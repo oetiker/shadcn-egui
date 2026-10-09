@@ -1,7 +1,7 @@
 # egui-shadcn 0.4.0 — shadcn styles as a parameter
 
 Date: 2026-10-09
-Status: design, awaiting review
+Status: design, revised after pushback review (2026-10-09), awaiting approval
 
 ## 1. Goal
 
@@ -61,6 +61,8 @@ Evidence and per-component tables: the research notes in §12.
 | Decision | Choice |
 |---|---|
 | How styles get into the crate | Generated from upstream `style-<s>.css` by a tool, not hand-copied, not interpreted at runtime |
+| How base components get into the crate | Ported by the AI following the skill's porting rules (§8); conversion is judgement work, not mechanical |
+| Consumer deviations from a style | Plain public `Style` struct, adjusted in the consumer's own theme setup; vendored files stay untouched |
 | new-york | Dropped. Default style becomes **vega** |
 | Upstream source | One pinned shadcn-svelte commit for both base components and style CSS |
 | Runtime dependencies | None added |
@@ -83,8 +85,11 @@ source at the pin. The port keeps upstream's structure and names its drawable
 parts by their marker (`slider_track`, `slider_range`, `slider_thumb`,
 `button_variant_outline`, `button_size_default`, …). Classes present in the
 base source (shared by all styles) are ported into the component directly,
-with a comment quoting them. Every value that comes from a marker is read from
-the style.
+with a `// base:` comment quoting the upstream class string verbatim. Every
+value that comes from a marker is read from the style. Where a base class
+overrides a style property (tailwind-merge: base classes come after the
+style's and win), the component ignores that recipe field and says so in the
+`// base:` comment. Porting is done by the AI under the rules in §8.
 
 ### 4.2 Style and recipes
 
@@ -105,12 +110,22 @@ what the translator can express:
 - states: default, `hover`, `active`, `focus-visible`, `disabled`,
   `aria-invalid`, checked/unchecked (`data-checked`/`data-unchecked`),
   `aria-expanded`;
+- context conditions, translated like states because they live in the style
+  CSS and differ per style: `has-data-[icon=inline-start|inline-end]:`
+  (icon present), `in-data-[slot=…]:` (inside a button group, card, …),
+  `group-data-[size=…]/…:` (parent size). The component passes its context
+  (icon side, enclosing slot, parent size); the recipe answers;
 - behaviour flags: press nudge (`active:translate-y-px`), hit-area inflation
   (`after:-inset-*`), backdrop blur.
 
-A field the component needs but the style leaves empty falls back to the
-base class, exactly as tailwind-merge would; the generator emits that
-resolution, the component does not guess.
+A recipe holds exactly what the style CSS says for that marker; an empty field
+means the style does not set it, and the component uses its ported base value.
+
+`Style` and every recipe are plain structs with public fields. A consumer that
+must deviate from a style in one place (e.g. a flat focus ring for a renderer
+without anti-aliasing) adjusts the value where it builds its theme:
+`let mut s = Style::nova(); s.<part>.<field> = …;`. Vendored files are never
+edited for this; re-vendoring stays free.
 
 ### 4.3 Theme
 
@@ -132,9 +147,8 @@ option (`Palette::with_bold_menu_accent()`). `Theme::apply` and
 The research found shadcn behaviour that is not a per-part value. These stay
 as component code paths, each commented with the upstream classes it mirrors:
 
-- context selectors: padding when an icon is present
-  (`has-data-[icon=inline-start]`), radius inside a button group, sizes
-  following the parent card's size;
+- knowing the context (icon side, enclosing slot, parent size) and passing it
+  to the recipe; the values themselves come from the style (§4.2);
 - `color-mix(in oklch, …)` hovers: an OKLCH mix helper in `theme.rs`;
 - structural parts: card and dialog footer strips that reach the panel edge,
   dialog close rendered as a ghost icon `Button`;
@@ -151,31 +165,31 @@ A separate cargo workspace like `tools/icongen`, never a dependency of the
 crate.
 
 Input: a shadcn-svelte checkout at the pinned commit (path argument; the pin
-is recorded in `tools/stylegen/PIN`). It reads
-`docs/src/lib/registry/styles/style-<s>.css` and the base component sources.
+is recorded in `tools/stylegen/PIN`). It reads only
+`docs/src/lib/registry/styles/style-<s>.css`; it never parses Svelte. The
+base components are the AI's job (§4.1, §8).
 
 Steps:
 
 1. Parse `style-<s>.css` into `marker → [classes]` (upstream's own
    `parseStyleCss` is the reference).
-2. For each marker the crate uses, take the base classes of the element that
-   carries it, prepend the style classes, and resolve conflicts per property
-   with "later wins", mirroring tailwind-merge for the translated subset.
+2. Within one marker's class list, resolve conflicts per property with
+   "later wins", as tailwind-merge does.
 3. Translate each class through a table of supported Tailwind utilities into
    recipe fields (Tailwind's default spacing scale, `px`, arbitrary
    `[…px]`/`[…rem]` values, role colours with `/alpha`, variant prefixes for
-   states and `dark:`).
+   states, context conditions and `dark:`).
 4. Emit `src/style/<s>.rs` (rustfmt-clean) and
    `tools/stylegen/reports/<s>.md`: every class it did not translate, per
    marker, with the reason. Nothing untranslated is guessed.
+5. Drift check: every `// base:` quote in `src/components/` must still occur
+   verbatim in the pinned upstream source. stylegen lists each component whose
+   quoted base changed, or whose markers appeared or disappeared upstream;
+   each listed component is a re-port job for the AI under §8.
 
-Check: a test in the stylegen workspace fetches nothing; it compares the
-generator's resolved class list per marker against the published per-style
-JSON (`registry/styles/<s>/<name>.json`) saved as fixtures from the same pin,
-so the merge emulation is verified against upstream's own output.
-
-Bumping upstream: update `PIN`, re-run, commit generated files and reports
-together with re-baselined snapshots; the diff is the review.
+Bumping upstream: update `PIN`, re-run, re-port the listed components, commit
+generated files, reports and re-baselined snapshots together; the diff is the
+review.
 
 ## 6. Scope of 0.4.0
 
@@ -203,33 +217,67 @@ slot is noted for later), Svelte or React output, runtime Tailwind.
   multipliers in `src/components/` unless marked `// base:` with the upstream
   class quoted. Positive control kept.
 - New test: `src/` and `skills/egui-shadcn/registry/src/` byte-identical.
-- stylegen's own fixture comparison (§5).
+- stylegen's translator unit tests (class → recipe field), and its drift
+  check (§5 step 5) clean at the pin.
 - Every custom-painted widget still reports `widget_info`.
 
 ## 8. Skill and documentation
 
-- `SKILL.md` Part B is rewritten around the two layers: port the base
-  component from the pinned shadcn-svelte source, name parts by their marker,
-  read every marker value from `Style`, quote base classes in comments, add
-  any new marker to stylegen and re-run it. Never write a style value into
-  component code.
+The skill's purpose is to give the AI strict rules so that every port comes
+out right and fits the egui design system. Part B of `SKILL.md` is rewritten
+as this per-component checklist; a port is done only when every item holds.
+
+1. **Source.** Fetch the component's base `.svelte` source and its bits-ui
+   primitive at the pin (`tools/stylegen/PIN`). Never port from memory, a
+   screenshot, or another style's resolved output.
+2. **Inventory.** List every `cn-*` marker the source uses and every data
+   attribute or state it styles on (`data-checked`, `aria-invalid`,
+   `data-[icon=…]`, `data-orientation`, …). Add any marker stylegen does not
+   yet emit, re-run stylegen.
+3. **Mapping.** Map each marker to a recipe field, each state and context
+   condition to the recipe's state/context input, and quote each base class
+   string in a `// base:` comment. A base class that overrides a style
+   property is noted in that comment and its recipe field is not read.
+4. **No style values in code.** Sizes, colours, radii, shadows, ring widths,
+   alphas come from the recipe or, for base classes, are quoted under
+   `// base:`. The extended token test enforces this.
+5. **Behaviour, not just looks.** Port the primitive's behaviour: keyboard
+   handling, focus order, pointer capture while dragging, value stepping,
+   disabled handling, and the accessibility role via `widget_info`. List
+   what bits-ui does and check each item in egui.
+6. **egui sizing.** The widget sets its own size before placement (single
+   pass); use the layout helpers, no `available_width()` arithmetic.
+7. **Context.** The widget's API takes whatever context the recipe's context
+   conditions need (icon side, enclosing slot, size variant).
+8. **Snapshots.** One per style × {dark, light}, reviewed side by side with
+   the same component on the shadcn-svelte docs page for that style.
+9. **Docs.** A row in `references/component-map.md` with the markers.
+10. **Done** means: stylegen's report and drift check are clean for the
+    component, snapshots reviewed, the behaviour list checked, clippy and
+    tests clean, registry copy identical.
+
+Plus:
+
+- A rule for consumers: project-specific deviations go into the theme
+  construction (§4.2), never into vendored files.
 - New reference page `references/styles.md`: the style model, the recipe
-  fields, the generator, choosing a style that matches a web project's
-  `components.json`, and how to bump the pin.
+  fields and context conditions, the generator and its drift check, choosing
+  the style that matches a web project's `components.json`, bumping the pin.
 - `references/component-map.md` gains the marker names per component.
 - Fixes found during research: `registry/README.md` no longer asks for eframe
   and image loaders; the "hover is opacity only, never a new hue" rule is
   replaced by "hover follows the style's recipe".
 - `CHANGES.md` 0.4.0 entry spells out the breaking changes: new-york gone,
-  `Theme::dark()/light()` replaced, `Metrics` fields moved into recipes,
-  radius scale changed, vega as default.
+  `Theme::dark()/light()` replaced, most `Metrics` fields (introduced in
+  0.3.0) moved into recipes, radius scale changed, vega as default.
 
 ## 9. Consumer migration
 
 Not part of this release; recorded so the design serves it. A project with a
 shadcn-svelte web client and an egui client:
 
-- picks `Theme::new(Style::<same as components.json>(), Palette::…, radius)`;
+- picks `Theme::new(Style::<same as components.json>(), Palette::…, radius)`,
+  adjusting individual recipe values there where it must deviate;
 - re-vendors the registry copy; local edits that only approximated its web
   style (fills, hover colours, switch colours) are dropped, brand palette
   constructors and renderer-specific tweaks stay as its own edits;
@@ -245,14 +293,15 @@ shadcn-svelte web client and an egui client:
 - **Translator coverage.** The class table may need many utilities. Mitigated
   by the per-style report: unsupported classes are visible, and a style ships
   only when clean for the shipped components.
-- **Merge emulation drift.** tailwind-merge's rules are richer than "later
-  wins per property". Mitigated by the fixture comparison against upstream's
-  published per-style JSON.
+- **Port quality varies by session.** Base components are ported by the AI.
+  Mitigated by the §8 checklist, the token test, the drift check and
+  per-style snapshots reviewed against the web rendering.
 - **Visual change for 0.3 users.** vega is close to new-york but not equal
   (new base). Called out in `CHANGES.md`; there is no compatibility style.
-- **Size of the change.** All components are touched. The implementation plan
-  should land stylegen and the recipe types first, then port components one
-  at a time against their snapshots.
+- **Size of the change.** All components are touched; the parts cannot ship
+  separately (no style without generator and re-ported components). The
+  implementation plan lands stylegen, the recipe types and the new Part B
+  first, then ports components one at a time against their snapshots.
 
 ## 11. Open points for the plan
 
