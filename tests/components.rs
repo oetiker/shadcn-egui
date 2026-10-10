@@ -849,3 +849,186 @@ fn switch_snapshot() {
         });
     });
 }
+
+/// Run a slider in a 240 x 40 harness. The value lives in a `Cell` so a test
+/// can read it between steps; it is written back to `v` at the end. `f` gets
+/// the harness, the cell and the slider's rect.
+fn run_slider(
+    v: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+    step: f32,
+    enabled: bool,
+    f: impl FnOnce(&mut egui_kittest::Harness<'_>, &std::cell::Cell<f32>, &std::cell::Cell<egui::Rect>),
+) {
+    use egui_shadcn::components::slider::Slider;
+    let cell = std::cell::Cell::new(*v);
+    let rect = std::cell::Cell::new(egui::Rect::NOTHING);
+    {
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(240.0, 40.0)).build_ui(|ui| {
+            egui_shadcn::Theme::vega_dark().apply(ui.ctx());
+            let mut value = cell.get();
+            rect.set(ui.add(Slider::new(&mut value, range.clone()).step(step).enabled(enabled).label("Volume")).rect);
+            cell.set(value);
+        });
+        h.run();
+        f(&mut h, &cell, &rect);
+    }
+    *v = cell.get();
+}
+
+fn slider_press(h: &mut egui_kittest::Harness<'_>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    h.drag_at(pos);
+    h.run();
+    h.drop_at(pos);
+    h.run();
+}
+
+#[test]
+fn slider_keyboard_steps() {
+    use egui_kittest::kittest::Queryable;
+    let mut v = 50.0;
+    run_slider(&mut v, 0.0..=100.0, 10.0, true, |h, value, _| {
+        h.get_by_label("Volume").focus();
+        h.run();
+        h.key_press(egui::Key::ArrowRight);
+        h.run();
+        assert_eq!(value.get(), 60.0, "ArrowRight is one step");
+        h.key_press(egui::Key::ArrowDown);
+        h.run();
+        assert_eq!(value.get(), 50.0, "ArrowDown is one step back");
+        h.key_press(egui::Key::PageUp);
+        h.run();
+        assert_eq!(value.get(), 100.0, "PageUp is ten steps, clamped");
+        h.key_press(egui::Key::Home);
+        h.run();
+        assert_eq!(value.get(), 0.0, "Home");
+        h.key_press(egui::Key::End);
+        h.run();
+        assert_eq!(value.get(), 100.0, "End");
+    });
+    assert_eq!(v, 100.0);
+}
+
+#[test]
+fn slider_continuous_keyboard_step_is_one_percent() {
+    use egui_kittest::kittest::Queryable;
+    let mut v = 0.0;
+    run_slider(&mut v, 0.0..=200.0, 0.0, true, |h, value, _| {
+        h.get_by_label("Volume").focus();
+        h.run();
+        h.key_press(egui::Key::ArrowRight);
+        h.run();
+        assert!((value.get() - 2.0).abs() < 1e-4, "{}", value.get());
+    });
+}
+
+#[test]
+fn slider_click_on_track_snaps_and_drag_follows_outside() {
+    let mut v = 0.0;
+    run_slider(&mut v, 0.0..=100.0, 25.0, true, |h, value, rect| {
+        let r = rect.get();
+        // The thumb centre travels over the track minus one thumb width (16 px in vega).
+        let at = |f: f32| egui::pos2(r.left() + 8.0 + (r.width() - 16.0) * f, r.center().y);
+        slider_press(h, at(0.6));
+        assert_eq!(value.get(), 50.0, "click at 60% snaps to 50");
+        h.hover_at(at(0.1));
+        h.run();
+        h.drag_at(at(0.1));
+        h.run();
+        h.hover_at(egui::pos2(at(1.0).x + 500.0, r.center().y + 300.0));
+        h.run();
+        assert_eq!(value.get(), 100.0, "drag outside the widget clamps to the end and keeps following");
+        h.drop_at(at(1.0));
+        h.run();
+    });
+}
+
+#[test]
+fn slider_vertical_has_minimum_at_the_bottom() {
+    use egui_shadcn::components::slider::{Slider, SliderOrientation};
+    let mut h = egui_kittest::Harness::new_ui_state(
+        |ui, s: &mut (f32, egui::Rect)| {
+            egui_shadcn::Theme::vega_dark().apply(ui.ctx());
+            s.1 = ui.add(Slider::new(&mut s.0, 0.0..=100.0).orientation(SliderOrientation::Vertical).label("V")).rect;
+        },
+        (50.0, egui::Rect::NOTHING),
+    );
+    h.run();
+    let r = h.state().1;
+    assert_eq!(r.height(), 160.0, "vertical min-h-40");
+    slider_press_state(&mut h, egui::pos2(r.center().x, r.top() + 8.0));
+    assert_eq!(h.state().0, 100.0, "top is the maximum");
+    slider_press_state(&mut h, egui::pos2(r.center().x, r.bottom() - 8.0));
+    assert_eq!(h.state().0, 0.0, "bottom is the minimum");
+}
+
+fn slider_press_state<S>(h: &mut egui_kittest::Harness<'_, S>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    h.drag_at(pos);
+    h.run();
+    h.drop_at(pos);
+    h.run();
+}
+
+#[test]
+fn slider_degenerate_inputs_do_not_panic() {
+    for (start, range, step) in [(5.0, 5.0..=5.0, 1.0), (3.0, 0.0..=10.0, 0.0), (3.0, 0.0..=10.0, -2.0), (f32::NAN, 0.0..=1.0, 0.1), (99.0, 0.0..=1.0, 0.1)] {
+        let mut v = start;
+        run_slider(&mut v, range.clone(), step, true, |h, _, _| h.run_steps(2));
+        assert!(v.is_finite(), "{start} {range:?} {step}");
+        assert!(range.contains(&v), "{v} not in {range:?}");
+    }
+    // min == max: pointer and keys do nothing.
+    let mut v = 5.0;
+    run_slider(&mut v, 5.0..=5.0, 1.0, true, |h, value, rect| {
+        slider_press(h, rect.get().center());
+        h.key_press(egui::Key::End);
+        h.run();
+        assert_eq!(value.get(), 5.0);
+    });
+}
+
+#[test]
+fn disabled_slider_ignores_input() {
+    use egui_kittest::kittest::Queryable;
+    let mut v = 50.0;
+    run_slider(&mut v, 0.0..=100.0, 0.0, false, |h, value, rect| {
+        slider_press(h, egui::pos2(rect.get().left() + 2.0, rect.get().center().y));
+        h.get_by_label("Volume").focus();
+        h.run();
+        h.key_press(egui::Key::Home);
+        h.run();
+        assert_eq!(value.get(), 50.0);
+    });
+    assert_eq!(v, 50.0);
+}
+
+#[test]
+fn slider_reports_role_label_and_value_to_accesskit() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut v = 30.0;
+    run_slider(&mut v, 0.0..=100.0, 0.0, true, |h, _, _| {
+        let node = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Volume");
+        assert_eq!(node.accesskit_node().numeric_value(), Some(30.0));
+    });
+}
+
+#[test]
+fn slider_snapshot() {
+    use egui_shadcn::components::slider::{Slider, SliderOrientation};
+    let (mut a, mut b, mut c, mut d) = (30.0, 70.0, 50.0, 100.0);
+    common::snapshot_all("slider", egui::vec2(320.0, 200.0), |ui| {
+        egui_shadcn::layout::row(ui, 24.0, |ui| {
+            egui_shadcn::layout::vstack(ui, 16.0, |ui| {
+                ui.set_width(200.0);
+                ui.add(Slider::new(&mut a, 0.0..=100.0).label("A"));
+                ui.add(Slider::new(&mut b, 0.0..=100.0).enabled(false).label("B"));
+                ui.add(Slider::new(&mut d, 0.0..=100.0).label("D"));
+            });
+            ui.add(Slider::new(&mut c, 0.0..=100.0).orientation(SliderOrientation::Vertical).label("C"));
+        });
+    });
+}

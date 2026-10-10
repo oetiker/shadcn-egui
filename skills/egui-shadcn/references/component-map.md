@@ -9,6 +9,7 @@
 | `<Card>` + Header/Title/Description | `layout::card(ui, |ui| ...)` + `components::card::{card_title, card_description}` |
 | `<Tabs>` | `components::tabs::tab_bar(ui, &mut active, &[..])` |
 | `<Switch size>` | `components::switch::toggle(ui, &mut on)` or `ui.add(Switch::new(&mut on).size(SwitchSize::Sm).enabled(..).invalid(..))`. Markers: `cn-switch`, `cn-switch-thumb` |
+| `<Slider orientation>` | `ui.add(Slider::new(&mut v, 0.0..=100.0).step(5.0).orientation(SliderOrientation::Vertical).enabled(..).label(..))`. One thumb. Markers: `cn-slider`, `cn-slider-track`, `cn-slider-range`, `cn-slider-thumb` |
 | `<Checkbox>` | `components::checkbox::checkbox(ui, &mut checked)` or `ui.add(Checkbox::new(&mut checked).enabled(..).invalid(..))`. Markers: `cn-checkbox`, `cn-checkbox-indicator`. No indeterminate state |
 | `<Select>` | `components::select::select(ui, "id", &mut idx, &[..])` |
 | `<Separator>` | `components::separator::separator(ui)`, `separator_vertical(ui)`. No marker: base classes only |

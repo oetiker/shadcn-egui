@@ -50,6 +50,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   shown with `Label::new(..).enabled(false)` is drawn at half opacity.
   Separators are exactly 1 px thick and add no spacing of their own; a new
   `separator_vertical` draws a vertical line.
+- New `Slider` with one thumb, horizontal or vertical, in the chosen style.
+  A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
+  step it, and `.enabled(false)` draws it at half opacity and ignores input.
 
 ## [0.3.2] - 2026-10-09
 
