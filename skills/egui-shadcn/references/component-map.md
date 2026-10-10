@@ -15,7 +15,7 @@
 | `<Separator>` | `components::separator::separator(ui)`, `separator_vertical(ui)`. No marker: base classes only |
 | `<Badge variant>` | `components::badge::Badge::new(t).variant(..).icon(..).icon_end(..)` via `ui.add(..)`, or `badge(ui, t, v)` — variants Default/Secondary/Destructive/Outline/Ghost/Link. Markers: `cn-badge`, `cn-badge-variant-*` |
 | `<Dialog>` + Header/Title/Description/Footer | `components::dialog::Dialog::new("id", "Title").description(..).show(ctx, &mut open, \|ui\| { ..; dialog::footer(ui, \|ui\| { primary; secondary }) })` — closes on Esc, backdrop, ×; footer runs right to left |
-| `<Popover>` + Trigger/Content | `let t = ui.add(Button::..); components::popover::Popover::new(&t).show(\|ui\| ..)` — click toggles, click outside closes |
+| `<Popover>` + Trigger/Content | `let t = ui.add(Button::..); components::popover::Popover::new(&t).show(\|ui\| ..)` — click toggles, Esc or click outside closes; `popover::popover_header(ui, title, description)` (content `popover_content`, `popover_header`, `popover_title`, `popover_description`) |
 | `<Tooltip>` | `components::tooltip::tooltip(ui.add(..), "text")` (content `tooltip_content`, arrow `tooltip_arrow`) |
 | Lucide `<Mic />` | `components::icon::IconView::new(&icons::MIC)` via `ui.add(..)`; `.size(..)`, `.color(..)`; data from `icongen` (see `references/icons.md`) |
 | `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&icons::MIC)` (`data-icon="inline-start"`), `.icon_end(..)` (`inline-end`); icon-only: `.size(ButtonSize::Icon)`, the text becomes the accessible name |

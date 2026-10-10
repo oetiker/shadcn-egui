@@ -6,7 +6,7 @@ use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
 use egui_shadcn::components::button::{Button, ButtonVariant};
 use egui_shadcn::components::dialog::{self, Dialog};
-use egui_shadcn::components::popover::Popover;
+use egui_shadcn::components::popover::{popover_header, Popover};
 use egui_shadcn::components::tooltip::tooltip;
 use egui_shadcn::Theme;
 
@@ -82,19 +82,24 @@ fn dialog_snapshot() {
     h.snapshot("dialog");
 }
 
+fn popover_trigger(ui: &mut egui::Ui) {
+    ui.add_space(16.0);
+    ui.horizontal(|ui| {
+        ui.add_space(16.0);
+        let trigger = ui.add(Button::new("Dimensions").variant(ButtonVariant::Outline));
+        Popover::new(&trigger).show(|ui| {
+            popover_header(ui, "Layer size", "Set the dimensions for the layer.");
+            ui.label("Width 100%");
+        });
+        ui.add_space(120.0);
+        ui.label("elsewhere");
+    });
+}
+
 fn popover_harness() -> Harness<'static> {
     Harness::builder().with_size(vec2(420.0, 240.0)).build_ui(|ui| {
         Theme::dark().apply(ui.ctx());
-        ui.add_space(16.0);
-        ui.horizontal(|ui| {
-            ui.add_space(16.0);
-            let trigger = ui.add(Button::new("Dimensions").variant(ButtonVariant::Outline));
-            Popover::new(&trigger).show(|ui| {
-                ui.label("Set the dimensions for the layer.");
-            });
-            ui.add_space(120.0);
-            ui.label("elsewhere");
-        });
+        popover_trigger(ui);
     })
 }
 
@@ -112,12 +117,48 @@ fn popover_toggles_and_closes_outside() {
 }
 
 #[test]
-fn popover_snapshot() {
+fn popover_closes_on_escape_and_toggles_on_trigger() {
     let mut h = popover_harness();
     h.run();
     h.get_by_label("Dimensions").click();
     h.run();
-    h.snapshot("popover");
+    h.get_by_label("Set the dimensions for the layer.");
+    h.key_press(Key::Escape);
+    h.run();
+    assert!(h.query_by_label("Set the dimensions for the layer.").is_none(), "Esc closes");
+    h.get_by_label("Dimensions").click();
+    h.run();
+    h.get_by_label("Set the dimensions for the layer.");
+    h.get_by_label("Dimensions").click();
+    h.run();
+    assert!(h.query_by_label("Set the dimensions for the layer.").is_none(), "the trigger toggles");
+}
+
+#[test]
+fn popover_box_is_w_72_and_content_gets_the_padding() {
+    for (name, theme) in common::themes() {
+        let inner = std::cell::Cell::new(0.0_f32);
+        let mut h = Harness::builder().with_size(vec2(420.0, 240.0)).build_ui(|ui| {
+            theme.apply(ui.ctx());
+            let trigger = ui.add(Button::new("Dimensions"));
+            Popover::new(&trigger).show(|ui| inner.set(ui.available_width()));
+        });
+        h.run();
+        h.get_by_label("Dimensions").click();
+        h.run();
+        let pad = theme.style.popover_content.pad_left.base.expect("fixed padding");
+        assert_eq!(inner.get() + 2.0 * pad, 288.0, "{name}: w-72 includes the padding");
+    }
+}
+
+#[test]
+fn popover_snapshot() {
+    common::snapshot_all_with("popover", vec2(420.0, 240.0), popover_trigger, |h| {
+        h.get_by_label("Dimensions").click();
+        h.run();
+        h.get_by_label("elsewhere").hover();
+        h.run();
+    });
 }
 
 fn tooltip_trigger(ui: &mut egui::Ui) {

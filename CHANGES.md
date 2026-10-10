@@ -59,6 +59,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - Tooltips are inverted as in current shadcn: a foreground-coloured bubble
   with background-coloured text instead of the primary colour, shown above the
   trigger with a small rounded arrow pointing at it. Text wraps at 320 px.
+- Popovers follow the chosen style: a thin outline ring instead of a border,
+  a softer shadow, and vega or nova padding and corners. The width of 288 px
+  now includes the padding, and the new `popover_header(ui, title,
+  description)` adds a title with a muted description.
 - New `Slider` with one thumb, horizontal or vertical, in the chosen style.
   A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
   step it, and `.enabled(false)` draws it at half opacity and ignores input.
