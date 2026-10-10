@@ -1,7 +1,7 @@
 //! shadcn v4 (new-york / OKLCH) design tokens, materialized for egui.
 
 use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
-use crate::style::{Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};
+use crate::style::{pick, Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};
 use egui::Color32;
 
 /// The semantic shadcn color tokens. Surfaces come in `x` / `x_foreground` pairs.
@@ -26,10 +26,6 @@ pub struct Palette {
     pub border: Color32,
     pub input: Color32,
     pub ring: Color32,
-    /// Drop-shadow color of raised surfaces (`shadow-sm`).
-    pub shadow: Color32,
-    /// Modal backdrop (`bg-black/50`).
-    pub overlay: Color32,
 }
 
 impl Palette {
@@ -54,8 +50,6 @@ impl Palette {
             border: c(0.922, 0.0, 0.0),
             input: c(0.922, 0.0, 0.0),
             ring: c(0.708, 0.0, 0.0),
-            shadow: Color32::from_black_alpha(20),
-            overlay: Color32::from_black_alpha(128),
         }
     }
 
@@ -80,8 +74,6 @@ impl Palette {
             border: ca(1.0, 0.0, 0.0, 0.10),
             input: ca(1.0, 0.0, 0.0, 0.15),
             ring: c(0.556, 0.0, 0.0), // solid mid-gray (border/input above are translucent white)
-            shadow: Color32::from_black_alpha(20),
-            overlay: Color32::from_black_alpha(128),
         }
     }
 }
@@ -108,11 +100,12 @@ pub struct Theme {
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the
 /// class each one stands for is noted. Components read sizes from here, never
-/// from literals, so one change restyles every screen. Geometry that belongs to
+/// from literals, so one change restyles every screen. Control heights,
+/// paddings and gaps belong to the [`Style`]. Geometry that belongs to
 /// a single widget's drawing (a checkmark path, a knob inset) stays local.
 ///
 /// Override with struct update syntax:
-/// `Theme { metrics: Metrics { control_md: 32.0, ..Metrics::default() }, ..Theme::dark() }`.
+/// `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega_dark() }`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Metrics {
     /// `text-xs`: badges, captions (`TextStyle::Small`).
@@ -135,36 +128,14 @@ pub struct Metrics {
     pub text_mono: f32,
     /// `TextStyle::Heading`.
     pub text_heading: f32,
-    /// `h-8`: small controls.
-    pub control_sm: f32,
-    /// `h-9`: default control height (buttons, inputs, tab bars).
-    pub control_md: f32,
-    /// `h-10`: large controls.
-    pub control_lg: f32,
-    /// `px-3`: horizontal padding of small controls and inputs.
-    pub pad_sm: f32,
-    /// `px-4`: horizontal padding of default controls.
-    pub pad_md: f32,
-    /// `px-6`: horizontal padding of large controls.
-    pub pad_lg: f32,
-    /// `gap-2`: default spacing between items.
-    pub gap: f32,
-    /// `p-6`: card padding.
-    pub card_padding: f32,
     /// Default maximum width of text fields and selects.
     pub field_max_width: f32,
-    /// `max-w-lg`: dialog width.
-    pub dialog_width: f32,
-    /// `w-72`: popover width.
-    pub popover_width: f32,
     /// `size-4`: icons and checkbox boxes.
     pub icon: f32,
     /// Icon stroke width in icon units (Lucide's 24-unit grid draws with 2).
     pub icon_stroke: f32,
     /// `border`: hairline width.
     pub border: f32,
-    /// `ring-[3px]`: focus ring width.
-    pub ring: f32,
 }
 
 impl Default for Metrics {
@@ -180,21 +151,10 @@ impl Default for Metrics {
             line_lg: 28.0,
             text_mono: 13.0,
             text_heading: 20.0,
-            control_sm: 32.0,
-            control_md: 36.0,
-            control_lg: 40.0,
-            pad_sm: 12.0,
-            pad_md: 16.0,
-            pad_lg: 24.0,
-            gap: 8.0,
-            card_padding: 24.0,
             field_max_width: 280.0,
-            dialog_width: 512.0,
-            popover_width: 288.0,
             icon: 16.0,
             icon_stroke: 2.0,
             border: 1.0,
-            ring: 3.0,
         }
     }
 }
@@ -208,10 +168,6 @@ impl Theme {
     }
     pub fn vega_dark() -> Self { Self::new(Style::vega(), Palette::dark(), 10.0) }
     pub fn vega_light() -> Self { Self::new(Style::vega(), Palette::light(), 10.0) }
-    /// Alias of [`Theme::vega_light`]; removed before 0.4.0 ships.
-    pub fn light() -> Self { Self::vega_light() }
-    /// Alias of [`Theme::vega_dark`]; removed before 0.4.0 ships.
-    pub fn dark() -> Self { Self::vega_dark() }
 
     /// The component state `s` plus this theme's [`State::DARK`].
     pub fn state(&self, s: State) -> State { s.with(State::DARK, self.dark) }
@@ -321,18 +277,12 @@ impl Theme {
         };
         egui::epaint::Shadow { offset: [0, y], blur, spread: 0, color: Color32::from_black_alpha((a * 255.0_f32).round() as u8) }
     }
-
-    /// `shadow-md`: popovers and tooltips.
-    pub fn shadow_md(&self) -> egui::epaint::Shadow {
-        egui::epaint::Shadow { offset: [0, 4], blur: 6, spread: 0, color: self.palette.shadow }
-    }
-    /// `shadow-lg`: dialogs.
-    pub fn shadow_lg(&self) -> egui::epaint::Shadow {
-        egui::epaint::Shadow { offset: [0, 10], blur: 15, spread: 0, color: self.palette.shadow }
-    }
 }
 
 // ---- Font + apply + accessor ----
+
+/// Item spacing of egui-native widgets when the style's tabs recipe sets no gap (`gap-2`).
+const DEFAULT_ITEM_GAP: f32 = 8.0;
 
 use egui::{FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle};
 use std::sync::Arc;
@@ -447,10 +397,18 @@ impl Theme {
             ]
             .into();
 
-            s.spacing.item_spacing = egui::vec2(m.gap, m.gap);
-            s.spacing.button_padding = egui::vec2(m.pad_md, m.gap);
+            // egui-native widgets follow the style's default button: its
+            // height and horizontal padding, and the tabs gap between items.
+            let button = [&self.style.button_size_default];
+            let none = self.state(State::NONE);
+            let gap = pick(&[&self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
+            let pad_x = pick(&button, |r| &r.pad_left, none).unwrap_or(0.0);
+            s.spacing.item_spacing = egui::vec2(gap, gap);
+            s.spacing.button_padding = egui::vec2(pad_x, gap);
             s.spacing.window_margin = egui::Margin::same(0);
-            s.spacing.interact_size.y = m.control_md;
+            if let Some(h) = pick(&button, |r| &r.height, none) {
+                s.spacing.interact_size.y = h;
+            }
 
             let v = &mut s.visuals;
             v.dark_mode = self.dark;

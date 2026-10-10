@@ -48,7 +48,7 @@ loop.
    integration you already have (eframe, egui-winit + softbuffer, etc.).
 3. **Apply the theme once**, right after the egui context is created (in
    eframe: the `run_native` app creator, on `cc.egui_ctx`):
-   `egui_shadcn::Theme::dark().apply(ctx)` (or `light`). Apply again only when
+   `egui_shadcn::Theme::vega_dark().apply(ctx)` (or `light`). Apply again only when
    the theme itself changes. Read tokens via `Theme::current(ctx)`.
 4. **Decompose the design top-down:** app shell → panels
    (`SidePanel`/`TopBottomPanel`/`CentralPanel`); each region's **layout intent**

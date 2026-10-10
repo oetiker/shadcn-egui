@@ -55,7 +55,7 @@ pub const CHEVRON_DOWN: Icon = Icon {
 };
 
 /// Curve flattening tolerance in screen points.
-const TOLERANCE: f32 = 0.1;
+const TOLERANCE: f32 = 0.1; // behaviour-ok: curve flattening tolerance, not a design token
 
 /// Paint `icon` scaled into the square `rect`. `stroke_width` is in icon units
 /// (Lucide's own is 2.0) and scales with the icon.

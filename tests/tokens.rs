@@ -58,18 +58,30 @@ fn components_use_theme_tokens() {
     assert!(found.is_empty(), "literal colors/sizes outside theme.rs:\n{}", found.join("\n"));
 }
 
-/// Strict scan for ported components (spec section 7): besides colours and
+/// Strict scan for components (spec section 7): besides colours and
 /// font sizes, literal geometry, shadow definitions and alpha multipliers. A
 /// line may carry them only with a `// base: "<upstream classes>"` quote on
 /// the same line or the line above (stylegen's drift check verifies the
-/// quote). Halving/doubling (`/ 2.0`, `* 2.0`) and 0.0/1.0 are arithmetic,
+/// quote), or a `// behaviour-ok: <reason>` comment on the line for constants
+/// that are behaviour, not design. Halving/doubling (`/ 2.0`, `* 2.0`) and 0.0/1.0 are arithmetic,
 /// not values.
 fn strict_violations(source: &str) -> Vec<String> {
     let mut out = violations(source);
     let mut prev = "";
+    let mut in_icon_data = false;
     for (n, line) in source.lines().enumerate() {
+        // Lucide path data: `pub const NAME: Icon = Icon {` ... `};`.
+        if line.starts_with("pub const ") && line.trim_end().ends_with(": Icon = Icon {") {
+            in_icon_data = true;
+        }
+        if in_icon_data {
+            in_icon_data = line.trim_end() != "};";
+            prev = line;
+            continue;
+        }
         let code = line.split("//").next().unwrap_or("");
-        let quoted = line.contains("// base: \"") || prev.contains("// base: \"");
+        let reason = line.split("// behaviour-ok:").nth(1).is_some_and(|r| !r.trim().is_empty());
+        let quoted = line.contains("// base: \"") || prev.contains("// base: \"") || reason;
         let shadow = code.contains("Shadow {");
         let alpha = ["gamma_multiply(", "linear_multiply(", "from_black_alpha(", "from_white_alpha("]
             .iter()
@@ -119,6 +131,9 @@ fn strict_scanner_catches_literals() {
     assert_eq!(strict_violations("let w = 2.0 + x;").len(), 1);
     assert_eq!(strict_violations("let z = 0.0; let o = 1.0;").len(), 0);
     assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
+    assert_eq!(strict_violations("let t = 0.1; // behaviour-ok: flattening tolerance").len(), 0);
+    assert_eq!(strict_violations("let t = 0.1; // behaviour-ok:").len(), 1);
+    assert_eq!(strict_violations("pub const X: Icon = Icon {\n    a: 3.5,\n};\nlet h = 32.0;").len(), 1);
 }
 
 /// The code before a file's trailing `#[cfg(test)] mod tests` module. Unit
@@ -147,21 +162,22 @@ fn non_test_code_cuts_only_the_trailing_test_module() {
     assert_eq!(strict_violations(non_test_code(&format!("\n{early}"))).len(), 2);
 }
 
-/// Files under `src/components/` (plus `layout.rs`) already re-ported to the
-/// shadcn-svelte base. Each port task adds its file; Task 24 replaces this
-/// list with "all files".
-const PORTED: &[&str] = &["button.rs", "badge.rs", "label.rs", "separator.rs", "input.rs", "checkbox.rs", "switch.rs", "slider.rs", "tabs.rs", "tooltip.rs", "popover.rs", "select.rs", "card.rs", "dialog.rs", "layout.rs"];
-
 #[test]
 fn ported_components_take_values_from_the_style() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+    let mut files: Vec<_> = std::fs::read_dir(format!("{dir}/components"))
+        .expect("components dir")
+        .map(|e| e.expect("dir entry").path())
+        .collect();
+    files.push(format!("{dir}/layout.rs").into());
+    assert!(files.len() > 5, "scanned too few files: {files:?}");
     let mut found = Vec::new();
-    for name in PORTED {
-        let path = if *name == "layout.rs" { format!("{dir}/layout.rs") } else { format!("{dir}/components/{name}") };
-        let src = std::fs::read_to_string(&path).expect("ported file exists");
+    for path in files {
+        let path = path.display().to_string();
+        let src = std::fs::read_to_string(&path).expect("source file readable");
         for v in strict_violations(non_test_code(&src)) {
             found.push(format!("{path}:{v}"));
         }
     }
-    assert!(found.is_empty(), "style values hard-coded in ported components:\n{}", found.join("\n"));
+    assert!(found.is_empty(), "style values hard-coded in components:\n{}", found.join("\n"));
 }

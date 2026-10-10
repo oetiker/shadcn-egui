@@ -17,23 +17,17 @@
 | `--radius` (10px) | `Theme.radius`; `radius_sm/md/lg/xl` |
 | 4px spacing grid | `Spacing.item_spacing`, margins |
 | 14px / medium | `text_styles[Body]` + `theme::family(ctx, FAMILY_MEDIUM)` |
-| shadow-sm | `Frame::shadow` (offset [0,1], blur 3), color `Palette.shadow` |
-| shadow-md / shadow-lg | `Theme::shadow_md()` / `shadow_lg()` |
-| dialog overlay `bg-black/50` | `Palette.overlay` |
-| `text-lg` | `Metrics.text_lg` (dialog title) |
-| `max-w-lg` / `w-72` | `Metrics.dialog_width` / `popover_width` |
-| `text-xs` / `text-sm` / `text-base` | `Metrics.text_xs` / `text_sm` / `text_base` |
-| `h-8` / `h-9` / `h-10` | `Metrics.control_sm` / `control_md` / `control_lg` |
-| `px-3` / `px-4` / `px-6` | `Metrics.pad_sm` / `pad_md` / `pad_lg` |
-| `gap-2` | `Metrics.gap` (also `Spacing.item_spacing`) |
-| `p-6` (card) | `Metrics.card_padding` |
+| `shadow-*` | `Theme::shadow(ShadowLevel)`; the style's recipes pick the level |
+| dialog overlay `bg-black/50` | the style's `dialog_overlay` recipe (`bg`) |
+| `text-xs` / `text-sm` / `text-base` / `text-lg` | `Metrics.text_xs` / `text_sm` / `text_base` / `text_lg` |
+| control heights, paddings, gaps, card padding, dialog and popover widths | the style's recipes (`button_size_*`, `card`, `dialog_content`, ...), not `Metrics` |
 | `size-4` (icons, checkbox) | `Metrics.icon` |
-| `border` / `ring-[3px]` widths | `Metrics.border` / `Metrics.ring` |
+| `border` / `ring-[3px]` widths | `Metrics.border` / the style's `ring` props |
 
 Tokens are OKLCH literals converted by `color::oklch_to_srgb` into the `Palette`.
 Customize by editing `Palette::light()/dark()` in the vendored `theme.rs`, or
 add your own preset there (a brand palette is one more `Palette` constructor).
-Sizes: `Theme { metrics: Metrics { control_md: 32.0, ..Metrics::default() }, ..Theme::dark() }`.
+Text and icon sizes: `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega_dark() }`. Control sizes belong to the `Style`.
 
 **Colors and text sizes live in `theme.rs` and nowhere else.** A widget that
 writes `Color32::from_rgb(..)` or `FontId::proportional(14.0)` drifts from the

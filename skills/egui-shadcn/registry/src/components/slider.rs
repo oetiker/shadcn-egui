@@ -7,7 +7,7 @@
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{box_shapes, interaction_state, mix_toward, ring_shape};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{pos2, vec2, Color32, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
@@ -139,7 +139,8 @@ impl Widget for Slider<'_> {
                     m.set_focus_lock_filter(resp.id, EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() })
                 });
                 // Without a step, bits-ui moves by 1% of the range.
-                let unit = if step > 0.0 && step.is_finite() { step } else { (hi - lo) / f32::from(100u8) };
+                let default_steps = 100.0; // behaviour-ok: bits-ui's 1% default step, not a design token
+                let unit = if step > 0.0 && step.is_finite() { step } else { (hi - lo) / default_steps };
                 let presses = |keys: &[Key]| ui.input_mut(|i| keys.iter().map(|k| i.consume_key(Modifiers::NONE, *k) as i32).sum::<i32>());
                 let steps = presses(&[Key::ArrowRight, Key::ArrowUp]) - presses(&[Key::ArrowLeft, Key::ArrowDown])
                     + 10 * (presses(&[Key::PageUp]) - presses(&[Key::PageDown]));
@@ -174,7 +175,7 @@ impl Widget for Slider<'_> {
             // CSS opacity composites the whole slider as one group, so a
             // disabled part is blended into the page rather than made see-through.
             let page = t.palette.background;
-            let fade = |c: Color32| if enabled { c } else { mix_toward(c, page, 1.0 - disabled_opacity) };
+            let fade = |c: Color32| if enabled { c } else { blend_toward(c, page, 1.0 - disabled_opacity) };
             let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| fade(t.paint(p)));
 
             let track_rect = if vertical {
@@ -214,3 +215,10 @@ impl Widget for Slider<'_> {
     }
 }
 
+
+/// Linearly blend `a` toward `b` by `t` in 0..=1 (sRGB space).
+fn blend_toward(a: Color32, b: Color32, t: f32) -> Color32 {
+    let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    // token-ok: computes a blend of two token colors, introduces none.
+    Color32::from_rgba_unmultiplied(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()), a.a())
+}

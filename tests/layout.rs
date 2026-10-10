@@ -6,7 +6,7 @@ use egui_shadcn::{layout, Theme};
 #[test]
 fn row_and_vstack_compose() {
     let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         layout::vstack(ui, 12.0, |ui| {
             ui.label("top");
             layout::row(ui, 8.0, |ui| {
@@ -22,7 +22,7 @@ fn row_and_vstack_compose() {
 #[test]
 fn space_between_composes() {
     let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         layout::space_between(
             ui,
             |ui| {
@@ -73,7 +73,7 @@ fn wrap_row_wraps_when_out_of_width() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(200.0, 200.0))
         .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
+            Theme::vega_dark().apply(ui.ctx());
             rects.borrow_mut().clear();
             layout::wrap_row(ui, 8.0, |ui| {
                 for _ in 0..4 {

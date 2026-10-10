@@ -7,6 +7,7 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 ### Changed
+- Removed items that only served the old new-york look: `Theme::dark()` and `Theme::light()` (use `Theme::vega_dark()` / `vega_light()`), `Palette::shadow` and `Palette::overlay`, `Theme::shadow_md()` / `shadow_lg()` (use `Theme::shadow(ShadowLevel)`), and the `Metrics` fields for control heights, paddings, gap, card padding, dialog and popover width and ring width (these now come from the `Style`). Native egui widgets take their height, padding and spacing from the style's default button and tabs gap, so they may differ slightly from before.
 - The `settings` example takes the style and palette on the command line:
   `cargo run --example settings -- nova light` (default `vega dark`). Its
   components tab now also shows a Volume slider and a Region select with a

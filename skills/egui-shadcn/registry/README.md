@@ -12,6 +12,6 @@ eframe = "0.34"
 egui_extras = { version = "0.34", features = ["all_loaders"] }
 ```
 
-Call `egui_shadcn::Theme::dark().apply(ctx)` once, right after the egui context
+Call `egui_shadcn::Theme::vega_dark().apply(ctx)` once, right after the egui context
 is created, then build with the
 `layout` + `components` helpers.

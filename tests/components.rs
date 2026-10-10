@@ -6,16 +6,6 @@ use egui_shadcn::components::card::{card_content, card_header, card_header_with_
 use egui_shadcn::style::Style;
 use egui_shadcn::{Palette, Theme};
 
-use egui_shadcn::components::shared::mix_toward;
-
-#[test]
-fn mix_toward_blends() {
-    let a = egui::Color32::from_rgb(200, 0, 0);
-    let b = egui::Color32::from_rgb(0, 0, 0);
-    let m = mix_toward(a, b, 0.5);
-    assert!(m.r() > 90 && m.r() < 110, "got {}", m.r());
-}
-
 #[test]
 fn button_click_sets_flag() {
     use egui_kittest::kittest::Queryable;
@@ -264,7 +254,7 @@ fn tabs_harness(labels: &'static [&'static str], start: usize) -> (egui_kittest:
     let active = std::rc::Rc::new(std::cell::Cell::new(start));
     let seen = active.clone();
     let h = egui_kittest::Harness::new_ui(move |ui| {
-        egui_shadcn::Theme::dark().apply(ui.ctx());
+        egui_shadcn::Theme::vega_dark().apply(ui.ctx());
         let mut sel = seen.get();
         ui.add(Tabs::new(&mut sel, labels));
         seen.set(sel);
@@ -456,7 +446,7 @@ fn select_and_badge_render() {
     use egui_shadcn::components::select::select;
     use egui_shadcn::Theme;
     let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         let mut choice = 0usize;
         select(ui, "lang", &mut choice, &["English", "German"]);
         badge(ui, "New", BadgeVariant::Default);

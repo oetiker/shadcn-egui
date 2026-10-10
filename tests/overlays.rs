@@ -15,7 +15,7 @@ use egui_shadcn::Theme;
 fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
     Harness::builder().with_size(vec2(640.0, 360.0)).build_ui_state(
         |ui, (open, clicks): &mut (bool, u32)| {
-            Theme::dark().apply(ui.ctx());
+            Theme::vega_dark().apply(ui.ctx());
             ui.label("page beneath");
             Dialog::new("confirm", "Delete session?")
                 .description("The session and its files are removed.")
@@ -103,7 +103,7 @@ fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
 #[test]
 fn dialog_close_button_can_be_hidden() {
     let mut h = Harness::builder().with_size(vec2(640.0, 360.0)).build_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         Dialog::new("nc", "Title").show_close_button(false).show(ui.ctx(), &mut true, |_| {});
     });
     h.run();
@@ -142,7 +142,7 @@ fn popover_trigger(ui: &mut egui::Ui) {
 
 fn popover_harness() -> Harness<'static> {
     Harness::builder().with_size(vec2(420.0, 240.0)).build_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         popover_trigger(ui);
     })
 }
@@ -217,7 +217,7 @@ fn tooltip_trigger(ui: &mut egui::Ui) {
 #[test]
 fn tooltip_shows_on_hover() {
     let mut h = Harness::builder().with_size(vec2(240.0, 120.0)).build_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         tooltip_trigger(ui);
     });
     h.run();
@@ -266,7 +266,7 @@ const FRUITS: [&str; 4] = ["Apple", "Banana", "Blueberry", "Cherry"];
 fn select_harness(start: usize) -> Harness<'static, usize> {
     Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(
         |ui, value: &mut usize| {
-            Theme::dark().apply(ui.ctx());
+            Theme::vega_dark().apply(ui.ctx());
             ui.add(Select::new("fruit", value, &FRUITS).placeholder("Pick a fruit"));
             ui.label("elsewhere");
         },
@@ -348,7 +348,7 @@ fn select_trigger_reports_the_current_text() {
 fn select_disabled_does_not_open() {
     let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(
         |ui, value: &mut usize| {
-            Theme::dark().apply(ui.ctx());
+            Theme::vega_dark().apply(ui.ctx());
             ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
         },
         0usize,
