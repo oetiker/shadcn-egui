@@ -21,6 +21,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   solid red fill. A pressed button moves down by 1 px. New sizes (`Xs`,
   `IconXs`, `IconSm`, `IconLg`), a trailing icon and the expanded, invalid
   and has-popup states are available.
+- Button states follow the style too: a hovered Ghost or Outline button
+  takes the style's muted hover fill instead of `accent`, and a hovered Link
+  button is underlined. Keyboard focus draws a 3 px ring right at the
+  button's edge and turns its border to the ring colour. A disabled button
+  is drawn at half opacity, so what lies behind it shows through, instead of
+  being blended toward the page colour.
 
 ## [0.3.2] - 2026-10-09
 

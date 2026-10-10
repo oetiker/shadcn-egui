@@ -125,10 +125,14 @@ impl Button {
     }
 
     /// The icon of an icon size (`ButtonSize::Icon`, …): drawn alone, the
-    /// text is not. `None` for text sizes, or an icon size without an icon.
+    /// text is not. `None` for text sizes. An icon size without an icon is a
+    /// caller error (debug builds panic); release builds fall back to a
+    /// button as wide as its text.
     fn icon_only(&self) -> Option<&'static Icon> {
         let square = matches!(self.size, ButtonSize::Icon | ButtonSize::IconXs | ButtonSize::IconSm | ButtonSize::IconLg);
-        if square { self.icon.or(self.icon_end) } else { None }
+        let icon = self.icon.or(self.icon_end);
+        debug_assert!(!square || icon.is_some(), "Button {:?}: an icon size needs .icon(..)", self.text);
+        if square { icon } else { None }
     }
 }
 

@@ -76,7 +76,9 @@ pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
 /// focus is `FOCUS_VISIBLE`: egui focuses a widget by Tab or code, never by
 /// click. A disabled widget (`enabled` false, or a disabled `Ui`) gets
 /// `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`, even if
-/// `context` has them: shadcn's `disabled:pointer-events-none`.
+/// `context` has them: shadcn's `disabled:pointer-events-none`. A composite
+/// widget passes the response of its focusable inner part (a select's
+/// trigger, a slider's thumb), so focus and press are read where they happen.
 pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context: State) -> State {
     let live = enabled && resp.enabled();
     let pointer_and_focus = State::HOVER | State::ACTIVE | State::FOCUS | State::FOCUS_VISIBLE;

@@ -38,14 +38,20 @@ pub fn snapshot_all(name: &str, size: egui::Vec2, mut ui_fn: impl FnMut(&mut egu
     }
 }
 
-/// The rect of the widget `add` places, under `theme`. Runs two frames: the
-/// fonts `Theme::apply` installs reach the atlas only on the second.
-pub fn measure(theme: &Theme, mut add: impl FnMut(&mut egui::Ui) -> egui::Response) -> egui::Rect {
+/// The rect of the widget `add` places, under `theme`, and the output of
+/// the frame that painted it. Runs two frames: the fonts `Theme::apply`
+/// installs reach the atlas only on the second, and focus requested in the
+/// first frame shows in the second.
+pub fn measure_output(theme: &Theme, mut add: impl FnMut(&mut egui::Ui) -> egui::Response) -> (egui::Rect, egui::FullOutput) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     let mut rect = egui::Rect::NOTHING;
-    for _ in 0..2 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
-    }
-    rect
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    let out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    (rect, out)
+}
+
+/// The rect of the widget `add` places, under `theme` (see [`measure_output`]).
+pub fn measure(theme: &Theme, add: impl FnMut(&mut egui::Ui) -> egui::Response) -> egui::Rect {
+    measure_output(theme, add).0
 }

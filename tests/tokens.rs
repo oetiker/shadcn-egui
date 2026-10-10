@@ -121,17 +121,30 @@ fn strict_scanner_catches_literals() {
     assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
 }
 
-/// The code before a file's `#[cfg(test)]` module. Unit tests compare
-/// against the style's numbers, so they hold literals by design.
+/// The code before a file's trailing `#[cfg(test)] mod tests` module. Unit
+/// tests compare against the style's numbers, so they hold literals by
+/// design. Only a module that runs to the end of the file is cut: other
+/// test-only items, and code after them, are scanned.
 fn non_test_code(source: &str) -> &str {
-    source.split("\n#[cfg(test)]").next().unwrap_or(source)
+    const MODULE: &str = "\n#[cfg(test)]\nmod tests {\n";
+    let Some(at) = source.rfind(MODULE) else { return source };
+    let body: Vec<&str> = source[at + MODULE.len()..].lines().filter(|l| !l.trim().is_empty()).collect();
+    // Inside the module every line is indented; only its closing brace is not.
+    let to_eof = body.split_last().is_some_and(|(last, rest)| *last == "}" && rest.iter().all(|l| l.starts_with(char::is_whitespace)));
+    if to_eof { &source[..at] } else { source }
 }
 
 #[test]
-fn non_test_code_stops_at_the_test_module() {
-    let src = "let h = 32.0;\n#[cfg(test)]\nmod tests { const H: f32 = 36.0; }";
-    assert_eq!(strict_violations(non_test_code(src)).len(), 1);
-    assert_eq!(strict_violations(src).len(), 2);
+fn non_test_code_cuts_only_the_trailing_test_module() {
+    let tail = "let h = 32.0;\n#[cfg(test)]\nmod tests {\n    const H: f32 = 36.0;\n}\n";
+    assert_eq!(strict_violations(non_test_code(tail)).len(), 1);
+    assert_eq!(strict_violations(tail).len(), 2);
+    // A test-only item mid-file exempts nothing after it.
+    let mid = "\n#[cfg(test)]\nfn helper() {}\nlet h = 32.0;\n#[cfg(test)]\nmod tests {\n    const H: f32 = 36.0;\n}\n";
+    assert_eq!(strict_violations(non_test_code(mid)).len(), 1);
+    // A test module followed by more code is not the trailing module.
+    let early = "#[cfg(test)]\nmod tests {\n    const H: f32 = 36.0;\n}\nlet h = 32.0;\n";
+    assert_eq!(strict_violations(non_test_code(&format!("\n{early}"))).len(), 2);
 }
 
 /// Files under `src/components/` (plus `layout.rs`) already re-ported to the

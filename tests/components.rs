@@ -131,17 +131,33 @@ fn button_fill_stops_inside_transparent_border() {
     use egui_shadcn::components::button::Button;
     use egui_shadcn::Theme;
     let theme = Theme::vega_light();
-    let ctx = egui::Context::default();
-    theme.apply(&ctx);
-    let mut rect = egui::Rect::NOTHING;
-    let mut out = None;
-    for _ in 0..2 {
-        out = Some(ctx.run_ui(egui::RawInput::default(), |ui| rect = ui.add(Button::new("Save")).rect));
-    }
+    let (rect, out) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
     let fill = theme.palette.primary;
-    let fills: Vec<_> = rect_shapes(&out.expect("ran")).into_iter().filter(|r| r.fill == fill).collect();
+    let fills: Vec<_> = rect_shapes(&out).into_iter().filter(|r| r.fill == fill).collect();
     assert_eq!(fills.len(), 1, "{fills:?}");
     assert_eq!(fills[0].rect, rect.shrink(1.0));
+}
+
+/// shadcn `focus-visible:border-ring focus-visible:ring-3 ring-ring/50`: a
+/// focused button gets a ring-coloured border and a 3px ring at half alpha.
+#[test]
+fn focused_button_shows_ring_and_ring_border() {
+    use egui_shadcn::components::button::Button;
+    use egui_shadcn::Theme;
+    let theme = Theme::vega_light();
+    let (rect, out) = common::measure_output(&theme, |ui| {
+        let resp = ui.add(Button::new("Save"));
+        resp.request_focus();
+        resp
+    });
+    let ring = theme.palette.ring;
+    let shapes = rect_shapes(&out);
+    let ring_shape = shapes.iter().find(|r| r.stroke.width == 3.0);
+    let ring_shape = ring_shape.unwrap_or_else(|| panic!("no 3px ring in {shapes:?}"));
+    assert_eq!(ring_shape.stroke.color, ring.gamma_multiply(0.5));
+    assert_eq!(ring_shape.stroke_kind, egui::StrokeKind::Outside);
+    assert_eq!(ring_shape.rect, rect);
+    assert!(shapes.iter().any(|r| r.stroke.width == 1.0 && r.stroke.color == ring), "no ring-coloured border in {shapes:?}");
 }
 
 /// Move the pointer to `pos` and press the primary button there.
