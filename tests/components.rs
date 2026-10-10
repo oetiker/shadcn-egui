@@ -614,3 +614,126 @@ fn input_id_source_is_stable() {
     assert_ne!(id_after(&ctx, 1, None), id_after(&ctx, 3, None));
     assert_eq!(id_after(&ctx, 1, Some("login-user")), id_after(&ctx, 3, Some("login-user")));
 }
+
+/// Harness state for the checkbox tests: the value and the rect of the
+/// visible box (the returned response's rect).
+struct CheckboxState {
+    checked: bool,
+    rect: egui::Rect,
+}
+
+fn checkbox_harness(enabled: bool, checked: bool) -> egui_kittest::Harness<'static, CheckboxState> {
+    use egui_shadcn::components::checkbox::Checkbox;
+    use egui_shadcn::Theme;
+    let mut h = egui_kittest::Harness::new_ui_state(
+        move |ui, s: &mut CheckboxState| {
+            Theme::vega_dark().apply(ui.ctx());
+            ui.add_space(20.0);
+            ui.horizontal(|ui| {
+                ui.add_space(20.0);
+                s.rect = ui.add(Checkbox::new(&mut s.checked).enabled(enabled)).rect;
+            });
+        },
+        CheckboxState { checked, rect: egui::Rect::NOTHING },
+    );
+    h.run();
+    h
+}
+
+/// Press and release the primary button at `pos`.
+fn click_pos(h: &mut egui_kittest::Harness<'_, CheckboxState>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    h.drag_at(pos);
+    h.run();
+    h.drop_at(pos);
+    h.run();
+}
+
+/// `after:-inset-x-3 after:-inset-y-2`: a click 6px left of the 16px box
+/// still lands on the checkbox, one 20px away does not. The response's rect is
+/// the visible box; the accessibility node carries the larger target.
+#[test]
+fn checkbox_hit_area_extends_beyond_the_box() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = checkbox_harness(true, false);
+    let boxr = h.state().rect;
+    assert_eq!(boxr.size(), egui::vec2(16.0, 16.0));
+    let node = h.get_by_role(egui::accesskit::Role::CheckBox).rect();
+    assert_eq!(node.expand2(egui::vec2(-12.0, -8.0)), boxr, "node rect is the box plus 12px x 8px");
+    click_pos(&mut h, egui::pos2(boxr.left() - 6.0, boxr.center().y));
+    assert!(h.state().checked, "click outside the box but inside the hit area did not toggle");
+    click_pos(&mut h, egui::pos2(boxr.center().x, boxr.top() - 6.0));
+    assert!(!h.state().checked, "click above the box did not toggle back");
+    click_pos(&mut h, egui::pos2(boxr.left() - 20.0, boxr.center().y));
+    assert!(!h.state().checked, "click beyond the hit area toggled");
+}
+
+#[test]
+fn disabled_checkbox_ignores_click_and_space() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = checkbox_harness(false, true);
+    let boxr = h.state().rect;
+    click_pos(&mut h, boxr.center());
+    assert!(h.state().checked, "disabled checkbox toggled by click");
+    h.get_by_role(egui::accesskit::Role::CheckBox).focus();
+    h.run();
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert!(h.state().checked, "disabled checkbox toggled by Space");
+}
+
+#[test]
+fn checkbox_toggles_on_space_when_focused() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = checkbox_harness(true, false);
+    h.get_by_role(egui::accesskit::Role::CheckBox).focus();
+    h.run();
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert!(h.state().checked, "Space did not check");
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert!(!h.state().checked, "Space did not uncheck");
+}
+
+#[test]
+fn checkbox_reports_toggled_state() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let h = checkbox_harness(true, true);
+    let node = h.get_by_role(egui::accesskit::Role::CheckBox);
+    assert_eq!(node.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+}
+
+#[test]
+fn checkbox_box_follows_style() {
+    use egui_shadcn::components::checkbox::Checkbox;
+    for (name, theme) in common::themes() {
+        let mut on = true;
+        let r = common::measure(&theme, |ui| ui.add(Checkbox::new(&mut on)));
+        assert_eq!(r.size(), egui::vec2(16.0, 16.0), "{name}");
+    }
+}
+
+#[test]
+fn checkbox_snapshot() {
+    use egui_shadcn::components::checkbox::Checkbox;
+    common::snapshot_all("checkbox", egui::vec2(220.0, 150.0), |ui| {
+        let (mut off, mut on, mut invalid, mut disabled) = (false, true, false, true);
+        ui.horizontal(|ui| {
+            ui.add(Checkbox::new(&mut off));
+            ui.add_space(12.0);
+            ui.add(Checkbox::new(&mut on));
+        });
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.add(Checkbox::new(&mut invalid).invalid(true));
+            ui.add_space(12.0);
+            ui.add(Checkbox::new(&mut disabled).enabled(false));
+        });
+        ui.add_space(8.0);
+        let mut focused = true;
+        let resp = ui.add(Checkbox::new(&mut focused));
+        resp.request_focus();
+    });
+}

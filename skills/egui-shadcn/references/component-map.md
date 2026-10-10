@@ -9,7 +9,7 @@
 | `<Card>` + Header/Title/Description | `layout::card(ui, |ui| ...)` + `components::card::{card_title, card_description}` |
 | `<Tabs>` | `components::tabs::tab_bar(ui, &mut active, &[..])` |
 | `<Switch>` | `components::switch::toggle(ui, &mut on)` |
-| `<Checkbox>` | `components::checkbox::checkbox(ui, &mut checked)` |
+| `<Checkbox>` | `components::checkbox::checkbox(ui, &mut checked)` or `ui.add(Checkbox::new(&mut checked).enabled(..).invalid(..))`. Markers: `cn-checkbox`, `cn-checkbox-indicator`. No indeterminate state |
 | `<Select>` | `components::select::select(ui, "id", &mut idx, &[..])` |
 | `<Separator>` | `components::separator::separator(ui)`, `separator_vertical(ui)`. No marker: base classes only |
 | `<Badge variant>` | `components::badge::Badge::new(t).variant(..).icon(..).icon_end(..)` via `ui.add(..)`, or `badge(ui, t, v)` — variants Default/Secondary/Destructive/Outline/Ghost/Link. Markers: `cn-badge`, `cn-badge-variant-*` |

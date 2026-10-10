@@ -38,6 +38,14 @@ pub const CLOSE: Icon = Icon {
     segs: &[Seg::M(18.0, 6.0), Seg::L(6.0, 18.0), Seg::M(6.0, 6.0), Seg::L(18.0, 18.0)],
 };
 
+/// The checkbox tick (Lucide `check`, ISC), built in for the same reason as
+/// [`CLOSE`].
+pub const CHECK: Icon = Icon {
+    name: "check",
+    size: 24.0,
+    segs: &[Seg::M(20.0, 6.0), Seg::L(9.0, 17.0), Seg::L(4.0, 12.0)],
+};
+
 /// Curve flattening tolerance in screen points.
 const TOLERANCE: f32 = 0.1;
 
