@@ -164,7 +164,10 @@ impl Theme {
     /// set `theme.dark` afterwards to override.
     pub fn new(style: Style, palette: Palette, radius: f32) -> Self {
         let dark = crate::color::srgb_to_oklch(palette.background).0 < 0.5;
-        Self { style: Arc::new(style), palette, radius, metrics: Metrics::default(), dark }
+        // `Arc::new` copies the large `Style` through two stack frames in a
+        // debug build; a box moves it to the heap once.
+        let style = Arc::from(Box::new(style));
+        Self { style, palette, radius, metrics: Metrics::default(), dark }
     }
     pub fn vega_dark() -> Self { Self::new(Style::vega(), Palette::dark(), 10.0) }
     pub fn vega_light() -> Self { Self::new(Style::vega(), Palette::light(), 10.0) }

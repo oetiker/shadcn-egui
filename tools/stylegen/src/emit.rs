@@ -33,24 +33,37 @@ pub fn emit_struct(pin: &str, markers: &[String]) -> String {
 }
 
 /// One style's values; `markers` in the order of the `Style` fields.
+///
+/// Each recipe gets its own function: one struct literal with every recipe
+/// keeps all their temporaries in one stack frame, about 0.5 MB in a debug
+/// build, which overflows small thread stacks.
 pub fn emit_style(style: &str, pin: &str, markers: &[(String, Marker)]) -> String {
     let mut s = header(pin, &format!("`style-{style}.css`"));
     s += "use super::recipe::*;\nuse super::Style;\n\n";
     s += &format!("pub(super) fn style() -> Style {{\n    Style {{\n        name: \"{style}\",\n");
+    let mut fns = String::new();
     for (name, m) in markers {
-        s += &format!("        {}: {},\n", field_name(name), recipe(m));
+        let field = field_name(name);
+        match recipe(m) {
+            None => s += &format!("        {field}: Recipe::default(),\n"),
+            Some(body) => {
+                s += &format!("        {field}: {field}(),\n");
+                fns += &format!("\nfn {field}() -> Recipe {{\n    {body}\n}}\n");
+            }
+        }
     }
     s += "    }\n}\n";
-    s
+    s + &fns
 }
 
-fn recipe(m: &Marker) -> String {
+/// The `Recipe { .. }` literal, or `None` when the marker sets nothing.
+fn recipe(m: &Marker) -> Option<String> {
     let mut by_field: BTreeMap<Field, Vec<&Decl>> = BTreeMap::new();
     for d in &m.decls {
         by_field.entry(d.field).or_default().push(d);
     }
     if by_field.is_empty() {
-        return "Recipe::default()".into();
+        return None;
     }
     let mut s = String::from("Recipe {\n");
     for (field, mut decls) in by_field {
@@ -60,24 +73,24 @@ fn recipe(m: &Marker) -> String {
         decls.sort_by_key(|d| (d.rank, d.idx));
         let name = field.rust_name();
         match (base, decls.is_empty()) {
-            (Some(b), true) => s += &format!("            {name}: Prop::fixed({b}),\n"),
+            (Some(b), true) => s += &format!("        {name}: Prop::fixed({b}),\n"),
             (base, _) => {
                 let base = base.map_or("None".into(), |b| format!("Some({b})"));
-                s += &format!("            {name}: Prop {{\n                base: {base},\n                rules: vec![\n");
+                s += &format!("        {name}: Prop {{\n            base: {base},\n            rules: vec![\n");
                 for d in decls {
                     s += &format!(
-                        "                    Rule {{ when: {}, rank: {}, value: {} }},\n",
+                        "                Rule {{ when: {}, rank: {}, value: {} }},\n",
                         when(d),
                         rank(d.rank),
                         d.value.rust()
                     );
                 }
-                s += "                ],\n            },\n";
+                s += "            ],\n        },\n";
             }
         }
     }
-    s += "            ..Recipe::default()\n        }";
-    s
+    s += "        ..Recipe::default()\n    }";
+    Some(s)
 }
 
 fn when(d: &Decl) -> String {

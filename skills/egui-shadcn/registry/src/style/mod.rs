@@ -15,8 +15,9 @@ mod vega;
 pub use generated::Style;
 pub use recipe::*;
 
+// The descriptions are upstream's (`docs/src/lib/registry/styles/index.ts`).
 impl Style {
-    /// shadcn's classic look: new-york sizes on the current base.
+    /// The classic shadcn/ui look. Clean, neutral, and familiar.
     pub fn vega() -> Self {
         vega::style()
     }
@@ -24,23 +25,23 @@ impl Style {
     pub fn nova() -> Self {
         nova::style()
     }
-    /// The maia style.
+    /// Soft and rounded, with generous spacing.
     pub fn maia() -> Self {
         maia::style()
     }
-    /// The lyra style.
+    /// Boxy and sharp. Pairs well with mono fonts.
     pub fn lyra() -> Self {
         lyra::style()
     }
-    /// The mira style.
+    /// Compact. Made for dense interfaces.
     pub fn mira() -> Self {
         mira::style()
     }
-    /// The luma style.
+    /// Rounded geometry. Soft elevation. Breathable layouts.
     pub fn luma() -> Self {
         luma::style()
     }
-    /// The rhea style.
+    /// Like luma, but compact.
     pub fn rhea() -> Self {
         rhea::style()
     }
@@ -71,23 +72,43 @@ mod tests {
 
     type Maker = fn() -> Style;
 
+    const MAKERS: [(&str, Maker, f32); 7] = [
+        ("vega", Style::vega, 36.0),
+        ("nova", Style::nova, 32.0),
+        ("maia", Style::maia, 36.0),
+        ("lyra", Style::lyra, 32.0),
+        ("mira", Style::mira, 28.0),
+        ("luma", Style::luma, 36.0),
+        ("rhea", Style::rhea, 32.0),
+    ];
+
     #[test]
-    fn every_exported_style_resolves_a_button_height() {
-        // One at a time: a `Style` is large, seven of them overflow a test thread's stack.
-        let makers: [(&str, Maker); 7] = [
-            ("vega", Style::vega),
-            ("nova", Style::nova),
-            ("maia", Style::maia),
-            ("lyra", Style::lyra),
-            ("mira", Style::mira),
-            ("luma", Style::luma),
-            ("rhea", Style::rhea),
-        ];
-        for (name, make) in makers {
+    fn every_exported_style_resolves_its_button_height() {
+        for (name, make, height) in MAKERS {
             let s = make();
             assert_eq!(s.name, name);
-            let h = s.button_size_default.height.get(State::NONE);
-            assert!(h.is_some_and(|h| h > 0.0), "{name}: button height {h:?}");
+            assert_eq!(s.button_size_default.height.get(State::NONE), Some(height), "{name}");
         }
+    }
+
+    /// Windows main threads and wasm have 1 MB of stack and `Theme::current`
+    /// builds its fallback on whichever thread asks first, so building a
+    /// style must fit in a small stack, also in debug builds.
+    #[test]
+    fn every_exported_style_builds_on_a_small_stack() {
+        for (name, make, _) in MAKERS {
+            let built = std::thread::Builder::new()
+                .stack_size(256 * 1024)
+                .spawn(move || make().name)
+                .expect("spawn")
+                .join();
+            assert_eq!(built.ok(), Some(name), "{name}: stack overflow");
+        }
+        let theme = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| crate::Theme::vega_dark().style.name)
+            .expect("spawn")
+            .join();
+        assert_eq!(theme.ok(), Some("vega"));
     }
 }
