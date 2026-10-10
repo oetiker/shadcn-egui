@@ -16,11 +16,13 @@
 //! it. Only the relative order of the bits matters, so indices over this
 //! subset compare exactly like Tailwind's. A rule's rank is the OR of
 //! `1u128 << rank` over its variants, compared as an integer like Tailwind's
-//! bigint; so at most [`MAX_RANKS`] distinct ranks.
+//! bigint. The top bit, [`R_IMPORTANT`], is reserved for `!important`
+//! classes, so variants have at most `MAX_RANKS - 1` distinct ranks.
 
 use std::cmp::Ordering;
 use std::sync::OnceLock;
 
+use crate::class::Class;
 use crate::model::flag;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,6 +278,11 @@ pub fn tw_cmp(a: &str, z: &str) -> Option<Ordering> {
 /// Bits in `Rule.rank` (`u128`, src/style/recipe.rs).
 pub const MAX_RANKS: u32 = 128;
 
+/// The rank bit of an `!important` class (`size-3!`). In CSS an important
+/// declaration beats every normal one whatever its selector or order, so
+/// this bit sits above every variant bit.
+pub const R_IMPORTANT: u32 = MAX_RANKS - 1;
+
 /// [`TRANSLATED`] in Tailwind variant order, each with its bit index:
 /// variants that compare equal share one (`getVariantOrder`).
 fn ranked() -> &'static [(&'static str, u32)] {
@@ -293,8 +300,9 @@ fn ranked() -> &'static [(&'static str, u32)] {
             };
             out.push((n, rank));
         }
-        // Fail loudly rather than wrap a bit out of the rank mask.
-        assert!(out.last().is_none_or(|(_, r)| *r < MAX_RANKS), "more than {MAX_RANKS} variant ranks");
+        // Fail loudly rather than wrap a bit out of the rank mask or onto
+        // the important bit.
+        assert!(out.last().is_none_or(|(_, r)| *r < R_IMPORTANT), "more than {R_IMPORTANT} variant ranks");
         out
     })
 }
@@ -318,4 +326,46 @@ pub fn variant(v: &str) -> V {
         Some((_, why)) => V::Ignore(why),
         None => V::Unsupported,
     }
+}
+
+/// The variants of one class, combined.
+#[derive(Debug, PartialEq)]
+pub struct Variants {
+    pub all: u32,
+    pub none: u32,
+    /// OR of `1 << rank` of each condition and always-true variant, plus
+    /// [`R_IMPORTANT`] for an important class.
+    pub rank: u128,
+    /// A pseudo target selects the field; it does not compete in the
+    /// cascade, so it adds no rank bit.
+    pub pseudo: Option<Pseudo>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Skip {
+    Ignore(&'static str),
+    Unsupported(String),
+}
+
+/// Combine a class's variants. The first variant that is ignored or
+/// unsupported decides for the whole class.
+pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
+    let mut out = Variants { all: 0, none: 0, rank: 0, pseudo: None };
+    if c.important {
+        out.rank |= 1 << R_IMPORTANT;
+    }
+    for v in &c.variants {
+        match variant(v) {
+            V::Cond { all, none, rank } => {
+                out.all |= all;
+                out.none |= none;
+                out.rank |= 1 << rank;
+            }
+            V::Always { rank } => out.rank |= 1 << rank,
+            V::Pseudo(p, _) => out.pseudo = Some(p),
+            V::Ignore(why) => return Err(Skip::Ignore(why)),
+            V::Unsupported => return Err(Skip::Unsupported(format!("variant `{v}`"))),
+        }
+    }
+    Ok(out)
 }

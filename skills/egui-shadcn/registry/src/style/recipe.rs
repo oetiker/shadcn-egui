@@ -99,7 +99,8 @@ impl When {
 /// A value that applies when `when` matches. `rank` is the Tailwind v4
 /// variant-order bitmask of the class's variants, one bit per distinct
 /// variant: when several rules match, the highest rank wins, as in
-/// Tailwind's CSS output order.
+/// Tailwind's CSS output order. Bit 127 marks an `!important` class, which
+/// beats every normal one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,

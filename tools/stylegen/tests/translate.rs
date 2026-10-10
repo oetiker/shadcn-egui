@@ -5,7 +5,9 @@ use stylegen::css::parse_style_css;
 use stylegen::markers::parse_markers;
 use stylegen::model::{flag, Field, Value, FLAGS};
 use stylegen::utility::{utility, U};
-use stylegen::variant::{rank_of, tw_cmp, variant, Pseudo, V, IGNORED, MAX_RANKS, TRANSLATED};
+use stylegen::variant::{
+    class_variants, rank_of, tw_cmp, variant, Pseudo, Skip, Variants, V, IGNORED, R_IMPORTANT, TRANSLATED,
+};
 
 fn set(u: &str) -> Vec<(Field, Value)> {
     match utility(u, None) {
@@ -150,11 +152,12 @@ fn tailwind_variant_order() {
 }
 
 /// The rank table is sorted by the port of `Variants.compare`: for every
-/// pair, rank order equals Tailwind order, and every rank fits `Rule.rank`.
+/// pair, rank order equals Tailwind order, and every rank stays below the
+/// important bit.
 #[test]
 fn ranks_follow_tailwind_order() {
     for (a, _) in TRANSLATED {
-        assert!(rank(a) < MAX_RANKS);
+        assert!(rank(a) < R_IMPORTANT);
         for (z, _) in TRANSLATED {
             assert_eq!(Some(rank(a).cmp(&rank(z))), tw_cmp(a, z), "`{a}` vs `{z}`");
         }
@@ -207,33 +210,11 @@ fn model_matches_recipe_rs() {
     assert_eq!(names, fields);
 }
 
-/// A class as `resolve` will see it: the variants' combined condition and
-/// rank bitmask, or why it is skipped. Stops at the first variant that is
-/// not translated.
-struct Translated {
-    all: u32,
-    none: u32,
-    mask: u128,
-    pseudo: Option<Pseudo>,
-}
-
-fn variants_of(raw: &str) -> Result<Translated, String> {
-    let c = split(raw);
-    let mut t = Translated { all: 0, none: 0, mask: 0, pseudo: None };
-    for v in &c.variants {
-        match variant(v) {
-            V::Cond { all, none, rank } => {
-                t.all |= all;
-                t.none |= none;
-                t.mask |= 1u128.checked_shl(rank).expect("rank fits a u128 mask");
-            }
-            V::Always { rank } => t.mask |= 1u128.checked_shl(rank).expect("rank fits a u128 mask"),
-            V::Pseudo(p, _) => t.pseudo = Some(p),
-            V::Ignore(_) => return Err("ignored".into()),
-            V::Unsupported => return Err(format!("variant `{v}` unsupported")),
-        }
-    }
-    Ok(t)
+fn variants_of(raw: &str) -> Result<Variants, String> {
+    class_variants(&split(raw)).map_err(|e| match e {
+        Skip::Ignore(_) => "ignored".to_owned(),
+        Skip::Unsupported(why) => format!("{why} unsupported"),
+    })
 }
 
 /// `marker → classes` of one style.
@@ -284,7 +265,7 @@ fn conditional_classes_have_nonzero_rank() {
         for raw in css.iter().flat_map(|(_, c)| c) {
             if let Ok(t) = variants_of(raw) {
                 if t.all != 0 || t.none != 0 {
-                    assert!(t.mask > 0, "`{raw}` is conditional with rank 0");
+                    assert!(t.rank > 0, "`{raw}` is conditional with rank 0");
                     checked += 1;
                 }
             }
@@ -295,7 +276,7 @@ fn conditional_classes_have_nonzero_rank() {
 
 /// The cascade the recipe models (`pick`: highest rank bitmask wins, then the
 /// later layer, then the later rule) must agree with the browser, where
-/// selector specificity decides before source order. In Tailwind's output
+/// `!important` decides first, then selector specificity, then source order. In Tailwind's output
 /// most variants add one class, attribute or pseudo-class of specificity;
 /// `in-*` (`:where(…) &`) and the media/supports variants add none, and of
 /// the svg targets only `[&_svg:not([class*='size-'])]` adds one. For every
@@ -322,7 +303,7 @@ fn rank_order_agrees_with_specificity() {
                     let U::Set(list) = utility(&c.utility, t.pseudo) else { continue };
                     let spec = c.variants.iter().map(|v| specificity(v)).sum();
                     for (field, value) in list {
-                        rules.push(Rule { field, value, all: t.all, none: t.none, key: (t.mask, layer, idx), spec, raw: raw.clone() });
+                        rules.push(Rule { field, value, all: t.all, none: t.none, key: (t.rank, layer, idx), spec, raw: raw.clone() });
                     }
                 }
             }
@@ -336,7 +317,11 @@ fn rank_order_agrees_with_specificity() {
                         continue;
                     }
                     pairs += 1;
-                    assert!(a.spec >= b.spec, "{style}: `{}` outranks `{}` but has lower specificity", a.raw, b.raw);
+                    let important = |r: &Rule| r.key.0 >> R_IMPORTANT;
+                    assert!(important(a) >= important(b), "{style}: `{}` outranks important `{}`", a.raw, b.raw);
+                    if important(a) == important(b) {
+                        assert!(a.spec >= b.spec, "{style}: `{}` outranks `{}` but has lower specificity", a.raw, b.raw);
+                    }
                 }
             }
         }
@@ -350,9 +335,28 @@ fn rank_order_agrees_with_specificity() {
 /// `aria-invalid:border-destructive`; `dark:aria-invalid:` beats both.
 #[test]
 fn checkbox_invalid_and_checked_keeps_primary_border() {
-    let both = variants_of("aria-invalid:aria-checked:border-primary").unwrap().mask;
-    let one = variants_of("aria-invalid:border-destructive").unwrap().mask;
-    let dark = variants_of("dark:aria-invalid:border-destructive/50").unwrap().mask;
+    let both = variants_of("aria-invalid:aria-checked:border-primary").unwrap().rank;
+    let one = variants_of("aria-invalid:border-destructive").unwrap().rank;
+    let dark = variants_of("dark:aria-invalid:border-destructive/50").unwrap().rank;
     assert!(both > one);
     assert!(dark > both);
+}
+
+/// `!important` beats every normal declaration: the class gets the top rank
+/// bit above its variant bits (cn-badge `[&>svg]:size-3!`).
+#[test]
+fn important_class_gets_the_top_rank_bit() {
+    let c = split("[&>svg]:size-3!");
+    assert!(c.important);
+    let v = class_variants(&c).unwrap();
+    assert_eq!(v, Variants { all: 0, none: 0, rank: 1 << R_IMPORTANT, pseudo: Some(Pseudo::Svg) });
+    assert_eq!(utility(&c.utility, v.pseudo), U::Set(vec![(Field::IconSize, Value::Px(12.0))]));
+    // An important plain class outranks the highest-ranked normal one.
+    let important = variants_of("h-8!").unwrap().rank;
+    let normal = variants_of("dark:aria-invalid:aria-checked:h-9").unwrap().rank;
+    assert!(important > normal);
+    // Variant bits are kept below the important bit.
+    let both = variants_of("dark:h-8!").unwrap().rank;
+    assert_eq!(both, (1 << R_IMPORTANT) | (1 << rank("dark")));
+    assert!(variants_of("dark:h-8").unwrap().rank < 1 << R_IMPORTANT);
 }
