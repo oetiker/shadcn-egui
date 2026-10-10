@@ -112,10 +112,11 @@ recipe holds are *base classes*, and you quote them.
    recipe field. `stylegen drift` checks that every quote is still a substring of
    the upstream source.
 5. **No style values in code.** `tests/tokens.rs` scans every file in its
-   `PORTED` list (strict): no colour or font-size literals, no float literals
-   other than `0.0`, `1.0` and halving/doubling, no `Shadow { .. }`, no alpha
-   multiplier — unless a `// base: "…"` quote sits on the same line or the line
-   above. Add the new file to `PORTED`.
+   `PORTED` list. Colour and font-size literals are allowed only with a
+   `// token-ok: <reason>` comment on the line above. Float literals other than
+   `0.0`, `1.0` and halving/doubling, `Shadow { .. }` and alpha multipliers are
+   allowed only with a `// base: "…"` quote on the same line or the line above.
+   Add the new file to `PORTED`.
 6. **egui sizing.** The widget sets its own size before placement (single pass).
    Use the `layout` helpers, no `available_width()` arithmetic. Resolve geometry
    *without* interaction states: size must not change on hover.
@@ -162,8 +163,8 @@ Example, the list for Slider:
    draws, does not panic and never produces NaN.
 
 ## Interaction states
-- One shared helper (in `src/components/shared.rs`) turns a `Response` into a `State`. Do not re-derive it per
-  component, or components will disagree.
+- One shared helper (in `src/components/shared.rs`) turns a `Response` into a
+  `State`. Do not re-derive it per component, or components will disagree.
 - **A disabled widget never gets `HOVER`, `ACTIVE` or `FOCUS_VISIBLE`.** It gets
   `DISABLED` only.
 - Geometry is resolved without interaction states.
