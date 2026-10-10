@@ -97,12 +97,13 @@ impl When {
 }
 
 /// A value that applies when `when` matches. `rank` is the Tailwind v4
-/// variant-order bitmask of the class's variants: when several rules match,
-/// the highest rank wins, as in Tailwind's CSS output order.
+/// variant-order bitmask of the class's variants, one bit per distinct
+/// variant: when several rules match, the highest rank wins, as in
+/// Tailwind's CSS output order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,
-    pub rank: u32,
+    pub rank: u128,
     pub value: T,
 }
 
@@ -138,8 +139,8 @@ pub fn pick<T: Copy>(layers: &[&Recipe], field: impl Fn(&Recipe) -> &Prop<T>, s:
 }
 
 fn pick_props<'a, T: Copy + 'a>(props: impl IntoIterator<Item = &'a Prop<T>>, s: State) -> Option<T> {
-    let mut best: Option<((u32, usize, usize), T)> = None;
-    let mut consider = |key: (u32, usize, usize), v: T| {
+    let mut best: Option<((u128, usize, usize), T)> = None;
+    let mut consider = |key: (u128, usize, usize), v: T| {
         if best.as_ref().is_none_or(|(k, _)| key >= *k) {
             best = Some((key, v));
         }
@@ -263,7 +264,7 @@ pub struct Recipe {
 mod tests {
     use super::*;
 
-    fn rule<T>(all: State, rank: u32, value: T) -> Rule<T> {
+    fn rule<T>(all: State, rank: u128, value: T) -> Rule<T> {
         Rule { when: When::new(all, State::NONE), rank, value }
     }
 
@@ -294,6 +295,26 @@ mod tests {
         let mut p2 = p.clone();
         p2.rules.push(rule(State::DARK | State::HOVER, (1 << 20) | (1 << 8), 3));
         assert_eq!(p2.get(State::DARK | State::HOVER), Some(3));
+    }
+
+    #[test]
+    fn two_variants_of_one_kind_beat_one() {
+        // cn-checkbox: aria-invalid:aria-checked:border-primary must beat
+        // aria-invalid:border-destructive when the box is invalid and
+        // checked. Each variant has its own bit (stylegen ranks: aria-checked
+        // 26, aria-invalid 28), so the pair's mask is larger.
+        let p = Prop {
+            base: Some(0),
+            rules: vec![rule(State::INVALID.or(State::CHECKED), (1 << 26) | (1 << 28), 1), rule(State::INVALID, 1 << 28, 2)],
+        };
+        assert_eq!(p.get(State::INVALID | State::CHECKED), Some(1));
+        assert_eq!(p.get(State::INVALID), Some(2));
+    }
+
+    #[test]
+    fn ranks_use_all_128_bits() {
+        let p = Prop { base: None, rules: vec![rule(State::DARK, 1 << 127, 1), rule(State::DARK, (1 << 126) | 1, 2)] };
+        assert_eq!(p.get(State::DARK), Some(1));
     }
 
     #[test]
