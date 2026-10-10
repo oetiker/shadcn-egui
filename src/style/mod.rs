@@ -3,8 +3,13 @@
 //! See `references/styles.md` in the skill.
 
 mod generated;
+mod luma;
+mod lyra;
+mod maia;
+mod mira;
 mod nova;
 pub mod recipe;
+mod rhea;
 mod vega;
 
 pub use generated::Style;
@@ -18,6 +23,26 @@ impl Style {
     /// Reduced padding and margins for compact layouts.
     pub fn nova() -> Self {
         nova::style()
+    }
+    /// The maia style.
+    pub fn maia() -> Self {
+        maia::style()
+    }
+    /// The lyra style.
+    pub fn lyra() -> Self {
+        lyra::style()
+    }
+    /// The mira style.
+    pub fn mira() -> Self {
+        mira::style()
+    }
+    /// The luma style.
+    pub fn luma() -> Self {
+        luma::style()
+    }
+    /// The rhea style.
+    pub fn rhea() -> Self {
+        rhea::style()
     }
 }
 
@@ -42,5 +67,27 @@ mod tests {
         assert_eq!(n.button_size_default.pad_left.get(State::ICON_START), Some(8.0));
         assert_eq!(n.card_content.pad_left.get(State::SIZE_SM), Some(12.0));
         assert_eq!(Style::default(), Style::vega());
+    }
+
+    type Maker = fn() -> Style;
+
+    #[test]
+    fn every_exported_style_resolves_a_button_height() {
+        // One at a time: a `Style` is large, seven of them overflow a test thread's stack.
+        let makers: [(&str, Maker); 7] = [
+            ("vega", Style::vega),
+            ("nova", Style::nova),
+            ("maia", Style::maia),
+            ("lyra", Style::lyra),
+            ("mira", Style::mira),
+            ("luma", Style::luma),
+            ("rhea", Style::rhea),
+        ];
+        for (name, make) in makers {
+            let s = make();
+            assert_eq!(s.name, name);
+            let h = s.button_size_default.height.get(State::NONE);
+            assert!(h.is_some_and(|h| h > 0.0), "{name}: button height {h:?}");
+        }
     }
 }

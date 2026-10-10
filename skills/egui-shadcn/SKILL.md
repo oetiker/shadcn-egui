@@ -48,8 +48,12 @@ loop.
    integration you already have (eframe, egui-winit + softbuffer, etc.).
 3. **Apply the theme once**, right after the egui context is created (in
    eframe: the `run_native` app creator, on `cc.egui_ctx`):
-   `egui_shadcn::Theme::vega_dark().apply(ctx)` (or `light`). Apply again only when
-   the theme itself changes. Read tokens via `Theme::current(ctx)`.
+   `egui_shadcn::Theme::new(Style::vega(), Palette::dark(), 10.0).apply(&ctx)`
+   (`Palette::light()` for light). Choose the style from `style` in the web
+   project's `components.json` (`Style::vega()`, `nova()`, `maia()`, `lyra()`,
+   `mira()`, `luma()`, `rhea()`; `sera` is not exported) and the radius from
+   its `--radius` (`0.625rem` is `10.0`); see `references/styles.md`. Apply again
+   only when the theme changes. Read tokens via `Theme::current(ctx)`.
 4. **Decompose the design top-down:** app shell → panels
    (`SidePanel`/`TopBottomPanel`/`CentralPanel`); each region's **layout intent**
    (stack? row? grid? space-between?); components + their cva variants; token

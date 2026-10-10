@@ -8,10 +8,10 @@ Add to the target's Cargo.toml:
 
 ```toml
 egui = "0.34"
-eframe = "0.34"
-egui_extras = { version = "0.34", features = ["all_loaders"] }
+egui_extras = { version = "0.34", default-features = false }
 ```
 
-Call `egui_shadcn::Theme::vega_dark().apply(ctx)` once, right after the egui context
+Nothing else is needed: no `eframe`, no image loaders. Call
+`egui_shadcn::Theme::new(Style::vega(), Palette::dark(), 10.0).apply(&ctx)` once, right after the egui context
 is created, then build with the
 `layout` + `components` helpers.

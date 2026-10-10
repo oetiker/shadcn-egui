@@ -7,86 +7,102 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 ### Changed
-- Removed items that only served the old new-york look: `Theme::dark()` and `Theme::light()` (use `Theme::vega_dark()` / `vega_light()`), `Palette::shadow` and `Palette::overlay`, `Theme::shadow_md()` / `shadow_lg()` (use `Theme::shadow(ShadowLevel)`), and the `Metrics` fields for control heights, paddings, gap, card padding, dialog and popover width and ring width (these now come from the `Style`). Native egui widgets take their height, padding and spacing from the style's default button and tabs gap, so they may differ slightly from before.
-- The `settings` example takes the style and palette on the command line:
-  `cargo run --example settings -- nova light` (default `vega dark`). Its
-  components tab now also shows a Volume slider and a Region select with a
-  placeholder, and `SettingsState` has new `slider` and `region` fields.
-- A theme now carries a shadcn style: `Theme::new(Style::vega(), palette, radius)`
-  or `Style::nova()` for the compact look; `Theme::vega_dark()` and
-  `Theme::vega_light()` give the default vega style. `Theme` can no longer be
-  copied implicitly, so code that reuses a theme value must call `.clone()`.
-- The `sm` to `4xl` corner radii now scale with `radius` by a factor, as in
-  current shadcn, instead of adding or subtracting fixed pixels. At the
-  default radius of 10 px, small, medium, large and extra-large corners look
-  the same as before.
-- Buttons follow the chosen style: vega buttons are 36 px high, nova buttons
-  32 px with rounder corners, both with 10 px side padding instead of 16 px,
-  and the Destructive button is a light red tint with red text instead of a
-  solid red fill. A pressed button moves down by 1 px. New sizes (`Xs`,
-  `IconXs`, `IconSm`, `IconLg`), a trailing icon and the expanded, invalid
-  and has-popup states are available.
-- Button states follow the style too: a hovered Ghost or Outline button
-  takes the style's muted hover fill instead of `accent`, and a hovered Link
-  button is underlined. Keyboard focus draws a 3 px ring right at the
-  button's edge and turns its border to the ring colour. A disabled button
-  is drawn at half opacity, so what lies behind it shows through, instead of
-  being blended toward the page colour.
-- Badges follow the chosen style: 20 px high with fully rounded ends, and
-  the Destructive badge is a light red tint with red text instead of a solid
-  red fill. New `Ghost` and `Link` variants and leading or trailing icons are
-  available.
-- Text inputs follow the chosen style: 36 px high in vega and 32 px in
-  nova, with 10 px side padding, the style's border and a 3 px focus ring.
-  The border is the `input` colour at rest and turns to the ring colour on
-  keyboard focus. New `.invalid(true)` draws a red border and ring, and
-  `.enabled(false)` draws the field at half opacity and ignores typing.
-- Checkboxes follow the chosen style: a 16 px box with a 1 px border, a
-  checkmark icon, a soft shadow and a 3 px ring on keyboard focus. The click
-  target reaches 12 px to each side and 8 px above and below the box. New
-  `Checkbox::new(&mut on).invalid(true)` draws a red border and ring, and
-  `.enabled(false)` draws the box at half opacity and ignores clicks and Space.
-- Switches follow the chosen style: a 32 x 18.4 px track in vega and nova
-  (24 x 14 px for the new `SwitchSize::Sm`), a round thumb inside the 1 px
-  border and a 3 px ring on keyboard focus. The click target reaches 12 px to
-  each side and 8 px above and below. New `Switch::new(&mut on).invalid(true)`
-  draws a red border and ring, and `.enabled(false)` draws it at half opacity.
-- Labels are medium-weight 14 px text with no extra line height, and a label
-  shown with `Label::new(..).enabled(false)` is drawn at half opacity.
-  Separators are exactly 1 px thick and add no spacing of their own; a new
-  `separator_vertical` draws a vertical line.
-- Tabs follow the chosen style: the tab list is as wide as its labels
-  instead of filling the row, 36 px high in vega and 32 px in nova, and the
-  active tab shows a raised pill with a soft shadow. New
-  `Tabs::new(&mut active, labels).variant(TabsVariant::Line)` draws an
-  underline under the active tab instead; Left, Right, Home and End move the
-  selection, and `.enabled(false)` draws the tabs at half opacity.
+- Components now take their sizes, colours, radii and shadows from a shadcn
+  style. `Theme::new(Style::vega(), Palette::dark(), 10.0)` gives the classic
+  look and `Style::nova()` the compact one, matching a web client set up with
+  the same `style` in `components.json`; `Style::maia()`, `lyra()`, `mira()`,
+  `luma()` and `rhea()` are available too, but are not covered by the snapshot
+  tests.
+- Controls look slightly different from 0.3 even with vega: destructive
+  buttons and badges are light red tints instead of solid red, hovered Ghost
+  and Outline buttons use the muted fill, and cards and popovers draw a thin
+  outline ring instead of a border. Controls are 36 px high in vega and 32 px
+  in nova, with 10 px side padding.
+- `Theme` is `Clone` and no longer `Copy`, so code that reuses a theme value
+  must call `.clone()`.
+- The `sm` to `4xl` corner radii scale with `radius` by a factor
+  (`rounded-xl` is 1.4 x radius), as in current shadcn. At the default radius
+  of 10 px, small, medium, large and extra-large corners look as before;
+  larger radii now round more.
+- `Popover::width(..)` and `Dialog::width(..)` set the width of the whole box
+  including its padding, so existing callers get narrower content.
+- Native egui widgets take their height,
+  padding and spacing from the style's default button and tabs gap, so in nova
+  they look slightly shorter than before.
+- Buttons: a pressed button moves down by 1 px, a hovered Link button is
+  underlined, and a disabled button is drawn at half opacity instead of being
+  blended toward the page colour. Keyboard focus draws a 3 px ring at the
+  button's edge and turns its border to the ring colour.
+- Badges are 20 px high with fully rounded ends.
+- Text inputs have a 3 px focus ring, and the border is the `input` colour at
+  rest and the ring colour on keyboard focus. `.invalid(true)` draws a red
+  border and ring, and `.enabled(false)` draws the field at half opacity and
+  ignores typing.
+- Checkboxes are a 16 px box with a 1 px border, a checkmark icon, a soft
+  shadow and a 3 px focus ring, and the click target reaches 12 px to each
+  side and 8 px above and below. `.invalid(true)` and `.enabled(false)` work as
+  for inputs.
+- Switches have a 32 x 18.4 px track, a round thumb inside the 1 px border
+  and a 3 px focus ring, with the same enlarged click target as checkboxes.
+  `.invalid(true)` and `.enabled(false)` work as for inputs.
+- Labels are 14 px text with no extra line height, and a label shown with
+  `Label::new(..).enabled(false)` is drawn at half opacity. Separators are
+  exactly 1 px thick and add no spacing of their own.
+- Tabs: the tab list is as wide as its labels instead of filling the row, and
+  the active tab shows a raised pill with a soft shadow. Left, Right, Home and
+  End move the selection, and `.enabled(false)` draws the tabs at half opacity.
 - Tooltips are inverted as in current shadcn: a foreground-coloured bubble
-  with background-coloured text instead of the primary colour, shown above the
-  trigger with a small rounded arrow pointing at it. Text wraps at 320 px.
-- Popovers follow the chosen style: a thin outline ring instead of a border,
-  a softer shadow, and vega or nova padding and corners. The width of 288 px
-  now includes the padding, and the new `popover_header(ui, title,
-  description)` adds a title with a muted description.
-- Selects follow the chosen style: a 36 px (vega) or 32 px (nova) trigger
-  with a chevron, and a list with a thin outline ring and a check mark on the
-  chosen row. The trigger is now as wide as its widest option instead of the
-  full field width; `Select::new(..).width(..)`, `.size(SelectSize::Sm)`,
-  `.placeholder(..)`, `.invalid(..)` and `.enabled(..)` change that, and the
-  list takes Up, Down, Home, End, Enter, Esc and type-ahead keys.
-- Cards follow the chosen style: a thin outline ring instead of a border, and
-  vega or nova padding, gaps and corners. A card now fills the available width.
-  New `Card::new().size(CardSize::Sm).footer(..).show(ui, ..)` adds a compact
-  size and a footer (a tinted strip reaching the card edges in nova), and
-  `card_header`, `card_header_with_action` and `card_content` build the sections.
-- Dialogs follow the chosen style: a thin outline ring and no shadow, a
-  384 px (nova) or 448 px (vega) wide panel, a close button that looks like
-  a ghost icon button, and a lighter backdrop without blur. In nova the
-  footer is a tinted strip reaching the panel edges. `Dialog::show_close_button(false)`
-  hides the close button.
-- New `Slider` with one thumb, horizontal or vertical, in the chosen style.
-  A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
-  step it, and `.enabled(false)` draws it at half opacity and ignores input.
+  with background-coloured text instead of the primary colour, with a small
+  rounded arrow pointing at the trigger. Text wraps at 320 px.
+- Popovers draw a thin outline ring instead of a border and a softer shadow,
+  with padding and corners from the style. The default width is 288 px.
+- Selects: the trigger has a chevron and is as wide as its widest option
+  instead of the full field width, and the list has a thin outline ring and a
+  check mark on the chosen row. The list takes Up, Down, Home, End, Enter, Esc
+  and type-ahead keys.
+- Cards fill the available width, with padding, gaps and corners from the
+  style.
+- Dialogs have a thin outline ring and no shadow, a 384 px (nova) or 448 px
+  (vega) wide panel, a close button that looks like a ghost icon button, and a
+  lighter backdrop without blur. In nova the footer is a tinted strip reaching
+  the panel edges.
+- The `settings` example takes the style and palette on the command line, for
+  example `cargo run --example settings -- nova light` (default `vega dark`).
+  `SettingsState` has new `slider` and `region` fields.
+
+### Added
+- `Slider` with one thumb, horizontal or vertical. A click or drag sets the
+  value, the arrow, Page Up/Down, Home and End keys step it, and
+  `.enabled(false)` draws it at half opacity and ignores input.
+- Button sizes `Xs`, `IconXs`, `IconSm` and `IconLg`, and leading or trailing
+  button icons. Buttons also show the expanded, invalid and has-popup states.
+- Badge variants `Ghost` and `Link`, and leading or trailing badge icons.
+- `SwitchSize::Sm` (24 x 14 px) and `Tabs::new(..).variant(TabsVariant::Line)`,
+  which draws an underline under the active tab.
+- `Input::invalid`, `Checkbox::invalid`, `Switch::invalid` and
+  `Select::new(..)` options `.width(..)`, `.size(SelectSize::Sm)`,
+  `.placeholder(..)`, `.invalid(..)` and `.enabled(..)`; `Dialog` gets
+  `show_close_button(false)`.
+- `Card::new().size(CardSize::Sm).footer(..).show(ui, ..)` with
+  `card_header`, `card_header_with_action` and `card_content`, and
+  `popover_header(ui, title, description)`; the card footer is a tinted strip
+  reaching the card edges in nova.
+- `separator_vertical` draws a vertical line.
+- `Palette::with_bold_menu_accent()` for shadcn's `menuAccent: "bold"`.
+- `Metrics` has new fields `line_xs`, `line_sm`, `line_base` and `line_lg`
+  (Tailwind's line heights for the text sizes), and `Theme::line_px(TextSize)`
+  returns the line height for a text size.
+- `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
+
+### Removed
+- `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /
+  `Theme::vega_light()` or `Theme::new(..)`. `Theme::shadow_md()` and
+  `shadow_lg()` are gone too; use `Theme::shadow(ShadowLevel)`.
+- `Metrics` fields that a style now sets (control heights, paddings, gap, card
+  padding, dialog and popover width, ring width), and `Palette::shadow` and
+  `Palette::overlay`. Set such values on the `Style` in your theme setup
+  instead.
+- The new-york look; there is no compatibility style.
 
 ## [0.3.2] - 2026-10-09
 

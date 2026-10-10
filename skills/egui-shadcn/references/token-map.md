@@ -13,16 +13,18 @@
 | `--destructive` | Button Destructive fill |
 | `--border` | 1px strokes everywhere; `widgets.*.bg_stroke` |
 | `--input` | TextEdit bg; switch off-track |
-| `--ring` | focus ring (3px @ 50%) |
+| `--ring` | `Palette.ring`; the ring colour and width come from the style's recipe props `ring_color` / `ring_width` |
 | `--radius` (10px) | `Theme.radius`; `radius_sm/md/lg/xl` |
 | 4px spacing grid | `Spacing.item_spacing`, margins |
-| 14px / medium | `text_styles[Body]` + `theme::family(ctx, FAMILY_MEDIUM)` |
+| 14px / medium | `text_styles[Body]` + `theme::family(ctx, FAMILY_MEDIUM)` (the Medium font currently renders as regular weight) |
 | `shadow-*` | `Theme::shadow(ShadowLevel)`; the style's recipes pick the level |
 | dialog overlay `bg-black/50` | the style's `dialog_overlay` recipe (`bg`) |
 | `text-xs` / `text-sm` / `text-base` / `text-lg` | `Metrics.text_xs` / `text_sm` / `text_base` / `text_lg` |
 | control heights, paddings, gaps, card padding, dialog and popover widths | the style's recipes (`button_size_*`, `card`, `dialog_content`, ...), not `Metrics` |
+| `text-*` line heights (Tailwind's implicit `leading`) | `Metrics.line_xs` / `line_sm` / `line_base` / `line_lg`; `Theme::line_px(TextSize)` |
 | `size-4` (icons, checkbox) | `Metrics.icon` |
-| `border` / `ring-[3px]` widths | `Metrics.border` / the style's `ring` props |
+| `border` width | `Metrics.border` |
+| `ring-[3px]` | the style's `ring_width` / `ring_color` props |
 
 Tokens are OKLCH literals converted by `color::oklch_to_srgb` into the `Palette`.
 Customize by editing `Palette::light()/dark()` in the vendored `theme.rs`, or

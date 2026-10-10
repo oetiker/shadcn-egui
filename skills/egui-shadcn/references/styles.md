@@ -110,6 +110,11 @@ A rule's `When` is `all` (flags that must be set) plus `none` (flags that must
 not be set; this is how a negated variant works). A component sets only the
 flags that are true for its current paint.
 
+Text sizes and line heights are not part of a style. `Metrics` holds
+`text_xs/sm/base/lg` and the line heights Tailwind attaches to them
+(`line_xs/line_sm/line_base/line_lg`); `Theme::line_px(TextSize)` returns the
+line height for a recipe's `text_size`.
+
 ## Breakpoints
 
 `sm:` and `md:` count as **matched**: an egui desktop window is wider than both.
@@ -147,6 +152,19 @@ cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift    <shadcn
 - A few values look odd and are right. vega's `card_content` gap of 12 comes from
   upstream's `.cn-card-content:has(> [data-slot=questionnaire-choices])` rule,
   which upstream's own CSS parser flattens; it matches the published output.
+
+## Exported styles
+
+Exported (constructors on `Style`): vega, nova, maia, lyra, mira, luma, rhea.
+The snapshot tests render vega and nova only; the other five have a unit test
+that they construct and resolve a button height, and have not been checked
+visually.
+
+Not exported: sera. Its report lists unsupported classes in shipped markers:
+single-side bottom borders on inputs (`border-b-*`, underline-style fields),
+`peer-data-[slot=…]` variants on the label, and a `translate-x-[calc(…)]`
+value on the switch thumb. Support for them has to be added to the generator
+first (see `tools/stylegen/reports/sera.md`).
 
 ## Choosing a style
 

@@ -1,4 +1,4 @@
-//! shadcn v4 (new-york / OKLCH) design tokens, materialized for egui.
+//! shadcn v4 (OKLCH) design tokens and the `Theme` (style x palette x radius), materialized for egui.
 
 use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
 use crate::style::{pick, Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};

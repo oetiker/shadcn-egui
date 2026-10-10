@@ -15,7 +15,7 @@ egui UI from a web design normally means many rounds of guess-and-tweak.
 This plugin fixes that by shipping three things:
 
 1. **A tested, compiling component module** (`registry/`) that ports the
-   shadcn-v4 (new-york / OKLCH) design system to egui — theme & tokens, a
+   shadcn-v4 (OKLCH) design system to egui — theme & tokens, a
    flexbox-substitute layout layer, and themed components (Button, Input, Label,
    Card, Tabs, Switch, Checkbox, Select, Separator, Badge). Runtime deps are just
    `egui` + `egui_extras` — no eframe/wgpu coupling; eframe and `egui_kittest`+wgpu

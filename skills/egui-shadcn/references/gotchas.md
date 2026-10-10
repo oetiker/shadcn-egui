@@ -17,6 +17,18 @@
   with `painter().layout_no_wrap(text, font_id, explicit_color)` (see `button.rs`).
 - **`strong()` is not a bold font.** egui's `strong` brightens color. For weight use the
   named families via `theme::family(ctx, FAMILY_MEDIUM|FAMILY_SEMIBOLD)`.
+- **Geometry is resolved without interaction states.** Sizes, paddings and
+  gaps are picked before hover, press or focus are known, so a style rule that
+  changes a size on `hover:` or `active:` does not move the layout. Only colours,
+  borders, rings, shadows and the 1px press nudge follow those states.
+- **egui has no backdrop blur.** `backdrop-blur-*` on a dialog overlay is not
+  drawn; the overlay is only the translucent fill.
+- **The ring is drawn outside the border box.** A focus ring (`ring-3`) is
+  painted around the control and takes no layout space, as in CSS. Leave room
+  around a control at the edge of a clipped area, or the ring is cut off.
+- **`cn-font-heading` is ignored.** Upstream adds this marker to dialog and card
+  titles so the shadcn CLI can swap in a heading font. `stylegen` skips it and
+  the titles use the normal body font; set a heading font yourself if wanted.
 - **No CSS transitions.** Animate manually with `ctx.animate_bool(id, on)` and lerp
   (see `switch.rs`). `animate_*` honours `animation_time`; set to 0 (as
   `cpu-rendering.md` advises) it jumps to the target, which is what you want.
