@@ -74,6 +74,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   New `Card::new().size(CardSize::Sm).footer(..).show(ui, ..)` adds a compact
   size and a footer (a tinted strip reaching the card edges in nova), and
   `card_header`, `card_header_with_action` and `card_content` build the sections.
+- Dialogs follow the chosen style: a thin outline ring and no shadow, a
+  384 px (nova) or 448 px (vega) wide panel, a close button that looks like
+  a ghost icon button, and a lighter backdrop without blur. In nova the
+  footer is a tinted strip reaching the panel edges. `Dialog::show_close_button(false)`
+  hides the close button.
 - New `Slider` with one thumb, horizontal or vertical, in the chosen style.
   A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
   step it, and `.enabled(false)` draws it at half opacity and ignores input.

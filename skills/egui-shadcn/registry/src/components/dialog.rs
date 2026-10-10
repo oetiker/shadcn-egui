@@ -1,15 +1,25 @@
-//! shadcn Dialog: a modal card over a dimmed backdrop, with title,
-//! description, a close cross, and a right-aligned footer.
+//! shadcn Dialog, ported from shadcn-svelte `ui/dialog/*.svelte` at
+//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; width,
+//! padding, gap, radius, ring, text, the footer strip and the close button's
+//! position come from the style's `cn-dialog-*` recipes.
 //!
-//! Built on `egui::Modal`, which keeps backdrop and card in one area (so their
+//! Built on `egui::Modal`, which keeps backdrop and panel in one area (so their
 //! z-order cannot flip) and blocks input to everything beneath. Closes on Esc,
-//! a backdrop click, or the cross.
+//! a backdrop click, or the close button.
+//!
+//! The overlay's `backdrop-blur-xs` is not drawn: egui cannot blur what lies
+//! beneath, so only the overlay colour applies.
 
-use crate::components::icon::{paint_icon, CLOSE};
-use crate::components::shared::corner;
-use crate::theme::{family, FAMILY_SEMIBOLD};
-use crate::{layout, Theme};
-use egui::{Color32, Frame, Id, Margin, RichText, Sense, Stroke, Ui, Vec2};
+use crate::components::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::icon::CLOSE;
+use crate::components::shared::ring;
+use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
+use crate::theme::family_for;
+use crate::Theme;
+use egui::{Align, Color32, CornerRadius, Frame, Id, Layout, Margin, Rect, RichText, Shape, Stroke, Ui, UiBuilder};
+
+// base: "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+const FOOTER_GAP: f32 = 8.0;
 
 pub struct Dialog<'a> {
     id: Id,
@@ -17,27 +27,34 @@ pub struct Dialog<'a> {
     description: Option<&'a str>,
     width: Option<f32>,
     backdrop: Option<Color32>,
+    show_close_button: bool,
 }
 
 impl<'a> Dialog<'a> {
     pub fn new(id_salt: impl std::hash::Hash, title: &'a str) -> Self {
-        Self { id: Id::new(id_salt), title, description: None, width: None, backdrop: None }
+        Self { id: Id::new(id_salt), title, description: None, width: None, backdrop: None, show_close_button: true }
     }
     pub fn description(mut self, text: &'a str) -> Self {
         self.description = Some(text);
         self
     }
-    /// Card width; default `Metrics::dialog_width`, capped to the window.
+    /// Width of the dialog box, padding included; default the style's
+    /// `max-w-*`, capped to keep clear of the window edges.
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
         self
     }
-    /// Backdrop color; default `Palette::overlay`. Under a CPU rasterizer a
+    /// Backdrop color; default the style's overlay. Under a CPU rasterizer a
     /// translucent full-window backdrop is re-blended every frame the dialog
     /// is open; pass `Color32::TRANSPARENT` and dim the background once in the
     /// compositor instead (see `cpu-rendering.md`). It still blocks clicks.
     pub fn backdrop(mut self, color: Color32) -> Self {
         self.backdrop = Some(color);
+        self
+    }
+    /// Whether the close button shows in the corner; default true.
+    pub fn show_close_button(mut self, yes: bool) -> Self {
+        self.show_close_button = yes;
         self
     }
 
@@ -48,61 +65,140 @@ impl<'a> Dialog<'a> {
             return None;
         }
         let t = Theme::current(ctx);
-        let (p, m) = (&t.palette, &t.metrics);
-        let screen = ctx.content_rect();
-        let width = self.width.unwrap_or(m.dialog_width).min(screen.width() - 2.0 * m.pad_md);
-        let frame = Frame::new()
-            .fill(p.background)
-            .stroke(Stroke::new(m.border, p.border))
-            .corner_radius(corner(t.radius_lg()))
-            .inner_margin(Margin::same(m.card_padding as i8))
-            .shadow(t.shadow_lg());
+        let g = t.state(State::NONE);
+        let l = [&t.style.dialog_content];
+        let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let (pad_t, pad_r, pad_b, pad_l) = (px(|r| &r.pad_top), px(|r| &r.pad_right), px(|r| &r.pad_bottom), px(|r| &r.pad_left));
+        let gap = px(|r| &r.gap);
+        let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
+        let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
+        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
 
-        let mut close = false;
-        let resp = egui::Modal::new(self.id)
-            .backdrop_color(self.backdrop.unwrap_or(p.overlay))
-            .frame(frame)
-            .show(ctx, |ui| {
-                ui.set_width(width);
-                ui.spacing_mut().item_spacing.y = m.gap;
-                layout::space_between(
-                    ui,
-                    |ui| {
-                        let fam = family(ui.ctx(), FAMILY_SEMIBOLD);
-                        ui.label(RichText::new(self.title).family(fam).size(m.text_lg).color(p.foreground));
-                    },
-                    |ui| close = close_cross(ui).clicked(),
-                );
-                if let Some(d) = self.description {
-                    ui.label(RichText::new(d).size(m.text_sm).color(p.muted_foreground));
+        // base: "cn-dialog-content fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none"
+        let max_width = self.width.or_else(|| pick(&l, |r| &r.max_width, g)).unwrap_or(f32::INFINITY);
+        let width = max_width.min(ctx.content_rect().width() - px(|r| &r.max_width_inset));
+        let inner_width = (width - pad_l - pad_r).max(0.0);
+
+        let mut frame = Frame::new().corner_radius(radius.round() as u8).inner_margin(Margin {
+            top: pad_t.round() as i8,
+            right: pad_r.round() as i8,
+            bottom: pad_b.round() as i8,
+            left: pad_l.round() as i8,
+        });
+        if let Some(fill) = pick(&l, |r| &r.bg, g).map(|p| t.paint(p)) {
+            frame = frame.fill(fill);
+        }
+        if let Some(s) = pick(&l, |r| &r.shadow, g) {
+            frame = frame.shadow(t.shadow(s));
+        }
+        let overlay = pick(&[&t.style.dialog_overlay], |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
+
+        let resp = egui::Modal::new(self.id).backdrop_color(self.backdrop.unwrap_or(overlay)).frame(frame).show(ctx, |ui| {
+            ui.set_width(inner_width);
+            ui.spacing_mut().item_spacing.y = gap;
+            if let Some(fg) = fg {
+                ui.visuals_mut().override_text_color = Some(fg);
+            }
+            for style in [egui::TextStyle::Body, egui::TextStyle::Button] {
+                if let Some(font) = ui.style_mut().text_styles.get_mut(&style) {
+                    font.size = text_px;
                 }
-                ui.add_space(m.gap);
-                body(ui)
-            });
-        if close || resp.should_close() {
+            }
+            header(ui, self.title, self.description);
+            let inner = body(ui);
+            let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
+            (inner, close)
+        });
+        // `ring-1` lies outside the box.
+        let ring_width = pick(&l, |r| &r.ring_width, g).unwrap_or(0.0);
+        if let Some(color) = pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p)) {
+            let painter = ctx.layer_painter(resp.response.layer_id);
+            ring(&painter, resp.response.rect, radius, ring_width, color);
+        }
+        let dismissed = resp.backdrop_response.clicked() || resp.should_close();
+        let (inner, close) = resp.inner;
+        if close || dismissed {
             *open = false;
         }
-        Some(resp.inner)
+        Some(inner)
     }
 }
 
-/// The dialog's close cross: `size-4`, muted until hovered.
-fn close_cross(ui: &mut Ui) -> egui::Response {
+/// `dialog-header` with its title and description.
+fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let t = Theme::current(ui.ctx());
-    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(t.metrics.icon), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), "Close"));
-    let color = if resp.hovered() { t.palette.foreground } else { t.palette.muted_foreground };
-    paint_icon(ui.painter(), rect, &CLOSE, color, t.metrics.icon_stroke);
-    crate::components::shared::focus_ring(ui, &resp, &t, t.radius_sm());
-    resp
+    let g = t.state(State::NONE);
+    let gap = pick(&[&t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
+    let content = [&t.style.dialog_content];
+    let heading = [&t.style.dialog_title];
+    let size = pick(&heading, |r| &r.text_size, g).or_else(|| pick(&content, |r| &r.text_size, g)).unwrap_or(TextSize::Sm);
+    let px = t.text_px(size);
+    let line = pick(&heading, |r| &r.line_height, g).map_or_else(|| t.line_px(size), |k| k * px);
+    let weight = pick(&heading, |r| &r.weight, g).unwrap_or(Weight::Normal);
+    let desc = [&t.style.dialog_description];
+    let desc_size = pick(&desc, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+    let desc_line = pick(&desc, |r| &r.line_height, g).map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = gap;
+        ui.label(RichText::new(title).family(family_for(ui.ctx(), weight)).size(px).line_height(Some(line)));
+        if let Some(d) = description {
+            let mut text = RichText::new(d).size(t.text_px(desc_size)).line_height(Some(desc_line));
+            if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
+                text = text.color(c);
+            }
+            ui.label(text);
+        }
+    });
 }
 
-/// Dialog footer: actions aligned right with `gap-2`, primary action last
-/// (add it first: the row runs right to left).
+/// The close button in the panel's top-right corner, `inset_*` from its
+/// edges. Returns true when clicked. It is placed without moving the cursor,
+/// so it does not grow the panel.
+fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
+    let g = t.state(State::NONE);
+    let at = [&t.style.dialog_close];
+    let (top, right) = (pick(&at, |r| &r.inset_top, g).unwrap_or(0.0), pick(&at, |r| &r.inset_right, g).unwrap_or(0.0));
+    let inner = ui.max_rect();
+    let rect = Rect::from_min_max(egui::pos2(inner.left(), inner.top() - pad.0 + top), egui::pos2(inner.right() + pad.1 - right, inner.bottom()));
+    let mut child = ui.new_child(UiBuilder::new().max_rect(rect).layout(Layout::right_to_left(Align::Min)).id_salt("egui_shadcn_dialog_close"));
+    child.add(Button::new("Close").icon(&CLOSE).variant(ButtonVariant::Ghost).size(ButtonSize::IconSm)).clicked()
+}
+
+/// `dialog-footer`: actions aligned right, primary action last (add it first:
+/// the row runs right to left). In a style with a footer strip (nova) the
+/// strip bleeds to the dialog's edges and bottom.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
-    let gap = Theme::current(ui.ctx()).metrics.gap;
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = gap;
-        add(ui);
-    });
+    let t = Theme::current(ui.ctx());
+    let g = t.state(State::NONE);
+    let l = [&t.style.dialog_footer];
+    let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+    let (pad_t, pad_r, pad_b, pad_l) = (px(|r| &r.pad_top), px(|r| &r.pad_right), px(|r| &r.pad_bottom), px(|r| &r.pad_left));
+    let (m_r, m_b, m_l) = (px(|r| &r.margin_right), px(|r| &r.margin_bottom), px(|r| &r.margin_left));
+    let gap = pick(&l, |r| &r.gap, g).unwrap_or(FOOTER_GAP);
+
+    let at = ui.max_rect();
+    let top = ui.cursor().top();
+    let (left, right) = (at.left() + m_l, at.right() - m_r);
+    let strip_bg = ui.painter().add(Shape::Noop);
+    let inner = Rect::from_min_max(egui::pos2(left + pad_l, top + pad_t), egui::pos2(right - pad_r, top + pad_t + ui.spacing().interact_size.y));
+    let mut row = ui.new_child(UiBuilder::new().max_rect(inner).layout(Layout::right_to_left(Align::Center)));
+    row.spacing_mut().item_spacing.x = gap;
+    add(&mut row);
+    let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
+
+    let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
+    let r_bottom = pick(&l, |r| &r.radius_bottom, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY)).round() as u8;
+    let mut shapes = Vec::new();
+    if let Some(bg) = pick(&l, |r| &r.bg, g).map(|p| t.paint(p)) {
+        shapes.push(Shape::rect_filled(strip, CornerRadius { nw: 0, ne: 0, sw: r_bottom, se: r_bottom }, bg));
+    }
+    let line = px(|r| &r.border_top_width);
+    if line > 0.0 {
+        // `border-t` takes the default border colour.
+        let color = pick(&l, |r| &r.border_color, g).map_or_else(|| t.role(Role::Border), |p| t.paint(p));
+        shapes.push(Shape::line_segment([strip.left_top(), strip.right_top()], Stroke::new(line, color)));
+    }
+    ui.painter().set(strip_bg, Shape::Vec(shapes));
+    // The negative bottom margin hands the panel's own bottom padding to the strip.
+    ui.allocate_rect(Rect::from_min_max(egui::pos2(at.left(), top), egui::pos2(at.right(), bottom + m_b)), egui::Sense::hover());
 }

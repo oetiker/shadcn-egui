@@ -76,11 +76,54 @@ fn closed_dialog_draws_nothing() {
     assert!(h.query_by_label("Delete session?").is_none());
 }
 
+/// Inner width of a dialog under `theme` in a window of `screen` width.
+fn dialog_inner_width(theme: &Theme, screen: f32) -> f32 {
+    let inner = std::cell::Cell::new(0.0_f32);
+    let mut h = Harness::builder().with_size(vec2(screen, 400.0)).build_ui(|ui| {
+        theme.apply(ui.ctx());
+        Dialog::new("w", "Title").show(ui.ctx(), &mut true, |ui| inner.set(ui.available_width()));
+    });
+    h.run();
+    h.run();
+    inner.get()
+}
+
+#[test]
+fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
+    for (name, theme) in common::themes() {
+        let pad = theme.style.dialog_content.pad_left.base.expect("fixed padding");
+        let max = theme.style.dialog_content.max_width.rules[0].value;
+        assert_eq!(dialog_inner_width(&theme, 1024.0) + 2.0 * pad, max, "{name}: sm:max-w-*");
+        assert_eq!(dialog_inner_width(&theme, 300.0) + 2.0 * pad, 300.0 - 32.0, "{name}: window minus 32");
+    }
+    let nova = common::themes().into_iter().find(|(n, _)| *n == "nova_dark").expect("nova").1;
+    assert_eq!(dialog_inner_width(&nova, 1024.0) + 32.0, 384.0, "nova is max-w-sm");
+}
+
+#[test]
+fn dialog_close_button_can_be_hidden() {
+    let mut h = Harness::builder().with_size(vec2(640.0, 360.0)).build_ui(|ui| {
+        Theme::dark().apply(ui.ctx());
+        Dialog::new("nc", "Title").show_close_button(false).show(ui.ctx(), &mut true, |_| {});
+    });
+    h.run();
+    assert!(h.query_by_label("Close").is_none());
+}
+
 #[test]
 fn dialog_snapshot() {
-    let mut h = dialog_harness(true);
-    h.run();
-    h.snapshot("dialog");
+    common::snapshot_all("dialog", vec2(800.0, 500.0), |ui| {
+        ui.label("page beneath");
+        Dialog::new("confirm", "Delete session?")
+            .description("The session and its files are removed.")
+            .show(ui.ctx(), &mut true, |ui| {
+                ui.label("This cannot be undone.");
+                dialog::footer(ui, |ui| {
+                    ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
+                    ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                });
+            });
+    });
 }
 
 fn popover_trigger(ui: &mut egui::Ui) {
