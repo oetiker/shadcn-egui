@@ -19,6 +19,7 @@
 | `<Tooltip>` | `components::tooltip::tooltip(ui.add(..), "text")` (content `tooltip_content`, arrow `tooltip_arrow`) |
 | Lucide `<Mic />` | `components::icon::IconView::new(&icons::MIC)` via `ui.add(..)`; `.size(..)`, `.color(..)`; data from `icongen` (see `references/icons.md`) |
 | `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&icons::MIC)` (`data-icon="inline-start"`), `.icon_end(..)` (`inline-end`); icon-only: `.size(ButtonSize::Icon)`, the text becomes the accessible name |
+| `<Label for="x">` + control | Name the control after the label: `let l = label(ui, "Email"); ui.add(Input::new(&mut s)).labelled_by(l.id);` (egui's `Response::labelled_by`). Switch, Checkbox and Select have no accessible name of their own (a Select reports its shown text as the value), so do this for every one of them |
 
 Not yet ported (add when needed): RadioGroup, Tags/Chips, Menubar, Table,
 DropdownMenu, Accordion, gradients. Build them as new

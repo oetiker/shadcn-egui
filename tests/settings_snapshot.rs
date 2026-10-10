@@ -59,29 +59,39 @@ fn with_tab(tab: usize, check: impl FnOnce(&Harness<'_>)) {
 
 #[test]
 fn every_widget_on_every_tab_is_exposed_to_accessibility() {
-    for tab in ["Account", "Notifications", "Components"] {
-        with_tab(0, |h| {
-            // The tab trigger; the card title may share its text.
-            h.get_by_role_and_label(Role::Button, tab);
-        });
-    }
     with_tab(0, |h| {
-        for l in ["Name", "Email", "Password", "Role", "Save", "Cancel"] {
-            h.get_by_label(l);
+        // The tab triggers; a card title may share their text.
+        for tab in ["Account", "Notifications", "Components"] {
+            h.get_by_role_and_label(Role::Button, tab);
         }
-        h.get_by_role_and_label(Role::ComboBox, "Member"); // the role select's trigger
+        // Each field's label names its control (`labelled_by`).
+        h.get_by_role_and_label(Role::TextInput, "Name");
+        h.get_by_role_and_label(Role::TextInput, "Email");
+        h.get_by_role_and_label(Role::PasswordInput, "Password");
+        h.get_by_role_and_label(Role::ComboBox, "Role");
+        for l in ["Save", "Cancel"] {
+            h.get_by_role_and_label(Role::Button, l);
+        }
     });
     with_tab(1, |h| {
-        for l in ["Marketing emails", "Security emails", "Weekly digest", "Active", "Beta", "Deprecated", "Optional"] {
-            h.get_by_label(l);
+        // Switches and the checkbox carry no text: their row label names them.
+        for l in ["Marketing emails", "Security emails", "Weekly digest"] {
+            h.get_by_role_and_label(Role::CheckBox, l);
         }
-        // Switches and the checkbox carry no text, so they are found by role.
-        assert_eq!(h.query_all_by_role(Role::CheckBox).count(), 3);
+        for l in ["Active", "Beta", "Deprecated", "Optional"] {
+            h.get_by_role_and_label(Role::Label, l);
+        }
     });
     with_tab(2, |h| {
-        for l in ["Default", "Secondary", "Destructive", "Outline", "Ghost", "Link", "Small", "Large", "Volume", "Select a region"] {
-            assert!(h.query_all_by_label(l).count() >= 1, "{l} missing");
+        // "Default" is a variant and a size button.
+        assert_eq!(h.query_all_by_role_and_label(Role::Button, "Default").count(), 2);
+        for l in ["Secondary", "Destructive", "Outline", "Ghost", "Link", "Small", "Large"] {
+            h.get_by_role_and_label(Role::Button, l);
         }
-        h.get_by_role(Role::Slider);
+        for l in ["Default", "Secondary", "Destructive", "Outline"] {
+            h.get_by_role_and_label(Role::Label, l);
+        }
+        h.get_by_role_and_label(Role::Slider, "Volume");
+        h.get_by_role_and_label(Role::ComboBox, "Region");
     });
 }

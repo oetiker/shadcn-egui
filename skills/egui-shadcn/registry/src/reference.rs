@@ -8,7 +8,7 @@ use crate::components::card::{card_description, card_title};
 use crate::components::checkbox::checkbox;
 use crate::components::input::Input;
 use crate::components::label::label;
-use crate::components::select::{select, Select};
+use crate::components::select::Select;
 use crate::components::separator::separator;
 use crate::components::switch::toggle;
 use crate::components::slider::Slider;
@@ -76,12 +76,26 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
         });
 }
 
-/// A labelled control: a 6px-gap stack of `label` over the control.
-fn field(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui)) {
+/// A labelled control: a 6px-gap stack of `label` over the control. The
+/// label names the control for screen readers (`labelled_by`).
+fn field(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> egui::Response) {
     layout::vstack(ui, 6.0, |ui| {
-        label(ui, name);
-        control(ui);
+        let name = label(ui, name);
+        let _ = control(ui).labelled_by(name.id);
     });
+}
+
+/// A label on the left, its control on the right, the label naming the
+/// control for screen readers (`labelled_by`).
+fn setting_row(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> egui::Response) {
+    let label_id = std::cell::Cell::new(egui::Id::NULL);
+    layout::space_between(
+        ui,
+        |ui| label_id.set(label(ui, name).id),
+        |ui| {
+            let _ = control(ui).labelled_by(label_id.get());
+        },
+    );
 }
 
 fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
@@ -90,23 +104,17 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             card_title(ui, "Account");
             card_description(ui, "Update your account details.");
             separator(ui);
-            field(ui, "Name", |ui| {
-                ui.add(Input::new(&mut state.name).hint("Your name").max_width(f32::INFINITY));
-            });
-            field(ui, "Email", |ui| {
-                ui.add(Input::new(&mut state.email).hint("you@example.com").max_width(f32::INFINITY));
-            });
+            field(ui, "Name", |ui| ui.add(Input::new(&mut state.name).hint("Your name").max_width(f32::INFINITY)));
+            field(ui, "Email", |ui| ui.add(Input::new(&mut state.email).hint("you@example.com").max_width(f32::INFINITY)));
             field(ui, "Password", |ui| {
                 ui.add(
                     Input::new(&mut state.password)
                         .hint("••••••••")
                         .password(true)
                         .max_width(f32::INFINITY),
-                );
+                )
             });
-            field(ui, "Role", |ui| {
-                select(ui, "role", &mut state.role, &["Member", "Admin", "Owner"]);
-            });
+            field(ui, "Role", |ui| ui.add(Select::new("role", &mut state.role, &["Member", "Admin", "Owner"])));
             separator(ui);
             layout::space_between(
                 ui,
@@ -128,33 +136,9 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             card_title(ui, "Notifications");
             card_description(ui, "Choose what you want to be notified about.");
             separator(ui);
-            layout::space_between(
-                ui,
-                |ui| {
-                    label(ui, "Marketing emails");
-                },
-                |ui| {
-                    let _ = toggle(ui, &mut state.marketing_emails);
-                },
-            );
-            layout::space_between(
-                ui,
-                |ui| {
-                    label(ui, "Security emails");
-                },
-                |ui| {
-                    let _ = toggle(ui, &mut state.security_emails);
-                },
-            );
-            layout::space_between(
-                ui,
-                |ui| {
-                    label(ui, "Weekly digest");
-                },
-                |ui| {
-                    let _ = checkbox(ui, &mut state.weekly_digest);
-                },
-            );
+            setting_row(ui, "Marketing emails", |ui| toggle(ui, &mut state.marketing_emails));
+            setting_row(ui, "Security emails", |ui| toggle(ui, &mut state.security_emails));
+            setting_row(ui, "Weekly digest", |ui| checkbox(ui, &mut state.weekly_digest));
             separator(ui);
             label(ui, "Channel status");
             layout::row(ui, 8.0, |ui| {
@@ -199,11 +183,9 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
                 badge(ui, "Outline", BadgeVariant::Outline);
             });
             separator(ui);
-            field(ui, "Volume", |ui| {
-                ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume"));
-            });
+            field(ui, "Volume", |ui| ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume")));
             field(ui, "Region", |ui| {
-                ui.add(Select::new("region", &mut state.region, &["Europe", "Americas", "Asia"]).placeholder("Select a region"));
+                ui.add(Select::new("region", &mut state.region, &["Europe", "Americas", "Asia"]).placeholder("Select a region"))
             });
         });
     });

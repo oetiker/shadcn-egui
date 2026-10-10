@@ -121,7 +121,9 @@ impl Widget for Switch<'_> {
             shapes.push(Shape::rect_filled(thumb_rect, thumb_radius, paint(&thumb, |r| &r.bg).unwrap_or_default()));
             painter.extend(shapes);
         }
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, on, ""));
+        // No label of its own: name it with `labelled_by(label.id)`, which
+        // an own label, even an empty one, would override.
+        resp.widget_info(|| egui::WidgetInfo { enabled, selected: Some(on), ..egui::WidgetInfo::new(egui::WidgetType::Checkbox) });
         resp.rect = rect;
         resp
     }

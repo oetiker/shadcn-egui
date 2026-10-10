@@ -359,14 +359,18 @@ fn select_typing_jumps_to_the_next_option_with_that_letter() {
     assert_eq!(*h.state(), 1, "first option after the highlight starting with b");
 }
 
+/// The trigger's accessibility value is the shown text; it has no name of
+/// its own (a form names it with `labelled_by`).
 #[test]
 fn select_trigger_reports_the_current_text() {
     let mut h = select_harness(2);
     h.run();
-    assert_eq!(h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().label().as_deref(), Some("Blueberry"));
+    let node = h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node();
+    assert_eq!(node.value().as_deref(), Some("Blueberry"));
+    assert_eq!(node.label(), None);
     let mut h = select_harness(9);
     h.run();
-    assert_eq!(h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().label().as_deref(), Some("Pick a fruit"));
+    assert_eq!(h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().value().as_deref(), Some("Pick a fruit"));
 }
 
 #[test]

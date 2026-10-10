@@ -88,7 +88,9 @@ impl Widget for Checkbox<'_> {
                 }
             }
         }
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, checked, ""));
+        // No label of its own: name it with `labelled_by(label.id)`, which
+        // an own label, even an empty one, would override.
+        resp.widget_info(|| egui::WidgetInfo { enabled, selected: Some(checked), ..egui::WidgetInfo::new(egui::WidgetType::Checkbox) });
         resp.rect = rect;
         resp
     }

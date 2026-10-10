@@ -222,7 +222,9 @@ impl Widget for Select<'_> {
             // base: "*:data-[slot=select-value]:line-clamp-1"
             painter.with_clip_rect(text_area).galley(at, galley, text_color);
         }
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, enabled, shown));
+        // The shown text is the combobox's value; its name comes from
+        // `labelled_by(label.id)`, which an own label would override.
+        resp.widget_info(|| egui::WidgetInfo { enabled, current_text_value: Some(shown.to_owned()), ..egui::WidgetInfo::new(egui::WidgetType::ComboBox) });
 
         // The list.
         if open {
