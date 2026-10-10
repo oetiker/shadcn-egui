@@ -1,6 +1,6 @@
 //! Shared painting helpers for shadcn-style components.
 
-use egui::{Color32, CornerRadius, Rect, Response, Stroke, Ui};
+use egui::{Color32, CornerRadius, Rect, Response, Shape, Stroke, Ui};
 use crate::style::{Shift, State};
 use crate::Theme;
 
@@ -40,24 +40,34 @@ pub fn focus_ring(ui: &Ui, resp: &Response, theme: &Theme, corner: f32) {
 /// shadcn's focus/invalid ring: a `ring-N` box-shadow drawn just outside
 /// the part's border box.
 pub fn ring(painter: &egui::Painter, rect: Rect, radius: f32, width: f32, color: Color32) {
-    if width > 0.0 && color.a() > 0 {
-        painter.rect_stroke(rect, radius, Stroke::new(width, color), egui::StrokeKind::Outside);
-    }
+    painter.extend(ring_shape(rect, radius, width, color));
 }
 
-/// A part's background and border. The border lies inside `rect`
-/// (`box-sizing: border-box`). With `clip_padding` (`bg-clip-padding`) the
-/// fill stops inside the border, so a transparent or translucent border
-/// shows what lies under the part instead of the fill.
-pub fn paint_box(painter: &egui::Painter, rect: Rect, radius: f32, fill: Option<Color32>, border: Option<Stroke>, clip_padding: bool) {
+/// The shape of [`ring`], if it has any width and colour.
+pub fn ring_shape(rect: Rect, radius: f32, width: f32, color: Color32) -> Option<Shape> {
+    (width > 0.0 && color.a() > 0).then(|| Shape::rect_stroke(rect, radius, Stroke::new(width, color), egui::StrokeKind::Outside))
+}
+
+/// A part's background and border, as shapes in paint order. The border
+/// lies inside `rect` (`box-sizing: border-box`). With `clip_padding`
+/// (`bg-clip-padding`) the fill stops inside the border, so a transparent or
+/// translucent border shows what lies under the part instead of the fill.
+pub fn box_shapes(rect: Rect, radius: f32, fill: Option<Color32>, border: Option<Stroke>, clip_padding: bool) -> Vec<Shape> {
     let border = border.filter(|b| b.width > 0.0);
+    let mut out = Vec::new();
     if let Some(fill) = fill {
         let inset = if clip_padding { border.map_or(0.0, |b| b.width) } else { 0.0 };
-        painter.rect_filled(rect.shrink(inset), (radius - inset).max(0.0), fill);
+        out.push(Shape::rect_filled(rect.shrink(inset), (radius - inset).max(0.0), fill));
     }
     if let Some(b) = border {
-        painter.rect_stroke(rect, radius, b, egui::StrokeKind::Inside);
+        out.push(Shape::rect_stroke(rect, radius, b, egui::StrokeKind::Inside));
     }
+    out
+}
+
+/// Paint [`box_shapes`].
+pub fn paint_box(painter: &egui::Painter, rect: Rect, radius: f32, fill: Option<Color32>, border: Option<Stroke>, clip_padding: bool) {
+    painter.extend(box_shapes(rect, radius, fill, border, clip_padding));
 }
 
 /// Apply `translate-x/y` to a part's rect. `SelfMinus(n)` is `calc(100% - n)`

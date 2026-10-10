@@ -31,6 +31,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   the Destructive badge is a light red tint with red text instead of a solid
   red fill. New `Ghost` and `Link` variants and leading or trailing icons are
   available.
+- Text inputs follow the chosen style: 36 px high in vega and 32 px in
+  nova, with 10 px side padding, the style's border and a 3 px focus ring.
+  The border is the `input` colour at rest and turns to the ring colour on
+  keyboard focus. New `.invalid(true)` draws a red border and ring, and
+  `.enabled(false)` draws the field at half opacity and ignores typing.
 - Labels are medium-weight 14 px text with no extra line height, and a label
   shown with `Label::new(..).enabled(false)` is drawn at half opacity.
   Separators are exactly 1 px thick and add no spacing of their own; a new

@@ -150,7 +150,7 @@ fn non_test_code_cuts_only_the_trailing_test_module() {
 /// Files under `src/components/` (plus `layout.rs`) already re-ported to the
 /// shadcn-svelte base. Each port task adds its file; Task 24 replaces this
 /// list with "all files".
-const PORTED: &[&str] = &["button.rs", "badge.rs", "label.rs", "separator.rs"];
+const PORTED: &[&str] = &["button.rs", "badge.rs", "label.rs", "separator.rs", "input.rs"];
 
 #[test]
 fn ported_components_take_values_from_the_style() {

@@ -1,9 +1,13 @@
-//! shadcn Input: a single-line text field themed with the input border,
-//! 36px height, rounded-md, focus ring.
+//! shadcn Input, ported from shadcn-svelte `ui/input/input.svelte` at
+//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
+//! other values come from the style's `cn-input` recipe. A frameless egui
+//! `TextEdit` sits inside a box this widget paints.
 
-use crate::components::shared::focus_ring;
+use crate::components::shared::{box_shapes, interaction_state, ring_shape};
+use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
+use crate::theme::family_for;
 use crate::Theme;
-use egui::{Margin, TextEdit, Ui, Vec2, Widget};
+use egui::{Frame, Margin, Shape, Stroke, TextEdit, Ui, Vec2, Widget};
 
 pub struct Input<'a> {
     text: &'a mut String,
@@ -11,11 +15,13 @@ pub struct Input<'a> {
     password: bool,
     max_width: f32,
     id_source: Option<&'static str>,
+    enabled: bool,
+    invalid: bool,
 }
 
 impl<'a> Input<'a> {
     pub fn new(text: &'a mut String) -> Self {
-        Self { text, hint: String::new(), password: false, max_width: f32::NAN, id_source: None }
+        Self { text, hint: String::new(), password: false, max_width: f32::NAN, id_source: None, enabled: true, invalid: false }
     }
     pub fn hint(mut self, h: impl Into<String>) -> Self {
         self.hint = h.into();
@@ -39,34 +45,79 @@ impl<'a> Input<'a> {
         self.id_source = Some(s);
         self
     }
+    /// `false` draws the field disabled: no focus, no typing.
+    pub fn enabled(mut self, yes: bool) -> Self {
+        self.enabled = yes;
+        self
+    }
+    /// shadcn `aria-invalid`: destructive border and ring.
+    pub fn invalid(mut self, yes: bool) -> Self {
+        self.invalid = yes;
+        self
+    }
 }
 
 impl<'a> Widget for Input<'a> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let corner = crate::components::shared::corner(t.radius_md());
+        let l = [&t.style.input];
+        let enabled = self.enabled && ui.is_enabled();
+        let context = State::NONE.with(State::INVALID, self.invalid);
+        // Geometry never depends on focus: resolve it before allocating.
+        let g = t.state(context);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let height = get(|r| &r.height);
+        let border_w = get(|r| &r.border_width);
+        let inset = |pad: f32| (pad + border_w).round() as i8;
+        let margin = Margin { left: inset(get(|r| &r.pad_left)), right: inset(get(|r| &r.pad_right)), top: inset(get(|r| &r.pad_top)), bottom: inset(get(|r| &r.pad_bottom)) };
+        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let font = egui::FontId::new(text_px, family_for(ui.ctx(), pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal)));
+
+        // base: "disabled:opacity-50"
+        let disabled_opacity = 0.5;
         let mut edit = TextEdit::singleline(self.text)
             .hint_text(self.hint)
             .password(self.password)
-            .margin(Margin::symmetric(t.metrics.pad_sm as i8, t.metrics.gap as i8))
+            .interactive(enabled)
+            .frame(Frame::NONE.inner_margin(margin))
+            .font(font)
             .vertical_align(egui::Align::Center)
-            .background_color(t.palette.input)
-            .text_color(t.palette.foreground);
+            .text_color(t.role(Role::Foreground));
         if let Some(id_source) = self.id_source {
             edit = edit.id_salt(id_source);
         }
         let max_width = if self.max_width.is_nan() { t.metrics.field_max_width } else { self.max_width };
-        let resp = ui.add_sized(Vec2::new(ui.available_width().min(max_width), t.metrics.control_md), edit);
-        // Our own 1px border over egui's frame: shadcn `border-input`, turning
-        // `ring`-colored on focus (`focus-visible:border-ring`).
-        let border = if resp.has_focus() { t.palette.ring } else { t.palette.border };
-        ui.painter().rect_stroke(
-            resp.rect,
-            corner,
-            egui::Stroke::new(t.metrics.border, border),
-            egui::StrokeKind::Inside,
-        );
-        focus_ring(ui, &resp, &t, t.radius_md());
+        // The box goes under the text: reserve its place in paint order, fill
+        // it once the focus state is known.
+        let slot = ui.painter().add(Shape::Noop);
+        let resp = ui
+            .scope(|ui| {
+                // base: "placeholder:text-muted-foreground"
+                ui.visuals_mut().weak_text_color = Some(t.role(Role::MutedForeground));
+                if !enabled {
+                    ui.multiply_opacity(disabled_opacity);
+                }
+                ui.add_sized(Vec2::new(ui.available_width().min(max_width), height), edit)
+            })
+            .inner;
+
+        let st = interaction_state(&t, &resp, enabled, context);
+        let fade = |c: egui::Color32| if enabled { c } else { c.gamma_multiply(disabled_opacity) };
+        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| fade(t.paint(p)));
+        let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, resp.rect.height() / 2.0));
+        let mut shapes = Vec::new();
+        if let Some(s) = pick(&l, |r| &r.shadow, st) {
+            let mut shadow = t.shadow(s);
+            shadow.color = fade(shadow.color);
+            shapes.push(Shape::from(shadow.as_shape(resp.rect, radius)));
+        }
+        let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
+        let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
+        shapes.extend(box_shapes(resp.rect, radius, paint(|r| &r.bg), border, clip_padding));
+        if let Some(c) = paint(|r| &r.ring_color) {
+            shapes.extend(ring_shape(resp.rect, radius, pick(&l, |r| &r.ring_width, st).unwrap_or(0.0), c));
+        }
+        ui.painter().set(slot, Shape::Vec(shapes));
         resp
     }
 }

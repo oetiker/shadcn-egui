@@ -170,41 +170,86 @@ fn pointer_down(pos: egui::Pos2) -> Vec<egui::Event> {
 
 #[test]
 fn input_accepts_text() {
+    use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
     use egui_shadcn::components::input::Input;
     use egui_shadcn::Theme;
     let mut text = String::new();
-    let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
-        ui.add(Input::new(&mut text).hint("Email"));
-    });
+    let mut h = Harness::new_ui_state(
+        |ui, text: &mut String| {
+            Theme::vega_dark().apply(ui.ctx());
+            ui.add(Input::new(text).hint("Email"));
+        },
+        std::mem::take(&mut text),
+    );
     h.run();
-    assert!(h.ctx.viewport_rect().width() > 0.0);
+    let node = h.get_by_role(egui::accesskit::Role::TextInput);
+    node.focus();
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput).type_text("a@b.c");
+    h.run();
+    assert_eq!(h.state(), "a@b.c");
 }
 
 #[test]
-fn label_input_snapshot() {
+fn disabled_input_ignores_typing() {
+    use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
     use egui_shadcn::components::input::Input;
-    use egui_shadcn::components::label::{description, label};
     use egui_shadcn::Theme;
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(360.0, 140.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(16.0);
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                ui.vertical(|ui| {
-                    label(ui, "Email");
-                    let mut s = String::from("you@example.com");
-                    ui.add(Input::new(&mut s));
-                    description(ui, "We'll never share your email.");
-                });
-            });
-        });
+    let mut h = Harness::new_ui_state(
+        |ui, text: &mut String| {
+            Theme::vega_dark().apply(ui.ctx());
+            ui.add(Input::new(text).enabled(false));
+        },
+        String::new(),
+    );
     h.run();
-    h.snapshot("label_input");
+    let node = h.get_by_role(egui::accesskit::Role::TextInput);
+    node.focus();
+    h.run();
+    h.get_by_role(egui::accesskit::Role::TextInput).type_text("nope");
+    h.run();
+    assert_eq!(h.state(), "");
+}
+
+#[test]
+fn input_height_follows_style() {
+    use egui_shadcn::components::input::Input;
+    for (name, theme) in common::themes() {
+        let want = if name.starts_with("nova") { 32.0 } else { 36.0 };
+        let mut text = String::new();
+        let h = common::measure(&theme, |ui| ui.add(Input::new(&mut text))).height();
+        assert_eq!(h, want, "{name}");
+    }
+}
+
+#[test]
+fn input_snapshot() {
+    use egui_shadcn::components::input::Input;
+    use egui_shadcn::components::label::label;
+    common::snapshot_all("input", egui::vec2(300.0, 390.0), |ui| {
+        let mut empty = String::new();
+        let mut filled = String::from("you@example.com");
+        let mut invalid = String::from("not an email");
+        let mut disabled = String::from("read only");
+        let mut focused = String::from("typing here");
+        label(ui, "Empty, with hint");
+        ui.add(Input::new(&mut empty).hint("Email").id_source("empty"));
+        ui.add_space(8.0);
+        label(ui, "Filled");
+        ui.add(Input::new(&mut filled).id_source("filled"));
+        ui.add_space(8.0);
+        label(ui, "Invalid");
+        ui.add(Input::new(&mut invalid).invalid(true).id_source("invalid"));
+        ui.add_space(8.0);
+        label(ui, "Disabled");
+        ui.add(Input::new(&mut disabled).enabled(false).id_source("disabled"));
+        ui.add_space(8.0);
+        label(ui, "Focused");
+        let resp = ui.add(Input::new(&mut focused).id_source("focused"));
+        resp.request_focus();
+    });
 }
 
 #[test]
@@ -495,47 +540,52 @@ fn disabled_button_ignores_clicks() {
     assert_eq!(rest, pressed, "disabled button shows hover or press styling");
 }
 
-/// shadcn `focus-visible:border-ring`: the input's own 1px border turns
-/// ring-colored while focused, under the separate focus ring.
+/// shadcn `border-input focus-visible:border-ring focus-visible:ring-3
+/// ring-ring/50`: the border is input-coloured at rest; focus turns it
+/// ring-coloured and adds a 3px ring at half alpha.
 #[test]
 fn focused_input_border_turns_ring_colored() {
     use egui_shadcn::components::input::Input;
-    use egui_shadcn::Theme;
 
-    fn border_colors(ctx: &egui::Context, text: &mut String, focus: bool) -> Vec<egui::Color32> {
-        let raw = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0))),
-            ..Default::default()
+    for (name, theme) in common::themes() {
+        let p = &theme.palette;
+        let shapes = |focus: bool| {
+            let mut text = String::new();
+            let (rect, out) = common::measure_output(&theme, |ui| {
+                let resp = ui.add(Input::new(&mut text).id_source("field"));
+                if focus {
+                    resp.request_focus();
+                }
+                resp
+            });
+            (rect, rect_shapes(&out))
         };
-        let out = ctx.run_ui(raw, |ui| {
-            Theme::dark().apply(ui.ctx());
-            let resp = ui.add(Input::new(text).id_source("field"));
-            if focus {
-                resp.request_focus();
-            }
-        });
-        fn walk(s: &egui::Shape, out: &mut Vec<egui::Color32>) {
-            match s {
-                egui::Shape::Rect(r) if r.stroke.width == 1.0 => out.push(r.stroke.color),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
-                _ => {}
-            }
-        }
-        let mut colors = Vec::new();
-        out.shapes.iter().for_each(|c| walk(&c.shape, &mut colors));
-        colors
+        let (rect, idle) = shapes(false);
+        let border = |s: &[egui::epaint::RectShape]| s.iter().rev().find(|r| r.stroke.width == 1.0).map(|r| r.stroke.color);
+        assert_eq!(border(&idle), Some(p.input), "{name} idle: {idle:?}");
+        assert!(idle.iter().all(|r| r.stroke.width != 3.0), "{name}: ring while idle");
+        let (_, focused) = shapes(true);
+        assert_eq!(border(&focused), Some(p.ring), "{name} focused: {focused:?}");
+        let ring = focused.iter().find(|r| r.stroke.width == 3.0).unwrap_or_else(|| panic!("{name}: no ring in {focused:?}"));
+        assert_eq!(ring.stroke.color, p.ring.gamma_multiply(0.5), "{name}");
+        assert_eq!(ring.rect, rect, "{name}");
     }
+}
 
-    let ctx = egui::Context::default();
-    let mut text = String::new();
-    let p = Theme::dark().palette;
-    // Our border is painted over egui's own TextEdit frame (which already uses
-    // `selection.stroke` on focus), so the visible border is the last 1px stroke.
-    let unfocused = border_colors(&ctx, &mut text, false);
-    assert_eq!(unfocused.last(), Some(&p.border), "unfocused border: {unfocused:?}");
-    border_colors(&ctx, &mut text, true); // focus lands next frame
-    let focused = border_colors(&ctx, &mut text, false);
-    assert_eq!(focused.last(), Some(&p.ring), "focused border: {focused:?}");
+/// `aria-invalid:border-destructive aria-invalid:ring-3`: dark themes use
+/// the `/50` border and `/40` ring.
+#[test]
+fn invalid_input_border_is_destructive() {
+    use egui_shadcn::components::input::Input;
+    for (name, theme) in common::themes() {
+        let mut text = String::new();
+        let (_, out) = common::measure_output(&theme, |ui| ui.add(Input::new(&mut text).invalid(true)));
+        let shapes = rect_shapes(&out);
+        let d = theme.palette.destructive;
+        let (border, ring) = if name.ends_with("dark") { (d.gamma_multiply(0.5), d.gamma_multiply(0.4)) } else { (d, d.gamma_multiply(0.2)) };
+        assert!(shapes.iter().any(|r| r.stroke.width == 1.0 && r.stroke.color == border), "{name}: border in {shapes:?}");
+        assert!(shapes.iter().any(|r| r.stroke.width == 3.0 && r.stroke.color == ring), "{name}: ring in {shapes:?}");
+    }
 }
 
 /// `Input::id_source` gives the field an id that does not depend on how many

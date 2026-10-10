@@ -3,7 +3,7 @@
 | shadcn | module widget |
 |---|---|
 | `<Button variant size>` | `components::button::Button::new(t).variant(..).size(..)` via `ui.add(..)` — variants Default/Outline/Secondary/Ghost/Destructive/Link; sizes Xs/Sm/Default/Lg/Icon/IconXs/IconSm/IconLg; `.enabled(..)`, `.expanded(..)` (aria-expanded), `.invalid(..)` (aria-invalid), `.has_popup(..)` (aria-haspopup). Markers: `cn-button`, `cn-button-variant-*`, `cn-button-size-*` |
-| `<Input>` | `components::input::Input::new(&mut s).hint(..).password(..).max_width(..)` via `ui.add(..)` |
+| `<Input>` | `components::input::Input::new(&mut s).hint(..).password(..).max_width(..)` via `ui.add(..)`; `.enabled(..)`, `.invalid(..)` (aria-invalid). Marker: `cn-input` |
 | `<Label>` | `components::label::label(ui, "..")`, or `Label::new("..").enabled(..)` via `ui.add(..)` (`peer-disabled:opacity-50`). Marker: `cn-label` |
 | description text | `components::label::description(ui, "..")` — reads `cn-card-description` (no marker of its own) |
 | `<Card>` + Header/Title/Description | `layout::card(ui, |ui| ...)` + `components::card::{card_title, card_description}` |
