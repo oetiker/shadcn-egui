@@ -253,61 +253,6 @@ fn input_snapshot() {
 }
 
 #[test]
-fn switch_toggles() {
-    use egui_kittest::kittest::Queryable;
-    use egui_kittest::Harness;
-    use egui_shadcn::components::switch::toggle;
-    use egui_shadcn::Theme;
-    use std::cell::Cell;
-    let on = Cell::new(false);
-    let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
-        let mut v = on.get();
-        if toggle(ui, &mut v).clicked() {
-            on.set(v);
-        }
-    });
-    h.run();
-    h.get_by_role(egui::accesskit::Role::CheckBox).click();
-    h.run();
-    assert!(on.get(), "switch did not toggle on");
-}
-
-#[test]
-fn switch_checkbox_snapshot() {
-    use egui_kittest::Harness;
-    use egui_shadcn::components::checkbox::checkbox;
-    use egui_shadcn::components::switch::toggle;
-    use egui_shadcn::{layout, Theme};
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(220.0, 120.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(16.0);
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                ui.vertical(|ui| {
-                    layout::row(ui, 8.0, |ui| {
-                        let mut on = true;
-                        toggle(ui, &mut on);
-                        let mut off = false;
-                        toggle(ui, &mut off);
-                    });
-                    ui.add_space(12.0);
-                    layout::row(ui, 8.0, |ui| {
-                        let mut c1 = true;
-                        checkbox(ui, &mut c1);
-                        let mut c2 = false;
-                        checkbox(ui, &mut c2);
-                    });
-                });
-            });
-        });
-    h.run();
-    h.snapshot("switch_checkbox");
-}
-
-#[test]
 fn tabs_select() {
     use egui_kittest::kittest::Queryable;
     use egui_kittest::Harness;
@@ -735,5 +680,172 @@ fn checkbox_snapshot() {
         let mut focused = true;
         let resp = ui.add(Checkbox::new(&mut focused));
         resp.request_focus();
+    });
+}
+
+/// Harness state for the switch tests: the value and the rect of the
+/// visible track (the returned response's rect).
+struct SwitchState {
+    on: bool,
+    rect: egui::Rect,
+}
+
+fn switch_harness(enabled: bool, on: bool) -> egui_kittest::Harness<'static, SwitchState> {
+    use egui_shadcn::components::switch::Switch;
+    use egui_shadcn::Theme;
+    let mut h = egui_kittest::Harness::new_ui_state(
+        move |ui, s: &mut SwitchState| {
+            Theme::vega_dark().apply(ui.ctx());
+            ui.add_space(20.0);
+            ui.horizontal(|ui| {
+                ui.add_space(20.0);
+                s.rect = ui.add(Switch::new(&mut s.on).enabled(enabled)).rect;
+            });
+        },
+        SwitchState { on, rect: egui::Rect::NOTHING },
+    );
+    h.run();
+    h
+}
+
+fn click_switch(h: &mut egui_kittest::Harness<'_, SwitchState>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    h.drag_at(pos);
+    h.run();
+    h.drop_at(pos);
+    h.run();
+}
+
+/// The response's rect is the visible track; the accessibility node carries
+/// the click target, which `after:-inset-x-3 after:-inset-y-2` grows by
+/// 12px x 8px.
+#[test]
+fn switch_track_size_and_hit_area() {
+    use egui_kittest::kittest::Queryable;
+    use egui_shadcn::components::switch::{Switch, SwitchSize};
+    for (name, theme) in common::themes() {
+        let mut on = false;
+        let r = common::measure(&theme, |ui| ui.add(Switch::new(&mut on)));
+        assert!((r.size() - egui::vec2(32.0, 18.4)).abs().max_elem() < 0.5, "{name} default {:?}", r.size());
+        let r = common::measure(&theme, |ui| ui.add(Switch::new(&mut on).size(SwitchSize::Sm)));
+        assert!((r.size() - egui::vec2(24.0, 14.0)).abs().max_elem() < 0.5, "{name} sm {:?}", r.size());
+    }
+    let mut h = switch_harness(true, false);
+    let track = h.state().rect;
+    let node = h.get_by_role(egui::accesskit::Role::CheckBox).rect();
+    assert_eq!(node.expand2(egui::vec2(-12.0, -8.0)), track, "node rect is the track plus 12px x 8px");
+    click_switch(&mut h, egui::pos2(track.left() - 6.0, track.center().y));
+    assert!(h.state().on, "click inside the hit area did not toggle");
+    click_switch(&mut h, egui::pos2(track.left() - 20.0, track.center().y));
+    assert!(h.state().on, "click beyond the hit area toggled");
+}
+
+/// Paint the switch for `on`, let the thumb settle, and return the thumb's
+/// bounding box: the only shape of the thumb colour that is a circle.
+fn thumb_rect(on: bool, size: egui_shadcn::components::switch::SwitchSize) -> (egui::Rect, egui::Rect) {
+    use egui_shadcn::components::switch::Switch;
+    let theme = egui_shadcn::Theme::vega_light();
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    let mut value = on;
+    let mut track = egui::Rect::NOTHING;
+    let mut out = None;
+    for _ in 0..3 {
+        out = Some(ctx.run_ui(egui::RawInput::default(), |ui| {
+            track = ui.add(Switch::new(&mut value).size(size)).rect;
+        }));
+    }
+    let mut thumb = None;
+    for clipped in out.unwrap().shapes {
+        if let egui::Shape::Rect(r) = clipped.shape {
+            if r.fill == theme.palette.background {
+                thumb = Some(r.rect);
+            }
+        }
+    }
+    (track, thumb.expect("thumb was painted"))
+}
+
+/// The thumb lies inside the 1px border; checked it moves by its width
+/// minus 2px, which leaves it 1px inside the right edge.
+#[test]
+fn switch_thumb_sits_inside_the_border_and_moves_when_checked() {
+    use egui_shadcn::components::switch::SwitchSize;
+    for size in [SwitchSize::Default, SwitchSize::Sm] {
+        let (track, off) = thumb_rect(false, size);
+        let (_, on) = thumb_rect(true, size);
+        assert!((off.left() - (track.left() + 1.0)).abs() < 0.01, "{size:?} off thumb left");
+        assert!((on.right() - (track.right() - 1.0)).abs() < 0.01, "{size:?} on thumb right");
+        assert!((on.center().y - track.center().y).abs() < 0.01, "{size:?} thumb centred");
+        assert!((on.left() - off.left() - (off.width() - 2.0)).abs() < 0.01, "{size:?} travel");
+    }
+    let (_, off) = thumb_rect(false, SwitchSize::Default);
+    assert_eq!(off.size(), egui::vec2(16.0, 16.0));
+    let (_, off) = thumb_rect(false, SwitchSize::Sm);
+    assert_eq!(off.size(), egui::vec2(12.0, 12.0));
+}
+
+#[test]
+fn disabled_switch_ignores_click_and_space() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = switch_harness(false, true);
+    let track = h.state().rect;
+    click_switch(&mut h, track.center());
+    assert!(h.state().on, "disabled switch toggled by click");
+    h.get_by_role(egui::accesskit::Role::CheckBox).focus();
+    h.run();
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert!(h.state().on, "disabled switch toggled by Space");
+}
+
+#[test]
+fn switch_toggles_on_click_space_and_enter() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = switch_harness(true, false);
+    let track = h.state().rect;
+    click_switch(&mut h, track.center());
+    assert!(h.state().on, "click did not switch on");
+    h.get_by_role(egui::accesskit::Role::CheckBox).focus();
+    h.run();
+    h.key_press(egui::Key::Space);
+    h.run();
+    assert!(!h.state().on, "Space did not switch off");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.state().on, "Enter did not switch on");
+}
+
+#[test]
+fn switch_reports_toggled_state() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let h = switch_harness(true, true);
+    let node = h.get_by_role(egui::accesskit::Role::CheckBox);
+    assert_eq!(node.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+}
+
+#[test]
+fn switch_snapshot() {
+    use egui_shadcn::components::switch::{Switch, SwitchSize};
+    common::snapshot_all("switch", egui::vec2(220.0, 290.0), |ui| {
+        for size in [SwitchSize::Default, SwitchSize::Sm] {
+            for enabled in [true, false] {
+                ui.horizontal(|ui| {
+                    let (mut off, mut on) = (false, true);
+                    ui.add(Switch::new(&mut off).size(size).enabled(enabled));
+                    ui.add_space(12.0);
+                    ui.add(Switch::new(&mut on).size(size).enabled(enabled));
+                });
+                ui.add_space(8.0);
+            }
+        }
+        ui.horizontal(|ui| {
+            let (mut bad, mut focused) = (true, true);
+            ui.add(Switch::new(&mut bad).invalid(true));
+            ui.add_space(12.0);
+            let resp = ui.add(Switch::new(&mut focused));
+            resp.request_focus();
+        });
     });
 }

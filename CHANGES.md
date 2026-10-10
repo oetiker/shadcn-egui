@@ -41,6 +41,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   target reaches 12 px to each side and 8 px above and below the box. New
   `Checkbox::new(&mut on).invalid(true)` draws a red border and ring, and
   `.enabled(false)` draws the box at half opacity and ignores clicks and Space.
+- Switches follow the chosen style: a 32 x 18.4 px track in vega and nova
+  (24 x 14 px for the new `SwitchSize::Sm`), a round thumb inside the 1 px
+  border and a 3 px ring on keyboard focus. The click target reaches 12 px to
+  each side and 8 px above and below. New `Switch::new(&mut on).invalid(true)`
+  draws a red border and ring, and `.enabled(false)` draws it at half opacity.
 - Labels are medium-weight 14 px text with no extra line height, and a label
   shown with `Label::new(..).enabled(false)` is drawn at half opacity.
   Separators are exactly 1 px thick and add no spacing of their own; a new
