@@ -303,6 +303,27 @@ fn tabs_snapshot() {
 }
 
 #[test]
+fn badge_is_h5_in_both_styles() {
+    use egui_shadcn::components::badge::{badge, BadgeVariant};
+    for (name, theme) in common::themes() {
+        let h = common::measure(&theme, |ui| badge(ui, "New", BadgeVariant::Default)).height();
+        assert_eq!(h, 20.0, "{name}");
+    }
+}
+
+#[test]
+fn badge_snapshot() {
+    use egui_shadcn::components::badge::{badge, BadgeVariant::*};
+    common::snapshot_all("badge", egui::vec2(480.0, 64.0), |ui| {
+        egui_shadcn::layout::row(ui, 8.0, |ui| {
+            for (t, v) in [("Default", Default), ("Secondary", Secondary), ("Destructive", Destructive), ("Outline", Outline), ("Ghost", Ghost), ("Link", Link)] {
+                badge(ui, t, v);
+            }
+        });
+    });
+}
+
+#[test]
 fn select_and_badge_render() {
     use egui_kittest::Harness;
     use egui_shadcn::components::badge::{badge, BadgeVariant};

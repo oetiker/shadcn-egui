@@ -12,7 +12,7 @@
 | `<Checkbox>` | `components::checkbox::checkbox(ui, &mut checked)` |
 | `<Select>` | `components::select::select(ui, "id", &mut idx, &[..])` |
 | `<Separator>` | `components::separator::separator(ui)` |
-| `<Badge variant>` | `components::badge::badge(ui, "..", BadgeVariant::..)` |
+| `<Badge variant>` | `components::badge::Badge::new(t).variant(..).icon(..).icon_end(..)` via `ui.add(..)`, or `badge(ui, t, v)` — variants Default/Secondary/Destructive/Outline/Ghost/Link. Markers: `cn-badge`, `cn-badge-variant-*` |
 | `<Dialog>` + Header/Title/Description/Footer | `components::dialog::Dialog::new("id", "Title").description(..).show(ctx, &mut open, \|ui\| { ..; dialog::footer(ui, \|ui\| { primary; secondary }) })` — closes on Esc, backdrop, ×; footer runs right to left |
 | `<Popover>` + Trigger/Content | `let t = ui.add(Button::..); components::popover::Popover::new(&t).show(\|ui\| ..)` — click toggles, click outside closes |
 | `<Tooltip>` | `components::tooltip::tooltip(ui.add(..), "text")` |

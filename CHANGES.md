@@ -27,6 +27,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   button's edge and turns its border to the ring colour. A disabled button
   is drawn at half opacity, so what lies behind it shows through, instead of
   being blended toward the page colour.
+- Badges follow the chosen style: 20 px high with fully rounded ends, and
+  the Destructive badge is a light red tint with red text instead of a solid
+  red fill. New `Ghost` and `Link` variants and leading or trailing icons are
+  available.
 
 ## [0.3.2] - 2026-10-09
 
