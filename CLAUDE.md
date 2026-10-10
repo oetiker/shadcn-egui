@@ -1,8 +1,8 @@
 # CLAUDE.md
 
 `egui_shadcn` is a Rust crate **and** a Claude Code plugin: it ports the shadcn-v4
-(new-york / OKLCH) design system to egui as a vendored, copy-paste component
-module. The canonical crate under `src/` is the source of truth;
+(OKLCH) design system and its styles (vega, nova, …, generated from the upstream
+CSS by `tools/stylegen`) to egui as a vendored, copy-paste component module. The canonical crate under `src/` is the source of truth;
 `skills/egui-shadcn/registry/` is the copy the plugin vendors into target projects.
 
 ## Start here — read the source docs, don't restate them

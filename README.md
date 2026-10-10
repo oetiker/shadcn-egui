@@ -16,8 +16,11 @@ This plugin fixes that by shipping three things:
 
 1. **A tested, compiling component module** (`registry/`) that ports the
    shadcn-v4 (OKLCH) design system to egui — theme & tokens, a
-   flexbox-substitute layout layer, and themed components (Button, Input, Label,
-   Card, Tabs, Switch, Checkbox, Select, Separator, Badge). Runtime deps are just
+   flexbox-substitute layout layer, and themed components (Button, Badge, Input,
+   Label, Card, Tabs, Switch, Checkbox, Select, Slider, Separator, Tooltip,
+   Popover, Dialog, Lucide icons). Sizes, colours and radii come from a shadcn
+   style generated from the upstream CSS: `vega` (the classic look) or `nova`
+   (compact), plus `maia`, `lyra`, `mira`, `luma` and `rhea`. Runtime deps are just
    `egui` + `egui_extras` — no eframe/wgpu coupling; eframe and `egui_kittest`+wgpu
    are dev-only (the example and the snapshot harness).
 2. **A layout-first workflow** (`skills/egui-shadcn/SKILL.md`): vendor the module
@@ -39,7 +42,8 @@ of every component, built entirely from the module:
 
 ![egui-shadcn component gallery](docs/components-screen.png)
 
-These are the actual `egui_kittest` snapshot renders (dark theme, Oxanium type).
+These are the actual `egui_kittest` snapshot renders (vega style, dark palette,
+Oxanium type).
 Run it live:
 
 ```bash

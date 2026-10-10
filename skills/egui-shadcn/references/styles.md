@@ -76,10 +76,13 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `hit_inset_x`, `hit_inset_y` | `after:-inset-x-*`, `after:-inset-y-*` (a larger hit area) |
 | `backdrop_blur` | `backdrop-blur-*` |
 
-`disabled:opacity-50` fades each colour of the part (fill, text, border,
-ring, shadow) to half alpha, because egui cannot composite a group of shapes
-at one opacity; text on a solid fill therefore shows a little less contrast
-than in the browser.
+`disabled:opacity-50` fades each shape of the part (fill, text, border,
+ring, shadow) to half alpha, the way egui fades a disabled `Ui`, because egui
+cannot composite a group of shapes at one opacity. Text on a solid fill
+therefore shows a little less contrast than in the browser, and where one
+part lies on another (a switch or slider thumb on its track) the lower part
+shows through. The fade comes from `shared::disabled_painter` and applies
+once: a widget inside a disabled `Ui` is not faded again by its own flag.
 
 `State` flags (`src/style/recipe.rs`) and the variants they stand for.
 `Theme::state(s)` adds `DARK`.
@@ -157,8 +160,8 @@ cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift    <shadcn
 
 Exported (constructors on `Style`): vega, nova, maia, lyra, mira, luma, rhea.
 The snapshot tests render vega and nova only; the other five have a unit test
-that they construct and resolve a button height, and have not been checked
-visually.
+that they construct (on a 256 KB stack) and resolve their button height, and
+have not been checked visually, so they may differ from the web in detail.
 
 Not exported: sera. Its report lists unsupported classes in shipped markers:
 single-side bottom borders on inputs (`border-b-*`, underline-style fields),

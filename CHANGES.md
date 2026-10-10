@@ -20,15 +20,27 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   in nova, with 10 px side padding.
 - `Theme` is `Clone` and no longer `Copy`, so code that reuses a theme value
   must call `.clone()`.
+- `Theme` has a new public field `style`, so a `Theme { .. }` struct literal
+  written for 0.3 no longer compiles; build themes with `Theme::new(..)`.
+- `card_title` and `card_description` return the label's `Response`. Where
+  such a call ends a block that must return nothing, add a `;`.
+- The new `ButtonSize` and `BadgeVariant` variants (see Added) break a
+  `match` that lists every variant of these enums; add the new arms or a `_`
+  arm.
 - The `sm` to `4xl` corner radii scale with `radius` by a factor
   (`rounded-xl` is 1.4 x radius), as in current shadcn. At the default radius
   of 10 px, small, medium, large and extra-large corners look as before;
   larger radii now round more.
 - `Popover::width(..)` and `Dialog::width(..)` set the width of the whole box
   including its padding, so existing callers get narrower content.
-- Native egui widgets take their height,
-  padding and spacing from the style's default button and tabs gap, so in nova
-  they look slightly shorter than before.
+- Native egui widgets such as `ui.button(..)` take their height, padding and
+  spacing from the style's default button and tabs gap: a native button is
+  36 px high in vega and 32 px in nova, like the crate's own buttons.
+  Applying a style that sets no button height brings back egui's default
+  height instead of keeping the previous theme's.
+- Disabled controls are drawn at half opacity both with `.enabled(false)` and
+  inside a disabled area (`ui.add_enabled(false, ..)`, `Ui::disable`). A
+  disabled slider or switch shows its track through the thumb.
 - Buttons: a pressed button moves down by 1 px, a hovered Link button is
   underlined, and a disabled button is drawn at half opacity instead of being
   blended toward the page colour. Keyboard focus draws a 3 px ring at the
@@ -44,13 +56,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   for inputs.
 - Switches have a 32 x 18.4 px track, a round thumb inside the 1 px border
   and a 3 px focus ring, with the same enlarged click target as checkboxes.
-  `.invalid(true)` and `.enabled(false)` work as for inputs.
+  `.invalid(true)` and `.enabled(false)` work as for inputs, and the track or
+  thumb casts the shadow the style sets (the track in vega).
 - Labels are 14 px text with no extra line height, and a label shown with
   `Label::new(..).enabled(false)` is drawn at half opacity. Separators are
   exactly 1 px thick and add no spacing of their own.
+- Helper text from `label::description`, popover headers and tooltips use the
+  line height of the web version (20 px for 14 px text, 16 px for 12 px), so
+  they take a little more room. Popover titles and descriptions take their
+  own size and line height from the style, which makes the title larger in
+  maia, lyra, mira, luma and rhea.
 - Tabs: the tab list is as wide as its labels instead of filling the row, and
   the active tab shows a raised pill with a soft shadow. Left, Right, Home and
   End move the selection, and `.enabled(false)` draws the tabs at half opacity.
+  A mouse click selects a tab without drawing the keyboard focus ring.
 - Tooltips are inverted as in current shadcn: a foreground-coloured bubble
   with background-coloured text instead of the primary colour, with a small
   rounded arrow pointing at the trigger. Text wraps at 320 px.
@@ -59,7 +78,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - Selects: the trigger has a chevron and is as wide as its widest option
   instead of the full field width, and the list has a thin outline ring and a
   check mark on the chosen row. The list takes Up, Down, Home, End, Enter, Esc
-  and type-ahead keys.
+  and type-ahead keys until keyboard focus moves to another control.
+- Screen readers get no name for a switch, checkbox or select on its own:
+  name each one after its label with `.labelled_by(label.id)`, as the
+  reference settings screen does. A select reports its shown text as its
+  value, not as its name.
 - Cards fill the available width, with padding, gaps and corners from the
   style.
 - Dialogs have a thin outline ring and no shadow, a 384 px (nova) or 448 px
@@ -106,6 +129,8 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   `Palette::overlay`. Set such values on the `Style` in your theme setup
   instead.
 - The new-york look; there is no compatibility style.
+- `components::shared::mix_toward`, `hover_fill` and `focus_ring`: the
+  components take hover and focus colours from the style.
 
 ## [0.3.2] - 2026-10-09
 

@@ -11,6 +11,10 @@
 //! Header, content and footer all inset their children by the same side
 //! padding in every style (`px-(--card-spacing)`), so [`Card::show`] insets
 //! the body once and [`card_header`] adds nothing of its own on the sides.
+//!
+//! `cn-card-header`'s `rounded-*` (vega `rounded-t-xl`, lyra `rounded-none`)
+//! is not read: the header paints no fill or border in any style, so its
+//! corners have nothing to shape.
 
 use crate::components::shared::ring;
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
