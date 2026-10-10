@@ -1,5 +1,6 @@
 use egui_shadcn::reference::{settings_ui, SettingsState};
-use egui_shadcn::Theme;
+use egui_shadcn::style::Style;
+use egui_shadcn::{Palette, Theme};
 
 struct SettingsApp {
     state: SettingsState,
@@ -14,13 +15,21 @@ impl eframe::App for SettingsApp {
 }
 
 fn main() -> eframe::Result<()> {
+    // `settings [vega|nova] [dark|light]`
+    let args: Vec<String> = std::env::args().collect();
+    let style = match args.get(1).map(String::as_str) {
+        Some("nova") => Style::nova(),
+        _ => Style::vega(),
+    };
+    let palette = if args.get(2).map(String::as_str) == Some("light") { Palette::light() } else { Palette::dark() };
+    let theme = Theme::new(style, palette, 10.0);
     eframe::run_native(
         "egui-shadcn settings",
         eframe::NativeOptions::default(),
-        Box::new(|cc| {
+        Box::new(move |cc| {
             // Once, when the context is created: the theme does not change
             // while the app runs.
-            Theme::dark().apply(&cc.egui_ctx);
+            theme.apply(&cc.egui_ctx);
             Ok(Box::new(SettingsApp { state: SettingsState::default() }))
         }),
     )

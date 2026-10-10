@@ -7,6 +7,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 ### Changed
+- The `settings` example takes the style and palette on the command line:
+  `cargo run --example settings -- nova light` (default `vega dark`). Its
+  components tab now also shows a Volume slider and a Region select with a
+  placeholder, and `SettingsState` has new `slider` and `region` fields.
 - A theme now carries a shadcn style: `Theme::new(Style::vega(), palette, radius)`
   or `Style::nova()` for the compact look; `Theme::vega_dark()` and
   `Theme::vega_light()` give the default vega style. `Theme` can no longer be

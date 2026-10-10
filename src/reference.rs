@@ -8,13 +8,13 @@ use crate::components::card::{card_description, card_title};
 use crate::components::checkbox::checkbox;
 use crate::components::input::Input;
 use crate::components::label::label;
-use crate::components::select::select;
+use crate::components::select::{select, Select};
 use crate::components::separator::separator;
 use crate::components::switch::toggle;
-use crate::components::tabs::tab_bar;
+use crate::components::slider::Slider;
+use crate::components::tabs::Tabs;
 use crate::{layout, Theme};
 
-#[derive(Default)]
 pub struct SettingsState {
     pub tab: usize,
     pub name: String,
@@ -24,6 +24,27 @@ pub struct SettingsState {
     pub marketing_emails: bool,
     pub security_emails: bool,
     pub weekly_digest: bool,
+    /// Volume slider on the components tab, 0..=100.
+    pub slider: f32,
+    /// Region select on the components tab; an index past the options shows its placeholder.
+    pub region: usize,
+}
+
+impl Default for SettingsState {
+    fn default() -> Self {
+        Self {
+            tab: 0,
+            name: String::new(),
+            email: String::new(),
+            password: String::new(),
+            role: 0,
+            marketing_emails: false,
+            security_emails: false,
+            weekly_digest: false,
+            slider: 50.0,
+            region: usize::MAX,
+        }
+    }
 }
 
 /// Render the settings screen into the given root `Ui`. `Theme::apply` must
@@ -42,12 +63,15 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
             layout::vstack(ui, 24.0, |ui| {
                 card_title(ui, "Settings");
                 card_description(ui, "Manage your account settings and preferences.");
-                tab_bar(ui, &mut state.tab, &["Account", "Notifications", "Components"]);
-                match state.tab {
-                    0 => account_tab(ui, state),
-                    1 => notifications_tab(ui, state),
-                    _ => components_tab(ui),
-                }
+                // The gap between the tab list and its content comes from the style.
+                layout::vstack(ui, Tabs::content_gap(ui), |ui| {
+                    ui.add(Tabs::new(&mut state.tab, &["Account", "Notifications", "Components"]));
+                    match state.tab {
+                        0 => account_tab(ui, state),
+                        1 => notifications_tab(ui, state),
+                        _ => components_tab(ui, state),
+                    }
+                });
             });
         });
 }
@@ -143,11 +167,11 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
     });
 }
 
-fn components_tab(ui: &mut egui::Ui) {
+fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
     layout::card(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Components");
-            card_description(ui, "Buttons and badges in every variant.");
+            card_description(ui, "Buttons, badges, a slider and a select.");
             separator(ui);
             label(ui, "Button variants");
             layout::row(ui, 8.0, |ui| {
@@ -173,6 +197,13 @@ fn components_tab(ui: &mut egui::Ui) {
                 badge(ui, "Secondary", BadgeVariant::Secondary);
                 badge(ui, "Destructive", BadgeVariant::Destructive);
                 badge(ui, "Outline", BadgeVariant::Outline);
+            });
+            separator(ui);
+            field(ui, "Volume", |ui| {
+                ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume"));
+            });
+            field(ui, "Region", |ui| {
+                ui.add(Select::new("region", &mut state.region, &["Europe", "Americas", "Asia"]).placeholder("Select a region"));
             });
         });
     });
