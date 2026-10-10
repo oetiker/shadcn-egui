@@ -82,3 +82,10 @@ fn every_conditional_decl_has_a_rank() {
         }
     }
 }
+
+/// Footer present and small size: the card drops its bottom padding.
+#[test]
+fn nova_card_small_with_footer_has_no_bottom_padding() {
+    let m = marker(&style("nova"), "cn-card");
+    assert_eq!(when(&m, Field::PadBottom, (1 << 19) | (1 << 25)), Some(Value::Px(0.0)));
+}

@@ -43,6 +43,8 @@ fn generate(up: &Path, root: &Path, tool: &Path, pin: &str, lines: &[markers::Ma
     let reports = tool.join("reports");
     std::fs::create_dir_all(&reports).expect("reports dir");
     write(&out_dir.join("generated.rs"), &emit::emit_struct(pin, &shipped));
+    // An export style that fails the gate must not stop the other reports.
+    let mut failed = false;
     for style in STYLES {
         let path = up.join(format!("docs/src/lib/registry/styles/style-{style}.css"));
         let parsed = css::parse_style_css(&std::fs::read_to_string(&path).expect("style css"));
@@ -52,19 +54,32 @@ fn generate(up: &Path, root: &Path, tool: &Path, pin: &str, lines: &[markers::Ma
             let unsupported: usize = translated.iter().map(|(_, m)| m.unsupported.len()).sum();
             if unsupported != 0 {
                 eprintln!("{style} is in EXPORT but has {unsupported} unsupported classes; see reports/{style}.md");
-                return ExitCode::FAILURE;
+                failed = true;
+                continue;
             }
             write(&out_dir.join(format!("{style}.rs")), &emit::emit_style(style, pin, &translated));
         }
     }
-    ExitCode::SUCCESS
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn write(path: &Path, src: &str) {
     std::fs::write(path, src).unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
 }
 
-fn drift(_up: &Path, _root: &Path, _lines: &[markers::MarkerLine]) -> ExitCode {
-    eprintln!("drift: implemented in Task 6");
-    ExitCode::from(2)
+fn drift(up: &Path, root: &Path, lines: &[markers::MarkerLine]) -> ExitCode {
+    let problems = stylegen::drift::check(up, root, lines);
+    for p in &problems {
+        println!("{p}");
+    }
+    if problems.is_empty() {
+        println!("drift: clean");
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }

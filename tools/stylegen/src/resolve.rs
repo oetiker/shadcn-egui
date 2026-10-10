@@ -73,6 +73,9 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                     m.decls.push(Decl { field, value, all: v.all, none: v.none, rank: v.rank, idx });
                 }
             }
+            // Approximation of CSS: a rule derived from a variable inherits
+            // the rank of the variable's definition (`rank: v.rank | d.rank`),
+            // not the specificity of the element the variable is set on.
             U::UseVar(fields, name) => match vars.get(&name) {
                 Some(defs) => {
                     for d in defs {

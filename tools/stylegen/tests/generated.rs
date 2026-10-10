@@ -1,6 +1,7 @@
 use stylegen::css::parse_style_css;
 use stylegen::emit::{emit_struct, emit_style};
 use stylegen::markers::parse_markers;
+use stylegen::report::report;
 use stylegen::resolve::markers;
 
 const ROOT: &str = env!("CARGO_MANIFEST_DIR");
@@ -29,5 +30,16 @@ fn committed_sources_are_current_and_output_is_deterministic() {
         let first = style_source(style, &pin);
         assert_eq!(first, style_source(style, &pin), "{style}: output differs between runs");
         assert_eq!(first, read(&format!("../../src/style/{style}.rs")), "{style}: re-run stylegen generate");
+    }
+}
+
+/// Stale reports hide new unsupported classes, so all eight must be current.
+#[test]
+fn committed_reports_are_current() {
+    let pin = read("PIN").trim().to_owned();
+    for style in ["vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea"] {
+        let css = parse_style_css(&read(&format!("tests/fixtures/style-{style}.css")));
+        let fresh = report(style, &pin, &markers(&css, &shipped()));
+        assert_eq!(fresh, read(&format!("reports/{style}.md")), "{style}: re-run stylegen generate");
     }
 }
