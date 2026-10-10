@@ -123,6 +123,14 @@ pub struct Metrics {
     pub text_base: f32,
     /// `text-lg`: dialog titles.
     pub text_lg: f32,
+    /// Tailwind's line height that comes with `text-xs`.
+    pub line_xs: f32,
+    /// Line height of `text-sm`.
+    pub line_sm: f32,
+    /// Line height of `text-base`.
+    pub line_base: f32,
+    /// Line height of `text-lg`.
+    pub line_lg: f32,
     /// `TextStyle::Monospace`.
     pub text_mono: f32,
     /// `TextStyle::Heading`.
@@ -166,6 +174,10 @@ impl Default for Metrics {
             text_sm: 14.0,
             text_base: 16.0,
             text_lg: 18.0,
+            line_xs: 16.0,
+            line_sm: 20.0,
+            line_base: 24.0,
+            line_lg: 28.0,
             text_mono: 13.0,
             text_heading: 20.0,
             control_sm: 32.0,
@@ -280,6 +292,18 @@ impl Theme {
             TextSize::Base => m.text_base,
             TextSize::Lg => m.text_lg,
             TextSize::Px(v) => v,
+        }
+    }
+    /// The line height Tailwind pairs with a text size (used when a recipe
+    /// has no `leading-*`). An arbitrary pixel size keeps the base ratio.
+    pub fn line_px(&self, s: TextSize) -> f32 {
+        let m = &self.metrics;
+        match s {
+            TextSize::Xs => m.line_xs,
+            TextSize::Sm => m.line_sm,
+            TextSize::Base => m.line_base,
+            TextSize::Lg => m.line_lg,
+            TextSize::Px(v) => v * m.line_base / m.text_base,
         }
     }
     /// Tailwind v4 shadows, first layer only (egui draws one); egui's spread

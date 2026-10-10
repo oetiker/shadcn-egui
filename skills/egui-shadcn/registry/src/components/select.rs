@@ -243,6 +243,8 @@ impl Widget for Select<'_> {
                 frame = frame.fill(fill);
             }
             let item_font = egui::FontId::new(t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)), family_for(&ctx, pick(&item, |r| &r.weight, ist).unwrap_or(Weight::Normal)));
+            let item_size = pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm);
+            let line = pick(&item, |r| &r.line_height, ist).map_or_else(|| t.line_px(item_size), |k| k * t.text_px(item_size));
             let galleys: Vec<_> = self.options.iter().map(|o| painter.layout_no_wrap((*o).to_owned(), item_font.clone(), Color32::PLACEHOLDER)).collect();
             let (ipl, ipr) = (px(&item, |r| &r.pad_left), px(&item, |r| &r.pad_right));
             let (ipt, ipb) = (px(&item, |r| &r.pad_top), px(&item, |r| &r.pad_bottom));
@@ -271,7 +273,7 @@ impl Widget for Select<'_> {
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     egui::ScrollArea::vertical().max_height(max_h.max(0.0)).auto_shrink([false, true]).show(ui, |ui| {
                         for (i, galley) in galleys.iter().enumerate() {
-                            let (_, row) = ui.allocate_space(vec2(inner_w, galley.size().y + ipt + ipb));
+                            let (_, row) = ui.allocate_space(vec2(inner_w, galley.size().y.max(line) + ipt + ipb));
                             let r = ui.interact(row, resp.id.with(("item", i)), Sense::click());
                             if r.hovered() && pointer_moved {
                                 hover_hl = Some(i);

@@ -361,3 +361,21 @@ fn select_open_snapshot() {
         },
     );
 }
+
+#[test]
+fn select_item_rows_have_the_text_sm_line_plus_padding() {
+    for (name, theme) in common::themes() {
+        let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(
+            |ui, value: &mut usize| {
+                theme.apply(ui.ctx());
+                ui.add(Select::new("fruit", value, &FRUITS));
+            },
+            0usize,
+        );
+        h.run();
+        open_select(&mut h);
+        // 20 px line plus py-1.5 (vega) or py-1 (nova).
+        let want = if name.starts_with("nova") { 28.0 } else { 32.0 };
+        assert_eq!(h.get_by_label("Cherry").rect().height(), want, "{name}");
+    }
+}
