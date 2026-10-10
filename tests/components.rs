@@ -323,6 +323,83 @@ fn badge_snapshot() {
     });
 }
 
+/// The colour of the first text a frame painted.
+fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
+    fn walk(s: &egui::Shape) -> Option<egui::Color32> {
+        match s {
+            egui::Shape::Text(t) => Some(t.galley.job.sections[0].format.color),
+            egui::Shape::Vec(v) => v.iter().find_map(walk),
+            _ => None,
+        }
+    }
+    out.shapes.iter().find_map(|c| walk(&c.shape)).expect("a text shape")
+}
+
+/// shadcn `peer-disabled:opacity-50`: a label of a disabled control paints
+/// its text at half alpha, and `text-sm leading-none` makes it 14px high.
+#[test]
+fn disabled_label_paints_half_alpha_text() {
+    use egui_shadcn::components::label::Label;
+    use egui_shadcn::style::{pick, State};
+    for (name, theme) in common::themes() {
+        let (rect, on) = common::measure_output(&theme, |ui| ui.add(Label::new("Email")));
+        let (_, off) = common::measure_output(&theme, |ui| ui.add(Label::new("Email").enabled(false)));
+        let fg = theme.palette.foreground;
+        assert_eq!(text_colour(&on), fg, "{name}");
+        assert_eq!(text_colour(&off), fg.gamma_multiply(0.5), "{name}");
+        assert_eq!(rect.height(), 14.0, "{name}");
+        assert_eq!(pick(&[&theme.style.label], |r| &r.opacity, State::DISABLED), Some(0.5), "{name}");
+    }
+}
+
+/// The separator is a 1px `bg-border` line: full width when horizontal,
+/// full row height when vertical.
+#[test]
+fn separators_are_one_pixel_border_lines() {
+    use egui_shadcn::components::separator::{separator, separator_vertical};
+    let theme = egui_shadcn::Theme::vega_light();
+    let (_, out) = common::measure_output(&theme, |ui| {
+        ui.allocate_response(egui::vec2(200.0, 0.0), egui::Sense::hover());
+        separator(ui);
+        ui.allocate_response(egui::vec2(0.0, 0.0), egui::Sense::hover())
+    });
+    let lines: Vec<_> = rect_shapes(&out).into_iter().filter(|r| r.fill == theme.palette.border).collect();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert_eq!(lines[0].rect.height(), 1.0);
+    assert!(lines[0].rect.width() >= 200.0);
+    let (_, out) = common::measure_output(&theme, |ui| {
+        ui.horizontal(|ui| {
+            ui.set_height(24.0);
+            separator_vertical(ui);
+        })
+        .response
+    });
+    let v: Vec<_> = rect_shapes(&out).into_iter().filter(|r| r.fill == theme.palette.border).collect();
+    assert_eq!(v.len(), 1, "{v:?}");
+    assert_eq!(v[0].rect.width(), 1.0);
+    assert_eq!(v[0].rect.height(), 24.0);
+}
+
+#[test]
+fn label_separator_snapshot() {
+    use egui_shadcn::components::label::{description, Label};
+    use egui_shadcn::components::separator::{separator, separator_vertical};
+    common::snapshot_all("label_separator", egui::vec2(360.0, 200.0), |ui| {
+        ui.add(Label::new("Email"));
+        ui.add(Label::new("Email (disabled)").enabled(false));
+        description(ui, "We'll never share your email.");
+        separator(ui);
+        ui.horizontal(|ui| {
+            ui.set_height(20.0);
+            ui.label("Docs");
+            separator_vertical(ui);
+            ui.label("Source");
+            separator_vertical(ui);
+            ui.label("Blog");
+        });
+    });
+}
+
 #[test]
 fn select_and_badge_render() {
     use egui_kittest::Harness;

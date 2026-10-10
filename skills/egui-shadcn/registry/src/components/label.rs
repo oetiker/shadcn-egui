@@ -1,15 +1,85 @@
-//! shadcn Label: small medium-weight text; plus a muted description helper.
+//! shadcn Label, ported from shadcn-svelte `ui/label/label.svelte` at
+//! `tools/stylegen/PIN`. The label has no base classes that matter in egui
+//! (`flex items-center select-none` and the pointer/cursor rules); its look
+//! comes from the style's `cn-label` recipe. `peer-disabled:opacity-50`
+//! arrives as the DISABLED state of that recipe.
+//!
+//! `description` has no marker of its own in shadcn: it is the muted `text-sm`
+//! paragraph that `cn-card-description` and `cn-dialog-description` share, so
+//! it reads the `card_description` recipe.
 
-use crate::theme::FAMILY_MEDIUM;
-use egui::{RichText, Ui};
+use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
+use crate::theme::family_for;
+use crate::Theme;
+use egui::{Response, RichText, Sense, Ui, Vec2, Widget};
 
-pub fn label(ui: &mut Ui, text: &str) -> egui::Response {
-    let family = crate::theme::family(ui.ctx(), FAMILY_MEDIUM);
-    let size = crate::Theme::current(ui.ctx()).metrics.text_sm;
-    ui.label(RichText::new(text).family(family).size(size))
+pub struct Label {
+    text: String,
+    enabled: bool,
 }
 
-pub fn description(ui: &mut Ui, text: &str) -> egui::Response {
-    let t = crate::Theme::current(ui.ctx());
-    ui.label(RichText::new(text).size(t.metrics.text_sm).color(t.palette.muted_foreground))
+impl Label {
+    pub fn new(text: impl Into<String>) -> Self {
+        Self { text: text.into(), enabled: true }
+    }
+    /// `false` draws the label as the label of a disabled peer control.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+}
+
+pub fn label(ui: &mut Ui, text: &str) -> Response {
+    ui.add(Label::new(text))
+}
+
+impl Widget for Label {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let t = Theme::current(ui.ctx());
+        let l = [&t.style.label];
+        let enabled = self.enabled && ui.is_enabled();
+        let st = t.state(State::NONE.with(State::DISABLED, !enabled));
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, st);
+        let text_px = t.text_px(pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
+        let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
+        let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
+        let opacity = get(|r| &r.opacity).unwrap_or(1.0);
+        let fg = t.role(Role::Foreground).gamma_multiply(opacity);
+
+        let galley = ui.painter().layout_no_wrap(self.text.clone(), font, fg);
+        // `leading-none`: the line box is `line_height` times the font size.
+        let height = get(|r| &r.line_height).map_or(galley.size().y, |k| k * text_px);
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x, height), Sense::hover());
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text));
+        if ui.is_rect_visible(rect) {
+            let pos = egui::pos2(rect.min.x, rect.center().y - galley.size().y / 2.0);
+            ui.painter().galley(pos, galley, fg);
+        }
+        resp
+    }
+}
+
+/// Muted `text-sm` helper text, wrapping like a paragraph.
+pub fn description(ui: &mut Ui, text: &str) -> Response {
+    let t = Theme::current(ui.ctx());
+    let l = [&t.style.card_description];
+    let st = t.state(State::NONE);
+    let px = t.text_px(pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
+    let color = pick(&l, |r| &r.text, st).map_or_else(|| t.role(Role::MutedForeground), |p| t.paint(p));
+    ui.label(RichText::new(text).size(px).color(color))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{pick, Style};
+
+    #[test]
+    fn disabled_label_recipe_is_half_opacity() {
+        for s in [Style::vega(), Style::nova()] {
+            let l = [&s.label];
+            assert_eq!(pick(&l, |r| &r.opacity, State::DISABLED), Some(0.5));
+            assert_eq!(pick(&l, |r| &r.opacity, State::NONE), None);
+        }
+    }
 }

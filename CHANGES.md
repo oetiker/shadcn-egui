@@ -31,6 +31,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   the Destructive badge is a light red tint with red text instead of a solid
   red fill. New `Ghost` and `Link` variants and leading or trailing icons are
   available.
+- Labels are medium-weight 14 px text with no extra line height, and a label
+  shown with `Label::new(..).enabled(false)` is drawn at half opacity.
+  Separators are exactly 1 px thick and add no spacing of their own; a new
+  `separator_vertical` draws a vertical line.
 
 ## [0.3.2] - 2026-10-09
 
