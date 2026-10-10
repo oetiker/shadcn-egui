@@ -81,19 +81,93 @@ the PNG instead — the point is "look at a real render," not this specific harn
 # Part B — Porting a new component into the library
 
 When you port a component or layout helper that isn't in the registry yet, do it
-to the library's standard so the next project gets it for free.
+to the library's standard so the next project gets it for free. A port is done
+only when **every** item below holds. A port is judgement work; these rules make
+two ports of the same component come out the same.
 
-**A complete contribution adds:**
-1. The new file under `src/components/` (or a helper in `src/layout.rs`), matching
-   the existing custom-paint pattern in `button.rs`.
-2. A `kittest` snapshot test plus its committed PNG.
-3. A synced copy under `skills/egui-shadcn/registry/` — the canonical `src/` and
-   the registry copy must stay **byte-identical**.
-4. A row in `references/component-map.md`.
-5. Colors and sizes from `Palette`/`Metrics` only (`tests/tokens.rs` fails
-   otherwise), and a `widget_info` call so the widget is visible to screen
-   readers.
-6. Build + `clippy --all-targets` warning-clean.
+Style values (sizes, colours, radii, shadows, ring widths, alphas) come from the
+active style's recipes — see `references/styles.md` for the model. Values that no
+recipe holds are *base classes*, and you quote them.
+
+1. **Source.** Read the component's base `.svelte` files in
+   `docs/src/lib/registry/ui/<name>/` of shadcn-svelte, checked out at the commit
+   in `tools/stylegen/PIN`, and the bits-ui primitive it wraps. Never port from
+   memory, a screenshot, or another style's resolved output.
+2. **Inventory.** List every `cn-*` marker the source uses and every state it
+   styles on (`data-checked`, `aria-invalid`, `data-[icon=…]`,
+   `data-orientation`, …). Put the markers on the component's line in
+   `tools/stylegen/markers.txt`. A marker that is new there needs a
+   `stylegen generate` run, which adds the field to `Style`
+   (`src/style/generated.rs`, generated — never edit by hand).
+3. **Mapping.** Map each marker to its `Style` field (`cn-button-size-sm` →
+   `s.button_size_sm`) and each state or context condition to a `State` flag
+   (`src/style/recipe.rs`). Resolve a property over the stacked recipes in the
+   order upstream joins their classes:
+   `pick(&[&s.button, &s.button_variant_outline, &s.button_size_sm], |r| &r.height, st)`.
+   Build the state with `theme.state(State::HOVER | …)`, which adds `DARK`.
+4. **Quote the base classes.** A class the component source sets itself (not
+   through a `cn-*` marker) is quoted verbatim on the line above the code that
+   uses it: `// base: "<substring of the upstream class string>"`. When a base
+   class overrides a style property, say so in that comment and do not read the
+   recipe field. `stylegen drift` checks that every quote is still a substring of
+   the upstream source.
+5. **No style values in code.** `tests/tokens.rs` scans every file in its
+   `PORTED` list (strict): no colour or font-size literals, no float literals
+   other than `0.0`, `1.0` and halving/doubling, no `Shadow { .. }`, no alpha
+   multiplier — unless a `// base: "…"` quote sits on the same line or the line
+   above. Add the new file to `PORTED`.
+6. **egui sizing.** The widget sets its own size before placement (single pass).
+   Use the `layout` helpers, no `available_width()` arithmetic. Resolve geometry
+   *without* interaction states: size must not change on hover.
+7. **Context.** The widget API takes whatever context the recipe conditions
+   need: icon side (`ICON_START`/`ICON_END`), size variant (`SIZE_SM`),
+   orientation, enclosing slot (`IN_BUTTON_GROUP`).
+8. **Behaviour, not just looks** — see below.
+9. **Interaction states** — see below.
+10. **Snapshots.** Render with `common::snapshot_all(name, size, ui_fn)` from
+    `tests/common/mod.rs`: one PNG per style × {dark, light}
+    (`<name>_vega_dark.png`, …). **Open every PNG the component appears in** —
+    also the ones of other tests (the gallery, forms) that now show a changed
+    look — and compare it with the same component on the shadcn-svelte docs page
+    for that style. Re-baseline the older single-theme PNGs the port affects, so
+    the suite stays green (`UPDATE_SNAPSHOTS=1 cargo test`); delete the PNGs that
+    no test writes any more.
+11. **Docs.** A row in `references/component-map.md` with the markers. A line in
+    `CHANGES.md` if the look changes (what the user sees, three sentences at
+    most).
+12. **Done** means: `stylegen drift` prints `drift: clean`; the component's
+    markers have no *unsupported* class in `tools/stylegen/reports/<style>.md`
+    (ignored classes are fine; each says why); snapshots reviewed; behaviour list
+    checked; `cargo clippy --all-targets` and the tests clean; and `src/` copied
+    into `skills/egui-shadcn/registry/src/` so both trees stay **byte-identical**.
+
+## Behaviour, not just looks
+A shadcn component is a styled bits-ui primitive. The primitive carries the
+behaviour. Read its source (`node_modules/bits-ui`, or
+https://bits-ui.com/docs/components/<name>), write down what it does, and check
+each item in egui — with a test, or with a stated reason why it does not apply.
+Cover keyboard handling, focus order, pointer capture while dragging, value
+stepping and clamping, disabled handling, degenerate input, and the accessibility
+role through `widget_info`.
+
+Example, the list for Slider:
+1. A click on the track jumps the value to that point, then snaps.
+2. Dragging the thumb keeps the pointer captured, also outside the widget.
+3. Arrow keys change the value by one step (continuous: 1% of the range);
+   PageUp/PageDown by 10 steps; Home/End go to min/max.
+4. The value is clamped to the range and snapped to the step.
+5. Disabled: no pointer or keyboard change and no hover or focus styles.
+6. `widget_info` reports a slider with its value and label.
+7. `min == max`, `step <= 0`, a NaN value, a value outside the range: the widget
+   draws, does not panic and never produces NaN.
+
+## Interaction states
+- One shared helper (in `src/components/shared.rs`) turns a `Response` into a `State`. Do not re-derive it per
+  component, or components will disagree.
+- **A disabled widget never gets `HOVER`, `ACTIVE` or `FOCUS_VISIBLE`.** It gets
+  `DISABLED` only.
+- Geometry is resolved without interaction states.
+- Every custom-painted widget reports itself with `resp.widget_info(..)`.
 
 Then **offer to open a PR** to `github.com/oetiker/egui-shadcn` (a nudge, not an
 automatic pipeline — it needs the user's go-ahead and push/fork access).
@@ -123,13 +197,14 @@ project**. Keep that surface minimal.
   `flex-grow` distribution across siblings. Use `egui_extras::StripBuilder`
   (`Size::relative/exact/remainder`) via the `layout` helpers.
 - Don't fight it with `available_width()` arithmetic when a helper exists.
-- Hover/active = opacity modulation of the base color, never a new hue.
+- Hover, active and focus follow the style's recipe; never invent a state colour.
 - Apply the theme once, not every frame; read tokens via `Theme::current(ctx)`.
-- **No color or text-size literals outside `theme.rs`.** Colors come from
-  `Palette`, sizes from `Metrics` (control heights, paddings, text sizes, icon
-  size, border/ring widths). A value the palette lacks is a new token, not a
-  literal. Geometry private to one widget's drawing (a checkmark path) may stay
-  local.
+- **No style values in component code.** Values come from the style's recipes
+  (`Theme::current(ctx).style`) and the palette; a value the style lacks is a
+  base class quoted under `// base:`, or a gap to report. Geometry private to one
+  widget's drawing (a checkmark path) may stay local.
+- **Project-specific deviations go into the theme construction**
+  (`let mut s = Style::nova(); s.<part>.<field> = …;`), never into vendored files.
 - **Every custom-painted widget reports itself** with `resp.widget_info(..)`
   (role, label, enabled, selected), or screen readers see nothing.
 
