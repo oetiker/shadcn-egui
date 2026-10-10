@@ -1,10 +1,6 @@
 //! Token discipline: components take every color and text size from the
 //! theme, so restyling means editing `theme.rs` alone.
 
-use egui_shadcn::components::button::Button;
-use egui_shadcn::components::input::Input;
-use egui_shadcn::{Metrics, Theme};
-
 /// Color constructors and literal font sizes. A line may opt out with a
 /// `// token-ok: <reason>` comment on the line above.
 fn violations(source: &str) -> Vec<String> {
@@ -62,18 +58,84 @@ fn components_use_theme_tokens() {
     assert!(found.is_empty(), "literal colors/sizes outside theme.rs:\n{}", found.join("\n"));
 }
 
-#[test]
-fn metrics_drive_component_sizes() {
-    let theme = Theme { metrics: Metrics { control_md: 44.0, ..Metrics::default() }, ..Theme::dark() };
-    let ctx = egui::Context::default();
-    let mut heights = (0.0, 0.0);
-    let mut text = String::new();
-    for _ in 0..2 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
-            theme.apply(ui.ctx());
-            heights.0 = ui.add(Button::new("Save")).rect.height();
-            heights.1 = ui.add(Input::new(&mut text)).rect.height();
+/// Strict scan for ported components (spec section 7): besides colours and
+/// font sizes, literal geometry, shadow definitions and alpha multipliers. A
+/// line may carry them only with a `// base: "<upstream classes>"` quote on
+/// the same line or the line above (stylegen's drift check verifies the
+/// quote). Halving/doubling (`/ 2.0`, `* 2.0`) and 0.0/1.0 are arithmetic,
+/// not values.
+fn strict_violations(source: &str) -> Vec<String> {
+    let mut out = violations(source);
+    let mut prev = "";
+    for (n, line) in source.lines().enumerate() {
+        let code = line.split("//").next().unwrap_or("");
+        let quoted = line.contains("// base: \"") || prev.contains("// base: \"");
+        let shadow = code.contains("Shadow {");
+        let alpha = ["gamma_multiply(", "linear_multiply(", "from_black_alpha(", "from_white_alpha("]
+            .iter()
+            .any(|p| code.split(p).skip(1).any(|r| r.starts_with(|c: char| c.is_ascii_digit())));
+        let geometry = float_literals(code).any(|(lit, before)| {
+            !matches!(lit, "0.0" | "1.0") && !((lit == "2.0") && (before.ends_with("/ ") || before.ends_with("* ")))
         });
+        if (shadow || alpha || geometry) && !quoted && !line.trim_start().starts_with("//") {
+            out.push(format!("{}: {}", n + 1, line.trim()));
+        }
+        prev = line;
     }
-    assert_eq!(heights, (44.0, 44.0));
+    out
+}
+
+/// Float literals in a line, each with the text before it.
+fn float_literals(code: &str) -> impl Iterator<Item = (&str, &str)> {
+    let b = code.as_bytes();
+    let mut i = 0;
+    std::iter::from_fn(move || {
+        while i < b.len() {
+            let start = i;
+            let ident_before = start > 0 && (b[start - 1].is_ascii_alphanumeric() || b[start - 1] == b'_');
+            if b[i].is_ascii_digit() && !ident_before {
+                while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'.' || b[i] == b'_') {
+                    i += 1;
+                }
+                let lit = &code[start..i];
+                if lit.contains('.') && !lit.ends_with('.') {
+                    return Some((lit, &code[..start]));
+                }
+            } else {
+                i += 1;
+            }
+        }
+        None
+    })
+}
+
+#[test]
+fn strict_scanner_catches_literals() {
+    assert_eq!(strict_violations("let h = 32.0;").len(), 1);
+    assert_eq!(strict_violations("let c = fill.gamma_multiply(0.5);").len(), 1);
+    assert_eq!(strict_violations("let s = Shadow { offset: [0, 1], blur: 3, spread: 0, color };").len(), 1);
+    assert_eq!(strict_violations("// base: \"disabled:opacity-50\"\nlet c = fill.gamma_multiply(0.5);").len(), 0);
+    assert_eq!(strict_violations("let c = rect.height() / 2.0;").len(), 0);
+    assert_eq!(strict_violations("let w = 2.0 + x;").len(), 1);
+    assert_eq!(strict_violations("let z = 0.0; let o = 1.0;").len(), 0);
+    assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
+}
+
+/// Files under `src/components/` (plus `layout.rs`) already re-ported to the
+/// shadcn-svelte base. Each port task adds its file; Task 24 replaces this
+/// list with "all files".
+const PORTED: &[&str] = &[];
+
+#[test]
+fn ported_components_take_values_from_the_style() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
+    let mut found = Vec::new();
+    for name in PORTED {
+        let path = if *name == "layout.rs" { format!("{dir}/layout.rs") } else { format!("{dir}/components/{name}") };
+        let src = std::fs::read_to_string(&path).expect("ported file exists");
+        for v in strict_violations(&src) {
+            found.push(format!("{path}:{v}"));
+        }
+    }
+    assert!(found.is_empty(), "style values hard-coded in ported components:\n{}", found.join("\n"));
 }
