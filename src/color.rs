@@ -1,5 +1,5 @@
-//! OKLCH -> sRGB conversion (shadcn v4 stores tokens as OKLCH).
-//! Converts oklch(L C H) to an egui Color32. Out-of-gamut channels are clamped.
+//! OKLCH <-> sRGB conversion and OKLCH color mix (shadcn v4 stores tokens as OKLCH).
+//! Converts oklch(L C H) to an egui Color32 and back. Out-of-gamut channels are clamped.
 
 use egui::Color32;
 
@@ -41,4 +41,51 @@ pub fn oklch_to_srgb_a(l: f32, c: f32, h: f32, alpha: f32) -> Color32 {
         to_u8(b),
         (alpha * 255.0).round().clamp(0.0, 255.0) as u8,
     )
+}
+
+/// sRGB (unmultiplied, alpha ignored) to OKLCH: L in 0..1, C, H in degrees.
+pub fn srgb_to_oklch(c: Color32) -> (f32, f32, f32) {
+    let [r, g, b, _] = c.to_srgba_unmultiplied();
+    let lin = |v: u8| {
+        let v = v as f32 / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    let (r, g, b) = (lin(r), lin(g), lin(b));
+    let l = 0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_99 * b;
+    let m = 0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b;
+    let s = 0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b;
+    let (l, m, s) = (l.cbrt(), m.cbrt(), s.cbrt());
+    let ok_l = 0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s;
+    let ok_a = 1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s;
+    let ok_b = 0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s;
+    let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
+    let hue = ok_b.atan2(ok_a).to_degrees().rem_euclid(360.0);
+    (ok_l, chroma, hue)
+}
+
+/// CSS `color-mix(in oklch, a, b t)`: `t` is the share of `b`. Hue takes the
+/// shorter arc; an achromatic side adopts the other side's hue.
+pub fn mix_oklch(a: Color32, b: Color32, t: f32) -> Color32 {
+    if t <= 0.0 {
+        return a;
+    }
+    if t >= 1.0 {
+        return b;
+    }
+    let (l1, c1, mut h1) = srgb_to_oklch(a);
+    let (l2, c2, mut h2) = srgb_to_oklch(b);
+    if c1 < 1e-4 {
+        h1 = h2;
+    }
+    if c2 < 1e-4 {
+        h2 = h1;
+    }
+    let mut dh = h2 - h1;
+    if dh > 180.0 {
+        dh -= 360.0;
+    } else if dh < -180.0 {
+        dh += 360.0;
+    }
+    let alpha = a.a() as f32 / 255.0 * (1.0 - t) + b.a() as f32 / 255.0 * t;
+    oklch_to_srgb_a(l1 + (l2 - l1) * t, c1 + (c2 - c1) * t, h1 + dh * t, alpha)
 }
