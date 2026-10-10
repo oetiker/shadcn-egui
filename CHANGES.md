@@ -15,6 +15,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   current shadcn, instead of adding or subtracting fixed pixels. At the
   default radius of 10 px, small, medium, large and extra-large corners look
   the same as before.
+- Buttons follow the chosen style: vega buttons are 36 px high, nova buttons
+  32 px with rounder corners, both with 10 px side padding instead of 16 px,
+  and the Destructive button is a light red tint with red text instead of a
+  solid red fill. A pressed button moves down by 1 px. New sizes (`Xs`,
+  `IconXs`, `IconSm`, `IconLg`), a trailing icon and the expanded, invalid
+  and has-popup states are available.
 
 ## [0.3.2] - 2026-10-09
 

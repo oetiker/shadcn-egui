@@ -1,3 +1,5 @@
+mod common;
+
 use egui_shadcn::components::shared::mix_toward;
 
 #[test]
@@ -17,7 +19,7 @@ fn button_click_sets_flag() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         if ui.add(Button::new("Save")).clicked() {
             clicked.set(true);
         }
@@ -28,26 +30,92 @@ fn button_click_sets_flag() {
 }
 
 #[test]
-fn button_variants_snapshot() {
-    use egui_kittest::Harness;
-    use egui_shadcn::components::button::{Button, ButtonVariant};
-    use egui_shadcn::{layout, Theme};
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(560.0, 80.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(20.0);
+fn button_height_follows_style() {
+    use egui_shadcn::components::button::Button;
+    for (name, theme) in common::themes() {
+        let want = if name.starts_with("nova") { 32.0 } else { 36.0 };
+        let h = common::measure(&theme, |ui| ui.add(Button::new("Save"))).height();
+        assert_eq!(h, want, "{name}");
+    }
+}
+
+/// A project deviates from the style when it builds the theme, not in the
+/// vendored component.
+#[test]
+fn button_override_from_theme_setup() {
+    use egui_shadcn::components::button::Button;
+    use egui_shadcn::style::Style;
+    use egui_shadcn::{Palette, Theme};
+    let mut s = Style::nova();
+    s.button_size_default.height.base = Some(40.0);
+    let theme = Theme::new(s, Palette::dark(), 10.0);
+    let h = common::measure(&theme, |ui| ui.add(Button::new("Save"))).height();
+    assert_eq!(h, 40.0);
+}
+
+#[test]
+fn button_snapshot() {
+    use egui_shadcn::components::button::{Button, ButtonSize, ButtonVariant};
+    use egui_shadcn::components::icon::CLOSE;
+    use egui_shadcn::layout;
+    common::snapshot_all("button", egui::vec2(720.0, 200.0), |ui| {
+        layout::vstack(ui, 12.0, |ui| {
             layout::row(ui, 8.0, |ui| {
-                ui.add_space(16.0);
                 ui.add(Button::new("Default"));
                 ui.add(Button::new("Secondary").variant(ButtonVariant::Secondary));
                 ui.add(Button::new("Outline").variant(ButtonVariant::Outline));
                 ui.add(Button::new("Ghost").variant(ButtonVariant::Ghost));
                 ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
+                ui.add(Button::new("Link").variant(ButtonVariant::Link));
+            });
+            layout::row(ui, 8.0, |ui| {
+                ui.add(Button::new("Xs").size(ButtonSize::Xs));
+                ui.add(Button::new("Small").size(ButtonSize::Sm));
+                ui.add(Button::new("Default"));
+                ui.add(Button::new("Large").size(ButtonSize::Lg));
+                ui.add(Button::new("Close").icon(&CLOSE).size(ButtonSize::Icon).variant(ButtonVariant::Outline));
+                ui.add(Button::new("With icon").icon(&CLOSE));
+            });
+            layout::row(ui, 8.0, |ui| {
+                ui.add(Button::new("Disabled").enabled(false));
+                ui.add(Button::new("Invalid").variant(ButtonVariant::Outline).invalid(true));
+                ui.add(Button::new("Open").variant(ButtonVariant::Outline).expanded(true));
             });
         });
-    h.run();
-    h.snapshot("button_variants");
+    });
+}
+
+/// The shared Response-to-State mapping: a disabled widget gets `DISABLED`
+/// and loses every pointer and focus bit, also one its caller passed in.
+#[test]
+fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
+    use egui_shadcn::components::shared::interaction_state;
+    use egui_shadcn::style::State;
+    use egui_shadcn::Theme;
+    let theme = Theme::vega_dark();
+    let target = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(80.0, 30.0));
+    let ctx = egui::Context::default();
+    let (mut live, mut disabled) = (State::NONE, State::NONE);
+    for events in [vec![], pointer_down(target.center()), vec![]] {
+        let _ = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            let resp = ui.interact(target, egui::Id::new("target"), egui::Sense::click());
+            resp.request_focus();
+            live = interaction_state(&theme, &resp, true, State::INVALID);
+            disabled = interaction_state(&theme, &resp, false, State::INVALID | State::FOCUS);
+        });
+    }
+    // Control: the same response, enabled, is hovered, pressed and focused.
+    let pointer = State::HOVER | State::ACTIVE | State::FOCUS_VISIBLE;
+    assert_eq!(live, pointer | State::INVALID | State::DARK);
+    assert_eq!(disabled, State::INVALID | State::DISABLED | State::DARK);
+}
+
+/// Move the pointer to `pos` and press the primary button there.
+fn pointer_down(pos: egui::Pos2) -> Vec<egui::Event> {
+    vec![
+        egui::Event::PointerMoved(pos),
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE },
+    ]
 }
 
 #[test]
@@ -236,6 +304,8 @@ fn card_badge_select_snapshot() {
     h.snapshot("card_badge_select");
 }
 
+/// shadcn `disabled:pointer-events-none`: no click, and a pressed pointer
+/// over the button changes nothing it paints (no hover fill, no press nudge).
 #[test]
 fn disabled_button_ignores_clicks() {
     use egui_kittest::kittest::Queryable;
@@ -245,7 +315,7 @@ fn disabled_button_ignores_clicks() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         if ui.add(Button::new("Save").enabled(false)).clicked() {
             clicked.set(true);
         }
@@ -253,6 +323,37 @@ fn disabled_button_ignores_clicks() {
     h.get_by_label("Save").click();
     h.run();
     assert!(!clicked.get(), "disabled button registered a click");
+
+    /// The button's rect shapes at rest and with the pointer held down on it.
+    fn at_rest_and_pressed(enabled: bool) -> (Vec<egui::epaint::RectShape>, Vec<egui::epaint::RectShape>) {
+        fn frame(ctx: &egui::Context, enabled: bool, events: Vec<egui::Event>) -> (egui::Rect, Vec<egui::epaint::RectShape>) {
+            let mut rect = egui::Rect::NOTHING;
+            let out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+                Theme::vega_dark().apply(ui.ctx());
+                rect = ui.add(Button::new("Save").enabled(enabled)).rect;
+            });
+            fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+                match s {
+                    egui::Shape::Rect(r) => out.push(r.clone()),
+                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                    _ => {}
+                }
+            }
+            let mut rects = Vec::new();
+            out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
+            (rect, rects)
+        }
+        let ctx = egui::Context::default();
+        frame(&ctx, enabled, vec![]);
+        let (rect, rest) = frame(&ctx, enabled, vec![]);
+        frame(&ctx, enabled, pointer_down(rect.center()));
+        (rest, frame(&ctx, enabled, vec![]).1)
+    }
+    // Control: an enabled button does change under a pressed pointer.
+    let (rest, pressed) = at_rest_and_pressed(true);
+    assert_ne!(rest, pressed, "enabled button shows no hover or press");
+    let (rest, pressed) = at_rest_and_pressed(false);
+    assert_eq!(rest, pressed, "disabled button shows hover or press styling");
 }
 
 /// shadcn `focus-visible:border-ring`: the input's own 1px border turns

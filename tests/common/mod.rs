@@ -33,3 +33,15 @@ pub fn snapshot_all(name: &str, size: egui::Vec2, mut ui_fn: impl FnMut(&mut egu
         results.extend(h.take_snapshot_results());
     }
 }
+
+/// The rect of the widget `add` places, under `theme`. Runs two frames: the
+/// fonts `Theme::apply` installs reach the atlas only on the second.
+pub fn measure(theme: &Theme, mut add: impl FnMut(&mut egui::Ui) -> egui::Response) -> egui::Rect {
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    let mut rect = egui::Rect::NOTHING;
+    for _ in 0..2 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    }
+    rect
+}

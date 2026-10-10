@@ -121,10 +121,23 @@ fn strict_scanner_catches_literals() {
     assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
 }
 
+/// The code before a file's `#[cfg(test)]` module. Unit tests compare
+/// against the style's numbers, so they hold literals by design.
+fn non_test_code(source: &str) -> &str {
+    source.split("\n#[cfg(test)]").next().unwrap_or(source)
+}
+
+#[test]
+fn non_test_code_stops_at_the_test_module() {
+    let src = "let h = 32.0;\n#[cfg(test)]\nmod tests { const H: f32 = 36.0; }";
+    assert_eq!(strict_violations(non_test_code(src)).len(), 1);
+    assert_eq!(strict_violations(src).len(), 2);
+}
+
 /// Files under `src/components/` (plus `layout.rs`) already re-ported to the
 /// shadcn-svelte base. Each port task adds its file; Task 24 replaces this
 /// list with "all files".
-const PORTED: &[&str] = &[];
+const PORTED: &[&str] = &["button.rs"];
 
 #[test]
 fn ported_components_take_values_from_the_style() {
@@ -133,7 +146,7 @@ fn ported_components_take_values_from_the_style() {
     for name in PORTED {
         let path = if *name == "layout.rs" { format!("{dir}/layout.rs") } else { format!("{dir}/components/{name}") };
         let src = std::fs::read_to_string(&path).expect("ported file exists");
-        for v in strict_violations(&src) {
+        for v in strict_violations(non_test_code(&src)) {
             found.push(format!("{path}:{v}"));
         }
     }

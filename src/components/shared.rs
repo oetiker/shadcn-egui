@@ -1,7 +1,7 @@
 //! Shared painting helpers for shadcn-style components.
 
 use egui::{Color32, CornerRadius, Rect, Response, Stroke, Ui};
-use crate::style::Shift;
+use crate::style::{Shift, State};
 use crate::Theme;
 
 /// Build a CornerRadius from an f32 radius, rounding to the nearest pixel.
@@ -54,4 +54,23 @@ pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
         None => 0.0,
     };
     rect.translate(egui::vec2(d(x, rect.width()), d(y, rect.height())))
+}
+
+/// A widget's [`State`] for one paint: `context` (variant, icon side, …),
+/// what pointer and keyboard do to `resp`, and the theme's `DARK`. Keyboard
+/// focus is `FOCUS_VISIBLE`: egui focuses a widget by Tab or code, never by
+/// click. A disabled widget (`enabled` false, or a disabled `Ui`) gets
+/// `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`, even if
+/// `context` has them: shadcn's `disabled:pointer-events-none`.
+pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context: State) -> State {
+    let live = enabled && resp.enabled();
+    let pointer_and_focus = State::HOVER | State::ACTIVE | State::FOCUS | State::FOCUS_VISIBLE;
+    let context = if live { context } else { State(context.0 & !pointer_and_focus.0) };
+    theme.state(
+        context
+            .with(State::HOVER, live && resp.hovered())
+            .with(State::ACTIVE, live && resp.is_pointer_button_down_on())
+            .with(State::FOCUS_VISIBLE, live && resp.has_focus())
+            .with(State::DISABLED, !live),
+    )
 }

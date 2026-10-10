@@ -2,7 +2,7 @@
 
 | shadcn | module widget |
 |---|---|
-| `<Button variant size>` | `components::button::Button::new(t).variant(..).size(..)` via `ui.add(..)` — variants Default/Destructive/Outline/Secondary/Ghost/Link; sizes Sm/Default/Lg/Icon |
+| `<Button variant size>` | `components::button::Button::new(t).variant(..).size(..)` via `ui.add(..)` — variants Default/Outline/Secondary/Ghost/Destructive/Link; sizes Xs/Sm/Default/Lg/Icon/IconXs/IconSm/IconLg; `.enabled(..)`, `.expanded(..)` (aria-expanded), `.invalid(..)` (aria-invalid), `.has_popup(..)` (aria-haspopup). Markers: `cn-button`, `cn-button-variant-*`, `cn-button-size-*` |
 | `<Input>` | `components::input::Input::new(&mut s).hint(..).password(..).max_width(..)` via `ui.add(..)` |
 | `<Label>` | `components::label::label(ui, "..")` |
 | description text | `components::label::description(ui, "..")` |
@@ -17,7 +17,7 @@
 | `<Popover>` + Trigger/Content | `let t = ui.add(Button::..); components::popover::Popover::new(&t).show(\|ui\| ..)` — click toggles, click outside closes |
 | `<Tooltip>` | `components::tooltip::tooltip(ui.add(..), "text")` |
 | Lucide `<Mic />` | `components::icon::IconView::new(&icons::MIC)` via `ui.add(..)`; `.size(..)`, `.color(..)`; data from `icongen` (see `references/icons.md`) |
-| `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&icons::MIC)`; icon-only: `.size(ButtonSize::Icon)`, the text becomes the accessible name |
+| `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&icons::MIC)` (`data-icon="inline-start"`), `.icon_end(..)` (`inline-end`); icon-only: `.size(ButtonSize::Icon)`, the text becomes the accessible name |
 
 Not yet ported (add when needed): RadioGroup, Tags/Chips, Menubar, Table,
 DropdownMenu, Accordion, gradients. Build them as new

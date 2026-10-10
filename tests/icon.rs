@@ -1,5 +1,6 @@
 #[path = "icons/lucide.rs"]
 mod lucide;
+mod common;
 
 use egui::epaint::{CircleShape, PathShape};
 use egui::{pos2, vec2, Color32, Rect, Shape};
@@ -71,7 +72,7 @@ fn icon_widgets_are_labelled() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
+        Theme::vega_dark().apply(ui.ctx());
         ui.add(IconView::new(&lucide::MIC));
         if ui.add(Button::new("Power off").icon(&lucide::POWER).size(ButtonSize::Icon)).clicked() {
             clicked.set(true);
@@ -85,30 +86,22 @@ fn icon_widgets_are_labelled() {
 
 #[test]
 fn icons_snapshot() {
-    let mut h = Harness::builder()
-        .with_size(vec2(420.0, 120.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(16.0);
-            layout::vstack(ui, 16.0, |ui| {
-                layout::row(ui, 16.0, |ui| {
-                    ui.add_space(16.0);
-                    for icon in lucide::ALL {
-                        ui.add(IconView::new(icon));
-                    }
-                    for icon in lucide::ALL.iter().take(3) {
-                        ui.add(IconView::new(icon).size(24.0));
-                    }
-                });
-                layout::row(ui, 8.0, |ui| {
-                    ui.add_space(16.0);
-                    ui.add(Button::new("Microphone").icon(&lucide::MIC));
-                    ui.add(Button::new("Display").icon(&lucide::MONITOR).variant(ButtonVariant::Outline));
-                    ui.add(Button::new("Close").icon(&lucide::X).size(ButtonSize::Icon).variant(ButtonVariant::Ghost));
-                    ui.add(Button::new("Power").icon(&lucide::POWER).size(ButtonSize::Icon).variant(ButtonVariant::Destructive));
-                });
+    common::snapshot_all("icons", vec2(420.0, 120.0), |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            layout::row(ui, 16.0, |ui| {
+                for icon in lucide::ALL {
+                    ui.add(IconView::new(icon));
+                }
+                for icon in lucide::ALL.iter().take(3) {
+                    ui.add(IconView::new(icon).size(24.0));
+                }
+            });
+            layout::row(ui, 8.0, |ui| {
+                ui.add(Button::new("Microphone").icon(&lucide::MIC));
+                ui.add(Button::new("Display").icon(&lucide::MONITOR).variant(ButtonVariant::Outline));
+                ui.add(Button::new("Close").icon(&lucide::X).size(ButtonSize::Icon).variant(ButtonVariant::Ghost));
+                ui.add(Button::new("Power").icon(&lucide::POWER).size(ButtonSize::Icon).variant(ButtonVariant::Destructive));
             });
         });
-    h.run();
-    h.snapshot("icons");
+    });
 }
