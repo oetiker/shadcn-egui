@@ -82,6 +82,7 @@ fn paint_alpha_and_mix() {
     assert_eq!(p, t.palette.primary);
     let half = t.paint(Paint::Role(Role::Primary, 0.5));
     assert!((half.a() as i32 - 128).abs() <= 1, "{half:?}");
+    assert_eq!(half, t.palette.primary.gamma_multiply(0.5));
     assert_eq!(t.paint(Paint::Role(Role::Transparent, 1.0)), egui::Color32::TRANSPARENT);
     let mix = t.paint(Paint::Mix(Role::Secondary, Role::Foreground, 0.05));
     assert_ne!(mix, t.palette.secondary);
@@ -93,7 +94,22 @@ fn text_and_shadow() {
     assert_eq!(t.text_px(TextSize::Sm), 14.0);
     assert_eq!(t.text_px(TextSize::Px(12.8)), 12.8);
     assert_eq!(t.shadow(ShadowLevel::None), egui::epaint::Shadow::NONE);
-    assert_eq!(t.shadow(ShadowLevel::Md).offset, [0, 4]);
+    // (level, y offset, blur, black alpha) from the Tailwind v4 shadow scale.
+    for (level, y, blur, a) in [
+        (ShadowLevel::Xs2, 1, 0, 13),
+        (ShadowLevel::Xs, 1, 2, 13),
+        (ShadowLevel::Sm, 1, 3, 26),
+        (ShadowLevel::Md, 4, 6, 26),
+        (ShadowLevel::Lg, 10, 15, 26),
+        (ShadowLevel::Xl, 20, 25, 26),
+        (ShadowLevel::Xl2, 25, 50, 64),
+    ] {
+        let s = t.shadow(level);
+        assert_eq!(s.offset, [0, y], "{level:?}");
+        assert_eq!(s.blur, blur, "{level:?}");
+        assert_eq!(s.spread, 0, "{level:?}");
+        assert_eq!(s.color, egui::Color32::from_black_alpha(a), "{level:?}");
+    }
 }
 
 #[test]
@@ -120,4 +136,14 @@ fn consumer_override_takes_effect() {
     s.button_size_default.height.base = Some(40.0);
     let t = Theme::new(s, Palette::dark(), 10.0);
     assert_eq!(t.style.button_size_default.height.get(t.state(State::NONE)), Some(40.0));
+}
+
+#[test]
+fn consumer_set_dark_is_honoured() {
+    let mut t = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    t.dark = false;
+    assert!(!t.state(State::HOVER).contains(State::DARK));
+    let mut t = Theme::new(Style::vega(), Palette::light(), 10.0);
+    t.dark = true;
+    assert!(t.state(State::HOVER).contains(State::DARK));
 }
