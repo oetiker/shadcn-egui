@@ -71,6 +71,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   `SettingsState` has new `slider` and `region` fields.
 
 ### Added
+- The `settings` example has a toolbar with a style select (vega, nova, maia,
+  lyra, mira, luma, rhea), a Dark/Light tab pair and a radius slider from 0 to
+  20 px, so the look can be changed while the window is open.
 - `Slider` with one thumb, horizontal or vertical. A click or drag sets the
   value, the arrow, Page Up/Down, Home and End keys step it, and
   `.enabled(false)` draws it at half opacity and ignores input.

@@ -1,36 +1,94 @@
+use egui_shadcn::components::label::label;
+use egui_shadcn::components::select::Select;
+use egui_shadcn::components::slider::Slider;
+use egui_shadcn::components::tabs::Tabs;
 use egui_shadcn::reference::{settings_ui, SettingsState};
 use egui_shadcn::style::Style;
-use egui_shadcn::{Palette, Theme};
+use egui_shadcn::{layout, Palette, Theme};
+
+/// Every exported style, in the order the Style select lists them.
+const STYLES: [&str; 7] = ["vega", "nova", "maia", "lyra", "mira", "luma", "rhea"];
+const MODES: [&str; 2] = ["Dark", "Light"];
+const DEFAULT_RADIUS: f32 = 10.0;
+
+fn style_by_index(i: usize) -> Style {
+    match STYLES[i] {
+        "nova" => Style::nova(),
+        "maia" => Style::maia(),
+        "lyra" => Style::lyra(),
+        "mira" => Style::mira(),
+        "luma" => Style::luma(),
+        "rhea" => Style::rhea(),
+        _ => Style::vega(),
+    }
+}
 
 struct SettingsApp {
     state: SettingsState,
+    /// Toolbar values; `applied` is what the context currently shows.
+    style: usize,
+    light: usize,
+    radius: f32,
+    applied: (usize, usize, f32),
+}
+
+impl SettingsApp {
+    fn apply(&mut self, ctx: &egui::Context) {
+        let palette = if self.light == 1 { Palette::light() } else { Palette::dark() };
+        Theme::new(style_by_index(self.style), palette, self.radius).apply(ctx);
+        self.applied = (self.style, self.light, self.radius);
+    }
+
+    /// Style, mode and radius controls, built from the crate's own components.
+    fn toolbar(&mut self, ui: &mut egui::Ui) {
+        let t = Theme::current(ui.ctx());
+        egui::Panel::top("theme_toolbar")
+            .frame(egui::Frame::new().fill(t.palette.background).inner_margin(egui::Margin::symmetric(32, 12)))
+            .show_inside(ui, |ui| {
+                layout::row(ui, 16.0, |ui| {
+                    label(ui, "Style");
+                    ui.add(Select::new("theme_style", &mut self.style, &STYLES));
+                    label(ui, "Mode");
+                    ui.add(Tabs::new(&mut self.light, &MODES));
+                    label(ui, "Radius");
+                    ui.add(Slider::new(&mut self.radius, 0.0..=20.0).step(1.0).label("Radius"));
+                });
+            });
+    }
 }
 
 impl eframe::App for SettingsApp {
     // eframe hands us a root &mut Ui; settings_ui fills it via a
     // CentralPanel::show_inside, so no ctx-level panel management is needed.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.toolbar(ui);
+        // Apply only when a toolbar value changed, never every frame.
+        if (self.style, self.light, self.radius) != self.applied {
+            self.apply(ui.ctx());
+        }
         settings_ui(ui, &mut self.state);
     }
 }
 
 fn main() -> eframe::Result<()> {
-    // `settings [vega|nova] [dark|light]`
+    // `settings [vega|nova|maia|lyra|mira|luma|rhea] [dark|light]` sets the
+    // initial toolbar values.
     let args: Vec<String> = std::env::args().collect();
-    let style = match args.get(1).map(String::as_str) {
-        Some("nova") => Style::nova(),
-        _ => Style::vega(),
-    };
-    let palette = if args.get(2).map(String::as_str) == Some("light") { Palette::light() } else { Palette::dark() };
-    let theme = Theme::new(style, palette, 10.0);
+    let style = args.get(1).and_then(|a| STYLES.iter().position(|s| s == a)).unwrap_or(0);
+    let light = usize::from(args.get(2).map(String::as_str) == Some("light"));
     eframe::run_native(
         "egui-shadcn settings",
         eframe::NativeOptions::default(),
         Box::new(move |cc| {
-            // Once, when the context is created: the theme does not change
-            // while the app runs.
-            theme.apply(&cc.egui_ctx);
-            Ok(Box::new(SettingsApp { state: SettingsState::default() }))
+            let mut app = SettingsApp {
+                state: SettingsState::default(),
+                style,
+                light,
+                radius: DEFAULT_RADIUS,
+                applied: (style, light, DEFAULT_RADIUS),
+            };
+            app.apply(&cc.egui_ctx);
+            Ok(Box::new(app))
         }),
     )
 }
