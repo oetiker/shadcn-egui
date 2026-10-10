@@ -16,7 +16,18 @@ pub fn themes() -> Vec<(&'static str, Theme)> {
 }
 
 /// One snapshot per style x {dark, light}: `{name}_{vega_dark|...}.png`.
-pub fn snapshot_all(name: &str, size: egui::Vec2, mut ui_fn: impl FnMut(&mut egui::Ui)) {
+pub fn snapshot_all(name: &str, size: egui::Vec2, ui_fn: impl FnMut(&mut egui::Ui)) {
+    snapshot_all_with(name, size, ui_fn, |_| {});
+}
+
+/// Like [`snapshot_all`], with `prepare` run on each harness after the first
+/// frame (hover a trigger, press a key) and before the snapshot.
+pub fn snapshot_all_with(
+    name: &str,
+    size: egui::Vec2,
+    mut ui_fn: impl FnMut(&mut egui::Ui),
+    mut prepare: impl FnMut(&mut Harness<'_>),
+) {
     // One result set for all harnesses, so a failing style does not abort the rest.
     let mut results = SnapshotResults::new();
     for (suffix, theme) in themes() {
@@ -33,6 +44,7 @@ pub fn snapshot_all(name: &str, size: egui::Vec2, mut ui_fn: impl FnMut(&mut egu
             });
         });
         h.run();
+        prepare(&mut h);
         h.snapshot(format!("{name}_{suffix}"));
         results.extend(h.take_snapshot_results());
     }

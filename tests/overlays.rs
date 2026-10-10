@@ -1,3 +1,5 @@
+mod common;
+
 use egui::vec2;
 use egui::Key;
 use egui_kittest::kittest::Queryable;
@@ -118,21 +120,58 @@ fn popover_snapshot() {
     h.snapshot("popover");
 }
 
+fn tooltip_trigger(ui: &mut egui::Ui) {
+    ui.style_mut().interaction.tooltip_delay = 0.0;
+    ui.add_space(32.0);
+    ui.horizontal(|ui| {
+        ui.add_space(32.0);
+        tooltip(ui.add(Button::new("Hover me").variant(ButtonVariant::Outline)), "Add to library");
+    });
+}
+
 #[test]
 fn tooltip_shows_on_hover() {
     let mut h = Harness::builder().with_size(vec2(240.0, 120.0)).build_ui(|ui| {
         Theme::dark().apply(ui.ctx());
-        ui.style_mut().interaction.tooltip_delay = 0.0;
-        ui.add_space(16.0);
-        ui.horizontal(|ui| {
-            ui.add_space(16.0);
-            tooltip(ui.add(Button::new("Hover me").variant(ButtonVariant::Outline)), "Add to library");
-        });
+        tooltip_trigger(ui);
     });
     h.run();
     assert!(h.query_by_label("Add to library").is_none());
     h.get_by_label("Hover me").hover();
     h.run();
     h.get_by_label("Add to library");
-    h.snapshot("tooltip");
+}
+
+#[test]
+fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
+    for (name, theme) in common::themes() {
+        let mut h = Harness::builder().with_size(vec2(240.0, 120.0)).build_ui(|ui| {
+            theme.apply(ui.ctx());
+            tooltip_trigger(ui);
+        });
+        h.run();
+        let trigger = h.get_by_label("Hover me").rect();
+        h.get_by_label("Hover me").hover();
+        h.run();
+        let text = h.get_by_label("Add to library").rect();
+        let img = h.render().expect("render");
+        let px = |p: egui::Pos2| {
+            let c = img.get_pixel(p.x as u32, p.y as u32);
+            egui::Color32::from_rgb(c[0], c[1], c[2])
+        };
+        // bg-foreground behind the text; the arrow reaches into the trigger below.
+        let fg = theme.palette.foreground;
+        let corner = egui::pos2(text.left() - 4.0, text.center().y);
+        assert_eq!(px(corner), fg, "{name}: fill is foreground");
+        let tip = egui::pos2(text.center().x, trigger.top() - 2.0);
+        assert_eq!(px(tip), fg, "{name}: arrow reaches the trigger");
+    }
+}
+
+#[test]
+fn tooltip_snapshot() {
+    common::snapshot_all_with("tooltip", vec2(240.0, 140.0), tooltip_trigger, |h| {
+        h.get_by_label("Hover me").hover();
+        h.run();
+    });
 }

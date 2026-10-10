@@ -56,6 +56,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   `Tabs::new(&mut active, labels).variant(TabsVariant::Line)` draws an
   underline under the active tab instead; Left, Right, Home and End move the
   selection, and `.enabled(false)` draws the tabs at half opacity.
+- Tooltips are inverted as in current shadcn: a foreground-coloured bubble
+  with background-coloured text instead of the primary colour, shown above the
+  trigger with a small rounded arrow pointing at it. Text wraps at 320 px.
 - New `Slider` with one thumb, horizontal or vertical, in the chosen style.
   A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
   step it, and `.enabled(false)` draws it at half opacity and ignores input.
