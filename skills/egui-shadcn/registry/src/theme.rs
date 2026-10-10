@@ -1,6 +1,7 @@
 //! shadcn v4 (new-york / OKLCH) design tokens, materialized for egui.
 
 use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
+use crate::style::{Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};
 use egui::Color32;
 
 /// The semantic shadcn color tokens. Surfaces come in `x` / `x_foreground` pairs.
@@ -85,9 +86,21 @@ impl Palette {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+impl Palette {
+    /// shadcn `menuAccent: "bold"`: menus highlight with the primary pair.
+    pub fn with_bold_menu_accent(mut self) -> Self {
+        self.accent = self.primary;
+        self.accent_foreground = self.primary_foreground;
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
+    /// The shadcn style (vega, nova, …): every component part's recipe.
+    pub style: Arc<Style>,
     pub palette: Palette,
+    /// shadcn `--radius`; the radius scale multiplies from it.
     pub radius: f32,
     pub metrics: Metrics,
     pub dark: bool,
@@ -175,17 +188,115 @@ impl Default for Metrics {
 }
 
 impl Theme {
-    pub fn light() -> Self {
-        Self { palette: Palette::light(), radius: 10.0, metrics: Metrics::default(), dark: false }
+    /// `dark` follows the palette's background (OKLCH lightness below 0.5);
+    /// set `theme.dark` afterwards to override.
+    pub fn new(style: Style, palette: Palette, radius: f32) -> Self {
+        let dark = crate::color::srgb_to_oklch(palette.background).0 < 0.5;
+        Self { style: Arc::new(style), palette, radius, metrics: Metrics::default(), dark }
     }
-    pub fn dark() -> Self {
-        Self { palette: Palette::dark(), radius: 10.0, metrics: Metrics::default(), dark: true }
-    }
+    pub fn vega_dark() -> Self { Self::new(Style::vega(), Palette::dark(), 10.0) }
+    pub fn vega_light() -> Self { Self::new(Style::vega(), Palette::light(), 10.0) }
+    /// Alias of [`Theme::vega_light`]; removed before 0.4.0 ships.
+    pub fn light() -> Self { Self::vega_light() }
+    /// Alias of [`Theme::vega_dark`]; removed before 0.4.0 ships.
+    pub fn dark() -> Self { Self::vega_dark() }
 
-    pub fn radius_sm(&self) -> f32 { (self.radius - 4.0).max(0.0) }
-    pub fn radius_md(&self) -> f32 { (self.radius - 2.0).max(0.0) }
-    pub fn radius_lg(&self) -> f32 { self.radius }
-    pub fn radius_xl(&self) -> f32 { self.radius + 4.0 }
+    /// The component state `s` plus this theme's [`State::DARK`].
+    pub fn state(&self, s: State) -> State { s.with(State::DARK, self.dark) }
+
+    /// A radius rung in px: shadcn's scale multiplies `--radius`.
+    pub fn rung(&self, r: Rung) -> f32 {
+        let k = match r {
+            Rung::None => 0.0,
+            Rung::Sm => 0.6,
+            Rung::Md => 0.8,
+            Rung::Lg => 1.0,
+            Rung::Xl => 1.4,
+            Rung::Xl2 => 1.8,
+            Rung::Xl3 => 2.2,
+            Rung::Xl4 => 2.6,
+            Rung::Full => return f32::INFINITY,
+        };
+        self.radius * k
+    }
+    /// Corner radius in px, clamped to `max` (half the part's short side)
+    /// and to egui's `u8` corner radius.
+    pub fn radius_px(&self, r: Radius, max: f32) -> f32 {
+        let v = match r {
+            Radius::Rung(r) => self.rung(r),
+            Radius::Px(v) => v,
+            Radius::Min(r, v) => self.rung(r).min(v),
+        };
+        v.min(max).clamp(0.0, 255.0)
+    }
+    pub fn radius_sm(&self) -> f32 { self.rung(Rung::Sm) }
+    pub fn radius_md(&self) -> f32 { self.rung(Rung::Md) }
+    pub fn radius_lg(&self) -> f32 { self.rung(Rung::Lg) }
+    pub fn radius_xl(&self) -> f32 { self.rung(Rung::Xl) }
+
+    /// The palette colour of a style role.
+    pub fn role(&self, r: Role) -> Color32 {
+        let p = &self.palette;
+        match r {
+            Role::Background => p.background,
+            Role::Foreground => p.foreground,
+            Role::Card => p.card,
+            Role::CardForeground => p.card_foreground,
+            Role::Popover => p.popover,
+            Role::PopoverForeground => p.popover_foreground,
+            Role::Primary => p.primary,
+            Role::PrimaryForeground => p.primary_foreground,
+            Role::Secondary => p.secondary,
+            Role::SecondaryForeground => p.secondary_foreground,
+            Role::Muted => p.muted,
+            Role::MutedForeground => p.muted_foreground,
+            Role::Accent => p.accent,
+            Role::AccentForeground => p.accent_foreground,
+            Role::Destructive => p.destructive,
+            Role::DestructiveForeground => p.destructive_foreground,
+            Role::Border => p.border,
+            Role::Input => p.input,
+            Role::Ring => p.ring,
+            Role::White => Color32::WHITE,
+            Role::Black => Color32::BLACK,
+            Role::Transparent => Color32::TRANSPARENT,
+        }
+    }
+    /// A style colour as egui paints it. Alpha scales the premultiplied colour,
+    /// which matches CSS `/alpha` compositing in sRGB.
+    pub fn paint(&self, p: Paint) -> Color32 {
+        match p {
+            Paint::Role(r, a) if a >= 1.0 => self.role(r),
+            Paint::Role(r, a) => self.role(r).gamma_multiply(a.max(0.0)),
+            Paint::Mix(a, b, t) => crate::color::mix_oklch(self.role(a), self.role(b), t),
+        }
+    }
+    /// A text size in px, from [`Metrics`].
+    pub fn text_px(&self, s: TextSize) -> f32 {
+        let m = &self.metrics;
+        match s {
+            TextSize::Xs => m.text_xs,
+            TextSize::Sm => m.text_sm,
+            TextSize::Base => m.text_base,
+            TextSize::Lg => m.text_lg,
+            TextSize::Px(v) => v,
+        }
+    }
+    /// Tailwind v4 shadows, first layer only (egui draws one); egui's spread
+    /// is unsigned, so Tailwind's negative spreads become 0.
+    pub fn shadow(&self, s: ShadowLevel) -> egui::epaint::Shadow {
+        let (y, blur, a) = match s {
+            ShadowLevel::None => return egui::epaint::Shadow::NONE,
+            ShadowLevel::Xs2 => (1, 0, 0.05),
+            ShadowLevel::Xs => (1, 2, 0.05),
+            ShadowLevel::Sm => (1, 3, 0.10),
+            ShadowLevel::Md => (4, 6, 0.10),
+            ShadowLevel::Lg => (10, 15, 0.10),
+            ShadowLevel::Xl => (20, 25, 0.10),
+            ShadowLevel::Xl2 => (25, 50, 0.25),
+        };
+        egui::epaint::Shadow { offset: [0, y], blur, spread: 0, color: Color32::from_black_alpha((a * 255.0_f32).round() as u8) }
+    }
 
     /// `shadow-md`: popovers and tooltips.
     pub fn shadow_md(&self) -> egui::epaint::Shadow {
@@ -221,6 +332,15 @@ pub fn family(ctx: &egui::Context, name: &str) -> egui::FontFamily {
         fam
     } else {
         egui::FontFamily::Proportional
+    }
+}
+
+/// Font family for a weight; Oxanium ships regular, medium and semibold.
+pub fn family_for(ctx: &egui::Context, w: Weight) -> egui::FontFamily {
+    match w {
+        Weight::Normal => egui::FontFamily::Proportional,
+        Weight::Medium => family(ctx, FAMILY_MEDIUM),
+        Weight::Semibold | Weight::Bold => family(ctx, FAMILY_SEMIBOLD),
     }
 }
 
@@ -271,9 +391,11 @@ fn install_fonts(ctx: &egui::Context) {
 }
 
 impl Theme {
-    /// Read the active theme stored by [`Theme::apply`]. Falls back to dark.
+    /// Read the active theme stored by [`Theme::apply`]. Falls back to vega
+    /// dark, shared so the fallback does not build a [`Style`] per call.
     pub fn current(ctx: &egui::Context) -> Theme {
-        ctx.data(|d| d.get_temp::<Theme>(theme_id())).unwrap_or_else(Theme::dark)
+        static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
+        ctx.data(|d| d.get_temp::<Theme>(theme_id())).unwrap_or_else(|| FALLBACK.clone())
     }
 
     /// Push this theme into the egui context: fonts, type scale, spacing, colors.
@@ -340,7 +462,7 @@ impl Theme {
             }
         });
 
-        ctx.data_mut(|d| d.insert_temp(theme_id(), *self));
+        ctx.data_mut(|d| d.insert_temp(theme_id(), self.clone()));
     }
 }
 

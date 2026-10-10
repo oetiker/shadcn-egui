@@ -1,6 +1,7 @@
 //! Shared painting helpers for shadcn-style components.
 
-use egui::{Color32, CornerRadius, Response, Stroke, Ui};
+use egui::{Color32, CornerRadius, Rect, Response, Stroke, Ui};
+use crate::style::Shift;
 use crate::Theme;
 
 /// Build a CornerRadius from an f32 radius, rounding to the nearest pixel.
@@ -34,4 +35,23 @@ pub fn focus_ring(ui: &Ui, resp: &Response, theme: &Theme, corner: f32) {
             egui::StrokeKind::Outside,
         );
     }
+}
+
+/// shadcn's focus/invalid ring: a `ring-N` box-shadow drawn just outside
+/// the part's border box.
+pub fn ring(painter: &egui::Painter, rect: Rect, radius: f32, width: f32, color: Color32) {
+    if width > 0.0 && color.a() > 0 {
+        painter.rect_stroke(rect, radius, Stroke::new(width, color), egui::StrokeKind::Outside);
+    }
+}
+
+/// Apply `translate-x/y` to a part's rect. `SelfMinus(n)` is `calc(100% - n)`
+/// of the part's own size.
+pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
+    let d = |s: Option<Shift>, own: f32| match s {
+        Some(Shift::Px(v)) => v,
+        Some(Shift::SelfMinus(v)) => own - v,
+        None => 0.0,
+    };
+    rect.translate(egui::vec2(d(x, rect.width()), d(y, rect.height())))
 }

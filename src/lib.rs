@@ -5,4 +5,5 @@ pub mod reference;
 pub mod style;
 pub mod theme;
 
+pub use style::Style;
 pub use theme::{theme, Metrics, Palette, Theme};

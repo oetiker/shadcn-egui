@@ -4,6 +4,18 @@ All notable changes to the **egui-shadcn** plugin and the `egui_shadcn` crate ar
 recorded here. The format is based on [Keep a Changelog](https://keepachangelog.com),
 and the project aims to follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+- A theme now carries a shadcn style: `Theme::new(Style::vega(), palette, radius)`
+  or `Style::nova()` for the compact look; `Theme::vega_dark()` and
+  `Theme::vega_light()` give the default vega style. `Theme` can no longer be
+  copied implicitly, so code that reuses a theme value must call `.clone()`.
+- The `sm` to `4xl` corner radii now scale with `radius` by a factor, as in
+  current shadcn, instead of adding or subtracting fixed pixels. At the
+  default radius of 10 px, small, medium, large and extra-large corners look
+  the same as before.
+
 ## [0.3.2] - 2026-10-09
 
 ### Changed
