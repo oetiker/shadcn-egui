@@ -1,6 +1,6 @@
 //! Shared painting helpers for shadcn-style components.
 
-use egui::{Color32, CornerRadius, Rect, Response, Shape, Stroke};
+use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 use crate::style::{Shift, State};
 use crate::Theme;
 
@@ -72,4 +72,20 @@ pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context:
             .with(State::FOCUS_VISIBLE, live && resp.has_focus())
             .with(State::DISABLED, !live),
     )
+}
+
+/// shadcn's `disabled:opacity-50`, the way egui fades a disabled `Ui`: a
+/// painter that multiplies the alpha of every shape by `opacity`. It fades
+/// only when the widget's own flag (`own_enabled` false) disables it inside
+/// an enabled `Ui`. A disabled `Ui` (`ui.add_enabled(false, ..)`,
+/// `Ui::disable`) has faded its painter already, and fading again would
+/// paint at a quarter. egui fades shape by shape: where a part lies on
+/// another (a switch or slider thumb on its track), the lower part shows
+/// through, which CSS opacity on the whole group would not show.
+pub fn disabled_painter(ui: &Ui, own_enabled: bool, opacity: f32) -> Painter {
+    let mut painter = ui.painter().clone();
+    if !own_enabled && ui.is_enabled() {
+        painter.multiply_opacity(opacity);
+    }
+    painter
 }

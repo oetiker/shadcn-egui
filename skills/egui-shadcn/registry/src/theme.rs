@@ -402,16 +402,21 @@ impl Theme {
 
             // egui-native widgets follow the style's default button: its
             // height and horizontal padding, and the tabs gap between items.
+            // A style without a value gets egui's default, also when an
+            // earlier theme had set one.
+            let egui_default = egui::style::Spacing::default();
             let button = [&self.style.button_size_default];
             let none = self.state(State::NONE);
             let gap = pick(&[&self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
-            let pad_x = pick(&button, |r| &r.pad_left, none).unwrap_or(0.0);
+            let pad_x = pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
+            let height = pick(&button, |r| &r.height, none);
+            // egui's button is its text row plus twice `button_padding.y`, and
+            // at least `interact_size.y`: keep the padding within the height.
+            let pad_y = height.map_or(egui_default.button_padding.y, |h| ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0));
             s.spacing.item_spacing = egui::vec2(gap, gap);
-            s.spacing.button_padding = egui::vec2(pad_x, gap);
+            s.spacing.button_padding = egui::vec2(pad_x, pad_y);
             s.spacing.window_margin = egui::Margin::same(0);
-            if let Some(h) = pick(&button, |r| &r.height, none) {
-                s.spacing.interact_size.y = h;
-            }
+            s.spacing.interact_size.y = height.unwrap_or(egui_default.interact_size.y);
 
             let v = &mut s.visuals;
             v.dark_mode = self.dark;

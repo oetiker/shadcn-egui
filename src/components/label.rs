@@ -8,6 +8,7 @@
 //! paragraph that `cn-card-description` and `cn-dialog-description` share, so
 //! it reads the `card_description` recipe.
 
+use crate::components::shared::disabled_painter;
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -40,20 +41,22 @@ impl Widget for Label {
         let enabled = self.enabled && ui.is_enabled();
         let st = t.state(State::NONE.with(State::DISABLED, !enabled));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, st);
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
+        let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
+        let text_px = t.text_px(size);
         let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        let opacity = get(|r| &r.opacity).unwrap_or(1.0);
-        let fg = t.role(Role::Foreground).gamma_multiply(opacity);
+        let fg = t.role(Role::Foreground);
+        let painter = disabled_painter(ui, self.enabled, get(|r| &r.opacity).unwrap_or(1.0));
 
-        let galley = ui.painter().layout_no_wrap(self.text.clone(), font, fg);
-        // `leading-none`: the line box is `line_height` times the font size.
-        let height = get(|r| &r.line_height).map_or(galley.size().y, |k| k * text_px);
+        let galley = painter.layout_no_wrap(self.text.clone(), font, fg);
+        // `leading-none`: the line box is `line_height` times the font size;
+        // without one, Tailwind's line height of the text size.
+        let height = get(|r| &r.line_height).map_or_else(|| t.line_px(size), |k| k * text_px);
         let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x, height), Sense::hover());
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text));
         if ui.is_rect_visible(rect) {
             let pos = egui::pos2(rect.min.x, rect.center().y - galley.size().y / 2.0);
-            ui.painter().galley(pos, galley, fg);
+            painter.galley(pos, galley, fg);
         }
         resp
     }
@@ -64,9 +67,12 @@ pub fn description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let l = [&t.style.card_description];
     let st = t.state(State::NONE);
-    let px = t.text_px(pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
+    let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
+    let px = t.text_px(size);
+    // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
+    let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
     let color = pick(&l, |r| &r.text, st).map_or_else(|| t.role(Role::MutedForeground), |p| t.paint(p));
-    ui.label(RichText::new(text).size(px).color(color))
+    ui.label(RichText::new(text).size(px).line_height(Some(line)).color(color))
 }
 
 #[cfg(test)]

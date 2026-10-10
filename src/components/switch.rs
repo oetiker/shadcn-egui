@@ -4,7 +4,7 @@
 //! recipes. The thumb sits inside the track's 1px transparent border and
 //! slides between its two positions with `animate_bool`.
 
-use crate::components::shared::{box_shapes, interaction_state, ring_shape, shift};
+use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape, shift};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{lerp, vec2, Rect, Sense, Shape, Stroke, Ui, Widget};
@@ -85,14 +85,17 @@ impl Widget for Switch<'_> {
 
         if ui.is_rect_visible(rect) {
             // base: "data-disabled:opacity-50"
-            let disabled_opacity = 0.5;
-            let fade = |c: egui::Color32| if enabled { c } else { c.gamma_multiply(disabled_opacity) };
-            let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| fade(t.paint(p)));
+            let painter = disabled_painter(ui, self.enabled, 0.5);
+            let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
             let radius = pick(&track, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
             let border_w = pick(&track, |r| &r.border_width, st).unwrap_or(0.0);
             let border = paint(&track, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
             let clip_padding = pick(&track, |r| &r.bg_clip_padding, st) == Some(true);
-            let mut shapes = box_shapes(rect, radius, paint(&track, |r| &r.bg), border, clip_padding);
+            let mut shapes = Vec::new();
+            if let Some(s) = pick(&track, |r| &r.shadow, st) {
+                shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
+            }
+            shapes.extend(box_shapes(rect, radius, paint(&track, |r| &r.bg), border, clip_padding));
             if let Some(c) = paint(&track, |r| &r.ring_color) {
                 shapes.extend(ring_shape(rect, radius, pick(&track, |r| &r.ring_width, st).unwrap_or(0.0), c));
             }
@@ -112,8 +115,11 @@ impl Widget for Switch<'_> {
                 size,
             );
             let thumb_radius = pick(&thumb, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, size.y / 2.0));
+            if let Some(s) = pick(&thumb, |r| &r.shadow, st) {
+                shapes.push(Shape::from(t.shadow(s).as_shape(thumb_rect, thumb_radius)));
+            }
             shapes.push(Shape::rect_filled(thumb_rect, thumb_radius, paint(&thumb, |r| &r.bg).unwrap_or_default()));
-            ui.painter().extend(shapes);
+            painter.extend(shapes);
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, enabled, on, ""));
         resp.rect = rect;

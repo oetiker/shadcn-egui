@@ -4,7 +4,7 @@
 //! and `cn-button-size-*` recipes, stacked in that order.
 
 use crate::components::icon::{paint_icon, Icon};
-use crate::components::shared::{interaction_state, paint_box, ring, shift};
+use crate::components::shared::{disabled_painter, interaction_state, paint_box, ring, shift};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -156,9 +156,10 @@ impl Widget for Button {
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         let weight = pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
+        // base: "disabled:pointer-events-none disabled:opacity-50"
+        let painter = disabled_painter(ui, self.enabled, 0.5);
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
-        let painter = ui.painter().clone();
         let layout = |underline: Stroke| {
             let mut job = egui::text::LayoutJob::simple_singleline(self.text.clone(), font.clone(), Color32::PLACEHOLDER);
             job.sections[0].format.underline = underline;
@@ -185,11 +186,9 @@ impl Widget for Button {
         }
 
         let st = interaction_state(&t, &resp, enabled, context);
-        // base: "disabled:pointer-events-none disabled:opacity-50"
-        let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.5) };
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| fade(t.paint(p)));
+        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let bg = paint(|r| &r.bg);
-        let fg = paint(|r| &r.text).unwrap_or_else(|| fade(t.role(Role::Foreground)));
+        let fg = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
         let border = paint(|r| &r.border_color);
         let ring_color = paint(|r| &r.ring_color);
         let ring_w = pick(&l, |r| &r.ring_width, st).unwrap_or(0.0);
@@ -197,9 +196,7 @@ impl Widget for Button {
         let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
 
         if let Some(s) = pick(&l, |r| &r.shadow, st) {
-            let mut shadow = t.shadow(s);
-            shadow.color = fade(shadow.color);
-            painter.add(shadow.as_shape(rect, radius));
+            painter.add(t.shadow(s).as_shape(rect, radius));
         }
         let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
         paint_box(&painter, rect, radius, bg, border.map(|b| Stroke::new(border_w, b)), clip_padding);

@@ -3,7 +3,7 @@
 //! other values come from the style's `cn-input` recipe. A frameless egui
 //! `TextEdit` sits inside a box this widget paints.
 
-use crate::components::shared::{box_shapes, interaction_state, ring_shape};
+use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -94,7 +94,8 @@ impl<'a> Widget for Input<'a> {
             .scope(|ui| {
                 // base: "placeholder:text-muted-foreground"
                 ui.visuals_mut().weak_text_color = Some(t.role(Role::MutedForeground));
-                if !enabled {
+                // A disabled `Ui` has faded already; see `disabled_painter`.
+                if !self.enabled && ui.is_enabled() {
                     ui.multiply_opacity(disabled_opacity);
                 }
                 ui.add_sized(Vec2::new(ui.available_width().min(max_width), height), edit)
@@ -102,14 +103,11 @@ impl<'a> Widget for Input<'a> {
             .inner;
 
         let st = interaction_state(&t, &resp, enabled, context);
-        let fade = |c: egui::Color32| if enabled { c } else { c.gamma_multiply(disabled_opacity) };
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| fade(t.paint(p)));
+        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, resp.rect.height() / 2.0));
         let mut shapes = Vec::new();
         if let Some(s) = pick(&l, |r| &r.shadow, st) {
-            let mut shadow = t.shadow(s);
-            shadow.color = fade(shadow.color);
-            shapes.push(Shape::from(shadow.as_shape(resp.rect, radius)));
+            shapes.push(Shape::from(t.shadow(s).as_shape(resp.rect, radius)));
         }
         let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
         let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
@@ -117,7 +115,7 @@ impl<'a> Widget for Input<'a> {
         if let Some(c) = paint(|r| &r.ring_color) {
             shapes.extend(ring_shape(resp.rect, radius, pick(&l, |r| &r.ring_width, st).unwrap_or(0.0), c));
         }
-        ui.painter().set(slot, Shape::Vec(shapes));
+        disabled_painter(ui, self.enabled, disabled_opacity).set(slot, Shape::Vec(shapes));
         resp
     }
 }

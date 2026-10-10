@@ -23,7 +23,10 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     let arrow = [&t.style.tooltip_arrow];
     let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| pick(&content, f, g).unwrap_or(0.0);
     let (pad_t, pad_r, pad_b, pad_l) = (px(|r| &r.pad_top), px(|r| &r.pad_right), px(|r| &r.pad_bottom), px(|r| &r.pad_left));
-    let text_px = t.text_px(pick(&content, |r| &r.text_size, g).unwrap_or(TextSize::Xs));
+    let text_size = pick(&content, |r| &r.text_size, g).unwrap_or(TextSize::Xs);
+    let text_px = t.text_px(text_size);
+    // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
+    let line = pick(&content, |r| &r.line_height, g).map_or_else(|| t.line_px(text_size), |k| k * text_px);
     let radius = pick(&content, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
     // base: "bg-foreground text-background"
     let (fill, fg) = (t.role(Role::Foreground), t.role(Role::Background));
@@ -43,7 +46,7 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     );
     let shown = tip.show(|ui| {
         ui.set_max_width(max_w - pad_l - pad_r);
-        ui.label(RichText::new(text).size(text_px).color(fg))
+        ui.label(RichText::new(text).size(text_px).line_height(Some(line)).color(fg))
     });
     if let Some(shown) = shown {
         let r = pick(&arrow, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, size / 2.0));

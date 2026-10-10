@@ -5,7 +5,7 @@
 //! Left/Right move the selection (and wrap), Home/End jump to the first/last
 //! tab (automatic activation).
 
-use crate::components::shared::{box_shapes, interaction_state, ring_shape};
+use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -127,7 +127,10 @@ impl Widget for Tabs<'_> {
         let resps: Vec<Response> = trigger_rects.iter().zip(&ids).map(|(r, id)| ui.interact(*r, *id, sense)).collect();
 
         // Selection: a click, or the arrow/Home/End keys on a focused trigger.
+        // Only a key moves the focus along: focus is what shows the ring,
+        // and a click must not show it.
         let mut next = None;
+        let mut by_key = false;
         if enabled {
             for (i, r) in resps.iter().enumerate() {
                 if r.clicked() {
@@ -139,14 +142,20 @@ impl Widget for Tabs<'_> {
                         m.set_focus_lock_filter(r.id, egui::EventFilter { horizontal_arrows: true, ..Default::default() })
                     });
                     let pressed = |key| ui.input_mut(|inp| inp.consume_key(Modifiers::NONE, key));
-                    if pressed(Key::ArrowRight) {
-                        next = Some((i + 1) % n);
+                    let key_next = if pressed(Key::ArrowRight) {
+                        Some((i + 1) % n)
                     } else if pressed(Key::ArrowLeft) {
-                        next = Some((i + n - 1) % n);
+                        Some((i + n - 1) % n)
                     } else if pressed(Key::Home) {
-                        next = Some(0);
+                        Some(0)
                     } else if pressed(Key::End) {
-                        next = Some(n - 1);
+                        Some(n - 1)
+                    } else {
+                        None
+                    };
+                    if key_next.is_some() {
+                        next = key_next;
+                        by_key = true;
                     }
                 }
             }
@@ -156,7 +165,9 @@ impl Widget for Tabs<'_> {
                 *self.active = i;
                 resp.mark_changed();
             }
-            ui.memory_mut(|m| m.request_focus(ids[i]));
+            if by_key {
+                ui.memory_mut(|m| m.request_focus(ids[i]));
+            }
         }
         let active = *self.active;
 
@@ -164,14 +175,17 @@ impl Widget for Tabs<'_> {
         let below = 5.0;
         // base: "group-data-horizontal/tabs:after:h-0.5"
         let thickness = 2.0;
+        for (i, r) in resps.iter().enumerate() {
+            r.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, enabled, i == active, &self.labels[i]));
+        }
         if ui.is_rect_visible(list_rect.expand(below)) {
             // base: "disabled:pointer-events-none disabled:opacity-50"
-            let disabled_opacity = 0.5;
-            let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(disabled_opacity) };
+            let painter = disabled_painter(ui, self.enabled, 0.5);
 
             // The list: a muted track in the default variant, nothing in line.
             let list_radius = pick(&list, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
             let track = (self.variant == TabsVariant::Default).then(|| t.role(Role::Muted));
+            // The fade is the triggers' (`disabled:opacity-50`), not the list's.
             ui.painter().extend(box_shapes(list_rect, list_radius, track, None, false));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
@@ -182,7 +196,7 @@ impl Widget for Tabs<'_> {
                 let hover = st.contains(State::HOVER);
                 let focus = st.contains(State::FOCUS_VISIBLE);
                 let line = self.variant == TabsVariant::Line;
-                let role = |role, alpha| fade(t.paint(Paint::Role(role, alpha)));
+                let role = |role, alpha| t.paint(Paint::Role(role, alpha));
 
                 // base: "text-foreground/60 transition-all"
                 // base: "hover:text-foreground focus-visible:border-ring"
@@ -213,14 +227,12 @@ impl Widget for Tabs<'_> {
                 } else {
                     Role::Transparent
                 };
-                let border = pick(&trigger, |r| &r.border_color, st).map(|p| fade(t.paint(p)));
+                let border = pick(&trigger, |r| &r.border_color, st).map(|p| t.paint(p));
                 let border = if border_role == Role::Transparent { border } else { Some(role(border_role, 1.0)) };
 
                 let radius = pick(&trigger, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
                 if let Some(level) = pick(&trigger, |r| &r.shadow, st) {
-                    let mut shadow = t.shadow(level);
-                    shadow.color = fade(shadow.color);
-                    ui.painter().add(shadow.as_shape(*rect, radius));
+                    painter.add(t.shadow(level).as_shape(*rect, radius));
                 }
                 let stroke = border.map(|b| Stroke::new(border_w, b));
                 let mut shapes = box_shapes(*rect, radius, bg, stroke, false);
@@ -237,10 +249,9 @@ impl Widget for Tabs<'_> {
                     let bar = Rect::from_min_max(pos2(inner.left(), inner.bottom() + below - thickness), pos2(inner.right(), inner.bottom() + below));
                     shapes.push(Shape::rect_filled(bar, 0.0, role(Role::Foreground, 1.0)));
                 }
-                ui.painter().extend(shapes);
+                painter.extend(shapes);
                 let galley = galleys[i].clone();
-                ui.painter().galley(rect.center() - galley.size() / 2.0, galley, fg);
-                r.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, enabled, is_active, &self.labels[i]));
+                painter.galley(rect.center() - galley.size() / 2.0, galley, fg);
             }
         }
         resp

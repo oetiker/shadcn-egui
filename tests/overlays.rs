@@ -322,6 +322,31 @@ fn select_escape_and_outside_click_keep_the_value() {
     assert!(h.query_by_label("Cherry").is_none(), "a click outside closes");
 }
 
+/// An open list whose trigger lost focus to another widget leaves the keys
+/// to that widget: typing and Enter do not choose an option.
+#[test]
+fn open_select_ignores_keys_once_focus_moves_elsewhere() {
+    let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(
+        |ui, value: &mut usize| {
+            Theme::vega_dark().apply(ui.ctx());
+            ui.add(Select::new("fruit", value, &FRUITS));
+            ui.add(egui_shadcn::components::button::Button::new("Other"));
+        },
+        0,
+    );
+    h.run();
+    open_select(&mut h);
+    h.get_by_label("Other").focus();
+    h.run();
+    // Typing moves the highlight of a list that has the keys; arrows are
+    // left out, as egui moves focus with them.
+    h.event(egui::Event::Text("c".into()));
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(*h.state(), 0);
+}
+
 #[test]
 fn select_typing_jumps_to_the_next_option_with_that_letter() {
     let mut h = select_harness(0);

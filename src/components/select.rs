@@ -11,7 +11,9 @@
 //! Down on a focused trigger); Up, Down, Home and End move the highlight,
 //! Enter or Space chooses it and closes; Esc and a click outside close
 //! without a change; typing a letter jumps to the next option starting with
-//! it. The pointer moves the highlight too.
+//! it. The pointer moves the highlight too. An open list takes the keys
+//! while its trigger has focus or no widget has; once Tab moves focus to
+//! another widget, the keys belong to that widget.
 //!
 //! Differences from upstream: the options-list API has no groups, labels,
 //! separators or per-option disabled state, so `cn-select-label` and
@@ -24,7 +26,7 @@
 //! widest option (`w-fit` would make it jump with the chosen text).
 
 use crate::components::icon::{paint_icon, CHECK, CHEVRON_DOWN};
-use crate::components::shared::{box_shapes, interaction_state, ring, ring_shape};
+use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -121,15 +123,20 @@ impl Widget for Select<'_> {
         let was_open = Popup::is_id_open(&ctx, popup_id);
 
         // Keyboard: the trigger keeps focus while the list is open, so the
-        // arrows are claimed here, not left to egui's focus movement.
+        // arrows are claimed here, not left to egui's focus movement. egui
+        // does not focus on a click, so a list opened by the mouse takes the
+        // keys while no widget has focus; once Tab moves focus to another
+        // widget, the keys are that widget's.
         let mut moved = false;
         let mut chosen = None;
-        if enabled && (resp.has_focus() || was_open) {
+        let focused = resp.has_focus();
+        let keys_to_list = was_open && (focused || ctx.memory(|m| m.focused()).is_none());
+        if enabled && (focused || keys_to_list) {
             ctx.memory_mut(|m| m.set_focus_lock_filter(resp.id, egui::EventFilter { vertical_arrows: true, ..Default::default() }));
         }
         let activation = ui.input(|i| i.key_pressed(Key::Enter) || i.key_pressed(Key::Space));
         let mut toggle = resp.clicked();
-        if enabled && was_open && n > 0 {
+        if enabled && keys_to_list && n > 0 {
             let mut hl = ctx.data(|d| d.get_temp::<usize>(hl_id)).unwrap_or(if has_value { *self.selected } else { 0 }).min(n - 1);
             let key = |k: Key| ui.input_mut(|i| i.consume_key(Modifiers::NONE, k));
             if key(Key::ArrowDown) {
@@ -170,7 +177,7 @@ impl Widget for Select<'_> {
                 toggle = false;
             }
             ctx.data_mut(|d| d.insert_temp(hl_id, hl));
-        } else if enabled && !was_open && resp.has_focus() && n > 0 && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::ArrowDown) | i.consume_key(Modifiers::NONE, Key::ArrowUp)) {
+        } else if enabled && !was_open && focused && n > 0 && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::ArrowDown) | i.consume_key(Modifiers::NONE, Key::ArrowUp)) {
             Popup::open_id(&ctx, popup_id);
         }
         if let Some(i) = chosen {
@@ -189,15 +196,12 @@ impl Widget for Select<'_> {
         let st = interaction_state(&t, &resp, enabled, context.with(State::EXPANDED, open));
         if ui.is_rect_visible(rect) {
             // base: "disabled:opacity-50"
-            let disabled_opacity = 0.5;
-            let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(disabled_opacity) };
-            let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| fade(t.paint(p)));
+            let painter = disabled_painter(ui, self.enabled, 0.5);
+            let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
             let radius = pick(&trig, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
             let mut shapes = Vec::new();
             if let Some(s) = pick(&trig, |r| &r.shadow, st) {
-                let mut shadow = t.shadow(s);
-                shadow.color = fade(shadow.color);
-                shapes.push(Shape::from(shadow.as_shape(rect, radius)));
+                shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
             }
             let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
             let clip_padding = pick(&trig, |r| &r.bg_clip_padding, st) == Some(true);
@@ -208,11 +212,11 @@ impl Widget for Select<'_> {
             painter.extend(shapes);
 
             let icon_rect = Rect::from_center_size(egui::pos2(rect.right() - pad_r - icon_side / 2.0, rect.center().y), vec2(icon_side, icon_side));
-            let icon_color = pick(&[&t.style.select_trigger_icon], |r| &r.text, st).map(|p| fade(t.paint(p)));
+            let icon_color = pick(&[&t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
             if let Some(c) = icon_color {
                 paint_icon(&painter, icon_rect, &CHEVRON_DOWN, c, t.metrics.icon_stroke);
             }
-            let text_color = fade(paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground)));
+            let text_color = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
             let text_area = Rect::from_min_max(egui::pos2(rect.left() + pad_l, rect.top()), egui::pos2(icon_rect.left() - gap, rect.bottom()));
             let at = egui::pos2(text_area.left(), rect.center().y - galley.size().y / 2.0);
             // base: "*:data-[slot=select-value]:line-clamp-1"
@@ -248,6 +252,7 @@ impl Widget for Select<'_> {
             let galleys: Vec<_> = self.options.iter().map(|o| painter.layout_no_wrap((*o).to_owned(), item_font.clone(), Color32::PLACEHOLDER)).collect();
             let (ipl, ipr) = (px(&item, |r| &r.pad_left), px(&item, |r| &r.pad_right));
             let (ipt, ipb) = (px(&item, |r| &r.pad_top), px(&item, |r| &r.pad_bottom));
+            let min_row = px(&item, |r| &r.min_height);
             let needed = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max) + ipl + ipr;
             // base: "sideOffset = 4"
             let side_offset = 4.0;
@@ -273,7 +278,7 @@ impl Widget for Select<'_> {
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     egui::ScrollArea::vertical().max_height(max_h.max(0.0)).auto_shrink([false, true]).show(ui, |ui| {
                         for (i, galley) in galleys.iter().enumerate() {
-                            let (_, row) = ui.allocate_space(vec2(inner_w, galley.size().y.max(line) + ipt + ipb));
+                            let (_, row) = ui.allocate_space(vec2(inner_w, (galley.size().y.max(line) + ipt + ipb).max(min_row)));
                             let r = ui.interact(row, resp.id.with(("item", i)), Sense::click());
                             if r.hovered() && pointer_moved {
                                 hover_hl = Some(i);

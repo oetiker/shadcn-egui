@@ -7,10 +7,10 @@
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{box_shapes, interaction_state, ring_shape};
+use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
-use egui::{pos2, vec2, Color32, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
+use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
 
 /// shadcn `orientation` of the slider.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -142,8 +142,9 @@ impl Widget for Slider<'_> {
                 let default_steps = 100.0; // behaviour-ok: bits-ui's 1% default step, not a design token
                 let unit = if step > 0.0 && step.is_finite() { step } else { (hi - lo) / default_steps };
                 let presses = |keys: &[Key]| ui.input_mut(|i| keys.iter().map(|k| i.consume_key(Modifiers::NONE, *k) as i32).sum::<i32>());
+                let page_steps = 10; // behaviour-ok: bits-ui's PageUp/PageDown move ten steps, not a design token
                 let steps = presses(&[Key::ArrowRight, Key::ArrowUp]) - presses(&[Key::ArrowLeft, Key::ArrowDown])
-                    + 10 * (presses(&[Key::PageUp]) - presses(&[Key::PageDown]));
+                    + page_steps * (presses(&[Key::PageUp]) - presses(&[Key::PageDown]));
                 if steps != 0 {
                     value = snap(value + steps as f32 * unit, lo, hi, step);
                     moved = true;
@@ -171,12 +172,8 @@ impl Widget for Slider<'_> {
 
         if ui.is_rect_visible(hit) {
             // base: "data-disabled:opacity-50"
-            let disabled_opacity = 0.5;
-            // CSS opacity composites the whole slider as one group, so a
-            // disabled part is blended into the page rather than made see-through.
-            let page = t.palette.background;
-            let fade = |c: Color32| if enabled { c } else { blend_toward(c, page, 1.0 - disabled_opacity) };
-            let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| fade(t.paint(p)));
+            let painter = disabled_painter(ui, self.enabled, 0.5);
+            let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
 
             let track_rect = if vertical {
                 Rect::from_center_size(rect.center(), vec2(thickness, rect.height()))
@@ -195,30 +192,21 @@ impl Widget for Slider<'_> {
             shapes.extend(box_shapes(range_rect, track_radius, paint(&range, |r| &r.bg), None, false));
 
             if let Some(s) = pick(&thumb, |r| &r.shadow, st) {
-                let mut shadow = t.shadow(s);
-                shadow.color = fade(shadow.color);
-                shapes.push(Shape::from(shadow.as_shape(thumb_rect, thumb_size.min_elem() / 2.0)));
+                shapes.push(Shape::from(t.shadow(s).as_shape(thumb_rect, thumb_size.min_elem() / 2.0)));
             }
             let border_w = pick(&thumb, |r| &r.border_width, st).unwrap_or(0.0);
             let border = paint(&thumb, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
             let thumb_radius = pick(&thumb, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, thumb_size.min_elem() / 2.0));
-            shapes.extend(box_shapes(thumb_rect, thumb_radius, paint(&thumb, |r| &r.bg), border, false));
+            let clip_padding = pick(&thumb, |r| &r.bg_clip_padding, st) == Some(true);
+            shapes.extend(box_shapes(thumb_rect, thumb_radius, paint(&thumb, |r| &r.bg), border, clip_padding));
             if let Some(c) = paint(&thumb, |r| &r.ring_color) {
                 shapes.extend(ring_shape(thumb_rect, thumb_radius, pick(&thumb, |r| &r.ring_width, st).unwrap_or(0.0), c));
             }
-            ui.painter().extend(shapes);
+            painter.extend(shapes);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));
         resp.rect = rect;
         resp
     }
-}
-
-
-/// Linearly blend `a` toward `b` by `t` in 0..=1 (sRGB space).
-fn blend_toward(a: Color32, b: Color32, t: f32) -> Color32 {
-    let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
-    // token-ok: computes a blend of two token colors, introduces none.
-    Color32::from_rgba_unmultiplied(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()), a.a())
 }

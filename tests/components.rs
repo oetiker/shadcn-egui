@@ -362,11 +362,12 @@ fn badge_snapshot() {
     });
 }
 
-/// The colour of the first text a frame painted.
+/// The colour of the first text a frame painted, as its glyphs carry it
+/// (a painter's opacity fades the glyphs, not the layout job).
 fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
     fn walk(s: &egui::Shape) -> Option<egui::Color32> {
         match s {
-            egui::Shape::Text(t) => Some(t.galley.job.sections[0].format.color),
+            egui::Shape::Text(t) => t.galley.rows.iter().find_map(|r| r.visuals.mesh.vertices.first()).map(|v| v.color),
             egui::Shape::Vec(v) => v.iter().find_map(walk),
             _ => None,
         }
@@ -439,8 +440,10 @@ fn label_separator_snapshot() {
     });
 }
 
+/// The `select` and `badge` shorthands; their sizes are asserted with the
+/// widgets they wrap.
 #[test]
-fn select_and_badge_render() {
+fn select_and_badge_shorthands_do_not_panic() {
     use egui_kittest::Harness;
     use egui_shadcn::components::badge::{badge, BadgeVariant};
     use egui_shadcn::components::select::select;
@@ -452,7 +455,6 @@ fn select_and_badge_render() {
         badge(ui, "New", BadgeVariant::Default);
     });
     h.run();
-    assert!(h.ctx.viewport_rect().width() > 0.0);
 }
 
 /// A card with a header, content and a footer button, 320 px wide.
@@ -1214,4 +1216,102 @@ fn slider_snapshot() {
             ui.add(Slider::new(&mut c, 0.0..=100.0).orientation(SliderOrientation::Vertical).label("C"));
         });
     });
+}
+
+/// Every rect shape of a frame with its fill and stroke, in paint order.
+fn rect_paint(out: &egui::FullOutput) -> Vec<(egui::Rect, egui::Color32, egui::Stroke)> {
+    rect_shapes(out).into_iter().map(|r| (r.rect, r.fill, r.stroke)).collect()
+}
+
+/// shadcn `disabled:opacity-50` applies once: a widget disabled by its own
+/// flag, by a disabled `Ui`, or by both paints exactly the same shapes.
+#[test]
+fn disabled_widgets_fade_once() {
+    use egui_shadcn::components::checkbox::Checkbox;
+    use egui_shadcn::components::input::Input;
+    use egui_shadcn::components::select::Select;
+    use egui_shadcn::components::slider::Slider;
+    use egui_shadcn::components::switch::Switch;
+    use egui_shadcn::components::tabs::{Tabs, TabsVariant};
+    type Add = fn(&mut egui::Ui, bool) -> egui::Response;
+    let widgets: [(&str, Add); 7] = [
+        ("button", |ui, on| ui.add(Button::new("Save").enabled(on))),
+        ("input", |ui, on| ui.add(Input::new(&mut "text".to_owned()).enabled(on))),
+        ("switch", |ui, on| ui.add(Switch::new(&mut true).enabled(on))),
+        ("checkbox", |ui, on| ui.add(Checkbox::new(&mut true).enabled(on))),
+        ("select", |ui, on| ui.add(Select::new("s", &mut 0, &["One", "Two"]).enabled(on))),
+        ("slider", |ui, on| ui.add(Slider::new(&mut 30.0, 0.0..=100.0).enabled(on))),
+        // The line variant: the default variant's list track does not fade
+        // with its triggers, but does with a disabled `Ui`.
+        ("tabs", |ui, on| ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line).enabled(on))),
+    ];
+    let theme = Theme::vega_light();
+    for (name, add) in widgets {
+        let (_, own) = common::measure_output(&theme, |ui| add(ui, false));
+        let (_, by_ui) = common::measure_output(&theme, |ui| ui.add_enabled_ui(false, |ui| add(ui, true)).inner);
+        let (_, both) = common::measure_output(&theme, |ui| ui.add_enabled_ui(false, |ui| add(ui, false)).inner);
+        assert_eq!(rect_paint(&own), rect_paint(&by_ui), "{name}: own flag vs disabled Ui");
+        assert_eq!(rect_paint(&both), rect_paint(&by_ui), "{name}: both vs disabled Ui");
+    }
+    // And the fade is a half: a solid button's fill.
+    let (rect, out) = common::measure_output(&theme, |ui| ui.add_enabled(false, Button::new("Save")));
+    let fill = rect_shapes(&out).into_iter().find(|r| r.rect == rect.shrink(1.0)).expect("button fill").fill;
+    assert_eq!(fill, theme.palette.primary.gamma_multiply(0.5));
+}
+
+/// A click selects a tab without the keyboard focus ring; the arrow keys
+/// move the focus, and with it the ring.
+#[test]
+fn tab_click_shows_no_focus_ring() {
+    use egui_kittest::kittest::Queryable;
+    let three_px = |h: &egui_kittest::Harness<'_>| {
+        h.output().shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.width == 3.0))
+    };
+    let (mut h, active) = tabs_harness(&["Account", "Notifications", "Display"], 0);
+    h.run();
+    let at = h.get_by_label("Notifications").rect().center();
+    h.hover_at(at);
+    h.run();
+    h.drag_at(at);
+    h.run();
+    h.drop_at(at);
+    h.run();
+    assert_eq!(active.get(), 1);
+    assert!(!three_px(&h), "a mouse click shows the focus ring");
+    h.get_by_label("Notifications").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(active.get(), 2);
+    assert!(three_px(&h), "keyboard focus shows the ring");
+}
+
+/// `description` is `text-sm`: each wrapped line is 20px, Tailwind's line
+/// height for `text-sm`, not egui's font row height.
+#[test]
+fn description_lines_are_text_sm_line_height() {
+    use egui_shadcn::components::label::description;
+    for (name, theme) in common::themes() {
+        let one = common::measure(&theme, |ui| description(ui, "Short."));
+        assert_eq!(one.height(), 20.0, "{name}");
+        let wrapped = common::measure(&theme, |ui| {
+            ui.set_max_width(120.0);
+            description(ui, "We will never share your email with anyone else, ever, at all.")
+        });
+        let lines = (wrapped.height() / 20.0).round();
+        assert!(lines >= 3.0, "{name}: {wrapped:?}");
+        assert_eq!(wrapped.height(), lines * 20.0, "{name}");
+    }
+}
+
+/// The switch paints the shadow its style sets (`shadow-xs` on vega's track).
+#[test]
+fn switch_paints_its_style_shadow() {
+    use egui_shadcn::components::switch::Switch;
+    use egui_shadcn::style::{pick, State};
+    let theme = Theme::vega_light();
+    assert!(pick(&[&theme.style.switch], |r| &r.shadow, State::NONE).is_some());
+    let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
+    // egui paints a shadow as a blurred rect.
+    assert!(rect_shapes(&out).iter().any(|r| r.blur_width > 0.0), "no shadow painted");
 }

@@ -3,38 +3,42 @@ mod common;
 use egui_kittest::Harness;
 use egui_shadcn::{layout, Theme};
 
+/// `vstack` puts its gap between rows, `row` between items.
 #[test]
 fn row_and_vstack_compose() {
-    let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+    let theme = Theme::vega_dark();
+    let (mut top, mut a, mut b) = (egui::Rect::NOTHING, egui::Rect::NOTHING, egui::Rect::NOTHING);
+    let mut row_top = 0.0;
+    common::measure(&theme, |ui| {
         layout::vstack(ui, 12.0, |ui| {
-            ui.label("top");
+            top = ui.label("top").rect;
             layout::row(ui, 8.0, |ui| {
-                ui.label("a");
-                ui.label("b");
+                row_top = ui.max_rect().top();
+                a = ui.label("a").rect;
+                b = ui.label("b").rect;
             });
         });
+        ui.label("end")
     });
-    h.run();
-    assert!(h.ctx.viewport_rect().width() > 0.0);
+    assert_eq!(row_top - top.bottom(), 12.0, "vstack gap");
+    assert_eq!(b.left() - a.right(), 8.0, "row gap: {a:?} {b:?}");
+    assert_eq!(a.left(), top.left());
 }
 
+/// `space_between`: the left part hugs the start, the right part the end.
 #[test]
 fn space_between_composes() {
-    let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
-        layout::space_between(
-            ui,
-            |ui| {
-                ui.label("left");
-            },
-            |ui| {
-                ui.label("right");
-            },
-        );
+    let theme = Theme::vega_dark();
+    let (mut left, mut right, mut row) = (egui::Rect::NOTHING, egui::Rect::NOTHING, egui::Rect::NOTHING);
+    common::measure(&theme, |ui| {
+        ui.set_width(300.0);
+        row = ui.max_rect();
+        layout::space_between(ui, |ui| left = ui.label("left").rect, |ui| right = ui.label("right").rect);
+        ui.label("end")
     });
-    h.run();
-    assert!(h.ctx.viewport_rect().width() > 0.0);
+    assert_eq!(left.left(), row.left());
+    assert_eq!(right.right(), row.right());
+    assert!(right.left() > left.right() + 100.0, "{left:?} {right:?}");
 }
 
 /// `form_row`: the control starts after the label column, and the row is at

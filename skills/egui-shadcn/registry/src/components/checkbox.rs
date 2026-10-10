@@ -7,7 +7,7 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::{paint_icon, CHECK};
-use crate::components::shared::{box_shapes, interaction_state, ring_shape};
+use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
@@ -63,15 +63,13 @@ impl Widget for Checkbox<'_> {
         let st = interaction_state(&t, &resp, enabled, context);
 
         if ui.is_rect_visible(rect) {
-            let opacity = pick(&l, |r| &r.opacity, st).unwrap_or(1.0);
-            let fade = |c: egui::Color32| c.gamma_multiply(opacity);
-            let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| fade(t.paint(p)));
+            // The style's `disabled:opacity-50` arrives as the DISABLED state.
+            let painter = disabled_painter(ui, self.enabled, pick(&l, |r| &r.opacity, st).unwrap_or(1.0));
+            let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
             let radius = pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
             let mut shapes = Vec::new();
             if let Some(s) = pick(&l, |r| &r.shadow, st) {
-                let mut shadow = t.shadow(s);
-                shadow.color = fade(shadow.color);
-                shapes.push(Shape::from(shadow.as_shape(rect, radius)));
+                shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
             }
             let border_w = pick(&l, |r| &r.border_width, st).unwrap_or(0.0);
             let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
@@ -80,13 +78,13 @@ impl Widget for Checkbox<'_> {
             if let Some(c) = paint(|r| &r.ring_color) {
                 shapes.extend(ring_shape(rect, radius, pick(&l, |r| &r.ring_width, st).unwrap_or(0.0), c));
             }
-            ui.painter().extend(shapes);
+            painter.extend(shapes);
             if checked {
                 let ind = [&t.style.checkbox_indicator];
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(0.0);
                 if let Some(color) = paint(|r| &r.text) {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
-                    paint_icon(ui.painter(), icon_rect, &CHECK, color, t.metrics.icon_stroke);
+                    paint_icon(&painter, icon_rect, &CHECK, color, t.metrics.icon_stroke);
                 }
             }
         }
