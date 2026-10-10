@@ -252,20 +252,24 @@ fn input_snapshot() {
     });
 }
 
-#[test]
-fn tabs_select() {
-    use egui_kittest::kittest::Queryable;
-    use egui_kittest::Harness;
-    use egui_shadcn::components::tabs::tab_bar;
-    use egui_shadcn::Theme;
-    use std::cell::Cell;
-    let active = Cell::new(0usize);
-    let mut h = Harness::new_ui(|ui| {
-        Theme::dark().apply(ui.ctx());
-        let mut sel = active.get();
-        tab_bar(ui, &mut sel, &["Account", "Notifications", "Display"]);
-        active.set(sel);
+/// Runs `Tabs` with state in a cell; the harness draws it under the dark vega theme.
+fn tabs_harness(labels: &'static [&'static str], start: usize) -> (egui_kittest::Harness<'static>, std::rc::Rc<std::cell::Cell<usize>>) {
+    use egui_shadcn::components::tabs::Tabs;
+    let active = std::rc::Rc::new(std::cell::Cell::new(start));
+    let seen = active.clone();
+    let h = egui_kittest::Harness::new_ui(move |ui| {
+        egui_shadcn::Theme::dark().apply(ui.ctx());
+        let mut sel = seen.get();
+        ui.add(Tabs::new(&mut sel, labels));
+        seen.set(sel);
     });
+    (h, active)
+}
+
+#[test]
+fn tabs_click_selects() {
+    use egui_kittest::kittest::Queryable;
+    let (mut h, active) = tabs_harness(&["Account", "Notifications", "Display"], 0);
     h.run();
     h.get_by_label("Notifications").click();
     h.run();
@@ -273,23 +277,72 @@ fn tabs_select() {
 }
 
 #[test]
-fn tabs_snapshot() {
-    use egui_kittest::Harness;
-    use egui_shadcn::components::tabs::tab_bar;
-    use egui_shadcn::Theme;
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(420.0, 70.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(16.0);
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                let mut sel = 0usize;
-                tab_bar(ui, &mut sel, &["Account", "Notifications"]);
-            });
-        });
+fn tabs_arrow_keys_move_selection() {
+    use egui_kittest::kittest::Queryable;
+    let (mut h, active) = tabs_harness(&["Account", "Notifications", "Display"], 0);
     h.run();
-    h.snapshot("tabs");
+    h.get_by_label("Account").focus();
+    h.run();
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(active.get(), 1, "ArrowRight selects the next tab");
+    h.key_press(egui::Key::End);
+    h.run();
+    assert_eq!(active.get(), 2, "End selects the last tab");
+    h.key_press(egui::Key::ArrowRight);
+    h.run();
+    assert_eq!(active.get(), 0, "ArrowRight wraps to the first tab");
+    h.key_press(egui::Key::ArrowLeft);
+    h.run();
+    assert_eq!(active.get(), 2, "ArrowLeft wraps to the last tab");
+    h.key_press(egui::Key::Home);
+    h.run();
+    assert_eq!(active.get(), 0, "Home selects the first tab");
+}
+
+#[test]
+fn tabs_report_the_selected_trigger() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let (mut h, _) = tabs_harness(&["Account", "Notifications"], 1);
+    h.run();
+    // egui reports `selected` as the node's toggled state.
+    use egui::accesskit::Toggled;
+    assert_eq!(h.get_by_label("Notifications").accesskit_node().toggled(), Some(Toggled::True));
+    assert_eq!(h.get_by_label("Account").accesskit_node().toggled(), Some(Toggled::False));
+}
+
+#[test]
+fn tabs_are_as_wide_as_their_labels() {
+    use egui_shadcn::components::tabs::{Tabs, TabsVariant};
+    for (name, theme) in common::themes() {
+        let short = common::measure(&theme, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
+        let long = common::measure(&theme, |ui| ui.add(Tabs::new(&mut 0, &["Account", "Notifications"])));
+        assert!(long.width() > short.width() + 40.0, "{name}: {} vs {}", long.width(), short.width());
+        // Line triggers are 4px apart (gap-1); the default ones touch.
+        let line = common::measure(&theme, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line)));
+        assert_eq!(line.width() - short.width(), 4.0, "{name}");
+    }
+    let vega = &common::themes()[0].1;
+    let nova = &common::themes()[2].1;
+    assert_eq!(common::measure(vega, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(), 36.0);
+    assert_eq!(common::measure(nova, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(), 32.0);
+}
+
+#[test]
+fn tabs_snapshot() {
+    use egui_shadcn::components::tabs::{Tabs, TabsVariant};
+    common::snapshot_all("tabs", egui::vec2(380.0, 290.0), |ui| {
+        ui.add(Tabs::new(&mut 0, &["Account", "Notifications"]));
+        ui.add_space(24.0);
+        ui.add(Tabs::new(&mut 1, &["Account", "Notifications", "Display"]).variant(TabsVariant::Line));
+        ui.add_space(24.0);
+        ui.add(Tabs::new(&mut 0, &["Disabled", "Tabs"]).enabled(false));
+        ui.add_space(24.0);
+        // Keyboard focus ring on the second trigger of a default list.
+        let mut sel = 1;
+        let resp = ui.add(Tabs::new(&mut sel, &["Account", "Notifications"]));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 1))));
+    });
 }
 
 #[test]

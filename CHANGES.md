@@ -50,6 +50,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   shown with `Label::new(..).enabled(false)` is drawn at half opacity.
   Separators are exactly 1 px thick and add no spacing of their own; a new
   `separator_vertical` draws a vertical line.
+- Tabs follow the chosen style: the tab list is as wide as its labels
+  instead of filling the row, 36 px high in vega and 32 px in nova, and the
+  active tab shows a raised pill with a soft shadow. New
+  `Tabs::new(&mut active, labels).variant(TabsVariant::Line)` draws an
+  underline under the active tab instead; Left, Right, Home and End move the
+  selection, and `.enabled(false)` draws the tabs at half opacity.
 - New `Slider` with one thumb, horizontal or vertical, in the chosen style.
   A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
   step it, and `.enabled(false)` draws it at half opacity and ignores input.

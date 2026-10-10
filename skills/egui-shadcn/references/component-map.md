@@ -7,7 +7,7 @@
 | `<Label>` | `components::label::label(ui, "..")`, or `Label::new("..").enabled(..)` via `ui.add(..)` (`peer-disabled:opacity-50`). Marker: `cn-label` |
 | description text | `components::label::description(ui, "..")` — reads `cn-card-description` (no marker of its own) |
 | `<Card>` + Header/Title/Description | `layout::card(ui, |ui| ...)` + `components::card::{card_title, card_description}` |
-| `<Tabs>` | `components::tabs::tab_bar(ui, &mut active, &[..])` |
+| `<Tabs>` + List/Trigger | `components::tabs::tab_bar(ui, &mut active, &[..])` or `ui.add(Tabs::new(&mut active, &[..]).variant(TabsVariant::Line).enabled(..))`; content sits `Tabs::content_gap(ui)` below. Horizontal only. Markers: `cn-tabs`, `cn-tabs-list`, `cn-tabs-list-variant-default`, `cn-tabs-list-variant-line`, `cn-tabs-trigger`, `cn-tabs-content` |
 | `<Switch size>` | `components::switch::toggle(ui, &mut on)` or `ui.add(Switch::new(&mut on).size(SwitchSize::Sm).enabled(..).invalid(..))`. Markers: `cn-switch`, `cn-switch-thumb` |
 | `<Slider orientation>` | `ui.add(Slider::new(&mut v, 0.0..=100.0).step(5.0).orientation(SliderOrientation::Vertical).enabled(..).label(..))`. One thumb. Markers: `cn-slider`, `cn-slider-track`, `cn-slider-range`, `cn-slider-thumb` |
 | `<Checkbox>` | `components::checkbox::checkbox(ui, &mut checked)` or `ui.add(Checkbox::new(&mut checked).enabled(..).invalid(..))`. Markers: `cn-checkbox`, `cn-checkbox-indicator`. No indeterminate state |
