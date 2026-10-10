@@ -46,6 +46,14 @@ pub const CHECK: Icon = Icon {
     segs: &[Seg::M(20.0, 6.0), Seg::L(9.0, 17.0), Seg::L(4.0, 12.0)],
 };
 
+/// The select chevron (Lucide `chevron-down`, ISC), built in for the same
+/// reason as [`CLOSE`].
+pub const CHEVRON_DOWN: Icon = Icon {
+    name: "chevron-down",
+    size: 24.0,
+    segs: &[Seg::M(6.0, 9.0), Seg::L(12.0, 15.0), Seg::L(18.0, 9.0)],
+};
+
 /// Curve flattening tolerance in screen points.
 const TOLERANCE: f32 = 0.1;
 

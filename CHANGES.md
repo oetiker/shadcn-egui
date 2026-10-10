@@ -63,6 +63,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   a softer shadow, and vega or nova padding and corners. The width of 288 px
   now includes the padding, and the new `popover_header(ui, title,
   description)` adds a title with a muted description.
+- Selects follow the chosen style: a 36 px (vega) or 32 px (nova) trigger
+  with a chevron, and a list with a thin outline ring and a check mark on the
+  chosen row. The trigger is now as wide as its widest option instead of the
+  full field width; `Select::new(..).width(..)`, `.size(SelectSize::Sm)`,
+  `.placeholder(..)`, `.invalid(..)` and `.enabled(..)` change that, and the
+  list takes Up, Down, Home, End, Enter, Esc and type-ahead keys.
 - New `Slider` with one thumb, horizontal or vertical, in the chosen style.
   A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
   step it, and `.enabled(false)` draws it at half opacity and ignores input.

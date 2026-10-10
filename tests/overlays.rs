@@ -2,11 +2,12 @@ mod common;
 
 use egui::vec2;
 use egui::Key;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
 use egui_shadcn::components::button::{Button, ButtonVariant};
 use egui_shadcn::components::dialog::{self, Dialog};
 use egui_shadcn::components::popover::{popover_header, Popover};
+use egui_shadcn::components::select::{Select, SelectSize};
 use egui_shadcn::components::tooltip::tooltip;
 use egui_shadcn::Theme;
 
@@ -215,4 +216,148 @@ fn tooltip_snapshot() {
         h.get_by_label("Hover me").hover();
         h.run();
     });
+}
+
+const FRUITS: [&str; 4] = ["Apple", "Banana", "Blueberry", "Cherry"];
+
+fn select_harness(start: usize) -> Harness<'static, usize> {
+    Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(
+        |ui, value: &mut usize| {
+            Theme::dark().apply(ui.ctx());
+            ui.add(Select::new("fruit", value, &FRUITS).placeholder("Pick a fruit"));
+            ui.label("elsewhere");
+        },
+        start,
+    )
+}
+
+fn open_select(h: &mut Harness<'_, usize>) {
+    h.get_by_role(egui::accesskit::Role::ComboBox).click();
+    h.run();
+}
+
+#[test]
+fn select_opens_and_a_click_chooses() {
+    let mut h = select_harness(0);
+    h.run();
+    assert!(h.query_by_label("Cherry").is_none(), "closed list shows no options");
+    open_select(&mut h);
+    h.get_by_label("Cherry").click();
+    h.run();
+    assert_eq!(*h.state(), 3);
+    assert!(h.query_by_label("Banana").is_none(), "choosing closes the list");
+}
+
+#[test]
+fn select_keyboard_down_enter_chooses_the_next_option() {
+    let mut h = select_harness(0);
+    h.run();
+    open_select(&mut h);
+    h.key_press(Key::ArrowDown);
+    h.run();
+    assert_eq!(*h.state(), 0, "moving the highlight does not choose");
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(*h.state(), 1);
+    assert!(h.query_by_label("Cherry").is_none(), "Enter closes the list");
+}
+
+#[test]
+fn select_escape_and_outside_click_keep_the_value() {
+    let mut h = select_harness(0);
+    h.run();
+    open_select(&mut h);
+    h.key_press(Key::ArrowDown);
+    h.key_press(Key::Escape);
+    h.run();
+    assert_eq!(*h.state(), 0);
+    assert!(h.query_by_label("Cherry").is_none(), "Esc closes");
+    open_select(&mut h);
+    h.get_by_label("elsewhere").click();
+    h.run();
+    assert_eq!(*h.state(), 0);
+    assert!(h.query_by_label("Cherry").is_none(), "a click outside closes");
+}
+
+#[test]
+fn select_typing_jumps_to_the_next_option_with_that_letter() {
+    let mut h = select_harness(0);
+    h.run();
+    open_select(&mut h);
+    h.get_by_role(egui::accesskit::Role::ComboBox).type_text("b");
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(*h.state(), 1, "first option after the highlight starting with b");
+}
+
+#[test]
+fn select_trigger_reports_the_current_text() {
+    let mut h = select_harness(2);
+    h.run();
+    assert_eq!(h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().label().as_deref(), Some("Blueberry"));
+    let mut h = select_harness(9);
+    h.run();
+    assert_eq!(h.get_by_role(egui::accesskit::Role::ComboBox).accesskit_node().label().as_deref(), Some("Pick a fruit"));
+}
+
+#[test]
+fn select_disabled_does_not_open() {
+    let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(
+        |ui, value: &mut usize| {
+            Theme::dark().apply(ui.ctx());
+            ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
+        },
+        0usize,
+    );
+    h.run();
+    h.get_by_role(egui::accesskit::Role::ComboBox).click();
+    h.run();
+    assert!(h.query_by_label("Cherry").is_none());
+}
+
+#[test]
+fn select_trigger_height_follows_style_and_size() {
+    for (name, theme) in common::themes() {
+        let (default_h, sm_h) = if name.starts_with("nova") { (32.0, 28.0) } else { (36.0, 32.0) };
+        let mut v = 0usize;
+        let mut h = |size| common::measure(&theme, |ui| ui.add(Select::new("s", &mut v, &FRUITS).size(size))).height();
+        assert_eq!(h(SelectSize::Default), default_h, "{name}");
+        assert_eq!(h(SelectSize::Sm), sm_h, "{name}");
+    }
+}
+
+fn select_triggers(ui: &mut egui::Ui) {
+    let (mut a, mut b, mut c, mut d, mut e) = (9usize, 1usize, 1usize, 0usize, 2usize);
+    ui.spacing_mut().item_spacing.y = 12.0;
+    ui.add(Select::new("a", &mut a, &FRUITS).placeholder("Pick a fruit").width(180.0));
+    ui.add(Select::new("b", &mut b, &FRUITS).width(180.0));
+    ui.add(Select::new("c", &mut c, &FRUITS).invalid(true).width(180.0));
+    ui.add(Select::new("d", &mut d, &FRUITS).enabled(false).width(180.0));
+    ui.add(Select::new("e", &mut e, &FRUITS).size(SelectSize::Sm));
+}
+
+#[test]
+fn select_trigger_snapshot() {
+    common::snapshot_all("select_trigger", vec2(240.0, 260.0), select_triggers);
+}
+
+#[test]
+fn select_open_snapshot() {
+    common::snapshot_all_with(
+        "select_open",
+        vec2(260.0, 260.0),
+        |ui| {
+            let mut v = 1usize;
+            ui.add(Select::new("fruit", &mut v, &FRUITS).width(180.0));
+            ui.add_space(200.0);
+            ui.label("elsewhere");
+        },
+        |h| {
+            h.get_by_role(egui::accesskit::Role::ComboBox).click();
+            h.run();
+            h.get_by_label("elsewhere").hover();
+            h.run();
+        },
+    );
 }
