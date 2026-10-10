@@ -45,6 +45,21 @@ pub fn ring(painter: &egui::Painter, rect: Rect, radius: f32, width: f32, color:
     }
 }
 
+/// A part's background and border. The border lies inside `rect`
+/// (`box-sizing: border-box`). With `clip_padding` (`bg-clip-padding`) the
+/// fill stops inside the border, so a transparent or translucent border
+/// shows what lies under the part instead of the fill.
+pub fn paint_box(painter: &egui::Painter, rect: Rect, radius: f32, fill: Option<Color32>, border: Option<Stroke>, clip_padding: bool) {
+    let border = border.filter(|b| b.width > 0.0);
+    if let Some(fill) = fill {
+        let inset = if clip_padding { border.map_or(0.0, |b| b.width) } else { 0.0 };
+        painter.rect_filled(rect.shrink(inset), (radius - inset).max(0.0), fill);
+    }
+    if let Some(b) = border {
+        painter.rect_stroke(rect, radius, b, egui::StrokeKind::Inside);
+    }
+}
+
 /// Apply `translate-x/y` to a part's rect. `SelfMinus(n)` is `calc(100% - n)`
 /// of the part's own size.
 pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {

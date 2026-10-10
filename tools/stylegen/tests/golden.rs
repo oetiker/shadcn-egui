@@ -37,6 +37,16 @@ fn vega_button_default_is_36() {
     assert_eq!(base(&m, Field::Height), Some(Value::Px(36.0)));
 }
 
+/// `bg-clip-padding` on `cn-button`: the fill stops inside the transparent
+/// border, in both styles.
+#[test]
+fn button_fill_clips_to_padding_box() {
+    for name in ["vega", "nova"] {
+        let m = marker(&style(name), "cn-button");
+        assert_eq!(base(&m, Field::BgClipPadding), Some(Value::Bool(true)), "{name}");
+    }
+}
+
 #[test]
 fn nova_destructive_is_tinted() {
     let m = marker(&style("nova"), "cn-button-variant-destructive");

@@ -71,6 +71,7 @@ fn radius_and_misc() {
     assert_eq!(set("rounded-b-xl"), [(Field::RadiusBottom, Value::Radius(RadiusV::Rung("Xl")))]);
     assert_eq!(set("shadow-md"), [(Field::Shadow, Value::Shadow("Md"))]);
     assert_eq!(set("font-medium"), [(Field::Weight, Value::Weight("Medium"))]);
+    assert_eq!(set("bg-clip-padding"), [(Field::BgClipPadding, Value::Bool(true))]);
     assert_eq!(set("translate-y-px"), [(Field::ShiftY, Value::Shift(ShiftV::Px(1.0)))]);
     assert_eq!(set("translate-x-[calc(100%-2px)]"), [(Field::ShiftX, Value::Shift(ShiftV::SelfMinus(2.0)))]);
 }
@@ -203,7 +204,7 @@ fn model_matches_recipe_rs() {
         Height, Width, MinHeight, MinWidth, MaxWidth, MaxWidthInset, PadTop, PadRight, PadBottom, PadLeft,
         MarginTop, MarginRight, MarginBottom, MarginLeft, Gap, InsetTop, InsetRight, InsetBottom, InsetLeft,
         IconSize, TextSize, LineHeight, Tracking, Weight, Uppercase, Underline, Radius, RadiusTop, RadiusBottom,
-        Bg, Text, BorderWidth, BorderTopWidth, BorderColor, RingWidth, RingColor, Shadow, Opacity, ShiftX, ShiftY,
+        Bg, BgClipPadding, Text, BorderWidth, BorderTopWidth, BorderColor, RingWidth, RingColor, Shadow, Opacity, ShiftX, ShiftY,
         HitInsetX, HitInsetY, BackdropBlur,
     ];
     let names: Vec<String> = all.iter().map(|f| f.rust_name().to_owned()).collect();

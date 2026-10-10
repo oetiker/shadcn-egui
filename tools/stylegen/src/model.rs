@@ -8,7 +8,7 @@ pub enum Field {
     Height, Width, MinHeight, MinWidth, MaxWidth, MaxWidthInset,
     PadTop, PadRight, PadBottom, PadLeft, MarginTop, MarginRight, MarginBottom, MarginLeft,
     Gap, InsetTop, InsetRight, InsetBottom, InsetLeft, IconSize, TextSize, LineHeight,
-    Tracking, Weight, Uppercase, Underline, Radius, RadiusTop, RadiusBottom, Bg, Text,
+    Tracking, Weight, Uppercase, Underline, Radius, RadiusTop, RadiusBottom, Bg, BgClipPadding, Text,
     BorderWidth, BorderTopWidth, BorderColor, RingWidth, RingColor, Shadow, Opacity,
     ShiftX, ShiftY, HitInsetX, HitInsetY, BackdropBlur,
 }
@@ -25,7 +25,7 @@ impl Field {
             InsetBottom => "inset_bottom", InsetLeft => "inset_left", IconSize => "icon_size",
             TextSize => "text_size", LineHeight => "line_height", Tracking => "tracking", Weight => "weight",
             Uppercase => "uppercase", Underline => "underline", Radius => "radius", RadiusTop => "radius_top",
-            RadiusBottom => "radius_bottom", Bg => "bg", Text => "text", BorderWidth => "border_width",
+            RadiusBottom => "radius_bottom", Bg => "bg", BgClipPadding => "bg_clip_padding", Text => "text", BorderWidth => "border_width",
             BorderTopWidth => "border_top_width", BorderColor => "border_color", RingWidth => "ring_width",
             RingColor => "ring_color", Shadow => "shadow", Opacity => "opacity", ShiftX => "shift_x",
             ShiftY => "shift_y", HitInsetX => "hit_inset_x", HitInsetY => "hit_inset_y",

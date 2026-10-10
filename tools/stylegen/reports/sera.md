@@ -6,10 +6,6 @@ Upstream: shadcn-svelte `493481fa`, `style-sera.css`.
 
 Unsupported classes in shipped markers: **21** (not exportable)
 
-## `cn-button`
-
-- ignored `bg-clip-padding`: egui fills inside the border already
-
 ## `cn-button-variant-link`
 
 - ignored `underline-offset-4`: egui draws text underlines at a fixed offset

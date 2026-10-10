@@ -23,6 +23,10 @@ pub fn snapshot_all(name: &str, size: egui::Vec2, mut ui_fn: impl FnMut(&mut egu
         let bg = theme.palette.background;
         let mut h = Harness::builder().with_size(size).build_ui(|ui| {
             theme.apply(ui.ctx());
+            // kittest wraps the ui in an 8px outer margin; paint the page
+            // colour under all of it, so no band of another colour shows.
+            let page = ui.ctx().viewport_rect();
+            ui.ctx().layer_painter(egui::LayerId::background()).rect_filled(page, 0.0, bg);
             egui::Frame::new().fill(bg).inner_margin(16).show(ui, |ui| {
                 ui.set_min_size(ui.available_size());
                 ui_fn(ui);

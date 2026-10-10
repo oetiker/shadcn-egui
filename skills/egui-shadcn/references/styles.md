@@ -66,6 +66,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `uppercase`, `underline` | `uppercase`, `underline` |
 | `radius`, `radius_top`, `radius_bottom` | `rounded-*`, `rounded-t-*`, `rounded-b-*` |
 | `bg`, `text` | `bg-*`, `text-*` (with `/alpha` and `color-mix`) |
+| `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::paint_box`) |
 | `border_width`, `border_top_width` | `border`, `border-t`, `border-N` |
 | `border_color` | `border-*` colour |
 | `ring_width`, `ring_color` | `ring-N`, `ring-*` |
@@ -74,6 +75,11 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `shift_x`, `shift_y` | `translate-x-*`, `translate-y-*` (`active:translate-y-px` is the press nudge) |
 | `hit_inset_x`, `hit_inset_y` | `after:-inset-x-*`, `after:-inset-y-*` (a larger hit area) |
 | `backdrop_blur` | `backdrop-blur-*` |
+
+`disabled:opacity-50` fades each colour of the part (fill, text, border,
+ring, shadow) to half alpha, because egui cannot composite a group of shapes
+at one opacity; text on a solid fill therefore shows a little less contrast
+than in the browser.
 
 `State` flags (`src/style/recipe.rs`) and the variants they stand for.
 `Theme::state(s)` adds `DARK`.

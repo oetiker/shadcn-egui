@@ -243,6 +243,9 @@ pub struct Recipe {
     pub radius_top: Prop<Radius>,
     pub radius_bottom: Prop<Radius>,
     pub bg: Prop<Paint>,
+    /// `bg-clip-padding`: the fill stops inside the border, so a transparent
+    /// border shows what lies under the part.
+    pub bg_clip_padding: Prop<bool>,
     pub text: Prop<Paint>,
     pub border_width: Prop<f32>,
     pub border_top_width: Prop<f32>,

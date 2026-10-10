@@ -12,6 +12,7 @@ pub(super) fn style() -> Style {
             text_size: Prop::fixed(TextSize::Sm),
             weight: Prop::fixed(Weight::Medium),
             radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+            bg_clip_padding: Prop::fixed(true),
             border_width: Prop::fixed(1.0),
             border_color: Prop {
                 base: Some(Paint::Role(Role::Transparent, 1.0)),

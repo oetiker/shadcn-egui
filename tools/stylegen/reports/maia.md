@@ -6,10 +6,6 @@ Upstream: shadcn-svelte `493481fa`, `style-maia.css`.
 
 Unsupported classes in shipped markers: **0** (exportable)
 
-## `cn-button`
-
-- ignored `bg-clip-padding`: egui fills inside the border already
-
 ## `cn-button-variant-link`
 
 - ignored `underline-offset-4`: egui draws text underlines at a fixed offset

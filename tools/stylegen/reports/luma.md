@@ -6,10 +6,6 @@ Upstream: shadcn-svelte `493481fa`, `style-luma.css`.
 
 Unsupported classes in shipped markers: **0** (exportable)
 
-## `cn-button`
-
-- ignored `bg-clip-padding`: egui fills inside the border already
-
 ## `cn-button-variant-link`
 
 - ignored `underline-offset-4`: egui draws text underlines at a fixed offset
@@ -188,7 +184,6 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-slider-thumb`
 
-- ignored `not-dark:bg-clip-padding`: egui fills inside the border already
 - ignored `transition-[color,box-shadow,background-color]`: animation or transition; out of scope (spec §4.4)
 - ignored `focus-visible:outline-hidden`: focus is drawn with the ring, never a browser outline
 
@@ -198,10 +193,6 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `group-has-[:focus-visible]/field-label:ring-0`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `group-has-[:focus-visible]/field-label:data-unchecked:border-transparent`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `group-has-[:focus-visible]/field-label:data-checked:border-primary`: inside a focused FieldLabel; the crate does not ship Field
-
-## `cn-switch-thumb`
-
-- ignored `not-dark:bg-clip-padding`: egui fills inside the border already
 
 ## `cn-tooltip-content`
 

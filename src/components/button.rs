@@ -4,11 +4,11 @@
 //! and `cn-button-size-*` recipes, stacked in that order.
 
 use crate::components::icon::{paint_icon, Icon};
-use crate::components::shared::{interaction_state, ring, shift};
+use crate::components::shared::{interaction_state, paint_box, ring, shift};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{Color32, Response, Sense, Stroke, StrokeKind, Ui, Vec2, Widget};
+use egui::{Color32, Response, Sense, Stroke, Ui, Vec2, Widget};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonVariant {
@@ -197,12 +197,8 @@ impl Widget for Button {
             shadow.color = fade(shadow.color);
             painter.add(shadow.as_shape(rect, radius));
         }
-        if let Some(bg) = bg {
-            painter.rect_filled(rect, radius, bg);
-        }
-        if let (Some(b), true) = (border, border_w > 0.0) {
-            painter.rect_stroke(rect, radius, Stroke::new(border_w, b), StrokeKind::Inside);
-        }
+        let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
+        paint_box(&painter, rect, radius, bg, border.map(|b| Stroke::new(border_w, b)), clip_padding);
         if let Some(c) = ring_color {
             ring(&painter, rect, radius, ring_w, c);
         }

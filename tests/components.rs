@@ -110,6 +110,40 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     assert_eq!(disabled, State::INVALID | State::DISABLED | State::DARK);
 }
 
+/// Every rect shape a frame painted, in paint order.
+fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
+    fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match s {
+            egui::Shape::Rect(r) => out.push(r.clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut rects = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
+    rects
+}
+
+/// shadcn `bg-clip-padding` with `border border-transparent`: a solid
+/// button's fill stops inside its 1px transparent border.
+#[test]
+fn button_fill_stops_inside_transparent_border() {
+    use egui_shadcn::components::button::Button;
+    use egui_shadcn::Theme;
+    let theme = Theme::vega_light();
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    let mut rect = egui::Rect::NOTHING;
+    let mut out = None;
+    for _ in 0..2 {
+        out = Some(ctx.run_ui(egui::RawInput::default(), |ui| rect = ui.add(Button::new("Save")).rect));
+    }
+    let fill = theme.palette.primary;
+    let fills: Vec<_> = rect_shapes(&out.expect("ran")).into_iter().filter(|r| r.fill == fill).collect();
+    assert_eq!(fills.len(), 1, "{fills:?}");
+    assert_eq!(fills[0].rect, rect.shrink(1.0));
+}
+
 /// Move the pointer to `pos` and press the primary button there.
 fn pointer_down(pos: egui::Pos2) -> Vec<egui::Event> {
     vec![
@@ -332,16 +366,7 @@ fn disabled_button_ignores_clicks() {
                 Theme::vega_dark().apply(ui.ctx());
                 rect = ui.add(Button::new("Save").enabled(enabled)).rect;
             });
-            fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
-                match s {
-                    egui::Shape::Rect(r) => out.push(r.clone()),
-                    egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
-                    _ => {}
-                }
-            }
-            let mut rects = Vec::new();
-            out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
-            (rect, rects)
+            (rect, rect_shapes(&out))
         }
         let ctx = egui::Context::default();
         frame(&ctx, enabled, vec![]);
