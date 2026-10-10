@@ -1,5 +1,11 @@
 mod common;
 
+use egui_shadcn::components::badge::{badge, BadgeVariant};
+use egui_shadcn::components::button::{Button, ButtonVariant};
+use egui_shadcn::components::card::{card_content, card_header, card_header_with_action, card_title, Card, CardSize};
+use egui_shadcn::style::Style;
+use egui_shadcn::{Palette, Theme};
+
 use egui_shadcn::components::shared::mix_toward;
 
 #[test]
@@ -459,40 +465,174 @@ fn select_and_badge_render() {
     assert!(h.ctx.viewport_rect().width() > 0.0);
 }
 
-#[test]
-fn card_badge_select_snapshot() {
-    use egui_kittest::Harness;
-    use egui_shadcn::components::badge::{badge, BadgeVariant};
-    use egui_shadcn::components::card::{card_description, card_title};
-    use egui_shadcn::components::select::select;
-    use egui_shadcn::{layout, Theme};
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(420.0, 220.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(16.0);
+/// A card with a header, content and a footer button, 320 px wide.
+fn demo_card(ui: &mut egui::Ui, size: CardSize, footer: bool) {
+    ui.set_max_width(320.0);
+    let mut card = Card::new().size(size);
+    if footer {
+        card = card.footer(|ui| {
+            ui.add(Button::new("Save"));
+        });
+    }
+    card.show(ui, |ui| {
+        card_header(ui, "Notifications", "Choose what you want to be notified about.");
+        card_content(ui, |ui| {
+            ui.label("You have 3 unread messages.");
             ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                ui.vertical(|ui| {
-                    layout::card(ui, |ui| {
-                        card_title(ui, "Notifications");
-                        card_description(ui, "Choose what you want to be notified about.");
-                        ui.add_space(8.0);
-                        layout::row(ui, 6.0, |ui| {
-                            badge(ui, "Default", BadgeVariant::Default);
-                            badge(ui, "Secondary", BadgeVariant::Secondary);
-                            badge(ui, "New", BadgeVariant::Destructive);
-                            badge(ui, "Outline", BadgeVariant::Outline);
-                        });
-                        ui.add_space(8.0);
-                        let mut choice = 0usize;
-                        select(ui, "lang", &mut choice, &["English", "German"]);
-                    });
-                });
+                badge(ui, "Default", BadgeVariant::Default);
+                badge(ui, "Outline", BadgeVariant::Outline);
             });
         });
-    h.run();
-    h.snapshot("card_badge_select");
+    });
+}
+
+#[test]
+fn card_default_snapshot() {
+    common::snapshot_all("card_default", egui::vec2(360.0, 200.0), |ui| demo_card(ui, CardSize::Default, false));
+}
+
+#[test]
+fn card_footer_snapshot() {
+    common::snapshot_all("card_footer", egui::vec2(360.0, 300.0), |ui| demo_card(ui, CardSize::Default, true));
+}
+
+#[test]
+fn card_sm_snapshot() {
+    common::snapshot_all("card_sm", egui::vec2(360.0, 300.0), |ui| demo_card(ui, CardSize::Sm, true));
+}
+
+#[test]
+fn card_action_snapshot() {
+    common::snapshot_all("card_action", egui::vec2(360.0, 140.0), |ui| {
+        ui.set_max_width(320.0);
+        Card::new().show(ui, |ui| {
+            card_header_with_action(ui, "Notifications", "Choose what you want to be notified about.", |ui| {
+                ui.add(Button::new("Mark all").variant(ButtonVariant::Outline));
+            });
+        });
+    });
+}
+
+/// The footer strip of a style that paints one reaches the card's bottom
+/// edge: the card adds no padding below it.
+#[test]
+fn nova_footer_strip_reaches_card_bottom() {
+    let theme = Theme::new(Style::nova(), Palette::dark(), 10.0);
+    let (card, out) = common::measure_output(&theme, |ui| ui.scope(|ui| demo_card(ui, CardSize::Default, true)).response);
+    let strip = theme.paint(egui_shadcn::style::Paint::Role(egui_shadcn::style::Role::Muted, 0.5));
+    let strips: Vec<_> = rect_shapes(&out).into_iter().filter(|r| r.fill == strip).collect();
+    assert_eq!(strips.len(), 1, "one footer strip");
+    assert_eq!(strips[0].rect.bottom(), card.bottom());
+    assert_eq!((strips[0].rect.left(), strips[0].rect.right()), (card.left(), card.right()));
+}
+
+/// vega has no footer strip: the card's own bottom padding stays below the footer.
+#[test]
+fn vega_footer_keeps_card_padding_below() {
+    let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    let mut button = egui::Rect::NOTHING;
+    let card = common::measure(&theme, |ui| {
+        ui.scope(|ui| {
+            ui.set_max_width(320.0);
+            Card::new()
+                .footer(|ui| button = ui.add(Button::new("Save")).rect)
+                .show(ui, |ui| card_header(ui, "T", "D"));
+        })
+        .response
+    });
+    assert_eq!(card.bottom() - button.bottom(), 24.0);
+}
+
+/// `data-[size=sm]` shrinks the side padding of the content: 12 in nova,
+/// 16 in vega; the default card has 16 and 24.
+#[test]
+fn card_side_padding_follows_size() {
+    for (style, default, sm) in [(Style::nova as fn() -> Style, 16.0, 12.0), (Style::vega, 24.0, 16.0)] {
+        let theme = Theme::new(style(), Palette::dark(), 10.0);
+        for (size, want) in [(CardSize::Default, default), (CardSize::Sm, sm)] {
+            let mut label = egui::Rect::NOTHING;
+            let card = common::measure(&theme, |ui| {
+                ui.scope(|ui| {
+                    ui.set_max_width(320.0);
+                    Card::new().size(size).show(ui, |ui| label = ui.label("x").rect);
+                })
+                .response
+            });
+            assert_eq!(label.left() - card.left(), want, "{size:?}");
+        }
+    }
+}
+
+/// A card fills the available width, like a block element.
+#[test]
+fn card_fills_available_width() {
+    let theme = Theme::vega_dark();
+    let card = common::measure(&theme, |ui| {
+        ui.scope(|ui| {
+            ui.set_max_width(320.0);
+            Card::new().show(ui, |ui| {
+                ui.label("x");
+            });
+        })
+        .response
+    });
+    assert_eq!(card.width(), 320.0);
+}
+
+/// The title row has the style's line height (`leading-6` in vega,
+/// `leading-snug` in nova) and shrinks with `data-[size=sm]`.
+#[test]
+fn card_title_row_height_follows_style_and_size() {
+    for (style, default, sm) in [(Style::vega as fn() -> Style, 24.0, 21.0), (Style::nova, 22.0, 19.25)] {
+        let theme = Theme::new(style(), Palette::dark(), 10.0);
+        for (size, want) in [(CardSize::Default, default), (CardSize::Sm, sm)] {
+            let mut title = egui::Rect::NOTHING;
+            common::measure(&theme, |ui| {
+                ui.scope(|ui| {
+                    Card::new().size(size).show(ui, |ui| title = card_title(ui, "Title").rect);
+                })
+                .response
+            });
+            assert!((title.height() - want).abs() <= 0.5, "{size:?}: {}", title.height());
+        }
+    }
+}
+
+/// The action sits at the right edge of the header, the text to its left.
+#[test]
+fn card_action_is_right_aligned() {
+    let theme = Theme::vega_dark();
+    let mut action = egui::Rect::NOTHING;
+    let mut title = egui::Rect::NOTHING;
+    let card = common::measure(&theme, |ui| {
+        ui.scope(|ui| {
+            ui.set_max_width(320.0);
+            Card::new().show(ui, |ui| {
+                card_header_with_action(ui, "Title", "Description", |ui| action = ui.add(Button::new("Go")).rect);
+                title = ui.min_rect();
+            });
+        })
+        .response
+    });
+    assert_eq!(card.right() - action.right(), 24.0);
+    assert!(action.top() <= title.top() + 0.5 + 40.0 && action.left() > card.left() + 24.0);
+}
+
+/// Header and content inset their children by the same amount in every
+/// style and size, which is why the card insets its body once.
+#[test]
+fn card_header_and_content_share_side_padding() {
+    use egui_shadcn::style::State;
+    for style in [Style::vega as fn() -> Style, Style::nova] {
+        let style = style();
+        for st in [State::SIZE_DEFAULT, State::SIZE_SM] {
+            let h = &style.card_header;
+            for other in [&style.card_content, &style.card_footer] {
+                assert_eq!(h.pad_left.get(st), other.pad_left.get(st));
+                assert_eq!(h.pad_right.get(st), other.pad_right.get(st));
+            }
+        }
+    }
 }
 
 /// shadcn `disabled:pointer-events-none`: no click, and a pressed pointer

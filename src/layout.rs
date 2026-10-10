@@ -1,8 +1,9 @@
 //! Flexbox substitutes for egui's single-pass layout.
 //! `gap` maps to item_spacing; space-between right-aligns via a nested layout.
 
+use crate::style::TextSize;
 use crate::Theme;
-use egui::{CornerRadius, Frame, Margin, Stroke, Ui};
+use egui::Ui;
 use egui_extras::{Size, StripBuilder};
 
 /// Horizontal stack with an explicit gap (flex-direction: row; gap: N).
@@ -49,28 +50,16 @@ pub fn space_between(
     });
 }
 
-/// A shadcn Card surface: card fill, 1px border, rounded-xl, p-6, subtle shadow.
-/// Reads the active theme from the context (set via `Theme::apply`).
+/// A shadcn Card at the default size, across the available width. See
+/// [`crate::components::card::Card`] for sizes and a footer.
 pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let theme = Theme::current(ui.ctx());
-    Frame::new()
-        .fill(theme.palette.card)
-        .stroke(Stroke::new(theme.metrics.border, theme.palette.border))
-        .corner_radius(CornerRadius::same(theme.radius_xl() as u8))
-        .inner_margin(Margin::same(theme.metrics.card_padding as i8))
-        .shadow(egui::epaint::Shadow {
-            offset: [0, 1],
-            blur: 3,
-            spread: 0,
-            color: theme.palette.shadow,
-        })
-        .show(ui, |ui| add(ui))
-        .inner
+    crate::components::card::Card::new().show(ui, add)
 }
 
 /// A labeled control row: fixed-width label column + control filling the rest.
 pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce(&mut Ui)) {
-    let row_h = ui.spacing().interact_size.y.max(20.0);
+    let t = Theme::current(ui.ctx());
+    let row_h = ui.spacing().interact_size.y.max(t.line_px(TextSize::Sm));
     ui.allocate_ui(egui::vec2(ui.available_width(), row_h), |ui| {
         StripBuilder::new(ui)
             .size(Size::exact(label_width))

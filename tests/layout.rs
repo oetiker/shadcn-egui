@@ -1,3 +1,5 @@
+mod common;
+
 use egui_kittest::Harness;
 use egui_shadcn::{layout, Theme};
 
@@ -35,27 +37,33 @@ fn space_between_composes() {
     assert!(h.ctx.viewport_rect().width() > 0.0);
 }
 
+/// `form_row`: the control starts after the label column, and the row is at
+/// least a text-sm line high.
 #[test]
-fn card_and_form_row_render() {
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(440.0, 180.0))
-        .build_ui(|ui| {
-            Theme::dark().apply(ui.ctx());
-            ui.add_space(16.0);
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                ui.allocate_ui(egui::vec2(380.0, 120.0), |ui| {
-                    layout::card(ui, |ui| {
-                        layout::form_row(ui, 100.0, "Name", |ui| {
-                            let mut s = String::from("hi");
-                            ui.text_edit_singleline(&mut s);
-                        });
-                    });
-                });
-            });
-        });
-    h.run();
-    h.snapshot("layout_card");
+fn form_row_puts_the_control_after_the_label_column() {
+    let theme = Theme::vega_dark();
+    let mut control = egui::Rect::NOTHING;
+    let mut gap = 0.0;
+    let row = common::measure(&theme, |ui| {
+        ui.scope(|ui| {
+            gap = ui.spacing().item_spacing.x;
+            ui.set_max_width(380.0);
+            layout::form_row(ui, 100.0, "Name", |ui| control = ui.label("hi").rect);
+        })
+        .response
+    });
+    assert_eq!(control.left() - row.left(), 100.0 + gap);
+    assert!(row.height() >= theme.line_px(egui_shadcn::style::TextSize::Sm));
+}
+
+/// `layout::card` is the default-size card.
+#[test]
+fn layout_card_matches_the_default_card() {
+    use egui_shadcn::components::card::Card;
+    let theme = Theme::vega_dark();
+    let a = common::measure(&theme, |ui| ui.scope(|ui| layout::card(ui, |ui| { ui.label("x"); })).response);
+    let b = common::measure(&theme, |ui| ui.scope(|ui| Card::new().show(ui, |ui| { ui.label("x"); })).response);
+    assert_eq!(a, b);
 }
 
 #[test]

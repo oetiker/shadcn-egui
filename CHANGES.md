@@ -69,6 +69,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   full field width; `Select::new(..).width(..)`, `.size(SelectSize::Sm)`,
   `.placeholder(..)`, `.invalid(..)` and `.enabled(..)` change that, and the
   list takes Up, Down, Home, End, Enter, Esc and type-ahead keys.
+- Cards follow the chosen style: a thin outline ring instead of a border, and
+  vega or nova padding, gaps and corners. A card now fills the available width.
+  New `Card::new().size(CardSize::Sm).footer(..).show(ui, ..)` adds a compact
+  size and a footer (a tinted strip reaching the card edges in nova), and
+  `card_header`, `card_header_with_action` and `card_content` build the sections.
 - New `Slider` with one thumb, horizontal or vertical, in the chosen style.
   A click or drag sets the value, the arrow, Page Up/Down, Home and End keys
   step it, and `.enabled(false)` draws it at half opacity and ignores input.
