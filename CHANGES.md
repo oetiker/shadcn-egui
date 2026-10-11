@@ -148,18 +148,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
   `to_code()` gives the code back. Codes from shadcn-svelte.com are not
   supported: that site numbers colours and icon libraries differently.
-- When a preset asks for something this build cannot show (the Sera style,
-  the gray base colour or theme, which ui.shadcn.com has no colours for, or
-  a font or icon library whose Cargo feature is off), the app uses Nova,
-  neutral, Inter or Lucide instead and logs a warning such as
+- When a preset asks for something this build cannot show, the app uses a
+  stand-in and logs a warning such as
   `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
+  The Sera style becomes Nova, the gray base colour, theme or chart colour
+  (ui.shadcn.com has no colours for gray) becomes neutral or the base colour,
+  and a font or icon library whose Cargo feature is off becomes Inter or
+  Lucide. The translucent menu colours draw as the default or inverted menu
+  colour, because egui cannot blur what lies behind a menu.
 - With the Lyra or Sera style every corner is square, whatever radius the
   preset names, as on the shadcn site.
 - A translucent menu colour always highlights menu items with the subtle
   accent, also when the preset asks for the bold one, as on ui.shadcn.com.
-- An open Select list draws in the preset's menu colours: with an inverted
-  menu colour it is dark also on a light page, and with a translucent one the
-  page shows through it, without the blur of the web version.
+- An open Select list draws in the preset's menu colours: with the
+  `inverted` menu colour it is dark also on a light page.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /

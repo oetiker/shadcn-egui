@@ -11,6 +11,8 @@ menu fills with `popover` at 70 % alpha and highlights rows with
 `foreground` at 10 %. The trigger is unchanged. Existing snapshots stay
 byte-identical; two new snapshot pairs are reviewed by the user.
 
+> Amended 2026-10-11 (user): translucency dropped; translucent menu colours draw opaque with a warning. See Task 5.1b in the SDD ledger.
+
 ---
 
 ### Task 5.1: Select draws its list with `menu_theme()` and translucency

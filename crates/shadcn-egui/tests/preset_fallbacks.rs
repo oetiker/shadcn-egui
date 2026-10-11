@@ -134,6 +134,31 @@ fn gray_falls_back_to_neutral_and_the_base() {
     );
 }
 
+/// egui has no backdrop blur, and alpha without it was rejected (user,
+/// 2026-10-11): a translucent menu colour draws as its opaque variant.
+#[test]
+fn translucent_menu_colours_draw_opaque() {
+    use shadcn_egui::MenuColor;
+    for (translucent, opaque) in [
+        (MenuColor::DefaultTranslucent, MenuColor::Default),
+        (MenuColor::InvertedTranslucent, MenuColor::Inverted),
+    ] {
+        let p = Preset::default().menu_color(translucent);
+        let (t, lines) = warnings(|| p.theme(Mode::Light));
+        let o = Preset::default().menu_color(opaque).theme(Mode::Light);
+        assert_eq!((t.palette, t.menu), (o.palette, o.menu), "{translucent:?}");
+        assert_eq!(
+            lines,
+            [format!(
+                "shadcn-egui: menu colour \"{}\" needs a backdrop blur egui lacks; using \"{}\"",
+                translucent.id(),
+                opaque.id()
+            )]
+        );
+        assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
+    }
+}
+
 #[test]
 fn a_supported_preset_logs_nothing() {
     let (_, lines) = warnings(|| Preset::default().theme(Mode::Dark));

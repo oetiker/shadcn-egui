@@ -23,6 +23,11 @@
   borders, rings, shadows and the 1px press nudge follow those states.
 - **egui has no backdrop blur.** `backdrop-blur-*` on a dialog overlay is not
   drawn; the overlay is only the translucent fill.
+- **Translucent menus draw opaque.** The menu colours
+  `default-translucent` and `inverted-translucent` draw like `default`
+  and `inverted`, and log a warning. Upstream blurs what lies behind the
+  menu (`backdrop-blur-2xl`); egui cannot, and alpha without the blur
+  makes the text behind the list compete with the list.
 - **The ring is drawn outside the border box.** A focus ring (`ring-3`) is
   painted around the control and takes no layout space, as in CSS. Leave room
   around a control at the edge of a clipped area, or the ring is cut off.

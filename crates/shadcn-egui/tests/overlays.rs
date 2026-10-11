@@ -614,9 +614,8 @@ fn an_inverted_menu_is_dark_in_light_mode() {
     );
 }
 
-/// An open Select in a preset's menu colours, light and dark. With `behind`,
-/// lines of text run under the list so translucency shows.
-fn select_open_in(name: &str, color: MenuColor, behind: bool) {
+/// An open Select in a preset's menu colours, light and dark.
+fn select_open_in(name: &str, color: MenuColor) {
     let themes = vec![
         // Preset::default() is Nova (ui.shadcn.com DEFAULT_CONFIG); these snapshots show Vega.
         (
@@ -641,13 +640,7 @@ fn select_open_in(name: &str, color: MenuColor, behind: bool) {
         |ui| {
             let mut v = 1usize;
             ui.add(Select::new("fruit", &mut v, &FRUITS).width(180.0));
-            if behind {
-                for i in 1..=8 {
-                    ui.label(format!("Text behind the menu, line {i}"));
-                }
-            } else {
-                ui.add_space(160.0);
-            }
+            ui.add_space(160.0);
             ui.label("elsewhere");
         },
         |h| {
@@ -661,14 +654,5 @@ fn select_open_in(name: &str, color: MenuColor, behind: bool) {
 
 #[test]
 fn select_open_inverted_snapshot() {
-    select_open_in("select_open_inverted", MenuColor::Inverted, false);
-}
-
-#[test]
-fn select_open_translucent_snapshot() {
-    select_open_in(
-        "select_open_translucent",
-        MenuColor::DefaultTranslucent,
-        true,
-    );
+    select_open_in("select_open_inverted", MenuColor::Inverted);
 }

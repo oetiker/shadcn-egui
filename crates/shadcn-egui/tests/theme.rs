@@ -193,7 +193,6 @@ fn icon_and_menu_builders() {
     let menu = MenuColors {
         palette: Some(Palette::dark()),
         dark: Some(true),
-        translucent: true,
     };
     let t = Theme::vega_light().menu(menu);
     assert_eq!(t.menu, menu);

@@ -123,17 +123,6 @@ pub struct MenuColors {
     /// The menu's dark flag; `Some(true)` for an inverted menu, so `dark:`
     /// rules resolve as in dark mode.
     pub dark: Option<bool>,
-    /// Translucent fill, alpha only (egui has no backdrop blur).
-    pub translucent: bool,
-}
-
-impl MenuColors {
-    /// Menu fill: popover colour at this alpha (upstream `bg-popover/70`).
-    pub const TRANSLUCENT_FILL: f32 = 0.7;
-    /// Highlighted item: foreground colour at this alpha (`bg-foreground/10`).
-    pub const TRANSLUCENT_HIGHLIGHT: f32 = 0.1;
-    /// Separator: foreground colour at this alpha (`bg-foreground/5`).
-    pub const TRANSLUCENT_SEPARATOR: f32 = 0.05;
 }
 
 #[derive(Clone, Debug, PartialEq)]

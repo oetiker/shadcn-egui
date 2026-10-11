@@ -30,7 +30,7 @@ use crate::components::shared::{
     box_shapes, disabled_painter, interaction_state, ring, ring_shape,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
-use crate::theme::{family_for, MenuColors};
+use crate::theme::family_for;
 use crate::Theme;
 use egui::{
     vec2, Color32, Frame, Key, Margin, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Shape,
@@ -358,7 +358,7 @@ impl Widget for Select<'_> {
                     bottom: gpb.round() as i8,
                     left: gpl.round() as i8,
                 });
-            if let Some(fill) = list_fill(t, pick(&l, |r| &r.bg, gs).map(|p| t.paint(p))) {
+            if let Some(fill) = pick(&l, |r| &r.bg, gs).map(|p| t.paint(p)) {
                 frame = frame.fill(fill);
             }
             let item_font = egui::FontId::new(
@@ -434,11 +434,7 @@ impl Widget for Select<'_> {
                                 if ui.is_rect_visible(row) {
                                     let item_radius = pick(&item, |r| &r.radius, s)
                                         .map_or(0.0, |r| t.radius_px(r, row.height() / 2.0));
-                                    let fill = row_fill(
-                                        t,
-                                        highlighted,
-                                        pick(&item, |r| &r.bg, s).map(|p| t.paint(p)),
-                                    );
+                                    let fill = pick(&item, |r| &r.bg, s).map(|p| t.paint(p));
                                     ui.painter().extend(box_shapes(
                                         row,
                                         item_radius,
@@ -518,80 +514,7 @@ impl Widget for Select<'_> {
     }
 }
 
-/// The list's fill: the recipe's, or for a translucent menu the popover
-/// colour at [`MenuColors::TRANSLUCENT_FILL`] (upstream `TRANSLUCENT_CLASSES`
-/// in the CLI's `transform-menu.ts`; alpha only, egui has no backdrop blur).
-fn list_fill(t: &Theme, recipe: Option<Color32>) -> Option<Color32> {
-    if t.menu.translucent {
-        Some(
-            t.palette
-                .popover
-                .gamma_multiply(MenuColors::TRANSLUCENT_FILL),
-        )
-    } else {
-        recipe
-    }
-}
-
-/// A row's fill: the recipe's, or for the highlighted row of a translucent
-/// menu the foreground at [`MenuColors::TRANSLUCENT_HIGHLIGHT`].
-fn row_fill(t: &Theme, highlighted: bool, recipe: Option<Color32>) -> Option<Color32> {
-    if t.menu.translucent && highlighted {
-        Some(
-            t.palette
-                .foreground
-                .gamma_multiply(MenuColors::TRANSLUCENT_HIGHLIGHT),
-        )
-    } else {
-        recipe
-    }
-}
-
 /// Renders a select. `selected` is the chosen index. Returns true if it changed.
 pub fn select(ui: &mut Ui, id: &str, selected: &mut usize, options: &[&str]) -> bool {
     ui.add(Select::new(id, selected, options)).changed()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::theme::MenuColors;
-
-    #[test]
-    fn translucent_menus_fill_with_alpha_only() {
-        let t = Theme::vega_light().menu(MenuColors {
-            translucent: true,
-            ..MenuColors::default()
-        });
-        // token-ok: a sentinel recipe colour, never drawn
-        let recipe = Some(Color32::RED);
-        let fill = list_fill(&t, recipe).expect("a fill");
-        assert_eq!(
-            fill,
-            t.palette
-                .popover
-                .gamma_multiply(MenuColors::TRANSLUCENT_FILL)
-        );
-        assert!(
-            (170..=190).contains(&fill.a()),
-            "about 70 % of an opaque popover: {}",
-            fill.a()
-        );
-        assert_eq!(
-            row_fill(&t, true, recipe),
-            Some(
-                t.palette
-                    .foreground
-                    .gamma_multiply(MenuColors::TRANSLUCENT_HIGHLIGHT)
-            )
-        );
-        assert_eq!(
-            row_fill(&t, false, recipe),
-            recipe,
-            "only the highlighted row changes"
-        );
-        let opaque = Theme::vega_light();
-        assert_eq!(list_fill(&opaque, recipe), recipe);
-        assert_eq!(row_fill(&opaque, true, recipe), recipe);
-    }
 }

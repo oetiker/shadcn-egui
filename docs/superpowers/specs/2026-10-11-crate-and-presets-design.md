@@ -42,7 +42,7 @@ This is spec 1+2 of four. Later specs: (3) port the remaining ~47 components,
 | D4 | First crates.io release is **0.4.0**. The version line continues from 0.3.2; CHANGES.md stays one history. 0.4 is never released as vendored code. | |
 | D5 | `Preset` is plain data and resolves to a `Theme`. Components keep reading `Theme`. Light/dark (`Mode`) is not part of the preset. | |
 | D6 | Colour sources: generated palettes (base colour × theme), chart colours, hand-built `Palette`. No CSS paste import. | |
-| D7 | Translucent menu colours use alpha only; egui has no backdrop blur. | Documented in `references/gotchas.md`. |
+| D7 | Translucent menu colours draw opaque (their default/inverted variant) with a warning; egui has no backdrop blur and alpha without blur was rejected (user, 2026-10-11). | Documented in `references/gotchas.md`. |
 | D8 | Inter is the bundled default font (upstream `DEFAULT_CONFIG`). `fontHeading` is supported. Oxanium moves to its own font crate. | |
 | D9 | Font and icon crates connect through **Cargo features** on the main crate (approach A). | Rejected: runtime trait registration (B), link-time registry via `inventory`/`linkme` (C, adds a runtime dependency). |
 | D10 | Publishing follows the repo-infra standard, plus a CI publish step on a release tag. | Set up with `repo-infra:apply`. |
@@ -146,8 +146,9 @@ impl Default for Preset; // upstream DEFAULT_CONFIG (React apps/v4/registry/conf
   forces the menu accent to Subtle, as ui.shadcn.com does
   (`lib/search-params.ts:150-169,197-205`, `menu-picker.tsx:89`): the bold
   accent is dropped from the palette and from the inverted menu palette. No
-  warning (site behaviour, not a fallback); `to_code` keeps the requested
-  Bold. (User decision 2026-10-11.)
+  warning for the accent (site behaviour, not a fallback); `to_code` keeps
+  the requested Bold. (User decision 2026-10-11.) The menu colour itself
+  draws opaque, with a warning (§4.1, §5.2).
 - `RadiusChoice::Default` means "keep the base colour's radius" (upstream
   `config.ts:241`), not 0.5rem. `None/Small/Medium/Large` = 0 / 0.45 / 0.625 /
   0.875 rem (React `RADII`; `default` has no rem value there). `Px(f32)` is
@@ -169,7 +170,7 @@ impl Default for Preset; // upstream DEFAULT_CONFIG (React apps/v4/registry/conf
   Inherit, Lucide slots and the default menu colours. Builders change them:
   `.fonts(body, heading)`, `.icons(IconSlots)`, `.menu(MenuColors)`. For a
   hand-built `Palette`, `MenuColors::default()` uses the theme's own palette
-  (not inverted, not translucent); an inverted menu needs the caller to pass
+  (not inverted); an inverted menu needs the caller to pass
   the dark palette in `MenuColors`.
 - Runtime switching: call `apply` again (as today).
 
@@ -189,6 +190,7 @@ usual way egui crates warn).
 | `IconLibrary::Hugeicons` when its crate does not exist (§6.3) | Lucide |
 | base colour without an upstream palette (`Gray`) | Neutral |
 | theme or chart colour without an upstream palette (`Gray`) | the resolved base colour |
+| menu colour `DefaultTranslucent` / `InvertedTranslucent` (egui has no backdrop blur) | `Default` / `Inverted`; the subtle accent stays forced |
 
 ## 5. Colours
 
@@ -212,7 +214,7 @@ the pins (checked 2026-10-11).
   3. `chart-1..5` from the `chart_color` theme;
   4. `menu_accent: Bold` → `accent = primary` (existing
      `Palette::with_bold_menu_accent`), unless the menu colour is
-     translucent (§4);
+     translucent (§4; the menu itself draws opaque, §5.2);
   5. radius per §4.
 - `Palette` gains `chart: [Color32; 5]`. Sidebar vars are not added until a
   Sidebar component exists. `destructive_foreground` stays (upstream dropped
@@ -235,11 +237,13 @@ only **Select** is affected.
   `dark:` variants. So the menu popup draws with a derived theme: the dark
   palette **and** `dark: true`, so recipes with `State::DARK` rules
   (e.g. `src/style/nova.rs`) resolve as in dark mode.
-- `*Translucent`: menu fill = `popover` at 70% alpha; highlighted item =
-  `foreground` at 10%; separator = `foreground` at 5%; destructive item text =
-  `accent_foreground` (from upstream `TRANSLUCENT_CLASSES`). No blur.
-- `Theme` holds a resolved `menu: MenuColors` (palette, dark flag,
-  translucent flag) and a `menu_theme()` helper that returns the derived
+- `*Translucent`: draws like the opaque variant (`DefaultTranslucent` as
+  `Default`, `InvertedTranslucent` as `Inverted`) and logs a warning (§4.1).
+  Upstream's `TRANSLUCENT_CLASSES` pair `bg-popover/70` with
+  `backdrop-blur-2xl`; egui has no backdrop blur, and alpha without the blur
+  was rejected (user, 2026-10-11, D7).
+- `Theme` holds a resolved `menu: MenuColors` (palette, dark flag) and a
+  `menu_theme()` helper that returns the derived
   theme; components never look at the preset.
 
 ## 6. Fonts and icons

@@ -216,7 +216,8 @@ fn bold_accent_highlights_with_primary() {
 }
 
 /// ui.shadcn.com turns Bold into Subtle for translucent menus, in the main
-/// palette and in the inverted menu palette; no warning, the code keeps Bold.
+/// palette and in the inverted menu palette; silent (the only warning is
+/// the menu colour's own), and the code keeps Bold.
 #[test]
 fn translucent_menus_force_the_subtle_accent() {
     let bold = Preset::default()
@@ -257,28 +258,9 @@ fn inverted_menus_use_the_dark_palette_and_flag() {
         MenuColors {
             palette: Some(dark_palette),
             dark: Some(true),
-            translucent: false
         }
     );
     assert!(!t.dark);
-    assert!(
-        p.menu_color(MenuColor::InvertedTranslucent)
-            .theme(Mode::Light)
-            .menu
-            .translucent
-    );
-    let translucent = p
-        .menu_color(MenuColor::DefaultTranslucent)
-        .theme(Mode::Light)
-        .menu;
-    assert_eq!(
-        translucent,
-        MenuColors {
-            palette: None,
-            dark: None,
-            translucent: true
-        }
-    );
 }
 
 #[test]
@@ -297,8 +279,10 @@ fn a_heading_font_resolves() {
 fn to_code_keeps_values_that_fall_back() {
     let p = Preset::default()
         .style(StyleName::Sera)
-        .font(FontName::Geist);
-    let _ = p.theme(Mode::Dark); // falls back to Nova / Inter, the preset stays as it is
+        .font(FontName::Geist)
+        .menu_color(MenuColor::InvertedTranslucent);
+    // falls back to Nova / Inter / an opaque inverted menu, the preset stays as it is
+    let _ = p.theme(Mode::Dark);
     assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
 }
 

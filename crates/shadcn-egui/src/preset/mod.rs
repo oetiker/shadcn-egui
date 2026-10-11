@@ -117,8 +117,9 @@ impl Preset {
 impl Preset {
     /// The [`Theme`] this preset describes. Pure apart from one
     /// `log::warn!` line per value this build cannot show (style Sera, a
-    /// font or icon library whose feature is off, the `gray` colours); each
-    /// falls back to a usable default, and the lines repeat on every call.
+    /// font or icon library whose feature is off, the `gray` colours, a
+    /// translucent menu colour); each falls back to a usable default, and
+    /// the lines repeat on every call.
     pub fn theme(&self, mode: Mode) -> Theme {
         let dark = mode == Mode::Dark;
         let style = if self.style == StyleName::Sera {
@@ -149,10 +150,23 @@ impl Preset {
             self.menu_color,
             MenuColor::Inverted | MenuColor::InvertedTranslucent
         );
+        if self.translucent_menu() {
+            // egui has no backdrop blur, and alpha without it was rejected:
+            // a translucent menu draws as its opaque variant.
+            let opaque = if inverted {
+                MenuColor::Inverted
+            } else {
+                MenuColor::Default
+            };
+            log::warn!(
+                "shadcn-egui: menu colour \"{}\" needs a backdrop blur egui lacks; using \"{}\"",
+                self.menu_color.id(),
+                opaque.id()
+            );
+        }
         let menu = MenuColors {
             palette: inverted.then(|| self.palette(ids, true)),
             dark: inverted.then_some(true),
-            translucent: self.translucent_menu(),
         };
         theme = theme.fonts(body, heading).icons(slots).menu(menu);
         theme.dark = dark;
