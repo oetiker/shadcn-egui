@@ -1,0 +1,20 @@
+# Preset codes for the decoder fixtures (Phase 4, Task 2).
+# One code per line, then " # <origin>". Codes found in the upstream repos.
+# WARNING: the React and svelte sites decode several of these differently
+# (see docs/superpowers/notes/0.4/p0a-preset-codes.md); Phase 4 waits for the spec ruling.
+a1Dg5eFl # shadcn-ui apps/v4/content/docs/changelog/2026-03-cli-v4.mdx:30
+ad3qkJ7 # shadcn-ui apps/v4/content/docs/changelog/2026-03-cli-v4.mdx:40
+adtk27v # shadcn-ui apps/v4/content/docs/changelog/2026-03-cli-v4.mdx:47
+a2r6bw # shadcn-ui packages/shadcn/README.md:30
+b2D0wqNxT # shadcn-ui apps/v4/content/docs/changelog/2026-03-luma.mdx:34 ; shadcn-svelte docs/src/.../open-preset.svelte:69
+b2D0vQ7G4 # shadcn-ui apps/v4/content/docs/changelog/2026-04-partial-preset-apply.mdx:15
+b5owWMfJ8l # shadcn-ui apps/v4/content/docs/changelog/2026-04-preset-commands.mdx:31
+b5Kc6P0Vc # shadcn-ui apps/v4/content/docs/changelog/2026-04-preset-commands.mdx:56
+b4xFeBLg4O # shadcn-ui apps/v4/content/docs/changelog/2026-04-sera.mdx:9 ; shadcn-svelte docs/content/changelog/2026-04-sera.md:13
+b27GcrRo # shadcn-ui apps/v4/content/docs/changelog/2026-05-rhea.mdx:9 ; shadcn-svelte docs/content/changelog/2026-05-rhea.md:13
+b3ZhLl2XfG # shadcn-svelte docs/content/changelog/2026-03-luma.md:37
+# Boundary and hand-made codes (decode only; the fixture marks round-trip):
+a0 # all indices 0, version a
+b0 # all indices 0, version b
+bZZZZZZZZ # out-of-range indices decode to index 0
+aZZZZZZZ # out-of-range indices, version a
