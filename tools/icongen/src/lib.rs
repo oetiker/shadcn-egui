@@ -305,13 +305,10 @@ pub fn render_crate(
     );
     src.push_str("//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).\n\n");
     src.push_str("use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};\n\n");
-    src.push_str("const BLOB: &[u8] = include_bytes!(\"icons.bin\");\n\n");
-    src.push_str("const fn icon(name: &'static str, start: u32, len: u32) -> Icon {\n");
-    src.push_str("    Icon { name, size: 24.0, shape: IconShape::Blob(BlobRange { blob: BLOB, start, len }) }\n}\n\n");
-    let mut blob = Vec::new();
+    let (mut consts, mut blob) = (String::new(), Vec::new());
     for icon in &sorted {
         let rec = blob::encode(icon)?;
-        src.push_str(&format!(
+        consts.push_str(&format!(
             "pub const {}: Icon = icon({:?}, {}, {});\n",
             const_name(&icon.name),
             icon.name,
@@ -326,6 +323,15 @@ pub fn render_crate(
             blob.len()
         ));
     }
+    // A static array, not a `const` reference: a const has no fixed address,
+    // so every crate using the icons would get its own copy of the blob.
+    src.push_str(&format!(
+        "static BLOB: [u8; {}] = *include_bytes!(\"icons.bin\");\n\n",
+        blob.len()
+    ));
+    src.push_str("const fn icon(name: &'static str, start: u32, len: u32) -> Icon {\n");
+    src.push_str("    Icon { name, size: 24.0, shape: IconShape::Blob(BlobRange { blob: &BLOB, start, len }) }\n}\n\n");
+    src.push_str(&consts);
     src.push_str("\n/// Every icon in this crate, sorted by name.\npub const ALL: &[&Icon] = &[");
     src.push_str(
         &sorted

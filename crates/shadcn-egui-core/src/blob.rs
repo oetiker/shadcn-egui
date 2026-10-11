@@ -21,23 +21,34 @@ pub struct BlobRange {
 }
 
 impl BlobRange {
-    /// The record's bytes; empty when the range does not fit the blob.
-    fn bytes(self) -> &'static [u8] {
+    /// The record's bytes; `None` when the range does not fit the blob.
+    fn record(self) -> Option<&'static [u8]> {
         let start = self.start as usize;
         start
             .checked_add(self.len as usize)
             .and_then(|end| self.blob.get(start..end))
-            .unwrap_or(&[])
+    }
+
+    /// The record's bytes; empty when the range does not fit the blob.
+    fn bytes(self) -> &'static [u8] {
+        self.record().unwrap_or(&[])
     }
 }
 
-/// Two ranges are the same icon when they point into the same blob at the
-/// same place; the bytes are never compared.
+/// Two ranges are the same icon when their records hold the same bytes,
+/// wherever they live: the linker may give each crate its own copy of a
+/// blob, so addresses say nothing. Ranges that do not fit their blob are
+/// equal only when blob address, start and len all match.
 impl PartialEq for BlobRange {
     fn eq(&self, other: &Self) -> bool {
-        core::ptr::eq(self.blob.as_ptr(), other.blob.as_ptr())
-            && self.start == other.start
-            && self.len == other.len
+        match (self.record(), other.record()) {
+            (Some(a), Some(b)) => a == b,
+            _ => {
+                core::ptr::eq(self.blob.as_ptr(), other.blob.as_ptr())
+                    && self.start == other.start
+                    && self.len == other.len
+            }
+        }
     }
 }
 
@@ -309,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn blob_ranges_compare_by_identity_and_print_without_bytes() {
+    fn blob_ranges_compare_by_record_bytes_and_print_without_bytes() {
         let blob = record();
         let a = BlobRange {
             blob,
@@ -317,13 +328,45 @@ mod tests {
             len: 8,
         };
         assert_eq!(a, a);
-        assert_ne!(a, BlobRange { start: 2, ..a });
+        assert_ne!(a, BlobRange { start: 2, ..a }, "another record");
+        assert_ne!(a, BlobRange { len: 10, ..a }, "a longer record");
+        // The same record in another blob (another crate's copy, or the
+        // same bytes at another offset) is the same icon.
         let copy: &'static [u8] = Box::leak(blob.to_vec().into_boxed_slice());
-        assert_ne!(
+        assert_eq!(a, BlobRange { blob: copy, ..a });
+        let shifted = leak(&[9, 7, 0, 1024, 2048]);
+        assert_eq!(
             a,
-            BlobRange { blob: copy, ..a },
-            "equal bytes in another blob are another icon"
+            BlobRange {
+                blob: shifted,
+                start: 2,
+                len: 8
+            }
         );
         assert_eq!(format!("{a:?}"), "BlobRange { start: 0, len: 8 }");
+    }
+
+    #[test]
+    fn out_of_range_blob_ranges_compare_by_position() {
+        let blob = record();
+        let bad = BlobRange {
+            blob,
+            start: u32::MAX,
+            len: 8,
+        };
+        assert_eq!(bad, bad);
+        let copy: &'static [u8] = Box::leak(blob.to_vec().into_boxed_slice());
+        assert_ne!(bad, BlobRange { blob: copy, ..bad }, "another blob");
+        assert_ne!(bad, BlobRange { start: 0, ..bad }, "an in-range record");
+        let empty = BlobRange {
+            blob,
+            start: 0,
+            len: 0,
+        };
+        assert_ne!(
+            BlobRange { len: 0, ..bad },
+            empty,
+            "out of range is not an empty record"
+        );
     }
 }

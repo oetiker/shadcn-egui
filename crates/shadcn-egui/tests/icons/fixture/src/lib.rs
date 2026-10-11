@@ -6,14 +6,14 @@
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
-const BLOB: &[u8] = include_bytes!("icons.bin");
+static BLOB: [u8; 2000] = *include_bytes!("icons.bin");
 
 const fn icon(name: &'static str, start: u32, len: u32) -> Icon {
     Icon {
         name,
         size: 24.0,
         shape: IconShape::Blob(BlobRange {
-            blob: BLOB,
+            blob: &BLOB,
             start,
             len,
         }),
