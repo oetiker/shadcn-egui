@@ -332,7 +332,10 @@ and Remixicon are filled outlines with holes.
   and the painter adds an **outward-only** fringe strip, the way epaint
   feathers its own shapes: from the fill colour at the edge to transparent
   over one physical pixel. Zoomed snapshots of a filled icon edge at full
-  and at 50% opacity check that edges are smooth and seam-free.
+  and at 50% opacity check that edges are smooth and seam-free. User decision
+  (2026-10-11): icons are instead rasterised on the CPU into cached coverage
+  textures and drawn tinted, so overlapping strokes, caps and the fill
+  boundary count once at any opacity; the fringe data stays in the blob.
 - Remixicon: since January 2026 it ships under "Remix Icon License v1.0",
   which forbids distributing the icons as an icon pack or library (§3.1,
   §3.2), although npm metadata still says Apache-2.0. The crate is built from

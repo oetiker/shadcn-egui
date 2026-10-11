@@ -1,14 +1,16 @@
-//! Vector icons painted with egui shapes, no image loader. Icon data is
-//! generated ahead of time by `tools/icongen` (strokes as path commands,
-//! fills as pre-triangulated meshes); this module only paints it.
+//! Vector icons, no image loader. Icon data is generated ahead of time by
+//! `tools/icongen` (strokes as path commands, fills as pre-triangulated
+//! meshes); [`paint_icon`] rasterises it on the CPU into a cached coverage
+//! texture and draws that tinted, so a translucent colour applies once to
+//! the whole icon.
 //!
 //! Lucide icons are 24x24 outlines drawn with a 2-unit round-capped stroke.
 //! Round caps matter: some icons draw dots as zero-length lines, which vanish
-//! without them, so every open subpath gets cap discs at both ends.
+//! without them. Every stroke is painted with round caps and round joins.
 
-use crate::{FillMesh, Theme};
-use egui::epaint::{CubicBezierShape, PathShape, QuadraticBezierShape};
-use egui::{Color32, Mesh, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget};
+use super::icon_raster;
+use crate::Theme;
+use egui::{pos2, Color32, Painter, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
 pub use shadcn_egui_core::{Icon, IconShape, IconSlots, Seg};
 
 /// The dialog close cross (Lucide `x`, ISC), built in because the registry's
@@ -47,130 +49,31 @@ pub const LUCIDE_SLOTS: IconSlots = IconSlots {
     close: CLOSE,
 };
 
-/// Curve flattening tolerance in screen points.
-const TOLERANCE: f32 = 0.1; // behaviour-ok: curve flattening tolerance, not a design token
-
-/// Paint `icon` scaled into the square `rect`: its fill first (if any), then
-/// its strokes. `stroke_width` is in icon units (Lucide's own is 2.0) and
-/// scales with the icon.
+/// Paint `icon` scaled into the square `rect`: its fill (if any) and its
+/// strokes, from one coverage texture tinted `color`. `stroke_width` is in
+/// icon units (Lucide's own is 2.0) and scales with the icon.
 ///
-/// Precondition: `icon.segs()` starts with `Seg::M` (icongen guarantees it);
-/// a curve with no start point is skipped.
+/// The texture is rasterised once per icon, physical pixel size and stroke
+/// width, and cached in the context; `rect` snaps to whole physical pixels.
+/// An icon larger than 1024 physical pixels is drawn from a 1024-pixel
+/// texture scaled up. A curve with no start point is skipped.
 pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, stroke_width: f32) {
-    let scale = rect.width() / icon.size;
-    let map = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
-    let stroke = Stroke::new(stroke_width * scale, color);
-    let cap_r = stroke.width / 2.0;
-
-    let mut shapes = Vec::new();
-    if let Some(fill) = icon.fill_mesh() {
-        shapes.push(fill_shape(
-            &fill,
-            map,
-            color,
-            1.0 / painter.pixels_per_point(),
-        ));
+    let ppp = painter.pixels_per_point();
+    let (x0, y0) = ((rect.min.x * ppp).round(), (rect.min.y * ppp).round());
+    let w = (rect.width() * ppp).round().max(1.0);
+    let h = (rect.height() * ppp).round().max(1.0);
+    let finite = [x0, y0, w, h].iter().all(|v| v.is_finite());
+    if !finite || icon.size.is_nan() || icon.size <= 0.0 {
+        return;
     }
-    let mut points: Vec<Pos2> = Vec::new();
-    let flush = |points: &mut Vec<Pos2>, closed: bool, shapes: &mut Vec<Shape>| {
-        if points.is_empty() {
-            return;
-        }
-        let pts = std::mem::take(points);
-        if closed {
-            shapes.push(Shape::Path(PathShape::closed_line(pts, stroke)));
-        } else {
-            let (first, last) = (pts[0], pts[pts.len() - 1]);
-            if pts.len() > 1 {
-                shapes.push(Shape::Path(PathShape::line(pts, stroke)));
-            }
-            shapes.push(Shape::circle_filled(first, cap_r, color));
-            shapes.push(Shape::circle_filled(last, cap_r, color));
-        }
-    };
-
-    for seg in icon.segs() {
-        match seg {
-            Seg::M(x, y) => {
-                flush(&mut points, false, &mut shapes);
-                points.push(map(x, y));
-            }
-            Seg::L(x, y) => points.push(map(x, y)),
-            Seg::Q(x1, y1, x, y) => {
-                let Some(&from) = points.last() else {
-                    continue;
-                };
-                let q = QuadraticBezierShape::from_points_stroke(
-                    [from, map(x1, y1), map(x, y)],
-                    false,
-                    Color32::TRANSPARENT,
-                    Stroke::NONE,
-                );
-                points.extend(q.flatten(Some(TOLERANCE)).into_iter().skip(1));
-            }
-            Seg::C(x1, y1, x2, y2, x, y) => {
-                let Some(&from) = points.last() else {
-                    continue;
-                };
-                let c = CubicBezierShape::from_points_stroke(
-                    [from, map(x1, y1), map(x2, y2), map(x, y)],
-                    false,
-                    Color32::TRANSPARENT,
-                    Stroke::NONE,
-                );
-                points.extend(c.flatten(Some(TOLERANCE)).into_iter().skip(1));
-            }
-            Seg::Z => flush(&mut points, true, &mut shapes),
-        }
-    }
-    flush(&mut points, false, &mut shapes);
-    painter.extend(shapes);
-}
-
-/// The fill as one mesh: its triangles in `color`, plus per contour a strip
-/// from the edge (in `color`) to `fringe` points outward along each vertex's
-/// miter (transparent). Like epaint's own feathering but outward only, so a
-/// translucent colour shows no darker seam: the strip stays off the fill, as
-/// icongen zeroes the miter where loops touch. Separate fill paths that
-/// overlap each other (two Remixicon icons) still blend twice there.
-/// `fringe` is one physical pixel on an untransformed layer.
-fn fill_shape(
-    fill: &FillMesh,
-    map: impl Fn(f32, f32) -> Pos2,
-    color: Color32,
-    fringe: f32,
-) -> Shape {
-    let mut mesh = Mesh::default();
-    for &[x, y] in &fill.vertices {
-        mesh.colored_vertex(map(x, y), color);
-    }
-    mesh.indices
-        .extend(fill.indices.iter().map(|&i| u32::from(i)));
-    for contour in &fill.contours {
-        if contour.is_empty() {
-            continue;
-        }
-        let base = mesh.vertices.len() as u32;
-        let n = contour.len() as u32;
-        for &([x, y], [mx, my]) in contour {
-            let p = map(x, y);
-            mesh.colored_vertex(p, color);
-            mesh.colored_vertex(p + Vec2::new(mx, my) * fringe, Color32::TRANSPARENT);
-        }
-        let mut i0 = n - 1;
-        for i1 in 0..n {
-            let (in0, out0, in1, out1) = (
-                base + 2 * i0,
-                base + 2 * i0 + 1,
-                base + 2 * i1,
-                base + 2 * i1 + 1,
-            );
-            mesh.add_triangle(in0, in1, out1);
-            mesh.add_triangle(in0, out1, out0);
-            i0 = i1;
-        }
-    }
-    Shape::mesh(mesh)
+    let drawn = Rect::from_min_size(pos2(x0 / ppp, y0 / ppp), Vec2::new(w / ppp, h / ppp));
+    let ctx = painter.ctx();
+    let side = icon_raster::MAX_SIDE.min(ctx.input(|i| i.max_texture_side)) as f32;
+    let k = (side / w.max(h)).min(1.0);
+    let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0));
+    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width);
+    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
+    painter.image(tex.id(), drawn, uv, color);
 }
 
 /// An icon as a widget: `ui.add(IconView::new(&icons::MIC))`. Sized

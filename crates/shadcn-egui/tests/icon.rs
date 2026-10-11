@@ -3,98 +3,107 @@
 mod lucide;
 mod common;
 
-use egui::epaint::{CircleShape, PathShape};
-use egui::{pos2, vec2, Color32, Rect, Shape};
+use egui::{pos2, vec2, Color32, ColorImage, Rect, Shape, TextureId};
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
 use shadcn_egui::components::button::{Button, ButtonSize, ButtonVariant};
 use shadcn_egui::components::icon::{paint_icon, Icon, IconView};
 use shadcn_egui::{layout, Theme};
+use std::sync::Arc;
 
-/// Paint one icon into `rect` and return the flattened shapes.
-fn painted(icon: &Icon, rect: Rect) -> Vec<Shape> {
+/// Paint one icon into `rect` at ppp 1 and return the drawn rect and the
+/// icon's coverage texture, with a lookup of its alpha at a point in the
+/// texture's pixel space.
+fn raster(icon: &Icon, rect: Rect) -> (Rect, Arc<ColorImage>) {
     let ctx = egui::Context::default();
     let out = ctx.run_ui(egui::RawInput::default(), |ui| {
         let painter = ui.painter_at(Rect::EVERYTHING);
         paint_icon(&painter, rect, icon, Color32::RED, 2.0);
     });
-    fn walk(s: &Shape, out: &mut Vec<Shape>) {
+    fn walk(s: &Shape, out: &mut Vec<Rect>) {
         match s {
             Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
-            s => out.push(s.clone()),
+            Shape::Mesh(m) if m.texture_id != TextureId::default() => out.push(m.calc_bounds()),
+            _ => {}
         }
     }
-    let mut shapes = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut shapes));
-    shapes
+    let mut rects = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
+    let imgs: Vec<_> = out
+        .textures_delta
+        .set
+        .iter()
+        .filter(|(id, _)| *id != TextureId::default())
+        .map(|(_, d)| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.clone()
+        })
+        .collect();
+    assert_eq!((rects.len(), imgs.len()), (1, 1), "one textured image");
+    (rects[0], imgs[0].clone())
 }
 
-fn circles(shapes: &[Shape]) -> Vec<CircleShape> {
-    shapes
-        .iter()
-        .filter_map(|s| {
-            if let Shape::Circle(c) = s {
-                Some(*c)
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-fn paths(shapes: &[Shape]) -> Vec<PathShape> {
-    shapes
-        .iter()
-        .filter_map(|s| {
-            if let Shape::Path(p) = s {
-                Some(p.clone())
-            } else {
-                None
-            }
-        })
-        .collect()
+fn alpha(img: &ColorImage, x: usize, y: usize) -> u8 {
+    img.pixels[y * img.size[0] + x].a()
 }
 
 #[test]
 fn round_caps_draw_the_dot() {
-    // circle-alert's dot is a 0.01-unit line; only its cap discs make it visible.
-    let shapes = painted(
+    // circle-alert's dot is a 0.01-unit line at (12, 16); only its round
+    // caps make it visible: a disc of radius 1.
+    let (_, img) = raster(
         &lucide::CIRCLE_ALERT,
         Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0)),
     );
-    let dot = circles(&shapes)
-        .into_iter()
-        .find(|c| (c.center - pos2(12.0, 16.0)).length() < 0.02);
-    let dot = dot.expect("cap disc at the dot");
-    assert_eq!(dot.radius, 1.0, "cap radius is half the stroke");
-    assert_eq!(dot.fill, Color32::RED);
+    for (x, y) in [(11, 15), (12, 15), (11, 16), (12, 16)] {
+        assert!(alpha(&img, x, y) > 180, "dot at ({x}, {y})");
+    }
+    // Two pixels left of the dot lie between it and the circle.
+    assert_eq!(alpha(&img, 9, 16), 0, "the dot has radius 1");
 }
 
 #[test]
 fn icon_scales_into_rect() {
     // x.svg: M18 6 L6 18 and M6 6 L18 18, painted at 2x offset by (100, 50).
-    let shapes = painted(
+    let (drawn, img) = raster(
         &lucide::X,
         Rect::from_min_size(pos2(100.0, 50.0), vec2(48.0, 48.0)),
     );
-    let p = paths(&shapes);
-    assert_eq!(p.len(), 2);
-    assert_eq!(p[0].points, vec![pos2(136.0, 62.0), pos2(112.0, 86.0)]);
-    assert!(!p[0].closed);
-    assert_eq!(p[0].stroke.width, 4.0, "stroke scales with the icon");
+    assert_eq!(
+        drawn,
+        Rect::from_min_size(pos2(100.0, 50.0), vec2(48.0, 48.0))
+    );
+    assert_eq!(img.size, [48, 48]);
+    // (12, 12) is the crossing, at 2x pixel (24, 24); the stroke is 4 px
+    // wide, so a pixel 1.4 px off the line is covered, 2.8 px off is not.
+    assert_eq!(alpha(&img, 24, 24), 255);
+    assert_eq!(alpha(&img, 25, 23), 255, "1.4 px off the line");
+    assert_eq!(alpha(&img, 28, 24), 0, "stroke scales with the icon");
 }
 
 #[test]
 fn closed_subpaths_stay_closed() {
-    let shapes = painted(
-        &lucide::SETTINGS,
-        Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0)),
-    );
-    let p = paths(&shapes);
-    assert!(p.iter().any(|p| p.closed), "settings has closed subpaths");
-    // A closed subpath gets no cap discs: only open ones do.
-    let open = p.iter().filter(|p| !p.closed).count();
-    assert_eq!(circles(&shapes).len(), open * 2);
+    use shadcn_egui::{IconShape, Seg};
+    // An open and a closed L: only the closed one draws its third edge,
+    // from (20, 20) back to (12, 4), passing (16, 12).
+    static OPEN: [Seg; 3] = [Seg::M(12.0, 4.0), Seg::L(4.0, 20.0), Seg::L(20.0, 20.0)];
+    static CLOSED: [Seg; 4] = [
+        Seg::M(12.0, 4.0),
+        Seg::L(4.0, 20.0),
+        Seg::L(20.0, 20.0),
+        Seg::Z,
+    ];
+    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0));
+    let at = |segs: &'static [Seg]| {
+        let icon = Icon {
+            name: "triangle",
+            size: 24.0,
+            shape: IconShape::Segs(segs),
+        };
+        alpha(&raster(&icon, rect).1, 15, 11)
+    };
+    assert_eq!(at(&OPEN), 0, "an open path has no closing edge");
+    assert!(at(&CLOSED) > 200, "Z draws the closing edge");
 }
 
 #[test]

@@ -176,6 +176,8 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   components take hover and focus colours from the style.
 
 ### Fixed
+- Faded and disabled icons are evenly transparent: line ends, crossings and
+  filled shapes no longer show darker spots.
 - An app that called `Theme::apply` while drawing a frame crashed with
   "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to any fonts"
   as soon as a window or popup showed a heading in that frame. Such a heading

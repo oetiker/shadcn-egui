@@ -62,3 +62,6 @@
   (styles are not saved). Re-applying every frame buys nothing and hides bugs:
   code that overwrites the style is silently repainted over on the next frame
   instead of showing. Read tokens via `Theme::current(ctx)` inside widgets.
+- **Icons are rasterised.** `paint_icon` draws each icon from a cached
+  coverage texture at the physical pixel size, so a translucent colour
+  applies once; very large icons cost a texture each.

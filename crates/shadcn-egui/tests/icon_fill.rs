@@ -73,91 +73,216 @@ fn generated_consts_point_into_one_blob() {
     assert_eq!(icon.size, 24.0);
 }
 
-use egui::{pos2, vec2, Color32, Id, LayerId, Order, Rect, Shape};
+use egui::{pos2, vec2, Color32, ColorImage, Id, LayerId, Order, Rect, Shape, TextureId};
 use egui_kittest::Harness;
 use shadcn_egui::components::icon::paint_icon;
+use std::sync::Arc;
 
-/// Paint one icon at pixels_per_point 1 and return the flattened shapes.
-fn painted(icon: &Icon, rect: Rect) -> Vec<Shape> {
-    let ctx = egui::Context::default();
+/// What one frame painted: each image (texture, rect, tint) and each
+/// texture uploaded for it.
+struct Painted {
+    images: Vec<(TextureId, Rect, Color32)>,
+    uploads: Vec<(TextureId, Arc<ColorImage>)>,
+}
+
+/// Run one frame of `ctx` at `ppp`, painting with `paint`.
+fn frame(ctx: &egui::Context, ppp: f32, mut paint: impl FnMut(&egui::Painter)) -> Painted {
+    ctx.set_pixels_per_point(ppp);
     let out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        paint_icon(
-            &ui.painter_at(Rect::EVERYTHING),
-            rect,
-            icon,
-            Color32::RED,
-            2.0,
-        );
+        paint(&ui.painter_at(Rect::EVERYTHING));
     });
-    fn walk(s: &Shape, out: &mut Vec<Shape>) {
+    fn walk(s: &Shape, out: &mut Vec<(TextureId, Rect, Color32)>) {
         match s {
             Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
-            s => out.push(s.clone()),
+            Shape::Mesh(m) if m.texture_id != TextureId::default() => {
+                let tint = m.vertices.first().map_or(Color32::TRANSPARENT, |v| v.color);
+                out.push((m.texture_id, m.calc_bounds(), tint));
+            }
+            _ => {}
         }
     }
-    let mut shapes = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut shapes));
-    shapes
-}
-
-#[test]
-fn fill_is_one_mesh_with_an_outward_fringe() {
-    // Scale 2: the outer corner (4, 4) of square-hole lands at (8, 8).
-    let shapes = painted(
-        &fixture::SQUARE_HOLE,
-        Rect::from_min_size(pos2(0.0, 0.0), vec2(48.0, 48.0)),
-    );
-    let meshes: Vec<_> = shapes
+    let mut images = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut images));
+    let uploads = out
+        .textures_delta
+        .set
         .iter()
-        .filter_map(|s| {
-            if let Shape::Mesh(m) = s {
-                Some(m.clone())
-            } else {
-                None
-            }
+        .filter(|(id, _)| *id != TextureId::default())
+        .map(|(id, d)| {
+            let egui::ImageData::Color(img) = &d.image;
+            (*id, img.clone())
         })
         .collect();
-    assert_eq!(meshes.len(), 1, "one mesh per icon");
-    let mesh = &meshes[0];
-    let fill = fixture::SQUARE_HOLE.fill_mesh().expect("filled");
-    let nv = fill.vertices.len();
-    let ring: usize = fill.contours.iter().map(Vec::len).sum();
-    assert_eq!(mesh.vertices.len(), nv + 2 * ring);
-    assert_eq!(
-        mesh.indices.len(),
-        fill.indices.len() + 6 * ring,
-        "two fringe triangles per edge"
+    Painted { images, uploads }
+}
+
+/// Paint one icon into `rect` (stroke width 2) on a fresh context and
+/// return the drawn rect and its coverage texture.
+fn raster(icon: &Icon, rect: Rect, ppp: f32) -> (Rect, Arc<ColorImage>) {
+    let ctx = egui::Context::default();
+    let p = frame(&ctx, ppp, |p| paint_icon(p, rect, icon, Color32::RED, 2.0));
+    assert_eq!(p.images.len(), 1, "one image per icon");
+    assert_eq!(p.uploads.len(), 1, "one texture per icon");
+    assert_eq!(p.images[0].0, p.uploads[0].0);
+    (p.images[0].1, p.uploads[0].1.clone())
+}
+
+#[test]
+fn fill_edges_are_anti_aliased_by_coverage() {
+    // 20 px for 24 units: the outer edge x = 4 lands at 3.33 px, the hole's
+    // edge x = 9 at 7.5 px. Row 10 (y 12.6 units) crosses both.
+    let (drawn, img) = raster(
+        &fixture::SQUARE_HOLE,
+        Rect::from_min_size(pos2(0.0, 0.0), vec2(20.0, 20.0)),
+        1.0,
     );
-    assert!(mesh.vertices[..nv].iter().all(|v| v.color == Color32::RED));
-    let k = mesh.vertices[nv..]
-        .chunks(2)
-        .position(|p| p[0].pos == pos2(8.0, 8.0))
-        .expect("the corner is a contour vertex");
-    let (inner, outer) = (mesh.vertices[nv + 2 * k], mesh.vertices[nv + 2 * k + 1]);
-    assert_eq!(inner.color, Color32::RED);
-    assert_eq!(outer.color, Color32::TRANSPARENT);
-    assert!(
-        (outer.pos - pos2(7.0, 7.0)).length() < 1e-3,
-        "one pixel out along the miter: {:?}",
-        outer.pos
+    assert_eq!(drawn, Rect::from_min_size(pos2(0.0, 0.0), vec2(20.0, 20.0)));
+    assert_eq!(img.size, [20, 20]);
+    let a = |x: usize| i32::from(img.pixels[10 * 20 + x].a());
+    assert_eq!(a(2), 0, "outside");
+    assert!((a(3) - 170).abs() <= 2, "two thirds covered: {}", a(3));
+    assert_eq!(a(4), 255, "inside");
+    assert!((a(7) - 128).abs() <= 2, "half covered: {}", a(7));
+    assert_eq!(a(10), 0, "the hole");
+    assert_eq!(
+        img.pixels[10 * 20 + 4],
+        Color32::from_white_alpha(255),
+        "white coverage"
     );
 }
 
 #[test]
-fn fill_is_painted_before_strokes() {
-    let shapes = painted(
+fn icon_snaps_to_physical_pixels() {
+    // At ppp 1.25, (10.1, 20.3) + 24 maps to pixels (12.6, 25.4) + 30.
+    let (drawn, img) = raster(
         &fixture::MIXED,
-        Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0)),
+        Rect::from_min_size(pos2(10.1, 20.3), vec2(24.0, 24.0)),
+        1.25,
     );
-    let mesh = shapes
-        .iter()
-        .position(|s| matches!(s, Shape::Mesh(_)))
-        .expect("the fill");
-    let path = shapes
-        .iter()
-        .position(|s| matches!(s, Shape::Path(_)))
-        .expect("the stroke");
-    assert!(mesh < path, "fill first, then strokes: {shapes:?}");
+    assert_eq!(img.size, [30, 30]);
+    let px = drawn.min.to_vec2() * 1.25;
+    assert!((px - vec2(13.0, 25.0)).length() < 1e-4, "{px:?}");
+    assert!((drawn.size() * 1.25 - vec2(30.0, 30.0)).length() < 1e-4);
+}
+
+/// Review Focus: two crossing strokes at 50 % alpha are as light at the
+/// crossing as along one line; the overlap counts once.
+#[test]
+fn crossing_strokes_blend_once() {
+    use shadcn_egui::IconShape;
+    static X: [Seg; 4] = [
+        Seg::M(4.0, 4.0),
+        Seg::L(20.0, 20.0),
+        Seg::M(20.0, 4.0),
+        Seg::L(4.0, 20.0),
+    ];
+    let icon = Icon {
+        name: "cross",
+        size: 24.0,
+        shape: IconShape::Segs(&X),
+    };
+    let mut h = Harness::builder()
+        .with_size(vec2(40.0, 40.0))
+        .build_ui(|ui| {
+            let page = ui.ctx().viewport_rect();
+            ui.ctx()
+                .layer_painter(LayerId::background())
+                .rect_filled(page, 0.0, Color32::WHITE);
+            let p = ui
+                .ctx()
+                .layer_painter(LayerId::new(Order::Foreground, Id::new("icon")));
+            let rect = Rect::from_min_size(pos2(8.0, 8.0), vec2(24.0, 24.0));
+            paint_icon(&p, rect, &icon, Color32::RED.gamma_multiply(0.5), 2.0);
+        });
+    h.run();
+    let img = h.render().expect("render");
+    let g = |x: u32, y: u32| i32::from(img.get_pixel(x, y).0[1]);
+    // Pixel (20, 20) is the crossing, (16, 16) lies on one line only.
+    let (crossing, line) = (g(20, 20), g(16, 16));
+    assert!((120..=136).contains(&line), "line green {line}");
+    assert!(
+        (crossing - line).abs() <= 2,
+        "crossing green {crossing} vs line {line}"
+    );
+}
+
+#[test]
+fn faded_and_opaque_icons_share_one_texture() {
+    let ctx = egui::Context::default();
+    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0));
+    let p = frame(&ctx, 1.0, |p| {
+        paint_icon(p, rect, &fixture::MIXED, Color32::RED, 2.0);
+        paint_icon(
+            p,
+            rect,
+            &fixture::MIXED,
+            Color32::RED.gamma_multiply(0.5),
+            2.0,
+        );
+        let mut faded = p.clone();
+        faded.multiply_opacity(0.5);
+        paint_icon(&faded, rect, &fixture::MIXED, Color32::RED, 2.0);
+    });
+    assert_eq!(p.uploads.len(), 1, "one texture for all three");
+    assert_eq!(p.images.len(), 3);
+    assert!(p.images.iter().all(|(id, _, _)| *id == p.uploads[0].0));
+    assert_eq!(p.images[0].2, Color32::RED);
+    assert_eq!(p.images[1].2, Color32::RED.gamma_multiply(0.5));
+    assert_eq!(p.images[2].2, Color32::RED.gamma_multiply(0.5));
+}
+
+#[test]
+fn textures_are_cached_and_bounded() {
+    let ctx = egui::Context::default();
+    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0));
+    let once = |p: &egui::Painter| paint_icon(p, rect, &fixture::MIXED, Color32::RED, 2.0);
+    assert_eq!(frame(&ctx, 1.0, once).uploads.len(), 1);
+    let again = frame(&ctx, 1.0, once);
+    assert_eq!(again.uploads.len(), 0, "cached: no upload in frame 2");
+    assert_eq!(again.images.len(), 1);
+    // 1200 distinct stroke widths, 100 per frame: never more than 1024
+    // icon textures alive (plus the font atlas).
+    let small = Rect::from_min_size(pos2(0.0, 0.0), vec2(4.0, 4.0));
+    for f in 0..12 {
+        frame(&ctx, 1.0, |p| {
+            for i in 0..100 {
+                let w = 1.0 + (f * 100 + i) as f32 / 1000.0;
+                paint_icon(p, small, &fixture::X, Color32::RED, w);
+            }
+        });
+        let alive = ctx.tex_manager().read().num_allocated();
+        assert!(alive <= 1024 + 1, "frame {f}: {alive} textures");
+    }
+    assert!(
+        ctx.tex_manager().read().num_allocated() >= 1000,
+        "the cache is used"
+    );
+}
+
+/// Rects of no, negative, absurd and non-finite size paint something
+/// bounded or nothing, never a panic or a giant texture.
+#[test]
+fn odd_rects_do_not_panic() {
+    let ctx = egui::Context::default();
+    for rect in [
+        Rect::from_min_size(pos2(5.0, 5.0), vec2(0.0, 0.0)),
+        Rect::from_min_size(pos2(5.0, 5.0), vec2(-3.0, 8.0)),
+        Rect::from_min_size(pos2(0.0, 0.0), vec2(1e7, 1e7)),
+        Rect::from_min_size(pos2(f32::NAN, 0.0), vec2(24.0, 24.0)),
+        Rect::from_min_size(pos2(0.0, 0.0), vec2(f32::INFINITY, 24.0)),
+        Rect::EVERYTHING,
+    ] {
+        let p = frame(&ctx, 1.0, |p| {
+            paint_icon(p, rect, &fixture::MIXED, Color32::RED, 2.0);
+        });
+        for (_, img) in &p.uploads {
+            assert!(
+                img.size[0] <= 1024 && img.size[1] <= 1024,
+                "{rect:?}: {:?}",
+                img.size
+            );
+        }
+    }
 }
 
 /// A curve without a preceding `M` (a public `IconShape::Segs` or a damaged
@@ -174,15 +299,16 @@ fn a_curve_without_a_start_point_does_not_panic() {
             size: 24.0,
             shape: IconShape::Segs(segs),
         };
-        painted(&icon, Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0)));
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0));
+        frame(&ctx, 1.0, |p| paint_icon(p, rect, &icon, Color32::RED, 2.0));
     }
 }
 
 /// Review Focus 4: a translucent filled icon shows no darker seam where the
 /// fill meets the fringe (nor where the even-odd star's arms touch) and no
 /// lighter gap inside, also at a fractional scale. `mixed` is painted with
-/// stroke width 0, its dot alone: translucent strokes darken where their cap
-/// discs overlap the line, which is the stroke painter's, not the fill's.
+/// stroke width 0, its dot alone.
 #[test]
 fn filled_icon_has_no_seam_at_fractional_scale() {
     type Inside = fn(f32, f32) -> bool;
