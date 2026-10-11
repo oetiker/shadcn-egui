@@ -25,7 +25,7 @@
 //! `cn-select-item` ask for. Without `width`, the trigger is as wide as its
 //! widest option (`w-fit` would make it jump with the chosen text).
 
-use crate::components::icon::{paint_icon, CHECK, CHEVRON_DOWN};
+use crate::components::icon::paint_icon;
 use crate::components::shared::{
     box_shapes, disabled_painter, interaction_state, ring, ring_shape,
 };
@@ -298,7 +298,13 @@ impl Widget for Select<'_> {
             let icon_color =
                 pick(&[&t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
             if let Some(c) = icon_color {
-                paint_icon(&painter, icon_rect, &CHEVRON_DOWN, c, t.metrics.icon_stroke);
+                paint_icon(
+                    &painter,
+                    icon_rect,
+                    &t.icons.chevron_down,
+                    c,
+                    t.metrics.icon_stroke,
+                );
             }
             let text_color = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
             let text_area = Rect::from_min_max(
@@ -462,7 +468,7 @@ impl Widget for Select<'_> {
                                         paint_icon(
                                             ui.painter(),
                                             tick,
-                                            &CHECK,
+                                            &t.icons.check,
                                             color,
                                             t.metrics.icon_stroke,
                                         );

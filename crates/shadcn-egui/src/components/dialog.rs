@@ -11,7 +11,6 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::icon::CLOSE;
 use crate::components::shared::ring;
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
 use crate::theme::heading_family_for;
@@ -215,7 +214,7 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
     child
         .add(
             Button::new("Close")
-                .icon(&CLOSE)
+                .icon(&t.icons.close)
                 .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::IconSm),
         )

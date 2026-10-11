@@ -19,3 +19,15 @@ pub struct Icon {
     pub size: f32,
     pub segs: &'static [Seg],
 }
+
+/// The icons the components draw, one per role. Each icon crate exports its
+/// set as `SLOTS`; `shadcn_egui::Theme::icons` holds the active one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct IconSlots {
+    /// Checkbox tick and the selected Select item.
+    pub check: Icon,
+    /// Select trigger (each library uses its own icon here).
+    pub chevron_down: Icon,
+    /// Dialog close button.
+    pub close: Icon,
+}

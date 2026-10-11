@@ -9,7 +9,7 @@
 use crate::Theme;
 use egui::epaint::{CubicBezierShape, PathShape, QuadraticBezierShape};
 use egui::{Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget};
-pub use shadcn_egui_core::{Icon, Seg};
+pub use shadcn_egui_core::{Icon, IconSlots, Seg};
 
 /// The dialog close cross (Lucide `x`, ISC), built in because the registry's
 /// own components need it and projects generate their icon sets separately.
@@ -38,6 +38,13 @@ pub const CHEVRON_DOWN: Icon = Icon {
     name: "chevron-down",
     size: 24.0,
     segs: &[Seg::M(6.0, 9.0), Seg::L(12.0, 15.0), Seg::L(18.0, 9.0)],
+};
+
+/// The built-in Lucide slots every new [`Theme`] starts with.
+pub const LUCIDE_SLOTS: IconSlots = IconSlots {
+    check: CHECK,
+    chevron_down: CHEVRON_DOWN,
+    close: CLOSE,
 };
 
 /// Curve flattening tolerance in screen points.

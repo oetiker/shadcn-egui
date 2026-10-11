@@ -137,6 +137,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   (Tailwind's line heights for the text sizes), and `Theme::line_px(TextSize)`
   returns the line height for a text size.
 - `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
+- `Theme::icons(IconSlots { check, chevron_down, close })` replaces the
+  checkbox tick, the select chevron and the dialog close icon; the default
+  stays Lucide. `Button::icon` and `Button::icon_end` now accept any icon,
+  not only a `static` one.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /

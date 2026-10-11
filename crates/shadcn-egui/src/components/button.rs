@@ -38,8 +38,8 @@ pub struct Button {
     variant: ButtonVariant,
     size: ButtonSize,
     enabled: bool,
-    icon: Option<&'static Icon>,
-    icon_end: Option<&'static Icon>,
+    icon: Option<Icon>,
+    icon_end: Option<Icon>,
     expanded: bool,
     invalid: bool,
     has_popup: bool,
@@ -76,13 +76,13 @@ impl Button {
     /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
     /// With an icon size (`ButtonSize::Icon`, …) only the icon is drawn and
     /// the text is the button's accessible name.
-    pub fn icon(mut self, icon: &'static Icon) -> Self {
-        self.icon = Some(icon);
+    pub fn icon(mut self, icon: &Icon) -> Self {
+        self.icon = Some(*icon);
         self
     }
     /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`).
-    pub fn icon_end(mut self, icon: &'static Icon) -> Self {
-        self.icon_end = Some(icon);
+    pub fn icon_end(mut self, icon: &Icon) -> Self {
+        self.icon_end = Some(*icon);
         self
     }
     /// `aria-expanded`: the menu or popover this button opens is open.
@@ -128,7 +128,7 @@ impl Button {
     /// text is not. `None` for text sizes. An icon size without an icon is a
     /// caller error (debug builds panic); release builds fall back to a
     /// button as wide as its text.
-    fn icon_only(&self) -> Option<&'static Icon> {
+    fn icon_only(&self) -> Option<Icon> {
         let square = matches!(
             self.size,
             ButtonSize::Icon | ButtonSize::IconXs | ButtonSize::IconSm | ButtonSize::IconLg
@@ -252,11 +252,11 @@ impl Widget for Button {
             paint_icon(&painter, r, icon, fg, t.metrics.icon_stroke);
         };
         if let Some(icon) = icon_only {
-            draw_icon(icon, x);
+            draw_icon(&icon, x);
             return resp;
         }
         if let Some(icon) = self.icon {
-            draw_icon(icon, x);
+            draw_icon(&icon, x);
             x += icon_px + gap;
         }
         let galley = if pick(&l, |r| &r.underline, st) == Some(true) {
@@ -271,7 +271,7 @@ impl Widget for Button {
             fg,
         );
         if let Some(icon) = self.icon_end {
-            draw_icon(icon, x + text_w + gap);
+            draw_icon(&icon, x + text_w + gap);
         }
         resp
     }

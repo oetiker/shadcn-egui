@@ -1,5 +1,7 @@
 pub mod color;
 pub mod components;
+pub mod fonts;
+pub mod icons;
 pub mod layout;
 mod palette;
 pub mod preset;
@@ -13,4 +15,4 @@ pub use preset::{
 };
 pub use shadcn_egui_core::*;
 pub use style::Style;
-pub use theme::{theme, Metrics, Palette, Theme, ThemeFonts};
+pub use theme::{theme, MenuColors, Metrics, Palette, Theme, ThemeFonts};

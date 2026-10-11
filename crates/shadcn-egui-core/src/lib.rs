@@ -6,4 +6,4 @@ mod font;
 mod icon;
 
 pub use font::{Face, FontFiles, FontKind, FontSource, WEIGHTS};
-pub use icon::{Icon, Seg};
+pub use icon::{Icon, IconSlots, Seg};

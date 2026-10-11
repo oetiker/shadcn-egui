@@ -6,7 +6,7 @@
 //! The indeterminate state of the upstream component is not offered: the
 //! value is a plain `bool`.
 
-use crate::components::icon::{paint_icon, CHECK};
+use crate::components::icon::paint_icon;
 use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
@@ -114,7 +114,13 @@ impl Widget for Checkbox<'_> {
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(0.0);
                 if let Some(color) = paint(|r| &r.text) {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
-                    paint_icon(&painter, icon_rect, &CHECK, color, t.metrics.icon_stroke);
+                    paint_icon(
+                        &painter,
+                        icon_rect,
+                        &t.icons.check,
+                        color,
+                        t.metrics.icon_stroke,
+                    );
                 }
             }
         }

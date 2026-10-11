@@ -158,3 +158,84 @@ fn consumer_set_dark_is_honoured() {
     t.dark = true;
     assert!(t.state(State::HOVER).contains(State::DARK));
 }
+
+use shadcn_egui::components::icon::{CHECK, CHEVRON_DOWN, CLOSE, LUCIDE_SLOTS};
+use shadcn_egui::{FontName, IconLibrary, IconSlots, MenuColors};
+
+#[test]
+fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
+    let t = Theme::vega_light();
+    assert_eq!(
+        t.icons,
+        IconSlots {
+            check: CHECK,
+            chevron_down: CHEVRON_DOWN,
+            close: CLOSE
+        }
+    );
+    assert_eq!(t.icons, LUCIDE_SLOTS);
+    assert_eq!(t.menu, MenuColors::default());
+    assert_eq!(
+        t.menu_theme(),
+        t,
+        "no menu colours: the menu draws with the theme itself"
+    );
+}
+
+#[test]
+fn icon_and_menu_builders() {
+    let crosses = IconSlots {
+        check: CLOSE,
+        chevron_down: CLOSE,
+        close: CLOSE,
+    };
+    assert_eq!(Theme::vega_light().icons(crosses).icons, crosses);
+    let menu = MenuColors {
+        palette: Some(Palette::dark()),
+        dark: Some(true),
+        translucent: true,
+    };
+    let t = Theme::vega_light().menu(menu);
+    assert_eq!(t.menu, menu);
+    let mt = t.menu_theme();
+    assert_eq!((mt.palette, mt.dark), (Palette::dark(), true));
+    assert!(
+        std::sync::Arc::ptr_eq(&mt.style, &t.style),
+        "the menu theme shares the style"
+    );
+    assert_eq!(
+        (t.palette, t.dark),
+        (Palette::light(), false),
+        "the theme itself is unchanged"
+    );
+}
+
+#[test]
+fn registries_hold_what_this_build_bundles() {
+    assert_eq!(
+        shadcn_egui::fonts::files(FontName::Inter).map(|f| f.name),
+        Some("inter")
+    );
+    assert_eq!(
+        shadcn_egui::icons::slots(IconLibrary::Lucide),
+        Some(LUCIDE_SLOTS)
+    );
+    #[cfg(feature = "font-oxanium")]
+    assert_eq!(
+        shadcn_egui::fonts::files(FontName::Oxanium).map(|f| f.name),
+        Some("oxanium")
+    );
+    #[cfg(not(feature = "font-oxanium"))]
+    assert_eq!(shadcn_egui::fonts::files(FontName::Oxanium), None);
+}
+
+/// New `Theme` fields must stay small: `Theme::vega_dark()` already needs
+/// ~200 KB of a 256 KB test stack (see `every_exported_style_builds_on_a_small_stack`).
+#[test]
+fn theme_stays_small() {
+    assert!(
+        std::mem::size_of::<Theme>() <= 1024,
+        "Theme is {} bytes",
+        std::mem::size_of::<Theme>()
+    );
+}

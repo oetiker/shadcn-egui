@@ -3,6 +3,7 @@
 use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
 use crate::style::{pick, Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};
 use egui::Color32;
+use shadcn_egui_core::IconSlots;
 
 /// The semantic shadcn color tokens. Surfaces come in `x` / `x_foreground` pairs.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -113,6 +114,28 @@ impl Palette {
     }
 }
 
+/// How menu content is coloured (upstream `menuColor`): today the Select
+/// list. `None` keeps the theme's own palette or dark flag.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MenuColors {
+    /// The menu's palette; an inverted menu passes the dark palette.
+    pub palette: Option<Palette>,
+    /// The menu's dark flag; `Some(true)` for an inverted menu, so `dark:`
+    /// rules resolve as in dark mode.
+    pub dark: Option<bool>,
+    /// Translucent fill, alpha only (egui has no backdrop blur).
+    pub translucent: bool,
+}
+
+impl MenuColors {
+    /// Menu fill: popover colour at this alpha (upstream `bg-popover/70`).
+    pub const TRANSLUCENT_FILL: f32 = 0.7;
+    /// Highlighted item: foreground colour at this alpha (`bg-foreground/10`).
+    pub const TRANSLUCENT_HIGHLIGHT: f32 = 0.1;
+    /// Separator: foreground colour at this alpha (`bg-foreground/5`).
+    pub const TRANSLUCENT_SEPARATOR: f32 = 0.05;
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     /// The shadcn style (vega, nova, …): every component part's recipe.
@@ -124,6 +147,10 @@ pub struct Theme {
     pub dark: bool,
     /// Body and heading font; [`Theme::apply`] installs them.
     pub fonts: ThemeFonts,
+    /// The icons components draw (default: built-in Lucide).
+    pub icons: IconSlots,
+    /// Menu content colours (default: the theme's own).
+    pub menu: MenuColors,
 }
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the
@@ -202,6 +229,8 @@ impl Theme {
             metrics: Metrics::default(),
             dark,
             fonts: ThemeFonts::inherit(&shadcn_egui_font_inter::FONT),
+            icons: crate::components::icon::LUCIDE_SLOTS,
+            menu: MenuColors::default(),
         }
     }
     pub fn vega_dark() -> Self {
@@ -219,6 +248,32 @@ impl Theme {
             heading: heading.unwrap_or(body),
         };
         self
+    }
+
+    /// The icon set components draw from (an icon crate's `SLOTS`).
+    pub fn icons(mut self, slots: IconSlots) -> Self {
+        self.icons = slots;
+        self
+    }
+
+    /// Menu content colours (upstream `menuColor`). An inverted menu needs
+    /// the dark palette: `MenuColors { palette: Some(dark), dark: Some(true), .. }`.
+    pub fn menu(mut self, menu: MenuColors) -> Self {
+        self.menu = menu;
+        self
+    }
+
+    /// The theme menu content draws with: this one, with palette and dark
+    /// flag replaced by the menu's where set.
+    pub fn menu_theme(&self) -> Theme {
+        let mut t = self.clone();
+        if let Some(p) = self.menu.palette {
+            t.palette = p;
+        }
+        if let Some(d) = self.menu.dark {
+            t.dark = d;
+        }
+        t
     }
 
     /// The component state `s` plus this theme's [`State::DARK`].
