@@ -106,6 +106,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - The `settings` example takes the style and palette on the command line, for
   example `cargo run --example settings -- nova light` (default `vega dark`).
   `SettingsState` has new `slider` and `region` fields.
+- `Theme` has the new public fields `icons` and `menu`; set them with
+  `Theme::icons(..)` and `Theme::menu(..)`. Checkbox, Select and Dialog draw
+  the icons of the theme.
+- `Button::icon` and `Button::icon_end` accept any icon reference, not only
+  constants.
 
 ### Added
 - `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
@@ -137,10 +142,21 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   (Tailwind's line heights for the text sizes), and `Theme::line_px(TextSize)`
   returns the line height for a text size.
 - `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
-- `Theme::icons(IconSlots { check, chevron_down, close })` replaces the
-  checkbox tick, the select chevron and the dialog close icon; the default
-  stays Lucide. `Button::icon` and `Button::icon_end` now accept any icon,
-  not only a `static` one.
+- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
+  and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
+  colour, theme, chart colour, fonts, icon library, radius and menu colours.
+  `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
+  `to_code()` gives the code back. Codes from shadcn-svelte.com are not
+  supported: that site numbers colours and icon libraries differently.
+- When a preset asks for something this build cannot show (the Sera style,
+  the gray base colour or theme, which ui.shadcn.com has no colours for, or
+  a font or icon library whose Cargo feature is off), the app uses Nova,
+  neutral, Inter or Lucide instead and logs a warning such as
+  `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
+- With the Lyra or Sera style every corner is square, whatever radius the
+  preset names, as on the shadcn site.
+- A translucent menu colour always highlights menu items with the subtle
+  accent, also when the preset asks for the bold one, as on ui.shadcn.com.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /

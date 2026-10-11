@@ -2,6 +2,8 @@
 //! `mod common;`.
 #![allow(dead_code)]
 
+pub mod logcap;
+
 use egui_kittest::{Harness, SnapshotResults};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
