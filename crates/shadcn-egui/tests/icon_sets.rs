@@ -87,7 +87,7 @@ fn slot_snapshot(lib: IconLibrary, name: &str) {
     let slots = theme.icons;
     common::snapshot_with_themes(
         name,
-        vec2(360.0, 96.0),
+        vec2(360.0, 120.0),
         vec![("vega_light", theme)],
         move |ui| {
             layout::vstack(ui, 12.0, |ui| {
