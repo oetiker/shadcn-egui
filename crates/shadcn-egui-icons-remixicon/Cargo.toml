@@ -1,0 +1,11 @@
+[package]
+name = "shadcn-egui-icons-remixicon"
+description = "Remix Icon (last Apache-2.0 release) for shadcn-egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT AND Apache-2.0"
+repository.workspace = true
+
+[dependencies]
+shadcn-egui-core.workspace = true

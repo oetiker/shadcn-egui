@@ -18,9 +18,18 @@ log.workspace = true
 shadcn-egui-core.workspace = true
 shadcn-egui-font-inter.workspace = true
 shadcn-egui-icons-lucide.workspace = true
+shadcn-egui-icons-tabler = { workspace = true, optional = true }
+shadcn-egui-icons-phosphor = { workspace = true, optional = true }
+shadcn-egui-icons-remixicon = { workspace = true, optional = true }
+shadcn-egui-icons-hugeicons = { workspace = true, optional = true }
 shadcn-egui-font-oxanium = { workspace = true, optional = true }
 
 [features]
+icons-tabler = ["dep:shadcn-egui-icons-tabler"]
+icons-phosphor = ["dep:shadcn-egui-icons-phosphor"]
+icons-remixicon = ["dep:shadcn-egui-icons-remixicon"]
+icons-hugeicons = ["dep:shadcn-egui-icons-hugeicons"]
+icons-all = ["icons-tabler", "icons-phosphor", "icons-remixicon", "icons-hugeicons"]
 font-oxanium = ["dep:shadcn-egui-font-oxanium"]
 
 [dev-dependencies]

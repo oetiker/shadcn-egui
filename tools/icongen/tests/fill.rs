@@ -365,12 +365,12 @@ fn crate_source_has_consts_all_and_slots() {
     // crate that uses the icons.
     assert!(
         src.contains(&format!(
-            "static BLOB: [u8; {}] = *include_bytes!(\"icons.bin\");",
+            "static ICONS_BIN: [u8; {}] = *include_bytes!(\"icons.bin\");",
             blob.len()
         )),
         "{src}"
     );
-    assert!(src.contains("blob: &BLOB,"), "{src}");
+    assert!(src.contains("blob: &ICONS_BIN,"), "{src}");
     // Sorted by name: mixed, ring, x.
     let mixed_len = encode(&icons[2]).expect("encodes").len();
     assert!(
@@ -577,4 +577,16 @@ fn random_grid_icons_all_close() {
             Err(e) => assert!(e.contains("no stroked or filled paths"), "{e}\n{svg}"),
         }
     }
+}
+
+#[test]
+fn an_icon_named_blob_does_not_clash_with_the_blob_static() {
+    let icons = vec![convert("blob", &fixture("x")).expect("converts")];
+    let slots = parse_slots("check=blob,chevron_down=blob,close=blob").expect("parses");
+    let (src, _) = render_crate(&icons, &slots, "Test set 1.0 (MIT)").expect("renders");
+    assert!(
+        src.contains("pub const BLOB: Icon = icon(\"blob\", 0,"),
+        "{src}"
+    );
+    assert!(!src.contains("static BLOB"), "{src}");
 }

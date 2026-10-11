@@ -20,3 +20,7 @@ shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.4.0" }
 shadcn-egui-font-inter = { path = "crates/shadcn-egui-font-inter", version = "0.4.0" }
 shadcn-egui-font-oxanium = { path = "crates/shadcn-egui-font-oxanium", version = "0.4.0" }
 shadcn-egui-icons-lucide = { path = "crates/shadcn-egui-icons-lucide", version = "0.4.0" }
+shadcn-egui-icons-tabler = { path = "crates/shadcn-egui-icons-tabler", version = "0.4.0" }
+shadcn-egui-icons-phosphor = { path = "crates/shadcn-egui-icons-phosphor", version = "0.4.0" }
+shadcn-egui-icons-remixicon = { path = "crates/shadcn-egui-icons-remixicon", version = "0.4.0" }
+shadcn-egui-icons-hugeicons = { path = "crates/shadcn-egui-icons-hugeicons", version = "0.4.0" }

@@ -2939,7 +2939,11 @@ dependencies = [
  "shadcn-egui-core",
  "shadcn-egui-font-inter",
  "shadcn-egui-font-oxanium",
+ "shadcn-egui-icons-hugeicons",
  "shadcn-egui-icons-lucide",
+ "shadcn-egui-icons-phosphor",
+ "shadcn-egui-icons-remixicon",
+ "shadcn-egui-icons-tabler",
 ]
 
 [[package]]
@@ -2961,7 +2965,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadcn-egui-icons-hugeicons"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
 name = "shadcn-egui-icons-lucide"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-icons-phosphor"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-icons-remixicon"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-icons-tabler"
 version = "0.4.0"
 dependencies = [
  "shadcn-egui-core",

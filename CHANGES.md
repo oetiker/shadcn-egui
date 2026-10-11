@@ -162,6 +162,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   accent, also when the preset asks for the bold one, as on ui.shadcn.com.
 - An open Select list draws in the preset's menu colours: with the
   `inverted` menu colour it is dark also on a light page.
+- Four more icon sets, each behind its own feature: `icons-tabler`,
+  `icons-phosphor`, `icons-remixicon` and `icons-hugeicons`; `icons-all` turns
+  them all on. A preset that names one of these libraries then draws its
+  checkbox tick, select arrows and close buttons in that set.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /

@@ -326,11 +326,11 @@ pub fn render_crate(
     // A static array, not a `const` reference: a const has no fixed address,
     // so every crate using the icons would get its own copy of the blob.
     src.push_str(&format!(
-        "static BLOB: [u8; {}] = *include_bytes!(\"icons.bin\");\n\n",
+        "static ICONS_BIN: [u8; {}] = *include_bytes!(\"icons.bin\");\n\n",
         blob.len()
     ));
     src.push_str("const fn icon(name: &'static str, start: u32, len: u32) -> Icon {\n");
-    src.push_str("    Icon { name, size: 24.0, shape: IconShape::Blob(BlobRange { blob: &BLOB, start, len }) }\n}\n\n");
+    src.push_str("    Icon { name, size: 24.0, shape: IconShape::Blob(BlobRange { blob: &ICONS_BIN, start, len }) }\n}\n\n");
     src.push_str(&consts);
     src.push_str("\n/// Every icon in this crate, sorted by name.\npub const ALL: &[&Icon] = &[");
     src.push_str(
