@@ -103,7 +103,9 @@ fn icon_widgets_are_labelled() {
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
         Theme::vega_dark().apply(ui.ctx());
-        ui.add(IconView::new(&lucide::MIC));
+        // No name of its own: a visible label names it.
+        let label = ui.label("Microphone");
+        ui.add(IconView::new(&lucide::MIC)).labelled_by(label.id);
         if ui
             .add(
                 Button::new("Power off")
@@ -115,7 +117,11 @@ fn icon_widgets_are_labelled() {
             clicked.set(true);
         }
     });
-    h.get_by_label("mic");
+    h.get_by_role_and_label(egui::accesskit::Role::Image, "Microphone");
+    assert!(
+        h.query_by_label("mic").is_none(),
+        "the icon's internal name is no label"
+    );
     h.get_by_label("Power off").click();
     h.run();
     assert!(

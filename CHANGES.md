@@ -137,6 +137,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to any fonts"
   as soon as a window or popup showed a heading in that frame. Such a heading
   now shows in the body font for that one frame.
+- Screen readers announced a standalone icon by its internal name ("mic",
+  "power") and ignored a label attached with `labelled_by`. An `IconView` now
+  has no name of its own; name it with `.labelled_by(label.id)`.
 
 ## [0.3.2] - 2026-10-09
 

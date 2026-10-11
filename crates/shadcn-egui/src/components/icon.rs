@@ -108,6 +108,7 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
 
 /// An icon as a widget: `ui.add(IconView::new(&icons::MIC))`. Sized
 /// `Metrics::icon`, colored `foreground`, stroked `Metrics::icon_stroke`.
+/// It has no accessible name; give it one with `.labelled_by(label.id)`.
 pub struct IconView<'a> {
     icon: &'a Icon,
     size: Option<f32>,
@@ -137,8 +138,13 @@ impl Widget for IconView<'_> {
         let t = Theme::current(ui.ctx());
         let side = self.size.unwrap_or(t.metrics.icon);
         let (rect, resp) = ui.allocate_exact_size(Vec2::splat(side), Sense::hover());
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), self.icon.name)
+        // No label of its own (the icon's name is an id, not text a reader
+        // should hear): name it with `labelled_by(label.id)`, which an own
+        // label would override.
+        let enabled = ui.is_enabled();
+        resp.widget_info(|| egui::WidgetInfo {
+            enabled,
+            ..egui::WidgetInfo::new(egui::WidgetType::Image)
         });
         if ui.is_rect_visible(rect) {
             let color = self.color.unwrap_or(t.palette.foreground);
