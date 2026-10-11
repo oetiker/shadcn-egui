@@ -1,5 +1,5 @@
 name	title	kind	license	files	license_file	y_offset_factor
-inter	Inter	sans	OFL-1.1	ofl/inter/Inter[opsz,wght].ttf	ofl/inter/OFL.txt	-
+inter	Inter	sans	OFL-1.1	ofl/inter/Inter[opsz,wght].ttf	ofl/inter/OFL.txt	-0.04
 noto-sans	Noto Sans	sans	OFL-1.1	ofl/notosans/NotoSans[wdth,wght].ttf	ofl/notosans/OFL.txt	-
 nunito-sans	Nunito Sans	sans	OFL-1.1	ofl/nunitosans/NunitoSans[YTLC,opsz,wdth,wght].ttf	ofl/nunitosans/OFL.txt	-
 figtree	Figtree	sans	OFL-1.1	ofl/figtree/Figtree[wght].ttf	ofl/figtree/OFL.txt	-
