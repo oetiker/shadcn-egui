@@ -8,7 +8,8 @@ pub mod style;
 pub mod theme;
 
 pub use preset::{
-    BaseColor, FontName, IconLibrary, MenuAccent, MenuColor, RadiusChoice, StyleName, ThemeColor,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, PresetCodeError,
+    RadiusChoice, StyleName, ThemeColor,
 };
 pub use shadcn_egui_core::*;
 pub use style::Style;
