@@ -1,14 +1,14 @@
-//! Stroked vector icons (Lucide-style) painted with egui shapes, no image
-//! loader. Icon data is generated ahead of time by `tools/icongen` from SVG
-//! files; this module only knows how to paint it.
+//! Vector icons painted with egui shapes, no image loader. Icon data is
+//! generated ahead of time by `tools/icongen` (strokes as path commands,
+//! fills as pre-triangulated meshes); this module only paints it.
 //!
 //! Lucide icons are 24x24 outlines drawn with a 2-unit round-capped stroke.
 //! Round caps matter: some icons draw dots as zero-length lines, which vanish
 //! without them, so every open subpath gets cap discs at both ends.
 
-use crate::Theme;
+use crate::{FillMesh, Theme};
 use egui::epaint::{CubicBezierShape, PathShape, QuadraticBezierShape};
-use egui::{Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget};
+use egui::{Color32, Mesh, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget};
 pub use shadcn_egui_core::{Icon, IconShape, IconSlots, Seg};
 
 /// The dialog close cross (Lucide `x`, ISC), built in because the registry's
@@ -50,10 +50,12 @@ pub const LUCIDE_SLOTS: IconSlots = IconSlots {
 /// Curve flattening tolerance in screen points.
 const TOLERANCE: f32 = 0.1; // behaviour-ok: curve flattening tolerance, not a design token
 
-/// Paint `icon` scaled into the square `rect`. `stroke_width` is in icon units
-/// (Lucide's own is 2.0) and scales with the icon.
+/// Paint `icon` scaled into the square `rect`: its fill first (if any), then
+/// its strokes. `stroke_width` is in icon units (Lucide's own is 2.0) and
+/// scales with the icon.
 ///
-/// Precondition: `icon.segs()` starts with `Seg::M` (icongen guarantees it).
+/// Precondition: `icon.segs()` starts with `Seg::M` (icongen guarantees it);
+/// a curve with no start point is skipped.
 pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, stroke_width: f32) {
     let scale = rect.width() / icon.size;
     let map = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
@@ -61,6 +63,14 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
     let cap_r = stroke.width / 2.0;
 
     let mut shapes = Vec::new();
+    if let Some(fill) = icon.fill_mesh() {
+        shapes.push(fill_shape(
+            &fill,
+            map,
+            color,
+            1.0 / painter.pixels_per_point(),
+        ));
+    }
     let mut points: Vec<Pos2> = Vec::new();
     let flush = |points: &mut Vec<Pos2>, closed: bool, shapes: &mut Vec<Shape>| {
         if points.is_empty() {
@@ -87,7 +97,9 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
             }
             Seg::L(x, y) => points.push(map(x, y)),
             Seg::Q(x1, y1, x, y) => {
-                let from = *points.last().expect("icon path starts with M");
+                let Some(&from) = points.last() else {
+                    continue;
+                };
                 let q = QuadraticBezierShape::from_points_stroke(
                     [from, map(x1, y1), map(x, y)],
                     false,
@@ -97,7 +109,9 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
                 points.extend(q.flatten(Some(TOLERANCE)).into_iter().skip(1));
             }
             Seg::C(x1, y1, x2, y2, x, y) => {
-                let from = *points.last().expect("icon path starts with M");
+                let Some(&from) = points.last() else {
+                    continue;
+                };
                 let c = CubicBezierShape::from_points_stroke(
                     [from, map(x1, y1), map(x2, y2), map(x, y)],
                     false,
@@ -111,6 +125,50 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
     }
     flush(&mut points, false, &mut shapes);
     painter.extend(shapes);
+}
+
+/// The fill as one mesh: its triangles in `color`, plus per contour a strip
+/// from the edge (in `color`) to `fringe` points outward along each vertex's
+/// miter (transparent). Like epaint's own feathering but outward only, so the
+/// strip never overlaps the fill and a translucent colour shows no darker
+/// seam; `fringe` is one physical pixel.
+fn fill_shape(
+    fill: &FillMesh,
+    map: impl Fn(f32, f32) -> Pos2,
+    color: Color32,
+    fringe: f32,
+) -> Shape {
+    let mut mesh = Mesh::default();
+    for &[x, y] in &fill.vertices {
+        mesh.colored_vertex(map(x, y), color);
+    }
+    mesh.indices
+        .extend(fill.indices.iter().map(|&i| u32::from(i)));
+    for contour in &fill.contours {
+        if contour.is_empty() {
+            continue;
+        }
+        let base = mesh.vertices.len() as u32;
+        let n = contour.len() as u32;
+        for &([x, y], [mx, my]) in contour {
+            let p = map(x, y);
+            mesh.colored_vertex(p, color);
+            mesh.colored_vertex(p + Vec2::new(mx, my) * fringe, Color32::TRANSPARENT);
+        }
+        let mut i0 = n - 1;
+        for i1 in 0..n {
+            let (in0, out0, in1, out1) = (
+                base + 2 * i0,
+                base + 2 * i0 + 1,
+                base + 2 * i1,
+                base + 2 * i1 + 1,
+            );
+            mesh.add_triangle(in0, in1, out1);
+            mesh.add_triangle(in0, out1, out0);
+            i0 = i1;
+        }
+    }
+    Shape::mesh(mesh)
 }
 
 /// An icon as a widget: `ui.add(IconView::new(&icons::MIC))`. Sized
