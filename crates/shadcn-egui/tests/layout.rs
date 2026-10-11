@@ -123,3 +123,91 @@ fn wrap_row_wraps_when_out_of_width() {
     );
     assert_eq!(r[1].left() - r[0].right(), 8.0, "horizontal gap");
 }
+
+/// The vertical centres of a row and its children (a label, then a button
+/// `tall`er or shorter than egui's row height), after the row has settled.
+fn row_centres(ctx: &egui::Context, tall: bool) -> (f32, f32, f32) {
+    use shadcn_egui::components::button::{Button, ButtonSize};
+    let (mut row, mut a, mut b) = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
+    let size = if tall { ButtonSize::Lg } else { ButtonSize::Sm };
+    // Each run settles within egui's passes; a third run checks it stays put.
+    for _ in 0..3 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            row = ui
+                .scope(|ui| {
+                    layout::row(ui, 8.0, |ui| {
+                        a = ui.label("label").rect;
+                        b = ui.add(Button::new("Button").size(size)).rect;
+                    });
+                })
+                .response
+                .rect;
+        });
+    }
+    (row.center().y, a.center().y, b.center().y)
+}
+
+/// `row` centres a short child placed before a child taller than egui's
+/// row height, and shrinks again when the tall child goes.
+#[test]
+fn row_centres_children_of_mixed_height() {
+    for theme in common::themes().into_iter().map(|(_, t)| t) {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let (row, a, b) = row_centres(&ctx, true);
+        assert_eq!((a, b), (row, row), "tall: row {row}, label {a}, button {b}");
+        let tall_row = row;
+        let (row, a, b) = row_centres(&ctx, false);
+        assert_eq!(
+            (a, b),
+            (row, row),
+            "short: row {row}, label {a}, button {b}"
+        );
+        assert!(row < tall_row, "the row shrinks: {row} vs {tall_row}");
+        assert_eq!(row, ctx.global_style().spacing.interact_size.y / 2.0);
+    }
+}
+
+/// A row that mixes a nested `vstack` (egui puts it at the top) with a tall
+/// widget settles: after the first frame no pass is redone.
+#[test]
+fn row_with_a_nested_stack_settles() {
+    use shadcn_egui::components::slider::{Slider, SliderOrientation};
+    for (name, theme) in common::themes() {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let (mut a, mut b) = (30.0, 50.0);
+        let mut run = || {
+            let mut row = egui::Rect::NOTHING;
+            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                row = ui
+                    .scope(|ui| {
+                        layout::row(ui, 24.0, |ui| {
+                            layout::vstack(ui, 16.0, |ui| {
+                                ui.set_width(200.0);
+                                ui.add(Slider::new(&mut a, 0.0..=100.0).label("A"));
+                                ui.add(Slider::new(&mut a, 0.0..=100.0).label("B"));
+                            });
+                            ui.add(
+                                Slider::new(&mut b, 0.0..=100.0)
+                                    .orientation(SliderOrientation::Vertical)
+                                    .label("C"),
+                            );
+                        });
+                    })
+                    .response
+                    .rect;
+            });
+            (row, out.platform_output.num_completed_passes)
+        };
+        let _ = run();
+        let (first, _) = run();
+        let (second, passes) = run();
+        assert_eq!(first, second, "{name}: the row keeps its height");
+        assert_eq!(passes, 1, "{name}: a settled row redoes no pass");
+    }
+}

@@ -140,6 +140,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - Screen readers announced a standalone icon by its internal name ("mic",
   "power") and ignored a label attached with `labelled_by`. An `IconView` now
   has no name of its own; name it with `.labelled_by(label.id)`.
+- In a `layout::row`, items placed before a taller item, such as a label
+  before a large button, sat about 2 px above the row's centre. They are now
+  centred, and a row shrinks back when its tallest item goes.
 
 ## [0.3.2] - 2026-10-09
 
