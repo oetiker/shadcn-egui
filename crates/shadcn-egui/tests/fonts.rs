@@ -266,3 +266,48 @@ fn switching_fonts_on_a_live_context_does_not_panic() {
         "shadcn-heading-600"
     );
 }
+
+fn heading_themes() -> Vec<(&'static str, Theme)> {
+    common::themes()
+        .into_iter()
+        .map(|(n, t)| (n, t.fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM))))
+        .collect()
+}
+
+#[test]
+fn card_title_uses_the_heading_font_snapshot() {
+    use shadcn_egui::components::card::{card_content, card_header, Card};
+    common::snapshot_with_themes(
+        "card_heading_font",
+        vec2(360.0, 180.0),
+        heading_themes(),
+        |ui| {
+            Card::new().show(ui, |ui| {
+                card_header(ui, "Oxanium heading", "Body text stays Inter");
+                card_content(ui, |ui| {
+                    ui.label("Card content");
+                });
+            });
+        },
+        |_| {},
+    );
+}
+
+#[test]
+fn dialog_title_uses_the_heading_font_snapshot() {
+    use shadcn_egui::components::dialog::Dialog;
+    common::snapshot_with_themes(
+        "dialog_heading_font",
+        vec2(480.0, 260.0),
+        heading_themes(),
+        |ui| {
+            let mut open = true;
+            Dialog::new("heading_font", "Oxanium heading")
+                .description("Body text stays Inter")
+                .show(ui.ctx(), &mut open, |ui| {
+                    ui.label("Dialog content");
+                });
+        },
+        |_| {},
+    );
+}

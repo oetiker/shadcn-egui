@@ -14,7 +14,7 @@ use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::icon::CLOSE;
 use crate::components::shared::ring;
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::theme::heading_family_for;
 use crate::Theme;
 use egui::{
     Align, Color32, CornerRadius, Frame, Id, Layout, Margin, Rect, RichText, Shape, Stroke, Ui,
@@ -172,9 +172,10 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
         .map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
+        // upstream: dialog-title carries `cn-font-heading`
         ui.label(
             RichText::new(title)
-                .family(family_for(ui.ctx(), weight))
+                .family(heading_family_for(ui.ctx(), weight))
                 .size(px)
                 .line_height(Some(line)),
         );

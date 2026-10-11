@@ -18,7 +18,7 @@
 
 use crate::components::shared::ring;
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::theme::heading_family_for;
 use crate::Theme;
 use egui::{
     Align, CornerRadius, Id, Layout, Rect, Response, RichText, Sense, Shape, Stroke, Ui, UiBuilder,
@@ -302,9 +302,10 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let px = t.text_px(size);
     let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
     let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
+    // upstream: card-title carries `cn-font-heading`
     ui.label(
         RichText::new(text)
-            .family(family_for(ui.ctx(), weight))
+            .family(heading_family_for(ui.ctx(), weight))
             .size(px)
             .line_height(Some(line)),
     )

@@ -37,12 +37,23 @@ pub fn snapshot_all(name: &str, size: egui::Vec2, ui_fn: impl FnMut(&mut egui::U
 pub fn snapshot_all_with(
     name: &str,
     size: egui::Vec2,
+    ui_fn: impl FnMut(&mut egui::Ui),
+    prepare: impl FnMut(&mut Harness<'_>),
+) {
+    snapshot_with_themes(name, size, themes(), ui_fn, prepare);
+}
+
+/// One snapshot per `(suffix, theme)`: `{name}_{suffix}.png`.
+pub fn snapshot_with_themes(
+    name: &str,
+    size: egui::Vec2,
+    themes: Vec<(&'static str, Theme)>,
     mut ui_fn: impl FnMut(&mut egui::Ui),
     mut prepare: impl FnMut(&mut Harness<'_>),
 ) {
     // One result set for all harnesses, so a failing style does not abort the rest.
     let mut results = SnapshotResults::new();
-    for (suffix, theme) in themes() {
+    for (suffix, theme) in themes {
         let bg = theme.palette.background;
         let mut h = Harness::builder().with_size(size).build_ui(|ui| {
             theme.apply(ui.ctx());
