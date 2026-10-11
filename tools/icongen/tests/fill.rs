@@ -106,13 +106,138 @@ fn miters_point_away_from_the_fill() {
 #[test]
 fn edges_with_fill_on_both_sides_get_no_fringe() {
     let f = fill_of("overlap");
-    assert_eq!(
-        miter_at(&f, [8.0, 8.0]),
-        [0.0, 0.0],
-        "both edges at (8, 8) lie inside the first square"
+    assert!(
+        f.contours.iter().flatten().all(|(p, _)| *p != [8.0, 8.0]),
+        "both edges at (8, 8) lie inside the first square: {:?}",
+        f.contours
     );
     assert!(close(miter_at(&f, [22.0, 22.0]), [1.0, 1.0]));
     assert!(close(miter_at(&f, [2.0, 2.0]), [-1.0, -1.0]));
+}
+
+/// Every fringe vertex and every fringe edge points out of the painted fill:
+/// a little along a miter is uncovered; a little to the outer side of each
+/// edge is uncovered and a little to its inner side is covered. Vertices
+/// where loops touch (the even-odd star's tips meet at points) are left out
+/// of the vertex check: their miter points between two fill wedges.
+fn assert_fringe_points_out(name: &str) {
+    let f = fill_of(name);
+    assert!(!f.contours.is_empty(), "{name}: no fringe");
+    let points: Vec<[f32; 2]> = f.contours.iter().flatten().map(|(p, _)| *p).collect();
+    let pinch = |p: [f32; 2]| points.iter().filter(|q| **q == p).count() > 1;
+    for c in &f.contours {
+        for (i, &(p, m)) in c.iter().enumerate() {
+            let len = m[0].hypot(m[1]);
+            assert!((0.99..=2.01).contains(&len), "{name}: miter {m:?} at {p:?}");
+            let along = [p[0] + m[0] * 0.05, p[1] + m[1] * 0.05];
+            assert!(
+                pinch(p) || !covers(&f, along),
+                "{name}: miter {m:?} at {p:?} points into the fill"
+            );
+            let q = c[(i + 1) % c.len()].0;
+            let d = [q[0] - p[0], q[1] - p[1]];
+            let len = d[0].hypot(d[1]);
+            let n = [d[1] / len, -d[0] / len];
+            let mid = [(p[0] + q[0]) / 2.0, (p[1] + q[1]) / 2.0];
+            assert!(
+                !covers(&f, [mid[0] + n[0] * 0.01, mid[1] + n[1] * 0.01]),
+                "{name}: edge {p:?}-{q:?} has fill outside"
+            );
+            assert!(
+                covers(&f, [mid[0] - n[0] * 0.01, mid[1] - n[1] * 0.01]),
+                "{name}: edge {p:?}-{q:?} has no fill inside"
+            );
+        }
+    }
+}
+
+fn perimeter(f: &Fill) -> f32 {
+    f.contours
+        .iter()
+        .map(|c| {
+            (0..c.len())
+                .map(|i| {
+                    let (p, q) = (c[i].0, c[(i + 1) % c.len()].0);
+                    (q[0] - p[0]).hypot(q[1] - p[1])
+                })
+                .sum::<f32>()
+        })
+        .sum()
+}
+
+#[test]
+fn fringe_follows_the_true_fill_boundary() {
+    for name in [
+        "star-nonzero",
+        "star-evenodd",
+        "overlap",
+        "square-hole",
+        "ring",
+        "mixed",
+        "big-box",
+    ] {
+        assert_fringe_points_out(name);
+    }
+    // Overlap: the union's outline, including the pieces x=20..22 at y=8 and
+    // y=20..22 at x=8 that lie on edges whose midpoints are inside the other square.
+    let f = fill_of("overlap");
+    assert_eq!(f.contours.len(), 1, "{:?}", f.contours);
+    assert_eq!(f.contours[0].len(), 8, "{:?}", f.contours);
+    assert!(
+        (perimeter(&f) - 80.0).abs() < 1e-3,
+        "perimeter {}",
+        perimeter(&f)
+    );
+    assert!(
+        close(miter_at(&f, [20.0, 8.0]), [1.0, -1.0]),
+        "concave corner"
+    );
+    assert!(
+        close(miter_at(&f, [8.0, 20.0]), [-1.0, 1.0]),
+        "concave corner"
+    );
+    // Non-zero star: one outline of five tips and five notches.
+    let f = fill_of("star-nonzero");
+    assert_eq!(f.contours.len(), 1, "{:?}", f.contours);
+    assert_eq!(f.contours[0].len(), 10, "{:?}", f.contours);
+    // Even-odd star: the empty pentagon leaves five triangles that touch at
+    // their corners.
+    let f = fill_of("star-evenodd");
+    assert_eq!(f.contours.len(), 5, "{:?}", f.contours);
+    assert!(f.contours.iter().all(|c| c.len() == 3), "{:?}", f.contours);
+    assert!(
+        miter_at(&f, [12.0, 2.0])[1] < -0.9,
+        "the top tip points up: {:?}",
+        miter_at(&f, [12.0, 2.0])
+    );
+}
+
+#[test]
+fn zero_area_subpaths_get_no_fringe() {
+    let svg = |d: &str| {
+        format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="{d}"/></svg>"#
+        )
+    };
+    let err = convert("line", &svg("M12 12L16 16L20 20Z")).expect_err("nothing is painted");
+    assert!(err.contains("no stroked or filled paths"), "{err}");
+    let f = convert("box", &svg("M2 2H6V6H2Z M12 12L16 16L20 20Z"))
+        .expect("converts")
+        .fill
+        .expect("the box is filled");
+    assert_eq!(
+        f.contours.len(),
+        1,
+        "only the box has a fringe: {:?}",
+        f.contours
+    );
+    assert!(
+        f.contours[0]
+            .iter()
+            .all(|(p, _)| p[0] <= 6.0 && p[1] <= 6.0),
+        "{:?}",
+        f.contours
+    );
 }
 
 #[test]
@@ -277,5 +402,26 @@ fn measure_reports_count_and_bytes() {
     assert!(
         report.contains("largest: ring "),
         "the ring outweighs the cross: {report}"
+    );
+}
+
+#[test]
+fn hairline_spike_beside_a_shallow_edge_keeps_the_outline_closed() {
+    // Phosphor's mask-happy has this shape: an edge runs down to a spike tip
+    // one quantum long, comes back, and leaves along an edge only 0.4 degrees
+    // off the vertical. A probe a fixed distance beside the spike lands past
+    // that edge and breaks the outline.
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M10 4L10 12.0009765625L10 12L9.9453125 20L4 20L4 4Z"/></svg>"#;
+    let f = convert("spike", svg)
+        .expect("converts")
+        .fill
+        .expect("filled");
+    assert_eq!(f.contours.len(), 1, "{:?}", f.contours);
+    assert!(
+        f.contours[0]
+            .iter()
+            .all(|(p, _)| *p != [10.0, 12.0 + 1.0 / 1024.0]),
+        "the spike tip encloses nothing: {:?}",
+        f.contours
     );
 }

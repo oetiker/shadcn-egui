@@ -11,9 +11,6 @@ use usvg::tiny_skia_path::{PathSegment, Point};
 /// Curve flattening tolerance in the 24-unit icon box.
 pub const FLATTEN_TOLERANCE: f32 = 0.02;
 
-/// Distance of the inside/outside probe from an edge's midpoint, in icon units.
-const PROBE: f32 = 1e-3;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FillRule {
     NonZero,
@@ -32,8 +29,9 @@ pub struct FillPath {
 pub struct Fill {
     pub vertices: Vec<[f32; 2]>,
     pub indices: Vec<u16>,
-    /// Per contour: (point, outward miter). A zero miter marks a vertex
-    /// whose edges have fill on both sides; the painter's fringe vanishes there.
+    /// The closed loops of the filled area's boundary: (point, outward
+    /// miter). Edges with fill on both sides or on neither side are not part
+    /// of any loop, so the painter's fringe lies only outside the fill.
     pub contours: Vec<Vec<([f32; 2], [f32; 2])>>,
 }
 
@@ -122,8 +120,8 @@ fn push(c: &mut Vec<[f32; 2]>, x: f32, y: f32) {
     }
 }
 
-/// Tessellate every filled path of one icon and compute the contour miters.
-/// `None` when the icon has no fill.
+/// Tessellate every filled path of one icon and trace the fringe contours.
+/// `None` when the icon has no fill (or only zero-area fill).
 pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
     let mut fill = Fill::default();
     for fp in paths {
@@ -160,45 +158,255 @@ pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
         );
         fill.indices
             .extend(buf.indices.iter().map(|&i| i + base as u16));
-        for c in &fp.contours {
-            fill.contours.push(miters(c, fp, paths));
-        }
     }
-    Ok((!fill.vertices.is_empty()).then_some(fill))
+    if fill.indices.is_empty() {
+        return Ok(None);
+    }
+    fill.contours = boundary(name, paths)?;
+    Ok(Some(fill))
 }
 
-/// Outward miter per vertex of the closed contour `c` of `own`.
-fn miters(c: &[[f32; 2]], own: &FillPath, all: &[FillPath]) -> Vec<([f32; 2], [f32; 2])> {
-    let n = c.len();
-    // Outward unit normal of edge i (c[i] -> c[i+1]); zero when both sides are filled.
-    let normals: Vec<[f32; 2]> = (0..n)
-        .map(|i| {
-            let (a, b) = (c[i], c[(i + 1) % n]);
-            let d = normalize([b[0] - a[0], b[1] - a[1]]);
-            let left = [d[1], -d[0]];
-            let mid = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0];
-            let probe = |v: [f32; 2]| [mid[0] + v[0] * PROBE, mid[1] + v[1] * PROBE];
-            let out = if inside(own, probe(left)) {
-                [-left[0], -left[1]]
-            } else {
-                left
-            };
-            if all.iter().any(|fp| inside(fp, probe(out))) {
-                [0.0, 0.0]
-            } else {
-                out
-            }
+/// The fringe contours of an icon: the boundary of the union of all its
+/// filled paths, as closed loops with an outward miter per vertex.
+///
+/// Every input edge is split where any other edge crosses or touches it, so
+/// the side that holds fill cannot change along a piece. A piece is boundary
+/// only when exactly one side is filled; pieces with fill on both sides or on
+/// neither side (zero-area subpaths) get no fringe. The boundary pieces are
+/// oriented with the outside on their left and chained head to tail.
+///
+/// Which side holds fill is decided exactly, by counting the winding number
+/// along a ray from the piece's midpoint to either side, so no probe distance
+/// can reach past a nearby edge. Splitting, classifying and chaining run in
+/// f64 on the exact crossing points; only the finished loops are quantised,
+/// so the arrangement stays consistent even where crossings lie closer
+/// together than one quantum.
+fn boundary(name: &str, paths: &[FillPath]) -> Result<Vec<Contour>, String> {
+    let edges: Vec<[P; 2]> = paths
+        .iter()
+        .flat_map(|fp| &fp.contours)
+        .flat_map(|c| {
+            (0..c.len()).map(move |i| [c[i], c[(i + 1) % c.len()]].map(|p| p.map(f64::from)))
         })
         .collect();
-    (0..n)
-        .map(|i| (c[i], miter(normals[(i + n - 1) % n], normals[i])))
-        .collect()
+    let splits = split_points(&edges);
+    // Whether fill lies right beside `p` (on a piece along `u`) in direction `dir`.
+    let filled = |p: P, u: P, dir: P| {
+        paths
+            .iter()
+            .any(|fp| covered(fp, winding(&fp.contours, p, dir, Some(u))))
+    };
+
+    let mut pieces: Vec<[P; 2]> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for (&[a, b], pts) in edges.iter().zip(&splits) {
+        let d = sub(b, a);
+        let mut pts = pts.clone();
+        pts.push(a);
+        pts.push(b);
+        let t = |p: &P| dot(sub(*p, a), d);
+        pts.sort_by(|p, q| t(p).total_cmp(&t(q)));
+        pts.dedup();
+        for w in pts.windows(2) {
+            let (p, q) = (w[0], w[1]);
+            let d = sub(q, p);
+            let mid = [(p[0] + q[0]) / 2.0, (p[1] + q[1]) / 2.0];
+            let len = d[0].hypot(d[1]);
+            let u = [d[0] / len, d[1] / len];
+            let (left, right) = (filled(mid, u, [u[1], -u[0]]), filled(mid, u, [-u[1], u[0]]));
+            let piece = match (left, right) {
+                (false, true) => [p, q],
+                (true, false) => [q, p],
+                _ => continue,
+            };
+            // Coincident edges of stacked paths would draw the fringe twice.
+            if seen.insert(piece.map(key)) {
+                pieces.push(piece);
+            }
+        }
+    }
+
+    let mut from: std::collections::HashMap<_, Vec<usize>> = std::collections::HashMap::new();
+    for (i, piece) in pieces.iter().enumerate() {
+        from.entry(key(piece[0])).or_default().push(i);
+    }
+    let mut used = vec![false; pieces.len()];
+    let mut loops = Vec::new();
+    for first in 0..pieces.len() {
+        if used[first] {
+            continue;
+        }
+        let mut points = Vec::new();
+        let mut cur = first;
+        loop {
+            used[cur] = true;
+            points.push(pieces[cur][0]);
+            let [p, end] = pieces[cur];
+            // Where loops touch (a pinch vertex), stay with the fill wedge on
+            // the right of the incoming piece: take the outgoing piece that
+            // comes first sweeping clockwise from the way back.
+            let back = sub(p, end);
+            let next = from
+                .get(&key(end))
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|&i| i == first || !used[i])
+                .min_by(|&i, &j| {
+                    let turn = |k: usize| clockwise(back, sub(pieces[k][1], end));
+                    turn(i).total_cmp(&turn(j))
+                })
+                .ok_or_else(|| format!("{name}: fill boundary does not close at {end:?}"))?;
+            if next == first {
+                break;
+            }
+            cur = next;
+        }
+        if let Some(l) = quantise_loop(&points) {
+            loops.push(l);
+        }
+    }
+    Ok(loops)
+}
+
+/// A point in f64, for the boundary arithmetic.
+type P = [f64; 2];
+
+/// One fringe loop: (point, outward miter) per vertex.
+type Contour = Vec<([f32; 2], [f32; 2])>;
+
+/// Quantise a closed loop. Runs of points that land on the same grid point
+/// become one vertex whose miter joins the run's incoming and outgoing edges,
+/// so pieces shorter than a quantum do not turn the miter. `None` when fewer
+/// than three vertices remain.
+fn quantise_loop(points: &[P]) -> Option<Contour> {
+    let n = points.len();
+    let q = |p: P| [quantise(p[0] as f32), quantise(p[1] as f32)];
+    let normal = |i: usize| {
+        let (p, r) = (points[i], points[(i + 1) % n]);
+        let d = sub(r, p);
+        let len = d[0].hypot(d[1]);
+        [(d[1] / len) as f32, (-d[0] / len) as f32]
+    };
+    // Start at a point that begins a run, so no run wraps around the end.
+    let start = (0..n).find(|&i| q(points[i]) != q(points[(i + n - 1) % n]))?;
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < n {
+        let first = (start + i) % n;
+        let mut last = first;
+        while i + 1 < n && q(points[(start + i + 1) % n]) == q(points[first]) {
+            i += 1;
+            last = (start + i) % n;
+        }
+        out.push((
+            q(points[first]),
+            miter(normal((first + n - 1) % n), normal(last)),
+        ));
+        i += 1;
+    }
+    (out.len() >= 3).then_some(out)
+}
+
+/// Per edge, the points where other edges cross it or end on it.
+fn split_points(edges: &[[P; 2]]) -> Vec<Vec<P>> {
+    let mut splits = vec![Vec::new(); edges.len()];
+    let lo = |e: &[P; 2]| e[0][0].min(e[1][0]);
+    let hi = |e: &[P; 2]| e[0][0].max(e[1][0]);
+    // Sweep along x so only edges whose x ranges overlap are compared.
+    let mut order: Vec<usize> = (0..edges.len()).collect();
+    order.sort_by(|&i, &j| lo(&edges[i]).total_cmp(&lo(&edges[j])));
+    for (k, &i) in order.iter().enumerate() {
+        for &j in &order[k + 1..] {
+            if lo(&edges[j]) > hi(&edges[i]) {
+                break;
+            }
+            let ([a, b], [c, d]) = (edges[i], edges[j]);
+            if a[1].max(b[1]) < c[1].min(d[1]) || c[1].max(d[1]) < a[1].min(b[1]) {
+                continue;
+            }
+            if let Some(p) = crossing(a, b, c, d) {
+                splits[i].push(p);
+                splits[j].push(p);
+            }
+            for p in [c, d] {
+                if on_segment(p, a, b) {
+                    splits[i].push(p);
+                }
+            }
+            for p in [a, b] {
+                if on_segment(p, c, d) {
+                    splits[j].push(p);
+                }
+            }
+        }
+    }
+    splits
+}
+
+/// The crossing point of segments `ab` and `cd`, if they are not parallel and
+/// meet. A crossing at (or within rounding of) an end point is that end
+/// point exactly, so edges that share a vertex agree on it.
+fn crossing(a: P, b: P, c: P, d: P) -> Option<P> {
+    let (r, s) = (sub(b, a), sub(d, c));
+    let denom = cross(r, s);
+    if denom.abs() <= 1e-12 * (r[0].hypot(r[1]) * s[0].hypot(s[1])) {
+        return None;
+    }
+    let ac = sub(c, a);
+    let (t, u) = (cross(ac, s) / denom, cross(ac, r) / denom);
+    if !((0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)) {
+        return None;
+    }
+    let x = [a[0] + t * r[0], a[1] + t * r[1]];
+    Some(
+        [a, b, c, d]
+            .into_iter()
+            .find(|e| (e[0] - x[0]).hypot(e[1] - x[1]) < 1e-9)
+            .unwrap_or(x),
+    )
+}
+
+/// Whether `p` lies on segment `ab`, strictly between its ends.
+fn on_segment(p: P, a: P, b: P) -> bool {
+    let (r, ap) = (sub(b, a), sub(p, a));
+    let len2 = dot(r, r);
+    let t = dot(ap, r) / len2;
+    t > 0.0 && t < 1.0 && cross(r, ap).abs() / len2.sqrt() < 1e-9
+}
+
+/// The angle from `u` to `w` sweeping clockwise in math orientation
+/// (`cross < 0`), in `(0, 2π]`.
+fn clockwise(u: P, w: P) -> f64 {
+    let a = (-cross(u, w)).atan2(dot(u, w));
+    if a <= 0.0 {
+        a + std::f64::consts::TAU
+    } else {
+        a
+    }
+}
+
+fn sub(u: P, v: P) -> P {
+    [u[0] - v[0], u[1] - v[1]]
+}
+
+fn dot(u: P, v: P) -> f64 {
+    u[0] * v[0] + u[1] * v[1]
+}
+
+fn cross(u: P, v: P) -> f64 {
+    u[0] * v[1] - u[1] * v[0]
+}
+
+/// Hash key of a point; `+ 0.0` folds -0.0 into 0.0.
+fn key(p: P) -> [u64; 2] {
+    p.map(|v| (v + 0.0).to_bits())
 }
 
 /// The miter at a vertex between edges with outward normals `n1` (incoming)
 /// and `n2` (outgoing): `normalize(n1 + n2) / max(dot(m, n1), 0.5)`, so its
-/// length is at most 2. A zero normal (edge with fill on both sides) yields
-/// the other edge's normal; two zero normals yield zero.
+/// length is at most 2. A zero normal yields the other edge's normal; two
+/// zero normals yield zero.
 pub fn miter(n1: [f32; 2], n2: [f32; 2]) -> [f32; 2] {
     let zero = [0.0, 0.0];
     match (n1 == zero, n2 == zero) {
@@ -218,31 +426,43 @@ pub fn miter(n1: [f32; 2], n2: [f32; 2]) -> [f32; 2] {
     }
 }
 
-fn normalize(v: [f32; 2]) -> [f32; 2] {
-    let len = (v[0] * v[0] + v[1] * v[1]).sqrt();
-    [v[0] / len, v[1] / len]
-}
-
 /// Whether `p` lies inside the fill of `fp` under its fill rule.
 pub fn inside(fp: &FillPath, p: [f32; 2]) -> bool {
-    let w = winding(&fp.contours, p);
+    covered(
+        fp,
+        winding(&fp.contours, p.map(f64::from), [1.0, 0.0], None),
+    )
+}
+
+fn covered(fp: &FillPath, w: i32) -> bool {
     match fp.rule {
         FillRule::NonZero => w != 0,
         FillRule::EvenOdd => w % 2 != 0,
     }
 }
 
-fn winding(contours: &[Vec<[f32; 2]>], p: [f32; 2]) -> i32 {
+/// Winding number of the contours around `p`, counted along the ray from
+/// `p` in direction `dir`. With `along = Some(u)` (a unit vector), edges on
+/// the line through `p` along `u` are left out: for `p` on such an edge and
+/// `dir` across it, the result is the winding number infinitesimally beside
+/// the edge on the `dir` side, decided without any probe distance.
+fn winding(contours: &[Vec<[f32; 2]>], p: P, dir: P, along: Option<P>) -> i32 {
     let mut w = 0;
     for c in contours {
         for i in 0..c.len() {
-            let (a, b) = (c[i], c[(i + 1) % c.len()]);
-            let cross = (b[0] - a[0]) * (p[1] - a[1]) - (p[0] - a[0]) * (b[1] - a[1]);
-            if a[1] <= p[1] {
-                if b[1] > p[1] && cross > 0.0 {
+            let (a, b) = (c[i].map(f64::from), c[(i + 1) % c.len()].map(f64::from));
+            if let Some(u) = along {
+                if cross(u, sub(a, p)).abs() < 1e-9 && cross(u, sub(b, p)).abs() < 1e-9 {
+                    continue;
+                }
+            }
+            let (ha, hb) = (cross(dir, sub(a, p)), cross(dir, sub(b, p)));
+            let side = cross(sub(b, a), sub(p, a));
+            if ha <= 0.0 {
+                if hb > 0.0 && side > 0.0 {
                     w += 1;
                 }
-            } else if b[1] <= p[1] && cross < 0.0 {
+            } else if hb <= 0.0 && side < 0.0 {
                 w -= 1;
             }
         }
