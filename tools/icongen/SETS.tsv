@@ -1,0 +1,6 @@
+lib	package	version	svg_glob	license	ship
+lucide	lucide-static	1.55.0	package/icons/*.svg	ISC	yes
+tabler	@tabler/icons	3.49.0	package/icons/outline/*.svg	MIT	yes
+phosphor	@phosphor-icons/core	2.1.1	package/assets/regular/*.svg	MIT	yes
+remixicon	remixicon	4.8.0	package/icons/*/*.svg	Apache-2.0	yes
+hugeicons	@hugeicons/core-free-icons	4.3.5	-	MIT	yes
