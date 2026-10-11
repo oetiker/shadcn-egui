@@ -15,3 +15,4 @@ repository = "https://github.com/oetiker/shadcn-egui"
 [workspace.dependencies]
 egui = "0.34"
 egui_extras = { version = "0.34", default-features = false }
+shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.4.0" }

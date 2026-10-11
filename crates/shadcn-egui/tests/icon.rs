@@ -159,3 +159,12 @@ fn icons_snapshot() {
         });
     });
 }
+
+#[test]
+fn core_types_are_reexported() {
+    let a: shadcn_egui::Icon = lucide::X;
+    let b: shadcn_egui_core::Icon = a;
+    let c: shadcn_egui::components::icon::Icon = b;
+    assert_eq!(c.name, "x");
+    assert!(matches!(c.segs[0], shadcn_egui::Seg::M(..)));
+}

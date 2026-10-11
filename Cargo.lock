@@ -2935,7 +2935,12 @@ dependencies = [
  "egui",
  "egui_extras",
  "egui_kittest",
+ "shadcn-egui-core",
 ]
+
+[[package]]
+name = "shadcn-egui-core"
+version = "0.4.0"
 
 [[package]]
 name = "shlex"

@@ -14,6 +14,7 @@ repository.workspace = true
 [dependencies]
 egui.workspace = true
 egui_extras.workspace = true
+shadcn-egui-core.workspace = true
 
 [dev-dependencies]
 eframe = "0.34"
