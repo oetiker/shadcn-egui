@@ -166,6 +166,7 @@ fn monospace_takes_the_body_font_only_when_it_is_mono() {
 fn heading_text_style_uses_the_heading_semibold_family() {
     let ctx = egui::Context::default();
     Theme::vega_dark().apply(&ctx);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     let id = &ctx.global_style().text_styles[&egui::TextStyle::Heading];
     assert_eq!(id.family, FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()));
 }
@@ -265,6 +266,45 @@ fn switching_fonts_on_a_live_context_does_not_panic() {
         defs.families[&FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into())][0],
         "shadcn-heading-600"
     );
+}
+
+/// The first `apply` inside a pass: the theme's families reach the atlas
+/// only next pass, yet a window opened later in this pass lays out a heading.
+#[test]
+fn a_heading_in_the_pass_of_the_first_apply_does_not_panic() {
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 160.0))
+        .build_ui(|ui| {
+            Theme::vega_dark().apply(ui.ctx());
+            egui::Window::new("w").show(ui.ctx(), |ui| ui.heading("egui heading"));
+        });
+    h.step();
+    let id = &h.ctx.global_style().text_styles[&egui::TextStyle::Heading];
+    assert_eq!(
+        id.family,
+        FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()),
+        "the heading takes the heading family once it is bound"
+    );
+}
+
+/// An app loop on `begin_pass`/`end_pass` runs no pass hooks: the next
+/// `Theme::current`, which every component calls, binds the heading.
+#[test]
+fn a_loop_without_pass_hooks_binds_the_heading_on_the_next_pass() {
+    let ctx = egui::Context::default();
+    let heading = |ctx: &egui::Context| {
+        egui::Area::new("a".into()).show(ctx, |ui| ui.heading("egui heading"));
+    };
+    ctx.begin_pass(egui::RawInput::default());
+    Theme::vega_dark().apply(&ctx);
+    heading(&ctx);
+    let _ = ctx.end_pass();
+    ctx.begin_pass(egui::RawInput::default());
+    let _ = Theme::current(&ctx);
+    heading(&ctx);
+    let _ = ctx.end_pass();
+    let id = &ctx.global_style().text_styles[&egui::TextStyle::Heading];
+    assert_eq!(id.family, FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()));
 }
 
 fn heading_themes() -> Vec<(&'static str, Theme)> {

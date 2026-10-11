@@ -132,6 +132,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - `components::shared::mix_toward`, `hover_fill` and `focus_ring`: the
   components take hover and focus colours from the style.
 
+### Fixed
+- An app that called `Theme::apply` while drawing a frame crashed with
+  "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to any fonts"
+  as soon as a window or popup showed a heading in that frame. Such a heading
+  now shows in the body font for that one frame.
+
 ## [0.3.2] - 2026-10-09
 
 ### Changed

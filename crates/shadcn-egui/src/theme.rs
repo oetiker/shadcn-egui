@@ -504,11 +504,81 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
     ctx.data_mut(|d| d.insert_temp(id, key));
 }
 
+/// `TextStyle::Heading` waits in `Proportional` until the heading family is
+/// bound: `set_fonts` takes effect only at the start of the next pass, and
+/// egui panics on a family the current fonts lack. Holds the stand-in
+/// `FontId`, so an app's own later change to the heading is left alone.
+#[derive(Clone)]
+struct PendingHeading(FontId);
+
+fn pending_heading_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::pending_heading")
+}
+
+/// Set once the heading family was seen bound; it stays bound for the
+/// context's life, since every install defines it.
+fn heading_bound_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::heading_bound")
+}
+
+/// The family `TextStyle::Heading` may name now: the heading family once it
+/// is known to be bound, else `Proportional`, upgraded by [`bind_heading`].
+fn heading_family_now(ctx: &egui::Context) -> FontFamily {
+    if ctx.data(|d| d.get_temp::<bool>(heading_bound_id()).unwrap_or(false)) {
+        return FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
+    }
+    let hook_id = egui::Id::new("shadcn_egui::heading_hook");
+    if !ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
+        ctx.data_mut(|d| d.insert_temp(hook_id, true));
+        ctx.on_begin_pass(
+            "shadcn_egui::bind_heading",
+            Arc::new(|ui: &mut egui::Ui| {
+                if let Some(id) = bind_heading(ui.ctx()) {
+                    // The root ui was built before this hook ran.
+                    ui.style_mut().text_styles.insert(TextStyle::Heading, id);
+                }
+            }),
+        );
+    }
+    FontFamily::Proportional
+}
+
+/// Give `TextStyle::Heading` the heading family once the fonts bind it.
+/// Returns the new heading `FontId` when it changed.
+fn bind_heading(ctx: &egui::Context) -> Option<FontId> {
+    let PendingHeading(stand_in) = ctx.data(|d| d.get_temp(pending_heading_id()))?;
+    let name = FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
+    if !ctx.fonts(|f| f.definitions().families.contains_key(&name)) {
+        return None;
+    }
+    ctx.data_mut(|d| {
+        d.remove::<PendingHeading>(pending_heading_id());
+        d.insert_temp(heading_bound_id(), true);
+    });
+    let id = FontId::new(stand_in.size, name);
+    let mut changed = false;
+    ctx.global_style_mut(|s| {
+        if s.text_styles.get(&TextStyle::Heading) == Some(&stand_in) {
+            s.text_styles.insert(TextStyle::Heading, id.clone());
+            changed = true;
+        }
+    });
+    changed.then_some(id)
+}
+
 impl Theme {
     /// Read the active theme stored by [`Theme::apply`]. Falls back to vega
     /// dark, shared so the fallback does not build a [`Style`] per call.
+    ///
+    /// Also binds a heading that still waits for its fonts, for apps whose
+    /// loop does not run egui's pass hooks (`Context::begin_pass`). Needs
+    /// the context's fonts, which exist once its first pass has ended.
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
+        // Before the first pass ends, fonts may not exist yet; the hook binds then.
+        if ctx.cumulative_pass_nr() > 0 {
+            let _ = bind_heading(ctx);
+        }
         ctx.data(|d| d.get_temp::<Theme>(theme_id()))
             .unwrap_or_else(|| FALLBACK.clone())
     }
@@ -538,6 +608,10 @@ impl Theme {
         let p = &self.palette;
         let m = &self.metrics;
         let hairline = m.border;
+        let heading = FontId::new(m.text_heading, heading_family_now(ctx));
+        if heading.family == FontFamily::Proportional {
+            ctx.data_mut(|d| d.insert_temp(pending_heading_id(), PendingHeading(heading.clone())));
+        }
 
         ctx.global_style_mut(|s| {
             use FontFamily::Proportional;
@@ -549,13 +623,7 @@ impl Theme {
                     TextStyle::Monospace,
                     FontId::new(m.text_mono, FontFamily::Monospace),
                 ),
-                (
-                    TextStyle::Heading,
-                    FontId::new(
-                        m.text_heading,
-                        FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()),
-                    ),
-                ),
+                (TextStyle::Heading, heading),
             ]
             .into();
 
