@@ -7,6 +7,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 ### Changed
+- A `Palette { .. }` struct literal written for 0.3 no longer compiles,
+  because `Palette` has the new field `chart`; start from `Palette::light()`,
+  `Palette::dark()` or `Palette::from_upstream(..)` and change single fields.
 - Medium and semibold text (button labels, badges, tabs, card and dialog
   titles) now renders at its real weight; before, every weight looked like
   regular text.
@@ -105,6 +108,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   `SettingsState` has new `slider` and `region` fields.
 
 ### Added
+- `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
+  shadcn site builds for a base colour, a colour theme and a chart colour,
+  for example `Palette::from_upstream("stone", "blue", "rose", true)`.
+- `Palette` has the five chart colours (`chart-1` … `chart-5`) as `chart`.
 - The `settings` example has a toolbar with a style select (vega, nova, maia,
   lyra, mira, luma, rhea), a Dark/Light tab pair and a radius slider from 0 to
   20 px, so the look can be changed while the window is open.

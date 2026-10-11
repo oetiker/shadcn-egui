@@ -94,3 +94,31 @@ pub fn check(up: &Path, crate_root: &Path, lines: &[MarkerLine]) -> Vec<String> 
     }
     problems
 }
+
+/// Fixture copies (`<tool>/tests/fixtures/`) that no longer match the
+/// upstream checkout: tests and generated code would describe stale sources.
+pub fn check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (from, fixture, upstream) in crate::sources::sources() {
+        let root = if from == crate::sources::Upstream::React {
+            up_react
+        } else {
+            up
+        };
+        let ours = std::fs::read(tool.join("tests/fixtures").join(&fixture));
+        let theirs = std::fs::read(root.join(&upstream));
+        match (ours, theirs) {
+            (Ok(a), Ok(b)) if a == b => {}
+            (_, Err(e)) => problems.push(format!(
+                "{upstream}: cannot read the upstream file ({e}); re-run stylegen generate"
+            )),
+            (Err(_), _) => problems.push(format!(
+                "tests/fixtures/{fixture} is missing; re-run stylegen generate"
+            )),
+            _ => problems.push(format!(
+                "tests/fixtures/{fixture} differs from {upstream}; re-run stylegen generate"
+            )),
+        }
+    }
+    problems
+}
