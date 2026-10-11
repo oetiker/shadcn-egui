@@ -1,7 +1,8 @@
 # shadcn-egui 0.4.0 — a published crate with shadcn presets
 
 Date: 2026-10-11
-Status: design approved in conversation (2026-10-11), awaiting spec review
+Status: design approved in conversation (2026-10-11); revised after pushback
+review (2026-10-11); awaiting spec review
 
 ## 1. Goal
 
@@ -23,7 +24,7 @@ Success:
   icons and radius.
 - Every preset code the shadcn site produces decodes. Choices the egui side
   cannot honour (style `sera`, a font or icon library whose feature is off)
-  fall back to a documented default and log one warning.
+  fall back to a documented default and log a warning (§4.1).
 - Medium and Semibold text render at their real weight.
 - A release is one tag; CI publishes all crates of the workspace.
 
@@ -46,6 +47,10 @@ This is spec 1+2 of four. Later specs: (3) port the remaining ~47 components,
 | D10 | Publishing follows the repo-infra standard, plus a CI publish step on a release tag. | Set up with `repo-infra:apply`. |
 | D11 | Until spec 4 ships, the marketplace plugin is pinned to `v0.3.2`. | Spec 4 removes the pin. |
 | D12 | Variable fonts are used as they are, via egui's `FontTweak::coords`. No static instancing. | §6.1. |
+| D13 | Preset codes from **both** ui.shadcn.com (React) and shadcn-svelte.com must decode. | The plan's first task compares the React `preset.ts` (list order, `V1_CHART_COLOR_MAP` use) with the svelte copy; a difference goes back into this spec. |
+| D14 | Remixicon ships pinned to its **last Apache-2.0 release** and is never updated. | Remix Icon License v1.0 (Jan 2026) forbids an icon-pack crate. §6.3. |
+| D15 | 0.4.0 ships the full scope (all fonts, all icon sets); no split. | The publish job handles the crates.io new-crate rate limit. §9. |
+| D16 | The in-repo marketplace (`.claude-plugin/marketplace.json`, `"source": "."`) stays as it is until spec 4. Accepted: its users get a skill that points at the deleted `registry/` until then. | `plugin.json` / `marketplace.json` keep `0.3.2` until spec 4; the crate versions move on alone. |
 
 ## 3. Workspace layout
 
@@ -55,16 +60,17 @@ shadcn-egui/
 ├─ crates/
 │  ├─ shadcn-egui/                theme, style, palette, preset, components,
 │  │                              examples/, tests/ (moved here)
-│  ├─ shadcn-egui-core/           leaf crate: Icon, Seg, IconSlots, FontFamily
+│  ├─ shadcn-egui-core/           leaf crate: Icon, Seg, IconSlots, FontFiles
 │  ├─ shadcn-egui-font-inter/     normal (non-optional) dependency
 │  ├─ shadcn-egui-font-<name>/    one per upstream font, optional
 │  ├─ shadcn-egui-icons-lucide/   normal (non-optional) dependency
-│  └─ shadcn-egui-icons-<lib>/    tabler, phosphor, remixicon, hugeicons*
+│  └─ shadcn-egui-icons-<lib>/    tabler, phosphor, remixicon†, hugeicons*
 ├─ tools/stylegen, tools/icongen  own workspaces, never dependencies
 └─ skills/egui-shadcn/            SKILL.md + references (registry/ deleted)
 ```
 
 \* hugeicons only if its licence allows republishing (§6.3).
+† remixicon pinned to its last Apache-2.0 release (D14).
 
 - `shadcn-egui-core` exists because font and icon crates must not depend on
   `shadcn-egui` (Cargo forbids dependency cycles, also through optional
@@ -99,7 +105,7 @@ impl Preset {
     pub fn from_code(code: &str) -> Result<Self, PresetCodeError>;
     pub fn to_code(&self) -> Option<String>;   // None when radius is Px(_)
     pub fn theme(&self, mode: Mode) -> Theme;  // pure
-    pub fn apply(&self, ctx: &egui::Context, mode: Mode); // theme() + fonts + icons
+    pub fn apply(&self, ctx: &egui::Context, mode: Mode); // = self.theme(mode).apply(ctx)
     // builder: one by-value setter per field, e.g. .style(StyleName::Nova)
 }
 impl Default for Preset; // index 0 of every upstream list
@@ -113,19 +119,28 @@ impl Default for Preset; // index 0 of every upstream list
 - Decoding follows upstream exactly: an index past the end of a list decodes
   to index 0; `a` codes get `fontHeading = Inherit` and `chartColor` = index 0.
   `PresetCodeError` covers what upstream returns `null` for: empty or
-  1-character code, unknown version letter, non-base62 character.
+  1-character code, unknown version letter, non-base62 character. It also
+  rejects a payload above 2^53 (`TooLong`): upstream decodes in f64 and
+  silently loses precision there; the sites never produce such codes, so we
+  decode in checked `u64` and refuse instead of guessing.
 - `to_code` always writes version `b`.
 - `RadiusChoice::Default` means "keep the base colour's radius" (upstream
   `config.ts:241`), not 0.5rem. `None/Small/Medium/Large` = 0 / 0.45 / 0.625 /
   0.875 rem. `Px(f32)` is our extension; it has no code.
 - `Theme::new(style, palette, radius)`, `Palette` and `Theme::apply` stay
   public. `Preset` is a layer on top.
+- `Theme` carries everything `apply` needs: resolved palette, menu colours
+  (§5.2), fonts (§6.1) and icon slots (§6.2). `Theme::apply` is the **only**
+  place that installs fonts and writes egui style; `Preset::apply` just calls
+  it. A `Theme::new(..)` without a preset gets Inter and Lucide.
 - Runtime switching: call `apply` again (as today).
 
 ### 4.1 Fallbacks
 
-Every fallback logs exactly one `log::warn!` line per `apply` call and still
-produces a usable theme. `log` becomes a runtime dependency (tiny, and the
+Each fallback that applies logs one `log::warn!` line, so a preset with two
+unsupported values logs two lines. The lines come from `Preset::theme()`, so
+they repeat on every call (e.g. each light/dark toggle); this is accepted.
+Every fallback still produces a usable theme. `log` becomes a runtime dependency (tiny, and the
 usual way egui crates warn).
 
 | Preset value | Fallback |
@@ -134,6 +149,7 @@ usual way egui crates warn).
 | font or heading font whose feature is off | Inter |
 | icon library whose feature is off | Lucide |
 | `theme` not allowed for `base_color` (not the base itself and not one of the 17 colour themes) | the base colour's own palette |
+| `IconLibrary::Hugeicons` when its crate does not exist (§6.3) | Lucide |
 
 ## 5. Colours
 
@@ -167,13 +183,18 @@ Upstream applies `menuColor` only to menu content: Select, DropdownMenu,
 ContextMenu, Menubar (and their sub-menus). Of the 14 existing components
 only **Select** is affected.
 
-- `Inverted` / `InvertedTranslucent`: menu content uses the **dark** palette
-  of the same preset, also in light mode.
+- `Inverted` / `InvertedTranslucent`: menu content renders as dark, also in
+  light mode. Upstream adds the `dark` class to the menu
+  (`transform-menu.ts:30`), which switches both the colour vars and the
+  `dark:` variants. So the menu popup draws with a derived theme: the dark
+  palette **and** `dark: true`, so recipes with `State::DARK` rules
+  (e.g. `src/style/nova.rs`) resolve as in dark mode.
 - `*Translucent`: menu fill = `popover` at 70% alpha; highlighted item =
   `foreground` at 10%; separator = `foreground` at 5%; destructive item text =
   `accent_foreground` (from upstream `TRANSLUCENT_CLASSES`). No blur.
-- `Theme` holds a resolved `menu: MenuColors` (palette + translucent flag), so
-  components never look at the preset.
+- `Theme` holds a resolved `menu: MenuColors` (palette, dark flag,
+  translucent flag) and a `menu_theme()` helper that returns the derived
+  theme; components never look at the preset.
 
 ## 6. Fonts and icons
 
@@ -185,10 +206,15 @@ coordinates per registered font. Our current `install_fonts` loads the
 Oxanium variable font three times without `coords`, so every weight renders
 as Regular. This is the Medium/Semibold bug; it is our bug, not egui's.
 
-- A font crate exports one `shadcn_egui_core::FontFamily`:
+- A font crate exports one `shadcn_egui_core::FontFiles` (not `FontFamily`,
+  which would clash with `egui::FontFamily` under glob imports):
   `name`, `Variable { data, wght: RangeInclusive<f32> }` or
-  `Static { regular, medium, semibold, bold }` (only for fonts with no
-  variable version), `y_offset_factor: f32`, and `LICENSE` text.
+  `Static { regular, medium: Option<_>, semibold: Option<_>, bold: Option<_> }`
+  (only for fonts with no variable version; a missing weight uses the nearest
+  weight that exists, e.g. Instrument Serif ships 400 only),
+  `y_offset_factor: f32`, and `LICENSE` text.
+- `Theme` holds the resolved `fonts: ThemeFonts` (body and heading
+  `&'static FontFiles`); `Theme::apply` installs them (§4).
 - `install_fonts` registers the bytes once per weight (400/500/600/700)
   with `FontTweak { coords: wght=…, y_offset_factor }`. A weight outside the
   font's `wght` range is clamped. `FontData::from_static` shares the bytes.
@@ -199,9 +225,13 @@ as Regular. This is the Medium/Semibold bug; it is our bug, not egui's.
   `family_for(ctx, Weight)` stays; new `heading_family_for(ctx, Weight)`.
   `TextStyle::Heading` uses the heading font at Semibold. `Inherit` maps the
   heading families to the body font.
+- Every named family lists egui's default fonts after its own font, so
+  glyphs the font lacks (emoji, CJK, symbols) still render, as they do in
+  `Proportional`.
 - `Monospace` stays egui's default unless the body font is a mono font.
-- `apply` reinstalls fonts only when `(font, font_heading)` changed since the
-  last install on that context; a light/dark switch does not rebuild the atlas.
+- `Theme::apply` reinstalls fonts only when the theme's fonts changed since
+  the last install on that context; a light/dark switch does not rebuild the
+  atlas.
 - Known egui limit: row height ignores variation coords
   (`fonts.rs:673`, TODO upstream). `wght` does not change ascent/descent, so
   this has no visible effect.
@@ -212,7 +242,7 @@ as Regular. This is the Medium/Semibold bug; it is our bug, not egui's.
 ### 6.2 Icon slots
 
 - `IconSlots` (in core) names every icon a component draws: today `check`,
-  `chevron_down`, `x` (dialog close); spec 3 extends it. `Theme` holds an
+  `chevron_down`, `close` (dialog close); spec 3 extends it. `Theme` holds an
   `IconSlots`; components read `t.icons.check` instead of the const `CHECK`.
 - Each icon crate exports `SLOTS: IconSlots` and every icon of the set as a
   `pub const`, generated by icongen.
@@ -226,34 +256,51 @@ and Remixicon are filled outlines with holes.
 - `Icon` gets a second form: a pre-triangulated mesh (vertices + indices in
   the 24-unit icon box). icongen triangulates filled paths at generation
   time with `lyon` (tool-only dependency). The runtime gains no dependency.
-- Hugeicons: the plan checks its licence first. If it does not allow
+- egui anti-aliases only shapes it tessellates itself; a raw `Mesh` has hard
+  edges. So a filled icon also stores its outline contours, and the painter
+  draws a hairline feathered stroke along them over the mesh. A snapshot
+  zoomed in on an icon edge checks that filled and stroked icons look equally
+  smooth.
+- Remixicon: since January 2026 it ships under "Remix Icon License v1.0",
+  which forbids distributing the icons as an icon pack or library (§3.1,
+  §3.2), although npm metadata still says Apache-2.0. The crate is built from
+  the **last Apache-2.0 release** (the plan finds the exact version and
+  records it with the licence text in the crate) and is never updated.
+- Hugeicons: the plan checks its licence first, reading the licence file in
+  the package, not only the npm metadata (`@hugeicons/core-free-icons` says
+  MIT). If it does not allow
   republishing the icons, the crate and feature do not exist and
   `IconLibrary::Hugeicons` falls back to Lucide.
 
 ## 7. Testing
 
-- **Preset codes:** fixture list of codes from the shadcn site (`a` and `b`)
-  with their upstream `decodePreset` output; `from_code` must match;
-  `to_code(from_code(c)) == c` for `b` codes; each `PresetCodeError` case.
+- **Preset codes:** fixture list of codes from both sites (D13), `a` and
+  `b`, with their upstream `decodePreset` output; `from_code` must match;
+  `to_code(from_code(c)) == c` for canonical `b` codes (as the sites write
+  them; a hand-made code with out-of-range indices does not round-trip);
+  each `PresetCodeError` case.
 - **Palettes:** merged palettes for a set of combinations equal upstream
   `buildRegistryTheme` output (fixtures produced from upstream once, committed).
 - **Fonts:** proof test first: one word at `wght` 700 has more ink than at
   400. Per font crate: a Button snapshot (checks `y_offset_factor`).
-- **Icons:** one snapshot per icon crate showing its slot icons; one for a
-  filled icon.
+- **Icons:** one snapshot per icon crate showing its slot icons; one zoomed
+  snapshot of a filled icon edge (§6.3).
+- **Inverted menu:** Select with `MenuColor::Inverted` in light mode, snapshot.
 - **Fallbacks:** one test per row of §4.1, checking the result and the single
   warning.
 - **Existing snapshots** change (Inter replaces Oxanium; weights now differ).
   The user reviews and approves the new PNGs, as in 0.4.
-- Gates: `cargo test`, `cargo clippy --all-targets` warning-clean for the
-  workspace and for both tools; `stylegen drift` clean; `--jobs 4`.
+- Gates, all with `--jobs 4`: `cargo test --workspace --all-features` (font
+  and icon snapshots) **and** `cargo test --workspace` with default features
+  (fallback tests); `cargo clippy --workspace --all-targets` warning-clean in
+  both feature sets and for both tools; `stylegen drift` clean.
 
 ## 8. Migration
 
 - Imports: `egui_shadcn::…` → `shadcn_egui::…`.
 - Breaking: default font is Inter; `Palette` has `chart`; components take
-  icons from `Theme::icons` (the `CHECK`/`CHEVRON_DOWN` consts move to the
-  icon crates).
+  icons from `Theme::icons` (the `CHECK`, `CHEVRON_DOWN` and `CLOSE` consts
+  move out of `components/icon.rs` into the icon crates).
 - CHANGES.md: one 0.4.0 entry for users (rename, presets, Inter, real font
   weights, breaking changes).
 - oxulnk moves to 0.4 as a separate, later project.
@@ -270,9 +317,22 @@ and Remixicon are filled outlines with holes.
 5. Rewrite `RELEASING.md` for the new flow.
 6. Tag `v0.4.0`; CI publishes the workspace.
 
+The first release creates about 33 new crates. crates.io limits how fast one
+account may create **new** crates (a small burst, then one per several
+minutes; the plan looks up the current numbers). So:
+
+- The publish job publishes in dependency order and **skips any crate
+  version that already exists** on crates.io, so a job stopped by HTTP 429
+  can simply be re-run until everything is out.
+- Before tagging, ask crates.io for a raised new-crate limit (they grant this
+  for workspaces), or accept that the first publish takes several re-runs.
+- Later releases only publish new versions of existing crates, which have a
+  much higher limit.
+
 ## 10. Out of scope
 
 - The remaining ~47 components (spec 3).
+- The in-repo marketplace and `plugin.json` (D16, spec 4).
 - Skill rewrite and removal of the plugin pin (spec 4).
 - Sidebar colour vars; the Sera style.
 - Known unrelated bugs (offer separately): `layout::row` ~1px off-centre for
