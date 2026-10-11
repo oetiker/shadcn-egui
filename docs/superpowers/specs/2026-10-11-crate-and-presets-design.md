@@ -54,7 +54,7 @@ This is spec 1+2 of four. Later specs: (3) port the remaining ~47 components,
 | D17 | Card and Dialog titles use the heading font, as upstream (`cn-font-heading`). | §6.1. Spec 3 does the same for AlertDialog, Sheet, Drawer, Empty. |
 | D18 | Icon data is stored as a compact binary blob per crate, after measuring the generated size. | §6.2. |
 | D19 | `theme` and `chart_color` merge onto any base colour, as upstream `buildRegistryTheme`; no fallback. | The picker limit (`getThemesForBaseColor`) is site UI only. |
-| D20 | Styles Lyra and Sera force radius 0, as the shadcn site does. | §4. |
+| D20 | Styles Lyra and Sera force radius 0, and style Rhea turns radius Large into the base colour's radius, as the shadcn site does. | §4. |
 | D16 | The in-repo marketplace (`.claude-plugin/marketplace.json`, `"source": "."`) stays as it is until spec 4. Accepted: its users get a skill that points at the deleted `registry/` until then. | `plugin.json` / `marketplace.json` keep `0.3.2` until spec 4; the crate versions move on alone. |
 
 ## 3. Workspace layout
@@ -156,6 +156,9 @@ impl Default for Preset; // upstream DEFAULT_CONFIG (React apps/v4/registry/conf
   does (`design-system-provider.svelte:37,44`). For Sera this still holds
   after the fall back to Nova, so the result is as close to the request as
   possible.
+- Style Rhea with radius `Large` resolves as `Default` (the base colour's
+  radius), silently, as the site does (`design-system-provider.svelte:49`);
+  `to_code` keeps `Large`. (User decision 2026-10-11.)
 - `Theme::new(style, palette, radius)`, `Palette` and `Theme::apply` stay
   public. `Preset` is a layer on top.
 - `Theme` carries everything `apply` needs: resolved palette, menu colours
@@ -359,7 +362,8 @@ and Remixicon are filled outlines with holes.
   thread id and each test reads only its own lines.
 - **Heading font:** Card and Dialog snapshot with a heading font clearly
   different from the body font.
-- **Lyra radius:** a Lyra preset with `radius: Large` resolves to radius 0.
+- **Lyra radius:** a Lyra preset with `radius: Large` resolves to radius 0;
+  a Rhea preset with `radius: Large` resolves to the base colour's radius.
 - **Existing snapshots** change (Inter replaces Oxanium; weights now differ).
   The user reviews and approves the new PNGs, as in 0.4.
 - Gates, all with `--jobs 4`: `cargo test --workspace --all-features` (font

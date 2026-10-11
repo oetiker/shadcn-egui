@@ -11,3 +11,9 @@ pub fn slots(lib: IconLibrary) -> Option<IconSlots> {
         _ => None,
     }
 }
+
+/// The warning `Preset::theme` logs when [`slots`] has nothing for `lib`.
+pub(crate) fn fallback_warning(lib: IconLibrary) -> String {
+    let id = lib.id();
+    format!("shadcn-egui: icon library \"{id}\" needs the \"icons-{id}\" feature; using \"lucide\"")
+}

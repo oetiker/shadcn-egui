@@ -150,3 +150,14 @@ pub(crate) fn merge(base_id: &str, theme: &str, chart: &str, dark: bool) -> Opti
     }
     Some(p)
 }
+
+/// A base colour's own radius (`radius: "0.625rem"` upstream) in px;
+/// `None` when `base_id` has no generated palette (`gray`, index §J).
+pub(crate) fn base_radius_px(base_id: &str) -> Option<f32> {
+    base(base_id).map(|(rem, _, _)| rem * 16.0)
+}
+
+/// A base or a colour overlay has this id (`false` for `gray`, index §J).
+pub(crate) fn is_theme(id: &str) -> bool {
+    theme_vars(id, false).is_some()
+}
