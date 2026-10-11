@@ -1,1 +1,4 @@
 target/
+# egui_kittest leftovers of a failed snapshot comparison
+**/snapshots/*.new.png
+**/snapshots/*.diff.png
