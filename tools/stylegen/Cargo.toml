@@ -2,11 +2,11 @@
 name = "stylegen"
 version = "0.1.0"
 edition = "2021"
-description = "Generate egui_shadcn style recipes from shadcn style CSS"
+description = "Generate shadcn_egui style recipes from shadcn style CSS"
 license = "MIT"
 publish = false
 
-# Its own workspace: this tool never becomes a dependency of egui_shadcn or of
+# Its own workspace: this tool never becomes a dependency of shadcn_egui or of
 # any project that vendors the registry.
 [workspace]
 

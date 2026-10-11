@@ -209,7 +209,7 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
         UiBuilder::new()
             .max_rect(rect)
             .layout(Layout::right_to_left(Align::Min))
-            .id_salt("egui_shadcn_dialog_close"),
+            .id_salt("shadcn_egui_dialog_close"),
     );
     child
         .add(

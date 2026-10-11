@@ -1,5 +1,5 @@
 //! Convert stroked SVG icons into Rust constants for
-//! `egui_shadcn::components::icon`.
+//! `shadcn_egui::components::icon`.
 //!
 //! The input is an outline icon set such as Lucide: paths, lines, circles and
 //! rects drawn with a stroke and no fill. usvg resolves shapes, arcs and
@@ -9,7 +9,7 @@
 
 use usvg::tiny_skia_path::{PathSegment, Point};
 
-/// Mirror of `egui_shadcn::components::icon::Seg`.
+/// Mirror of `shadcn_egui::components::icon::Seg`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
     M(f32, f32),

@@ -30,7 +30,7 @@ fn committed_sources_are_current_and_output_is_deterministic() {
     let pin = read("PIN").trim().to_owned();
     assert_eq!(
         emit_struct(&pin, &shipped()),
-        read("../../src/style/generated.rs"),
+        read("../../crates/shadcn-egui/src/style/generated.rs"),
         "re-run stylegen generate"
     );
     for style in ["vega", "nova"] {
@@ -42,7 +42,7 @@ fn committed_sources_are_current_and_output_is_deterministic() {
         );
         assert_eq!(
             first,
-            read(&format!("../../src/style/{style}.rs")),
+            read(&format!("../../crates/shadcn-egui/src/style/{style}.rs")),
             "{style}: re-run stylegen generate"
         );
     }

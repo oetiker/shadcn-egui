@@ -3,8 +3,8 @@
 #![allow(dead_code)]
 
 use egui_kittest::{Harness, SnapshotResults};
-use egui_shadcn::style::Style;
-use egui_shadcn::{Palette, Theme};
+use shadcn_egui::style::Style;
+use shadcn_egui::{Palette, Theme};
 
 pub fn themes() -> Vec<(&'static str, Theme)> {
     vec![

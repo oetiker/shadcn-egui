@@ -1,9 +1,12 @@
-//! stylegen generate <shadcn-svelte checkout> <crate root>
-//! stylegen drift    <shadcn-svelte checkout> <crate root>
+//! stylegen generate <shadcn-svelte checkout> <repository root>
+//! stylegen drift    <shadcn-svelte checkout> <repository root>
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use stylegen::{css, emit, markers, report, resolve};
+
+/// The crate stylegen writes into, relative to the repository root.
+const CRATE: &str = "crates/shadcn-egui";
 
 /// Every upstream style; each gets a report, the ones in `EXPORT` also Rust.
 const STYLES: &[&str] = &[
@@ -13,7 +16,7 @@ const STYLES: &[&str] = &[
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let (Some(cmd), Some(up), Some(root)) = (args.get(1), args.get(2), args.get(3)) else {
-        eprintln!("usage: stylegen generate|drift <shadcn-svelte> <crate-root>");
+        eprintln!("usage: stylegen generate|drift <shadcn-svelte> <repo-root>");
         return ExitCode::from(2);
     };
     let (up, root) = (PathBuf::from(up), PathBuf::from(root));
@@ -28,7 +31,7 @@ fn main() -> ExitCode {
     );
     match cmd.as_str() {
         "generate" => generate(&up, &root, &tool, &pin, &lines),
-        "drift" => drift(&up, &root, &lines),
+        "drift" => drift(&up, &root.join(CRATE), &lines),
         _ => {
             eprintln!("unknown command `{cmd}`");
             ExitCode::from(2)
@@ -63,7 +66,7 @@ fn generate(
         .split_whitespace()
         .map(str::to_owned)
         .collect();
-    let out_dir = root.join("src/style");
+    let out_dir = root.join(CRATE).join("src/style");
     let reports = tool.join("reports");
     std::fs::create_dir_all(&reports).expect("reports dir");
     write(

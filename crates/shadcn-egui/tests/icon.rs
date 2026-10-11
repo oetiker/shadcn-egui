@@ -7,9 +7,9 @@ use egui::epaint::{CircleShape, PathShape};
 use egui::{pos2, vec2, Color32, Rect, Shape};
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
-use egui_shadcn::components::button::{Button, ButtonSize, ButtonVariant};
-use egui_shadcn::components::icon::{paint_icon, Icon, IconView};
-use egui_shadcn::{layout, Theme};
+use shadcn_egui::components::button::{Button, ButtonSize, ButtonVariant};
+use shadcn_egui::components::icon::{paint_icon, Icon, IconView};
+use shadcn_egui::{layout, Theme};
 
 /// Paint one icon into `rect` and return the flattened shapes.
 fn painted(icon: &Icon, rect: Rect) -> Vec<Shape> {

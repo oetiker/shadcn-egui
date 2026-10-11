@@ -45,7 +45,7 @@ impl CardSize {
 /// The size of the card being laid out; `card_title` reads it
 /// (`group-data-[size=sm]/card`).
 fn size_key() -> Id {
-    Id::new("egui_shadcn::card::size")
+    Id::new("shadcn_egui::card::size")
 }
 
 fn current_size(ui: &Ui) -> CardSize {

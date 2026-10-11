@@ -1,7 +1,7 @@
 mod common;
 
 use egui_kittest::Harness;
-use egui_shadcn::{layout, Theme};
+use shadcn_egui::{layout, Theme};
 
 /// `vstack` puts its gap between rows, `row` between items.
 #[test]
@@ -69,13 +69,13 @@ fn form_row_puts_the_control_after_the_label_column() {
         .response
     });
     assert_eq!(control.left() - row.left(), 100.0 + gap);
-    assert!(row.height() >= theme.line_px(egui_shadcn::style::TextSize::Sm));
+    assert!(row.height() >= theme.line_px(shadcn_egui::style::TextSize::Sm));
 }
 
 /// `layout::card` is the default-size card.
 #[test]
 fn layout_card_matches_the_default_card() {
-    use egui_shadcn::components::card::Card;
+    use shadcn_egui::components::card::Card;
     let theme = Theme::vega_dark();
     let a = common::measure(&theme, |ui| {
         ui.scope(|ui| {

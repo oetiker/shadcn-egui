@@ -2,11 +2,11 @@
 name = "icongen"
 version = "0.1.0"
 edition = "2021"
-description = "Convert stroked SVG icons (e.g. Lucide) into egui_shadcn icon constants"
+description = "Convert stroked SVG icons (e.g. Lucide) into shadcn_egui icon constants"
 license = "MIT"
 publish = false
 
-# Its own workspace: this tool never becomes a dependency of egui_shadcn or of
+# Its own workspace: this tool never becomes a dependency of shadcn_egui or of
 # any project that vendors the registry.
 [workspace]
 

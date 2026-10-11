@@ -1,6 +1,6 @@
-use egui_shadcn::reference::{settings_ui, SettingsState};
-use egui_shadcn::style::Style;
-use egui_shadcn::{Palette, Theme};
+use shadcn_egui::reference::{settings_ui, SettingsState};
+use shadcn_egui::style::Style;
+use shadcn_egui::{Palette, Theme};
 
 fn render(ctx: &egui::Context, state: &mut SettingsState) {
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| settings_ui(ui, state));

@@ -4,12 +4,12 @@ use egui::vec2;
 use egui::Key;
 use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
-use egui_shadcn::components::button::{Button, ButtonVariant};
-use egui_shadcn::components::dialog::{self, Dialog};
-use egui_shadcn::components::popover::{popover_header, Popover};
-use egui_shadcn::components::select::{Select, SelectSize};
-use egui_shadcn::components::tooltip::tooltip;
-use egui_shadcn::Theme;
+use shadcn_egui::components::button::{Button, ButtonVariant};
+use shadcn_egui::components::dialog::{self, Dialog};
+use shadcn_egui::components::popover::{popover_header, Popover};
+use shadcn_egui::components::select::{Select, SelectSize};
+use shadcn_egui::components::tooltip::tooltip;
+use shadcn_egui::Theme;
 
 /// A dialog harness: `open` starts true; the body has a button that counts clicks.
 fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
@@ -413,7 +413,7 @@ fn open_select_ignores_keys_once_focus_moves_elsewhere() {
             |ui, value: &mut usize| {
                 Theme::vega_dark().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS));
-                ui.add(egui_shadcn::components::button::Button::new("Other"));
+                ui.add(shadcn_egui::components::button::Button::new("Other"));
             },
             0,
         );

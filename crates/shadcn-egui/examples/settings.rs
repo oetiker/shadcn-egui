@@ -1,10 +1,10 @@
-use egui_shadcn::components::label::label;
-use egui_shadcn::components::select::Select;
-use egui_shadcn::components::slider::Slider;
-use egui_shadcn::components::tabs::Tabs;
-use egui_shadcn::reference::{settings_ui, SettingsState};
-use egui_shadcn::style::Style;
-use egui_shadcn::{layout, Palette, Theme};
+use shadcn_egui::components::label::label;
+use shadcn_egui::components::select::Select;
+use shadcn_egui::components::slider::Slider;
+use shadcn_egui::components::tabs::Tabs;
+use shadcn_egui::reference::{settings_ui, SettingsState};
+use shadcn_egui::style::Style;
+use shadcn_egui::{layout, Palette, Theme};
 
 type StyleFn = fn() -> Style;
 
@@ -97,7 +97,7 @@ fn main() -> eframe::Result<()> {
         .unwrap_or(0);
     let light = usize::from(args.get(2).map(String::as_str) == Some("light"));
     eframe::run_native(
-        "egui-shadcn settings",
+        "shadcn-egui settings",
         eframe::NativeOptions::default(),
         Box::new(move |cc| {
             let mut app = SettingsApp {

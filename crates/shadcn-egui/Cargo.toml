@@ -1,0 +1,23 @@
+[package]
+name = "shadcn-egui"
+description = "The shadcn/ui design system for egui: styles, palettes, presets and components"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Keep the runtime dependency surface minimal: these propagate to every
+# consumer. The library only needs egui and egui_extras' StripBuilder/Size
+# (no loaders, no features). Heavier crates (eframe, egui_kittest, wgpu) are
+# dev-only.
+[dependencies]
+egui.workspace = true
+egui_extras.workspace = true
+
+[dev-dependencies]
+eframe = "0.34"
+egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
+
+[[example]]
+name = "settings"

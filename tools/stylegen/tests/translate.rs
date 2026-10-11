@@ -365,7 +365,7 @@ fn tables_are_consistent() {
 /// `src/style/recipe.rs` defines.
 #[test]
 fn model_matches_recipe_rs() {
-    let src = read("../../src/style/recipe.rs");
+    let src = read("../../crates/shadcn-egui/src/style/recipe.rs");
     let consts: Vec<(String, u32)> = src
         .lines()
         .filter_map(|l| {

@@ -1,4 +1,4 @@
-use egui_shadcn::color::{mix_oklch, oklch_to_srgb, oklch_to_srgb_a, srgb_to_oklch};
+use shadcn_egui::color::{mix_oklch, oklch_to_srgb, oklch_to_srgb_a, srgb_to_oklch};
 
 #[test]
 fn white_is_white() {

@@ -1,8 +1,8 @@
-use egui_shadcn::theme::Theme;
+use shadcn_egui::theme::Theme;
 
 #[test]
 fn apply_sets_panel_fill_and_stores_theme() {
-    use egui_shadcn::theme::{theme, Theme};
+    use shadcn_egui::theme::{theme, Theme};
     let ctx = egui::Context::default();
     Theme::vega_dark().apply(&ctx);
     // run one frame so style takes effect
@@ -40,8 +40,8 @@ fn dark_border_is_low_alpha_white() {
     assert_eq!(d.palette.border.a(), 26);
 }
 
-use egui_shadcn::style::{Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize};
-use egui_shadcn::Palette;
+use shadcn_egui::style::{Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize};
+use shadcn_egui::Palette;
 
 #[test]
 fn new_detects_dark_from_palette() {

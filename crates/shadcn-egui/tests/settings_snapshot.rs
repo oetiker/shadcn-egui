@@ -3,9 +3,9 @@ mod common;
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
-use egui_shadcn::reference::{settings_ui, SettingsState};
-use egui_shadcn::style::Style;
-use egui_shadcn::{Palette, Theme};
+use shadcn_egui::reference::{settings_ui, SettingsState};
+use shadcn_egui::style::Style;
+use shadcn_egui::{Palette, Theme};
 
 fn state(tab: usize) -> SettingsState {
     SettingsState {

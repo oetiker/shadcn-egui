@@ -317,7 +317,7 @@ use std::sync::Arc;
 
 fn theme_id() -> egui::Id {
     static ID: std::sync::LazyLock<egui::Id> =
-        std::sync::LazyLock::new(|| egui::Id::new("egui_shadcn::active_theme"));
+        std::sync::LazyLock::new(|| egui::Id::new("shadcn_egui::active_theme"));
     *ID
 }
 
@@ -354,7 +354,7 @@ pub fn family_for(ctx: &egui::Context, w: Weight) -> egui::FontFamily {
 fn install_fonts(ctx: &egui::Context) {
     // Building the font atlas is expensive, so install the fonts only once per
     // context; re-applying (e.g. a light/dark toggle) only refreshes the style.
-    let installed_id = egui::Id::new("egui_shadcn::fonts_installed");
+    let installed_id = egui::Id::new("shadcn_egui::fonts_installed");
     if ctx
         .data(|d| d.get_temp::<bool>(installed_id))
         .unwrap_or(false)

@@ -1,5 +1,5 @@
 //! The reference screen: a settings form with tabs that doubles as a gallery of
-//! every ported component. Built entirely from the egui_shadcn theme + layout
+//! every ported component. Built entirely from the shadcn_egui theme + layout
 //! helpers + components. Reused by the snapshot eval and the `settings` example.
 
 use crate::components::badge::{badge, BadgeVariant};

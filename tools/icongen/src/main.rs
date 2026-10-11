@@ -1,4 +1,4 @@
-//! icongen: SVG icons -> egui_shadcn icon constants.
+//! icongen: SVG icons -> shadcn_egui icon constants.
 //!
 //! icongen --out src/icons.rs [--module-path crate::components::icon]
 //!         [--provenance "Lucide v1.54.0 (ISC)"] path/to/mic.svg path/to/power.svg ...
