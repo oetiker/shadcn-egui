@@ -1,7 +1,8 @@
 # Preset codes for the decoder fixtures (Phase 4, Task 2).
 # One code per line, then " # <origin>". Codes found in the upstream repos.
-# WARNING: the React and svelte sites decode several of these differently
-# (see docs/superpowers/notes/0.4/p0a-preset-codes.md); Phase 4 waits for the spec ruling.
+# All codes decode with the ui.shadcn.com (React) lists only (user ruling
+# 2026-10-11, spec D13); codes found on the svelte site are kept as inputs,
+# they mean other presets there (docs/superpowers/notes/0.4/p0a-preset-codes.md).
 a1Dg5eFl # shadcn-ui apps/v4/content/docs/changelog/2026-03-cli-v4.mdx:30
 ad3qkJ7 # shadcn-ui apps/v4/content/docs/changelog/2026-03-cli-v4.mdx:40
 adtk27v # shadcn-ui apps/v4/content/docs/changelog/2026-03-cli-v4.mdx:47

@@ -6,16 +6,19 @@
 `buildRegistryTheme`).
 **Index decisions applied:** G3 (theme ids are looked up in the bases first,
 then in the overlays), G4 (`destructive-foreground` = `oklch(0.985 0 0)`),
-G1 (drift also covers `libraries.ts`).
+§J (amendment 2026-10-11: palettes, preset lists and fonts come from the
+shadcn/ui (React) checkout `$UP_REACT`, pinned in `tools/stylegen/PIN_REACT`;
+style CSS stays on `$UP`; `libraries.ts` is not read).
 
-**Outcome:** stylegen reads upstream `themes.ts` and writes
+**Outcome:** stylegen reads upstream (React) `themes.ts` and `base-colors.ts` and writes
 `crates/shadcn-egui/src/palette/generated.rs` (7 base palettes, 17 colour
 overlays, light and dark, as OKLCH constants). `Palette` gains
 `chart: [Color32; 5]` and `Palette::from_upstream(base, theme, chart, dark)`,
 which merges like upstream `buildRegistryTheme` and is checked against
 fixtures produced by running upstream's own code. `stylegen generate` keeps
 byte copies of every upstream source it reads in `tools/stylegen/tests/fixtures/`,
-and `stylegen drift` reports when one of them no longer matches `$UP`.
+and `stylegen drift` reports when one of them no longer matches `$UP` or
+`$UP_REACT`.
 
 No rendering changes in this phase: no snapshot changes, no PNG review.
 
@@ -26,26 +29,32 @@ No rendering changes in this phase: no snapshot changes, no PNG review.
 **Files:**
 - Create: `tools/stylegen/src/themes.rs`
 - Modify: `tools/stylegen/src/lib.rs` (add `pub mod themes;`)
-- Modify: `tools/stylegen/src/emit.rs` (`header` becomes `pub(crate)`)
+- Modify: `tools/stylegen/src/emit.rs` (`header` becomes `pub(crate)`; new `pub(crate) fn header_react`)
 - Create: `tools/stylegen/tests/themes.rs`
-- Create: `tools/stylegen/tests/fixtures/themes.ts` (byte copy of `$UP/docs/src/lib/registry/themes.ts`)
+- Create: `tools/stylegen/PIN_REACT` (`c2a67849`)
+- Create: `tools/stylegen/tests/fixtures/{themes.ts,base-colors.ts}` (byte copies of `$UP_REACT/apps/v4/registry/{themes.ts,base-colors.ts}`), `tools/stylegen/tests/fixtures/SHADCN-UI-LICENSE` (copy of `$UP_REACT/LICENSE.md`)
 
 **Interfaces:**
-- Consumes: `stylegen::emit::header(pin: &str, source: &str) -> String` (exists, made `pub(crate)`).
+- Consumes: `stylegen::emit::header(pin: &str, source: &str) -> String` (exists, made `pub(crate)`); new `stylegen::emit::header_react(pin, source)` (same text, `shadcn/ui` in place of `shadcn-svelte`).
 - Produces (all `pub` in `stylegen::themes`):
   - `struct Oklch { pub l: f32, pub c: f32, pub h: f32, pub alpha: f32 }` (`Clone, Copy, Debug, PartialEq`)
   - `struct ThemeEntry { pub name: String, pub radius_rem: Option<f32>, pub light: Vec<(String, Oklch)>, pub dark: Vec<(String, Oklch)> }` (`Clone, Debug, Default, PartialEq`)
   - `struct Themes { pub bases: Vec<ThemeEntry>, pub overlays: Vec<ThemeEntry> }` (`Clone, Debug, Default, PartialEq`)
   - `const VARS: [(&str, &str); 23]` — upstream var name → crate `Var` variant, in `Var` order.
   - `fn parse_oklch(s: &str) -> Result<Oklch, String>`
-  - `fn parse_themes(src: &str) -> Result<Themes, String>`
+  - `fn parse_themes(themes_ts: &str, base_colors_ts: &str) -> Result<Themes, String>` — React `THEMES` entries; the names `base-colors.ts` filters are the bases (in `THEMES` order), all others overlays
   - `fn emit_palettes(pin: &str, themes: &Themes) -> Result<String, String>` — the text of `palette/generated.rs` (index C).
 
-- [ ] **Step 1: Copy the fixture**
+- [ ] **Step 1: Pin the React checkout and copy the fixtures**
 
 ```bash
-cp "$UP/docs/src/lib/registry/themes.ts" tools/stylegen/tests/fixtures/themes.ts
-grep -c 'name: "' tools/stylegen/tests/fixtures/themes.ts   # 24
+test "$(git -C "$UP_REACT" rev-parse HEAD)" = c2a67849be260701852b0977ba15eb5f3a0ce2a4
+echo c2a67849 > tools/stylegen/PIN_REACT
+cp "$UP_REACT/apps/v4/registry/themes.ts" tools/stylegen/tests/fixtures/themes.ts
+cp "$UP_REACT/apps/v4/registry/base-colors.ts" tools/stylegen/tests/fixtures/base-colors.ts
+cp "$UP_REACT/LICENSE.md" tools/stylegen/tests/fixtures/SHADCN-UI-LICENSE
+grep -c 'name: "' tools/stylegen/tests/fixtures/themes.ts   # 24 (no "gray")
+grep -n 'includes(' tools/stylegen/tests/fixtures/base-colors.ts   # the 7 base names on one line
 ```
 
 - [ ] **Step 2: Write the failing tests**
@@ -59,8 +68,12 @@ const ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
 fn fixture() -> Themes {
     let src = std::fs::read_to_string(format!("{ROOT}/tests/fixtures/themes.ts")).expect("themes.ts fixture");
-    parse_themes(&src).expect("fixture parses")
+    let bases = std::fs::read_to_string(format!("{ROOT}/tests/fixtures/base-colors.ts")).expect("base-colors.ts fixture");
+    parse_themes(&src, &bases).expect("fixture parses")
 }
+
+/// A `base-colors.ts` whose filter names the one base `x`.
+const BASES_X: &str = "export const BASE_COLORS = THEMES.filter((theme) =>\n  [\"x\"].includes(\n    theme.name\n  )\n)\n";
 
 #[test]
 fn oklch_values_parse() {
@@ -104,8 +117,8 @@ fn every_base_defines_every_var_in_both_modes() {
 #[test]
 fn emit_is_deterministic_and_skips_sidebar_and_radius() {
     let t = fixture();
-    let a = emit_palettes("493481fa", &t).expect("emit");
-    assert_eq!(a, emit_palettes("493481fa", &t).expect("emit"), "output differs between runs");
+    let a = emit_palettes("c2a67849", &t).expect("emit");
+    assert_eq!(a, emit_palettes("c2a67849", &t).expect("emit"), "output differs between runs");
     assert!(a.starts_with("// @generated by tools/stylegen — do not edit."));
     assert!(a.contains("(\"neutral\", 0.625, &["));
     assert!(a.contains("(Background, O(1.0, 0.0, 0.0, 1.0)),"));
@@ -143,9 +156,16 @@ fn unknown_vars_and_incomplete_bases_are_errors() {
 
 #[test]
 fn a_var_line_that_is_not_oklch_or_rem_is_an_error() {
-    let src = "export const BASE_THEMES = [\n\t{\n\t\tname: \"x\",\n\t\tcssVars: {\n\t\t\tlight: {\n\t\t\t\tbackground: \"#fff\",\n\t\t\t},\n\t\t},\n\t},\n] as const;\n";
-    let err = parse_themes(src).unwrap_err();
+    let src = "export const THEMES: RegistryItem[] = [\n  {\n    name: \"x\",\n    cssVars: {\n      light: {\n        background: \"#fff\",\n      },\n    },\n  },\n] as const satisfies RegistryItem[]\n";
+    let err = parse_themes(src, BASES_X).unwrap_err();
     assert!(err.starts_with("themes.ts:6:"), "{err}");
+}
+
+#[test]
+fn a_base_missing_from_themes_is_an_error() {
+    let src = "export const THEMES: RegistryItem[] = [\n  {\n    name: \"y\",\n  },\n] as const satisfies RegistryItem[]\n";
+    assert!(parse_themes(src, BASES_X).unwrap_err().contains("`x`"));
+    assert!(parse_themes(src, "no list here").is_err());
 }
 ```
 
@@ -156,14 +176,23 @@ Expected: FAIL to compile (`stylegen::themes` not found).
 
 - [ ] **Step 4: Implement**
 
-`tools/stylegen/src/emit.rs`: change `fn header(` to `pub(crate) fn header(`.
+`tools/stylegen/src/emit.rs`: change `fn header(` to `pub(crate) fn header(`, and add
+below it:
+
+```rust
+/// [`header`] for outputs generated from the shadcn/ui (React) checkout.
+pub(crate) fn header_react(pin: &str, source: &str) -> String {
+    header(pin, source).replacen("shadcn-svelte", "shadcn/ui", 1)
+}
+```
 
 `tools/stylegen/src/lib.rs`: add `pub mod themes;` (keep the list alphabetical).
 
 `tools/stylegen/src/themes.rs`:
 
 ```rust
-//! `docs/src/lib/registry/themes.ts` → `crates/shadcn-egui/src/palette/generated.rs`.
+//! shadcn/ui `apps/v4/registry/themes.ts` (+ `base-colors.ts`, which names
+//! the bases) → `crates/shadcn-egui/src/palette/generated.rs`.
 //!
 //! A line-based reader: upstream writes one `key: "value",` per line inside
 //! each `light: {` / `dark: {` map. Anything else inside such a map is an
@@ -178,7 +207,7 @@ pub struct Oklch {
     pub alpha: f32,
 }
 
-/// One entry of `BASE_THEMES` or `THEMES`.
+/// One entry of `THEMES`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ThemeEntry {
     pub name: String,
@@ -189,7 +218,8 @@ pub struct ThemeEntry {
     pub dark: Vec<(String, Oklch)>,
 }
 
-/// `BASE_THEMES`, and the colour overlays `THEMES` appends to them.
+/// The base colours (`BASE_COLORS` of `base-colors.ts`) and the other
+/// `THEMES` entries, the colour overlays, each in `THEMES` order.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Themes {
     pub bases: Vec<ThemeEntry>,
@@ -249,41 +279,42 @@ pub fn parse_oklch(s: &str) -> Result<Oklch, String> {
     Ok(Oklch { l, c, h, alpha })
 }
 
-#[derive(PartialEq)]
-enum Section {
-    Outside,
-    Bases,
-    Overlays,
+/// The names in the `[...].includes(` filter of `base-colors.ts`.
+fn base_names(base_colors_ts: &str) -> Result<Vec<String>, String> {
+    let line = base_colors_ts
+        .lines()
+        .find(|l| l.contains("].includes("))
+        .ok_or("base-colors.ts: no `[...].includes(` line")?;
+    let list = line.split_once('[').and_then(|(_, r)| r.split_once(']')).map(|(l, _)| l).unwrap_or_default();
+    let names: Vec<String> = list.split('"').skip(1).step_by(2).map(str::to_owned).collect();
+    if names.is_empty() {
+        return Err("base-colors.ts: empty base list".into());
+    }
+    Ok(names)
 }
 
-/// Read `BASE_THEMES` and the overlays of `THEMES`.
-pub fn parse_themes(src: &str) -> Result<Themes, String> {
-    let mut section = Section::Outside;
-    let mut out = Themes::default();
+/// Read the `THEMES` array; `base_colors_ts` says which entries are bases.
+pub fn parse_themes(src: &str, base_colors_ts: &str) -> Result<Themes, String> {
+    let base_ids = base_names(base_colors_ts)?;
+    let mut inside = false;
+    let mut all: Vec<ThemeEntry> = Vec::new();
     // Some(true) inside a `dark: {` map, Some(false) inside `light: {`.
     let mut mode: Option<bool> = None;
     for (i, line) in src.lines().enumerate() {
         let n = i + 1;
         let t = line.trim();
-        if t.starts_with("export const BASE_THEMES = [") {
-            section = Section::Bases;
+        if t.starts_with("export const THEMES") && t.ends_with('[') {
+            inside = true;
             continue;
         }
-        if t.starts_with("export const THEMES = [") {
-            section = Section::Overlays;
+        if !inside {
             continue;
         }
-        if section == Section::Outside {
+        if mode.is_none() && (t == "]" || t.starts_with("] as const")) {
+            inside = false;
             continue;
         }
-        if t.starts_with("] as const") {
-            section = Section::Outside;
-            continue;
-        }
-        if t == "...BASE_THEMES," {
-            continue;
-        }
-        let list = if section == Section::Bases { &mut out.bases } else { &mut out.overlays };
+        let list = &mut all;
         if mode.is_none() {
             if let Some(name) = t.strip_prefix("name: \"").and_then(|r| r.strip_suffix("\",")) {
                 list.push(ThemeEntry { name: name.to_owned(), ..ThemeEntry::default() });
@@ -326,6 +357,19 @@ pub fn parse_themes(src: &str) -> Result<Themes, String> {
         let vars = if dark { &mut entry.dark } else { &mut entry.light };
         vars.push((key.to_owned(), c));
     }
+    let mut out = Themes::default();
+    for id in &base_ids {
+        if !all.iter().any(|e| &e.name == id) {
+            return Err(format!("base-colors.ts names `{id}`, which themes.ts lacks"));
+        }
+    }
+    for e in all {
+        if base_ids.contains(&e.name) {
+            out.bases.push(e);
+        } else {
+            out.overlays.push(e);
+        }
+    }
     Ok(out)
 }
 
@@ -344,9 +388,9 @@ fn var_lines(theme: &str, mode: &str, vars: &[(String, Oklch)]) -> Result<String
 
 /// `crates/shadcn-egui/src/palette/generated.rs`.
 pub fn emit_palettes(pin: &str, themes: &Themes) -> Result<String, String> {
-    let mut s = crate::emit::header(pin, "`docs/src/lib/registry/themes.ts`");
+    let mut s = crate::emit::header_react(pin, "`apps/v4/registry/themes.ts` and `base-colors.ts`");
     s += "use super::{Oklch as O, Var, Var::*};\n\n";
-    s += "/// `BASE_THEMES`: (id, radius in rem, light vars, dark vars). Every var is present.\n";
+    s += "/// The base colours (`base-colors.ts`): (id, radius in rem, light vars, dark vars). Every var is present.\n";
     s += "pub(crate) const BASES: &[(&str, f32, &[(Var, O)], &[(Var, O)])] = &[\n";
     for b in &themes.bases {
         let radius = b.radius_rem.ok_or_else(|| format!("base `{}` has no radius", b.name))?;
@@ -364,7 +408,7 @@ pub fn emit_palettes(pin: &str, themes: &Themes) -> Result<String, String> {
         );
     }
     s += "];\n\n";
-    s += "/// The colour themes `THEMES` adds after the bases: (id, light vars, dark vars).\n";
+    s += "/// The other `THEMES` entries, colour overlays: (id, light vars, dark vars).\n";
     s += "pub(crate) const OVERLAYS: &[(&str, &[(Var, O)], &[(Var, O)])] = &[\n";
     for o in &themes.overlays {
         s += &format!(
@@ -382,14 +426,14 @@ pub fn emit_palettes(pin: &str, themes: &Themes) -> Result<String, String> {
 - [ ] **Step 5: Run the tests**
 
 Run: `cargo test --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- --test-threads 4`
-Expected: all pass (the 6 new ones and every existing stylegen test).
+Expected: all pass (the 7 new ones and every existing stylegen test).
 
 - [ ] **Step 6: Clippy and commit**
 
 ```bash
 cargo clippy --manifest-path tools/stylegen/Cargo.toml --all-targets --jobs 4 -- -D warnings
 git add tools/stylegen
-git commit -m "feat(stylegen): parse upstream themes.ts into palette constants
+git commit -m "feat(stylegen): parse shadcn/ui themes.ts into palette constants
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -402,7 +446,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `tools/stylegen/src/sources.rs`
 - Modify: `tools/stylegen/src/lib.rs` (add `pub mod sources;`), `tools/stylegen/src/main.rs` (`generate`)
 - Modify: `tools/stylegen/tests/generated.rs` (palette file is current)
-- Create: `tools/stylegen/tests/fixtures/{preset.ts,libraries.ts,font-definitions.ts}` (written by `generate`)
+- Create: `tools/stylegen/tests/fixtures/{preset.ts,config.ts,font-definitions.ts}` (written by `generate`, from `$UP_REACT`)
 - Create: `crates/shadcn-egui/src/palette/mod.rs`
 - Create (generated): `crates/shadcn-egui/src/palette/generated.rs`
 - Modify: `crates/shadcn-egui/src/theme.rs` (`Palette`), `crates/shadcn-egui/src/lib.rs` (`mod palette;`)
@@ -411,7 +455,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `stylegen::themes::{parse_themes, emit_palettes}` (Task 3.1).
 - Produces:
-  - `stylegen::sources::STYLES: &[&str]` (moved from `main.rs`), `stylegen::sources::sources() -> Vec<(String, String)>` (`(fixture file name, path inside the shadcn-svelte checkout)`), `stylegen::sources::refresh(up: &Path, tool: &Path) -> std::io::Result<()>`. Task 3.4 and Phase 4 rely on them.
+  - `stylegen::sources::STYLES: &[&str]` (moved from `main.rs`), `pub enum Upstream { Svelte, React }`, `stylegen::sources::sources() -> Vec<(Upstream, String, String)>` (`(checkout, fixture file name, path inside that checkout)`), `stylegen::sources::refresh(up: &Path, up_react: &Path, tool: &Path) -> std::io::Result<()>`. Task 3.4 and Phase 4 rely on them.
+  - CLI: `stylegen generate|drift <shadcn-svelte> <shadcn-ui> <repo-root>`; `main` checks `PIN` against the svelte checkout and `PIN_REACT` against the React one.
   - In the crate (index C): `Palette.chart: [Color32; 5]`; `Palette::from_upstream(base: &str, theme: &str, chart: &str, dark: bool) -> Option<Palette>`; `pub(crate) mod palette` with `Oklch(pub f32, pub f32, pub f32, pub f32)`, `enum Var` (23 variants), `pub(crate) fn merge(base, theme, chart, dark) -> Option<Palette>`; `generated::{BASES, OVERLAYS}`.
   - `palette::base_radius_px` is **not** added here: nothing would call it before Phase 4 and the lib build would warn (`dead_code`) under `-D warnings`. Phase 4 Task 5 adds it.
 
@@ -451,8 +496,8 @@ Append to `tools/stylegen/tests/generated.rs`:
 /// `palette/generated.rs` is exactly what the generator gives for the fixture copy.
 #[test]
 fn committed_palettes_are_current() {
-    let pin = read("PIN").trim().to_owned();
-    let themes = stylegen::themes::parse_themes(&read("tests/fixtures/themes.ts")).expect("themes.ts");
+    let pin = read("PIN_REACT").trim().to_owned();
+    let themes = stylegen::themes::parse_themes(&read("tests/fixtures/themes.ts"), &read("tests/fixtures/base-colors.ts")).expect("themes.ts");
     let fresh = stylegen::themes::emit_palettes(&pin, &themes).expect("emit");
     assert_eq!(fresh, read("../../crates/shadcn-egui/src/palette/generated.rs"), "re-run stylegen generate");
 }
@@ -475,25 +520,36 @@ use std::path::Path;
 /// Every upstream style; each gets a report, the ones in `EXPORT` also Rust.
 pub const STYLES: &[&str] = &["vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea"];
 
-/// `(fixture file name, path inside the shadcn-svelte checkout)`.
-pub fn sources() -> Vec<(String, String)> {
-    let mut v: Vec<(String, String)> = [
-        ("themes.ts", "docs/src/lib/registry/themes.ts"),
-        ("preset.ts", "packages/cli/src/preset/preset.ts"),
-        ("libraries.ts", "packages/cli/src/icons/libraries.ts"),
-        ("font-definitions.ts", "docs/src/lib/font-definitions.ts"),
+/// The two upstream checkouts: shadcn-svelte (`PIN`, style CSS) and
+/// shadcn/ui (`PIN_REACT`, preset lists, palettes, fonts).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Upstream {
+    Svelte,
+    React,
+}
+
+/// `(checkout, fixture file name, path inside that checkout)`.
+pub fn sources() -> Vec<(Upstream, String, String)> {
+    let mut v: Vec<(Upstream, String, String)> = [
+        ("themes.ts", "apps/v4/registry/themes.ts"),
+        ("base-colors.ts", "apps/v4/registry/base-colors.ts"),
+        ("config.ts", "apps/v4/registry/config.ts"),
+        ("preset.ts", "packages/registry/src/preset/preset.ts"),
+        ("font-definitions.ts", "apps/v4/lib/font-definitions.ts"),
     ]
     .iter()
-    .map(|(f, u)| (f.to_string(), u.to_string()))
+    .map(|(f, u)| (Upstream::React, f.to_string(), u.to_string()))
     .collect();
-    v.extend(STYLES.iter().map(|s| (format!("style-{s}.css"), format!("docs/src/lib/registry/styles/style-{s}.css"))));
+    v.extend(STYLES.iter().map(|s| (Upstream::Svelte, format!("style-{s}.css"), format!("docs/src/lib/registry/styles/style-{s}.css"))));
     v
 }
 
-/// Copy every source from the checkout `up` into `<tool>/tests/fixtures/`.
-pub fn refresh(up: &Path, tool: &Path) -> std::io::Result<()> {
-    for (fixture, upstream) in sources() {
-        std::fs::copy(up.join(&upstream), tool.join("tests/fixtures").join(&fixture))?;
+/// Copy every source from its checkout (`up`: svelte, `up_react`: React)
+/// into `<tool>/tests/fixtures/`.
+pub fn refresh(up: &Path, up_react: &Path, tool: &Path) -> std::io::Result<()> {
+    for (from, fixture, upstream) in sources() {
+        let root = if from == Upstream::React { up_react } else { up };
+        std::fs::copy(root.join(&upstream), tool.join("tests/fixtures").join(&fixture))?;
     }
     Ok(())
 }
@@ -503,6 +559,14 @@ pub fn refresh(up: &Path, tool: &Path) -> std::io::Result<()> {
 
 `tools/stylegen/src/main.rs`:
 - delete the `STYLES` const and import it: `use stylegen::sources::STYLES;`, and add `themes` to the `use stylegen::{…}` list;
+- the CLI takes the React checkout as a new second path. Module docs:
+  `//! stylegen generate|drift <shadcn-svelte checkout> <shadcn-ui checkout> <repository root>`.
+  In `main`: read `(cmd, up, up_react, root)` from `args.get(1..=4)` (usage
+  line `"usage: stylegen generate|drift <shadcn-svelte> <shadcn-ui> <repo-root>"`),
+  read `PIN_REACT` like `PIN` into `pin_react` and call
+  `check_pin(&up_react, &pin_react)` after `check_pin(&up, &pin)`; pass
+  `&up_react` and `&pin_react` to `generate` (new parameters after `up` and
+  `pin`) and `&up_react` to `drift` (Task 3.4);
 - add next to `write`:
 
 ```rust
@@ -514,7 +578,7 @@ fn read(path: &Path) -> String {
 - in `generate`, as the first statement:
 
 ```rust
-    stylegen::sources::refresh(up, tool).expect("copy the upstream sources into tests/fixtures");
+    stylegen::sources::refresh(up, up_react, tool).expect("copy the upstream sources into tests/fixtures");
 ```
 
 - in the style loop, read the fixture copy instead of the checkout (same bytes):
@@ -527,7 +591,8 @@ fn read(path: &Path) -> String {
 - before `if failed {`:
 
 ```rust
-    let palettes = themes::parse_themes(&read(&tool.join("tests/fixtures/themes.ts"))).and_then(|t| themes::emit_palettes(pin, &t));
+    let palettes = themes::parse_themes(&read(&tool.join("tests/fixtures/themes.ts")), &read(&tool.join("tests/fixtures/base-colors.ts")))
+        .and_then(|t| themes::emit_palettes(pin_react, &t));
     match palettes {
         Ok(src) => {
             let dir = root.join(CRATE).join("src/palette");
@@ -542,17 +607,17 @@ fn read(path: &Path) -> String {
 ```
 
 (If the compiler reports `up` unused in `generate` after this change, it is
-not: `refresh` uses it.)
+not: `refresh` uses it. `drift` uses `up_react` from Task 3.4 on.)
 
 - [ ] **Step 4: Run `generate`**
 
 ```bash
-cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- generate "$UP" .
+cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- generate "$UP" "$UP_REACT" .
 git status --short
 ```
 
 Expected: new `crates/shadcn-egui/src/palette/generated.rs`, new fixtures
-`preset.ts`, `libraries.ts`, `font-definitions.ts`; `themes.ts` and every
+`preset.ts`, `config.ts`, `font-definitions.ts`; `themes.ts`, `base-colors.ts` and every
 `style-*.css` fixture, every `src/style/*.rs` and every report unchanged (if
 any of them changed, the fixture copies were stale: stop and find out why
 before going on).
@@ -562,7 +627,7 @@ before going on).
 `crates/shadcn-egui/src/palette/mod.rs`:
 
 ```rust
-//! shadcn base colours and colour themes, generated from upstream
+//! shadcn base colours and colour themes, generated from shadcn/ui
 //! `themes.ts` (`generated.rs`, by `tools/stylegen`), and the merge upstream
 //! `buildRegistryTheme` applies to them.
 
@@ -619,7 +684,7 @@ fn base(id: &str) -> Option<(f32, Vars, Vars)> {
 }
 
 /// A theme's vars: a base name overlays that whole base (upstream `THEMES`
-/// starts with `...BASE_THEMES`), else a colour overlay.
+/// holds the bases too), else a colour overlay.
 fn theme_vars(id: &str, dark: bool) -> Option<Vars> {
     let pick = |light: Vars, d: Vars| if dark { d } else { light };
     base(id)
@@ -758,7 +823,9 @@ git add -A
 git commit -m "feat: generated shadcn palettes and chart colours
 
 stylegen generate now keeps byte copies of every upstream source it reads
-in tests/fixtures and writes palette/generated.rs from themes.ts. Palette
+in tests/fixtures (palettes, preset lists and fonts from a second pinned
+checkout, shadcn/ui; style CSS from shadcn-svelte) and writes
+palette/generated.rs from themes.ts. Palette
 gains chart colours and from_upstream(base, theme, chart, dark), which
 merges like upstream buildRegistryTheme.
 
@@ -780,30 +847,30 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   `<base> <theme> <chart> <subtle|bold> <light|dark> <var> <value…>` (value
   is the rest of the line, e.g. `oklch(1 0 0 / 10%)`); `#` lines are comments.
   The script follows the index A convention: arguments
-  `<shadcn-svelte checkout> <scratch dir>`, output on stdout.
+  `<shadcn-ui checkout> <scratch dir>`, output on stdout.
 
 - [ ] **Step 1: Write the script**
 
 `tools/stylegen/upstream/registry-themes.mjs`:
 
 ```js
-// Runs upstream buildRegistryTheme (docs/src/lib/registry/config.ts) on a
+// Runs upstream buildRegistryTheme (shadcn/ui apps/v4/registry/config.ts) on a
 // fixed set of base colour / theme / chart colour / menu accent cases and
 // prints every resulting CSS var, for crates/shadcn-egui/tests/palettes.rs.
 //
-// Usage: node tools/stylegen/upstream/registry-themes.mjs <shadcn-svelte checkout> <scratch dir> \
+// Usage: node tools/stylegen/upstream/registry-themes.mjs <shadcn-ui checkout> <scratch dir> \
 //          > crates/shadcn-egui/tests/fixtures/registry_themes.txt
 // Needs node >= 22.18 (TypeScript type stripping on by default).
-// Only buildRegistryTheme and RADII are sliced out of config.ts: the rest of
-// that file imports packages that are not installed.
+// Only RADII, getTheme, getBaseColor and buildRegistryTheme are sliced out of
+// config.ts: the rest of that file imports packages that are not installed.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [up, scratch] = process.argv.slice(2);
-if (!up || !scratch) {
-  console.error("usage: registry-themes.mjs <shadcn-svelte checkout> <scratch dir>");
+const [upReact, scratch] = process.argv.slice(2);
+if (!upReact || !scratch) {
+  console.error("usage: registry-themes.mjs <shadcn-ui checkout> <scratch dir>");
   process.exit(2);
 }
 mkdirSync(scratch, { recursive: true });
@@ -826,27 +893,34 @@ function slice(text, marker) {
   throw new Error(`unbalanced: ${marker}`);
 }
 
-const pin = execFileSync("git", ["-C", up, "rev-parse", "HEAD"]).toString().trim().slice(0, 8);
-// The only import of themes.ts is a type from an uninstalled package.
-const themesTs = readFileSync(join(up, "docs/src/lib/registry/themes.ts"), "utf8").replace(/^import .*$/m, "");
-writeFileSync(join(scratch, "themes.ts"), themesTs);
-const config = readFileSync(join(up, "docs/src/lib/registry/config.ts"), "utf8");
+const pin = execFileSync("git", ["-C", upReact, "rev-parse", "HEAD"]).toString().trim().slice(0, 8);
+const reg = join(upReact, "apps/v4/registry");
+// The only import of themes.ts is a type from an uninstalled package; type
+// stripping drops the `: RegistryItem[]` / `satisfies` annotations.
+writeFileSync(join(scratch, "themes.ts"), readFileSync(join(reg, "themes.ts"), "utf8").replace(/^import .*$/m, ""));
+const baseColors = readFileSync(join(reg, "base-colors.ts"), "utf8")
+  .replace(/^import \{ THEMES \} from .*$/m, 'import { THEMES } from "./themes.ts";');
+if (/from "@\//.test(baseColors)) throw new Error("an upstream import was not rewritten");
+writeFileSync(join(scratch, "base-colors.ts"), baseColors);
+const config = readFileSync(join(reg, "config.ts"), "utf8");
 writeFileSync(
   join(scratch, "registry.ts"),
   [
-    'import { BASE_THEMES, THEMES } from "./themes.ts";',
+    'import { THEMES } from "./themes.ts";',
+    'import { BASE_COLORS } from "./base-colors.ts";',
     "type DesignSystemConfig = any;",
-    "const getTheme = (name: string) => THEMES.find((t) => t.name === name);",
-    "const getBaseColor = (name: string) => BASE_THEMES.find((t) => t.name === name);",
     slice(config, "export const RADII ="),
-    slice(config, "export function buildRegistryTheme"),
-    "export { BASE_THEMES, THEMES };",
+    // The `(` keeps getTheme from matching getThemesForBaseColor.
+    slice(config, "export function getTheme("),
+    slice(config, "export function getBaseColor("),
+    slice(config, "export function buildRegistryTheme("),
+    "export { BASE_COLORS, THEMES };",
     "",
   ].join("\n"),
 );
-const { buildRegistryTheme, BASE_THEMES, THEMES } = await import(pathToFileURL(join(scratch, "registry.ts")).href);
+const { buildRegistryTheme, BASE_COLORS, THEMES } = await import(pathToFileURL(join(scratch, "registry.ts")).href);
 
-const baseIds = BASE_THEMES.map((t) => t.name);
+const baseIds = BASE_COLORS.map((t) => t.name);
 const themeIds = THEMES.map((t) => t.name);
 const cases = [
   // Every theme on neutral, charts from the same theme.
@@ -867,7 +941,7 @@ const cases = [
 ];
 
 const out = [
-  `# @generated by tools/stylegen/upstream/registry-themes.mjs from shadcn-svelte ${pin}; do not edit.`,
+  `# @generated by tools/stylegen/upstream/registry-themes.mjs from shadcn/ui ${pin}; do not edit.`,
   "# <base> <theme> <chart> <subtle|bold> <light|dark> <var> <value>",
 ];
 for (const [baseColor, theme, chartColor, menuAccent] of cases) {
@@ -895,7 +969,7 @@ process.stdout.write(out.join("\n") + "\n");
 
 ```bash
 mkdir -p crates/shadcn-egui/tests/fixtures
-node tools/stylegen/upstream/registry-themes.mjs "$UP" "$SCRATCH/registry-themes" > crates/shadcn-egui/tests/fixtures/registry_themes.txt
+node tools/stylegen/upstream/registry-themes.mjs "$UP_REACT" "$SCRATCH/registry-themes" > crates/shadcn-egui/tests/fixtures/registry_themes.txt
 grep -vc '^#' crates/shadcn-egui/tests/fixtures/registry_themes.txt
 grep -c ' bold ' crates/shadcn-egui/tests/fixtures/registry_themes.txt
 ```
@@ -983,6 +1057,9 @@ fn unknown_ids_give_none() {
     assert_eq!(Palette::from_upstream("neutral", "nope", "neutral", false), None);
     assert_eq!(Palette::from_upstream("neutral", "neutral", "nope", true), None);
     assert_eq!(Palette::from_upstream("", "", "", true), None);
+    // `gray` is a preset code value on ui.shadcn.com without a palette (index §J).
+    assert_eq!(Palette::from_upstream("gray", "neutral", "neutral", false), None);
+    assert_eq!(Palette::from_upstream("neutral", "gray", "neutral", false), None);
 }
 ```
 
@@ -1015,7 +1092,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `stylegen::sources::sources()` (Task 3.2).
-- Produces: `stylegen::drift::check_sources(up: &Path, tool: &Path) -> Vec<String>` — one line per fixture copy that is missing or differs from the checkout, each ending in `re-run stylegen generate`; empty means clean.
+- Produces: `stylegen::drift::check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String>` — one line per fixture copy that is missing or differs from its checkout (`up`: svelte, `up_react`: React), each ending in `re-run stylegen generate`; empty means clean.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1025,25 +1102,27 @@ Append to `tools/stylegen/tests/drift.rs`:
 #[test]
 fn reports_fixture_copies_that_differ_from_upstream() {
     use stylegen::drift::check_sources;
-    use stylegen::sources::sources;
+    use stylegen::sources::{sources, Upstream};
     let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("stylegen-sources-{}", std::process::id()));
-    let (up, tool) = (dir.join("up"), dir.join("tool"));
-    for (fixture, upstream) in sources() {
-        let src = up.join(&upstream);
+    let (up, up_react, tool) = (dir.join("up"), dir.join("up-react"), dir.join("tool"));
+    for (from, fixture, upstream) in sources() {
+        let src = if from == Upstream::React { up_react.join(&upstream) } else { up.join(&upstream) };
         std::fs::create_dir_all(src.parent().unwrap()).unwrap();
         std::fs::write(&src, format!("upstream {fixture}")).unwrap();
         std::fs::create_dir_all(tool.join("tests/fixtures")).unwrap();
         std::fs::write(tool.join("tests/fixtures").join(&fixture), format!("upstream {fixture}")).unwrap();
     }
-    assert!(check_sources(&up, &tool).is_empty(), "identical copies are clean");
+    assert!(check_sources(&up, &up_react, &tool).is_empty(), "identical copies are clean");
 
-    std::fs::write(up.join("docs/src/lib/registry/themes.ts"), "changed upstream").unwrap();
-    std::fs::remove_file(tool.join("tests/fixtures/libraries.ts")).unwrap();
-    let problems = check_sources(&up, &tool);
+    std::fs::write(up_react.join("apps/v4/registry/themes.ts"), "changed upstream").unwrap();
+    std::fs::remove_file(tool.join("tests/fixtures/preset.ts")).unwrap();
+    std::fs::write(up.join("docs/src/lib/registry/styles/style-vega.css"), "changed upstream").unwrap();
+    let problems = check_sources(&up, &up_react, &tool);
     std::fs::remove_dir_all(&dir).unwrap();
-    assert_eq!(problems.len(), 2, "{problems:#?}");
+    assert_eq!(problems.len(), 3, "{problems:#?}");
     assert!(problems.iter().any(|p| p.contains("themes.ts") && p.ends_with("re-run stylegen generate")));
-    assert!(problems.iter().any(|p| p.contains("libraries.ts") && p.ends_with("re-run stylegen generate")));
+    assert!(problems.iter().any(|p| p.contains("preset.ts") && p.ends_with("re-run stylegen generate")));
+    assert!(problems.iter().any(|p| p.contains("style-vega.css") && p.ends_with("re-run stylegen generate")));
 }
 ```
 
@@ -1057,11 +1136,12 @@ Append to `tools/stylegen/src/drift.rs`:
 ```rust
 /// Fixture copies (`<tool>/tests/fixtures/`) that no longer match the
 /// upstream checkout: tests and generated code would describe stale sources.
-pub fn check_sources(up: &Path, tool: &Path) -> Vec<String> {
+pub fn check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String> {
     let mut problems = Vec::new();
-    for (fixture, upstream) in crate::sources::sources() {
+    for (from, fixture, upstream) in crate::sources::sources() {
+        let root = if from == crate::sources::Upstream::React { up_react } else { up };
         let ours = std::fs::read(tool.join("tests/fixtures").join(&fixture));
-        let theirs = std::fs::read(up.join(&upstream));
+        let theirs = std::fs::read(root.join(&upstream));
         match (ours, theirs) {
             (Ok(a), Ok(b)) if a == b => {}
             (_, Err(e)) => problems.push(format!("{upstream}: cannot read the upstream file ({e}); re-run stylegen generate")),
@@ -1074,12 +1154,12 @@ pub fn check_sources(up: &Path, tool: &Path) -> Vec<String> {
 ```
 
 `tools/stylegen/src/main.rs`: the `"drift"` arm becomes
-`"drift" => drift(&up, &root.join(CRATE), &tool, &lines),` and `drift` reads:
+`"drift" => drift(&up, &up_react, &root.join(CRATE), &tool, &lines),` and `drift` reads:
 
 ```rust
-fn drift(up: &Path, crate_root: &Path, tool: &Path, lines: &[markers::MarkerLine]) -> ExitCode {
+fn drift(up: &Path, up_react: &Path, crate_root: &Path, tool: &Path, lines: &[markers::MarkerLine]) -> ExitCode {
     let mut problems = stylegen::drift::check(up, crate_root, lines);
-    problems.extend(stylegen::drift::check_sources(up, tool));
+    problems.extend(stylegen::drift::check_sources(up, up_react, tool));
     for p in &problems {
         println!("{p}");
     }
@@ -1096,7 +1176,7 @@ fn drift(up: &Path, crate_root: &Path, tool: &Path, lines: &[markers::MarkerLine
 
 ```bash
 cargo test --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- --test-threads 4
-cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift "$UP" .
+cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift "$UP" "$UP_REACT" .
 ```
 
 Expected: all pass; drift prints `drift: clean`.
@@ -1128,9 +1208,9 @@ Run every gate from the index (both feature sets, clippy, tools, drift).
 git add -A
 git commit -m "feat(stylegen): drift reports stale fixture copies of upstream sources
 
-drift now also compares the fixture copies of themes.ts, preset.ts,
-libraries.ts, font-definitions.ts and the style CSS with the pinned
-checkout.
+drift now also compares the fixture copies of themes.ts, base-colors.ts,
+config.ts, preset.ts, font-definitions.ts (shadcn/ui pin) and the style
+CSS (shadcn-svelte pin) with the pinned checkouts.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```

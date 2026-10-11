@@ -2326,7 +2326,7 @@ use shadcn_egui::{layout, Mode, Preset};
 
 /// The slot icons of `lib` as the components draw them, vega light.
 fn slot_snapshot(lib: IconLibrary, name: &str) {
-    let theme = Preset::default().icons(lib).theme(Mode::Light);
+    let theme = Preset::default().style(shadcn_egui::StyleName::Vega).icons(lib).theme(Mode::Light);
     let slots = theme.icons;
     common::snapshot_with_themes(
         name,
@@ -2854,7 +2854,7 @@ cargo test --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- --test-threads 
 cargo clippy --manifest-path tools/stylegen/Cargo.toml --all-targets --jobs 4 -- -D warnings
 cargo test --manifest-path tools/icongen/Cargo.toml --jobs 4 -- --test-threads 4
 cargo clippy --manifest-path tools/icongen/Cargo.toml --all-targets --jobs 4 -- -D warnings
-cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift "$UP" .
+cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift "$UP" "$UP_REACT" .
 scripts/check-package-size.sh
 ```
 

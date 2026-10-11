@@ -4,14 +4,17 @@
 
 **Spec:** D5, D13, D20, §4, §4.1, §6.2 (types), §7 (preset codes,
 fallbacks, Lyra radius).
-**Cites:** `docs/superpowers/notes/0.4/p0a-preset-codes.md` (decision for
-`a` codes), `tools/stylegen/upstream/preset-codes.txt` (codes from both sites).
-**Index decisions applied:** G1 (icon library order from `libraries.ts`),
-G2 (Rhea + Large is **not** special-cased), index C (all names, the
-`Preset::theme` steps and the warning lines).
+**Cites:** `docs/superpowers/notes/0.4/p0a-preset-codes.md` (lists differ
+between the sites), `tools/stylegen/upstream/preset-codes.txt` (example codes).
+**Index decisions applied:** §J (amendment 2026-10-11: React lists only,
+`gray` added, icon order from React `PRESET_ICON_LIBRARIES`, `a` codes take
+`V1_CHART_COLOR_MAP[theme] ?? theme`, `Default` = React `DEFAULT_CONFIG` =
+Nova), G2 as ruled in preflight Addendum A (Rhea + Large resolves as
+Default), index C (all names, the `Preset::theme` steps and the warning
+lines).
 
-**Outcome:** stylegen generates the preset enums from `preset.ts` and
-`libraries.ts`; `Preset::from_code` / `to_code` port upstream
+**Outcome:** stylegen generates the preset enums from React `preset.ts` and
+the `RADII` of React `config.ts`; `Preset::from_code` / `to_code` port upstream
 `decodePreset` / `encodePreset` and are checked against fixtures from
 upstream's own code; `Theme` gains `icons: IconSlots` and `menu: MenuColors`;
 the three components read their icons from the theme; `Preset::theme(mode)`
@@ -38,7 +41,7 @@ byte-identical (checked in Task 4.4).
 
 ---
 
-### Task 4.1: Preset enums generated from `preset.ts` and `libraries.ts`
+### Task 4.1: Preset enums generated from `preset.ts` and `config.ts`
 
 **Files:**
 - Create: `tools/stylegen/src/preset.rs`, `tools/stylegen/tests/preset.rs`
@@ -49,10 +52,10 @@ byte-identical (checked in Task 4.4).
 - Create: `crates/shadcn-egui/tests/preset.rs`
 
 **Interfaces:**
-- Consumes: fixture copies `tools/stylegen/tests/fixtures/{preset.ts,libraries.ts}` (Phase 3 Task 2); `stylegen::emit::header` (`pub(crate)` since Phase 3).
+- Consumes: fixture copies `tools/stylegen/tests/fixtures/{preset.ts,config.ts}` (React, Phase 3 Task 2); `stylegen::emit::header_react` (Phase 3).
 - Produces:
-  - NEW INTERFACE: `stylegen::preset::PresetLists { styles, base_colors, themes, fonts: Vec<String>, radii: Vec<(String, f32)>, menu_accents, menu_colors, icon_libraries: Vec<String>, fields_v1, fields_v2: Vec<(String, u32)> }`, `parse_preset(preset_ts: &str, libraries_ts: &str) -> Result<PresetLists, String>`, `emit_preset(pin: &str, lists: &PresetLists) -> String`.
-  - In the crate, exactly as index C: `StyleName`, `BaseColor`, `ThemeColor`, `FontName`, `IconLibrary`, `MenuColor`, `MenuAccent` (each `Clone, Copy, Debug, PartialEq, Eq, Hash`; `pub const ALL: [Self; N]`; `pub const fn id(self) -> &'static str`; `pub fn from_id(&str) -> Option<Self>`), `RadiusChoice` (`Clone, Copy, Debug, PartialEq`; `Default, None, Small, Medium, Large, Px(f32)`; `ALL: [Self; 5]`; `id(self) -> Option<&'static str>`; `rem(self) -> Option<f32>`; `from_id`), `pub(crate) enum Field`, `pub(crate) const FIELDS_V1: [(Field, u32); 8]`, `FIELDS_V2: [(Field, u32); 10]`. All public enums re-exported at the crate root.
+  - NEW INTERFACE: `stylegen::preset::PresetLists { styles, base_colors, themes, fonts: Vec<String>, radii: Vec<(String, Option<f32>)>, menu_accents, menu_colors, icon_libraries: Vec<String>, v1_chart_colors: Vec<(String, String)>, fields_v1, fields_v2: Vec<(String, u32)> }`, `parse_preset(preset_ts: &str, config_ts: &str) -> Result<PresetLists, String>`, `emit_preset(pin: &str, lists: &PresetLists) -> String`.
+  - In the crate, exactly as index C: `StyleName`, `BaseColor` (8, with `Gray`), `ThemeColor` (25, with `Gray`), `FontName`, `IconLibrary` (Lucide, Hugeicons, Tabler, Phosphor, Remixicon), `MenuColor`, `MenuAccent` (each `Clone, Copy, Debug, PartialEq, Eq, Hash`; `pub const ALL: [Self; N]`; `pub const fn id(self) -> &'static str`; `pub fn from_id(&str) -> Option<Self>`), `RadiusChoice` (`Clone, Copy, Debug, PartialEq`; `Default, None, Small, Medium, Large, Px(f32)`; `ALL: [Self; 5]`; `id(self) -> Option<&'static str>`; `rem(self) -> Option<f32>`, `None` for `Default` and `Px`; `from_id`), `pub(crate) enum Field`, `pub(crate) const FIELDS_V1: [(Field, u32); 8]`, `FIELDS_V2: [(Field, u32); 10]`, `pub(crate) const V1_CHART_COLORS: [(ThemeColor, ThemeColor); 7]`. All public enums re-exported at the crate root.
 
 - [ ] **Step 1: Write the failing stylegen tests**
 
@@ -67,20 +70,26 @@ fn read(p: &str) -> String {
     std::fs::read_to_string(format!("{ROOT}/tests/fixtures/{p}")).expect(p)
 }
 
+fn parse() -> stylegen::preset::PresetLists {
+    parse_preset(&read("preset.ts"), &read("config.ts")).expect("parse")
+}
+
 #[test]
 fn lists_follow_upstream_order() {
-    let l = parse_preset(&read("preset.ts"), &read("libraries.ts")).expect("parse");
+    let l = parse();
     assert_eq!(l.styles, ["nova", "vega", "maia", "lyra", "mira", "luma", "sera", "rhea"]);
-    assert_eq!(l.base_colors, ["neutral", "stone", "zinc", "mauve", "olive", "mist", "taupe"]);
-    assert_eq!(l.themes.len(), 24);
-    assert_eq!((l.themes[0].as_str(), l.themes[3].as_str(), l.themes[23].as_str()), ("neutral", "amber", "taupe"));
+    assert_eq!(l.base_colors, ["neutral", "stone", "zinc", "gray", "mauve", "olive", "mist", "taupe"]);
+    assert_eq!(l.themes.len(), 25);
+    assert_eq!((l.themes[0].as_str(), l.themes[3].as_str(), l.themes[4].as_str(), l.themes[24].as_str()), ("neutral", "gray", "amber", "taupe"));
     assert_eq!(l.fonts.len(), 26);
     assert_eq!((l.fonts[0].as_str(), l.fonts[17].as_str(), l.fonts[25].as_str()), ("inter", "oxanium", "instrument-serif"));
-    let radii: Vec<(&str, f32)> = l.radii.iter().map(|(n, r)| (n.as_str(), *r)).collect();
-    assert_eq!(radii, [("default", 0.5), ("none", 0.0), ("small", 0.45), ("medium", 0.625), ("large", 0.875)]);
+    let radii: Vec<(&str, Option<f32>)> = l.radii.iter().map(|(n, r)| (n.as_str(), *r)).collect();
+    assert_eq!(radii, [("default", None), ("none", Some(0.0)), ("small", Some(0.45)), ("medium", Some(0.625)), ("large", Some(0.875))]);
     assert_eq!(l.menu_accents, ["subtle", "bold"]);
     assert_eq!(l.menu_colors, ["default", "inverted", "default-translucent", "inverted-translucent"]);
-    assert_eq!(l.icon_libraries, ["lucide", "tabler", "hugeicons", "phosphor", "remixicon"]);
+    assert_eq!(l.icon_libraries, ["lucide", "hugeicons", "tabler", "phosphor", "remixicon"]);
+    let v1: Vec<(&str, &str)> = l.v1_chart_colors.iter().map(|(t, c)| (t.as_str(), c.as_str())).collect();
+    assert_eq!(v1, [("neutral", "blue"), ("stone", "lime"), ("zinc", "amber"), ("mauve", "emerald"), ("olive", "violet"), ("mist", "rose"), ("taupe", "cyan")]);
     assert_eq!(l.fields_v1.iter().map(|f| f.1).sum::<u32>(), 40);
     assert_eq!(l.fields_v2.iter().map(|f| f.1).sum::<u32>(), 51);
     assert_eq!(l.fields_v2[0], ("menuColor".to_string(), 3));
@@ -91,21 +100,31 @@ fn lists_follow_upstream_order() {
 #[test]
 fn a_list_too_long_for_its_bits_is_an_error() {
     let src = read("preset.ts").replace("values: PRESET_MENU_COLORS, bits: 3 }", "values: PRESET_MENU_COLORS, bits: 1 }");
-    let err = parse_preset(&src, &read("libraries.ts")).unwrap_err();
+    let err = parse_preset(&src, &read("config.ts")).unwrap_err();
     assert!(err.contains("menuColor"), "{err}");
+}
+
+#[test]
+fn radii_must_match_between_preset_ts_and_config_ts() {
+    let config = read("config.ts").replace("{ name: \"small\", label: \"Small\", value: \"0.45rem\" },", "");
+    assert!(parse_preset(&read("preset.ts"), &config).unwrap_err().contains("RADII"));
 }
 
 #[test]
 fn an_unknown_values_list_is_an_error() {
     let src = read("preset.ts").replace("values: PRESET_STYLES,", "values: PRESET_SHAPES,");
-    assert!(parse_preset(&src, &read("libraries.ts")).unwrap_err().contains("PRESET_SHAPES"));
+    assert!(parse_preset(&src, &read("config.ts")).unwrap_err().contains("PRESET_SHAPES"));
 }
 
 #[test]
 fn emit_is_deterministic() {
-    let l = parse_preset(&read("preset.ts"), &read("libraries.ts")).expect("parse");
-    let a = emit_preset("493481fa", &l);
-    assert_eq!(a, emit_preset("493481fa", &l));
+    let l = parse();
+    let a = emit_preset("c2a67849", &l);
+    assert_eq!(a, emit_preset("c2a67849", &l));
+    assert!(a.contains("    Gray,"));
+    assert!(a.contains("pub const ALL: [Self; 25] = ["));
+    assert!(a.contains("(ThemeColor::Neutral, ThemeColor::Blue),"));
+    assert!(a.contains("Self::Default => None,"));
     assert!(a.contains("pub enum FontName {"));
     assert!(a.contains("Self::SourceSans3 => \"source-sans-3\","));
     assert!(a.contains("pub const ALL: [Self; 26] = ["));
@@ -119,8 +138,8 @@ Append to `tools/stylegen/tests/generated.rs`:
 ```rust
 #[test]
 fn committed_preset_enums_are_current() {
-    let pin = read("PIN").trim().to_owned();
-    let lists = stylegen::preset::parse_preset(&read("tests/fixtures/preset.ts"), &read("tests/fixtures/libraries.ts")).expect("parse");
+    let pin = read("PIN_REACT").trim().to_owned();
+    let lists = stylegen::preset::parse_preset(&read("tests/fixtures/preset.ts"), &read("tests/fixtures/config.ts")).expect("parse");
     assert_eq!(stylegen::preset::emit_preset(&pin, &lists), read("../../crates/shadcn-egui/src/preset/generated.rs"), "re-run stylegen generate");
 }
 ```
@@ -133,7 +152,8 @@ Expected: FAIL to compile (`stylegen::preset` not found).
 `tools/stylegen/src/preset.rs`:
 
 ```rust
-//! `packages/cli/src/preset/preset.ts` + `packages/cli/src/icons/libraries.ts`
+//! shadcn/ui `packages/registry/src/preset/preset.ts` (lists, fields,
+//! `V1_CHART_COLOR_MAP`) + `apps/v4/registry/config.ts` (`RADII` values)
 //! → `crates/shadcn-egui/src/preset/generated.rs`. Enum order is the
 //! upstream list order: it is the index inside a preset code.
 
@@ -143,12 +163,15 @@ pub struct PresetLists {
     pub base_colors: Vec<String>,
     pub themes: Vec<String>,
     pub fonts: Vec<String>,
-    /// `PRESET_RADII`: (key, value in rem).
-    pub radii: Vec<(String, f32)>,
+    /// `PRESET_RADII` keys with the `config.ts` `RADII` value in rem
+    /// (`None` for `default`, whose value is `""` upstream).
+    pub radii: Vec<(String, Option<f32>)>,
     pub menu_accents: Vec<String>,
     pub menu_colors: Vec<String>,
-    /// `keys(iconLibraries)` in `libraries.ts` (index G1).
+    /// `PRESET_ICON_LIBRARIES` (index §J; not the `libraries.ts` key order).
     pub icon_libraries: Vec<String>,
+    /// `V1_CHART_COLOR_MAP`: (theme, chart colour) for `a` codes.
+    pub v1_chart_colors: Vec<(String, String)>,
     /// `(key, bits)`, low bits first.
     pub fields_v1: Vec<(String, u32)>,
     pub fields_v2: Vec<(String, u32)>,
@@ -182,13 +205,14 @@ fn strings(src: &str, marker: &str) -> Result<Vec<String>, String> {
     Ok(body.split('"').skip(1).step_by(2).map(str::to_owned).collect())
 }
 
-/// Keys of an object literal: lines indented by exactly one tab.
-fn keys(src: &str, marker: &str) -> Result<Vec<String>, String> {
-    Ok(block(src, marker)?
+/// `key: "value",` lines of an object literal, as (key, value).
+fn pairs(src: &str, marker: &str) -> Result<Vec<(String, String)>, String> {
+    let b = block(src, marker)?;
+    Ok(b[marker.len()..]
         .lines()
-        .filter_map(|l| l.strip_prefix('\t'))
-        .filter(|l| !l.starts_with(char::is_whitespace))
-        .filter_map(|l| l.split_once(':').map(|(k, _)| k.trim_matches('"').to_owned()))
+        .filter_map(|l| l.trim().strip_suffix(','))
+        .filter_map(|l| l.split_once(": \""))
+        .map(|(k, v)| (k.trim_matches('"').to_owned(), v.trim_end_matches('"').to_owned()))
         .collect())
 }
 
@@ -213,11 +237,11 @@ fn fields(src: &str, marker: &str) -> Result<Vec<(String, String, u32)>, String>
 const FIELD_VALUES: [(&str, &str); 10] = [
     ("menuColor", "PRESET_MENU_COLORS"),
     ("menuAccent", "PRESET_MENU_ACCENTS"),
-    ("radius", "PRESET_RADII_KEYS"),
+    ("radius", "PRESET_RADII"),
     ("font", "PRESET_FONTS"),
     ("iconLibrary", "PRESET_ICON_LIBRARIES"),
-    ("theme", "PRESET_THEME_KEYS"),
-    ("baseColor", "PRESET_BASE_COLOR_KEYS"),
+    ("theme", "PRESET_THEMES"),
+    ("baseColor", "PRESET_BASE_COLORS"),
     ("style", "PRESET_STYLES"),
     ("chartColor", "PRESET_CHART_COLORS"),
     ("fontHeading", "PRESET_FONT_HEADINGS"),
@@ -227,29 +251,49 @@ fn require(src: &str, text: &str) -> Result<(), String> {
     src.contains(text).then_some(()).ok_or_else(|| format!("preset.ts no longer contains `{text}`"))
 }
 
-pub fn parse_preset(preset_ts: &str, libraries_ts: &str) -> Result<PresetLists, String> {
+/// `config.ts` `RADII` (`{ name: "small", label: "Small", value: "0.45rem" },`)
+/// as (name, rem): `""` is `None` (`default`), `"0"` is 0.
+fn radii(config_ts: &str) -> Result<Vec<(String, Option<f32>)>, String> {
+    let mut out = Vec::new();
+    for line in block(config_ts, "export const RADII =")?.lines().filter(|l| l.contains("name: \"")) {
+        let bad = || format!("RADII: cannot read `{}`", line.trim());
+        let name = between(line, "name: \"", "\"").ok_or_else(bad)?;
+        let value = between(line, "value: \"", "\"").ok_or_else(bad)?;
+        let rem = match value {
+            "" => None,
+            v => Some(v.strip_suffix("rem").unwrap_or(v).parse::<f32>().map_err(|_| bad())?),
+        };
+        out.push((name.to_owned(), rem));
+    }
+    Ok(out)
+}
+
+pub fn parse_preset(preset_ts: &str, config_ts: &str) -> Result<PresetLists, String> {
     // The derived lists the generated code relies on.
-    require(preset_ts, "export const PRESET_FONT_HEADINGS = [\"inherit\", ...PRESET_FONTS] as const;")?;
-    require(preset_ts, "export const PRESET_CHART_COLORS = PRESET_THEME_KEYS;")?;
-    require(preset_ts, "export const PRESET_ICON_LIBRARIES = keys(iconLibraries);")?;
-    let radii_block = block(preset_ts, "export const PRESET_RADII =")?;
-    let mut radii = Vec::new();
-    for line in radii_block.lines().filter(|l| l.contains("value: \"")) {
-        let key = line.trim().split_once(':').map(|(k, _)| k.to_owned()).ok_or("PRESET_RADII: no key")?;
-        let rem = between(line, "value: \"", "rem\"").ok_or_else(|| format!("PRESET_RADII: no rem value in `{}`", line.trim()))?;
-        radii.push((key, rem.parse::<f32>().map_err(|e| format!("PRESET_RADII {rem}: {e}"))?));
+    require(preset_ts, "export const PRESET_FONT_HEADINGS = [\"inherit\", ...PRESET_FONTS] as const")?;
+    require(preset_ts, "export const PRESET_CHART_COLORS = PRESET_THEMES\n")?;
+    let radius_keys = strings(preset_ts, "export const PRESET_RADII =")?;
+    let radii = radii(config_ts)?;
+    if radii.iter().map(|r| r.0.as_str()).ne(radius_keys.iter().map(String::as_str)) {
+        return Err(format!("config.ts RADII {:?} differ from PRESET_RADII {radius_keys:?}", radii.iter().map(|r| &r.0).collect::<Vec<_>>()));
     }
     let mut l = PresetLists {
         styles: strings(preset_ts, "export const PRESET_STYLES =")?,
-        base_colors: keys(preset_ts, "export const PRESET_BASE_COLORS =")?,
-        themes: keys(preset_ts, "export const PRESET_THEMES =")?,
+        base_colors: strings(preset_ts, "export const PRESET_BASE_COLORS =")?,
+        themes: strings(preset_ts, "export const PRESET_THEMES =")?,
         fonts: strings(preset_ts, "export const PRESET_FONTS =")?,
         radii,
         menu_accents: strings(preset_ts, "export const PRESET_MENU_ACCENTS =")?,
         menu_colors: strings(preset_ts, "export const PRESET_MENU_COLORS =")?,
-        icon_libraries: keys(libraries_ts, "export const iconLibraries =")?,
+        icon_libraries: strings(preset_ts, "export const PRESET_ICON_LIBRARIES =")?,
+        v1_chart_colors: pairs(preset_ts, "export const V1_CHART_COLOR_MAP")?,
         ..PresetLists::default()
     };
+    for (theme, chart) in &l.v1_chart_colors {
+        if !l.themes.contains(theme) || !l.themes.contains(chart) {
+            return Err(format!("V1_CHART_COLOR_MAP: {theme} -> {chart} is not a pair of themes"));
+        }
+    }
     let v1 = fields(preset_ts, "const PRESET_FIELDS_V1 =")?;
     let mut v2 = v1.clone();
     if !block(preset_ts, "const PRESET_FIELDS_V2 =")?.contains("...PRESET_FIELDS_V1,") {
@@ -312,19 +356,22 @@ fn emit_enum(s: &mut String, name: &str, doc: &str, ids: &[String]) {
 }
 
 pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
-    let mut s = crate::emit::header(pin, "`packages/cli/src/preset/preset.ts` and `packages/cli/src/icons/libraries.ts`");
+    let mut s = crate::emit::header_react(pin, "`packages/registry/src/preset/preset.ts` and `apps/v4/registry/config.ts`");
     emit_enum(&mut s, "StyleName", "A shadcn style (upstream `PRESET_STYLES`).", &l.styles);
     emit_enum(&mut s, "BaseColor", "A base colour (upstream `PRESET_BASE_COLORS`).", &l.base_colors);
     emit_enum(&mut s, "ThemeColor", "A colour theme, also used for chart colours (upstream `PRESET_THEMES`).", &l.themes);
     emit_enum(&mut s, "FontName", "A font (upstream `PRESET_FONTS`).", &l.fonts);
-    emit_enum(&mut s, "IconLibrary", "An icon library (upstream `iconLibraries` keys).", &l.icon_libraries);
+    emit_enum(&mut s, "IconLibrary", "An icon library (upstream `PRESET_ICON_LIBRARIES`).", &l.icon_libraries);
     emit_enum(&mut s, "MenuColor", "Menu content colours (upstream `PRESET_MENU_COLORS`).", &l.menu_colors);
     emit_enum(&mut s, "MenuAccent", "Menu highlight (upstream `PRESET_MENU_ACCENTS`).", &l.menu_accents);
     // RadiusChoice: the coded radii plus `Px`, which has no code.
     s += "/// A radius (upstream `PRESET_RADII`), or `Px` for any other radius.\n";
     s += "#[derive(Clone, Copy, Debug, PartialEq)]\npub enum RadiusChoice {\n";
     for (id, rem) in &l.radii {
-        s += &format!("    /// `\"{id}\"` ({rem:?}rem)\n    {},\n", pascal(id));
+        match rem {
+            Some(r) => s += &format!("    /// `\"{id}\"` ({r:?}rem)\n    {},\n", pascal(id)),
+            None => s += &format!("    /// `\"{id}\"` (the base colour's own radius)\n    {},\n", pascal(id)),
+        }
     }
     s += "    /// Any radius in logical px; such a preset has no code.\n    Px(f32),\n}\n\nimpl RadiusChoice {\n";
     s += "    /// The coded values, in upstream list order.\n";
@@ -334,9 +381,9 @@ pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
         s += &format!("            Self::{} => Some(\"{id}\"),\n", pascal(id));
     }
     s += "            Self::Px(_) => None,\n        }\n    }\n\n";
-    s += "    /// The upstream value in rem; `None` for `Px`.\n    pub const fn rem(self) -> Option<f32> {\n        match self {\n";
+    s += "    /// The upstream value in rem; `None` for `Default` (the base colour's\n    /// radius) and for `Px`.\n    pub const fn rem(self) -> Option<f32> {\n        match self {\n";
     for (id, rem) in &l.radii {
-        s += &format!("            Self::{} => Some({rem:?}),\n", pascal(id));
+        s += &format!("            Self::{} => {rem:?},\n", pascal(id));
     }
     s += "            Self::Px(_) => None,\n        }\n    }\n\n";
     s += "    /// The coded value with this upstream id.\n    pub fn from_id(id: &str) -> Option<Self> {\n";
@@ -355,6 +402,12 @@ pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
         }
         s += "];\n\n";
     }
+    s += "/// Upstream `V1_CHART_COLOR_MAP`: the chart colour of an `a` code, by theme.\n";
+    s += &format!("pub(crate) const V1_CHART_COLORS: [(ThemeColor, ThemeColor); {}] = [\n", l.v1_chart_colors.len());
+    for (theme, chart) in &l.v1_chart_colors {
+        s += &format!("    (ThemeColor::{}, ThemeColor::{}),\n", pascal(theme), pascal(chart));
+    }
+    s += "];\n\n";
     s.truncate(s.trim_end().len());
     s.push('\n');
     s
@@ -367,8 +420,8 @@ pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
 and in `generate`, after the palette block:
 
 ```rust
-    let enums = preset::parse_preset(&read(&tool.join("tests/fixtures/preset.ts")), &read(&tool.join("tests/fixtures/libraries.ts")))
-        .map(|l| preset::emit_preset(pin, &l));
+    let enums = preset::parse_preset(&read(&tool.join("tests/fixtures/preset.ts")), &read(&tool.join("tests/fixtures/config.ts")))
+        .map(|l| preset::emit_preset(pin_react, &l));
     match enums {
         Ok(src) => {
             let dir = root.join(CRATE).join("src/preset");
@@ -385,7 +438,7 @@ and in `generate`, after the palette block:
 - [ ] **Step 3: Generate and wire the crate module**
 
 ```bash
-cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- generate "$UP" .
+cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- generate "$UP" "$UP_REACT" .
 git status --short   # new: crates/shadcn-egui/src/preset/generated.rs; nothing else changed
 ```
 
@@ -394,11 +447,13 @@ git status --short   # new: crates/shadcn-egui/src/preset/generated.rs; nothing 
 ```rust
 //! shadcn presets: every choice of the shadcn "create" page (style, colours,
 //! fonts, icons, radius, menu) and the preset codes the site shows.
-//! The enums are generated from upstream `preset.ts` (`generated.rs`, by
-//! `tools/stylegen`); their order is the index inside a preset code.
+//! The enums are generated from shadcn/ui `preset.ts` (`generated.rs`, by
+//! `tools/stylegen`); their order is the index inside a preset code on
+//! ui.shadcn.com. Codes from shadcn-svelte.com use other lists and are not
+//! supported.
 
-// `Field` and `FIELDS_*` are read by `code.rs` from the next task on, which
-// removes this allow.
+// `Field`, `FIELDS_*` and `V1_CHART_COLORS` are read by `code.rs` from the
+// next task on, which removes this allow.
 #[allow(dead_code)]
 mod generated;
 
@@ -419,16 +474,16 @@ use shadcn_egui::{BaseColor, FontName, IconLibrary, MenuAccent, MenuColor, Radiu
 #[test]
 fn enums_follow_upstream_list_order() {
     assert_eq!(StyleName::ALL.map(|s| s.id()), ["nova", "vega", "maia", "lyra", "mira", "luma", "sera", "rhea"]);
-    assert_eq!(BaseColor::ALL.map(|b| b.id()), ["neutral", "stone", "zinc", "mauve", "olive", "mist", "taupe"]);
-    assert_eq!(ThemeColor::ALL.len(), 24);
-    assert_eq!((ThemeColor::ALL[3], ThemeColor::ALL[23]), (ThemeColor::Amber, ThemeColor::Taupe));
+    assert_eq!(BaseColor::ALL.map(|b| b.id()), ["neutral", "stone", "zinc", "gray", "mauve", "olive", "mist", "taupe"]);
+    assert_eq!(ThemeColor::ALL.len(), 25);
+    assert_eq!((ThemeColor::ALL[3], ThemeColor::ALL[4], ThemeColor::ALL[24]), (ThemeColor::Gray, ThemeColor::Amber, ThemeColor::Taupe));
     assert_eq!(FontName::ALL.len(), 26);
     assert_eq!((FontName::ALL[0], FontName::ALL[17], FontName::ALL[25]), (FontName::Inter, FontName::Oxanium, FontName::InstrumentSerif));
     assert_eq!(FontName::SourceSans3.id(), "source-sans-3");
-    assert_eq!(IconLibrary::ALL.map(|l| l.id()), ["lucide", "tabler", "hugeicons", "phosphor", "remixicon"]);
+    assert_eq!(IconLibrary::ALL.map(|l| l.id()), ["lucide", "hugeicons", "tabler", "phosphor", "remixicon"]);
     assert_eq!(MenuColor::ALL.map(|m| m.id()), ["default", "inverted", "default-translucent", "inverted-translucent"]);
     assert_eq!(MenuAccent::ALL.map(|m| m.id()), ["subtle", "bold"]);
-    assert_eq!(RadiusChoice::ALL.map(|r| r.rem()), [Some(0.5), Some(0.0), Some(0.45), Some(0.625), Some(0.875)]);
+    assert_eq!(RadiusChoice::ALL.map(|r| r.rem()), [None, Some(0.0), Some(0.45), Some(0.625), Some(0.875)]);
 }
 
 #[test]
@@ -479,7 +534,7 @@ Expected: all pass, warning-clean.
 
 ```bash
 git add -A
-git commit -m "feat: preset enums generated from upstream preset.ts and libraries.ts
+git commit -m "feat: preset enums generated from shadcn/ui preset.ts
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -506,13 +561,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 `tools/stylegen/upstream/preset-codes.mjs`:
 
 ```js
-// Decodes preset codes with upstream decodePreset/encodePreset
-// (packages/cli/src/preset/preset.ts) for crates/shadcn-egui/tests/preset_codes.rs.
-// Codes: tools/stylegen/upstream/preset-codes.txt (both sites, P0a), the
-// encodes of the svelte CLI DEFAULT_PRESETS and docs PRESETS, and 64 configs
-// from a seeded generator.
+// Decodes preset codes with upstream decodePreset/encodePreset (shadcn/ui
+// packages/registry/src/preset/preset.ts) for crates/shadcn-egui/tests/preset_codes.rs.
+// Codes: tools/stylegen/upstream/preset-codes.txt (P0a), the encodes of the
+// CLI DEFAULT_PRESETS, the site PRESETS and DEFAULT_CONFIG, and 64 configs
+// from a seeded generator. `a` codes get the chart colour the React site and
+// CLI give them after decodePreset: V1_CHART_COLOR_MAP[theme] ?? theme.
 //
-// Usage: node tools/stylegen/upstream/preset-codes.mjs <shadcn-svelte checkout> <scratch dir> \
+// Usage: node tools/stylegen/upstream/preset-codes.mjs <shadcn-ui checkout> <scratch dir> \
 //          > crates/shadcn-egui/tests/fixtures/preset_codes.txt
 // Needs node >= 22.18 (TypeScript type stripping on by default).
 import { execFileSync } from "node:child_process";
@@ -520,9 +576,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [up, scratch] = process.argv.slice(2);
-if (!up || !scratch) {
-  console.error("usage: preset-codes.mjs <shadcn-svelte checkout> <scratch dir>");
+const [upReact, scratch] = process.argv.slice(2);
+if (!upReact || !scratch) {
+  console.error("usage: preset-codes.mjs <shadcn-ui checkout> <scratch dir>");
   process.exit(2);
 }
 mkdirSync(scratch, { recursive: true });
@@ -547,15 +603,10 @@ function slice(text, marker) {
 /** An object or array literal from upstream source, evaluated. */
 const literal = (text, marker) => new Function(`return ${slice(text, marker).replace(/ as const/g, "")};`)();
 
-const pin = execFileSync("git", ["-C", up, "rev-parse", "HEAD"]).toString().trim().slice(0, 8);
-// Only the keys of iconLibraries matter; its helper import is stubbed.
-const libs = readFileSync(join(up, "packages/cli/src/icons/libraries.ts"), "utf8")
-  .replace(/^import \{ pascalToKebab \} from .*$/m, "const pascalToKebab = (s: string) => s;");
-const presetTs = readFileSync(join(up, "packages/cli/src/preset/preset.ts"), "utf8")
-  .replace(/^import \{ iconLibraries \} from .*$/m, 'import { iconLibraries } from "./libraries.ts";')
-  .replace(/^import \{ keys \} from .*$/m, "const keys = (o: object) => Object.keys(o);");
-if (/from "\.\.\//.test(libs) || /from "\.\.\//.test(presetTs)) throw new Error("an upstream import was not rewritten");
-writeFileSync(join(scratch, "libraries.ts"), libs);
+const pin = execFileSync("git", ["-C", upReact, "rev-parse", "HEAD"]).toString().trim().slice(0, 8);
+// preset.ts has no imports: a byte copy imports as is.
+const presetTs = readFileSync(join(upReact, "packages/registry/src/preset/preset.ts"), "utf8");
+if (/^import /m.test(presetTs)) throw new Error("preset.ts gained an import; stub it here");
 writeFileSync(join(scratch, "preset.ts"), presetTs);
 const P = await import(pathToFileURL(join(scratch, "preset.ts")).href);
 
@@ -564,20 +615,21 @@ for (const line of readFileSync(new URL("./preset-codes.txt", import.meta.url), 
   const code = line.replace(/#.*/, "").trim();
   if (code) codes.push(code);
 }
-const presets = readFileSync(join(up, "packages/cli/src/preset/presets.ts"), "utf8");
-const config = readFileSync(join(up, "docs/src/lib/registry/config.ts"), "utf8");
-for (const p of Object.values(literal(presets, "export const DEFAULT_PRESETS ="))) codes.push(P.encodePreset(p));
+const defaults = readFileSync(join(upReact, "packages/shadcn/src/preset/defaults.ts"), "utf8");
+const config = readFileSync(join(upReact, "apps/v4/registry/config.ts"), "utf8");
+for (const p of Object.values(literal(defaults, "export const DEFAULT_PRESETS ="))) codes.push(P.encodePreset(p));
 for (const p of literal(config, "export const PRESETS: Preset[] =")) codes.push(P.encodePreset(p));
+codes.push(P.encodePreset(literal(config, "export const DEFAULT_CONFIG: DesignSystemConfig =")));
 
 const lists = {
   style: P.PRESET_STYLES,
-  baseColor: P.PRESET_BASE_COLOR_KEYS,
-  theme: P.PRESET_THEME_KEYS,
+  baseColor: P.PRESET_BASE_COLORS,
+  theme: P.PRESET_THEMES,
   chartColor: P.PRESET_CHART_COLORS,
   iconLibrary: P.PRESET_ICON_LIBRARIES,
   font: P.PRESET_FONTS,
   fontHeading: P.PRESET_FONT_HEADINGS,
-  radius: P.PRESET_RADII_KEYS,
+  radius: P.PRESET_RADII,
   menuAccent: P.PRESET_MENU_ACCENTS,
   menuColor: P.PRESET_MENU_COLORS,
 };
@@ -591,8 +643,8 @@ for (let i = 0; i < 64; i++) {
 }
 
 const out = [
-  `# @generated by tools/stylegen/upstream/preset-codes.mjs from shadcn-svelte ${pin}; do not edit.`,
-  "# code style base theme chart|- icons font heading radius accent menu canonical(0|1)  |  code null  |  code toolong",
+  `# @generated by tools/stylegen/upstream/preset-codes.mjs from shadcn/ui ${pin}; do not edit.`,
+  "# code style base theme chart icons font heading radius accent menu canonical(0|1)  |  code null  |  code toolong",
 ];
 const seen = new Set();
 for (const code of codes) {
@@ -609,8 +661,10 @@ for (const code of codes) {
     continue;
   }
   const canonical = code[0] === "b" && P.encodePreset(d) === code ? 1 : 0;
+  // apps/v4/app/(app)/(create)/lib/preset-query.ts, packages/shadcn/src/commands/preset.ts
+  const chart = d.chartColor ?? P.V1_CHART_COLOR_MAP[d.theme] ?? d.theme;
   out.push(
-    [code, d.style, d.baseColor, d.theme, d.chartColor ?? "-", d.iconLibrary, d.font, d.fontHeading, d.radius, d.menuAccent, d.menuColor, canonical].join(" "),
+    [code, d.style, d.baseColor, d.theme, chart, d.iconLibrary, d.font, d.fontHeading, d.radius, d.menuAccent, d.menuColor, canonical].join(" "),
   );
 }
 process.stdout.write(out.join("\n") + "\n");
@@ -618,7 +672,8 @@ process.stdout.write(out.join("\n") + "\n");
 
 ```bash
 mkdir -p crates/shadcn-egui/tests/fixtures
-node tools/stylegen/upstream/preset-codes.mjs "$UP" "$SCRATCH/preset-codes" > crates/shadcn-egui/tests/fixtures/preset_codes.txt
+node tools/stylegen/upstream/preset-codes.mjs "$UP_REACT" "$SCRATCH/preset-codes" > crates/shadcn-egui/tests/fixtures/preset_codes.txt
+grep -c ' gray ' crates/shadcn-egui/tests/fixtures/preset_codes.txt    # > 0: the seeded configs reach gray
 grep -vc '^#' crates/shadcn-egui/tests/fixtures/preset_codes.txt     # >= 70
 grep -c ' 1$' crates/shadcn-egui/tests/fixtures/preset_codes.txt      # canonical b codes, >= 64
 ```
@@ -638,18 +693,14 @@ fn lines() -> impl Iterator<Item = Vec<&'static str>> {
     FIXTURE.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).map(|l| l.split(' ').collect())
 }
 
-/// The chart colour of an `a` code (upstream leaves it unset: "-").
-fn v1_chart(_base: BaseColor) -> ThemeColor {
-    ThemeColor::ALL[0]
-}
-
+/// Column 5 holds the chart colour the React site uses, also for `a` codes
+/// (`V1_CHART_COLOR_MAP[theme] ?? theme`, applied by the fixture script).
 fn expected(w: &[&str]) -> Preset {
-    let base = BaseColor::from_id(w[2]).expect("base");
     Preset {
         style: StyleName::from_id(w[1]).expect("style"),
-        base_color: base,
+        base_color: BaseColor::from_id(w[2]).expect("base"),
         theme: ThemeColor::from_id(w[3]).expect("theme"),
-        chart_color: if w[4] == "-" { v1_chart(base) } else { ThemeColor::from_id(w[4]).expect("chart") },
+        chart_color: ThemeColor::from_id(w[4]).expect("chart"),
         icons: IconLibrary::from_id(w[5]).expect("icons"),
         font: FontName::from_id(w[6]).expect("font"),
         font_heading: if w[7] == "inherit" { FontHeading::Inherit } else { FontHeading::Font(FontName::from_id(w[7]).expect("heading")) },
@@ -753,7 +804,24 @@ mod tests {
     #[test]
     fn a_codes_ignore_the_v2_fields() {
         let p = Preset::from_code(&format!("a{}", to_base62((5 << 40) | (3 << 46)))).expect("decodes");
-        assert_eq!((p.chart_color, p.font_heading), (ThemeColor::ALL[0], FontHeading::Inherit));
+        // theme neutral (index 0): V1_CHART_COLOR_MAP gives blue.
+        assert_eq!((p.chart_color, p.font_heading), (ThemeColor::Blue, FontHeading::Inherit));
+    }
+
+    #[test]
+    fn a_codes_take_the_chart_colour_from_the_theme() {
+        // theme: 6 bits at offset 22 (menuColor 3, menuAccent 3, radius 4, font 6, iconLibrary 6).
+        let theme = |t: ThemeColor| {
+            let i = ThemeColor::ALL.iter().position(|&x| x == t).expect("listed") as u64;
+            Preset::from_code(&format!("a{}", to_base62(i << 22))).expect("decodes")
+        };
+        assert_eq!(theme(ThemeColor::Stone).chart_color, ThemeColor::Lime, "keyed by theme");
+        assert_eq!(theme(ThemeColor::Taupe).chart_color, ThemeColor::Cyan);
+        assert_eq!(theme(ThemeColor::Rose).chart_color, ThemeColor::Rose, "not in the map: the theme itself");
+        assert_eq!(theme(ThemeColor::Gray).chart_color, ThemeColor::Gray);
+        assert_eq!(theme(ThemeColor::Stone).base_color, BaseColor::Neutral, "the base colour plays no part");
+        let b = Preset::from_code(&format!("b{}", to_base62(1 << 22))).expect("decodes");
+        assert_eq!((b.theme, b.chart_color), (ThemeColor::Stone, ThemeColor::Neutral), "b codes carry their own chart");
     }
 
     #[test]
@@ -805,11 +873,11 @@ pub struct Preset {
 
 ```rust
 //! Preset codes: a port of upstream `decodePreset` / `encodePreset`
-//! (`packages/cli/src/preset/preset.ts`). A code is a version letter (`a`:
+//! (shadcn/ui `packages/registry/src/preset/preset.ts`). A code is a version letter (`a`:
 //! 40 bits, `b`: 51 bits) and a base62 number whose bit fields are the list
 //! indices, low bits first in `FIELDS_V2` order.
 
-use super::generated::{Field, FIELDS_V1, FIELDS_V2};
+use super::generated::{Field, FIELDS_V1, FIELDS_V2, V1_CHART_COLORS};
 use super::{BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, RadiusChoice, StyleName, ThemeColor};
 
 const BASE62: &[u8; 62] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -866,9 +934,11 @@ fn pick<T: Copy>(all: &[T], idx: usize) -> T {
 }
 
 impl Preset {
-    /// Decode a preset code from ui.shadcn.com or shadcn-svelte.com
-    /// (`"b0"`, `"a…"`). An index past the end of a list decodes to the
-    /// list's first value, as upstream does.
+    /// Decode a preset code from ui.shadcn.com (`"b0"`, `"a…"`). An index
+    /// past the end of a list decodes to the list's first value, as upstream
+    /// does. An `a` code has no chart colour; it gets the one the site gives
+    /// it (`V1_CHART_COLOR_MAP[theme]`, else the theme). Codes from
+    /// shadcn-svelte.com use other lists and decode to other presets.
     pub fn from_code(code: &str) -> Result<Preset, PresetCodeError> {
         let mut chars = code.chars();
         let version = chars.next().ok_or(PresetCodeError::TooShort)?;
@@ -885,7 +955,7 @@ impl Preset {
             let d = digit(c).ok_or(PresetCodeError::InvalidChar(c))?;
             bits = bits.checked_mul(62).and_then(|b| b.checked_add(d)).filter(|&b| b <= MAX_PAYLOAD).ok_or(PresetCodeError::TooLong)?;
         }
-        // Fields an `a` code lacks keep these: heading inherit, chart index 0.
+        // Fields an `a` code lacks keep these: heading inherit; chart set below.
         let mut p = Preset {
             style: StyleName::ALL[0],
             base_color: BaseColor::ALL[0],
@@ -903,6 +973,9 @@ impl Preset {
             let idx = ((bits >> offset) & ((1 << width) - 1)) as usize;
             p.set_index(field, idx);
             offset += width;
+        }
+        if version == 'a' {
+            p.chart_color = V1_CHART_COLORS.iter().find(|(t, _)| *t == p.theme).map_or(p.theme, |&(_, c)| c);
         }
         Ok(p)
     }
@@ -969,31 +1042,6 @@ impl Preset {
 pub use preset::{BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, PresetCodeError, RadiusChoice, StyleName, ThemeColor};
 ```
 
-**V1 chart map branch.** Only if `docs/superpowers/notes/0.4/p0a-preset-codes.md`
-says a site decoder applies `V1_CHART_COLOR_MAP`: in `from_code`, before
-`Ok(p)`, add
-
-```rust
-        if version == 'a' {
-            // Upstream V1_CHART_COLOR_MAP: `a` codes predate chart colours.
-            p.chart_color = match p.base_color {
-                BaseColor::Neutral => ThemeColor::Blue,
-                BaseColor::Stone => ThemeColor::Lime,
-                BaseColor::Zinc => ThemeColor::Amber,
-                BaseColor::Mauve => ThemeColor::Emerald,
-                BaseColor::Olive => ThemeColor::Violet,
-                BaseColor::Mist => ThemeColor::Rose,
-                BaseColor::Taupe => ThemeColor::Cyan,
-            };
-        }
-```
-
-make `v1_chart` in `tests/preset_codes.rs` return the same mapping, and
-change the unit test `a_codes_ignore_the_v2_fields` to expect
-`ThemeColor::Blue` (base neutral). The fixture script prints the upstream
-decoder's raw `chartColor` (`-`), so the fixture itself needs no change.
-Otherwise leave both as written.
-
 - [ ] **Step 4: Run the tests**
 
 ```bash
@@ -1011,9 +1059,10 @@ cargo clippy --workspace --all-targets --jobs 4 -- -D warnings
 git add -A
 git commit -m "feat: decode and encode shadcn preset codes
 
-Port of upstream decodePreset/encodePreset, checked against codes from
-both shadcn sites decoded by upstream's own code. Payloads above 2^53,
-which upstream decodes imprecisely, are refused.
+Port of the shadcn/ui decodePreset/encodePreset, checked against codes
+decoded by upstream's own code. a codes take the chart colour the site
+gives them (V1_CHART_COLOR_MAP by theme). Payloads above 2^53, which
+upstream decodes imprecisely, are refused.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1028,7 +1077,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `Preset`, `FontHeading` (Task 4.2).
-- Produces (index C): `impl Default for Preset` (upstream `DEFAULT_CONFIG` + heading inherit); `pub enum Mode { Light, Dark }` (`Clone, Copy, Debug, PartialEq, Eq`); by-value setters `style`, `base_color`, `theme_color` (for the `theme` field), `chart_color`, `font`, `font_heading`, `icons`, `radius`, `menu_color`, `menu_accent`. `Mode` at the crate root.
+- Produces (index C): `impl Default for Preset` (React `DEFAULT_CONFIG`: Nova, equal to code `b0`); `pub enum Mode { Light, Dark }` (`Clone, Copy, Debug, PartialEq, Eq`); by-value setters `style`, `base_color`, `theme_color` (for the `theme` field), `chart_color`, `font`, `font_heading`, `icons`, `radius`, `menu_color`, `menu_accent`. `Mode` at the crate root.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1038,12 +1087,12 @@ Append to `crates/shadcn-egui/tests/preset.rs`:
 use shadcn_egui::{FontHeading, Mode, Preset};
 
 #[test]
-fn default_is_the_sites_default_config_not_code_b0() {
+fn default_is_the_sites_default_config_and_code_b0() {
     let p = Preset::default();
     assert_eq!(
         p,
         Preset {
-            style: StyleName::Vega,
+            style: StyleName::Nova,
             base_color: BaseColor::Neutral,
             theme: ThemeColor::Neutral,
             chart_color: ThemeColor::Neutral,
@@ -1055,16 +1104,16 @@ fn default_is_the_sites_default_config_not_code_b0() {
             menu_accent: MenuAccent::Subtle,
         }
     );
-    let b0 = Preset::from_code("b0").expect("decodes");
-    assert_eq!(b0.style, StyleName::Nova, "all indices 0 is Nova, as upstream");
-    assert_ne!(p, b0);
+    // ui.shadcn.com DEFAULT_CONFIG is all indices 0 (the svelte site's was Vega).
+    assert_eq!(Preset::from_code("b0"), Ok(p));
+    assert_eq!(p.to_code().as_deref(), Some("b0"));
     assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
 }
 
 #[test]
 fn each_setter_changes_its_field() {
     let p = Preset::default()
-        .style(StyleName::Nova)
+        .style(StyleName::Vega)
         .base_color(BaseColor::Stone)
         .theme_color(ThemeColor::Blue)
         .chart_color(ThemeColor::Rose)
@@ -1077,7 +1126,7 @@ fn each_setter_changes_its_field() {
     assert_eq!(
         p,
         Preset {
-            style: StyleName::Nova,
+            style: StyleName::Vega,
             base_color: BaseColor::Stone,
             theme: ThemeColor::Blue,
             chart_color: ThemeColor::Rose,
@@ -1110,12 +1159,12 @@ pub enum Mode {
     Dark,
 }
 
-/// The shadcn site's `DEFAULT_CONFIG`: Vega, neutral, Inter, Lucide. Not the
-/// same as code `b0` (all indices 0 = Nova), as upstream.
+/// ui.shadcn.com's `DEFAULT_CONFIG`: Nova, neutral, Inter, Lucide; the same
+/// as code `b0` (all indices 0).
 impl Default for Preset {
     fn default() -> Self {
         Preset {
-            style: StyleName::Vega,
+            style: StyleName::Nova,
             base_color: BaseColor::Neutral,
             theme: ThemeColor::Neutral,
             chart_color: ThemeColor::Neutral,
@@ -1511,9 +1560,9 @@ fn radius_choices_resolve_to_px() {
 }
 
 #[test]
-fn default_preset_is_vega_with_the_hand_written_palettes() {
+fn default_preset_is_nova_with_the_hand_written_palettes() {
     let dark = Preset::default().theme(Mode::Dark);
-    assert_eq!((dark.style.name, dark.palette, dark.dark), ("vega", Palette::dark(), true));
+    assert_eq!((dark.style.name, dark.palette, dark.dark), ("nova", Palette::dark(), true));
     let light = Preset::default().theme(Mode::Light);
     assert_eq!((light.palette, light.dark), (Palette::light(), false));
     assert_eq!(light.fonts.body.name, "inter");
@@ -1558,11 +1607,16 @@ fn to_code_keeps_values_that_fall_back() {
     assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
 }
 
+/// Every id has a generated palette except `gray`, which ui.shadcn.com
+/// codes can name but its `themes.ts` lacks (index §J); `theme()` still
+/// resolves every combination.
 #[test]
-fn every_preset_id_has_a_palette() {
+fn every_palette_id_resolves() {
     for b in BaseColor::ALL {
         for c in ThemeColor::ALL {
-            assert!(Palette::from_upstream(b.id(), c.id(), c.id(), false).is_some(), "{b:?} {c:?}");
+            let has = Palette::from_upstream(b.id(), c.id(), c.id(), false).is_some();
+            assert_eq!(has, b != BaseColor::Gray && c != ThemeColor::Gray, "{b:?} {c:?}");
+            let _ = Preset::default().base_color(b).theme_color(c).chart_color(c).theme(Mode::Light);
         }
     }
 }
@@ -1588,7 +1642,7 @@ fn preset_theme_builds_on_a_small_stack() {
         })
         .expect("spawn")
         .join();
-    assert_eq!(built.ok(), Some("vega"));
+    assert_eq!(built.ok(), Some("nova"));
 }
 ```
 
@@ -1603,9 +1657,15 @@ Root `Cargo.toml`, `[workspace.dependencies]`: `log = "0.4"`.
 Append to `crates/shadcn-egui/src/palette/mod.rs`:
 
 ```rust
-/// A base colour's own radius (`radius: "0.625rem"` upstream) in px.
+/// A base colour's own radius (`radius: "0.625rem"` upstream) in px;
+/// `None` when `base_id` has no generated palette (`gray`, index §J).
 pub(crate) fn base_radius_px(base_id: &str) -> Option<f32> {
     base(base_id).map(|(rem, _, _)| rem * 16.0)
+}
+
+/// A base or a colour overlay has this id (`false` for `gray`, index §J).
+pub(crate) fn is_theme(id: &str) -> bool {
+    theme_vars(id, false).is_some()
 }
 ```
 
@@ -1725,10 +1785,32 @@ impl Preset {
         self.theme(mode).apply(ctx);
     }
 
+    /// The base colour, theme and chart ids with a palette: a code value
+    /// ui.shadcn.com has no palette for (`gray`) falls back with a warning,
+    /// the base to neutral, theme and chart to the resolved base.
+    fn palette_ids(&self) -> (&'static str, &'static str, &'static str) {
+        let base = self.base_color.id();
+        let base = if crate::palette::base_radius_px(base).is_some() {
+            base
+        } else {
+            log::warn!("shadcn-egui: base colour \"{base}\" has no palette on ui.shadcn.com; using \"neutral\"");
+            "neutral"
+        };
+        let pick = |what: &str, id: &'static str| {
+            if crate::palette::is_theme(id) {
+                id
+            } else {
+                log::warn!("shadcn-egui: {what} \"{id}\" has no palette on ui.shadcn.com; using \"{base}\"");
+                base
+            }
+        };
+        (base, pick("theme", self.theme.id()), pick("chart colour", self.chart_color.id()))
+    }
+
     /// Base colour × theme × chart colour, then the menu accent.
     fn palette(&self, dark: bool) -> Palette {
-        let p = Palette::from_upstream(self.base_color.id(), self.theme.id(), self.chart_color.id(), dark)
-            .expect("every preset id has a generated palette");
+        let (base, theme, chart) = self.palette_ids();
+        let p = Palette::from_upstream(base, theme, chart, dark).expect("palette_ids returns ids with palettes");
         if self.menu_accent == MenuAccent::Bold {
             p.with_bold_menu_accent()
         } else {
@@ -1743,10 +1825,18 @@ impl Preset {
             return 0.0;
         }
         match self.radius {
-            RadiusChoice::Default => crate::palette::base_radius_px(self.base_color.id()).expect("every base colour has a radius"),
+            RadiusChoice::Default => crate::palette::base_radius_px(self.palette_ids_quiet_base()).expect("a base with a palette has a radius"),
             RadiusChoice::Px(v) => v,
             r => r.rem().expect("coded radii have a rem value") * 16.0,
         }
+    }
+}
+
+impl Preset {
+    /// The base id `palette_ids` resolves to, without logging again.
+    fn palette_ids_quiet_base(&self) -> &'static str {
+        let base = self.base_color.id();
+        if crate::palette::base_radius_px(base).is_some() { base } else { "neutral" }
     }
 }
 
@@ -1949,7 +2039,27 @@ fn two_unsupported_values_log_two_lines_and_every_call_repeats_them() {
         let _ = p.theme(Mode::Light);
         p.theme(Mode::Dark)
     });
+    // theme() builds the palette twice when the menu is inverted; here it is not.
     assert_eq!(toggled, [SERA, GEIST, SERA, GEIST], "each theme() call warns again");
+}
+
+/// `gray` is a code value on ui.shadcn.com without a palette there (index §J).
+#[test]
+fn gray_falls_back_to_neutral_and_the_base() {
+    use shadcn_egui::{BaseColor, Palette, ThemeColor};
+    let (t, lines) = warnings(|| Preset::default().base_color(BaseColor::Gray).theme(Mode::Light));
+    assert_eq!(t.palette, Palette::light());
+    assert_eq!(t.radius, 10.0);
+    assert_eq!(lines, ["shadcn-egui: base colour \"gray\" has no palette on ui.shadcn.com; using \"neutral\""]);
+    let (t, lines) = warnings(|| Preset::default().base_color(BaseColor::Stone).theme_color(ThemeColor::Gray).chart_color(ThemeColor::Gray).theme(Mode::Dark));
+    assert_eq!(Some(t.palette), Palette::from_upstream("stone", "stone", "stone", true));
+    assert_eq!(
+        lines,
+        [
+            "shadcn-egui: theme \"gray\" has no palette on ui.shadcn.com; using \"stone\"",
+            "shadcn-egui: chart colour \"gray\" has no palette on ui.shadcn.com; using \"stone\"",
+        ]
+    );
 }
 
 #[test]
@@ -1975,14 +2085,16 @@ Expected: all pass in both feature sets; in this phase nothing is skipped
 `CHANGES.md`, `## [Unreleased]` → `### Added`:
 
 ```markdown
-- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com
-  or shadcn-svelte.com, and `preset.apply(ctx, Mode::Dark)` sets up the app
-  with its style, base colour, theme, chart colour, fonts, icon library,
-  radius and menu colours. `Preset::default()` is the site's default (Vega,
-  neutral, Inter, Lucide); `to_code()` gives the code back.
+- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
+  and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
+  colour, theme, chart colour, fonts, icon library, radius and menu colours.
+  `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
+  `to_code()` gives the code back. Codes from shadcn-svelte.com are not
+  supported: that site numbers colours and icon libraries differently.
 - When a preset asks for something this build cannot show (the Sera style,
-  or a font or icon library whose Cargo feature is off), the app uses Nova,
-  Inter or Lucide instead and logs a warning such as
+  the gray base colour or theme, which ui.shadcn.com has no colours for, or
+  a font or icon library whose Cargo feature is off), the app uses Nova,
+  neutral, Inter or Lucide instead and logs a warning such as
   `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
 - With the Lyra or Sera style every corner is square, whatever radius the
   preset names, as on the shadcn site.

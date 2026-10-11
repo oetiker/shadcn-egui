@@ -257,7 +257,7 @@ git -C "$SCRATCH/gfonts" ls-tree -r --name-only HEAD > "$SCRATCH/gfonts-files.tx
 
 - [ ] **Step 2: Locate each font and its licence**
 
-For each name in `PRESET_FONTS` (`grep -A30 'PRESET_FONTS = \[' "$UP/packages/cli/src/preset/preset.ts"`),
+For each name in `PRESET_FONTS` (`grep -A30 'PRESET_FONTS = \[' "$UP_REACT/packages/registry/src/preset/preset.ts"`; index §J),
 find its directory: the id without dashes, under `ofl/`, `apache/` or `ufl/`
 (`jetbrains-mono` → `ofl/jetbrainsmono/`, `source-sans-3` → `ofl/sourcesans3/`):
 
@@ -286,7 +286,7 @@ oxanium	Oxanium	sans	OFL-1.1	ofl/oxanium/Oxanium[wght].ttf	ofl/oxanium/OFL.txt	0
 instrument-serif	Instrument Serif	serif	OFL-1.1	400=ofl/instrumentserif/InstrumentSerif-Regular.ttf	ofl/instrumentserif/OFL.txt	-
 ```
 
-`title` and `kind` come from `$UP/docs/src/lib/font-definitions.ts`.
+`title` and `kind` come from `$UP_REACT/apps/v4/lib/font-definitions.ts` (same data as the svelte copy; index §J).
 
 - [ ] **Step 4: Icon set licences, read from each tarball**
 

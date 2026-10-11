@@ -59,7 +59,7 @@ Append to `crates/shadcn-egui/tests/overlays.rs` (add the imports to the
 top of the file):
 
 ```rust
-use shadcn_egui::{MenuColor, Mode, Palette, Preset};
+use shadcn_egui::{MenuColor, Mode, Palette, Preset, StyleName};
 
 /// Pixels darker than (60, 60, 60) once the list of a light-mode Select is open.
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
@@ -79,10 +79,10 @@ fn dark_pixels_of_open_list(theme: Theme) -> usize {
 
 #[test]
 fn an_inverted_menu_is_dark_in_light_mode() {
-    let inverted = Preset::default().menu_color(MenuColor::Inverted).theme(Mode::Light);
+    let inverted = Preset::default().style(StyleName::Vega).menu_color(MenuColor::Inverted).theme(Mode::Light);
     let mt = inverted.menu_theme();
     assert!(mt.dark && mt.palette == Palette::dark(), "the menu resolves as dark mode");
-    let plain = dark_pixels_of_open_list(Preset::default().theme(Mode::Light));
+    let plain = dark_pixels_of_open_list(Preset::default().style(StyleName::Vega).theme(Mode::Light));
     let dark = dark_pixels_of_open_list(inverted);
     // The open list is ~180 x 140 px: filled dark it adds well over 10 000
     // dark pixels; a light list only has its text.
@@ -176,8 +176,9 @@ Append to `crates/shadcn-egui/tests/overlays.rs`:
 /// lines of text run under the list so translucency shows.
 fn select_open_in(name: &str, color: MenuColor, behind: bool) {
     let themes = vec![
-        ("vega_light", Preset::default().menu_color(color).theme(Mode::Light)),
-        ("vega_dark", Preset::default().menu_color(color).theme(Mode::Dark)),
+        // Preset::default() is Nova (ui.shadcn.com DEFAULT_CONFIG); these snapshots show Vega.
+        ("vega_light", Preset::default().style(StyleName::Vega).menu_color(color).theme(Mode::Light)),
+        ("vega_dark", Preset::default().style(StyleName::Vega).menu_color(color).theme(Mode::Dark)),
     ];
     common::snapshot_with_themes(
         name,

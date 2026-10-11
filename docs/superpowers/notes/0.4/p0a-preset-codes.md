@@ -57,3 +57,29 @@ Per the decision rule, STOP. D13 needs a ruling: one list set for decoding
 (probably React, the newer and canonical site, with svelte at a newer pin
 possibly converging), or a per-source decoder. The color palettes of
 `gray` also need a base-color table entry if React's lists are chosen.
+
+## Review of this spike (2026-10-11, re-checked against shadcn/ui c2a67849)
+
+Verified: the list differences (gray at index 3; icon order), identical
+field order and bit widths, identical `V1_CHART_COLOR_MAP` content, the
+React consumers that apply the map (`preset-query.ts:22,24`,
+`commands/preset.ts:48`, keyed by theme), and all four decode examples in
+the table above (decoded with the React `preset.ts` itself under node).
+
+Corrections:
+- "The svelte checkout at the pin seems to lag React (`gray`, ...)": `gray`
+  is in React's `PRESET_BASE_COLORS`/`PRESET_THEMES` since the first preset
+  commit (b484f36a, 2026-02-19). It is not a newer React addition.
+- "The color palettes of `gray` also need a base-color table entry if
+  React's lists are chosen": React has **no** `gray` palette for presets.
+  `apps/v4/registry/themes.ts` has the same 24 entries as svelte (values
+  identical), `base-colors.ts` lists 7 bases, the site's zod schema rejects
+  `gray`, and the randomiser skips it (`randomize-biases.ts:63`). Only the
+  legacy registry (`_legacy-base-colors.ts`) has a gray. The plan therefore
+  keeps `Gray` in the enums and falls back (plan index §J).
+- `PRESET_RADII`: the key lists are identical, but React's lists carry no
+  rem values; they live in `apps/v4/registry/config.ts` `RADII`, where
+  `default` is `""` (svelte `0.5rem`) and `none` is `"0"`.
+
+Decision (user, 2026-10-11): React lists only; `a` codes take
+`V1_CHART_COLOR_MAP[theme] ?? theme`. Recorded in spec D13 and plan index §J.

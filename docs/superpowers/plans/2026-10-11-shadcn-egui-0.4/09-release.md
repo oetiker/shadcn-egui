@@ -585,8 +585,8 @@ cargo add shadcn-egui
 
 ## Use a shadcn preset
 
-Build a look on the shadcn create page (ui.shadcn.com or
-shadcn-svelte.com), copy its preset code and apply it:
+Build a look on the shadcn create page (ui.shadcn.com; codes from
+shadcn-svelte.com number colours differently and are not supported), copy its preset code and apply it:
 
 ```rust
 use shadcn_egui::{Mode, Preset};
@@ -824,14 +824,14 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
     cargo test --manifest-path tools/$t/Cargo.toml --jobs 4 -- --test-threads 4
     cargo clippy --manifest-path tools/$t/Cargo.toml --all-targets --jobs 4 -- -D warnings
   done
-  cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift <shadcn-svelte checkout> .
+  cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift <shadcn-svelte checkout> <shadcn-ui checkout> .
   scripts/check-packages.sh
   scripts/check-package-size.sh
   cargo publish --dry-run --workspace --jobs 4
   ```
 
 - Generators run from the repository root: `stylegen generate|drift
-  <shadcn-svelte checkout> .`; `tools/fontgen/fetch.sh <downloads-dir>`
+  <shadcn-svelte checkout> <shadcn-ui checkout> .`; `tools/fontgen/fetch.sh <downloads-dir>`
   then `fontgen <downloads-dir> .`; icongen as described in
   `skills/egui-shadcn/references/icons.md`. Downloads go to a scratch
   directory, never into the repository.
@@ -964,7 +964,7 @@ lets the first CI run see the workspace; if it insists on a branch from
   `scripts/check-package-size.sh` and `cargo publish --dry-run
   --workspace`. Snapshot tests need a Vulkan software driver (mesa
   lavapipe). `stylegen drift` needs the shadcn-svelte checkout at
-  `tools/stylegen/PIN`.
+  `tools/stylegen/PIN` and the shadcn/ui checkout at `tools/stylegen/PIN_REACT`.
 - `ri-ci-rust` lints with `cargo fmt --check`. The workspace is not
   rustfmt-formatted today (`cargo fmt --check` reported about 950 diffs at
   commit 20ba879). Ask the user: format the workspace in one commit before

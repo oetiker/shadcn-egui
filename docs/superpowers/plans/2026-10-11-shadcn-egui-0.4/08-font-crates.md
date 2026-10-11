@@ -7,7 +7,7 @@ OFL-1.1/Apache-2.0 font, `y_offset_factor` measured per font), §7 (per font
 crate a Button snapshot).
 **Cites:** `tools/fontgen/FONTS.tsv` + `tools/fontgen/GF_PIN` (P0c licence
 table, Phase 0 Task 3), `tools/stylegen/tests/fixtures/font-definitions.ts`
-(fixture copy of upstream `docs/src/lib/font-definitions.ts`, Phase 3),
+(fixture copy of shadcn/ui `apps/v4/lib/font-definitions.ts`, Phase 3 / index §J),
 `crates/shadcn-egui/tests/font_offset.rs` (Phase 2 Task 5).
 
 **Outcome:** `tools/fontgen` (own workspace, `skrifa`) turns FONTS.tsv plus
@@ -1346,7 +1346,7 @@ fn every_font_crate_renders_a_button() {
     let themes: Vec<(&'static str, Theme)> = FontName::ALL
         .into_iter()
         .filter(|n| fonts::files(*n).is_some())
-        .map(|n| (n.id(), Preset::default().font(n).theme(Mode::Light)))
+        .map(|n| (n.id(), Preset::default().style(shadcn_egui::StyleName::Vega).font(n).theme(Mode::Light)))
         .collect();
     assert!(themes.len() > 2, "fonts-all enables the font crates");
     common::snapshot_with_themes(
