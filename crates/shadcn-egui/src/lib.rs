@@ -7,4 +7,4 @@ pub mod theme;
 
 pub use shadcn_egui_core::*;
 pub use style::Style;
-pub use theme::{theme, Metrics, Palette, Theme};
+pub use theme::{theme, Metrics, Palette, Theme, ThemeFonts};

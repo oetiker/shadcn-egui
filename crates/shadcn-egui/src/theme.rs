@@ -96,6 +96,8 @@ pub struct Theme {
     pub radius: f32,
     pub metrics: Metrics,
     pub dark: bool,
+    /// Body and heading font; [`Theme::apply`] installs them.
+    pub fonts: ThemeFonts,
 }
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the
@@ -173,6 +175,7 @@ impl Theme {
             radius,
             metrics: Metrics::default(),
             dark,
+            fonts: ThemeFonts::inherit(&shadcn_egui_font_inter::FONT),
         }
     }
     pub fn vega_dark() -> Self {
@@ -180,6 +183,16 @@ impl Theme {
     }
     pub fn vega_light() -> Self {
         Self::new(Style::vega(), Palette::light(), 10.0)
+    }
+
+    /// Body font and heading font (`None`: headings use the body font,
+    /// upstream `fontHeading: "inherit"`).
+    pub fn fonts(mut self, body: &'static FontFiles, heading: Option<&'static FontFiles>) -> Self {
+        self.fonts = ThemeFonts {
+            body,
+            heading: heading.unwrap_or(body),
+        };
+        self
     }
 
     /// The component state `s` plus this theme's [`State::DARK`].
@@ -321,9 +334,73 @@ fn theme_id() -> egui::Id {
     *ID
 }
 
-/// Named font families for shadcn-style weight emphasis.
-pub const FAMILY_MEDIUM: &str = "oxanium-medium";
-pub const FAMILY_SEMIBOLD: &str = "oxanium-semibold";
+use egui::epaint::text::VariationCoords;
+use shadcn_egui_core::{FontFiles, FontKind, WEIGHTS};
+
+/// A theme's fonts. `heading == body` is upstream `fontHeading: "inherit"`.
+/// Two values are equal when they name the same fonts.
+#[derive(Clone, Copy)]
+pub struct ThemeFonts {
+    pub body: &'static FontFiles,
+    pub heading: &'static FontFiles,
+}
+
+impl ThemeFonts {
+    /// Headings in the body font.
+    pub fn inherit(body: &'static FontFiles) -> Self {
+        Self {
+            body,
+            heading: body,
+        }
+    }
+}
+
+impl PartialEq for ThemeFonts {
+    fn eq(&self, other: &Self) -> bool {
+        self.body.name == other.body.name && self.heading.name == other.heading.name
+    }
+}
+
+impl std::fmt::Debug for ThemeFonts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ThemeFonts")
+            .field("body", &self.body.name)
+            .field("heading", &self.heading.name)
+            .finish()
+    }
+}
+
+/// Named font families. Body regular is `FontFamily::Proportional`.
+pub const FAMILY_MEDIUM: &str = "shadcn-body-medium";
+pub const FAMILY_SEMIBOLD: &str = "shadcn-body-semibold";
+pub const FAMILY_BOLD: &str = "shadcn-body-bold";
+pub const FAMILY_HEADING: &str = "shadcn-heading-regular";
+pub const FAMILY_HEADING_MEDIUM: &str = "shadcn-heading-medium";
+pub const FAMILY_HEADING_SEMIBOLD: &str = "shadcn-heading-semibold";
+pub const FAMILY_HEADING_BOLD: &str = "shadcn-heading-bold";
+
+/// Families per [`WEIGHTS`] entry; `None` is `Proportional`.
+const BODY_FAMILIES: [Option<&str>; 4] = [
+    None,
+    Some(FAMILY_MEDIUM),
+    Some(FAMILY_SEMIBOLD),
+    Some(FAMILY_BOLD),
+];
+const HEADING_FAMILIES: [&str; 4] = [
+    FAMILY_HEADING,
+    FAMILY_HEADING_MEDIUM,
+    FAMILY_HEADING_SEMIBOLD,
+    FAMILY_HEADING_BOLD,
+];
+
+fn weight_index(w: Weight) -> usize {
+    match w {
+        Weight::Normal => 0,
+        Weight::Medium => 1,
+        Weight::Semibold => 2,
+        Weight::Bold => 3,
+    }
+}
 
 /// Return the named font family if it's registered (via `Theme::apply`), else
 /// fall back to Proportional. egui defers `set_fonts` to the next frame, so on
@@ -337,71 +414,94 @@ pub fn family(ctx: &egui::Context, name: &str) -> egui::FontFamily {
     }
 }
 
-/// Font family for a weight; Oxanium ships regular, medium and semibold.
+/// The body font family for a weight.
 pub fn family_for(ctx: &egui::Context, w: Weight) -> egui::FontFamily {
-    match w {
-        Weight::Normal => egui::FontFamily::Proportional,
-        Weight::Medium => family(ctx, FAMILY_MEDIUM),
-        Weight::Semibold | Weight::Bold => family(ctx, FAMILY_SEMIBOLD),
+    match BODY_FAMILIES[weight_index(w)] {
+        None => egui::FontFamily::Proportional,
+        Some(name) => family(ctx, name),
     }
 }
 
-// NOTE: The Google Fonts repository only ships Oxanium as a variable font
-// (Oxanium[wght].ttf) — there are no separate static weight files any more.
-// All three weight slots use the same variable font binary; egui will render
-// at one effective weight.  A future improvement would be to use font
-// variation settings once egui gains that support.
-fn install_fonts(ctx: &egui::Context) {
-    // Building the font atlas is expensive, so install the fonts only once per
-    // context; re-applying (e.g. a light/dark toggle) only refreshes the style.
-    let installed_id = egui::Id::new("shadcn_egui::fonts_installed");
-    if ctx
-        .data(|d| d.get_temp::<bool>(installed_id))
-        .unwrap_or(false)
-    {
+/// The heading font family for a weight (upstream `cn-font-heading`).
+pub fn heading_family_for(ctx: &egui::Context, w: Weight) -> egui::FontFamily {
+    family(ctx, HEADING_FAMILIES[weight_index(w)])
+}
+
+/// `base` plus the theme's fonts: one registration per weight with the
+/// `wght` coordinate, each family followed by `base`'s Proportional list so
+/// glyphs the font lacks (emoji, CJK, symbols) still render.
+fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinitions {
+    let fallback = base
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
+    let inherit = fonts.heading == fonts.body;
+    for (role, files) in [("body", fonts.body), ("heading", fonts.heading)] {
+        let data_role = if role == "heading" && inherit {
+            "body"
+        } else {
+            role
+        };
+        for (i, w) in WEIGHTS.into_iter().enumerate() {
+            let key = format!("shadcn-{data_role}-{w}");
+            if data_role == role {
+                let face = files.face(w);
+                let mut tweak = egui::FontTweak {
+                    y_offset_factor: files.y_offset_factor,
+                    ..Default::default()
+                };
+                if let Some(v) = face.wght {
+                    tweak.coords = VariationCoords::new([(b"wght", v)]);
+                }
+                base.font_data.insert(
+                    key.clone(),
+                    Arc::new(FontData::from_static(face.data).tweak(tweak)),
+                );
+            }
+            let family = match (role, i) {
+                ("body", 0) => FontFamily::Proportional,
+                ("body", _) => {
+                    FontFamily::Name(BODY_FAMILIES[i].expect("named body family").into())
+                }
+                _ => FontFamily::Name(HEADING_FAMILIES[i].into()),
+            };
+            let mut list = vec![key];
+            list.extend(fallback.iter().cloned());
+            base.families.insert(family, list);
+        }
+    }
+    if fonts.body.kind == FontKind::Mono {
+        base.families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .insert(0, "shadcn-body-400".into());
+    }
+    base
+}
+
+/// The fonts last installed on a context by [`Theme::apply`].
+#[derive(Clone, PartialEq)]
+struct InstalledFonts {
+    body: &'static str,
+    heading: &'static str,
+}
+
+/// Install the theme's fonts. With `base: None` (plain `apply`) nothing
+/// happens when the same fonts are installed already, so a light/dark toggle
+/// neither rebuilds the atlas nor drops fonts an app added through
+/// `apply_with_fonts`.
+fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefinitions>) {
+    let id = egui::Id::new("shadcn_egui::installed_fonts");
+    let key = InstalledFonts {
+        body: fonts.body.name,
+        heading: fonts.heading.name,
+    };
+    if base.is_none() && ctx.data(|d| d.get_temp::<InstalledFonts>(id)).as_ref() == Some(&key) {
         return;
     }
-    // Oxanium's ascent reserves more empty space above the cap height than below
-    // the baseline, so egui's row-box centering (`Align2::CENTER_CENTER` in
-    // buttons/badges/tabs, and `TextEdit` vertical centering) leaves single-line
-    // text sitting ~0.18em too high. Nudge every glyph down by that fraction so
-    // centered text is optically balanced. Measured against the reference button.
-    let tweak = egui::FontTweak {
-        y_offset_factor: 0.18,
-        ..Default::default()
-    };
-    let inter = match &shadcn_egui_font_inter::FONT.source {
-        shadcn_egui_core::FontSource::Variable { data, .. } => *data,
-        shadcn_egui_core::FontSource::Static { regular, .. } => *regular,
-    };
-    let mut fonts = FontDefinitions::default();
-    fonts.font_data.insert(
-        "oxanium".into(),
-        Arc::new(FontData::from_static(inter).tweak(tweak.clone())),
-    );
-    fonts.font_data.insert(
-        FAMILY_MEDIUM.into(),
-        Arc::new(FontData::from_static(inter).tweak(tweak.clone())),
-    );
-    fonts.font_data.insert(
-        FAMILY_SEMIBOLD.into(),
-        Arc::new(FontData::from_static(inter).tweak(tweak)),
-    );
-    fonts
-        .families
-        .entry(FontFamily::Proportional)
-        .or_default()
-        .insert(0, "oxanium".into());
-    fonts.families.insert(
-        FontFamily::Name(FAMILY_MEDIUM.into()),
-        vec![FAMILY_MEDIUM.into()],
-    );
-    fonts.families.insert(
-        FontFamily::Name(FAMILY_SEMIBOLD.into()),
-        vec![FAMILY_SEMIBOLD.into()],
-    );
-    ctx.set_fonts(fonts);
-    ctx.data_mut(|d| d.insert_temp(installed_id, true));
+    ctx.set_fonts(font_definitions(fonts, base.unwrap_or_default()));
+    ctx.data_mut(|d| d.insert_temp(id, key));
 }
 
 impl Theme {
@@ -416,13 +516,25 @@ impl Theme {
     /// Push this theme into the egui context: fonts, type scale, spacing, colors.
     ///
     /// Call once, right after the context is created, and again only when the
-    /// theme changes: the font atlas is only built on the first call per
-    /// context (later calls just refresh the style and stored theme). Not every
-    /// frame: that would silently undo any other code's style writes. egui-native widgets pick up the inactive/hovered/active visuals
-    /// set here, while the crate's own custom components manage their own
-    /// per-state colors.
+    /// theme changes. Not every frame: that would silently undo any other
+    /// code's style writes. Fonts are rebuilt from egui's defaults plus the
+    /// theme's fonts, and only when they differ from the last install on
+    /// this context. **An app that installs fonts of its own must use
+    /// [`Theme::apply_with_fonts`]** and must not call `ctx.set_fonts` itself
+    /// afterwards: that would drop the theme's families, and egui panics when
+    /// `TextStyle::Heading` names a family that is gone.
     pub fn apply(&self, ctx: &egui::Context) {
-        install_fonts(ctx);
+        self.apply_inner(ctx, None);
+    }
+
+    /// Like [`Theme::apply`], starting from the app's own font definitions
+    /// instead of egui's defaults. Always reinstalls the fonts.
+    pub fn apply_with_fonts(&self, ctx: &egui::Context, base: FontDefinitions) {
+        self.apply_inner(ctx, Some(base));
+    }
+
+    fn apply_inner(&self, ctx: &egui::Context, base: Option<FontDefinitions>) {
+        install_fonts(ctx, self.fonts, base);
         let p = &self.palette;
         let m = &self.metrics;
         let hairline = m.border;
@@ -439,7 +551,10 @@ impl Theme {
                 ),
                 (
                     TextStyle::Heading,
-                    FontId::new(m.text_heading, FontFamily::Name(FAMILY_SEMIBOLD.into())),
+                    FontId::new(
+                        m.text_heading,
+                        FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()),
+                    ),
                 ),
             ]
             .into();
