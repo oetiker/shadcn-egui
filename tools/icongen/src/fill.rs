@@ -191,7 +191,13 @@ fn boundary(name: &str, paths: &[FillPath]) -> Result<Vec<Contour>, String> {
         .collect();
     let splits = split_points(&edges);
     // Whether fill lies right beside `p` (on a piece along `u`) in direction `dir`.
-    let filled = |p: P, u: P, dir: P| {
+    let vertices: Vec<P> = paths
+        .iter()
+        .flat_map(|fp| fp.contours.iter().flatten())
+        .map(|v| v.map(f64::from))
+        .collect();
+    let filled = |p: P, u: P, side: P| {
+        let dir = ray_dir(&vertices, p, side);
         paths
             .iter()
             .any(|fp| covered(fp, winding(&fp.contours, p, dir, Some(u))))
@@ -269,6 +275,25 @@ fn boundary(name: &str, paths: &[FillPath]) -> Result<Vec<Contour>, String> {
     Ok(loops)
 }
 
+/// A ray direction from `p` into the half-plane of the unit normal `side`
+/// whose line passes no vertex. The perpendicular is tried first, then directions
+/// turned away from it: a ray through a vertex, or along an edge, is
+/// decided by the sign of a rounding error.
+fn ray_dir(vertices: &[P], p: P, side: P) -> P {
+    const TURNS: [f64; 7] = [0.0, 0.37, -0.37, 0.71, -0.71, 1.07, -1.07];
+    for a in TURNS {
+        let (s, c) = a.sin_cos();
+        let d = [side[0] * c - side[1] * s, side[0] * s + side[1] * c];
+        // The whole line counts, not only the ray ahead: the crossing rule
+        // tests an edge against the line first.
+        let clear = vertices.iter().all(|v| cross(d, sub(*v, p)).abs() > WELD);
+        if clear {
+            return d;
+        }
+    }
+    side
+}
+
 /// A point in f64, for the boundary arithmetic.
 type P = [f64; 2];
 
@@ -309,7 +334,19 @@ fn quantise_loop(points: &[P]) -> Option<Contour> {
 }
 
 /// Per edge, the points where other edges cross it or end on it.
+///
+/// Every point goes through one [`Weld`] table, so a crossing found on two
+/// collinear edges (stacked paths sharing an edge line, a spike running back
+/// along itself) is the same value on both, and so is a crossing that lands
+/// on a vertex. Without that the two copies differ in the last bit and the
+/// boundary pieces do not meet.
 fn split_points(edges: &[[P; 2]]) -> Vec<Vec<P>> {
+    let mut weld = Weld::default();
+    // Input vertices first: they are the representatives crossings snap to.
+    for e in edges {
+        weld.snap(e[0]);
+        weld.snap(e[1]);
+    }
     let mut splits = vec![Vec::new(); edges.len()];
     let lo = |e: &[P; 2]| e[0][0].min(e[1][0]);
     let hi = |e: &[P; 2]| e[0][0].max(e[1][0]);
@@ -326,6 +363,7 @@ fn split_points(edges: &[[P; 2]]) -> Vec<Vec<P>> {
                 continue;
             }
             if let Some(p) = crossing(a, b, c, d) {
+                let p = weld.snap(p);
                 splits[i].push(p);
                 splits[j].push(p);
             }
@@ -344,9 +382,40 @@ fn split_points(edges: &[[P; 2]]) -> Vec<Vec<P>> {
     splits
 }
 
-/// The crossing point of segments `ab` and `cd`, if they are not parallel and
-/// meet. A crossing at (or within rounding of) an end point is that end
-/// point exactly, so edges that share a vertex agree on it.
+/// Points closer than this are one point. Far above f64 rounding of a
+/// crossing (about 1e-14 at icon scale), far below a quantum (1/1024).
+const WELD: f64 = 1e-9;
+
+/// A table of distinct points; `snap` returns the first point seen within
+/// [`WELD`] of its argument.
+#[derive(Default)]
+struct Weld {
+    cells: std::collections::HashMap<[i64; 2], Vec<P>>,
+}
+
+impl Weld {
+    /// Cells are 1000 × WELD wide, so a match lies in the 3 × 3 block around a point's cell.
+    const CELL: f64 = WELD * 1000.0;
+
+    fn snap(&mut self, p: P) -> P {
+        let c = p.map(|v| (v / Self::CELL).floor() as i64);
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                if let Some(found) = self.cells.get(&[c[0] + dx, c[1] + dy]).and_then(|ps| {
+                    ps.iter()
+                        .find(|q| (q[0] - p[0]).hypot(q[1] - p[1]) < WELD)
+                        .copied()
+                }) {
+                    return found;
+                }
+            }
+        }
+        self.cells.entry(c).or_default().push(p);
+        p
+    }
+}
+
+/// The crossing point of segments `ab` and `cd`, if they are not parallel and meet.
 fn crossing(a: P, b: P, c: P, d: P) -> Option<P> {
     let (r, s) = (sub(b, a), sub(d, c));
     let denom = cross(r, s);
@@ -355,16 +424,8 @@ fn crossing(a: P, b: P, c: P, d: P) -> Option<P> {
     }
     let ac = sub(c, a);
     let (t, u) = (cross(ac, s) / denom, cross(ac, r) / denom);
-    if !((0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)) {
-        return None;
-    }
-    let x = [a[0] + t * r[0], a[1] + t * r[1]];
-    Some(
-        [a, b, c, d]
-            .into_iter()
-            .find(|e| (e[0] - x[0]).hypot(e[1] - x[1]) < 1e-9)
-            .unwrap_or(x),
-    )
+    ((0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u))
+        .then(|| [a[0] + t * r[0], a[1] + t * r[1]])
 }
 
 /// Whether `p` lies on segment `ab`, strictly between its ends.
@@ -372,7 +433,7 @@ fn on_segment(p: P, a: P, b: P) -> bool {
     let (r, ap) = (sub(b, a), sub(p, a));
     let len2 = dot(r, r);
     let t = dot(ap, r) / len2;
-    t > 0.0 && t < 1.0 && cross(r, ap).abs() / len2.sqrt() < 1e-9
+    t > 0.0 && t < 1.0 && cross(r, ap).abs() / len2.sqrt() < WELD
 }
 
 /// The angle from `u` to `w` sweeping clockwise in math orientation
@@ -447,12 +508,14 @@ fn covered(fp: &FillPath, w: i32) -> bool {
 /// `dir` across it, the result is the winding number infinitesimally beside
 /// the edge on the `dir` side, decided without any probe distance.
 fn winding(contours: &[Vec<[f32; 2]>], p: P, dir: P, along: Option<P>) -> i32 {
+    // Ten times WELD: a piece whose ends were welded lies at most WELD off its edge's line.
+    const ALONG: f64 = 10.0 * WELD;
     let mut w = 0;
     for c in contours {
         for i in 0..c.len() {
             let (a, b) = (c[i].map(f64::from), c[(i + 1) % c.len()].map(f64::from));
             if let Some(u) = along {
-                if cross(u, sub(a, p)).abs() < 1e-9 && cross(u, sub(b, p)).abs() < 1e-9 {
+                if cross(u, sub(a, p)).abs() < ALONG && cross(u, sub(b, p)).abs() < ALONG {
                     continue;
                 }
             }

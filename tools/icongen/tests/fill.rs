@@ -425,3 +425,115 @@ fn hairline_spike_beside_a_shallow_edge_keeps_the_outline_closed() {
         f.contours
     );
 }
+
+fn svg_of(paths: &[(&str, &str)]) -> String {
+    let mut s = String::from(r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">"#);
+    for (d, rule) in paths {
+        s += &format!(r#"<path fill-rule="{rule}" d="{d}"/>"#);
+    }
+    s + "</svg>"
+}
+
+/// Every loop has at least three points and every miter is 1..2 long.
+fn assert_loops_sound(name: &str, f: &Fill) {
+    for c in &f.contours {
+        assert!(c.len() >= 3, "{name}: {c:?}");
+        for (p, m) in c {
+            let len = m[0].hypot(m[1]);
+            assert!((0.99..=2.01).contains(&len), "{name}: miter {m:?} at {p:?}");
+        }
+    }
+}
+
+#[test]
+fn crossing_two_collinear_edges_off_the_grid_closes() {
+    // Two squares share the line y = 2; the triangle crosses it at an x that
+    // no f32 or f64 holds exactly, once per square edge.
+    let svg = svg_of(&[
+        ("M2 2H12V12H2Z", "nonzero"),
+        ("M6 2H16V12H6Z", "nonzero"),
+        ("M7.1 0.3L8.2 3.1L10.3 0.2Z", "nonzero"),
+    ]);
+    let f = convert("stacked", &svg)
+        .expect("converts")
+        .fill
+        .expect("filled");
+    assert_loops_sound("stacked", &f);
+    assert_eq!(f.contours.len(), 1, "{:?}", f.contours);
+    // One path whose edges (16,24)-(0,8) and (0,8)-(4,12) lie on one line.
+    let svg = svg_of(&[("M16 24L0 8L4 12L0 4L4 20Z", "nonzero")]);
+    let f = convert("folded", &svg)
+        .expect("converts")
+        .fill
+        .expect("filled");
+    assert_loops_sound("folded", &f);
+}
+
+#[test]
+fn rays_through_vertices_and_along_edges_classify_exactly() {
+    // From the fuzz run below with other seeds. In the first, the side ray of
+    // the edge (20,12)-(16,0) runs through (0,12) and along (0,12)-(12,8).
+    // In the second, the line of a side ray holds the edge (24,0)-(6,6)
+    // behind the ray's start.
+    let icons = [
+        vec![(
+            "M20 12L16 0L0 8L0 20L20 20L12 8ZM12 8L0 24L16 4L8 20L0 12Z",
+            "nonzero",
+        )],
+        vec![
+            ("M0 0L0 12L0 0L6 18L12 0L6 0Z", "evenodd"),
+            (
+                "M12 6L24 0L6 6L18 12L0 24ZM0 12L0 24L24 6L24 24Z",
+                "evenodd",
+            ),
+        ],
+    ];
+    for (i, paths) in icons.iter().enumerate() {
+        let name = format!("ray{i}");
+        let f = convert(&name, &svg_of(paths))
+            .expect("converts")
+            .fill
+            .expect("filled");
+        assert_loops_sound(&name, &f);
+    }
+}
+
+#[test]
+fn random_grid_icons_all_close() {
+    // Random polygons on coarse grids: shared vertices, collinear overlaps,
+    // rays through vertices. Fixed xorshift seed, so failures reproduce.
+    let mut seed: u64 = 0x1234_5678;
+    let mut rnd = |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    for it in 0..400 {
+        let grid = if it % 2 == 0 { 7 } else { 25 };
+        let mut paths = Vec::new();
+        for _ in 0..1 + rnd(3) {
+            let mut d = String::new();
+            for _ in 0..1 + rnd(2) {
+                for k in 0..3 + rnd(4) {
+                    let mut v = || rnd(grid) as f64 * 24.0 / (grid - 1) as f64;
+                    let (x, y) = (v(), v());
+                    d += &format!("{}{x:.4} {y:.4}", if k == 0 { "M" } else { "L" });
+                }
+                d += "Z";
+            }
+            paths.push((d, if rnd(2) == 0 { "nonzero" } else { "evenodd" }));
+        }
+        let refs: Vec<(&str, &str)> = paths.iter().map(|(d, r)| (d.as_str(), *r)).collect();
+        let svg = svg_of(&refs);
+        let name = format!("fuzz{it}");
+        match convert(&name, &svg) {
+            Ok(icon) => {
+                if let Some(f) = icon.fill {
+                    assert_loops_sound(&name, &f);
+                }
+            }
+            Err(e) => assert!(e.contains("no stroked or filled paths"), "{e}\n{svg}"),
+        }
+    }
+}
