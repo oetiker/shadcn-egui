@@ -118,8 +118,8 @@ fn edges_with_fill_on_both_sides_get_no_fringe() {
 /// Every fringe vertex and every fringe edge points out of the painted fill:
 /// a little along a miter is uncovered; a little to the outer side of each
 /// edge is uncovered and a little to its inner side is covered. Vertices
-/// where loops touch (the even-odd star's tips meet at points) are left out
-/// of the vertex check: their miter points between two fill wedges.
+/// where loops touch (the even-odd star's tips meet at points) have a zero
+/// miter: any direction there leads into one fill wedge or the other.
 fn assert_fringe_points_out(name: &str) {
     let f = fill_of(name);
     assert!(!f.contours.is_empty(), "{name}: no fringe");
@@ -127,13 +127,17 @@ fn assert_fringe_points_out(name: &str) {
     let pinch = |p: [f32; 2]| points.iter().filter(|q| **q == p).count() > 1;
     for c in &f.contours {
         for (i, &(p, m)) in c.iter().enumerate() {
-            let len = m[0].hypot(m[1]);
-            assert!((0.99..=2.01).contains(&len), "{name}: miter {m:?} at {p:?}");
-            let along = [p[0] + m[0] * 0.05, p[1] + m[1] * 0.05];
-            assert!(
-                pinch(p) || !covers(&f, along),
-                "{name}: miter {m:?} at {p:?} points into the fill"
-            );
+            if pinch(p) {
+                assert_eq!(m, [0.0, 0.0], "{name}: pinch {p:?} has a miter");
+            } else {
+                let len = m[0].hypot(m[1]);
+                assert!((0.99..=2.01).contains(&len), "{name}: miter {m:?} at {p:?}");
+                let along = [p[0] + m[0] * 0.05, p[1] + m[1] * 0.05];
+                assert!(
+                    !covers(&f, along),
+                    "{name}: miter {m:?} at {p:?} points into the fill"
+                );
+            }
             let q = c[(i + 1) % c.len()].0;
             let d = [q[0] - p[0], q[1] - p[1]];
             let len = d[0].hypot(d[1]);
@@ -210,6 +214,30 @@ fn fringe_follows_the_true_fill_boundary() {
         "the top tip points up: {:?}",
         miter_at(&f, [12.0, 2.0])
     );
+}
+
+/// Where two loops of the even-odd star touch, the arms are vertical angles:
+/// an outward miter of one arm points into the other, and its fringe would
+/// cover that arm's fill a second time. The five inner pinches get none.
+#[test]
+fn pinch_vertices_get_a_zero_miter() {
+    let f = fill_of("star-evenodd");
+    let points: Vec<[f32; 2]> = f.contours.iter().flatten().map(|(p, _)| *p).collect();
+    let mut pinches: Vec<[f32; 2]> = points
+        .iter()
+        .copied()
+        .filter(|p| points.iter().filter(|q| *q == p).count() > 1)
+        .collect();
+    pinches.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    pinches.dedup();
+    assert_eq!(pinches.len(), 5, "{pinches:?}");
+    for c in &f.contours {
+        for &(p, m) in c {
+            let zero = m == [0.0, 0.0];
+            assert_eq!(zero, pinches.contains(&p), "miter {m:?} at {p:?}");
+        }
+    }
+    assert_fringe_points_out("star-evenodd");
 }
 
 #[test]
@@ -440,13 +468,20 @@ fn svg_of(paths: &[(&str, &str)]) -> String {
     s + "</svg>"
 }
 
-/// Every loop has at least three points and every miter is 1..2 long.
+/// Every loop has at least three points and every miter is 1..2 long, or
+/// zero where loops touch.
 fn assert_loops_sound(name: &str, f: &Fill) {
+    let points: Vec<[f32; 2]> = f.contours.iter().flatten().map(|(p, _)| *p).collect();
+    let pinch = |p: &[f32; 2]| points.iter().filter(|q| *q == p).count() > 1;
     for c in &f.contours {
         assert!(c.len() >= 3, "{name}: {c:?}");
         for (p, m) in c {
-            let len = m[0].hypot(m[1]);
-            assert!((0.99..=2.01).contains(&len), "{name}: miter {m:?} at {p:?}");
+            if pinch(p) {
+                assert_eq!(*m, [0.0, 0.0], "{name}: pinch {p:?} has a miter");
+            } else {
+                let len = m[0].hypot(m[1]);
+                assert!((0.99..=2.01).contains(&len), "{name}: miter {m:?} at {p:?}");
+            }
         }
     }
 }

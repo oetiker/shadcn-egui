@@ -272,7 +272,25 @@ fn boundary(name: &str, paths: &[FillPath]) -> Result<Vec<Contour>, String> {
             loops.push(l);
         }
     }
+    zero_pinches(&mut loops);
     Ok(loops)
+}
+
+/// Zero the miter of every vertex whose quantised position occurs twice
+/// among the loops (two loops touching, or one loop passing a point twice).
+/// The fill wedges there are vertical angles, so an outward miter of one
+/// points into the other and its fringe would cover that fill a second time;
+/// with a zero miter the adjacent fringe strips taper to the pinch instead.
+fn zero_pinches(loops: &mut [Contour]) {
+    let mut count = std::collections::HashMap::new();
+    for &(p, _) in loops.iter().flatten() {
+        *count.entry(p.map(f32::to_bits)).or_insert(0) += 1;
+    }
+    for (p, m) in loops.iter_mut().flatten() {
+        if count[&p.map(f32::to_bits)] > 1 {
+            *m = [0.0, 0.0];
+        }
+    }
 }
 
 /// A ray direction from `p` into the half-plane of the unit normal `side`

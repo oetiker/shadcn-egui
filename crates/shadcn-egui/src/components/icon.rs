@@ -129,9 +129,11 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
 
 /// The fill as one mesh: its triangles in `color`, plus per contour a strip
 /// from the edge (in `color`) to `fringe` points outward along each vertex's
-/// miter (transparent). Like epaint's own feathering but outward only, so the
-/// strip never overlaps the fill and a translucent colour shows no darker
-/// seam; `fringe` is one physical pixel.
+/// miter (transparent). Like epaint's own feathering but outward only, so a
+/// translucent colour shows no darker seam: the strip stays off the fill, as
+/// icongen zeroes the miter where loops touch. Separate fill paths that
+/// overlap each other (two Remixicon icons) still blend twice there.
+/// `fringe` is one physical pixel on an untransformed layer.
 fn fill_shape(
     fill: &FillMesh,
     map: impl Fn(f32, f32) -> Pos2,

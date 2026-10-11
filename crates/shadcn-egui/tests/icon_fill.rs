@@ -179,106 +179,75 @@ fn a_curve_without_a_start_point_does_not_panic() {
 }
 
 /// Review Focus 4: a translucent filled icon shows no darker seam where the
-/// fill meets the fringe and no lighter gap inside, also at a fractional scale.
+/// fill meets the fringe (nor where the even-odd star's arms touch) and no
+/// lighter gap inside, also at a fractional scale. `mixed` is painted with
+/// stroke width 0, its dot alone: translucent strokes darken where their cap
+/// discs overlap the line, which is the stroke painter's, not the fill's.
 #[test]
 fn filled_icon_has_no_seam_at_fractional_scale() {
-    for ppp in [1.0_f32, 1.25] {
-        let mut h = Harness::builder()
-            .with_size(vec2(40.0, 40.0))
-            .with_pixels_per_point(ppp)
-            .build_ui(|ui| {
-                let page = ui.ctx().viewport_rect();
-                ui.ctx().layer_painter(LayerId::background()).rect_filled(
-                    page,
-                    0.0,
-                    Color32::WHITE,
-                );
-                let p = ui
-                    .ctx()
-                    .layer_painter(LayerId::new(Order::Foreground, Id::new("icon")));
-                let rect = Rect::from_min_size(pos2(8.0, 8.0), vec2(24.0, 24.0));
-                paint_icon(
-                    &p,
-                    rect,
-                    &fixture::RING,
-                    Color32::RED.gamma_multiply(0.5),
-                    2.0,
-                );
-            });
-        h.run();
-        let img = h.render().expect("render");
-        let g = |x: u32, y: u32| i32::from(img.get_pixel(x, y).0[1]);
-        let px = |v: f32| ((8.0 + v) * ppp) as u32;
+    type Inside = fn(f32, f32) -> bool;
+    let cases: [(&str, Icon, f32, [f32; 2], Inside); 3] = [
         // Icon (12, 4) lies between the ring's edge (radius 10) and its hole (8..16).
-        let interior = g(px(12.0), px(4.0));
-        assert!(
-            (120..=136).contains(&interior),
-            "ppp {ppp}: interior green {interior}"
-        );
-        for y in 0..img.height() {
-            for x in 0..img.width() {
-                let v = g(x, y);
-                assert!(
-                    v >= interior - 3,
-                    "ppp {ppp}: ({x}, {y}) green {v} < interior {interior} - 3: seam"
-                );
-                let (ix, iy) = ((x as f32 + 0.5) / ppp - 8.0, (y as f32 + 0.5) / ppp - 8.0);
-                let r = ((ix - 12.0).powi(2) + (iy - 12.0).powi(2)).sqrt();
-                let near_hole = (7.0..=17.0).contains(&ix) && (7.0..=17.0).contains(&iy);
-                if r < 9.0 && !near_hole {
-                    assert!(
-                        (v - interior).abs() <= 3,
-                        "ppp {ppp}: ({x}, {y}) green {v} vs interior {interior}: gap"
+        ("ring", fixture::RING, 2.0, [12.0, 4.0], |x, y| {
+            let r = ((x - 12.0).powi(2) + (y - 12.0).powi(2)).sqrt();
+            r < 9.0 && !((7.0..=17.0).contains(&x) && (7.0..=17.0).contains(&y))
+        }),
+        // The top arm, tip (12, 2), base 9.79..14.21 at y = 9.
+        (
+            "star-evenodd",
+            fixture::STAR_EVENODD,
+            2.0,
+            [12.0, 6.0],
+            |x, y| (4.0..=8.0).contains(&y) && (x - 12.0).abs() < (y - 2.0) * 0.316 - 0.8,
+        ),
+        // The dot, centre (12, 6), radius 2.
+        ("mixed", fixture::MIXED, 0.0, [12.0, 6.0], |x, y| {
+            ((x - 12.0).powi(2) + (y - 6.0).powi(2)).sqrt() < 1.0
+        }),
+    ];
+    for (name, icon, stroke, [sx, sy], inside) in cases {
+        for ppp in [1.0_f32, 1.25] {
+            let mut h = Harness::builder()
+                .with_size(vec2(40.0, 40.0))
+                .with_pixels_per_point(ppp)
+                .build_ui(|ui| {
+                    let page = ui.ctx().viewport_rect();
+                    ui.ctx().layer_painter(LayerId::background()).rect_filled(
+                        page,
+                        0.0,
+                        Color32::WHITE,
                     );
+                    let p = ui
+                        .ctx()
+                        .layer_painter(LayerId::new(Order::Foreground, Id::new("icon")));
+                    let rect = Rect::from_min_size(pos2(8.0, 8.0), vec2(24.0, 24.0));
+                    paint_icon(&p, rect, &icon, Color32::RED.gamma_multiply(0.5), stroke);
+                });
+            h.run();
+            let img = h.render().expect("render");
+            let g = |x: u32, y: u32| i32::from(img.get_pixel(x, y).0[1]);
+            let px = |v: f32| ((8.0 + v) * ppp) as u32;
+            let interior = g(px(sx), px(sy));
+            assert!(
+                (120..=136).contains(&interior),
+                "{name} ppp {ppp}: interior green {interior}"
+            );
+            for y in 0..img.height() {
+                for x in 0..img.width() {
+                    let v = g(x, y);
+                    assert!(
+                        v >= interior - 3,
+                        "{name} ppp {ppp}: ({x}, {y}) green {v} < interior {interior} - 3: seam"
+                    );
+                    let (ix, iy) = ((x as f32 + 0.5) / ppp - 8.0, (y as f32 + 0.5) / ppp - 8.0);
+                    if inside(ix, iy) {
+                        assert!(
+                            (v - interior).abs() <= 3,
+                            "{name} ppp {ppp}: ({x}, {y}) green {v} vs interior {interior}: gap"
+                        );
+                    }
                 }
             }
-        }
-    }
-}
-
-/// The same check for `mixed`'s dot, fill only (stroke width 0: translucent
-/// strokes darken where their cap discs overlap the line, which is the stroke
-/// painter's, not the fill's).
-#[test]
-fn filled_dot_has_no_seam_at_fractional_scale() {
-    for ppp in [1.0_f32, 1.25] {
-        let mut h = Harness::builder()
-            .with_size(vec2(40.0, 40.0))
-            .with_pixels_per_point(ppp)
-            .build_ui(|ui| {
-                let page = ui.ctx().viewport_rect();
-                ui.ctx().layer_painter(LayerId::background()).rect_filled(
-                    page,
-                    0.0,
-                    Color32::WHITE,
-                );
-                let p = ui
-                    .ctx()
-                    .layer_painter(LayerId::new(Order::Foreground, Id::new("icon")));
-                let rect = Rect::from_min_size(pos2(8.0, 8.0), vec2(24.0, 24.0));
-                paint_icon(
-                    &p,
-                    rect,
-                    &fixture::MIXED,
-                    Color32::RED.gamma_multiply(0.5),
-                    0.0,
-                );
-            });
-        h.run();
-        let img = h.render().expect("render");
-        let g = |x: u32, y: u32| i32::from(img.get_pixel(x, y).0[1]);
-        // The dot's centre, icon (12, 6).
-        let interior = g((20.0 * ppp) as u32, (14.0 * ppp) as u32);
-        assert!(
-            (120..=136).contains(&interior),
-            "ppp {ppp}: interior green {interior}"
-        );
-        for (x, y, p) in img.enumerate_pixels() {
-            let v = i32::from(p.0[1]);
-            assert!(
-                v >= interior - 3,
-                "ppp {ppp}: ({x}, {y}) green {v} < interior {interior} - 3: seam"
-            );
         }
     }
 }
