@@ -307,6 +307,114 @@ fn a_loop_without_pass_hooks_binds_the_heading_on_the_next_pass() {
     assert_eq!(id.family, FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()));
 }
 
+/// Fonts of an app's own, without the theme's named families.
+fn app_fonts() -> FontDefinitions {
+    let mut defs = FontDefinitions::default();
+    defs.font_data.insert(
+        "app-font".into(),
+        Arc::new(FontData::from_static(OXANIUM.face(400).data)),
+    );
+    defs.families
+        .insert(FontFamily::Name("app".into()), vec!["app-font".into()]);
+    defs
+}
+
+/// A pass that lays out every heading and body weight, in the root ui and
+/// in a window built from the global style.
+fn every_family(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    ui.heading("egui heading");
+    egui::Window::new("w").show(&ctx, |ui| {
+        ui.heading("egui heading");
+        for w in [Weight::Medium, Weight::Semibold, Weight::Bold] {
+            ui.label(RichText::new("body").family(family_for(&ctx, w)));
+            ui.label(RichText::new("heading").family(heading_family_for(&ctx, w)));
+        }
+    });
+}
+
+/// The app replaces the fonts after `apply`, then applies again: the
+/// theme's families are installed again on top of the app's fonts.
+#[test]
+fn apply_after_the_app_replaced_the_fonts_does_not_panic() {
+    let frame = std::cell::Cell::new(0);
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 260.0))
+        .build_ui(|ui| {
+            let n = frame.get();
+            match n {
+                0 => Theme::vega_dark().apply(ui.ctx()),
+                2 => ui.ctx().set_fonts(app_fonts()),
+                3 => Theme::vega_light().apply(ui.ctx()),
+                _ => {}
+            }
+            frame.set(n + 1);
+            every_family(ui);
+        });
+    for _ in 0..6 {
+        h.step();
+    }
+    let defs = h.ctx.fonts(|f| f.definitions().clone());
+    assert!(
+        defs.families.contains_key(&FontFamily::Name("app".into())),
+        "the app's families survive the reinstall"
+    );
+    assert!(defs
+        .families
+        .contains_key(&FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into())));
+    let id = &h.ctx.global_style().text_styles[&egui::TextStyle::Heading];
+    assert_eq!(id.family, FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()));
+}
+
+/// The app replaces the fonts and applies the theme in the same pass: the
+/// replacement is not visible yet, so the next pass finds the heading
+/// family gone and the heading falls back to `Proportional`.
+#[test]
+fn apply_in_the_pass_that_replaces_the_fonts_does_not_panic() {
+    let frame = std::cell::Cell::new(0);
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 260.0))
+        .build_ui(|ui| {
+            let n = frame.get();
+            match n {
+                0 => Theme::vega_dark().apply(ui.ctx()),
+                2 => {
+                    ui.ctx().set_fonts(app_fonts());
+                    Theme::vega_light().apply(ui.ctx());
+                }
+                _ => {}
+            }
+            frame.set(n + 1);
+            every_family(ui);
+        });
+    for _ in 0..5 {
+        h.step();
+    }
+    let id = &h.ctx.global_style().text_styles[&egui::TextStyle::Heading];
+    assert_eq!(id.family, FontFamily::Proportional);
+}
+
+/// Same as above for a loop without pass hooks: `Theme::current` checks.
+#[test]
+fn a_loop_without_pass_hooks_survives_replaced_fonts() {
+    let ctx = egui::Context::default();
+    let pass = |ctx: &egui::Context, f: &dyn Fn(&egui::Context)| {
+        ctx.begin_pass(egui::RawInput::default());
+        f(ctx);
+        let _ = Theme::current(ctx);
+        egui::Area::new("a".into()).show(ctx, every_family);
+        let _ = ctx.end_pass();
+    };
+    pass(&ctx, &|ctx| Theme::vega_dark().apply(ctx));
+    pass(&ctx, &|_| {});
+    pass(&ctx, &|ctx| {
+        ctx.set_fonts(app_fonts());
+        Theme::vega_light().apply(ctx);
+    });
+    pass(&ctx, &|_| {});
+    pass(&ctx, &|_| {});
+}
+
 fn heading_themes() -> Vec<(&'static str, Theme)> {
     common::themes()
         .into_iter()

@@ -487,20 +487,41 @@ struct InstalledFonts {
     heading: &'static str,
 }
 
+/// Whether the context's current fonts bind `family`. Only valid once the
+/// context has fonts (`Context::fonts` panics before its first pass).
+fn is_bound(ctx: &egui::Context, family: &str) -> bool {
+    let fam = FontFamily::Name(family.into());
+    ctx.fonts(|f| f.definitions().families.contains_key(&fam))
+}
+
 /// Install the theme's fonts. With `base: None` (plain `apply`) nothing
 /// happens when the same fonts are installed already, so a light/dark toggle
 /// neither rebuilds the atlas nor drops fonts an app added through
-/// `apply_with_fonts`.
+/// `apply_with_fonts`. When the app has replaced the fonts since
+/// (`ctx.set_fonts`), the theme's families are installed again on top of
+/// the app's current fonts, which keeps the app's own families.
 fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefinitions>) {
     let id = egui::Id::new("shadcn_egui::installed_fonts");
     let key = InstalledFonts {
         body: fonts.body.name,
         heading: fonts.heading.name,
     };
-    if base.is_none() && ctx.data(|d| d.get_temp::<InstalledFonts>(id)).as_ref() == Some(&key) {
-        return;
-    }
-    ctx.set_fonts(font_definitions(fonts, base.unwrap_or_default()));
+    let base = match base {
+        Some(base) => base,
+        None if ctx.data(|d| d.get_temp::<InstalledFonts>(id)).as_ref() != Some(&key) => {
+            FontDefinitions::default()
+        }
+        // Before the first pass the fonts are still the ones installed last.
+        None if ctx.cumulative_pass_nr() == 0 => return,
+        None => {
+            let all = BODY_FAMILIES.iter().flatten().chain(&HEADING_FAMILIES);
+            if all.into_iter().all(|f| is_bound(ctx, f)) {
+                return;
+            }
+            ctx.fonts(|f| f.definitions().clone())
+        }
+    };
+    ctx.set_fonts(font_definitions(fonts, base));
     ctx.data_mut(|d| d.insert_temp(id, key));
 }
 
@@ -515,17 +536,26 @@ fn pending_heading_id() -> egui::Id {
     egui::Id::new("shadcn_egui::pending_heading")
 }
 
-/// Set once the heading family was seen bound; it stays bound for the
-/// context's life, since every install defines it.
+/// Set once the heading family was seen bound. Every install defines it,
+/// but an app's own `ctx.set_fonts` drops it: [`unbind_lost_heading`]
+/// clears the flag again.
 fn heading_bound_id() -> egui::Id {
     egui::Id::new("shadcn_egui::heading_bound")
+}
+
+fn heading_bound(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(heading_bound_id()).unwrap_or(false))
 }
 
 /// The family `TextStyle::Heading` may name now: the heading family once it
 /// is known to be bound, else `Proportional`, upgraded by [`bind_heading`].
 fn heading_family_now(ctx: &egui::Context) -> FontFamily {
-    if ctx.data(|d| d.get_temp::<bool>(heading_bound_id()).unwrap_or(false)) {
-        return FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
+    if heading_bound(ctx) {
+        if is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
+            return FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
+        }
+        // The app replaced the fonts; this apply installs the theme's again.
+        ctx.data_mut(|d| d.remove::<bool>(heading_bound_id()));
     }
     let hook_id = egui::Id::new("shadcn_egui::heading_hook");
     if !ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
@@ -533,7 +563,7 @@ fn heading_family_now(ctx: &egui::Context) -> FontFamily {
         ctx.on_begin_pass(
             "shadcn_egui::bind_heading",
             Arc::new(|ui: &mut egui::Ui| {
-                if let Some(id) = bind_heading(ui.ctx()) {
+                if let Some(id) = check_heading(ui.ctx()) {
                     // The root ui was built before this hook ran.
                     ui.style_mut().text_styles.insert(TextStyle::Heading, id);
                 }
@@ -541,6 +571,55 @@ fn heading_family_now(ctx: &egui::Context) -> FontFamily {
         );
     }
     FontFamily::Proportional
+}
+
+/// Once per pass: a heading whose family the app's own fonts dropped
+/// ([`unbind_lost_heading`]) falls back, a waiting one binds
+/// ([`bind_heading`]). Returns the new heading `FontId` when it changed.
+fn check_heading(ctx: &egui::Context) -> Option<FontId> {
+    let id = egui::Id::new("shadcn_egui::heading_checked");
+    let pass = ctx.cumulative_pass_nr();
+    if ctx.data(|d| d.get_temp::<u64>(id)) == Some(pass) {
+        return None;
+    }
+    ctx.data_mut(|d| d.insert_temp(id, pass));
+    let fallback = unbind_lost_heading(ctx);
+    bind_heading(ctx).or(fallback)
+}
+
+/// `TextStyle::Heading` back to `Proportional` when the context's fonts no
+/// longer bind the heading family: the app called `ctx.set_fonts` after
+/// [`Theme::apply`], and egui panics on a family its fonts lack. The heading
+/// waits as a [`PendingHeading`] until a later apply installs the family.
+fn unbind_lost_heading(ctx: &egui::Context) -> Option<FontId> {
+    if !heading_bound(ctx) || is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
+        return None;
+    }
+    let warned = egui::Id::new("shadcn_egui::lost_heading_warned");
+    ctx.data_mut(|d| {
+        d.remove::<bool>(heading_bound_id());
+        if !d.get_temp::<bool>(warned).unwrap_or(false) {
+            d.insert_temp(warned, true);
+            log::warn!(
+                "shadcn-egui: the fonts no longer bind the theme's families \
+                 (ctx.set_fonts after Theme::apply?); headings fall back to \
+                 Proportional. Use Theme::apply_with_fonts for fonts of your own."
+            );
+        }
+    });
+    let name = FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
+    let mut stand_in = None;
+    ctx.global_style_mut(|s| {
+        if let Some(h) = s.text_styles.get_mut(&TextStyle::Heading) {
+            if h.family == name {
+                h.family = FontFamily::Proportional;
+                stand_in = Some(h.clone());
+            }
+        }
+    });
+    let stand_in = stand_in?;
+    ctx.data_mut(|d| d.insert_temp(pending_heading_id(), PendingHeading(stand_in.clone())));
+    Some(stand_in)
 }
 
 /// Give `TextStyle::Heading` the heading family once the fonts bind it.
@@ -570,14 +649,15 @@ impl Theme {
     /// Read the active theme stored by [`Theme::apply`]. Falls back to vega
     /// dark, shared so the fallback does not build a [`Style`] per call.
     ///
-    /// Also binds a heading that still waits for its fonts, for apps whose
+    /// Also binds a heading that still waits for its fonts, and lets one
+    /// whose family the app's own fonts dropped fall back, for apps whose
     /// loop does not run egui's pass hooks (`Context::begin_pass`). Needs
     /// the context's fonts, which exist once its first pass has ended.
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
         if ctx.cumulative_pass_nr() > 0 {
-            let _ = bind_heading(ctx);
+            let _ = check_heading(ctx);
         }
         ctx.data(|d| d.get_temp::<Theme>(theme_id()))
             .unwrap_or_else(|| FALLBACK.clone())
@@ -590,9 +670,10 @@ impl Theme {
     /// code's style writes. Fonts are rebuilt from egui's defaults plus the
     /// theme's fonts, and only when they differ from the last install on
     /// this context. **An app that installs fonts of its own must use
-    /// [`Theme::apply_with_fonts`]** and must not call `ctx.set_fonts` itself
-    /// afterwards: that would drop the theme's families, and egui panics when
-    /// `TextStyle::Heading` names a family that is gone.
+    /// [`Theme::apply_with_fonts`]**. A `ctx.set_fonts` of its own after
+    /// `apply` drops the theme's families: headings then fall back to
+    /// `Proportional` (with a log warning) until the next `apply`, which
+    /// installs the theme's families on top of the app's fonts again.
     pub fn apply(&self, ctx: &egui::Context) {
         self.apply_inner(ctx, None);
     }

@@ -149,6 +149,11 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to any fonts"
   as soon as a window or popup showed a heading in that frame. Such a heading
   now shows in the body font for that one frame.
+- An app that replaced the fonts with `ctx.set_fonts` after `Theme::apply`
+  crashed with "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to
+  any fonts" on the next heading or the next `Theme::apply`. Headings now fall
+  back to the regular text font with a log warning, and the next
+  `Theme::apply` adds the theme's fonts back while keeping the app's own fonts.
 - Screen readers announced a standalone icon by its internal name ("mic",
   "power") and ignored a label attached with `labelled_by`. An `IconView` now
   has no name of its own; name it with `.labelled_by(label.id)`.

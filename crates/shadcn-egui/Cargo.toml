@@ -14,6 +14,7 @@ repository.workspace = true
 [dependencies]
 egui.workspace = true
 egui_extras.workspace = true
+log.workspace = true
 shadcn-egui-core.workspace = true
 shadcn-egui-font-inter.workspace = true
 shadcn-egui-font-oxanium = { workspace = true, optional = true }
