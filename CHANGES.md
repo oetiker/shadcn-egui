@@ -17,8 +17,7 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   font unless `Theme::fonts(body, Some(heading))` sets another one.
 - An app that installs fonts of its own calls
   `Theme::apply_with_fonts(ctx, its_font_definitions)` instead of
-  `Theme::apply`; this keeps its fonts and avoids the crash that followed
-  replacing the fonts after `apply`.
+  `Theme::apply`; this keeps the app's fonts next to the theme's.
 - Components now take their sizes, colours, radii and shadows from a shadcn
   style. `Theme::new(Style::vega(), Palette::dark(), 10.0)` gives the classic
   look and `Style::nova()` the compact one, matching a web client set up with
@@ -152,8 +151,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - An app that replaced the fonts with `ctx.set_fonts` after `Theme::apply`
   crashed with "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to
   any fonts" on the next heading or the next `Theme::apply`. Headings now fall
-  back to the regular text font with a log warning, and the next
-  `Theme::apply` adds the theme's fonts back while keeping the app's own fonts.
+  back to the regular text font with a log warning. A later `Theme::apply` of
+  the same fonts, in a later frame, adds the theme's fonts back and keeps the
+  app's own fonts.
 - Screen readers announced a standalone icon by its internal name ("mic",
   "power") and ignored a label attached with `labelled_by`. An `IconView` now
   has no name of its own; name it with `.labelled_by(label.id)`.

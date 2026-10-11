@@ -652,7 +652,10 @@ impl Theme {
     /// Also binds a heading that still waits for its fonts, and lets one
     /// whose family the app's own fonts dropped fall back, for apps whose
     /// loop does not run egui's pass hooks (`Context::begin_pass`). Needs
-    /// the context's fonts, which exist once its first pass has ended.
+    /// the context's fonts, which exist once its first pass has ended. In
+    /// such a loop, a heading in a `Ui` built before the first shadcn
+    /// component of the pass can still panic after an app's own
+    /// `ctx.set_fonts`; use [`Theme::apply_with_fonts`].
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
@@ -672,8 +675,12 @@ impl Theme {
     /// this context. **An app that installs fonts of its own must use
     /// [`Theme::apply_with_fonts`]**. A `ctx.set_fonts` of its own after
     /// `apply` drops the theme's families: headings then fall back to
-    /// `Proportional` (with a log warning) until the next `apply`, which
-    /// installs the theme's families on top of the app's fonts again.
+    /// `Proportional` (with a log warning) until a later `apply` of the same
+    /// fonts, in a later pass, installs the theme's families on top of the
+    /// app's fonts again. In a loop that does not run egui's pass hooks, a
+    /// heading in a `Ui` built before the first shadcn component of that pass
+    /// can still panic. Calling `apply` and `set_fonts` every frame rebuilds
+    /// the font atlas on every other frame.
     pub fn apply(&self, ctx: &egui::Context) {
         self.apply_inner(ctx, None);
     }
