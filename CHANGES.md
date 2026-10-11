@@ -157,6 +157,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   preset names, as on the shadcn site.
 - A translucent menu colour always highlights menu items with the subtle
   accent, also when the preset asks for the bold one, as on ui.shadcn.com.
+- An open Select list draws in the preset's menu colours: with an inverted
+  menu colour it is dark also on a light page, and with a translucent one the
+  page shows through it, without the blur of the web version.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /

@@ -10,6 +10,7 @@ use shadcn_egui::components::popover::{popover_header, Popover};
 use shadcn_egui::components::select::{Select, SelectSize};
 use shadcn_egui::components::tooltip::tooltip;
 use shadcn_egui::Theme;
+use shadcn_egui::{MenuColor, Mode, Palette, Preset, StyleName};
 
 /// A dialog harness: `open` starts true; the body has a button that counts clicks.
 fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
@@ -567,4 +568,107 @@ fn select_item_rows_have_the_text_sm_line_plus_padding() {
         let want = if name.starts_with("nova") { 28.0 } else { 32.0 };
         assert_eq!(h.get_by_label("Cherry").rect().height(), want, "{name}");
     }
+}
+
+/// Pixels darker than (60, 60, 60) once the list of a light-mode Select is open.
+fn dark_pixels_of_open_list(theme: Theme) -> usize {
+    let bg = theme.palette.background;
+    let mut h = Harness::builder()
+        .with_size(vec2(260.0, 260.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            ui.ctx()
+                .layer_painter(egui::LayerId::background())
+                .rect_filled(ui.ctx().viewport_rect(), 0.0, bg);
+            let mut v = 1usize;
+            ui.add(Select::new("fruit", &mut v, &FRUITS).width(180.0));
+        });
+    h.run();
+    h.get_by_role(egui::accesskit::Role::ComboBox).click();
+    h.run();
+    let img = h.render().expect("wgpu render");
+    img.pixels()
+        .filter(|p| p.0[0] < 60 && p.0[1] < 60 && p.0[2] < 60)
+        .count()
+}
+
+#[test]
+fn an_inverted_menu_is_dark_in_light_mode() {
+    let inverted = Preset::default()
+        .style(StyleName::Vega)
+        .menu_color(MenuColor::Inverted)
+        .theme(Mode::Light);
+    let mt = inverted.menu_theme();
+    assert!(
+        mt.dark && mt.palette == Palette::dark(),
+        "the menu resolves as dark mode"
+    );
+    let plain =
+        dark_pixels_of_open_list(Preset::default().style(StyleName::Vega).theme(Mode::Light));
+    let dark = dark_pixels_of_open_list(inverted);
+    // The open list is ~180 x 140 px: filled dark it adds well over 10 000
+    // dark pixels; a light list only has its text.
+    assert!(
+        dark > 3 * plain + 5000,
+        "inverted list must be dark: {dark} dark px, default list {plain}"
+    );
+}
+
+/// An open Select in a preset's menu colours, light and dark. With `behind`,
+/// lines of text run under the list so translucency shows.
+fn select_open_in(name: &str, color: MenuColor, behind: bool) {
+    let themes = vec![
+        // Preset::default() is Nova (ui.shadcn.com DEFAULT_CONFIG); these snapshots show Vega.
+        (
+            "vega_light",
+            Preset::default()
+                .style(StyleName::Vega)
+                .menu_color(color)
+                .theme(Mode::Light),
+        ),
+        (
+            "vega_dark",
+            Preset::default()
+                .style(StyleName::Vega)
+                .menu_color(color)
+                .theme(Mode::Dark),
+        ),
+    ];
+    common::snapshot_with_themes(
+        name,
+        vec2(260.0, 260.0),
+        themes,
+        |ui| {
+            let mut v = 1usize;
+            ui.add(Select::new("fruit", &mut v, &FRUITS).width(180.0));
+            if behind {
+                for i in 1..=8 {
+                    ui.label(format!("Text behind the menu, line {i}"));
+                }
+            } else {
+                ui.add_space(160.0);
+            }
+            ui.label("elsewhere");
+        },
+        |h| {
+            h.get_by_role(egui::accesskit::Role::ComboBox).click();
+            h.run();
+            h.get_by_label("elsewhere").hover();
+            h.run();
+        },
+    );
+}
+
+#[test]
+fn select_open_inverted_snapshot() {
+    select_open_in("select_open_inverted", MenuColor::Inverted, false);
+}
+
+#[test]
+fn select_open_translucent_snapshot() {
+    select_open_in(
+        "select_open_translucent",
+        MenuColor::DefaultTranslucent,
+        true,
+    );
 }
