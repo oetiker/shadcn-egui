@@ -81,3 +81,18 @@ fn committed_palettes_are_current() {
         "re-run stylegen generate"
     );
 }
+
+#[test]
+fn committed_preset_enums_are_current() {
+    let pin = read("PIN_REACT").trim().to_owned();
+    let lists = stylegen::preset::parse_preset(
+        &read("tests/fixtures/preset.ts"),
+        &read("tests/fixtures/config.ts"),
+    )
+    .expect("parse");
+    assert_eq!(
+        stylegen::preset::emit_preset(&pin, &lists),
+        read("../../crates/shadcn-egui/src/preset/generated.rs"),
+        "re-run stylegen generate"
+    );
+}

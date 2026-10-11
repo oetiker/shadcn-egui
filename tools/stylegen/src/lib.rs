@@ -5,6 +5,7 @@ pub mod drift;
 pub mod emit;
 pub mod markers;
 pub mod model;
+pub mod preset;
 pub mod report;
 pub mod resolve;
 pub mod sources;

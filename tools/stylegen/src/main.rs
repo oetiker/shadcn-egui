@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use stylegen::sources::STYLES;
-use stylegen::{css, emit, markers, report, resolve, themes};
+use stylegen::{css, emit, markers, preset, report, resolve, themes};
 
 /// The crate stylegen writes into, relative to the repository root.
 const CRATE: &str = "crates/shadcn-egui";
@@ -120,6 +120,22 @@ fn generate(
         }
         Err(e) => {
             eprintln!("palettes: {e}");
+            failed = true;
+        }
+    }
+    let enums = preset::parse_preset(
+        &read(&tool.join("tests/fixtures/preset.ts")),
+        &read(&tool.join("tests/fixtures/config.ts")),
+    )
+    .map(|l| preset::emit_preset(pin_react, &l));
+    match enums {
+        Ok(src) => {
+            let dir = root.join(CRATE).join("src/preset");
+            std::fs::create_dir_all(&dir).expect("preset dir");
+            write(&dir.join("generated.rs"), &src);
+        }
+        Err(e) => {
+            eprintln!("preset: {e}");
             failed = true;
         }
     }
