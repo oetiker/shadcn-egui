@@ -21,7 +21,7 @@ are converted to compact binary blobs (strokes plus pre-triangulated fills) by
 **Tech Stack:** Rust 2021, MSRV 1.92 (egui 0.34's), egui 0.34, egui_extras
 0.34, `log` 0.4 (new runtime dependency), egui_kittest 0.34 + wgpu (dev only,
 headless mesa snapshots), eframe 0.34 (example, dev only). Tools: usvg 0.48,
-lyon_tessellation 1 (icongen only), skrifa (fontgen only), node ≥ 22 (runs
+lyon_tessellation 1 (icongen only), skrifa (fontgen only), node ≥ 22.18 (runs
 upstream TypeScript once to produce committed fixtures), curl, jq.
 
 **Spec:** [`docs/superpowers/specs/2026-10-11-crate-and-presets-design.md`](../../specs/2026-10-11-crate-and-presets-design.md)
@@ -87,6 +87,10 @@ Upstream shadcn-svelte at the pin (`tools/stylegen/PIN` = `493481fa`):
 git clone --filter=blob:none https://github.com/huntabyte/shadcn-svelte.git "$UP"
 git -C "$UP" checkout 493481fa
 ```
+
+`node --version` must print v22.18 or later: the scripts in
+`tools/stylegen/upstream/` import upstream `.ts` files directly, which needs
+type stripping on by default.
 
 Downloaded files (npm tarballs, font files) are untrusted data: each goes into
 its own new directory under `$SCRATCH`; scripts that read them live in the repo
@@ -186,7 +190,7 @@ signatures exactly as given.
   - `crates/shadcn-egui-icons-*/src/{lib.rs,icons.bin}` (icongen, Phase 6)
   - `crates/shadcn-egui/tests/icons/lucide.rs` (icongen `--out` mode)
 - Fixture copies of the upstream sources live in `tools/stylegen/tests/fixtures/`: `themes.ts`, `preset.ts`, `libraries.ts`, `font-definitions.ts`, and the existing `style-*.css`. `stylegen generate` refreshes these copies from `$UP` before generating.
-- Node scripts that run upstream TypeScript (node ≥ 22 type stripping) live in `tools/stylegen/upstream/`. Each takes `<shadcn-svelte checkout> <scratch dir>` as arguments and writes its output to stdout.
+- Node scripts that run upstream TypeScript (node ≥ 22.18: type stripping on by default) live in `tools/stylegen/upstream/`. Each takes `<shadcn-svelte checkout> <scratch dir>` as arguments and writes its output to stdout.
 
 ### B. Types from Phases 1–2 (already specified)
 
@@ -325,8 +329,14 @@ Fallback warning lines (`log::warn!`, exact text, one line per fallback):
 - `shadcn-egui: style "sera" is not available in egui; using "nova"`
 - `shadcn-egui: font "<id>" needs the "font-<id>" feature; using "inter"`
 - `shadcn-egui: heading font "<id>" needs the "font-<id>" feature; using "inter"`
+- A font P0c left out for its licence (no crate, no feature): `shadcn-egui: font "<id>" is not available (licence); using "inter"` (`heading font` likewise)
 - `shadcn-egui: icon library "<id>" needs the "icons-<id>" feature; using "lucide"`
 - Hugeicons when it is not shipped: `shadcn-egui: icon library "hugeicons" is not available (licence); using "lucide"`
+
+The lines come from `pub(crate) fn fonts::fallback_warning(name: FontName, heading: bool) -> String`
+and `pub(crate) fn icons::fallback_warning(lib: IconLibrary) -> String` (Phase 4 Task 5).
+The licence-excluded fonts are the private `fonts::UNLICENSED: &[FontName]`:
+hand-written from P0c in Phase 4, generated into `fonts/registry.rs` by fontgen in Phase 7.
 
 The capture logger lives in `tests/common/logcap.rs` as `pub fn warnings<R>(f: impl FnOnce() -> R) -> (R, Vec<String>)`:
 
@@ -418,7 +428,7 @@ Tests:
 - Zoomed snapshots (ppp 8) of a filled icon edge at alpha 1.0 and 0.5.
 - Numeric seam check, Review Focus 4: a red icon at 50 % on white, ppp 1.0 and 1.25. No pixel is redder than the interior + 3.
 - One slot snapshot per icon crate.
-- Gate: `scripts/check-package-size.sh` runs `cargo package --workspace --no-verify --jobs 4` once and fails if any `target/package/*.crate` is larger than 8 MB.
+- Gate: `scripts/check-package-size.sh` runs `cargo package --workspace --no-verify --allow-dirty --jobs 4` once and fails if any `target/package/*.crate` is larger than 8 MB.
 - **Measure first** (Task 6.2): if Remixicon or Phosphor exceed 8 MB, then:
   - (a) raise the flatten tolerance to 0.05;
   - (b) delta-encode indices as u8 where possible;
@@ -502,7 +512,7 @@ Release pieces (Phase 8):
      - Review Focus 3, `to_code_keeps_values_that_fall_back` (Sera, Geist round-trip through to_code).
 6. *Fallbacks + logcap.*
    - One test per §4.1 row, checking the result and the exact warning line.
-   - Font and heading tests are `#[cfg(not(feature = "font-geist"))]`, icons `#[cfg(not(feature = "icons-tabler"))]`.
+   - Font and heading tests skip at run time when `fonts::files(FontName::Geist)` is `Some`, icons when `icons::slots(IconLibrary::Tabler)` is `Some` (a `cfg` on a not-yet-declared feature fails `-D warnings`; see 05-preset.md).
    - Two unsupported values give two lines; a repeated `theme()` repeats the lines.
    - CHANGES entry for presets.
 
@@ -565,3 +575,43 @@ Further decisions:
 - `MenuColors` uses `Option` fields: `None` means the theme's own palette and dark flag. This satisfies "`MenuColors::default()` uses the theme's own palette".
 - Fixture text formats are parsed without serde.
 - CHANGES entries go under `[Unreleased]` without a header.
+
+### H. NEW INTERFACES added by phase writers
+
+Names the phase files introduced beyond sections A–G. They are part of the
+contract: a later phase uses them exactly as written here.
+
+- **Phase 4 (05-preset.md)**
+  - stylegen: `stylegen::preset::PresetLists { styles, base_colors, themes, fonts, radii: Vec<(String, f32)>, menu_accents, menu_colors, icon_libraries, fields_v1, fields_v2 }`, `parse_preset(preset_ts, libraries_ts) -> Result<PresetLists, String>`, `emit_preset(pin, &PresetLists) -> String` (Task 4.1).
+  - Fixture `tests/fixtures/preset_codes.txt` also has `<code> toolong` lines (payload above 2^53 → `Err(TooLong)`) (Task 4.2).
+  - `Button::icon(self, &Icon)` / `Button::icon_end(self, &Icon)`: any `&Icon`, was `&'static Icon` (Task 4.4).
+  - `pub(crate) fn icons::fallback_warning(IconLibrary) -> String`; `pub(crate) fn fonts::fallback_warning(FontName, heading: bool) -> String` with the private `fonts::UNLICENSED: &[FontName]` (Task 4.5; see C).
+- **Phase 6 (07-icons.md)**
+  - icongen: `Slots { check, chevron_down, close: String }`, `parse_slots(&str)`, `render_crate(&[Converted], &Slots, provenance) -> Result<(String, Vec<u8>), String>`, `measure(&[Converted]) -> Result<String, String>` (Task 6.1).
+  - core: `pub struct BlobSegs` (payload of `SegIter::Words`; `Clone`, `Debug` without bytes), re-exported with `BlobRange`, `FillMesh`, `IconShape`, `IconSlots`, `SegIter` (Task 6.3).
+  - `shadcn_egui::icons::lucide` (= `pub use shadcn_egui_icons_lucide as lucide`), and `icons::{tabler, phosphor, remixicon, hugeicons}` behind their features (Tasks 6.5, 6.6).
+  - `tools/icongen/scripts/generate-crates.sh <scratch dir> [lib…]` (Task 6.5).
+  - `scripts/check-package-size.sh`: env `PACKAGE_SIZE_LIMIT` (bytes, default 8388608) (Task 6.7).
+- **Phase 7 (08-font-crates.md)**
+  - fontgen library API (`Row`, `Kind`, `Files`, `parse_fonts_tsv`, `registry_rs`, `features_block`, `workspace_deps_block`, `replace_block`, `rustfmt`, `generate`, …; full list in Task 7.1).
+  - A second `# BEGIN fontgen` / `# END fontgen` block inside the root `[workspace.dependencies]`, so the font crates' workspace entries are generated too.
+  - `fonts/registry.rs` also holds the generated `pub(crate) const UNLICENSED: &[FontName]`.
+- **Phase 8 (09-release.md)**
+  - `scripts/check-packages.sh` (prints `check-packages: ok`): metadata, SPDX licences, `LICENSE` copies, no tests/examples in packages (Task 8.2). Every crate directory holds a copy of the root `LICENSE`; fontgen writes it for font crates.
+  - `scripts/publish-crates.sh`: `DRY_RUN=1`, `PLAN_ONLY=1` (publish order, no network), `JOBS` (default 4); exit 2 on HTTP 429 (Task 8.3).
+
+### I. Known pre-existing issues to offer the user
+
+Found while writing the plan; not fixed by it. Offer each to the user
+after the phase that touches it; do not fix them off-plan.
+
+- `IconView` sets its own accessible name from `icon.name`, against the
+  rule that a widget never sets its own label (accesskit prefers it over
+  `labelled_by`, so a caller's label is ignored). Phase 6 keeps the
+  behaviour (icongen still writes `name`).
+- The repository is not rustfmt-clean (`cargo fmt --check` reports about
+  950 diffs at 20ba879), while the repo-infra CI (Phase 8 Task 5) runs
+  `cargo fmt --check`.
+- Overlapping filled paths in one icon (fixture `overlap.svg`) are drawn as
+  overlapping triangles, so under alpha (a disabled widget, a translucent
+  menu) the overlap blends twice and looks darker. Unresolved in Phase 6.
