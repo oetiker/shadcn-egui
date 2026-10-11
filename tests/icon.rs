@@ -1,4 +1,5 @@
 #[path = "icons/lucide.rs"]
+#[rustfmt::skip]
 mod lucide;
 mod common;
 

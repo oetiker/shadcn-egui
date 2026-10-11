@@ -2,14 +2,22 @@
 //! style values (`generated.rs`, `<name>.rs`, by `tools/stylegen`).
 //! See `references/styles.md` in the skill.
 
+#[rustfmt::skip]
 mod generated;
+#[rustfmt::skip]
 mod luma;
+#[rustfmt::skip]
 mod lyra;
+#[rustfmt::skip]
 mod maia;
+#[rustfmt::skip]
 mod mira;
+#[rustfmt::skip]
 mod nova;
 pub mod recipe;
+#[rustfmt::skip]
 mod rhea;
+#[rustfmt::skip]
 mod vega;
 
 pub use generated::Style;
