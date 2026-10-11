@@ -327,7 +327,7 @@ impl Theme {
 
 1. Sera falls back to Nova, with a warning.
 2. The style comes from a `fn() -> Style` called inline as `Theme::new(make(), ..)`, so no local `Style` is held. A stack test on a 256 KB thread covers `Preset::default().theme(Mode::Dark)`.
-3. Palette ids: a base colour with no upstream palette (`base_radius_px(id)` is `None`: `gray`) becomes `"neutral"`, with a warning; a theme or chart colour with none (`!is_theme(id)`: `gray`) becomes the resolved base id, with a warning (§J). Then `Palette::from_upstream(base, theme, chart, dark)`, then `with_bold_menu_accent()` if the menu accent is Bold.
+3. Palette ids: a base colour with no upstream palette (`base_radius_px(id)` is `None`: `gray`) becomes `"neutral"`, with a warning; a theme or chart colour with none (`!is_theme(id)`: `gray`) becomes the resolved base id, with a warning (§J). Then `Palette::from_upstream(base, theme, chart, dark)`, then `with_bold_menu_accent()` if the menu accent is Bold **and** the menu colour is not translucent (`DefaultTranslucent`/`InvertedTranslucent` force Subtle, as ui.shadcn.com `lib/search-params.ts:197-205`; silent, `to_code` keeps Bold; user decision 2026-10-11).
 4. Radius:
    - Lyra and Sera (the requested style) give 0.
    - `Default` gives `base_radius_px(base)`.
@@ -336,7 +336,7 @@ impl Theme {
 5. Fonts: `fonts::files(font)` else Inter, with a warning. The heading font resolves the same way; `Inherit` passes `None`.
 6. Icons: `icons::slots(lib)` else `LUCIDE_SLOTS`, with a warning.
 7. Menu colours:
-   - `Inverted` and `InvertedTranslucent` give `MenuColors { palette: Some(<merged dark palette, bold accent applied>), dark: Some(true), .. }`.
+   - `Inverted` and `InvertedTranslucent` give `MenuColors { palette: Some(<merged dark palette, bold accent applied as in step 3, so never for InvertedTranslucent>), dark: Some(true), .. }`.
    - `*Translucent` sets `translucent: true`.
 8. Set `theme.dark = (mode == Dark)` explicitly.
 
@@ -525,6 +525,7 @@ Release pieces (Phase 8):
      - Default radius = 10;
      - Px passes through;
      - bold accent;
+     - `translucent_menus_force_the_subtle_accent`;
      - inverted gives `menu.palette` == dark palette;
      - stack test of `Preset::default().theme(Dark)` on 256 KB;
      - `every_palette_id_resolves` (every BaseColor × ThemeColor resolves; only `gray` lacks a palette);
@@ -673,6 +674,10 @@ returns `None`. (Open question for the user: use the legacy oklch gray from
 Counts: `BaseColor` 8, `ThemeColor` 25, palettes still 7 bases + 17 overlays.
 `IconLibrary::ALL` = Lucide, Hugeicons, Tabler, Phosphor, Remixicon.
 
-Not adopted (site behaviour, reported to the user): the React site also turns
-menu accent Bold into Subtle when the menu colour is translucent
-(`lib/search-params.ts:197-205`, `menu-picker.tsx:89`).
+Adopted (user decision 2026-10-11): the React site turns menu accent Bold
+into Subtle when the menu colour is `default-translucent` or
+`inverted-translucent` (`lib/search-params.ts:150-169,197-205`,
+`menu-picker.tsx:89,101`). Upstream then builds every palette with Subtle,
+so the inverted dark menu palette has no bold accent either. `Preset::theme`
+does the same silently; `to_code` keeps the requested Bold (§C step 3,
+Task 4.5 `translucent_menus_force_the_subtle_accent`).

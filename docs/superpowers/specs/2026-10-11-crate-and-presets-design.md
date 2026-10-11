@@ -142,6 +142,12 @@ impl Default for Preset; // upstream DEFAULT_CONFIG (React apps/v4/registry/conf
   palette there: `themes.ts` has no `gray` entry, the site's schema rejects
   it and its randomiser skips it. It decodes and encodes like any value;
   resolving it is a fallback (§4.1).
+- A translucent menu colour (`DefaultTranslucent`, `InvertedTranslucent`)
+  forces the menu accent to Subtle, as ui.shadcn.com does
+  (`lib/search-params.ts:150-169,197-205`, `menu-picker.tsx:89`): the bold
+  accent is dropped from the palette and from the inverted menu palette. No
+  warning (site behaviour, not a fallback); `to_code` keeps the requested
+  Bold. (User decision 2026-10-11.)
 - `RadiusChoice::Default` means "keep the base colour's radius" (upstream
   `config.ts:241`), not 0.5rem. `None/Small/Medium/Large` = 0 / 0.45 / 0.625 /
   0.875 rem (React `RADII`; `default` has no rem value there). `Px(f32)` is
@@ -202,7 +208,8 @@ the pins (checked 2026-10-11).
      `secondary(-foreground)`, `chart-1..5`, `sidebar-primary(-foreground)`);
   3. `chart-1..5` from the `chart_color` theme;
   4. `menu_accent: Bold` → `accent = primary` (existing
-     `Palette::with_bold_menu_accent`);
+     `Palette::with_bold_menu_accent`), unless the menu colour is
+     translucent (§4);
   5. radius per §4.
 - `Palette` gains `chart: [Color32; 5]`. Sidebar vars are not added until a
   Sidebar component exists. `destructive_foreground` stays (upstream dropped

@@ -1581,6 +1581,24 @@ fn bold_accent_highlights_with_primary() {
     assert_eq!((t.palette.accent, t.palette.accent_foreground), (t.palette.primary, t.palette.primary_foreground));
 }
 
+/// ui.shadcn.com turns Bold into Subtle for translucent menus, in the main
+/// palette and in the inverted menu palette; no warning, the code keeps Bold.
+#[test]
+fn translucent_menus_force_the_subtle_accent() {
+    let bold = Preset::default().theme_color(ThemeColor::Blue).menu_accent(MenuAccent::Bold);
+    let subtle = Preset::default().theme_color(ThemeColor::Blue);
+    for menu in [MenuColor::DefaultTranslucent, MenuColor::InvertedTranslucent] {
+        let t = bold.menu_color(menu).theme(Mode::Light);
+        let s = subtle.menu_color(menu).theme(Mode::Light);
+        assert_eq!((t.palette, t.menu), (s.palette, s.menu), "{menu:?}");
+        assert_ne!(t.palette.accent, t.palette.primary, "{menu:?}");
+        let p = bold.menu_color(menu);
+        assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p), "to_code keeps Bold");
+    }
+    let solid = bold.menu_color(MenuColor::Inverted).theme(Mode::Light);
+    assert_eq!(solid.palette.accent, solid.palette.primary, "solid menus keep the bold accent");
+}
+
 #[test]
 fn inverted_menus_use_the_dark_palette_and_flag() {
     let p = Preset::default().theme_color(ThemeColor::Blue).menu_accent(MenuAccent::Bold);
@@ -1811,7 +1829,10 @@ impl Preset {
     fn palette(&self, dark: bool) -> Palette {
         let (base, theme, chart) = self.palette_ids();
         let p = Palette::from_upstream(base, theme, chart, dark).expect("palette_ids returns ids with palettes");
-        if self.menu_accent == MenuAccent::Bold {
+        // ui.shadcn.com forces Subtle for translucent menus
+        // (lib/search-params.ts:197-205); silent, and to_code keeps Bold.
+        let translucent = matches!(self.menu_color, MenuColor::DefaultTranslucent | MenuColor::InvertedTranslucent);
+        if self.menu_accent == MenuAccent::Bold && !translucent {
             p.with_bold_menu_accent()
         } else {
             p
@@ -1882,7 +1903,8 @@ git add -A
 git commit -m "feat: Preset resolves to a Theme
 
 Radius follows the base colour unless chosen (Lyra and Sera force 0),
-colours merge like upstream, the menu accent and menu colours apply,
+colours merge like upstream, the menu accent (Subtle for translucent
+menus, as on ui.shadcn.com) and menu colours apply,
 and fonts and icons come from what the build bundles.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -2098,6 +2120,8 @@ Expected: all pass in both feature sets; in this phase nothing is skipped
   `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
 - With the Lyra or Sera style every corner is square, whatever radius the
   preset names, as on the shadcn site.
+- A translucent menu colour always highlights menu items with the subtle
+  accent, also when the preset asks for the bold one, as on ui.shadcn.com.
 ```
 
 `### Changed`:
