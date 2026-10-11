@@ -7,5 +7,6 @@ pub mod markers;
 pub mod model;
 pub mod report;
 pub mod resolve;
+pub mod themes;
 pub mod utility;
 pub mod variant;
