@@ -25,5 +25,17 @@ Shipped SVGs using attributes that icongen ignores (every fill is encoded solid)
 | phosphor | 0 | 0 | 0 | 0 | 0 |
 | tabler | 0 | 1 (brand-parsinta) | 0 | 0 | 0 |
 
+Non-uniform paint (fill or stroke other than `currentColor` or `none`), counted over the shipped SVGs:
+
+| Set | Icons with other paint | Names |
+|---|---|---|
+| remixicon | 2 | remix-run-fill (path fill `#121212`), webhook-line (path fill `#231F20`), both in `Logos/`; the root is `currentColor`, one path overrides it |
+| phosphor | 0 | none |
+| tabler | 0 | none |
+
+No set uses gradients, `url(#...)` paints, `style` attributes, `<defs>`, `<use>`, `<image>` or white knock-out shapes. icongen encodes the two Remixicon logos in the single theme colour, so they lose their hard-coded dark colour.
+
+Tabler has 49 icons with a non-`none` fill (77 `fill="currentColor"` shapes next to the outline strokes): all are `currentColor`, so none counts as non-uniform. They are brand-steam, stack-back, stack-middle, stack-forward, stack-backward, stack-front, percentage-10 to -100 (20, 25, 30, 33, 40, 50, 60, 66, 70, 75, 80, 90, 100), transform-point-* (4), dice and dice-1 to -6, device-audio-tape, device-nintendo, focus, focus-2, discount, rosette-discount, divide, app-window-* (4), accessible, brand-reddit, brand-deliveroo, yin-yang, outlet, receipt-tax, scuba-diving-tank. The fill-opacity row above stays at 0, so these fills are drawn opaque as intended.
+
 Branch taken: none (every `.crate` at most 8 MB).
 Re-measured after the branch: n/a.
