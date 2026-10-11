@@ -16,7 +16,7 @@
 | `--ring` | `Palette.ring`; the ring colour and width come from the style's recipe props `ring_color` / `ring_width` |
 | `--radius` (10px) | `Theme.radius`; `radius_sm/md/lg/xl` |
 | 4px spacing grid | `Spacing.item_spacing`, margins |
-| 14px / medium | `text_styles[Body]` + `theme::family(ctx, FAMILY_MEDIUM)` (the Medium font currently renders as regular weight) |
+| 14px / medium | `text_styles[Body]` + `theme::family_for(ctx, Weight::Medium)` |
 | `shadow-*` | `Theme::shadow(ShadowLevel)`; the style's recipes pick the level |
 | dialog overlay `bg-black/50` | the style's `dialog_overlay` recipe (`bg`) |
 | `text-xs` / `text-sm` / `text-base` / `text-lg` | `Metrics.text_xs` / `text_sm` / `text_base` / `text_lg` |

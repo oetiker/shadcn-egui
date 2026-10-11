@@ -7,6 +7,18 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 ### Changed
+- Medium and semibold text (button labels, badges, tabs, card and dialog
+  titles) now renders at its real weight; before, every weight looked like
+  regular text.
+- The default font is Inter, as on the shadcn site, so all text looks
+  different from 0.3. Oxanium remains available through the `font-oxanium`
+  feature.
+- Card and dialog titles use the theme's heading font, which is the body
+  font unless `Theme::fonts(body, Some(heading))` sets another one.
+- An app that installs fonts of its own calls
+  `Theme::apply_with_fonts(ctx, its_font_definitions)` instead of
+  `Theme::apply`; this keeps its fonts and avoids the crash that followed
+  replacing the fonts after `apply`.
 - Components now take their sizes, colours, radii and shadows from a shadcn
   style. `Theme::new(Style::vega(), Palette::dark(), 10.0)` gives the classic
   look and `Style::nova()` the compact one, matching a web client set up with
