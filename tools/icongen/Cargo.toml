@@ -13,3 +13,5 @@ publish = false
 [dependencies]
 # Text and font support are off: icons are paths only.
 usvg = { version = "0.48", default-features = false }
+# Tessellates filled paths at generation time; the runtime gets plain data.
+lyon_tessellation = "1"

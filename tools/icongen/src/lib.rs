@@ -1,13 +1,19 @@
-//! Convert stroked SVG icons into Rust constants for
-//! `shadcn_egui::components::icon`.
+//! Convert SVG icons (stroked or filled) into icon data for shadcn-egui.
 //!
-//! The input is an outline icon set such as Lucide: paths, lines, circles and
-//! rects drawn with a stroke and no fill. usvg resolves shapes, arcs and
-//! transforms into move/line/quad/cubic segments; this crate writes those out
-//! as `Seg` values. Anything it cannot draw as a stroke (fills, images, text,
-//! a non-square view box) is an error, not a silent omission.
+//! The input is an icon set such as Lucide (stroked outlines) or Phosphor
+//! (filled outlines). usvg resolves shapes, arcs and transforms into
+//! move/line/quad/cubic segments. Stroked paths become `Seg` values; filled
+//! paths are flattened and triangulated (see `fill`). `--out` writes Rust
+//! `Seg` slices (strokes only); `--crate-dir` writes a whole icon crate as a
+//! binary blob (see `blob`). Images, text and non-square view boxes are
+//! errors, not silent omissions.
 
 use usvg::tiny_skia_path::{PathSegment, Point};
+
+pub mod blob;
+pub mod fill;
+
+pub use fill::{Fill, FillPath, FillRule};
 
 /// Mirror of `shadcn_egui_core::Seg`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -23,9 +29,12 @@ pub enum Seg {
 pub struct Converted {
     /// The icon's name as given (usually the SVG file stem), e.g. `circle-alert`.
     pub name: String,
-    /// Side of the square view box.
+    /// Side of the square view box; `segs` are in these units.
     pub size: f32,
+    /// Stroked subpaths.
     pub segs: Vec<Seg>,
+    /// Filled paths, tessellated, in the 24-unit box and quantised.
+    pub fill: Option<Fill>,
 }
 
 /// Convert one SVG document. `name` becomes the icon's accessible name and,
@@ -41,39 +50,70 @@ pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
             size.height()
         ));
     }
-    let mut segs = Vec::new();
-    walk(name, tree.root(), &mut segs)?;
-    if segs.is_empty() {
-        return Err(format!("{name}: no stroked paths"));
+    let (mut segs, mut fills) = (Vec::new(), Vec::new());
+    walk(
+        name,
+        tree.root(),
+        24.0 / size.width(),
+        &mut segs,
+        &mut fills,
+    )?;
+    let fill = fill::build(name, &fills)?;
+    if segs.is_empty() && fill.is_none() {
+        return Err(format!("{name}: no stroked or filled paths"));
     }
     Ok(Converted {
         name: name.to_owned(),
         size: size.width(),
         segs,
+        fill,
     })
 }
 
-fn walk(name: &str, group: &usvg::Group, out: &mut Vec<Seg>) -> Result<(), String> {
+fn walk(
+    name: &str,
+    group: &usvg::Group,
+    scale: f32,
+    segs: &mut Vec<Seg>,
+    fills: &mut Vec<FillPath>,
+) -> Result<(), String> {
     for node in group.children() {
         match node {
-            usvg::Node::Group(g) => walk(name, g, out)?,
+            usvg::Node::Group(g) => walk(name, g, scale, segs, fills)?,
             usvg::Node::Path(p) => {
-                if p.fill().is_some() {
-                    return Err(format!(
-                        "{name}: filled shape (id {:?}); only stroked outlines are supported",
-                        p.id()
-                    ));
-                }
-                if p.stroke().is_none() || !p.is_visible() {
+                if !p.is_visible() {
                     continue;
                 }
-                path_segs(p.data(), p.abs_transform(), out);
+                if let Some(f) = p.fill() {
+                    let rule = match f.rule() {
+                        usvg::FillRule::NonZero => FillRule::NonZero,
+                        usvg::FillRule::EvenOdd => FillRule::EvenOdd,
+                    };
+                    let contours = fill::flatten(p.data(), p.abs_transform(), scale);
+                    if !contours.is_empty() {
+                        fills.push(FillPath { rule, contours });
+                    }
+                }
+                if p.stroke().is_some() {
+                    path_segs(p.data(), p.abs_transform(), segs);
+                }
             }
             usvg::Node::Image(_) => return Err(format!("{name}: embedded image not supported")),
             usvg::Node::Text(_) => return Err(format!("{name}: text not supported")),
         }
     }
     Ok(())
+}
+
+/// `--out` writes `Seg` slices, which cannot hold a fill.
+pub fn ensure_stroke_only(icon: &Converted) -> Result<(), String> {
+    match icon.fill {
+        Some(_) => Err(format!(
+            "{}: filled shape; --out writes strokes only, use --crate-dir",
+            icon.name
+        )),
+        None => Ok(()),
+    }
 }
 
 fn path_segs(path: &usvg::tiny_skia_path::Path, ts: usvg::Transform, out: &mut Vec<Seg>) {
@@ -198,4 +238,176 @@ pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -
     );
     out.push_str("];\n");
     out
+}
+
+/// The three icons shadcn-egui's components draw, by icon name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Slots {
+    pub check: String,
+    pub chevron_down: String,
+    pub close: String,
+}
+
+/// Parse `check=<icon>,chevron_down=<icon>,close=<icon>`.
+pub fn parse_slots(s: &str) -> Result<Slots, String> {
+    let (mut check, mut chevron_down, mut close) = (None, None, None);
+    for part in s.split(',') {
+        let (k, v) = part
+            .split_once('=')
+            .ok_or_else(|| format!("--slots: {part:?} is not slot=icon"))?;
+        let slot = match k {
+            "check" => &mut check,
+            "chevron_down" => &mut chevron_down,
+            "close" => &mut close,
+            _ => return Err(format!("--slots: unknown slot {k:?}")),
+        };
+        *slot = Some(v.to_owned());
+    }
+    match (check, chevron_down, close) {
+        (Some(check), Some(chevron_down), Some(close)) => Ok(Slots {
+            check,
+            chevron_down,
+            close,
+        }),
+        _ => Err("--slots needs check=<icon>,chevron_down=<icon>,close=<icon>".to_owned()),
+    }
+}
+
+/// Render an icon crate: `src/lib.rs` text and the `src/icons.bin` bytes.
+/// Icons are sorted by name, so the output does not depend on argument order.
+pub fn render_crate(
+    icons: &[Converted],
+    slots: &Slots,
+    provenance: &str,
+) -> Result<(String, Vec<u8>), String> {
+    let mut sorted: Vec<&Converted> = icons.iter().collect();
+    sorted.sort_by(|a, b| a.name.cmp(&b.name));
+    let find = |slot: &str, name: &str| {
+        sorted
+            .iter()
+            .find(|i| i.name == name)
+            .map(|i| const_name(&i.name))
+            .ok_or_else(|| format!("--slots: {slot}={name}: no such icon"))
+    };
+    let check = find("check", &slots.check)?;
+    let chevron_down = find("chevron_down", &slots.chevron_down)?;
+    let close = find("close", &slots.close)?;
+
+    let mut src = String::new();
+    src.push_str("// Generated by icongen (shadcn-egui/tools/icongen). Do not edit: re-run it.\n");
+    for line in provenance.lines() {
+        src.push_str(&format!("//! {line}\n"));
+    }
+    src.push_str(
+        "//!\n//! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the\n",
+    );
+    src.push_str("//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).\n\n");
+    src.push_str("use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};\n\n");
+    src.push_str("const BLOB: &[u8] = include_bytes!(\"icons.bin\");\n\n");
+    src.push_str("const fn icon(name: &'static str, start: u32, len: u32) -> Icon {\n");
+    src.push_str("    Icon { name, size: 24.0, shape: IconShape::Blob(BlobRange { blob: BLOB, start, len }) }\n}\n\n");
+    let mut blob = Vec::new();
+    for icon in &sorted {
+        let rec = blob::encode(icon)?;
+        src.push_str(&format!(
+            "pub const {}: Icon = icon({:?}, {}, {});\n",
+            const_name(&icon.name),
+            icon.name,
+            blob.len(),
+            rec.len()
+        ));
+        blob.extend_from_slice(&rec);
+    }
+    if u32::try_from(blob.len()).is_err() {
+        return Err(format!(
+            "blob is {} bytes, more than u32 offsets reach",
+            blob.len()
+        ));
+    }
+    src.push_str("\n/// Every icon in this crate, sorted by name.\npub const ALL: &[&Icon] = &[");
+    src.push_str(
+        &sorted
+            .iter()
+            .map(|i| format!("&{}", const_name(&i.name)))
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
+    src.push_str("];\n\n/// The icons shadcn-egui's components draw.\n");
+    src.push_str(&format!(
+        "pub const SLOTS: IconSlots = IconSlots {{ check: {check}, chevron_down: {chevron_down}, close: {close} }};\n"
+    ));
+    Ok((rustfmt(&src)?, blob))
+}
+
+/// Format generated source the way `cargo fmt --check` expects it: a crate
+/// root cannot opt out with `#![rustfmt::skip]` on stable.
+fn rustfmt(src: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("rustfmt")
+        .args(["--edition", "2021"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("rustfmt: {e}"))?;
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let input = src.to_owned();
+    // Write from a thread so a large crate cannot deadlock on full pipes.
+    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+    let mut out = String::new();
+    child
+        .stdout
+        .take()
+        .expect("piped stdout")
+        .read_to_string(&mut out)
+        .map_err(|e| format!("rustfmt: {e}"))?;
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("rustfmt: {e}"))?;
+    writer
+        .join()
+        .expect("rustfmt writer thread")
+        .map_err(|e| format!("rustfmt: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "rustfmt failed ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(out)
+}
+
+/// Icon count, blob size split into stroke and fill, and the ten largest icons.
+pub fn measure(icons: &[Converted]) -> Result<String, String> {
+    let (mut stroke, mut fill, mut sizes) = (0, 0, Vec::new());
+    for icon in icons {
+        let rec = blob::encode(icon)?;
+        let s = blob::stroke_bytes(&rec);
+        stroke += s;
+        fill += rec.len() - s;
+        sizes.push((rec.len(), icon.name.as_str()));
+    }
+    sizes.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(b.1)));
+    let largest: Vec<String> = sizes
+        .iter()
+        .take(10)
+        .map(|(n, name)| format!("{name} {n}"))
+        .collect();
+    Ok(format!(
+        "icons: {}\nblob bytes: {} (stroke {stroke}, fill {fill})\nlargest: {}\n",
+        icons.len(),
+        stroke + fill,
+        largest.join(", ")
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn rustfmt_failure_is_an_error() {
+        let err = super::rustfmt("fn {").expect_err("not Rust");
+        assert!(err.starts_with("rustfmt failed"), "{err}");
+    }
 }

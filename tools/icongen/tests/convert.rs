@@ -78,9 +78,11 @@ fn moveto_is_restored_after_close() {
 }
 
 #[test]
-fn fills_are_rejected() {
+fn stroke_only_check_rejects_fills() {
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="4" height="4" fill="black"/></svg>"#;
-    let err = convert("filled", svg).expect_err("fills must be rejected");
+    let icon = convert("filled", svg).expect("fills convert now");
+    assert!(icon.fill.is_some());
+    let err = icongen::ensure_stroke_only(&icon).expect_err("--out writes strokes only");
     assert!(err.contains("filled"), "{err}");
 }
 
