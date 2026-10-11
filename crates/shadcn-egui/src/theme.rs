@@ -26,6 +26,8 @@ pub struct Palette {
     pub border: Color32,
     pub input: Color32,
     pub ring: Color32,
+    /// `chart-1` … `chart-5`.
+    pub chart: [Color32; 5],
 }
 
 impl Palette {
@@ -50,6 +52,13 @@ impl Palette {
             border: c(0.922, 0.0, 0.0),
             input: c(0.922, 0.0, 0.0),
             ring: c(0.708, 0.0, 0.0),
+            chart: [
+                c(0.87, 0.0, 0.0),
+                c(0.556, 0.0, 0.0),
+                c(0.439, 0.0, 0.0),
+                c(0.371, 0.0, 0.0),
+                c(0.269, 0.0, 0.0),
+            ],
         }
     }
 
@@ -74,11 +83,28 @@ impl Palette {
             border: ca(1.0, 0.0, 0.0, 0.10),
             input: ca(1.0, 0.0, 0.0, 0.15),
             ring: c(0.556, 0.0, 0.0), // solid mid-gray (border/input above are translucent white)
+            chart: [
+                c(0.87, 0.0, 0.0),
+                c(0.556, 0.0, 0.0),
+                c(0.439, 0.0, 0.0),
+                c(0.371, 0.0, 0.0),
+                c(0.269, 0.0, 0.0),
+            ],
         }
     }
 }
 
 impl Palette {
+    /// The palette the shadcn site builds for a base colour, a theme and a
+    /// chart colour (upstream `buildRegistryTheme`): the `base` colour's
+    /// vars, the `theme` on top (a colour theme, or a base name, which
+    /// overlays that whole base), then `chart-1..5` from the `chart` theme.
+    /// Ids are upstream's (`"neutral"`, `"blue"`); `None` when one is
+    /// unknown. Menu accent is separate: [`Palette::with_bold_menu_accent`].
+    pub fn from_upstream(base: &str, theme: &str, chart: &str, dark: bool) -> Option<Palette> {
+        crate::palette::merge(base, theme, chart, dark)
+    }
+
     /// shadcn `menuAccent: "bold"`: menus highlight with the primary pair.
     pub fn with_bold_menu_accent(mut self) -> Self {
         self.accent = self.primary;

@@ -1,36 +1,42 @@
-//! stylegen generate <shadcn-svelte checkout> <repository root>
-//! stylegen drift    <shadcn-svelte checkout> <repository root>
+//! stylegen generate|drift <shadcn-svelte checkout> <shadcn-ui checkout> <repository root>
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
-use stylegen::{css, emit, markers, report, resolve};
+use stylegen::sources::STYLES;
+use stylegen::{css, emit, markers, report, resolve, themes};
 
 /// The crate stylegen writes into, relative to the repository root.
 const CRATE: &str = "crates/shadcn-egui";
 
-/// Every upstream style; each gets a report, the ones in `EXPORT` also Rust.
-const STYLES: &[&str] = &[
-    "vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea",
-];
-
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
-    let (Some(cmd), Some(up), Some(root)) = (args.get(1), args.get(2), args.get(3)) else {
-        eprintln!("usage: stylegen generate|drift <shadcn-svelte> <repo-root>");
+    let (Some(cmd), Some(up), Some(up_react), Some(root)) =
+        (args.get(1), args.get(2), args.get(3), args.get(4))
+    else {
+        eprintln!("usage: stylegen generate|drift <shadcn-svelte> <shadcn-ui> <repo-root>");
         return ExitCode::from(2);
     };
-    let (up, root) = (PathBuf::from(up), PathBuf::from(root));
+    let (up, up_react, root) = (
+        PathBuf::from(up),
+        PathBuf::from(up_react),
+        PathBuf::from(root),
+    );
     let tool = root.join("tools/stylegen");
     let pin = std::fs::read_to_string(tool.join("PIN"))
         .expect("PIN")
         .trim()
         .to_owned();
+    let pin_react = std::fs::read_to_string(tool.join("PIN_REACT"))
+        .expect("PIN_REACT")
+        .trim()
+        .to_owned();
     check_pin(&up, &pin);
+    check_pin(&up_react, &pin_react);
     let lines = markers::parse_markers(
         &std::fs::read_to_string(tool.join("markers.txt")).expect("markers.txt"),
     );
     match cmd.as_str() {
-        "generate" => generate(&up, &root, &tool, &pin, &lines),
+        "generate" => generate(&up, &up_react, &root, &tool, &pin, &pin_react, &lines),
         "drift" => drift(&up, &root.join(CRATE), &lines),
         _ => {
             eprintln!("unknown command `{cmd}`");
@@ -55,11 +61,15 @@ fn check_pin(up: &Path, pin: &str) {
 
 fn generate(
     up: &Path,
+    up_react: &Path,
     root: &Path,
     tool: &Path,
     pin: &str,
+    pin_react: &str,
     lines: &[markers::MarkerLine],
 ) -> ExitCode {
+    stylegen::sources::refresh(up, up_react, tool)
+        .expect("copy the upstream sources into tests/fixtures");
     let shipped: Vec<String> = lines.iter().flat_map(|l| l.markers.clone()).collect();
     let export: Vec<String> = std::fs::read_to_string(tool.join("EXPORT"))
         .expect("EXPORT")
@@ -76,8 +86,9 @@ fn generate(
     // An export style that fails the gate must not stop the other reports.
     let mut failed = false;
     for style in STYLES {
-        let path = up.join(format!("docs/src/lib/registry/styles/style-{style}.css"));
-        let parsed = css::parse_style_css(&std::fs::read_to_string(&path).expect("style css"));
+        let parsed = css::parse_style_css(&read(
+            &tool.join(format!("tests/fixtures/style-{style}.css")),
+        ));
         let translated = resolve::markers(&parsed, &shipped);
         write(
             &reports.join(format!("{style}.md")),
@@ -96,11 +107,31 @@ fn generate(
             );
         }
     }
+    let palettes = themes::parse_themes(
+        &read(&tool.join("tests/fixtures/themes.ts")),
+        &read(&tool.join("tests/fixtures/base-colors.ts")),
+    )
+    .and_then(|t| themes::emit_palettes(pin_react, &t));
+    match palettes {
+        Ok(src) => {
+            let dir = root.join(CRATE).join("src/palette");
+            std::fs::create_dir_all(&dir).expect("palette dir");
+            write(&dir.join("generated.rs"), &src);
+        }
+        Err(e) => {
+            eprintln!("palettes: {e}");
+            failed = true;
+        }
+    }
     if failed {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
     }
+}
+
+fn read(path: &Path) -> String {
+    std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
 }
 
 fn write(path: &Path, src: &str) {

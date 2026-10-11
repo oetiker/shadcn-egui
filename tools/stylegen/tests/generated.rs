@@ -64,3 +64,20 @@ fn committed_reports_are_current() {
         );
     }
 }
+
+/// `palette/generated.rs` is exactly what the generator gives for the fixture copy.
+#[test]
+fn committed_palettes_are_current() {
+    let pin = read("PIN_REACT").trim().to_owned();
+    let themes = stylegen::themes::parse_themes(
+        &read("tests/fixtures/themes.ts"),
+        &read("tests/fixtures/base-colors.ts"),
+    )
+    .expect("themes.ts");
+    let fresh = stylegen::themes::emit_palettes(&pin, &themes).expect("emit");
+    assert_eq!(
+        fresh,
+        read("../../crates/shadcn-egui/src/palette/generated.rs"),
+        "re-run stylegen generate"
+    );
+}
