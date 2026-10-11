@@ -142,7 +142,8 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   has no name of its own; name it with `.labelled_by(label.id)`.
 - In a `layout::row`, items placed before a taller item, such as a label
   before a large button, sat about 2 px above the row's centre. They are now
-  centred, and a row shrinks back when its tallest item goes.
+  centred. A row shrinks back when its tallest item goes, except a row that
+  holds a vertical separator or a scroll area, which keeps its tallest height.
 
 ## [0.3.2] - 2026-10-09
 

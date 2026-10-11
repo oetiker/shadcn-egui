@@ -126,7 +126,7 @@ fn wrap_row_wraps_when_out_of_width() {
 
 /// The vertical centres of a row and its children (a label, then a button
 /// `tall`er or shorter than egui's row height), after the row has settled.
-fn row_centres(ctx: &egui::Context, tall: bool) -> (f32, f32, f32) {
+fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32) {
     use shadcn_egui::components::button::{Button, ButtonSize};
     let (mut row, mut a, mut b) = (
         egui::Rect::NOTHING,
@@ -140,7 +140,13 @@ fn row_centres(ctx: &egui::Context, tall: bool) -> (f32, f32, f32) {
             row = ui
                 .scope(|ui| {
                     layout::row(ui, 8.0, |ui| {
-                        a = ui.label("label").rect;
+                        a = match wrap {
+                            Wrap::None => ui.label("label").rect,
+                            Wrap::EnabledUi => {
+                                ui.add_enabled_ui(true, |ui| ui.label("label")).inner.rect
+                            }
+                            Wrap::Scope => ui.scope(|ui| ui.label("label")).inner.rect,
+                        };
                         b = ui.add(Button::new("Button").size(size)).rect;
                     });
                 })
@@ -151,24 +157,43 @@ fn row_centres(ctx: &egui::Context, tall: bool) -> (f32, f32, f32) {
     (row.center().y, a.center().y, b.center().y)
 }
 
+/// How the short child sits in the row: bare, or inside a child Ui that
+/// egui makes as high as the row.
+#[derive(Clone, Copy, Debug)]
+enum Wrap {
+    None,
+    EnabledUi,
+    Scope,
+}
+
 /// `row` centres a short child placed before a child taller than egui's
-/// row height, and shrinks again when the tall child goes.
+/// row height, and shrinks again when the tall child goes, also when the
+/// short child sits in a child Ui.
 #[test]
 fn row_centres_children_of_mixed_height() {
-    for theme in common::themes().into_iter().map(|(_, t)| t) {
-        let ctx = egui::Context::default();
-        theme.apply(&ctx);
-        let (row, a, b) = row_centres(&ctx, true);
-        assert_eq!((a, b), (row, row), "tall: row {row}, label {a}, button {b}");
-        let tall_row = row;
-        let (row, a, b) = row_centres(&ctx, false);
-        assert_eq!(
-            (a, b),
-            (row, row),
-            "short: row {row}, label {a}, button {b}"
-        );
-        assert!(row < tall_row, "the row shrinks: {row} vs {tall_row}");
-        assert_eq!(row, ctx.global_style().spacing.interact_size.y / 2.0);
+    for wrap in [Wrap::None, Wrap::EnabledUi, Wrap::Scope] {
+        for (name, theme) in common::themes() {
+            let ctx = egui::Context::default();
+            theme.apply(&ctx);
+            let (row, a, b) = row_centres(&ctx, true, wrap);
+            assert_eq!(
+                (a, b),
+                (row, row),
+                "{name} {wrap:?} tall: row {row}, label {a}, button {b}"
+            );
+            let tall_row = row;
+            let (row, a, b) = row_centres(&ctx, false, wrap);
+            assert_eq!(
+                (a, b),
+                (row, row),
+                "{name} {wrap:?} short: row {row}, label {a}, button {b}"
+            );
+            assert!(
+                row < tall_row,
+                "{name} {wrap:?}: the row shrinks: {row} vs {tall_row}"
+            );
+            assert_eq!(row, ctx.global_style().spacing.interact_size.y / 2.0);
+        }
     }
 }
 
@@ -210,4 +235,29 @@ fn row_with_a_nested_stack_settles() {
         assert_eq!(first, second, "{name}: the row keeps its height");
         assert_eq!(passes, 1, "{name}: a settled row redoes no pass");
     }
+}
+
+/// A nested `vstack` counts with the height of what it holds: a button
+/// beside a three-line stack is centred on the stack.
+#[test]
+fn row_centres_a_widget_beside_a_nested_stack() {
+    use shadcn_egui::components::button::Button;
+    let ctx = egui::Context::default();
+    Theme::vega_dark().apply(&ctx);
+    let (mut stack, mut button) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+    for _ in 0..3 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            layout::row(ui, 8.0, |ui| {
+                stack = layout::vstack(ui, 8.0, |ui| {
+                    ui.label("one");
+                    ui.label("two");
+                    ui.label("three");
+                    ui.min_rect()
+                });
+                button = ui.add(Button::new("Button")).rect;
+            });
+        });
+    }
+    assert!(stack.height() > button.height(), "{stack:?} {button:?}");
+    assert_eq!(button.center().y, stack.center().y, "{stack:?} {button:?}");
 }
