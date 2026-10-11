@@ -1,8 +1,8 @@
 //! Shared painting helpers for shadcn-style components.
 
-use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 use crate::style::{Shift, State};
 use crate::Theme;
+use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 
 /// Build a CornerRadius from an f32 radius, rounding to the nearest pixel.
 pub fn corner(r: f32) -> CornerRadius {
@@ -17,28 +17,61 @@ pub fn ring(painter: &egui::Painter, rect: Rect, radius: f32, width: f32, color:
 
 /// The shape of [`ring`], if it has any width and colour.
 pub fn ring_shape(rect: Rect, radius: f32, width: f32, color: Color32) -> Option<Shape> {
-    (width > 0.0 && color.a() > 0).then(|| Shape::rect_stroke(rect, radius, Stroke::new(width, color), egui::StrokeKind::Outside))
+    (width > 0.0 && color.a() > 0).then(|| {
+        Shape::rect_stroke(
+            rect,
+            radius,
+            Stroke::new(width, color),
+            egui::StrokeKind::Outside,
+        )
+    })
 }
 
 /// A part's background and border, as shapes in paint order. The border
 /// lies inside `rect` (`box-sizing: border-box`). With `clip_padding`
 /// (`bg-clip-padding`) the fill stops inside the border, so a transparent or
 /// translucent border shows what lies under the part instead of the fill.
-pub fn box_shapes(rect: Rect, radius: f32, fill: Option<Color32>, border: Option<Stroke>, clip_padding: bool) -> Vec<Shape> {
+pub fn box_shapes(
+    rect: Rect,
+    radius: f32,
+    fill: Option<Color32>,
+    border: Option<Stroke>,
+    clip_padding: bool,
+) -> Vec<Shape> {
     let border = border.filter(|b| b.width > 0.0);
     let mut out = Vec::new();
     if let Some(fill) = fill {
-        let inset = if clip_padding { border.map_or(0.0, |b| b.width) } else { 0.0 };
-        out.push(Shape::rect_filled(rect.shrink(inset), (radius - inset).max(0.0), fill));
+        let inset = if clip_padding {
+            border.map_or(0.0, |b| b.width)
+        } else {
+            0.0
+        };
+        out.push(Shape::rect_filled(
+            rect.shrink(inset),
+            (radius - inset).max(0.0),
+            fill,
+        ));
     }
     if let Some(b) = border {
-        out.push(Shape::rect_stroke(rect, radius, b, egui::StrokeKind::Inside));
+        out.push(Shape::rect_stroke(
+            rect,
+            radius,
+            b,
+            egui::StrokeKind::Inside,
+        ));
     }
     out
 }
 
 /// Paint [`box_shapes`].
-pub fn paint_box(painter: &egui::Painter, rect: Rect, radius: f32, fill: Option<Color32>, border: Option<Stroke>, clip_padding: bool) {
+pub fn paint_box(
+    painter: &egui::Painter,
+    rect: Rect,
+    radius: f32,
+    fill: Option<Color32>,
+    border: Option<Stroke>,
+    clip_padding: bool,
+) {
     painter.extend(box_shapes(rect, radius, fill, border, clip_padding));
 }
 
@@ -64,7 +97,11 @@ pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
 pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context: State) -> State {
     let live = enabled && resp.enabled();
     let pointer_and_focus = State::HOVER | State::ACTIVE | State::FOCUS | State::FOCUS_VISIBLE;
-    let context = if live { context } else { State(context.0 & !pointer_and_focus.0) };
+    let context = if live {
+        context
+    } else {
+        State(context.0 & !pointer_and_focus.0)
+    };
     theme.state(
         context
             .with(State::HOVER, live && resp.hovered())

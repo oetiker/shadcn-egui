@@ -18,7 +18,9 @@ fn walk(css: &str, out: &mut Vec<(String, Vec<String>)>) {
     while let Some(open_rel) = css[i..].find('{') {
         let open = i + open_rel;
         let selector = css[i..open].trim();
-        let Some(close) = matching_brace(css, open) else { return };
+        let Some(close) = matching_brace(css, open) else {
+            return;
+        };
         let body = &css[open + 1..close];
         if !selector.starts_with('@') || selector.starts_with("@apply") {
             let apply = immediate_apply(body);

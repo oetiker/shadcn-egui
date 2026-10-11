@@ -65,7 +65,11 @@ impl State {
         State(self.0 | other.0)
     }
     pub const fn with(self, flag: State, on: bool) -> State {
-        if on { self.or(flag) } else { self }
+        if on {
+            self.or(flag)
+        } else {
+            self
+        }
     }
     pub const fn contains(self, other: State) -> bool {
         self.0 & other.0 == other.0
@@ -87,7 +91,10 @@ pub struct When {
 }
 
 impl When {
-    pub const ALWAYS: When = When { all: State::NONE, none: State::NONE };
+    pub const ALWAYS: When = When {
+        all: State::NONE,
+        none: State::NONE,
+    };
     pub const fn new(all: State, none: State) -> When {
         When { all, none }
     }
@@ -118,13 +125,19 @@ pub struct Prop<T> {
 
 impl<T> Default for Prop<T> {
     fn default() -> Self {
-        Prop { base: None, rules: Vec::new() }
+        Prop {
+            base: None,
+            rules: Vec::new(),
+        }
     }
 }
 
 impl<T: Copy> Prop<T> {
     pub fn fixed(value: T) -> Self {
-        Prop { base: Some(value), rules: Vec::new() }
+        Prop {
+            base: Some(value),
+            rules: Vec::new(),
+        }
     }
     pub fn get(&self, s: State) -> Option<T> {
         pick_props([self], s)
@@ -135,11 +148,18 @@ impl<T: Copy> Prop<T> {
 /// their classes (e.g. `cn-button`, then `cn-button-variant-*`, then
 /// `cn-button-size-*`). The matching candidate with the highest rank wins;
 /// ties go to the later layer, then the later rule. A base value has rank 0.
-pub fn pick<T: Copy>(layers: &[&Recipe], field: impl Fn(&Recipe) -> &Prop<T>, s: State) -> Option<T> {
+pub fn pick<T: Copy>(
+    layers: &[&Recipe],
+    field: impl Fn(&Recipe) -> &Prop<T>,
+    s: State,
+) -> Option<T> {
     pick_props(layers.iter().map(|r| field(r)), s)
 }
 
-fn pick_props<'a, T: Copy + 'a>(props: impl IntoIterator<Item = &'a Prop<T>>, s: State) -> Option<T> {
+fn pick_props<'a, T: Copy + 'a>(
+    props: impl IntoIterator<Item = &'a Prop<T>>,
+    s: State,
+) -> Option<T> {
     let mut best: Option<((u128, usize, usize), T)> = None;
     let mut consider = |key: (u128, usize, usize), v: T| {
         if best.as_ref().is_none_or(|(k, _)| key >= *k) {
@@ -162,10 +182,28 @@ fn pick_props<'a, T: Copy + 'a>(props: impl IntoIterator<Item = &'a Prop<T>>, s:
 /// A palette colour role (shadcn CSS variable), or a fixed colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
-    Background, Foreground, Card, CardForeground, Popover, PopoverForeground,
-    Primary, PrimaryForeground, Secondary, SecondaryForeground, Muted, MutedForeground,
-    Accent, AccentForeground, Destructive, DestructiveForeground, Border, Input, Ring,
-    White, Black, Transparent,
+    Background,
+    Foreground,
+    Card,
+    CardForeground,
+    Popover,
+    PopoverForeground,
+    Primary,
+    PrimaryForeground,
+    Secondary,
+    SecondaryForeground,
+    Muted,
+    MutedForeground,
+    Accent,
+    AccentForeground,
+    Destructive,
+    DestructiveForeground,
+    Border,
+    Input,
+    Ring,
+    White,
+    Black,
+    Transparent,
 }
 
 /// A colour as a style states it.
@@ -180,7 +218,17 @@ pub enum Paint {
 /// A step of shadcn's radius scale, multiplied from the theme radius
 /// (`sm` ×0.6, `md` ×0.8, `lg` ×1, `xl` ×1.4, `2xl` ×1.8, `3xl` ×2.2, `4xl` ×2.6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Rung { None, Sm, Md, Lg, Xl, Xl2, Xl3, Xl4, Full }
+pub enum Rung {
+    None,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Xl2,
+    Xl3,
+    Xl4,
+    Full,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Radius {
@@ -192,18 +240,41 @@ pub enum Radius {
 
 /// `text-xs` … `text-lg`, resolved through `Metrics`; or an arbitrary size.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum TextSize { Xs, Sm, Base, Lg, Px(f32) }
+pub enum TextSize {
+    Xs,
+    Sm,
+    Base,
+    Lg,
+    Px(f32),
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Weight { Normal, Medium, Semibold, Bold }
+pub enum Weight {
+    Normal,
+    Medium,
+    Semibold,
+    Bold,
+}
 
 /// Tailwind v4 `shadow-*` levels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ShadowLevel { None, Xs2, Xs, Sm, Md, Lg, Xl, Xl2 }
+pub enum ShadowLevel {
+    None,
+    Xs2,
+    Xs,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+    Xl2,
+}
 
 /// A translation: fixed pixels, or `calc(100% - Npx)` of the part's own size.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Shift { Px(f32), SelfMinus(f32) }
+pub enum Shift {
+    Px(f32),
+    SelfMinus(f32),
+}
 
 /// Everything a style can say about one part. Lengths are logical px.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -269,7 +340,11 @@ mod tests {
     use super::*;
 
     fn rule<T>(all: State, rank: u128, value: T) -> Rule<T> {
-        Rule { when: When::new(all, State::NONE), rank, value }
+        Rule {
+            when: When::new(all, State::NONE),
+            rank,
+            value,
+        }
     }
 
     #[test]
@@ -281,7 +356,10 @@ mod tests {
 
     #[test]
     fn matching_rule_beats_base() {
-        let p = Prop { base: Some(10.0), rules: vec![rule(State::ICON_START, 1 << 14, 8.0)] };
+        let p = Prop {
+            base: Some(10.0),
+            rules: vec![rule(State::ICON_START, 1 << 14, 8.0)],
+        };
         assert_eq!(p.get(State::NONE), Some(10.0));
         assert_eq!(p.get(State::ICON_START), Some(8.0));
     }
@@ -297,7 +375,8 @@ mod tests {
         assert_eq!(p.get(State::DARK | State::HOVER), Some(1));
         // dark:hover: has both bits, so it beats dark: alone.
         let mut p2 = p.clone();
-        p2.rules.push(rule(State::DARK | State::HOVER, (1 << 20) | (1 << 8), 3));
+        p2.rules
+            .push(rule(State::DARK | State::HOVER, (1 << 20) | (1 << 8), 3));
         assert_eq!(p2.get(State::DARK | State::HOVER), Some(3));
     }
 
@@ -309,7 +388,10 @@ mod tests {
         // 26, aria-invalid 28), so the pair's mask is larger.
         let p = Prop {
             base: Some(0),
-            rules: vec![rule(State::INVALID.or(State::CHECKED), (1 << 26) | (1 << 28), 1), rule(State::INVALID, 1 << 28, 2)],
+            rules: vec![
+                rule(State::INVALID.or(State::CHECKED), (1 << 26) | (1 << 28), 1),
+                rule(State::INVALID, 1 << 28, 2),
+            ],
         };
         assert_eq!(p.get(State::INVALID | State::CHECKED), Some(1));
         assert_eq!(p.get(State::INVALID), Some(2));
@@ -317,7 +399,13 @@ mod tests {
 
     #[test]
     fn ranks_use_all_128_bits() {
-        let p = Prop { base: None, rules: vec![rule(State::DARK, 1 << 127, 1), rule(State::DARK, (1 << 126) | 1, 2)] };
+        let p = Prop {
+            base: None,
+            rules: vec![
+                rule(State::DARK, 1 << 127, 1),
+                rule(State::DARK, (1 << 126) | 1, 2),
+            ],
+        };
         assert_eq!(p.get(State::DARK), Some(1));
     }
 
@@ -325,7 +413,11 @@ mod tests {
     fn negated_condition() {
         let p = Prop {
             base: None,
-            rules: vec![Rule { when: When::new(State::ACTIVE, State::HAS_POPUP), rank: 1, value: true }],
+            rules: vec![Rule {
+                when: When::new(State::ACTIVE, State::HAS_POPUP),
+                rank: 1,
+                value: true,
+            }],
         };
         assert_eq!(p.get(State::ACTIVE), Some(true));
         assert_eq!(p.get(State::ACTIVE | State::HAS_POPUP), None);
@@ -333,20 +425,38 @@ mod tests {
 
     #[test]
     fn later_layer_wins_ties() {
-        let button = Recipe { height: Prop::fixed(1.0), ..Recipe::default() };
-        let size = Recipe { height: Prop::fixed(32.0), ..Recipe::default() };
-        assert_eq!(pick(&[&button, &size], |r| &r.height, State::NONE), Some(32.0));
-        // A conditional rule in an earlier layer still beats a later base.
         let button = Recipe {
-            height: Prop { base: None, rules: vec![rule(State::SIZE_SM, 1 << 16, 20.0)] },
+            height: Prop::fixed(1.0),
             ..Recipe::default()
         };
-        assert_eq!(pick(&[&button, &size], |r| &r.height, State::SIZE_SM), Some(20.0));
+        let size = Recipe {
+            height: Prop::fixed(32.0),
+            ..Recipe::default()
+        };
+        assert_eq!(
+            pick(&[&button, &size], |r| &r.height, State::NONE),
+            Some(32.0)
+        );
+        // A conditional rule in an earlier layer still beats a later base.
+        let button = Recipe {
+            height: Prop {
+                base: None,
+                rules: vec![rule(State::SIZE_SM, 1 << 16, 20.0)],
+            },
+            ..Recipe::default()
+        };
+        assert_eq!(
+            pick(&[&button, &size], |r| &r.height, State::SIZE_SM),
+            Some(20.0)
+        );
     }
 
     #[test]
     fn consumer_can_override_base() {
-        let mut r = Recipe { height: Prop::fixed(32.0), ..Recipe::default() };
+        let mut r = Recipe {
+            height: Prop::fixed(32.0),
+            ..Recipe::default()
+        };
         r.height.base = Some(40.0);
         assert_eq!(r.height.get(State::HOVER), Some(40.0));
     }

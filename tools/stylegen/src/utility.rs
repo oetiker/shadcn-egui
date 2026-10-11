@@ -19,25 +19,65 @@ const LAYOUT: &str = "flex/grid/position keyword; egui layout is done by the com
 const ANIM: &str = "animation or transition; out of scope (spec §4.4)";
 
 const IGNORE_EXACT: &[(&str, &str)] = &[
-    ("flex", LAYOUT), ("inline-flex", LAYOUT), ("grid", LAYOUT), ("flex-col", LAYOUT),
-    ("flex-1", LAYOUT), ("items-center", LAYOUT), ("justify-center", LAYOUT), ("shrink-0", LAYOUT),
-    ("relative", LAYOUT), ("absolute", LAYOUT), ("isolate", LAYOUT), ("w-full", LAYOUT),
-    ("h-full", LAYOUT), ("w-auto", LAYOUT), ("block", LAYOUT), ("text-left", LAYOUT),
-    ("text-center", LAYOUT), ("overflow-hidden", "egui clips children to the frame already"),
+    ("flex", LAYOUT),
+    ("inline-flex", LAYOUT),
+    ("grid", LAYOUT),
+    ("flex-col", LAYOUT),
+    ("flex-1", LAYOUT),
+    ("items-center", LAYOUT),
+    ("justify-center", LAYOUT),
+    ("shrink-0", LAYOUT),
+    ("relative", LAYOUT),
+    ("absolute", LAYOUT),
+    ("isolate", LAYOUT),
+    ("w-full", LAYOUT),
+    ("h-full", LAYOUT),
+    ("w-auto", LAYOUT),
+    ("block", LAYOUT),
+    ("text-left", LAYOUT),
+    ("text-center", LAYOUT),
+    (
+        "overflow-hidden",
+        "egui clips children to the frame already",
+    ),
     ("select-none", "text selection is off for egui widgets"),
-    ("pointer-events-none", "the component decides what senses input"),
+    (
+        "pointer-events-none",
+        "the component decides what senses input",
+    ),
     ("cursor-default", "cursor icon is chosen by the component"),
-    ("outline-hidden", "focus is drawn with the ring, never a browser outline"),
-    ("outline-none", "focus is drawn with the ring, never a browser outline"),
-    ("animate-in", ANIM), ("animate-out", ANIM),
-    ("rotate-45", "the tooltip arrow is painted as a rotated square by the component"),
-    ("translate-y-[calc(-50%-2px)]", "tooltip arrow placement is component geometry"),
+    (
+        "outline-hidden",
+        "focus is drawn with the ring, never a browser outline",
+    ),
+    (
+        "outline-none",
+        "focus is drawn with the ring, never a browser outline",
+    ),
+    ("animate-in", ANIM),
+    ("animate-out", ANIM),
+    (
+        "rotate-45",
+        "the tooltip arrow is painted as a rotated square by the component",
+    ),
+    (
+        "translate-y-[calc(-50%-2px)]",
+        "tooltip arrow placement is component geometry",
+    ),
     ("text-balance", "egui has no balanced wrapping"),
 ];
 const IGNORE_PREFIX: &[(&str, &str)] = &[
-    ("transition", ANIM), ("duration-", ANIM), ("fade-", ANIM), ("zoom-", ANIM),
-    ("slide-in-from-", ANIM), ("z-", LAYOUT), ("scroll-my-", "scroll snapping"),
-    ("underline-offset-", "egui draws text underlines at a fixed offset"),
+    ("transition", ANIM),
+    ("duration-", ANIM),
+    ("fade-", ANIM),
+    ("zoom-", ANIM),
+    ("slide-in-from-", ANIM),
+    ("z-", LAYOUT),
+    ("scroll-my-", "scroll snapping"),
+    (
+        "underline-offset-",
+        "egui draws text underlines at a fixed offset",
+    ),
 ];
 
 /// Tailwind spacing: `N` → N×4px, `px` → 1, `[Npx]`, `[Nrem]` (16px rem),
@@ -50,12 +90,18 @@ pub fn spacing(s: &str) -> Option<f32> {
         return Some(0.0);
     }
     if let Some(inner) = s.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
-        if let Some(n) = inner.strip_prefix("calc(--spacing(").and_then(|r| r.strip_suffix("))")) {
+        if let Some(n) = inner
+            .strip_prefix("calc(--spacing(")
+            .and_then(|r| r.strip_suffix("))"))
+        {
             return n.parse::<f32>().ok().map(|n| n * 4.0);
         }
         return length(inner);
     }
-    if let Some(n) = s.strip_prefix("--spacing(").and_then(|r| r.strip_suffix(')')) {
+    if let Some(n) = s
+        .strip_prefix("--spacing(")
+        .and_then(|r| r.strip_suffix(')'))
+    {
         return n.parse::<f32>().ok().map(|n| n * 4.0);
     }
     s.parse::<f32>().ok().map(|n| n * 4.0)
@@ -80,15 +126,27 @@ pub fn role(s: &str) -> Option<(&'static str, f32)> {
         None => (s, 1.0),
     };
     let r = match name {
-        "background" => "Background", "foreground" => "Foreground", "card" => "Card",
-        "card-foreground" => "CardForeground", "popover" => "Popover",
-        "popover-foreground" => "PopoverForeground", "primary" => "Primary",
-        "primary-foreground" => "PrimaryForeground", "secondary" => "Secondary",
-        "secondary-foreground" => "SecondaryForeground", "muted" => "Muted",
-        "muted-foreground" => "MutedForeground", "accent" => "Accent",
-        "accent-foreground" => "AccentForeground", "destructive" => "Destructive",
-        "destructive-foreground" => "DestructiveForeground", "border" => "Border",
-        "input" => "Input", "ring" => "Ring", "white" => "White", "black" => "Black",
+        "background" => "Background",
+        "foreground" => "Foreground",
+        "card" => "Card",
+        "card-foreground" => "CardForeground",
+        "popover" => "Popover",
+        "popover-foreground" => "PopoverForeground",
+        "primary" => "Primary",
+        "primary-foreground" => "PrimaryForeground",
+        "secondary" => "Secondary",
+        "secondary-foreground" => "SecondaryForeground",
+        "muted" => "Muted",
+        "muted-foreground" => "MutedForeground",
+        "accent" => "Accent",
+        "accent-foreground" => "AccentForeground",
+        "destructive" => "Destructive",
+        "destructive-foreground" => "DestructiveForeground",
+        "border" => "Border",
+        "input" => "Input",
+        "ring" => "Ring",
+        "white" => "White",
+        "black" => "Black",
         "transparent" => "Transparent",
         _ => return None,
     };
@@ -125,9 +183,15 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         Some(Pseudo::After) => {
             return match u {
                 "absolute" => U::Ignore(LAYOUT),
-                _ if u.starts_with("-inset-x-") => spaced(&[HitInsetX], &u["-inset-x-".len()..], 1.0),
-                _ if u.starts_with("-inset-y-") => spaced(&[HitInsetY], &u["-inset-y-".len()..], 1.0),
-                _ if u.starts_with("-inset-") => spaced(&[HitInsetX, HitInsetY], &u["-inset-".len()..], 1.0),
+                _ if u.starts_with("-inset-x-") => {
+                    spaced(&[HitInsetX], &u["-inset-x-".len()..], 1.0)
+                }
+                _ if u.starts_with("-inset-y-") => {
+                    spaced(&[HitInsetY], &u["-inset-y-".len()..], 1.0)
+                }
+                _ if u.starts_with("-inset-") => {
+                    spaced(&[HitInsetX, HitInsetY], &u["-inset-".len()..], 1.0)
+                }
                 _ => U::Unsupported("after: utility other than -inset-*"),
             }
         }
@@ -152,16 +216,30 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         None => (1.0, u),
     };
     let sides: &[(&str, &[Field])] = &[
-        ("size-", &[Height, Width]), ("h-", &[Height]), ("w-", &[Width]),
-        ("min-h-", &[MinHeight]), ("min-w-", &[MinWidth]),
-        ("px-", &[PadLeft, PadRight]), ("py-", &[PadTop, PadBottom]),
-        ("pt-", &[PadTop]), ("pr-", &[PadRight]), ("pb-", &[PadBottom]), ("pl-", &[PadLeft]),
+        ("size-", &[Height, Width]),
+        ("h-", &[Height]),
+        ("w-", &[Width]),
+        ("min-h-", &[MinHeight]),
+        ("min-w-", &[MinWidth]),
+        ("px-", &[PadLeft, PadRight]),
+        ("py-", &[PadTop, PadBottom]),
+        ("pt-", &[PadTop]),
+        ("pr-", &[PadRight]),
+        ("pb-", &[PadBottom]),
+        ("pl-", &[PadLeft]),
         ("p-", &[PadTop, PadRight, PadBottom, PadLeft]),
-        ("mx-", &[MarginLeft, MarginRight]), ("my-", &[MarginTop, MarginBottom]),
-        ("mt-", &[MarginTop]), ("mr-", &[MarginRight]), ("mb-", &[MarginBottom]), ("ml-", &[MarginLeft]),
+        ("mx-", &[MarginLeft, MarginRight]),
+        ("my-", &[MarginTop, MarginBottom]),
+        ("mt-", &[MarginTop]),
+        ("mr-", &[MarginRight]),
+        ("mb-", &[MarginBottom]),
+        ("ml-", &[MarginLeft]),
         ("m-", &[MarginTop, MarginRight, MarginBottom, MarginLeft]),
-        ("gap-", &[Gap]), ("top-", &[InsetTop]), ("right-", &[InsetRight]),
-        ("bottom-", &[InsetBottom]), ("left-", &[InsetLeft]),
+        ("gap-", &[Gap]),
+        ("top-", &[InsetTop]),
+        ("right-", &[InsetRight]),
+        ("bottom-", &[InsetBottom]),
+        ("left-", &[InsetLeft]),
     ];
     for (prefix, fields) in sides {
         if let Some(v) = body.strip_prefix(prefix) {
@@ -171,10 +249,17 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     }
     if let Some(v) = u.strip_prefix("max-w-") {
         return match v {
-            "xs" => px(&[MaxWidth], 320.0), "sm" => px(&[MaxWidth], 384.0),
-            "md" => px(&[MaxWidth], 448.0), "lg" => px(&[MaxWidth], 512.0),
-            "xl" => px(&[MaxWidth], 576.0), "2xl" => px(&[MaxWidth], 672.0),
-            _ => match v.strip_prefix("[calc(100%-").and_then(|r| r.strip_suffix(")]")).and_then(length) {
+            "xs" => px(&[MaxWidth], 320.0),
+            "sm" => px(&[MaxWidth], 384.0),
+            "md" => px(&[MaxWidth], 448.0),
+            "lg" => px(&[MaxWidth], 512.0),
+            "xl" => px(&[MaxWidth], 576.0),
+            "2xl" => px(&[MaxWidth], 672.0),
+            _ => match v
+                .strip_prefix("[calc(100%-")
+                .and_then(|r| r.strip_suffix(")]"))
+                .and_then(length)
+            {
                 Some(n) => px(&[MaxWidthInset], n),
                 None => U::Unsupported("max-w value"),
             },
@@ -183,9 +268,15 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     if let Some(v) = u.strip_prefix("text-") {
         let (size, leading) = v.split_once('/').map_or((v, None), |(s, l)| (s, Some(l)));
         let size_val = match size {
-            "xs" => Some(Value::Text("Xs")), "sm" => Some(Value::Text("Sm")),
-            "base" => Some(Value::Text("Base")), "lg" => Some(Value::Text("Lg")),
-            _ => size.strip_prefix('[').and_then(|r| r.strip_suffix(']')).and_then(length).map(Value::TextPx),
+            "xs" => Some(Value::Text("Xs")),
+            "sm" => Some(Value::Text("Sm")),
+            "base" => Some(Value::Text("Base")),
+            "lg" => Some(Value::Text("Lg")),
+            _ => size
+                .strip_prefix('[')
+                .and_then(|r| r.strip_suffix(']'))
+                .and_then(length)
+                .map(Value::TextPx),
         };
         if let Some(sv) = size_val {
             let mut out = vec![(TextSize, sv)];
@@ -203,18 +294,28 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         };
     }
     if let Some(v) = u.strip_prefix("leading-") {
-        return leading_factor(v).map_or(U::Unsupported("leading"), |f| U::Set(vec![(LineHeight, Value::Factor(f))]));
+        return leading_factor(v).map_or(U::Unsupported("leading"), |f| {
+            U::Set(vec![(LineHeight, Value::Factor(f))])
+        });
     }
     if let Some(v) = u.strip_prefix("tracking-") {
         let em = match v {
-            "tighter" => -0.05, "tight" => -0.025, "normal" => 0.0, "wide" => 0.025, "wider" => 0.05, "widest" => 0.1,
+            "tighter" => -0.05,
+            "tight" => -0.025,
+            "normal" => 0.0,
+            "wide" => 0.025,
+            "wider" => 0.05,
+            "widest" => 0.1,
             _ => return U::Unsupported("tracking"),
         };
         return U::Set(vec![(Tracking, Value::Factor(em))]);
     }
     if let Some(v) = u.strip_prefix("font-") {
         let w = match v {
-            "normal" => "Normal", "medium" => "Medium", "semibold" => "Semibold", "bold" => "Bold",
+            "normal" => "Normal",
+            "medium" => "Medium",
+            "semibold" => "Semibold",
+            "bold" => "Bold",
             _ => return U::Unsupported("font-* other than weight"),
         };
         return U::Set(vec![(Weight, Value::Weight(w))]);
@@ -231,61 +332,108 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         "ring" => return px(&[RingWidth], 1.0),
         _ => {}
     }
-    for (prefix, field) in [("rounded-t-", RadiusTop), ("rounded-b-", RadiusBottom), ("rounded-", Radius)] {
+    for (prefix, field) in [
+        ("rounded-t-", RadiusTop),
+        ("rounded-b-", RadiusBottom),
+        ("rounded-", Radius),
+    ] {
         if let Some(v) = u.strip_prefix(prefix) {
-            return radius(v).map_or(U::Unsupported("radius value"), |r| U::Set(vec![(field, Value::Radius(r))]));
+            return radius(v).map_or(U::Unsupported("radius value"), |r| {
+                U::Set(vec![(field, Value::Radius(r))])
+            });
         }
     }
     if let Some(v) = u.strip_prefix("bg-") {
-        if let Some(mix) = v.strip_prefix("[color-mix(in_oklch,var(--").and_then(|r| r.strip_suffix("%)]")) {
+        if let Some(mix) = v
+            .strip_prefix("[color-mix(in_oklch,var(--")
+            .and_then(|r| r.strip_suffix("%)]"))
+        {
             // `secondary),var(--foreground)_5`
             let parsed = mix.split_once("),var(--").and_then(|(a, rest)| {
                 let (b, pct) = rest.split_once(")_")?;
                 Some((role(a)?.0, role(b)?.0, pct.parse::<f32>().ok()? / 100.0))
             });
-            return parsed.map_or(U::Unsupported("color-mix form"), |(a, b, t)| U::Set(vec![(Bg, Value::Mix(a, b, t))]));
+            return parsed.map_or(U::Unsupported("color-mix form"), |(a, b, t)| {
+                U::Set(vec![(Bg, Value::Mix(a, b, t))])
+            });
         }
-        return role(v).map_or(U::Unsupported("bg-* value"), |(r, a)| U::Set(vec![(Bg, Value::Paint { role: r, alpha: a })]));
+        return role(v).map_or(U::Unsupported("bg-* value"), |(r, a)| {
+            U::Set(vec![(Bg, Value::Paint { role: r, alpha: a })])
+        });
     }
     if let Some(v) = u.strip_prefix("border-") {
         if let Ok(n) = v.parse::<f32>() {
             return px(&[BorderWidth], n);
         }
-        if v.starts_with("b-") || v.starts_with("l-") || v.starts_with("r-") || v.starts_with("x-") || v.starts_with("y-") {
-            return U::Unsupported("single-side border other than border-t (underline-style inputs)");
+        if v.starts_with("b-")
+            || v.starts_with("l-")
+            || v.starts_with("r-")
+            || v.starts_with("x-")
+            || v.starts_with("y-")
+        {
+            return U::Unsupported(
+                "single-side border other than border-t (underline-style inputs)",
+            );
         }
-        return role(v).map_or(U::Unsupported("border-* value"), |(r, a)| U::Set(vec![(BorderColor, Value::Paint { role: r, alpha: a })]));
+        return role(v).map_or(U::Unsupported("border-* value"), |(r, a)| {
+            U::Set(vec![(BorderColor, Value::Paint { role: r, alpha: a })])
+        });
     }
     if let Some(v) = u.strip_prefix("ring-") {
         if let Ok(n) = v.parse::<f32>() {
             return px(&[RingWidth], n);
         }
-        if let Some(n) = v.strip_prefix('[').and_then(|r| r.strip_suffix(']')).and_then(length) {
+        if let Some(n) = v
+            .strip_prefix('[')
+            .and_then(|r| r.strip_suffix(']'))
+            .and_then(length)
+        {
             return px(&[RingWidth], n);
         }
-        return role(v).map_or(U::Unsupported("ring-* value"), |(r, a)| U::Set(vec![(RingColor, Value::Paint { role: r, alpha: a })]));
+        return role(v).map_or(U::Unsupported("ring-* value"), |(r, a)| {
+            U::Set(vec![(RingColor, Value::Paint { role: r, alpha: a })])
+        });
     }
     if let Some(v) = u.strip_prefix("shadow-") {
         let s = match v {
-            "none" => "None", "2xs" => "Xs2", "xs" => "Xs", "sm" => "Sm", "md" => "Md", "lg" => "Lg", "xl" => "Xl", "2xl" => "Xl2",
+            "none" => "None",
+            "2xs" => "Xs2",
+            "xs" => "Xs",
+            "sm" => "Sm",
+            "md" => "Md",
+            "lg" => "Lg",
+            "xl" => "Xl",
+            "2xl" => "Xl2",
             _ => return U::Unsupported("shadow value"),
         };
         return U::Set(vec![(Shadow, Value::Shadow(s))]);
     }
     if let Some(v) = u.strip_prefix("opacity-") {
-        return v.parse::<f32>().map_or(U::Unsupported("opacity"), |n| U::Set(vec![(Opacity, Value::Factor(n / 100.0))]));
+        return v.parse::<f32>().map_or(U::Unsupported("opacity"), |n| {
+            U::Set(vec![(Opacity, Value::Factor(n / 100.0))])
+        });
     }
     for (prefix, field) in [("translate-x-", ShiftX), ("translate-y-", ShiftY)] {
         if let Some(v) = body.strip_prefix(prefix) {
-            if let Some(n) = v.strip_prefix("[calc(100%-").and_then(|r| r.strip_suffix(")]")).and_then(length) {
+            if let Some(n) = v
+                .strip_prefix("[calc(100%-")
+                .and_then(|r| r.strip_suffix(")]"))
+                .and_then(length)
+            {
                 return U::Set(vec![(field, Value::Shift(ShiftV::SelfMinus(n)))]);
             }
-            return spacing(v).map_or(U::Unsupported("translate value"), |n| U::Set(vec![(field, Value::Shift(ShiftV::Px(n * sign)))]));
+            return spacing(v).map_or(U::Unsupported("translate value"), |n| {
+                U::Set(vec![(field, Value::Shift(ShiftV::Px(n * sign)))])
+            });
         }
     }
     if let Some(v) = u.strip_prefix("backdrop-blur-") {
         let n = match v {
-            "xs" => 4.0, "sm" => 8.0, "md" => 12.0, "lg" => 16.0, "xl" => 24.0,
+            "xs" => 4.0,
+            "sm" => 8.0,
+            "md" => 12.0,
+            "lg" => 16.0,
+            "xl" => 24.0,
             _ => return U::Unsupported("blur value"),
         };
         return px(&[BackdropBlur], n);
@@ -295,7 +443,12 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
 
 fn leading_factor(v: &str) -> Option<f32> {
     Some(match v {
-        "none" => 1.0, "tight" => 1.25, "snug" => 1.375, "normal" => 1.5, "relaxed" => 1.625, "loose" => 2.0,
+        "none" => 1.0,
+        "tight" => 1.25,
+        "snug" => 1.375,
+        "normal" => 1.5,
+        "relaxed" => 1.625,
+        "loose" => 2.0,
         _ => return None,
     })
 }
@@ -303,8 +456,15 @@ fn leading_factor(v: &str) -> Option<f32> {
 fn radius(v: &str) -> Option<RadiusV> {
     let rung = |s: &str| -> Option<&'static str> {
         Some(match s {
-            "none" => "None", "sm" => "Sm", "md" => "Md", "lg" => "Lg", "xl" => "Xl",
-            "2xl" => "Xl2", "3xl" => "Xl3", "4xl" => "Xl4", "full" => "Full",
+            "none" => "None",
+            "sm" => "Sm",
+            "md" => "Md",
+            "lg" => "Lg",
+            "xl" => "Xl",
+            "2xl" => "Xl2",
+            "3xl" => "Xl3",
+            "4xl" => "Xl4",
+            "full" => "Full",
             _ => return None,
         })
     };

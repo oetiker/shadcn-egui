@@ -10,8 +10,8 @@ use crate::components::input::Input;
 use crate::components::label::label;
 use crate::components::select::Select;
 use crate::components::separator::separator;
-use crate::components::switch::toggle;
 use crate::components::slider::Slider;
+use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
 use crate::{layout, Theme};
 
@@ -65,7 +65,10 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
                 card_description(ui, "Manage your account settings and preferences.");
                 // The gap between the tab list and its content comes from the style.
                 layout::vstack(ui, Tabs::content_gap(ui), |ui| {
-                    ui.add(Tabs::new(&mut state.tab, &["Account", "Notifications", "Components"]));
+                    ui.add(Tabs::new(
+                        &mut state.tab,
+                        &["Account", "Notifications", "Components"],
+                    ));
                     match state.tab {
                         0 => account_tab(ui, state),
                         1 => notifications_tab(ui, state),
@@ -87,7 +90,11 @@ fn field(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> e
 
 /// A label on the left, its control on the right, the label naming the
 /// control for screen readers (`labelled_by`).
-fn setting_row(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> egui::Response) {
+fn setting_row(
+    ui: &mut egui::Ui,
+    name: &str,
+    control: impl FnOnce(&mut egui::Ui) -> egui::Response,
+) {
     let label_id = std::cell::Cell::new(egui::Id::NULL);
     layout::space_between(
         ui,
@@ -104,8 +111,20 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             card_title(ui, "Account");
             card_description(ui, "Update your account details.");
             separator(ui);
-            field(ui, "Name", |ui| ui.add(Input::new(&mut state.name).hint("Your name").max_width(f32::INFINITY)));
-            field(ui, "Email", |ui| ui.add(Input::new(&mut state.email).hint("you@example.com").max_width(f32::INFINITY)));
+            field(ui, "Name", |ui| {
+                ui.add(
+                    Input::new(&mut state.name)
+                        .hint("Your name")
+                        .max_width(f32::INFINITY),
+                )
+            });
+            field(ui, "Email", |ui| {
+                ui.add(
+                    Input::new(&mut state.email)
+                        .hint("you@example.com")
+                        .max_width(f32::INFINITY),
+                )
+            });
             field(ui, "Password", |ui| {
                 ui.add(
                     Input::new(&mut state.password)
@@ -114,7 +133,13 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
                         .max_width(f32::INFINITY),
                 )
             });
-            field(ui, "Role", |ui| ui.add(Select::new("role", &mut state.role, &["Member", "Admin", "Owner"])));
+            field(ui, "Role", |ui| {
+                ui.add(Select::new(
+                    "role",
+                    &mut state.role,
+                    &["Member", "Admin", "Owner"],
+                ))
+            });
             separator(ui);
             layout::space_between(
                 ui,
@@ -136,9 +161,15 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             card_title(ui, "Notifications");
             card_description(ui, "Choose what you want to be notified about.");
             separator(ui);
-            setting_row(ui, "Marketing emails", |ui| toggle(ui, &mut state.marketing_emails));
-            setting_row(ui, "Security emails", |ui| toggle(ui, &mut state.security_emails));
-            setting_row(ui, "Weekly digest", |ui| checkbox(ui, &mut state.weekly_digest));
+            setting_row(ui, "Marketing emails", |ui| {
+                toggle(ui, &mut state.marketing_emails)
+            });
+            setting_row(ui, "Security emails", |ui| {
+                toggle(ui, &mut state.security_emails)
+            });
+            setting_row(ui, "Weekly digest", |ui| {
+                checkbox(ui, &mut state.weekly_digest)
+            });
             separator(ui);
             label(ui, "Channel status");
             layout::row(ui, 8.0, |ui| {
@@ -170,9 +201,21 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             });
             label(ui, "Button sizes");
             layout::row(ui, 8.0, |ui| {
-                let _ = ui.add(Button::new("Small").variant(ButtonVariant::Secondary).size(ButtonSize::Sm));
-                let _ = ui.add(Button::new("Default").variant(ButtonVariant::Secondary).size(ButtonSize::Default));
-                let _ = ui.add(Button::new("Large").variant(ButtonVariant::Secondary).size(ButtonSize::Lg));
+                let _ = ui.add(
+                    Button::new("Small")
+                        .variant(ButtonVariant::Secondary)
+                        .size(ButtonSize::Sm),
+                );
+                let _ = ui.add(
+                    Button::new("Default")
+                        .variant(ButtonVariant::Secondary)
+                        .size(ButtonSize::Default),
+                );
+                let _ = ui.add(
+                    Button::new("Large")
+                        .variant(ButtonVariant::Secondary)
+                        .size(ButtonSize::Lg),
+                );
             });
             separator(ui);
             label(ui, "Badges");
@@ -183,9 +226,14 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
                 badge(ui, "Outline", BadgeVariant::Outline);
             });
             separator(ui);
-            field(ui, "Volume", |ui| ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume")));
+            field(ui, "Volume", |ui| {
+                ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume"))
+            });
             field(ui, "Region", |ui| {
-                ui.add(Select::new("region", &mut state.region, &["Europe", "Americas", "Asia"]).placeholder("Select a region"))
+                ui.add(
+                    Select::new("region", &mut state.region, &["Europe", "Americas", "Asia"])
+                        .placeholder("Select a region"),
+                )
             });
         });
     });

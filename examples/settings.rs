@@ -32,7 +32,11 @@ struct SettingsApp {
 
 impl SettingsApp {
     fn apply(&mut self, ctx: &egui::Context) {
-        let palette = if self.light == 1 { Palette::light() } else { Palette::dark() };
+        let palette = if self.light == 1 {
+            Palette::light()
+        } else {
+            Palette::dark()
+        };
         Theme::new(STYLES[self.style].1(), palette, self.radius).apply(ctx);
         self.applied = (self.style, self.light, self.radius);
     }
@@ -42,7 +46,11 @@ impl SettingsApp {
         let t = Theme::current(ui.ctx());
         let names = STYLES.map(|(name, _)| name);
         egui::Panel::top("theme_toolbar")
-            .frame(egui::Frame::new().fill(t.palette.background).inner_margin(egui::Margin::symmetric(32, 12)))
+            .frame(
+                egui::Frame::new()
+                    .fill(t.palette.background)
+                    .inner_margin(egui::Margin::symmetric(32, 12)),
+            )
             .show_inside(ui, |ui| {
                 layout::row(ui, 16.0, |ui| {
                     label(ui, "Style");
@@ -50,7 +58,11 @@ impl SettingsApp {
                     label(ui, "Mode");
                     ui.add(Tabs::new(&mut self.light, &MODES));
                     label(ui, "Radius");
-                    ui.add(Slider::new(&mut self.radius, 0.0..=20.0).step(1.0).label("Radius"));
+                    ui.add(
+                        Slider::new(&mut self.radius, 0.0..=20.0)
+                            .step(1.0)
+                            .label("Radius"),
+                    );
                 });
             });
     }
@@ -79,7 +91,10 @@ fn main() -> eframe::Result<()> {
     // `settings [vega|nova|maia|lyra|mira|luma|rhea] [dark|light]` sets the
     // initial toolbar values.
     let args: Vec<String> = std::env::args().collect();
-    let style = args.get(1).and_then(|a| STYLES.iter().position(|(name, _)| name == a)).unwrap_or(0);
+    let style = args
+        .get(1)
+        .and_then(|a| STYLES.iter().position(|(name, _)| name == a))
+        .unwrap_or(0);
     let light = usize::from(args.get(2).map(String::as_str) == Some("light"));
     eframe::run_native(
         "egui-shadcn settings",

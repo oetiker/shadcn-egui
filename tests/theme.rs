@@ -9,7 +9,10 @@ fn apply_sets_panel_fill_and_stores_theme() {
     let _ = ctx.run_ui(Default::default(), |_ui| {});
     let got = theme(&ctx);
     assert!(got.dark);
-    assert_eq!(ctx.global_style().visuals.panel_fill, Theme::vega_dark().palette.background);
+    assert_eq!(
+        ctx.global_style().visuals.panel_fill,
+        Theme::vega_dark().palette.background
+    );
 }
 
 #[test]
@@ -50,7 +53,9 @@ fn new_detects_dark_from_palette() {
 #[test]
 fn state_adds_dark() {
     assert!(Theme::vega_dark().state(State::HOVER).contains(State::DARK));
-    assert!(!Theme::vega_light().state(State::HOVER).contains(State::DARK));
+    assert!(!Theme::vega_light()
+        .state(State::HOVER)
+        .contains(State::DARK));
 }
 
 #[test]
@@ -83,7 +88,10 @@ fn paint_alpha_and_mix() {
     let half = t.paint(Paint::Role(Role::Primary, 0.5));
     assert!((half.a() as i32 - 128).abs() <= 1, "{half:?}");
     assert_eq!(half, t.palette.primary.gamma_multiply(0.5));
-    assert_eq!(t.paint(Paint::Role(Role::Transparent, 1.0)), egui::Color32::TRANSPARENT);
+    assert_eq!(
+        t.paint(Paint::Role(Role::Transparent, 1.0)),
+        egui::Color32::TRANSPARENT
+    );
     let mix = t.paint(Paint::Mix(Role::Secondary, Role::Foreground, 0.05));
     assert_ne!(mix, t.palette.secondary);
 }
@@ -135,7 +143,10 @@ fn consumer_override_takes_effect() {
     let mut s = Style::nova();
     s.button_size_default.height.base = Some(40.0);
     let t = Theme::new(s, Palette::dark(), 10.0);
-    assert_eq!(t.style.button_size_default.height.get(t.state(State::NONE)), Some(40.0));
+    assert_eq!(
+        t.style.button_size_default.height.get(t.state(State::NONE)),
+        Some(40.0)
+    );
 }
 
 #[test]

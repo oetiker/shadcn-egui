@@ -45,7 +45,12 @@ pub fn collect_vars(css: &[(String, Vec<String>)]) -> Vars {
             let c = split(raw);
             let Ok(v) = class_variants(&c) else { continue };
             if let U::VarDef(name, px) = utility(&c.utility, v.pseudo) {
-                vars.entry(name).or_default().push(VarDef { all: v.all, none: v.none, rank: v.rank, px });
+                vars.entry(name).or_default().push(VarDef {
+                    all: v.all,
+                    none: v.none,
+                    rank: v.rank,
+                    px,
+                });
             }
         }
     }
@@ -70,7 +75,14 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
         match utility(&c.utility, v.pseudo) {
             U::Set(list) => {
                 for (field, value) in list {
-                    m.decls.push(Decl { field, value, all: v.all, none: v.none, rank: v.rank, idx });
+                    m.decls.push(Decl {
+                        field,
+                        value,
+                        all: v.all,
+                        none: v.none,
+                        rank: v.rank,
+                        idx,
+                    });
                 }
             }
             // Approximation of CSS: a rule derived from a variable inherits
@@ -91,7 +103,9 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                         }
                     }
                 }
-                None => m.unsupported.push((raw.clone(), format!("unknown CSS variable {name}"))),
+                None => m
+                    .unsupported
+                    .push((raw.clone(), format!("unknown CSS variable {name}"))),
             },
             U::VarDef(..) => {}
             U::Ignore(why) => m.ignored.push((raw.clone(), why)),
@@ -109,7 +123,11 @@ pub fn markers(css: &[(String, Vec<String>)], shipped: &[String]) -> Vec<(String
     shipped
         .iter()
         .map(|m| {
-            let classes = css.iter().find(|(n, _)| n == m).map(|(_, c)| c.as_slice()).unwrap_or_default();
+            let classes = css
+                .iter()
+                .find(|(n, _)| n == m)
+                .map(|(_, c)| c.as_slice())
+                .unwrap_or_default();
             (m.clone(), translate(classes, &vars))
         })
         .collect()
@@ -120,7 +138,9 @@ pub fn markers(css: &[(String, Vec<String>)], shipped: &[String]) -> Vec<(String
 fn merge(decls: Vec<Decl>) -> Vec<Decl> {
     let mut out: Vec<Decl> = Vec::new();
     for d in decls {
-        out.retain(|o| !(o.field == d.field && o.all == d.all && o.none == d.none && o.rank == d.rank));
+        out.retain(|o| {
+            !(o.field == d.field && o.all == d.all && o.none == d.none && o.rank == d.rank)
+        });
         out.push(d);
     }
     out

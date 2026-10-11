@@ -1,7 +1,11 @@
 use icongen::{const_name, convert, render_module, Seg};
 
 fn fixture(name: &str) -> String {
-    std::fs::read_to_string(format!("{}/tests/fixtures/{name}.svg", env!("CARGO_MANIFEST_DIR"))).expect("fixture")
+    std::fs::read_to_string(format!(
+        "{}/tests/fixtures/{name}.svg",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("fixture")
 }
 
 fn subpaths(segs: &[Seg]) -> usize {
@@ -26,7 +30,13 @@ fn near_zero_length_dot_survives() {
     // dropped, or the icon loses its dot.
     let icon = convert("circle-alert", &fixture("circle-alert")).expect("converts");
     assert_eq!(subpaths(&icon.segs), 3, "{:?}", icon.segs);
-    assert!(icon.segs.windows(2).any(|w| w == [Seg::M(12.0, 16.0), Seg::L(12.01, 16.0)]), "{:?}", icon.segs);
+    assert!(
+        icon.segs
+            .windows(2)
+            .any(|w| w == [Seg::M(12.0, 16.0), Seg::L(12.01, 16.0)]),
+        "{:?}",
+        icon.segs
+    );
 }
 
 #[test]
@@ -41,7 +51,10 @@ fn all_fixtures_convert() {
                 Seg::C(a, b, c, d, x, y) => vec![a, b, c, d, x, y],
                 Seg::Z => vec![],
             };
-            assert!(coords.iter().all(|v| (-1.0..=25.0).contains(v)), "{n}: {s:?} outside the view box");
+            assert!(
+                coords.iter().all(|v| (-1.0..=25.0).contains(v)),
+                "{n}: {s:?} outside the view box"
+            );
         }
     }
 }
@@ -82,8 +95,15 @@ fn names_and_module_render() {
     assert_eq!(const_name("circle-alert"), "CIRCLE_ALERT");
     assert_eq!(const_name("3d-box"), "I_3D_BOX");
     let icon = convert("x", &fixture("x")).expect("converts");
-    let src = render_module(&[icon], "crate::shadcn::components::icon", "Lucide v1.54.0 (ISC)");
-    assert!(src.contains("use crate::shadcn::components::icon::{Icon, Seg::*};"), "{src}");
+    let src = render_module(
+        &[icon],
+        "crate::shadcn::components::icon",
+        "Lucide v1.54.0 (ISC)",
+    );
+    assert!(
+        src.contains("use crate::shadcn::components::icon::{Icon, Seg::*};"),
+        "{src}"
+    );
     assert!(src.contains("pub const X: Icon = Icon {"), "{src}");
     assert!(src.contains("        M(18.0, 6.0),"), "{src}");
     assert!(src.contains("// Lucide v1.54.0 (ISC)"));

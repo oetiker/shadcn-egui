@@ -22,11 +22,18 @@ fn files(root: &Path) -> Vec<PathBuf> {
 #[test]
 fn registry_src_is_byte_identical() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let (src, reg) = (root.join("src"), root.join("skills/egui-shadcn/registry/src"));
+    let (src, reg) = (
+        root.join("src"),
+        root.join("skills/egui-shadcn/registry/src"),
+    );
     let (a, b) = (files(&src), files(&reg));
     assert_eq!(a, b, "file lists differ");
     assert!(a.len() > 10, "too few files: {a:?}");
     for f in a {
-        assert!(std::fs::read(src.join(&f)).unwrap() == std::fs::read(reg.join(&f)).unwrap(), "{} differs", f.display());
+        assert!(
+            std::fs::read(src.join(&f)).unwrap() == std::fs::read(reg.join(&f)).unwrap(),
+            "{} differs",
+            f.display()
+        );
     }
 }

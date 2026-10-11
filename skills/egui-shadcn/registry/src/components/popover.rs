@@ -31,7 +31,10 @@ pub struct Popover<'a> {
 impl<'a> Popover<'a> {
     /// A popover toggled by clicks on `trigger`.
     pub fn new(trigger: &'a Response) -> Self {
-        Self { trigger, width: None }
+        Self {
+            trigger,
+            width: None,
+        }
     }
     /// Width of the popover box, padding included; default `w-72`.
     pub fn width(mut self, w: f32) -> Self {
@@ -43,8 +46,15 @@ impl<'a> Popover<'a> {
         let t = Theme::current(&self.trigger.ctx);
         let g = t.state(State::NONE);
         let l = [&t.style.popover_content];
-        let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
-        let (pad_t, pad_r, pad_b, pad_l) = (px(|r| &r.pad_top), px(|r| &r.pad_right), px(|r| &r.pad_bottom), px(|r| &r.pad_left));
+        let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
+            pick(&l, f, g).unwrap_or(0.0)
+        };
+        let (pad_t, pad_r, pad_b, pad_l) = (
+            px(|r| &r.pad_top),
+            px(|r| &r.pad_right),
+            px(|r| &r.pad_bottom),
+            px(|r| &r.pad_left),
+        );
         let gap = px(|r| &r.gap);
         let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
         let fill = pick(&l, |r| &r.bg, g).map(|p| t.paint(p));
@@ -54,12 +64,15 @@ impl<'a> Popover<'a> {
         let shadow = pick(&l, |r| &r.shadow, g).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
 
-        let mut frame = Frame::new().corner_radius(radius.round() as u8).shadow(shadow).inner_margin(Margin {
-            top: pad_t.round() as i8,
-            right: pad_r.round() as i8,
-            bottom: pad_b.round() as i8,
-            left: pad_l.round() as i8,
-        });
+        let mut frame = Frame::new()
+            .corner_radius(radius.round() as u8)
+            .shadow(shadow)
+            .inner_margin(Margin {
+                top: pad_t.round() as i8,
+                right: pad_r.round() as i8,
+                bottom: pad_b.round() as i8,
+                left: pad_l.round() as i8,
+            });
         if let Some(fill) = fill {
             frame = frame.fill(fill);
         }
@@ -110,16 +123,23 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let (title_px, title_line) = text(&title_l);
     let (desc_px, desc_line) = text(&desc_l);
     let weight = pick(&title_l, |r| &r.weight, g).unwrap_or(Weight::Normal);
-    let title_color = pick(&title_l, |r| &r.text, g).or(pick(&[&t.style.popover_content], |r| &r.text, g)).map(|p| t.paint(p));
+    let title_color = pick(&title_l, |r| &r.text, g)
+        .or(pick(&[&t.style.popover_content], |r| &r.text, g))
+        .map(|p| t.paint(p));
     let muted = pick(&desc_l, |r| &r.text, g).map(|p| t.paint(p));
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
-        let mut title = RichText::new(title).size(title_px).line_height(Some(title_line)).family(family_for(ui.ctx(), weight));
+        let mut title = RichText::new(title)
+            .size(title_px)
+            .line_height(Some(title_line))
+            .family(family_for(ui.ctx(), weight));
         if let Some(c) = title_color {
             title = title.color(c);
         }
         ui.label(title);
-        let mut description = RichText::new(description).size(desc_px).line_height(Some(desc_line));
+        let mut description = RichText::new(description)
+            .size(desc_px)
+            .line_height(Some(desc_line));
         if let Some(c) = muted {
             description = description.color(c);
         }
@@ -136,10 +156,34 @@ mod tests {
     #[test]
     fn header_lines_read_their_own_recipes() {
         let lyra = Style::lyra();
-        assert_eq!(pick(&[&lyra.popover_header], |r| &r.text_size, State::NONE), Some(TextSize::Xs));
-        assert_eq!(pick(&[&lyra.popover_header, &lyra.popover_title], |r| &r.text_size, State::NONE), Some(TextSize::Sm));
-        assert_eq!(pick(&[&lyra.popover_header, &lyra.popover_description], |r| &r.line_height, State::NONE), Some(1.625));
+        assert_eq!(
+            pick(&[&lyra.popover_header], |r| &r.text_size, State::NONE),
+            Some(TextSize::Xs)
+        );
+        assert_eq!(
+            pick(
+                &[&lyra.popover_header, &lyra.popover_title],
+                |r| &r.text_size,
+                State::NONE
+            ),
+            Some(TextSize::Sm)
+        );
+        assert_eq!(
+            pick(
+                &[&lyra.popover_header, &lyra.popover_description],
+                |r| &r.line_height,
+                State::NONE
+            ),
+            Some(1.625)
+        );
         let maia = Style::maia();
-        assert_eq!(pick(&[&maia.popover_header, &maia.popover_title], |r| &r.text_size, State::NONE), Some(TextSize::Base));
+        assert_eq!(
+            pick(
+                &[&maia.popover_header, &maia.popover_title],
+                |r| &r.text_size,
+                State::NONE
+            ),
+            Some(TextSize::Base)
+        );
     }
 }

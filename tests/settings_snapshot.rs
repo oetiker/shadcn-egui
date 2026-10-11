@@ -22,7 +22,9 @@ fn state(tab: usize) -> SettingsState {
 /// Render the settings screen with `tab` pre-selected, once per style and palette.
 fn snapshot_tab(tab: usize, name: &str) {
     let mut state = state(tab);
-    common::snapshot_all(name, egui::vec2(640.0, 840.0), move |ui| settings_ui(ui, &mut state));
+    common::snapshot_all(name, egui::vec2(640.0, 840.0), move |ui| {
+        settings_ui(ui, &mut state)
+    });
 }
 
 #[test]
@@ -49,10 +51,12 @@ fn settings_default_slider_is_50() {
 fn with_tab(tab: usize, check: impl FnOnce(&Harness<'_>)) {
     let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
     let mut state = state(tab);
-    let mut h = Harness::builder().with_size(egui::vec2(640.0, 840.0)).build_ui(move |ui| {
-        theme.apply(ui.ctx());
-        settings_ui(ui, &mut state);
-    });
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(640.0, 840.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            settings_ui(ui, &mut state);
+        });
     h.run();
     check(&h);
 }
@@ -84,8 +88,20 @@ fn every_widget_on_every_tab_is_exposed_to_accessibility() {
     });
     with_tab(2, |h| {
         // "Default" is a variant and a size button.
-        assert_eq!(h.query_all_by_role_and_label(Role::Button, "Default").count(), 2);
-        for l in ["Secondary", "Destructive", "Outline", "Ghost", "Link", "Small", "Large"] {
+        assert_eq!(
+            h.query_all_by_role_and_label(Role::Button, "Default")
+                .count(),
+            2
+        );
+        for l in [
+            "Secondary",
+            "Destructive",
+            "Outline",
+            "Ghost",
+            "Link",
+            "Small",
+            "Large",
+        ] {
             h.get_by_role_and_label(Role::Button, l);
         }
         for l in ["Default", "Secondary", "Destructive", "Outline"] {

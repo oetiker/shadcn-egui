@@ -16,9 +16,18 @@ fn violations(source: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut prev = "";
     for (n, line) in source.lines().enumerate() {
-        let literal_size = ["FontId::new(", "FontId::proportional(", "FontId::monospace(", ".size("]
-            .iter()
-            .any(|p| line.split(p).skip(1).any(|rest| rest.starts_with(|c: char| c.is_ascii_digit())));
+        let literal_size = [
+            "FontId::new(",
+            "FontId::proportional(",
+            "FontId::monospace(",
+            ".size(",
+        ]
+        .iter()
+        .any(|p| {
+            line.split(p)
+                .skip(1)
+                .any(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+        });
         let literal_color = patterns.iter().any(|p| line.contains(p));
         if (literal_size || literal_color) && !prev.contains("token-ok:") {
             out.push(format!("{}: {}", n + 1, line.trim()));
@@ -35,8 +44,14 @@ fn scanner_catches_literals() {
     assert_eq!(violations("let c = Color32::WHITE;").len(), 1);
     assert_eq!(violations("let f = FontId::proportional(12.0);").len(), 1);
     assert_eq!(violations("RichText::new(t).size(14.0)").len(), 1);
-    assert_eq!(violations("// token-ok: test\nlet c = Color32::WHITE;").len(), 0);
-    assert_eq!(violations("let f = FontId::proportional(t.metrics.text_xs);").len(), 0);
+    assert_eq!(
+        violations("// token-ok: test\nlet c = Color32::WHITE;").len(),
+        0
+    );
+    assert_eq!(
+        violations("let f = FontId::proportional(t.metrics.text_xs);").len(),
+        0
+    );
 }
 
 #[test]
@@ -55,7 +70,11 @@ fn components_use_theme_tokens() {
             found.push(format!("{}:{v}", f.display()));
         }
     }
-    assert!(found.is_empty(), "literal colors/sizes outside theme.rs:\n{}", found.join("\n"));
+    assert!(
+        found.is_empty(),
+        "literal colors/sizes outside theme.rs:\n{}",
+        found.join("\n")
+    );
 }
 
 /// Strict scan for components (spec section 7): besides colours and
@@ -80,14 +99,27 @@ fn strict_violations(source: &str) -> Vec<String> {
             continue;
         }
         let code = line.split("//").next().unwrap_or("");
-        let reason = line.split("// behaviour-ok:").nth(1).is_some_and(|r| !r.trim().is_empty());
+        let reason = line
+            .split("// behaviour-ok:")
+            .nth(1)
+            .is_some_and(|r| !r.trim().is_empty());
         let quoted = line.contains("// base: \"") || prev.contains("// base: \"") || reason;
         let shadow = code.contains("Shadow {");
-        let alpha = ["gamma_multiply(", "linear_multiply(", "from_black_alpha(", "from_white_alpha("]
-            .iter()
-            .any(|p| code.split(p).skip(1).any(|r| r.starts_with(|c: char| c.is_ascii_digit())));
+        let alpha = [
+            "gamma_multiply(",
+            "linear_multiply(",
+            "from_black_alpha(",
+            "from_white_alpha(",
+        ]
+        .iter()
+        .any(|p| {
+            code.split(p)
+                .skip(1)
+                .any(|r| r.starts_with(|c: char| c.is_ascii_digit()))
+        });
         let geometry = float_literals(code).any(|(lit, before)| {
-            !matches!(lit, "0.0" | "1.0") && !((lit == "2.0") && (before.ends_with("/ ") || before.ends_with("* ")))
+            !matches!(lit, "0.0" | "1.0")
+                && !((lit == "2.0") && (before.ends_with("/ ") || before.ends_with("* ")))
         });
         if (shadow || alpha || geometry) && !quoted && !line.trim_start().starts_with("//") {
             out.push(format!("{}: {}", n + 1, line.trim()));
@@ -104,7 +136,8 @@ fn float_literals(code: &str) -> impl Iterator<Item = (&str, &str)> {
     std::iter::from_fn(move || {
         while i < b.len() {
             let start = i;
-            let ident_before = start > 0 && (b[start - 1].is_ascii_alphanumeric() || b[start - 1] == b'_');
+            let ident_before =
+                start > 0 && (b[start - 1].is_ascii_alphanumeric() || b[start - 1] == b'_');
             if b[i].is_ascii_digit() && !ident_before {
                 while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'.' || b[i] == b'_') {
                     i += 1;
@@ -124,16 +157,32 @@ fn float_literals(code: &str) -> impl Iterator<Item = (&str, &str)> {
 #[test]
 fn strict_scanner_catches_literals() {
     assert_eq!(strict_violations("let h = 32.0;").len(), 1);
-    assert_eq!(strict_violations("let c = fill.gamma_multiply(0.5);").len(), 1);
-    assert_eq!(strict_violations("let s = Shadow { offset: [0, 1], blur: 3, spread: 0, color };").len(), 1);
-    assert_eq!(strict_violations("// base: \"disabled:opacity-50\"\nlet c = fill.gamma_multiply(0.5);").len(), 0);
+    assert_eq!(
+        strict_violations("let c = fill.gamma_multiply(0.5);").len(),
+        1
+    );
+    assert_eq!(
+        strict_violations("let s = Shadow { offset: [0, 1], blur: 3, spread: 0, color };").len(),
+        1
+    );
+    assert_eq!(
+        strict_violations("// base: \"disabled:opacity-50\"\nlet c = fill.gamma_multiply(0.5);")
+            .len(),
+        0
+    );
     assert_eq!(strict_violations("let c = rect.height() / 2.0;").len(), 0);
     assert_eq!(strict_violations("let w = 2.0 + x;").len(), 1);
     assert_eq!(strict_violations("let z = 0.0; let o = 1.0;").len(), 0);
     assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
-    assert_eq!(strict_violations("let t = 0.1; // behaviour-ok: flattening tolerance").len(), 0);
+    assert_eq!(
+        strict_violations("let t = 0.1; // behaviour-ok: flattening tolerance").len(),
+        0
+    );
     assert_eq!(strict_violations("let t = 0.1; // behaviour-ok:").len(), 1);
-    assert_eq!(strict_violations("pub const X: Icon = Icon {\n    a: 3.5,\n};\nlet h = 32.0;").len(), 1);
+    assert_eq!(
+        strict_violations("pub const X: Icon = Icon {\n    a: 3.5,\n};\nlet h = 32.0;").len(),
+        1
+    );
 }
 
 /// The code before a file's trailing `#[cfg(test)] mod tests` module. Unit
@@ -142,11 +191,22 @@ fn strict_scanner_catches_literals() {
 /// test-only items, and code after them, are scanned.
 fn non_test_code(source: &str) -> &str {
     const MODULE: &str = "\n#[cfg(test)]\nmod tests {\n";
-    let Some(at) = source.rfind(MODULE) else { return source };
-    let body: Vec<&str> = source[at + MODULE.len()..].lines().filter(|l| !l.trim().is_empty()).collect();
+    let Some(at) = source.rfind(MODULE) else {
+        return source;
+    };
+    let body: Vec<&str> = source[at + MODULE.len()..]
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
     // Inside the module every line is indented; only its closing brace is not.
-    let to_eof = body.split_last().is_some_and(|(last, rest)| *last == "}" && rest.iter().all(|l| l.starts_with(char::is_whitespace)));
-    if to_eof { &source[..at] } else { source }
+    let to_eof = body.split_last().is_some_and(|(last, rest)| {
+        *last == "}" && rest.iter().all(|l| l.starts_with(char::is_whitespace))
+    });
+    if to_eof {
+        &source[..at]
+    } else {
+        source
+    }
 }
 
 #[test]
@@ -159,7 +219,10 @@ fn non_test_code_cuts_only_the_trailing_test_module() {
     assert_eq!(strict_violations(non_test_code(mid)).len(), 1);
     // A test module followed by more code is not the trailing module.
     let early = "#[cfg(test)]\nmod tests {\n    const H: f32 = 36.0;\n}\nlet h = 32.0;\n";
-    assert_eq!(strict_violations(non_test_code(&format!("\n{early}"))).len(), 2);
+    assert_eq!(
+        strict_violations(non_test_code(&format!("\n{early}"))).len(),
+        2
+    );
 }
 
 #[test]
@@ -179,5 +242,9 @@ fn ported_components_take_values_from_the_style() {
             found.push(format!("{path}:{v}"));
         }
     }
-    assert!(found.is_empty(), "style values hard-coded in components:\n{}", found.join("\n"));
+    assert!(
+        found.is_empty(),
+        "style values hard-coded in components:\n{}",
+        found.join("\n")
+    );
 }

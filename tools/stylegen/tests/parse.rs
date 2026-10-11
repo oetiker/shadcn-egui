@@ -3,7 +3,11 @@ use stylegen::css::parse_style_css;
 use stylegen::markers::parse_markers;
 
 fn fixture(name: &str) -> String {
-    std::fs::read_to_string(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).expect("fixture")
+    std::fs::read_to_string(format!(
+        "{}/tests/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("fixture")
 }
 
 fn v(xs: &[&str]) -> Vec<String> {
@@ -13,8 +17,22 @@ fn v(xs: &[&str]) -> Vec<String> {
 #[test]
 fn parses_nova_markers() {
     let m = parse_style_css(&fixture("style-nova.css"));
-    let get = |k: &str| m.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone()).expect(k);
-    assert_eq!(get("cn-button-size-default"), ["h-8", "gap-1.5", "px-2.5", "has-data-[icon=inline-end]:pr-2", "has-data-[icon=inline-start]:pl-2"]);
+    let get = |k: &str| {
+        m.iter()
+            .find(|(n, _)| n == k)
+            .map(|(_, v)| v.clone())
+            .expect(k)
+    };
+    assert_eq!(
+        get("cn-button-size-default"),
+        [
+            "h-8",
+            "gap-1.5",
+            "px-2.5",
+            "has-data-[icon=inline-end]:pr-2",
+            "has-data-[icon=inline-start]:pl-2"
+        ]
+    );
     assert_eq!(get("cn-slider-range"), ["bg-primary"]);
     // ~420 @apply rules; most markers appear once.
     assert!(m.len() > 300, "{}", m.len());
@@ -23,7 +41,10 @@ fn parses_nova_markers() {
 #[test]
 fn comments_are_not_markers() {
     let css = ".style-x {\n  /* MARK: cn-fake */\n  .cn-b .cn-a-part { @apply w-2; }\n}";
-    assert_eq!(parse_style_css(css), vec![("cn-a-part".to_string(), v(&["w-2"]))]);
+    assert_eq!(
+        parse_style_css(css),
+        vec![("cn-a-part".to_string(), v(&["w-2"]))]
+    );
 }
 
 #[test]
@@ -32,7 +53,10 @@ fn later_rule_is_prepended() {
     let css = ".style-x { .cn-a { @apply h-1; } .cn-b { @apply w-1; } .cn-a { @apply p-1 p-2; } }";
     assert_eq!(
         parse_style_css(css),
-        vec![("cn-a".to_string(), v(&["p-1", "p-2", "h-1"])), ("cn-b".to_string(), v(&["w-1"]))]
+        vec![
+            ("cn-a".to_string(), v(&["p-1", "p-2", "h-1"])),
+            ("cn-b".to_string(), v(&["w-1"]))
+        ]
     );
 }
 
@@ -41,7 +65,10 @@ fn apply_without_semicolon_does_not_swallow_next_rule() {
     let css = ".style-x {\n  .cn-a {\n    @apply h-1 w-2\n  }\n  .cn-b {\n    @apply p-1;\n  }\n}";
     assert_eq!(
         parse_style_css(css),
-        vec![("cn-a".to_string(), v(&["h-1", "w-2"])), ("cn-b".to_string(), v(&["p-1"]))]
+        vec![
+            ("cn-a".to_string(), v(&["h-1", "w-2"])),
+            ("cn-b".to_string(), v(&["p-1"]))
+        ]
     );
 }
 
@@ -72,7 +99,8 @@ fn split_respects_brackets() {
 
 #[test]
 fn markers_file_parses() {
-    let lines = parse_markers("# c\nbutton.rs button: cn-button cn-button-size-sm\nlayout.rs card:\n");
+    let lines =
+        parse_markers("# c\nbutton.rs button: cn-button cn-button-size-sm\nlayout.rs card:\n");
     assert_eq!(lines.len(), 2);
     assert_eq!(lines[0].file, "button.rs");
     assert_eq!(lines[0].dir, "button");
@@ -82,7 +110,9 @@ fn markers_file_parses() {
 
 #[test]
 fn shipped_markers_file_parses() {
-    let lines = parse_markers(&std::fs::read_to_string(format!("{}/markers.txt", env!("CARGO_MANIFEST_DIR"))).unwrap());
+    let lines = parse_markers(
+        &std::fs::read_to_string(format!("{}/markers.txt", env!("CARGO_MANIFEST_DIR"))).unwrap(),
+    );
     assert_eq!(lines.len(), 15);
 }
 

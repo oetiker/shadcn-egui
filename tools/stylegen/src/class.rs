@@ -27,5 +27,9 @@ pub fn split(class: &str) -> Class {
         (Some(u), _) | (_, Some(u)) => (u.to_owned(), true),
         _ => (raw.to_owned(), false),
     };
-    Class { variants, utility, important }
+    Class {
+        variants,
+        utility,
+        important,
+    }
 }

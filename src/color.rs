@@ -48,7 +48,11 @@ pub fn srgb_to_oklch(c: Color32) -> (f32, f32, f32) {
     let [r, g, b, _] = c.to_srgba_unmultiplied();
     let lin = |v: u8| {
         let v = v as f32 / 255.0;
-        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
     };
     let (r, g, b) = (lin(r), lin(g), lin(b));
     let l = 0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_99 * b;

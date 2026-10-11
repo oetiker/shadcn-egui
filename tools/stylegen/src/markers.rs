@@ -15,7 +15,11 @@ pub fn parse_markers(src: &str) -> Vec<MarkerLine> {
             let mut h = head.split_whitespace();
             let file = h.next().expect("file").to_owned();
             let dir = h.next().expect("dir").to_owned();
-            MarkerLine { file, dir, markers: markers.split_whitespace().map(str::to_owned).collect() }
+            MarkerLine {
+                file,
+                dir,
+                markers: markers.split_whitespace().map(str::to_owned).collect(),
+            }
         })
         .collect()
 }

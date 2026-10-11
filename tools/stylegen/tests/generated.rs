@@ -11,7 +11,10 @@ fn read(path: &str) -> String {
 }
 
 fn shipped() -> Vec<String> {
-    parse_markers(&read("markers.txt")).into_iter().flat_map(|l| l.markers).collect()
+    parse_markers(&read("markers.txt"))
+        .into_iter()
+        .flat_map(|l| l.markers)
+        .collect()
 }
 
 fn style_source(style: &str, pin: &str) -> String {
@@ -25,11 +28,23 @@ fn style_source(style: &str, pin: &str) -> String {
 #[test]
 fn committed_sources_are_current_and_output_is_deterministic() {
     let pin = read("PIN").trim().to_owned();
-    assert_eq!(emit_struct(&pin, &shipped()), read("../../src/style/generated.rs"), "re-run stylegen generate");
+    assert_eq!(
+        emit_struct(&pin, &shipped()),
+        read("../../src/style/generated.rs"),
+        "re-run stylegen generate"
+    );
     for style in ["vega", "nova"] {
         let first = style_source(style, &pin);
-        assert_eq!(first, style_source(style, &pin), "{style}: output differs between runs");
-        assert_eq!(first, read(&format!("../../src/style/{style}.rs")), "{style}: re-run stylegen generate");
+        assert_eq!(
+            first,
+            style_source(style, &pin),
+            "{style}: output differs between runs"
+        );
+        assert_eq!(
+            first,
+            read(&format!("../../src/style/{style}.rs")),
+            "{style}: re-run stylegen generate"
+        );
     }
 }
 
@@ -37,9 +52,15 @@ fn committed_sources_are_current_and_output_is_deterministic() {
 #[test]
 fn committed_reports_are_current() {
     let pin = read("PIN").trim().to_owned();
-    for style in ["vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea"] {
+    for style in [
+        "vega", "nova", "maia", "lyra", "mira", "luma", "sera", "rhea",
+    ] {
         let css = parse_style_css(&read(&format!("tests/fixtures/style-{style}.css")));
         let fresh = report(style, &pin, &markers(&css, &shipped()));
-        assert_eq!(fresh, read(&format!("reports/{style}.md")), "{style}: re-run stylegen generate");
+        assert_eq!(
+            fresh,
+            read(&format!("reports/{style}.md")),
+            "{style}: re-run stylegen generate"
+        );
     }
 }

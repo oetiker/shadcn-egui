@@ -167,13 +167,25 @@ impl Theme {
         // `Arc::new` copies the large `Style` through two stack frames in a
         // debug build; a box moves it to the heap once.
         let style = Arc::from(Box::new(style));
-        Self { style, palette, radius, metrics: Metrics::default(), dark }
+        Self {
+            style,
+            palette,
+            radius,
+            metrics: Metrics::default(),
+            dark,
+        }
     }
-    pub fn vega_dark() -> Self { Self::new(Style::vega(), Palette::dark(), 10.0) }
-    pub fn vega_light() -> Self { Self::new(Style::vega(), Palette::light(), 10.0) }
+    pub fn vega_dark() -> Self {
+        Self::new(Style::vega(), Palette::dark(), 10.0)
+    }
+    pub fn vega_light() -> Self {
+        Self::new(Style::vega(), Palette::light(), 10.0)
+    }
 
     /// The component state `s` plus this theme's [`State::DARK`].
-    pub fn state(&self, s: State) -> State { s.with(State::DARK, self.dark) }
+    pub fn state(&self, s: State) -> State {
+        s.with(State::DARK, self.dark)
+    }
 
     /// A radius rung in px: shadcn's scale multiplies `--radius`.
     pub fn rung(&self, r: Rung) -> f32 {
@@ -200,10 +212,18 @@ impl Theme {
         };
         v.min(max).clamp(0.0, 255.0)
     }
-    pub fn radius_sm(&self) -> f32 { self.rung(Rung::Sm) }
-    pub fn radius_md(&self) -> f32 { self.rung(Rung::Md) }
-    pub fn radius_lg(&self) -> f32 { self.rung(Rung::Lg) }
-    pub fn radius_xl(&self) -> f32 { self.rung(Rung::Xl) }
+    pub fn radius_sm(&self) -> f32 {
+        self.rung(Rung::Sm)
+    }
+    pub fn radius_md(&self) -> f32 {
+        self.rung(Rung::Md)
+    }
+    pub fn radius_lg(&self) -> f32 {
+        self.rung(Rung::Lg)
+    }
+    pub fn radius_xl(&self) -> f32 {
+        self.rung(Rung::Xl)
+    }
 
     /// The palette colour of a style role.
     pub fn role(&self, r: Role) -> Color32 {
@@ -278,7 +298,12 @@ impl Theme {
             ShadowLevel::Xl => (20, 25, 0.10),
             ShadowLevel::Xl2 => (25, 50, 0.25),
         };
-        egui::epaint::Shadow { offset: [0, y], blur, spread: 0, color: Color32::from_black_alpha((a * 255.0_f32).round() as u8) }
+        egui::epaint::Shadow {
+            offset: [0, y],
+            blur,
+            spread: 0,
+            color: Color32::from_black_alpha((a * 255.0_f32).round() as u8),
+        }
     }
 }
 
@@ -330,7 +355,10 @@ fn install_fonts(ctx: &egui::Context) {
     // Building the font atlas is expensive, so install the fonts only once per
     // context; re-applying (e.g. a light/dark toggle) only refreshes the style.
     let installed_id = egui::Id::new("egui_shadcn::fonts_installed");
-    if ctx.data(|d| d.get_temp::<bool>(installed_id)).unwrap_or(false) {
+    if ctx
+        .data(|d| d.get_temp::<bool>(installed_id))
+        .unwrap_or(false)
+    {
         return;
     }
     // Oxanium's ascent reserves more empty space above the cap height than below
@@ -338,31 +366,44 @@ fn install_fonts(ctx: &egui::Context) {
     // buttons/badges/tabs, and `TextEdit` vertical centering) leaves single-line
     // text sitting ~0.18em too high. Nudge every glyph down by that fraction so
     // centered text is optically balanced. Measured against the reference button.
-    let tweak = egui::FontTweak { y_offset_factor: 0.18, ..Default::default() };
+    let tweak = egui::FontTweak {
+        y_offset_factor: 0.18,
+        ..Default::default()
+    };
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "oxanium".into(),
-        Arc::new(FontData::from_static(include_bytes!("../assets/Oxanium-Regular.ttf")).tweak(tweak.clone())),
+        Arc::new(
+            FontData::from_static(include_bytes!("../assets/Oxanium-Regular.ttf"))
+                .tweak(tweak.clone()),
+        ),
     );
     fonts.font_data.insert(
         FAMILY_MEDIUM.into(),
-        Arc::new(FontData::from_static(include_bytes!("../assets/Oxanium-Medium.ttf")).tweak(tweak.clone())),
+        Arc::new(
+            FontData::from_static(include_bytes!("../assets/Oxanium-Medium.ttf"))
+                .tweak(tweak.clone()),
+        ),
     );
     fonts.font_data.insert(
         FAMILY_SEMIBOLD.into(),
-        Arc::new(FontData::from_static(include_bytes!("../assets/Oxanium-SemiBold.ttf")).tweak(tweak)),
+        Arc::new(
+            FontData::from_static(include_bytes!("../assets/Oxanium-SemiBold.ttf")).tweak(tweak),
+        ),
     );
     fonts
         .families
         .entry(FontFamily::Proportional)
         .or_default()
         .insert(0, "oxanium".into());
-    fonts
-        .families
-        .insert(FontFamily::Name(FAMILY_MEDIUM.into()), vec![FAMILY_MEDIUM.into()]);
-    fonts
-        .families
-        .insert(FontFamily::Name(FAMILY_SEMIBOLD.into()), vec![FAMILY_SEMIBOLD.into()]);
+    fonts.families.insert(
+        FontFamily::Name(FAMILY_MEDIUM.into()),
+        vec![FAMILY_MEDIUM.into()],
+    );
+    fonts.families.insert(
+        FontFamily::Name(FAMILY_SEMIBOLD.into()),
+        vec![FAMILY_SEMIBOLD.into()],
+    );
     ctx.set_fonts(fonts);
     ctx.data_mut(|d| d.insert_temp(installed_id, true));
 }
@@ -372,7 +413,8 @@ impl Theme {
     /// dark, shared so the fallback does not build a [`Style`] per call.
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
-        ctx.data(|d| d.get_temp::<Theme>(theme_id())).unwrap_or_else(|| FALLBACK.clone())
+        ctx.data(|d| d.get_temp::<Theme>(theme_id()))
+            .unwrap_or_else(|| FALLBACK.clone())
     }
 
     /// Push this theme into the egui context: fonts, type scale, spacing, colors.
@@ -395,8 +437,14 @@ impl Theme {
                 (TextStyle::Small, FontId::new(m.text_xs, Proportional)),
                 (TextStyle::Body, FontId::new(m.text_sm, Proportional)),
                 (TextStyle::Button, FontId::new(m.text_sm, Proportional)),
-                (TextStyle::Monospace, FontId::new(m.text_mono, FontFamily::Monospace)),
-                (TextStyle::Heading, FontId::new(m.text_heading, FontFamily::Name(FAMILY_SEMIBOLD.into()))),
+                (
+                    TextStyle::Monospace,
+                    FontId::new(m.text_mono, FontFamily::Monospace),
+                ),
+                (
+                    TextStyle::Heading,
+                    FontId::new(m.text_heading, FontFamily::Name(FAMILY_SEMIBOLD.into())),
+                ),
             ]
             .into();
 
@@ -408,11 +456,14 @@ impl Theme {
             let button = [&self.style.button_size_default];
             let none = self.state(State::NONE);
             let gap = pick(&[&self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
-            let pad_x = pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
+            let pad_x =
+                pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
             let height = pick(&button, |r| &r.height, none);
             // egui's button is its text row plus twice `button_padding.y`, and
             // at least `interact_size.y`: keep the padding within the height.
-            let pad_y = height.map_or(egui_default.button_padding.y, |h| ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0));
+            let pad_y = height.map_or(egui_default.button_padding.y, |h| {
+                ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0)
+            });
             s.spacing.item_spacing = egui::vec2(gap, gap);
             s.spacing.button_padding = egui::vec2(pad_x, pad_y);
             s.spacing.window_margin = egui::Margin::same(0);

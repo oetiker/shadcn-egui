@@ -7,7 +7,11 @@ use egui_shadcn::{layout, Theme};
 #[test]
 fn row_and_vstack_compose() {
     let theme = Theme::vega_dark();
-    let (mut top, mut a, mut b) = (egui::Rect::NOTHING, egui::Rect::NOTHING, egui::Rect::NOTHING);
+    let (mut top, mut a, mut b) = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
     let mut row_top = 0.0;
     common::measure(&theme, |ui| {
         layout::vstack(ui, 12.0, |ui| {
@@ -29,11 +33,19 @@ fn row_and_vstack_compose() {
 #[test]
 fn space_between_composes() {
     let theme = Theme::vega_dark();
-    let (mut left, mut right, mut row) = (egui::Rect::NOTHING, egui::Rect::NOTHING, egui::Rect::NOTHING);
+    let (mut left, mut right, mut row) = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
     common::measure(&theme, |ui| {
         ui.set_width(300.0);
         row = ui.max_rect();
-        layout::space_between(ui, |ui| left = ui.label("left").rect, |ui| right = ui.label("right").rect);
+        layout::space_between(
+            ui,
+            |ui| left = ui.label("left").rect,
+            |ui| right = ui.label("right").rect,
+        );
         ui.label("end")
     });
     assert_eq!(left.left(), row.left());
@@ -65,8 +77,22 @@ fn form_row_puts_the_control_after_the_label_column() {
 fn layout_card_matches_the_default_card() {
     use egui_shadcn::components::card::Card;
     let theme = Theme::vega_dark();
-    let a = common::measure(&theme, |ui| ui.scope(|ui| layout::card(ui, |ui| { ui.label("x"); })).response);
-    let b = common::measure(&theme, |ui| ui.scope(|ui| Card::new().show(ui, |ui| { ui.label("x"); })).response);
+    let a = common::measure(&theme, |ui| {
+        ui.scope(|ui| {
+            layout::card(ui, |ui| {
+                ui.label("x");
+            })
+        })
+        .response
+    });
+    let b = common::measure(&theme, |ui| {
+        ui.scope(|ui| {
+            Card::new().show(ui, |ui| {
+                ui.label("x");
+            })
+        })
+        .response
+    });
     assert_eq!(a, b);
 }
 
@@ -81,7 +107,8 @@ fn wrap_row_wraps_when_out_of_width() {
             rects.borrow_mut().clear();
             layout::wrap_row(ui, 8.0, |ui| {
                 for _ in 0..4 {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(80.0, 20.0), egui::Sense::hover());
+                    let (r, _) =
+                        ui.allocate_exact_size(egui::vec2(80.0, 20.0), egui::Sense::hover());
                     rects.borrow_mut().push(r);
                 }
             });
@@ -89,6 +116,10 @@ fn wrap_row_wraps_when_out_of_width() {
     h.run();
     let r = rects.borrow();
     assert_eq!(r[0].top(), r[1].top(), "first two items share a line");
-    assert!(r[2].top() >= r[0].bottom() + 8.0, "third item wraps with the vertical gap: {:?}", *r);
+    assert!(
+        r[2].top() >= r[0].bottom() + 8.0,
+        "third item wraps with the vertical gap: {:?}",
+        *r
+    );
     assert_eq!(r[1].left() - r[0].right(), 8.0, "horizontal gap");
 }

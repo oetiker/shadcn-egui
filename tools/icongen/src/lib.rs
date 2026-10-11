@@ -31,17 +31,26 @@ pub struct Converted {
 /// Convert one SVG document. `name` becomes the icon's accessible name and,
 /// upper-cased, its constant name.
 pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
-    let tree = usvg::Tree::from_str(svg, &usvg::Options::default()).map_err(|e| format!("{name}: {e}"))?;
+    let tree =
+        usvg::Tree::from_str(svg, &usvg::Options::default()).map_err(|e| format!("{name}: {e}"))?;
     let size = tree.size();
     if size.width() != size.height() {
-        return Err(format!("{name}: view box is {}x{}, icons must be square", size.width(), size.height()));
+        return Err(format!(
+            "{name}: view box is {}x{}, icons must be square",
+            size.width(),
+            size.height()
+        ));
     }
     let mut segs = Vec::new();
     walk(name, tree.root(), &mut segs)?;
     if segs.is_empty() {
         return Err(format!("{name}: no stroked paths"));
     }
-    Ok(Converted { name: name.to_owned(), size: size.width(), segs })
+    Ok(Converted {
+        name: name.to_owned(),
+        size: size.width(),
+        segs,
+    })
 }
 
 fn walk(name: &str, group: &usvg::Group, out: &mut Vec<Seg>) -> Result<(), String> {
@@ -50,7 +59,10 @@ fn walk(name: &str, group: &usvg::Group, out: &mut Vec<Seg>) -> Result<(), Strin
             usvg::Node::Group(g) => walk(name, g, out)?,
             usvg::Node::Path(p) => {
                 if p.fill().is_some() {
-                    return Err(format!("{name}: filled shape (id {:?}); only stroked outlines are supported", p.id()));
+                    return Err(format!(
+                        "{name}: filled shape (id {:?}); only stroked outlines are supported",
+                        p.id()
+                    ));
                 }
                 if p.stroke().is_none() || !p.is_visible() {
                     continue;
@@ -112,8 +124,16 @@ fn round(v: f32) -> f32 {
 
 /// `circle-alert` -> `CIRCLE_ALERT`; a leading digit gets an `I_` prefix.
 pub fn const_name(name: &str) -> String {
-    let mut s: String =
-        name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect();
+    let mut s: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect();
     if s.starts_with(|c: char| c.is_ascii_digit()) {
         s.insert_str(0, "I_");
     }
@@ -152,7 +172,15 @@ pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -
                 Seg::L(x, y) => format!("L({}, {})", num(x), num(y)),
                 Seg::Q(a, b, x, y) => format!("Q({}, {}, {}, {})", num(a), num(b), num(x), num(y)),
                 Seg::C(a, b, c, d, x, y) => {
-                    format!("C({}, {}, {}, {}, {}, {})", num(a), num(b), num(c), num(d), num(x), num(y))
+                    format!(
+                        "C({}, {}, {}, {}, {}, {})",
+                        num(a),
+                        num(b),
+                        num(c),
+                        num(d),
+                        num(x),
+                        num(y)
+                    )
                 }
                 Seg::Z => "Z".to_owned(),
             };
@@ -161,7 +189,13 @@ pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -
         out.push_str("    ],\n};\n");
     }
     out.push_str("\n/// Every icon in this module, in input order.\npub const ALL: &[&Icon] = &[");
-    out.push_str(&icons.iter().map(|i| format!("&{}", const_name(&i.name))).collect::<Vec<_>>().join(", "));
+    out.push_str(
+        &icons
+            .iter()
+            .map(|i| format!("&{}", const_name(&i.name)))
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
     out.push_str("];\n");
     out
 }

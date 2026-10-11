@@ -24,7 +24,9 @@ pub fn upstream_markers(text: &str) -> BTreeSet<String> {
     let mut rest = text;
     while let Some(i) = rest.find("cn-") {
         let tail = &rest[i..];
-        let len = tail.find(|c: char| !(c.is_ascii_alphanumeric() || c == '-')).unwrap_or(tail.len());
+        let len = tail
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+            .unwrap_or(tail.len());
         let m = &tail[..len];
         let cli = m == "cn-font-heading"
             || m.starts_with("cn-menu-")
@@ -65,7 +67,10 @@ pub fn check(up: &Path, crate_root: &Path, lines: &[MarkerLine]) -> Vec<String> 
         if let Ok(src) = std::fs::read_to_string(&file) {
             for (n, q) in base_quotes(&src) {
                 if !upstream.contains(&q) {
-                    problems.push(format!("{}:{n}: base quote no longer upstream in ui/{}: \"{q}\"", line.file, line.dir));
+                    problems.push(format!(
+                        "{}:{n}: base quote no longer upstream in ui/{}: \"{q}\"",
+                        line.file, line.dir
+                    ));
                 }
             }
         }
@@ -75,10 +80,16 @@ pub fn check(up: &Path, crate_root: &Path, lines: &[MarkerLine]) -> Vec<String> 
         let up_set = upstream_markers(&upstream);
         let ours: BTreeSet<String> = line.markers.iter().cloned().collect();
         for m in up_set.difference(&ours) {
-            problems.push(format!("{}: marker {m} appeared upstream; re-port", line.file));
+            problems.push(format!(
+                "{}: marker {m} appeared upstream; re-port",
+                line.file
+            ));
         }
         for m in ours.difference(&up_set) {
-            problems.push(format!("{}: marker {m} disappeared upstream; re-port", line.file));
+            problems.push(format!(
+                "{}: marker {m} disappeared upstream; re-port",
+                line.file
+            ));
         }
     }
     problems

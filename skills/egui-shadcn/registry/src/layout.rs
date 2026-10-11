@@ -37,11 +37,7 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// A row whose `left` content hugs the start and `right` content hugs the end
 /// (justify-content: space-between).
-pub fn space_between(
-    ui: &mut Ui,
-    left: impl FnOnce(&mut Ui),
-    right: impl FnOnce(&mut Ui),
-) {
+pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
         left(ui);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

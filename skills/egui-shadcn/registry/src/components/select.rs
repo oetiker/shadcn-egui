@@ -26,11 +26,16 @@
 //! widest option (`w-fit` would make it jump with the chosen text).
 
 use crate::components::icon::{paint_icon, CHECK, CHEVRON_DOWN};
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring, ring_shape};
+use crate::components::shared::{
+    box_shapes, disabled_painter, interaction_state, ring, ring_shape,
+};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{vec2, Color32, Frame, Key, Margin, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Shape, Stroke, Ui, Widget};
+use egui::{
+    vec2, Color32, Frame, Key, Margin, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Shape,
+    Stroke, Ui, Widget,
+};
 
 /// Trigger height variant: shadcn `size="default" | "sm"`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -54,7 +59,16 @@ pub struct Select<'a> {
 impl<'a> Select<'a> {
     /// `selected` indexes `options`; an index past the end shows the placeholder.
     pub fn new(id: &'a str, selected: &'a mut usize, options: &'a [&'a str]) -> Self {
-        Self { id, selected, options, size: SelectSize::Default, placeholder: String::new(), enabled: true, invalid: false, width: None }
+        Self {
+            id,
+            selected,
+            options,
+            size: SelectSize::Default,
+            placeholder: String::new(),
+            enabled: true,
+            invalid: false,
+            width: None,
+        }
     }
     pub fn size(mut self, size: SelectSize) -> Self {
         self.size = size;
@@ -90,34 +104,63 @@ impl Widget for Select<'_> {
         let enabled = self.enabled && ui.is_enabled();
         let n = self.options.len();
         let has_value = *self.selected < n;
-        let size_state = if self.size == SelectSize::Sm { State::SIZE_SM } else { State::SIZE_DEFAULT };
-        let context = size_state.with(State::INVALID, self.invalid).with(State::PLACEHOLDER, !has_value);
+        let size_state = if self.size == SelectSize::Sm {
+            State::SIZE_SM
+        } else {
+            State::SIZE_DEFAULT
+        };
+        let context = size_state
+            .with(State::INVALID, self.invalid)
+            .with(State::PLACEHOLDER, !has_value);
         // Geometry depends on neither interaction nor the open state.
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&trig, f, g).unwrap_or(0.0);
         let height = get(|r| &r.height);
         let border_w = get(|r| &r.border_width);
-        let (pad_l, pad_r) = (get(|r| &r.pad_left) + border_w, get(|r| &r.pad_right) + border_w);
+        let (pad_l, pad_r) = (
+            get(|r| &r.pad_left) + border_w,
+            get(|r| &r.pad_right) + border_w,
+        );
         let gap = get(|r| &r.gap);
         let icon_side = get(|r| &r.icon_size);
         let weight = pick(&trig, |r| &r.weight, g).unwrap_or(Weight::Normal);
-        let font = egui::FontId::new(t.text_px(pick(&trig, |r| &r.text_size, g).unwrap_or(TextSize::Sm)), family_for(&ctx, weight));
+        let font = egui::FontId::new(
+            t.text_px(pick(&trig, |r| &r.text_size, g).unwrap_or(TextSize::Sm)),
+            family_for(&ctx, weight),
+        );
         let painter = ui.painter().clone();
-        let shown = if has_value { self.options[*self.selected] } else { self.placeholder.as_str() };
+        let shown = if has_value {
+            self.options[*self.selected]
+        } else {
+            self.placeholder.as_str()
+        };
         let galley = painter.layout_no_wrap(shown.to_owned(), font.clone(), Color32::PLACEHOLDER);
         let fit = self
             .options
             .iter()
             .copied()
             .chain(std::iter::once(self.placeholder.as_str()))
-            .map(|o| painter.layout_no_wrap(o.to_owned(), font.clone(), Color32::PLACEHOLDER).size().x)
+            .map(|o| {
+                painter
+                    .layout_no_wrap(o.to_owned(), font.clone(), Color32::PLACEHOLDER)
+                    .size()
+                    .x
+            })
             .fold(0.0, f32::max);
         // base: "flex w-fit items-center justify-between"
         let width = self.width.unwrap_or(fit + gap + icon_side + pad_l + pad_r);
 
         let (_, rect) = ui.allocate_space(vec2(width, height));
-        let sense = if enabled { Sense::click() } else { Sense::hover() };
-        let mut resp = ui.interact(rect, ui.make_persistent_id(("shadcn_select", self.id)), sense);
+        let sense = if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let mut resp = ui.interact(
+            rect,
+            ui.make_persistent_id(("shadcn_select", self.id)),
+            sense,
+        );
         let popup_id = Popup::default_response_id(&resp);
         let hl_id = popup_id.with("highlight");
         let was_open = Popup::is_id_open(&ctx, popup_id);
@@ -132,12 +175,23 @@ impl Widget for Select<'_> {
         let focused = resp.has_focus();
         let keys_to_list = was_open && (focused || ctx.memory(|m| m.focused()).is_none());
         if enabled && (focused || keys_to_list) {
-            ctx.memory_mut(|m| m.set_focus_lock_filter(resp.id, egui::EventFilter { vertical_arrows: true, ..Default::default() }));
+            ctx.memory_mut(|m| {
+                m.set_focus_lock_filter(
+                    resp.id,
+                    egui::EventFilter {
+                        vertical_arrows: true,
+                        ..Default::default()
+                    },
+                )
+            });
         }
         let activation = ui.input(|i| i.key_pressed(Key::Enter) || i.key_pressed(Key::Space));
         let mut toggle = resp.clicked();
         if enabled && keys_to_list && n > 0 {
-            let mut hl = ctx.data(|d| d.get_temp::<usize>(hl_id)).unwrap_or(if has_value { *self.selected } else { 0 }).min(n - 1);
+            let mut hl = ctx
+                .data(|d| d.get_temp::<usize>(hl_id))
+                .unwrap_or(if has_value { *self.selected } else { 0 })
+                .min(n - 1);
             let key = |k: Key| ui.input_mut(|i| i.consume_key(Modifiers::NONE, k));
             if key(Key::ArrowDown) {
                 hl = (hl + 1).min(n - 1);
@@ -165,8 +219,14 @@ impl Widget for Select<'_> {
                     .collect()
             });
             for c in typed {
-                let starts = |o: &&str| o.chars().next().is_some_and(|f| f.to_lowercase().eq(c.to_lowercase()));
-                let after = (1..=n).map(|d| (hl + d) % n).find(|&i| starts(&self.options[i]));
+                let starts = |o: &&str| {
+                    o.chars()
+                        .next()
+                        .is_some_and(|f| f.to_lowercase().eq(c.to_lowercase()))
+                };
+                let after = (1..=n)
+                    .map(|d| (hl + d) % n)
+                    .find(|&i| starts(&self.options[i]));
                 if let Some(i) = after {
                     hl = i;
                     moved = true;
@@ -177,7 +237,15 @@ impl Widget for Select<'_> {
                 toggle = false;
             }
             ctx.data_mut(|d| d.insert_temp(hl_id, hl));
-        } else if enabled && !was_open && focused && n > 0 && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::ArrowDown) | i.consume_key(Modifiers::NONE, Key::ArrowUp)) {
+        } else if enabled
+            && !was_open
+            && focused
+            && n > 0
+            && ui.input_mut(|i| {
+                i.consume_key(Modifiers::NONE, Key::ArrowDown)
+                    | i.consume_key(Modifiers::NONE, Key::ArrowUp)
+            })
+        {
             Popup::open_id(&ctx, popup_id);
         }
         if let Some(i) = chosen {
@@ -198,33 +266,58 @@ impl Widget for Select<'_> {
             // base: "disabled:opacity-50"
             let painter = disabled_painter(ui, self.enabled, 0.5);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
-            let radius = pick(&trig, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
+            let radius =
+                pick(&trig, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
             let mut shapes = Vec::new();
             if let Some(s) = pick(&trig, |r| &r.shadow, st) {
                 shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
             }
             let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
             let clip_padding = pick(&trig, |r| &r.bg_clip_padding, st) == Some(true);
-            shapes.extend(box_shapes(rect, radius, paint(|r| &r.bg), border, clip_padding));
+            shapes.extend(box_shapes(
+                rect,
+                radius,
+                paint(|r| &r.bg),
+                border,
+                clip_padding,
+            ));
             if let Some(c) = paint(|r| &r.ring_color) {
-                shapes.extend(ring_shape(rect, radius, pick(&trig, |r| &r.ring_width, st).unwrap_or(0.0), c));
+                shapes.extend(ring_shape(
+                    rect,
+                    radius,
+                    pick(&trig, |r| &r.ring_width, st).unwrap_or(0.0),
+                    c,
+                ));
             }
             painter.extend(shapes);
 
-            let icon_rect = Rect::from_center_size(egui::pos2(rect.right() - pad_r - icon_side / 2.0, rect.center().y), vec2(icon_side, icon_side));
-            let icon_color = pick(&[&t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
+            let icon_rect = Rect::from_center_size(
+                egui::pos2(rect.right() - pad_r - icon_side / 2.0, rect.center().y),
+                vec2(icon_side, icon_side),
+            );
+            let icon_color =
+                pick(&[&t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
             if let Some(c) = icon_color {
                 paint_icon(&painter, icon_rect, &CHEVRON_DOWN, c, t.metrics.icon_stroke);
             }
             let text_color = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
-            let text_area = Rect::from_min_max(egui::pos2(rect.left() + pad_l, rect.top()), egui::pos2(icon_rect.left() - gap, rect.bottom()));
+            let text_area = Rect::from_min_max(
+                egui::pos2(rect.left() + pad_l, rect.top()),
+                egui::pos2(icon_rect.left() - gap, rect.bottom()),
+            );
             let at = egui::pos2(text_area.left(), rect.center().y - galley.size().y / 2.0);
             // base: "*:data-[slot=select-value]:line-clamp-1"
-            painter.with_clip_rect(text_area).galley(at, galley, text_color);
+            painter
+                .with_clip_rect(text_area)
+                .galley(at, galley, text_color);
         }
         // The shown text is the combobox's value; its name comes from
         // `labelled_by(label.id)`, which an own label would override.
-        resp.widget_info(|| egui::WidgetInfo { enabled, current_text_value: Some(shown.to_owned()), ..egui::WidgetInfo::new(egui::WidgetType::ComboBox) });
+        resp.widget_info(|| egui::WidgetInfo {
+            enabled,
+            current_text_value: Some(shown.to_owned()),
+            ..egui::WidgetInfo::new(egui::WidgetType::ComboBox)
+        });
 
         // The list.
         if open {
@@ -234,24 +327,46 @@ impl Widget for Select<'_> {
             let gs = t.state(State::NONE);
             let ist = t.state(State::FOCUS.with(State::SELECTED, false));
             let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, gs).unwrap_or(0.0);
-            let (gpt, gpr, gpb, gpl) = (px(&group, |r| &r.pad_top), px(&group, |r| &r.pad_right), px(&group, |r| &r.pad_bottom), px(&group, |r| &r.pad_left));
+            let (gpt, gpr, gpb, gpl) = (
+                px(&group, |r| &r.pad_top),
+                px(&group, |r| &r.pad_right),
+                px(&group, |r| &r.pad_bottom),
+                px(&group, |r| &r.pad_left),
+            );
             let radius = pick(&l, |r| &r.radius, gs).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
             let ring_w = px(&l, |r| &r.ring_width);
             let ring_color = pick(&l, |r| &r.ring_color, gs).map(|p| t.paint(p));
-            let shadow = pick(&l, |r| &r.shadow, gs).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
-            let mut frame = Frame::new().corner_radius(radius.round() as u8).shadow(shadow).inner_margin(Margin {
-                top: gpt.round() as i8,
-                right: gpr.round() as i8,
-                bottom: gpb.round() as i8,
-                left: gpl.round() as i8,
-            });
+            let shadow =
+                pick(&l, |r| &r.shadow, gs).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
+            let mut frame = Frame::new()
+                .corner_radius(radius.round() as u8)
+                .shadow(shadow)
+                .inner_margin(Margin {
+                    top: gpt.round() as i8,
+                    right: gpr.round() as i8,
+                    bottom: gpb.round() as i8,
+                    left: gpl.round() as i8,
+                });
             if let Some(fill) = pick(&l, |r| &r.bg, gs).map(|p| t.paint(p)) {
                 frame = frame.fill(fill);
             }
-            let item_font = egui::FontId::new(t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)), family_for(&ctx, pick(&item, |r| &r.weight, ist).unwrap_or(Weight::Normal)));
+            let item_font = egui::FontId::new(
+                t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)),
+                family_for(
+                    &ctx,
+                    pick(&item, |r| &r.weight, ist).unwrap_or(Weight::Normal),
+                ),
+            );
             let item_size = pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm);
-            let line = pick(&item, |r| &r.line_height, ist).map_or_else(|| t.line_px(item_size), |k| k * t.text_px(item_size));
-            let galleys: Vec<_> = self.options.iter().map(|o| painter.layout_no_wrap((*o).to_owned(), item_font.clone(), Color32::PLACEHOLDER)).collect();
+            let line = pick(&item, |r| &r.line_height, ist)
+                .map_or_else(|| t.line_px(item_size), |k| k * t.text_px(item_size));
+            let galleys: Vec<_> = self
+                .options
+                .iter()
+                .map(|o| {
+                    painter.layout_no_wrap((*o).to_owned(), item_font.clone(), Color32::PLACEHOLDER)
+                })
+                .collect();
             let (ipl, ipr) = (px(&item, |r| &r.pad_left), px(&item, |r| &r.pad_right));
             let (ipt, ipb) = (px(&item, |r| &r.pad_top), px(&item, |r| &r.pad_bottom));
             let min_row = px(&item, |r| &r.min_height);
@@ -261,7 +376,10 @@ impl Widget for Select<'_> {
             let min_w = px(&l, |r| &r.min_width).max(rect.width());
             let inner_w = (min_w - gpl - gpr).max(needed);
             let screen = ctx.content_rect();
-            let max_h = (screen.bottom() - rect.bottom()).max(rect.top() - screen.top()) - side_offset - gpt - gpb;
+            let max_h = (screen.bottom() - rect.bottom()).max(rect.top() - screen.top())
+                - side_offset
+                - gpt
+                - gpb;
             let hl = ctx.data(|d| d.get_temp::<usize>(hl_id));
             let hl_missing = hl.is_none();
             let hl = hl.unwrap_or(if has_value { *self.selected } else { 0 });
@@ -278,40 +396,88 @@ impl Widget for Select<'_> {
                 .show(|ui| {
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                    egui::ScrollArea::vertical().max_height(max_h.max(0.0)).auto_shrink([false, true]).show(ui, |ui| {
-                        for (i, galley) in galleys.iter().enumerate() {
-                            let (_, row) = ui.allocate_space(vec2(inner_w, (galley.size().y.max(line) + ipt + ipb).max(min_row)));
-                            let r = ui.interact(row, resp.id.with(("item", i)), Sense::click());
-                            if r.hovered() && pointer_moved {
-                                hover_hl = Some(i);
-                            }
-                            if r.clicked() {
-                                clicked = Some(i);
-                            }
-                            let highlighted = hl == i;
-                            let state = State::NONE.with(State::FOCUS, highlighted).with(State::SELECTED, i == current);
-                            let s = t.state(state);
-                            if highlighted && (moved || hl_missing) {
-                                r.scroll_to_me(None);
-                            }
-                            if ui.is_rect_visible(row) {
-                                let item_radius = pick(&item, |r| &r.radius, s).map_or(0.0, |r| t.radius_px(r, row.height() / 2.0));
-                                let fill = pick(&item, |r| &r.bg, s).map(|p| t.paint(p));
-                                ui.painter().extend(box_shapes(row, item_radius, fill, None, false));
-                                // The row's own text colour serves tick and text alike.
-                                let color = pick(&item, |r| &r.text, s).or(pick(&l, |r| &r.text, s)).map(|p| t.paint(p)).unwrap_or_else(|| t.role(Role::PopoverForeground));
-                                ui.painter().galley(egui::pos2(row.left() + ipl, row.center().y - galley.size().y / 2.0), galley.clone(), color);
-                                if i == current {
-                                    let ind = [&t.style.select_item_indicator];
-                                    let (w, h) = (pick(&ind, |r| &r.width, s).unwrap_or(0.0), pick(&ind, |r| &r.height, s).unwrap_or(0.0));
-                                    let right = pick(&ind, |r| &r.inset_right, s).unwrap_or(0.0);
-                                    let tick = Rect::from_center_size(egui::pos2(row.right() - right - w / 2.0, row.center().y), vec2(w, h));
-                                    paint_icon(ui.painter(), tick, &CHECK, color, t.metrics.icon_stroke);
+                    egui::ScrollArea::vertical()
+                        .max_height(max_h.max(0.0))
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            for (i, galley) in galleys.iter().enumerate() {
+                                let (_, row) = ui.allocate_space(vec2(
+                                    inner_w,
+                                    (galley.size().y.max(line) + ipt + ipb).max(min_row),
+                                ));
+                                let r = ui.interact(row, resp.id.with(("item", i)), Sense::click());
+                                if r.hovered() && pointer_moved {
+                                    hover_hl = Some(i);
                                 }
+                                if r.clicked() {
+                                    clicked = Some(i);
+                                }
+                                let highlighted = hl == i;
+                                let state = State::NONE
+                                    .with(State::FOCUS, highlighted)
+                                    .with(State::SELECTED, i == current);
+                                let s = t.state(state);
+                                if highlighted && (moved || hl_missing) {
+                                    r.scroll_to_me(None);
+                                }
+                                if ui.is_rect_visible(row) {
+                                    let item_radius = pick(&item, |r| &r.radius, s)
+                                        .map_or(0.0, |r| t.radius_px(r, row.height() / 2.0));
+                                    let fill = pick(&item, |r| &r.bg, s).map(|p| t.paint(p));
+                                    ui.painter().extend(box_shapes(
+                                        row,
+                                        item_radius,
+                                        fill,
+                                        None,
+                                        false,
+                                    ));
+                                    // The row's own text colour serves tick and text alike.
+                                    let color = pick(&item, |r| &r.text, s)
+                                        .or(pick(&l, |r| &r.text, s))
+                                        .map(|p| t.paint(p))
+                                        .unwrap_or_else(|| t.role(Role::PopoverForeground));
+                                    ui.painter().galley(
+                                        egui::pos2(
+                                            row.left() + ipl,
+                                            row.center().y - galley.size().y / 2.0,
+                                        ),
+                                        galley.clone(),
+                                        color,
+                                    );
+                                    if i == current {
+                                        let ind = [&t.style.select_item_indicator];
+                                        let (w, h) = (
+                                            pick(&ind, |r| &r.width, s).unwrap_or(0.0),
+                                            pick(&ind, |r| &r.height, s).unwrap_or(0.0),
+                                        );
+                                        let right =
+                                            pick(&ind, |r| &r.inset_right, s).unwrap_or(0.0);
+                                        let tick = Rect::from_center_size(
+                                            egui::pos2(
+                                                row.right() - right - w / 2.0,
+                                                row.center().y,
+                                            ),
+                                            vec2(w, h),
+                                        );
+                                        paint_icon(
+                                            ui.painter(),
+                                            tick,
+                                            &CHECK,
+                                            color,
+                                            t.metrics.icon_stroke,
+                                        );
+                                    }
+                                }
+                                r.widget_info(|| {
+                                    egui::WidgetInfo::selected(
+                                        egui::WidgetType::SelectableLabel,
+                                        true,
+                                        i == current,
+                                        self.options[i],
+                                    )
+                                });
                             }
-                            r.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, i == current, self.options[i]));
-                        }
-                    });
+                        });
                 });
             if let Some(i) = hover_hl.filter(|&i| i != hl) {
                 ctx.data_mut(|d| d.insert_temp(hl_id, i));

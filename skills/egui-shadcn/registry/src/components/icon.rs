@@ -35,7 +35,12 @@ pub struct Icon {
 pub const CLOSE: Icon = Icon {
     name: "close",
     size: 24.0,
-    segs: &[Seg::M(18.0, 6.0), Seg::L(6.0, 18.0), Seg::M(6.0, 6.0), Seg::L(18.0, 18.0)],
+    segs: &[
+        Seg::M(18.0, 6.0),
+        Seg::L(6.0, 18.0),
+        Seg::M(6.0, 6.0),
+        Seg::L(18.0, 18.0),
+    ],
 };
 
 /// The checkbox tick (Lucide `check`, ISC), built in for the same reason as
@@ -130,7 +135,11 @@ pub struct IconView<'a> {
 
 impl<'a> IconView<'a> {
     pub fn new(icon: &'a Icon) -> Self {
-        Self { icon, size: None, color: None }
+        Self {
+            icon,
+            size: None,
+            color: None,
+        }
     }
     pub fn size(mut self, size: f32) -> Self {
         self.size = Some(size);
@@ -147,7 +156,9 @@ impl Widget for IconView<'_> {
         let t = Theme::current(ui.ctx());
         let side = self.size.unwrap_or(t.metrics.icon);
         let (rect, resp) = ui.allocate_exact_size(Vec2::splat(side), Sense::hover());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), self.icon.name));
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Image, ui.is_enabled(), self.icon.name)
+        });
         if ui.is_rect_visible(rect) {
             let color = self.color.unwrap_or(t.palette.foreground);
             paint_icon(ui.painter(), rect, self.icon, color, t.metrics.icon_stroke);

@@ -26,7 +26,11 @@ pub struct Checkbox<'a> {
 
 impl<'a> Checkbox<'a> {
     pub fn new(checked: &'a mut bool) -> Self {
-        Self { checked, enabled: true, invalid: false }
+        Self {
+            checked,
+            enabled: true,
+            invalid: false,
+        }
     }
     /// `false` draws the box disabled: no hover, no focus, no toggling.
     pub fn enabled(mut self, yes: bool) -> Self {
@@ -49,24 +53,39 @@ impl Widget for Checkbox<'_> {
         let g = t.state(State::NONE.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
 
-        let (rect, base) = ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
+        let (rect, base) =
+            ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
         // base: "after:absolute after:-inset-x-3 after:-inset-y-2"
         let hit = rect.expand2(vec2(12.0, 8.0));
-        let sense = if enabled { Sense::click() } else { Sense::hover() };
+        let sense = if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
         let mut resp = ui.interact(hit, base.id.with("hit"), sense);
         if enabled && resp.clicked() {
             *self.checked = !*self.checked;
             resp.mark_changed();
         }
         let checked = *self.checked;
-        let context = (if checked { State::CHECKED } else { State::UNCHECKED }).with(State::INVALID, self.invalid);
+        let context = (if checked {
+            State::CHECKED
+        } else {
+            State::UNCHECKED
+        })
+        .with(State::INVALID, self.invalid);
         let st = interaction_state(&t, &resp, enabled, context);
 
         if ui.is_rect_visible(rect) {
             // The style's `disabled:opacity-50` arrives as the DISABLED state.
-            let painter = disabled_painter(ui, self.enabled, pick(&l, |r| &r.opacity, st).unwrap_or(1.0));
+            let painter = disabled_painter(
+                ui,
+                self.enabled,
+                pick(&l, |r| &r.opacity, st).unwrap_or(1.0),
+            );
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
-            let radius = pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
+            let radius =
+                pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
             let mut shapes = Vec::new();
             if let Some(s) = pick(&l, |r| &r.shadow, st) {
                 shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
@@ -74,9 +93,20 @@ impl Widget for Checkbox<'_> {
             let border_w = pick(&l, |r| &r.border_width, st).unwrap_or(0.0);
             let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
             let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
-            shapes.extend(box_shapes(rect, radius, paint(|r| &r.bg), border, clip_padding));
+            shapes.extend(box_shapes(
+                rect,
+                radius,
+                paint(|r| &r.bg),
+                border,
+                clip_padding,
+            ));
             if let Some(c) = paint(|r| &r.ring_color) {
-                shapes.extend(ring_shape(rect, radius, pick(&l, |r| &r.ring_width, st).unwrap_or(0.0), c));
+                shapes.extend(ring_shape(
+                    rect,
+                    radius,
+                    pick(&l, |r| &r.ring_width, st).unwrap_or(0.0),
+                    c,
+                ));
             }
             painter.extend(shapes);
             if checked {
@@ -90,7 +120,11 @@ impl Widget for Checkbox<'_> {
         }
         // No label of its own: name it with `labelled_by(label.id)`, which
         // an own label, even an empty one, would override.
-        resp.widget_info(|| egui::WidgetInfo { enabled, selected: Some(checked), ..egui::WidgetInfo::new(egui::WidgetType::Checkbox) });
+        resp.widget_info(|| egui::WidgetInfo {
+            enabled,
+            selected: Some(checked),
+            ..egui::WidgetInfo::new(egui::WidgetType::Checkbox)
+        });
         resp.rect = rect;
         resp
     }

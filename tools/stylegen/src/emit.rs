@@ -68,7 +68,10 @@ fn recipe(m: &Marker) -> Option<String> {
     let mut s = String::from("Recipe {\n");
     for (field, mut decls) in by_field {
         let unconditional = |d: &Decl| d.all == 0 && d.none == 0 && d.rank == 0;
-        let base = decls.iter().rfind(|d| unconditional(d)).map(|d| d.value.rust());
+        let base = decls
+            .iter()
+            .rfind(|d| unconditional(d))
+            .map(|d| d.value.rust());
         decls.retain(|d| !unconditional(d));
         decls.sort_by_key(|d| (d.rank, d.idx));
         let name = field.rust_name();
@@ -103,10 +106,17 @@ fn when(d: &Decl) -> String {
 
 /// `(1 << 3) | (1 << 20)`: the variant bits, readable against `variant.rs`.
 fn rank(r: u128) -> String {
-    let bits: Vec<String> = (0..128).filter(|b| r & (1 << b) != 0).map(|b| format!("1 << {b}")).collect();
+    let bits: Vec<String> = (0..128)
+        .filter(|b| r & (1 << b) != 0)
+        .map(|b| format!("1 << {b}"))
+        .collect();
     match bits.len() {
         0 => "0".into(),
         1 => bits[0].clone(),
-        _ => bits.iter().map(|b| format!("({b})")).collect::<Vec<_>>().join(" | "),
+        _ => bits
+            .iter()
+            .map(|b| format!("({b})"))
+            .collect::<Vec<_>>()
+            .join(" | "),
     }
 }

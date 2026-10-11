@@ -34,7 +34,11 @@ fn achromatic_grays_match_zinc() {
 fn destructive_red_is_reddish() {
     let c = oklch_to_srgb(0.577, 0.245, 27.325);
     assert!(c.r() > 200, "expected strong red, got r={}", c.r());
-    assert!(c.g() < 90 && c.b() < 90, "expected low g/b, got {:?}", (c.g(), c.b()));
+    assert!(
+        c.g() < 90 && c.b() < 90,
+        "expected low g/b, got {:?}",
+        (c.g(), c.b())
+    );
 }
 
 #[test]
@@ -45,7 +49,12 @@ fn alpha_is_passed_through() {
 
 #[test]
 fn oklch_round_trip() {
-    for (l, c, h) in [(0.205, 0.0, 0.0), (0.577, 0.245, 27.325), (0.985, 0.0, 0.0), (0.704, 0.191, 22.216)] {
+    for (l, c, h) in [
+        (0.205, 0.0, 0.0),
+        (0.577, 0.245, 27.325),
+        (0.985, 0.0, 0.0),
+        (0.704, 0.191, 22.216),
+    ] {
         let rgb = oklch_to_srgb(l, c, h);
         let (l2, c2, h2) = srgb_to_oklch(rgb);
         assert!((l - l2).abs() < 0.01, "L {l} -> {l2}");

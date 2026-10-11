@@ -21,7 +21,15 @@ pub struct Input<'a> {
 
 impl<'a> Input<'a> {
     pub fn new(text: &'a mut String) -> Self {
-        Self { text, hint: String::new(), password: false, max_width: f32::NAN, id_source: None, enabled: true, invalid: false }
+        Self {
+            text,
+            hint: String::new(),
+            password: false,
+            max_width: f32::NAN,
+            id_source: None,
+            enabled: true,
+            invalid: false,
+        }
     }
     pub fn hint(mut self, h: impl Into<String>) -> Self {
         self.hint = h.into();
@@ -69,9 +77,20 @@ impl<'a> Widget for Input<'a> {
         let height = get(|r| &r.height);
         let border_w = get(|r| &r.border_width);
         let inset = |pad: f32| (pad + border_w).round() as i8;
-        let margin = Margin { left: inset(get(|r| &r.pad_left)), right: inset(get(|r| &r.pad_right)), top: inset(get(|r| &r.pad_top)), bottom: inset(get(|r| &r.pad_bottom)) };
+        let margin = Margin {
+            left: inset(get(|r| &r.pad_left)),
+            right: inset(get(|r| &r.pad_right)),
+            top: inset(get(|r| &r.pad_top)),
+            bottom: inset(get(|r| &r.pad_bottom)),
+        };
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
-        let font = egui::FontId::new(text_px, family_for(ui.ctx(), pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal)));
+        let font = egui::FontId::new(
+            text_px,
+            family_for(
+                ui.ctx(),
+                pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal),
+            ),
+        );
 
         // base: "disabled:opacity-50"
         let disabled_opacity = 0.5;
@@ -86,7 +105,11 @@ impl<'a> Widget for Input<'a> {
         if let Some(id_source) = self.id_source {
             edit = edit.id_salt(id_source);
         }
-        let max_width = if self.max_width.is_nan() { t.metrics.field_max_width } else { self.max_width };
+        let max_width = if self.max_width.is_nan() {
+            t.metrics.field_max_width
+        } else {
+            self.max_width
+        };
         // The box goes under the text: reserve its place in paint order, fill
         // it once the focus state is known.
         let slot = ui.painter().add(Shape::Noop);
@@ -104,16 +127,28 @@ impl<'a> Widget for Input<'a> {
 
         let st = interaction_state(&t, &resp, enabled, context);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
-        let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, resp.rect.height() / 2.0));
+        let radius =
+            pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, resp.rect.height() / 2.0));
         let mut shapes = Vec::new();
         if let Some(s) = pick(&l, |r| &r.shadow, st) {
             shapes.push(Shape::from(t.shadow(s).as_shape(resp.rect, radius)));
         }
         let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
         let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
-        shapes.extend(box_shapes(resp.rect, radius, paint(|r| &r.bg), border, clip_padding));
+        shapes.extend(box_shapes(
+            resp.rect,
+            radius,
+            paint(|r| &r.bg),
+            border,
+            clip_padding,
+        ));
         if let Some(c) = paint(|r| &r.ring_color) {
-            shapes.extend(ring_shape(resp.rect, radius, pick(&l, |r| &r.ring_width, st).unwrap_or(0.0), c));
+            shapes.extend(ring_shape(
+                resp.rect,
+                radius,
+                pick(&l, |r| &r.ring_width, st).unwrap_or(0.0),
+                c,
+            ));
         }
         disabled_painter(ui, self.enabled, disabled_opacity).set(slot, Shape::Vec(shapes));
         resp

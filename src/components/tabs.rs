@@ -88,14 +88,27 @@ impl Widget for Tabs<'_> {
         // Geometry depends neither on the selection nor on interaction.
         let g = t.state(State::HORIZONTAL.or(variant_bit));
         let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
-        let (pad_t, pad_r, pad_b, pad_l) = (geo(&list, |r| &r.pad_top), geo(&list, |r| &r.pad_right), geo(&list, |r| &r.pad_bottom), geo(&list, |r| &r.pad_left));
+        let (pad_t, pad_r, pad_b, pad_l) = (
+            geo(&list, |r| &r.pad_top),
+            geo(&list, |r| &r.pad_right),
+            geo(&list, |r| &r.pad_bottom),
+            geo(&list, |r| &r.pad_left),
+        );
         let list_h = geo(&list, |r| &r.height);
         // base: "h-[calc(100%-1px)]"
         let trigger_h = list_h - pad_t - pad_b - 1.0;
-        let (tpad_l, tpad_r, border_w) = (geo(&trigger, |r| &r.pad_left), geo(&trigger, |r| &r.pad_right), geo(&trigger, |r| &r.border_width));
+        let (tpad_l, tpad_r, border_w) = (
+            geo(&trigger, |r| &r.pad_left),
+            geo(&trigger, |r| &r.pad_right),
+            geo(&trigger, |r| &r.border_width),
+        );
         // base: "gap-1 bg-transparent"
         let line_gap = 4.0;
-        let gap = if self.variant == TabsVariant::Line { line_gap } else { 0.0 };
+        let gap = if self.variant == TabsVariant::Line {
+            line_gap
+        } else {
+            0.0
+        };
         let text_px = t.text_px(pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         let weight = pick(&trigger, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
@@ -107,7 +120,10 @@ impl Widget for Tabs<'_> {
             .iter()
             .map(|l| painter.layout_no_wrap(l.clone(), font.clone(), Color32::PLACEHOLDER))
             .collect();
-        let widths: Vec<f32> = galleys.iter().map(|g| g.size().x + tpad_l + tpad_r + border_w * 2.0).collect();
+        let widths: Vec<f32> = galleys
+            .iter()
+            .map(|g| g.size().x + tpad_l + tpad_r + border_w * 2.0)
+            .collect();
         let n = widths.len();
         // base: "inline-flex w-fit items-center justify-center"
         let list_w = widths.iter().sum::<f32>() + gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
@@ -118,13 +134,24 @@ impl Widget for Tabs<'_> {
         let trigger_rects: Vec<Rect> = widths
             .iter()
             .map(|w| {
-                let r = Rect::from_min_size(pos2(x, list_rect.center().y - trigger_h / 2.0), vec2(*w, trigger_h));
+                let r = Rect::from_min_size(
+                    pos2(x, list_rect.center().y - trigger_h / 2.0),
+                    vec2(*w, trigger_h),
+                );
                 x += w + gap;
                 r
             })
             .collect();
-        let sense = if enabled { Sense::click() } else { Sense::hover() };
-        let resps: Vec<Response> = trigger_rects.iter().zip(&ids).map(|(r, id)| ui.interact(*r, *id, sense)).collect();
+        let sense = if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let resps: Vec<Response> = trigger_rects
+            .iter()
+            .zip(&ids)
+            .map(|(r, id)| ui.interact(*r, *id, sense))
+            .collect();
 
         // Selection: a click, or the arrow/Home/End keys on a focused trigger.
         // Only a key moves the focus along: focus is what shows the ring,
@@ -139,7 +166,13 @@ impl Widget for Tabs<'_> {
                 if r.has_focus() {
                     // Keep egui from using the arrows to move focus on its own.
                     ui.memory_mut(|m| {
-                        m.set_focus_lock_filter(r.id, egui::EventFilter { horizontal_arrows: true, ..Default::default() })
+                        m.set_focus_lock_filter(
+                            r.id,
+                            egui::EventFilter {
+                                horizontal_arrows: true,
+                                ..Default::default()
+                            },
+                        )
                     });
                     let pressed = |key| ui.input_mut(|inp| inp.consume_key(Modifiers::NONE, key));
                     let key_next = if pressed(Key::ArrowRight) {
@@ -176,21 +209,32 @@ impl Widget for Tabs<'_> {
         // base: "group-data-horizontal/tabs:after:h-0.5"
         let thickness = 2.0;
         for (i, r) in resps.iter().enumerate() {
-            r.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, enabled, i == active, &self.labels[i]));
+            r.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::SelectableLabel,
+                    enabled,
+                    i == active,
+                    &self.labels[i],
+                )
+            });
         }
         if ui.is_rect_visible(list_rect.expand(below)) {
             // base: "disabled:pointer-events-none disabled:opacity-50"
             let painter = disabled_painter(ui, self.enabled, 0.5);
 
             // The list: a muted track in the default variant, nothing in line.
-            let list_radius = pick(&list, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
+            let list_radius = pick(&list, |r| &r.radius, g)
+                .map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
             let track = (self.variant == TabsVariant::Default).then(|| t.role(Role::Muted));
             // The fade is the triggers' (`disabled:opacity-50`), not the list's.
-            ui.painter().extend(box_shapes(list_rect, list_radius, track, None, false));
+            ui.painter()
+                .extend(box_shapes(list_rect, list_radius, track, None, false));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
                 let is_active = i == active;
-                let context = State::HORIZONTAL.or(variant_bit).with(State::SELECTED, is_active);
+                let context = State::HORIZONTAL
+                    .or(variant_bit)
+                    .with(State::SELECTED, is_active);
                 let st = interaction_state(&t, r, enabled, context);
                 let dark = st.contains(State::DARK);
                 let hover = st.contains(State::HOVER);
@@ -221,16 +265,25 @@ impl Widget for Tabs<'_> {
                 // base: "dark:group-data-[variant=line]/tabs-list:data-active:border-transparent"
                 // base: "dark:data-active:border-input"
                 let border_role = if is_active && dark {
-                    if line { Role::Transparent } else { Role::Input }
+                    if line {
+                        Role::Transparent
+                    } else {
+                        Role::Input
+                    }
                 } else if focus {
                     Role::Ring
                 } else {
                     Role::Transparent
                 };
                 let border = pick(&trigger, |r| &r.border_color, st).map(|p| t.paint(p));
-                let border = if border_role == Role::Transparent { border } else { Some(role(border_role, 1.0)) };
+                let border = if border_role == Role::Transparent {
+                    border
+                } else {
+                    Some(role(border_role, 1.0))
+                };
 
-                let radius = pick(&trigger, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
+                let radius = pick(&trigger, |r| &r.radius, st)
+                    .map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
                 if let Some(level) = pick(&trigger, |r| &r.shadow, st) {
                     painter.add(t.shadow(level).as_shape(*rect, radius));
                 }
@@ -246,7 +299,10 @@ impl Widget for Tabs<'_> {
                 }
                 if line && is_active {
                     let inner = rect.shrink(border_w);
-                    let bar = Rect::from_min_max(pos2(inner.left(), inner.bottom() + below - thickness), pos2(inner.right(), inner.bottom() + below));
+                    let bar = Rect::from_min_max(
+                        pos2(inner.left(), inner.bottom() + below - thickness),
+                        pos2(inner.right(), inner.bottom() + below),
+                    );
                     shapes.push(Shape::rect_filled(bar, 0.0, role(Role::Foreground, 1.0)));
                 }
                 painter.extend(shapes);

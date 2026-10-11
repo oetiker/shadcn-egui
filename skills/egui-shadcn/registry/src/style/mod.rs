@@ -73,7 +73,10 @@ mod tests {
         assert_eq!(v.button_size_default.height.get(State::NONE), Some(36.0));
         assert_eq!(n.button_size_default.height.get(State::NONE), Some(32.0));
         assert_eq!(n.button_size_default.pad_left.get(State::NONE), Some(10.0));
-        assert_eq!(n.button_size_default.pad_left.get(State::ICON_START), Some(8.0));
+        assert_eq!(
+            n.button_size_default.pad_left.get(State::ICON_START),
+            Some(8.0)
+        );
         assert_eq!(n.card_content.pad_left.get(State::SIZE_SM), Some(12.0));
         assert_eq!(Style::default(), Style::vega());
     }
@@ -95,7 +98,11 @@ mod tests {
         for (name, make, height) in MAKERS {
             let s = make();
             assert_eq!(s.name, name);
-            assert_eq!(s.button_size_default.height.get(State::NONE), Some(height), "{name}");
+            assert_eq!(
+                s.button_size_default.height.get(State::NONE),
+                Some(height),
+                "{name}"
+            );
         }
     }
 

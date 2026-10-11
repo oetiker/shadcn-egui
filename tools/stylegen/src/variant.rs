@@ -26,7 +26,10 @@ use crate::class::Class;
 use crate::model::flag;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Pseudo { After, Svg }
+pub enum Pseudo {
+    After,
+    Svg,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum V {
@@ -98,7 +101,10 @@ pub const TRANSLATED: &[(&str, Meaning)] = &[
     ("group-data-horizontal/tabs", Is("HORIZONTAL")),
     ("data-[variant=line]", Is("VARIANT_LINE")),
     ("group-data-[variant=line]/tabs-list", Is("VARIANT_LINE")),
-    ("group-data-[variant=default]/tabs-list", Is("VARIANT_DEFAULT")),
+    (
+        "group-data-[variant=default]/tabs-list",
+        Is("VARIANT_DEFAULT"),
+    ),
     ("has-data-[slot=card-footer]", Is("HAS_FOOTER")),
     // The crate has no destructive select item.
     ("not-data-[variant=destructive]", Always),
@@ -156,15 +162,35 @@ pub const IGNORED: &[(&str, &str)] = &[
 /// shadcn's `@custom-variant dark` replaces `dark` in place (`Variants.set`
 /// keeps an existing variant's order).
 const ROOTS: &[(&str, u32)] = &[
-    ("*", 375), ("**", 376), ("not", 494), ("group", 569), ("peer", 621),
-    ("file", 684), ("placeholder", 685), ("before", 699), ("after", 713),
-    ("first", 729), ("last", 730), ("focus-within", 763), ("hover", 764),
-    ("focus", 767), ("focus-visible", 768), ("active", 769), ("enabled", 770),
-    ("disabled", 771), ("in", 775), ("has", 810), ("aria", 845), ("data", 873),
+    ("*", 375),
+    ("**", 376),
+    ("not", 494),
+    ("group", 569),
+    ("peer", 621),
+    ("file", 684),
+    ("placeholder", 685),
+    ("before", 699),
+    ("after", 713),
+    ("first", 729),
+    ("last", 730),
+    ("focus-within", 763),
+    ("hover", 764),
+    ("focus", 767),
+    ("focus-visible", 768),
+    ("active", 769),
+    ("enabled", 770),
+    ("disabled", 771),
+    ("in", 775),
+    ("has", 810),
+    ("aria", 845),
+    ("data", 873),
     ("supports", 919),
     // One group (variants.ts:1046-1075), ordered by breakpoint width.
-    ("sm", BREAKPOINT_GROUP), ("md", BREAKPOINT_GROUP), ("lg", BREAKPOINT_GROUP),
-    ("xl", BREAKPOINT_GROUP), ("2xl", BREAKPOINT_GROUP),
+    ("sm", BREAKPOINT_GROUP),
+    ("md", BREAKPOINT_GROUP),
+    ("lg", BREAKPOINT_GROUP),
+    ("xl", BREAKPOINT_GROUP),
+    ("2xl", BREAKPOINT_GROUP),
     ("dark", 1199),
 ];
 
@@ -182,8 +208,16 @@ const FUNCTIONAL: &[&str] = &["aria", "data", "supports"];
 enum Tw<'a> {
     Arbitrary(String),
     Static(&'a str),
-    Functional { root: &'a str, value: &'a str, arbitrary: bool },
-    Compound { root: &'a str, inner: Box<Tw<'a>>, modifier: Option<&'a str> },
+    Functional {
+        root: &'a str,
+        value: &'a str,
+        arbitrary: bool,
+    },
+    Compound {
+        root: &'a str,
+        inner: Box<Tw<'a>>,
+        modifier: Option<&'a str>,
+    },
 }
 
 /// Split at the top-level `/` (`segment(variant, '/')`).
@@ -206,36 +240,62 @@ fn parse(v: &str) -> Option<Tw<'_>> {
         // `&` is wrapped in `&:is(…)` unless it is relative.
         let sel = inner.replace('_', " ");
         let relative = sel.starts_with(['>', '+', '~']);
-        let sel = if !relative && !sel.starts_with('@') && !sel.contains('&') { format!("&:is({sel})") } else { sel };
+        let sel = if !relative && !sel.starts_with('@') && !sel.contains('&') {
+            format!("&:is({sel})")
+        } else {
+            sel
+        };
         return Some(Tw::Arbitrary(sel));
     }
     let (body, modifier) = split_modifier(v);
-    let is_static = ROOTS.iter().any(|(r, _)| *r == body) && !COMPOUND.contains(&body) && !FUNCTIONAL.contains(&body);
+    let is_static = ROOTS.iter().any(|(r, _)| *r == body)
+        && !COMPOUND.contains(&body)
+        && !FUNCTIONAL.contains(&body);
     if is_static {
         return modifier.is_none().then_some(Tw::Static(body));
     }
     let (root, value) = body.split_once('-')?;
     if COMPOUND.contains(&root) {
-        return Some(Tw::Compound { root, inner: Box::new(parse(value)?), modifier });
+        return Some(Tw::Compound {
+            root,
+            inner: Box::new(parse(value)?),
+            modifier,
+        });
     }
     if FUNCTIONAL.contains(&root) && modifier.is_none() {
-        return Some(match value.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
-            Some(a) => Tw::Functional { root, value: a, arbitrary: true },
-            None => Tw::Functional { root, value, arbitrary: false },
-        });
+        return Some(
+            match value.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+                Some(a) => Tw::Functional {
+                    root,
+                    value: a,
+                    arbitrary: true,
+                },
+                None => Tw::Functional {
+                    root,
+                    value,
+                    arbitrary: false,
+                },
+            },
+        );
     }
     None
 }
 
 fn root_order(root: &str) -> u32 {
-    ROOTS.iter().find(|(r, _)| *r == root).map(|(_, o)| *o).expect("root in ROOTS")
+    ROOTS
+        .iter()
+        .find(|(r, _)| *r == root)
+        .map(|(_, o)| *o)
+        .expect("root in ROOTS")
 }
 
 fn root_of<'a>(t: &Tw<'a>) -> &'a str {
     match t {
         Tw::Static(r) => r,
         Tw::Functional { root, .. } | Tw::Compound { root, .. } => root,
-        Tw::Arbitrary(_) => unreachable!("arbitrary variants are ordered before roots are compared"),
+        Tw::Arbitrary(_) => {
+            unreachable!("arbitrary variants are ordered before roots are compared")
+        }
     }
 }
 
@@ -253,7 +313,18 @@ fn compare(a: &Tw, z: &Tw) -> Ordering {
         return by_root;
     }
     match (a, z) {
-        (Tw::Compound { inner: ia, modifier: ma, .. }, Tw::Compound { inner: iz, modifier: mz, .. }) => {
+        (
+            Tw::Compound {
+                inner: ia,
+                modifier: ma,
+                ..
+            },
+            Tw::Compound {
+                inner: iz,
+                modifier: mz,
+                ..
+            },
+        ) => {
             // `None < Some`, and two modifiers compare as strings.
             compare(ia, iz).then_with(|| ma.cmp(mz))
         }
@@ -262,7 +333,18 @@ fn compare(a: &Tw, z: &Tw) -> Ordering {
             width(ra).cmp(&width(rz))
         }
         _ if ra != rz => ra.cmp(rz),
-        (Tw::Functional { value: va, arbitrary: xa, .. }, Tw::Functional { value: vz, arbitrary: xz, .. }) => {
+        (
+            Tw::Functional {
+                value: va,
+                arbitrary: xa,
+                ..
+            },
+            Tw::Functional {
+                value: vz,
+                arbitrary: xz,
+                ..
+            },
+        ) => {
             // Named values before arbitrary ones, then by value.
             xa.cmp(xz).then_with(|| va.cmp(vz))
         }
@@ -288,7 +370,9 @@ pub const R_IMPORTANT: u32 = MAX_RANKS - 1;
 fn ranked() -> &'static [(&'static str, u32)] {
     static RANKED: OnceLock<Vec<(&'static str, u32)>> = OnceLock::new();
     RANKED.get_or_init(|| {
-        let cmp = |a: &str, z: &str| tw_cmp(a, z).unwrap_or_else(|| panic!("unparseable variant `{a}` or `{z}`"));
+        let cmp = |a: &str, z: &str| {
+            tw_cmp(a, z).unwrap_or_else(|| panic!("unparseable variant `{a}` or `{z}`"))
+        };
         let mut names: Vec<&'static str> = TRANSLATED.iter().map(|(n, _)| *n).collect();
         names.sort_by(|a, z| cmp(a, z));
         let mut out: Vec<(&'static str, u32)> = Vec::with_capacity(names.len());
@@ -302,7 +386,10 @@ fn ranked() -> &'static [(&'static str, u32)] {
         }
         // Fail loudly rather than wrap a bit out of the rank mask or onto
         // the important bit.
-        assert!(out.last().is_none_or(|(_, r)| *r < R_IMPORTANT), "more than {R_IMPORTANT} variant ranks");
+        assert!(
+            out.last().is_none_or(|(_, r)| *r < R_IMPORTANT),
+            "more than {R_IMPORTANT} variant ranks"
+        );
         out
     })
 }
@@ -316,8 +403,16 @@ pub fn variant(v: &str) -> V {
     if let Some((_, m)) = TRANSLATED.iter().find(|(n, _)| *n == v) {
         let rank = rank_of(v).expect("translated variant has a rank");
         return match *m {
-            Is(f) => V::Cond { all: flag(f), none: 0, rank },
-            IsNot(f) => V::Cond { all: 0, none: flag(f), rank },
+            Is(f) => V::Cond {
+                all: flag(f),
+                none: 0,
+                rank,
+            },
+            IsNot(f) => V::Cond {
+                all: 0,
+                none: flag(f),
+                rank,
+            },
             Always => V::Always { rank },
             Target(p) => V::Pseudo(p, rank),
         };
@@ -350,7 +445,12 @@ pub enum Skip {
 /// Combine a class's variants. The first variant that is ignored or
 /// unsupported decides for the whole class.
 pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
-    let mut out = Variants { all: 0, none: 0, rank: 0, pseudo: None };
+    let mut out = Variants {
+        all: 0,
+        none: 0,
+        rank: 0,
+        pseudo: None,
+    };
     if c.important {
         out.rank |= 1 << R_IMPORTANT;
     }

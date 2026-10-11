@@ -129,10 +129,21 @@ impl Button {
     /// caller error (debug builds panic); release builds fall back to a
     /// button as wide as its text.
     fn icon_only(&self) -> Option<&'static Icon> {
-        let square = matches!(self.size, ButtonSize::Icon | ButtonSize::IconXs | ButtonSize::IconSm | ButtonSize::IconLg);
+        let square = matches!(
+            self.size,
+            ButtonSize::Icon | ButtonSize::IconXs | ButtonSize::IconSm | ButtonSize::IconLg
+        );
         let icon = self.icon.or(self.icon_end);
-        debug_assert!(!square || icon.is_some(), "Button {:?}: an icon size needs .icon(..)", self.text);
-        if square { icon } else { None }
+        debug_assert!(
+            !square || icon.is_some(),
+            "Button {:?}: an icon size needs .icon(..)",
+            self.text
+        );
+        if square {
+            icon
+        } else {
+            None
+        }
     }
 }
 
@@ -151,7 +162,12 @@ impl Widget for Button {
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let height = get(|r| &r.height);
-        let (pad_l, pad_r, gap, border_w) = (get(|r| &r.pad_left), get(|r| &r.pad_right), get(|r| &r.gap), get(|r| &r.border_width));
+        let (pad_l, pad_r, gap, border_w) = (
+            get(|r| &r.pad_left),
+            get(|r| &r.pad_right),
+            get(|r| &r.gap),
+            get(|r| &r.border_width),
+        );
         let icon_px = pick(&l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         let weight = pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal);
@@ -161,7 +177,11 @@ impl Widget for Button {
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
         let layout = |underline: Stroke| {
-            let mut job = egui::text::LayoutJob::simple_singleline(self.text.clone(), font.clone(), Color32::PLACEHOLDER);
+            let mut job = egui::text::LayoutJob::simple_singleline(
+                self.text.clone(),
+                font.clone(),
+                Color32::PLACEHOLDER,
+            );
             job.sections[0].format.underline = underline;
             painter.layout_job(job)
         };
@@ -178,9 +198,15 @@ impl Widget for Button {
         } else {
             content_w + pad_l + pad_r + border_w * 2.0
         };
-        let sense = if enabled { Sense::click() } else { Sense::hover() };
+        let sense = if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
         let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), sense);
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text));
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
+        });
         if !ui.is_rect_visible(rect) {
             return resp;
         }
@@ -192,14 +218,26 @@ impl Widget for Button {
         let border = paint(|r| &r.border_color);
         let ring_color = paint(|r| &r.ring_color);
         let ring_w = pick(&l, |r| &r.ring_width, st).unwrap_or(0.0);
-        let rect = shift(rect, pick(&l, |r| &r.shift_x, st), pick(&l, |r| &r.shift_y, st));
-        let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
+        let rect = shift(
+            rect,
+            pick(&l, |r| &r.shift_x, st),
+            pick(&l, |r| &r.shift_y, st),
+        );
+        let radius =
+            pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
 
         if let Some(s) = pick(&l, |r| &r.shadow, st) {
             painter.add(t.shadow(s).as_shape(rect, radius));
         }
         let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
-        paint_box(&painter, rect, radius, bg, border.map(|b| Stroke::new(border_w, b)), clip_padding);
+        paint_box(
+            &painter,
+            rect,
+            radius,
+            bg,
+            border.map(|b| Stroke::new(border_w, b)),
+            clip_padding,
+        );
         if let Some(c) = ring_color {
             ring(&painter, rect, radius, ring_w, c);
         }
@@ -207,7 +245,10 @@ impl Widget for Button {
         // Content is centred; unequal icon-side padding shifts it.
         let mut x = rect.center().x - content_w / 2.0 + (pad_l - pad_r) / 2.0;
         let draw_icon = |icon: &Icon, x: f32| {
-            let r = egui::Rect::from_min_size(egui::pos2(x, rect.center().y - icon_px / 2.0), Vec2::splat(icon_px));
+            let r = egui::Rect::from_min_size(
+                egui::pos2(x, rect.center().y - icon_px / 2.0),
+                Vec2::splat(icon_px),
+            );
             paint_icon(&painter, r, icon, fg, t.metrics.icon_stroke);
         };
         if let Some(icon) = icon_only {
@@ -218,9 +259,17 @@ impl Widget for Button {
             draw_icon(icon, x);
             x += icon_px + gap;
         }
-        let galley = if pick(&l, |r| &r.underline, st) == Some(true) { layout(Stroke::new(1.0, fg)) } else { galley };
+        let galley = if pick(&l, |r| &r.underline, st) == Some(true) {
+            layout(Stroke::new(1.0, fg))
+        } else {
+            galley
+        };
         let text_w = galley.size().x;
-        painter.galley(egui::pos2(x, rect.center().y - galley.size().y / 2.0), galley, fg);
+        painter.galley(
+            egui::pos2(x, rect.center().y - galley.size().y / 2.0),
+            galley,
+            fg,
+        );
         if let Some(icon) = self.icon_end {
             draw_icon(icon, x + text_w + gap);
         }
@@ -249,8 +298,14 @@ mod tests {
     fn outline_hover_in_dark_uses_input_tint() {
         let s = Style::nova();
         let l = layers(&s, ButtonVariant::Outline, ButtonSize::Default);
-        assert_eq!(pick(&l, |r| &r.bg, State::DARK | State::HOVER), Some(Paint::Role(Role::Input, 0.5)));
-        assert_eq!(pick(&l, |r| &r.bg, State::HOVER), Some(Paint::Role(Role::Muted, 1.0)));
+        assert_eq!(
+            pick(&l, |r| &r.bg, State::DARK | State::HOVER),
+            Some(Paint::Role(Role::Input, 0.5))
+        );
+        assert_eq!(
+            pick(&l, |r| &r.bg, State::HOVER),
+            Some(Paint::Role(Role::Muted, 1.0))
+        );
     }
 
     #[test]

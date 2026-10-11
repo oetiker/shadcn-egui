@@ -8,10 +8,22 @@ use egui_shadcn::{Palette, Theme};
 
 pub fn themes() -> Vec<(&'static str, Theme)> {
     vec![
-        ("vega_dark", Theme::new(Style::vega(), Palette::dark(), 10.0)),
-        ("vega_light", Theme::new(Style::vega(), Palette::light(), 10.0)),
-        ("nova_dark", Theme::new(Style::nova(), Palette::dark(), 10.0)),
-        ("nova_light", Theme::new(Style::nova(), Palette::light(), 10.0)),
+        (
+            "vega_dark",
+            Theme::new(Style::vega(), Palette::dark(), 10.0),
+        ),
+        (
+            "vega_light",
+            Theme::new(Style::vega(), Palette::light(), 10.0),
+        ),
+        (
+            "nova_dark",
+            Theme::new(Style::nova(), Palette::dark(), 10.0),
+        ),
+        (
+            "nova_light",
+            Theme::new(Style::nova(), Palette::light(), 10.0),
+        ),
     ]
 }
 
@@ -37,7 +49,9 @@ pub fn snapshot_all_with(
             // kittest wraps the ui in an 8px outer margin; paint the page
             // colour under all of it, so no band of another colour shows.
             let page = ui.ctx().viewport_rect();
-            ui.ctx().layer_painter(egui::LayerId::background()).rect_filled(page, 0.0, bg);
+            ui.ctx()
+                .layer_painter(egui::LayerId::background())
+                .rect_filled(page, 0.0, bg);
             egui::Frame::new().fill(bg).inner_margin(16).show(ui, |ui| {
                 ui.set_min_size(ui.available_size());
                 ui_fn(ui);
@@ -54,7 +68,10 @@ pub fn snapshot_all_with(
 /// the frame that painted it. Runs two frames: the fonts `Theme::apply`
 /// installs reach the atlas only on the second, and focus requested in the
 /// first frame shows in the second.
-pub fn measure_output(theme: &Theme, mut add: impl FnMut(&mut egui::Ui) -> egui::Response) -> (egui::Rect, egui::FullOutput) {
+pub fn measure_output(
+    theme: &Theme,
+    mut add: impl FnMut(&mut egui::Ui) -> egui::Response,
+) -> (egui::Rect, egui::FullOutput) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     let mut rect = egui::Rect::NOTHING;

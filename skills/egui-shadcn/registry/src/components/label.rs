@@ -21,7 +21,10 @@ pub struct Label {
 
 impl Label {
     pub fn new(text: impl Into<String>) -> Self {
-        Self { text: text.into(), enabled: true }
+        Self {
+            text: text.into(),
+            enabled: true,
+        }
     }
     /// `false` draws the label as the label of a disabled peer control.
     pub fn enabled(mut self, enabled: bool) -> Self {
@@ -52,8 +55,11 @@ impl Widget for Label {
         // `leading-none`: the line box is `line_height` times the font size;
         // without one, Tailwind's line height of the text size.
         let height = get(|r| &r.line_height).map_or_else(|| t.line_px(size), |k| k * text_px);
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x, height), Sense::hover());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text));
+        let (rect, resp) =
+            ui.allocate_exact_size(Vec2::new(galley.size().x, height), Sense::hover());
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
+        });
         if ui.is_rect_visible(rect) {
             let pos = egui::pos2(rect.min.x, rect.center().y - galley.size().y / 2.0);
             painter.galley(pos, galley, fg);
@@ -71,8 +77,14 @@ pub fn description(ui: &mut Ui, text: &str) -> Response {
     let px = t.text_px(size);
     // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
     let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
-    let color = pick(&l, |r| &r.text, st).map_or_else(|| t.role(Role::MutedForeground), |p| t.paint(p));
-    ui.label(RichText::new(text).size(px).line_height(Some(line)).color(color))
+    let color =
+        pick(&l, |r| &r.text, st).map_or_else(|| t.role(Role::MutedForeground), |p| t.paint(p));
+    ui.label(
+        RichText::new(text)
+            .size(px)
+            .line_height(Some(line))
+            .color(color),
+    )
 }
 
 #[cfg(test)]
