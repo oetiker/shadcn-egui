@@ -17,6 +17,7 @@ egui_extras.workspace = true
 log.workspace = true
 shadcn-egui-core.workspace = true
 shadcn-egui-font-inter.workspace = true
+shadcn-egui-icons-lucide.workspace = true
 shadcn-egui-font-oxanium = { workspace = true, optional = true }
 
 [features]

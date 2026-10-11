@@ -10,7 +10,6 @@ mod code;
 #[rustfmt::skip]
 mod generated;
 
-use crate::components::icon::LUCIDE_SLOTS;
 use crate::style::Style;
 use crate::theme::{MenuColors, Palette, Theme};
 
@@ -144,7 +143,7 @@ impl Preset {
         };
         let slots = crate::icons::slots(self.icons).unwrap_or_else(|| {
             log::warn!("{}", crate::icons::fallback_warning(self.icons));
-            LUCIDE_SLOTS
+            crate::icons::lucide::SLOTS
         });
         let inverted = matches!(
             self.menu_color,

@@ -54,7 +54,7 @@ fn button_override_from_theme_setup() {
 #[test]
 fn button_snapshot() {
     use shadcn_egui::components::button::{Button, ButtonSize, ButtonVariant};
-    use shadcn_egui::components::icon::CLOSE;
+    use shadcn_egui::icons::lucide::X as CLOSE;
     use shadcn_egui::layout;
     common::snapshot_all("button", egui::vec2(720.0, 200.0), |ui| {
         layout::vstack(ui, 12.0, |ui| {

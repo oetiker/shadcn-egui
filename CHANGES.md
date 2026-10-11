@@ -174,6 +174,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - The new-york look; there is no compatibility style.
 - `components::shared::mix_toward`, `hover_fill` and `focus_ring`: the
   components take hover and focus colours from the style.
+- `components::icon::{CHECK, CHEVRON_DOWN, CLOSE, LUCIDE_SLOTS}`: use
+  `icons::lucide::{CHECK, CHEVRON_DOWN, X, SLOTS}`, which also gives you every
+  other Lucide icon (2141 in all).
 
 ### Fixed
 - Faded and disabled icons are evenly transparent: line ends, crossings and

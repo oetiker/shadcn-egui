@@ -218,7 +218,7 @@ impl Theme {
             metrics: Metrics::default(),
             dark,
             fonts: ThemeFonts::inherit(&shadcn_egui_font_inter::FONT),
-            icons: crate::components::icon::LUCIDE_SLOTS,
+            icons: crate::icons::lucide::SLOTS,
             menu: MenuColors::default(),
         }
     }

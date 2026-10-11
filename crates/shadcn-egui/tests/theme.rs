@@ -159,7 +159,7 @@ fn consumer_set_dark_is_honoured() {
     assert!(t.state(State::HOVER).contains(State::DARK));
 }
 
-use shadcn_egui::components::icon::{CHECK, CHEVRON_DOWN, CLOSE, LUCIDE_SLOTS};
+use shadcn_egui::icons::lucide::{CHECK, CHEVRON_DOWN, SLOTS as LUCIDE_SLOTS, X as CLOSE};
 use shadcn_egui::{FontName, IconLibrary, IconSlots, MenuColors};
 
 #[test]

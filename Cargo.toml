@@ -19,3 +19,4 @@ log = "0.4"
 shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.4.0" }
 shadcn-egui-font-inter = { path = "crates/shadcn-egui-font-inter", version = "0.4.0" }
 shadcn-egui-font-oxanium = { path = "crates/shadcn-egui-font-oxanium", version = "0.4.0" }
+shadcn-egui-icons-lucide = { path = "crates/shadcn-egui-icons-lucide", version = "0.4.0" }

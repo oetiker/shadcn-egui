@@ -1,0 +1,11 @@
+[package]
+name = "shadcn-egui-icons-lucide"
+description = "Lucide icons for shadcn-egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT AND ISC"
+repository.workspace = true
+
+[dependencies]
+shadcn-egui-core.workspace = true

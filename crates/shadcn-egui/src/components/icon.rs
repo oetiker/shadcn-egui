@@ -13,42 +13,6 @@ use crate::Theme;
 use egui::{pos2, Color32, Painter, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
 pub use shadcn_egui_core::{Icon, IconShape, IconSlots, Seg};
 
-/// The dialog close cross (Lucide `x`, ISC), built in because the registry's
-/// own components need it and projects generate their icon sets separately.
-pub const CLOSE: Icon = Icon {
-    name: "close",
-    size: 24.0,
-    shape: IconShape::Segs(&[
-        Seg::M(18.0, 6.0),
-        Seg::L(6.0, 18.0),
-        Seg::M(6.0, 6.0),
-        Seg::L(18.0, 18.0),
-    ]),
-};
-
-/// The checkbox tick (Lucide `check`, ISC), built in for the same reason as
-/// [`CLOSE`].
-pub const CHECK: Icon = Icon {
-    name: "check",
-    size: 24.0,
-    shape: IconShape::Segs(&[Seg::M(20.0, 6.0), Seg::L(9.0, 17.0), Seg::L(4.0, 12.0)]),
-};
-
-/// The select chevron (Lucide `chevron-down`, ISC), built in for the same
-/// reason as [`CLOSE`].
-pub const CHEVRON_DOWN: Icon = Icon {
-    name: "chevron-down",
-    size: 24.0,
-    shape: IconShape::Segs(&[Seg::M(6.0, 9.0), Seg::L(12.0, 15.0), Seg::L(18.0, 9.0)]),
-};
-
-/// The built-in Lucide slots every new [`Theme`] starts with.
-pub const LUCIDE_SLOTS: IconSlots = IconSlots {
-    check: CHECK,
-    chevron_down: CHEVRON_DOWN,
-    close: CLOSE,
-};
-
 /// Paint `icon` scaled into the square `rect`: its fill (if any) and its
 /// strokes, from one coverage texture tinted `color`. `stroke_width` is in
 /// icon units (Lucide's own is 2.0) and scales with the icon.

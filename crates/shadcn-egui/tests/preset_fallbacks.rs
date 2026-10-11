@@ -2,7 +2,7 @@
 mod common;
 
 use common::logcap::warnings;
-use shadcn_egui::components::icon::LUCIDE_SLOTS;
+use shadcn_egui::icons::lucide::SLOTS as LUCIDE_SLOTS;
 use shadcn_egui::{FontHeading, FontName, IconLibrary, Mode, Preset, StyleName};
 
 /// The font and icon library these tests ask for, unless a feature bundles
