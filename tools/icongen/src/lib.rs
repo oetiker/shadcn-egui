@@ -190,7 +190,7 @@ fn num(v: f32) -> String {
 }
 
 /// Render a Rust module defining one `pub const` per icon plus `ALL`.
-/// `module_path` is where `Icon` and `Seg` live in the target crate, e.g.
+/// `module_path` is where `Icon`, `IconShape` and `Seg` live in the target crate, e.g.
 /// `crate::components::icon` or `crate::shadcn::components::icon`.
 pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -> String {
     let mut out = String::new();
@@ -198,10 +198,12 @@ pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -
     for line in provenance.lines() {
         out.push_str(&format!("// {line}\n"));
     }
-    out.push_str(&format!("\nuse {module_path}::{{Icon, Seg::*}};\n"));
+    out.push_str(&format!(
+        "\nuse {module_path}::{{Icon, IconShape, Seg::*}};\n"
+    ));
     for icon in icons {
         out.push_str(&format!(
-            "\npub const {}: Icon = Icon {{\n    name: {:?},\n    size: {},\n    segs: &[\n",
+            "\npub const {}: Icon = Icon {{\n    name: {:?},\n    size: {},\n    shape: IconShape::Segs(&[\n",
             const_name(&icon.name),
             icon.name,
             num(icon.size)
@@ -226,7 +228,7 @@ pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -
             };
             out.push_str(&format!("        {line},\n"));
         }
-        out.push_str("    ],\n};\n");
+        out.push_str("    ]),\n};\n");
     }
     out.push_str("\n/// Every icon in this module, in input order.\npub const ALL: &[&Icon] = &[");
     out.push_str(

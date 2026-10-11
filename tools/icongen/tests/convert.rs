@@ -103,10 +103,15 @@ fn names_and_module_render() {
         "Lucide v1.54.0 (ISC)",
     );
     assert!(
-        src.contains("use crate::shadcn::components::icon::{Icon, Seg::*};"),
+        src.contains("use crate::shadcn::components::icon::{Icon, IconShape, Seg::*};"),
         "{src}"
     );
-    assert!(src.contains("pub const X: Icon = Icon {"), "{src}");
+    assert!(
+        src.contains(
+            "pub const X: Icon = Icon {\n    name: \"x\",\n    size: 24.0,\n    shape: IconShape::Segs(&[\n"
+        ),
+        "{src}"
+    );
     assert!(src.contains("        M(18.0, 6.0),"), "{src}");
     assert!(src.contains("// Lucide v1.54.0 (ISC)"));
     assert!(src.contains("pub const ALL: &[&Icon] = &[&X];"));

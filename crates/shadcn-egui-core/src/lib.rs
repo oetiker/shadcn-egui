@@ -2,8 +2,10 @@
 //!
 //! Users never name this crate: `shadcn-egui` re-exports everything in it.
 
+mod blob;
 mod font;
 mod icon;
 
+pub use blob::{BlobRange, BlobSegs, FillMesh};
 pub use font::{Face, FontFiles, FontKind, FontSource, WEIGHTS};
-pub use icon::{Icon, IconSlots, Seg};
+pub use icon::{Icon, IconShape, IconSlots, Seg, SegIter};

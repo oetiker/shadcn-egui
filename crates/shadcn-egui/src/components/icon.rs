@@ -9,19 +9,19 @@
 use crate::Theme;
 use egui::epaint::{CubicBezierShape, PathShape, QuadraticBezierShape};
 use egui::{Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2, Widget};
-pub use shadcn_egui_core::{Icon, IconSlots, Seg};
+pub use shadcn_egui_core::{Icon, IconShape, IconSlots, Seg};
 
 /// The dialog close cross (Lucide `x`, ISC), built in because the registry's
 /// own components need it and projects generate their icon sets separately.
 pub const CLOSE: Icon = Icon {
     name: "close",
     size: 24.0,
-    segs: &[
+    shape: IconShape::Segs(&[
         Seg::M(18.0, 6.0),
         Seg::L(6.0, 18.0),
         Seg::M(6.0, 6.0),
         Seg::L(18.0, 18.0),
-    ],
+    ]),
 };
 
 /// The checkbox tick (Lucide `check`, ISC), built in for the same reason as
@@ -29,7 +29,7 @@ pub const CLOSE: Icon = Icon {
 pub const CHECK: Icon = Icon {
     name: "check",
     size: 24.0,
-    segs: &[Seg::M(20.0, 6.0), Seg::L(9.0, 17.0), Seg::L(4.0, 12.0)],
+    shape: IconShape::Segs(&[Seg::M(20.0, 6.0), Seg::L(9.0, 17.0), Seg::L(4.0, 12.0)]),
 };
 
 /// The select chevron (Lucide `chevron-down`, ISC), built in for the same
@@ -37,7 +37,7 @@ pub const CHECK: Icon = Icon {
 pub const CHEVRON_DOWN: Icon = Icon {
     name: "chevron-down",
     size: 24.0,
-    segs: &[Seg::M(6.0, 9.0), Seg::L(12.0, 15.0), Seg::L(18.0, 9.0)],
+    shape: IconShape::Segs(&[Seg::M(6.0, 9.0), Seg::L(12.0, 15.0), Seg::L(18.0, 9.0)]),
 };
 
 /// The built-in Lucide slots every new [`Theme`] starts with.
@@ -53,7 +53,7 @@ const TOLERANCE: f32 = 0.1; // behaviour-ok: curve flattening tolerance, not a d
 /// Paint `icon` scaled into the square `rect`. `stroke_width` is in icon units
 /// (Lucide's own is 2.0) and scales with the icon.
 ///
-/// Precondition: `icon.segs` starts with `Seg::M` (the generator guarantees it).
+/// Precondition: `icon.segs()` starts with `Seg::M` (icongen guarantees it).
 pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, stroke_width: f32) {
     let scale = rect.width() / icon.size;
     let map = |x: f32, y: f32| rect.min + Vec2::new(x, y) * scale;
@@ -79,8 +79,8 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
         }
     };
 
-    for seg in icon.segs {
-        match *seg {
+    for seg in icon.segs() {
+        match seg {
             Seg::M(x, y) => {
                 flush(&mut points, false, &mut shapes);
                 points.push(map(x, y));

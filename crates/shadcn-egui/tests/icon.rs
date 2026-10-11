@@ -172,5 +172,5 @@ fn core_types_are_reexported() {
     let b: shadcn_egui_core::Icon = a;
     let c: shadcn_egui::components::icon::Icon = b;
     assert_eq!(c.name, "x");
-    assert!(matches!(c.segs[0], shadcn_egui::Seg::M(..)));
+    assert!(matches!(c.segs().next(), Some(shadcn_egui::Seg::M(..))));
 }
