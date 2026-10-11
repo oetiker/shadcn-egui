@@ -1,5 +1,6 @@
 use shadcn_egui::{
-    BaseColor, FontName, IconLibrary, MenuAccent, MenuColor, RadiusChoice, StyleName, ThemeColor,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Mode, Preset,
+    RadiusChoice, StyleName, ThemeColor,
 };
 
 #[test]
@@ -84,4 +85,64 @@ fn ids_round_trip_and_unknown_ids_are_none() {
     );
     assert_eq!(FontName::from_id(""), None);
     assert_eq!(RadiusChoice::from_id("px"), None);
+}
+
+#[test]
+fn default_is_the_sites_default_config_and_code_b0() {
+    let p = Preset::default();
+    assert_eq!(
+        p,
+        Preset {
+            style: StyleName::Nova,
+            base_color: BaseColor::Neutral,
+            theme: ThemeColor::Neutral,
+            chart_color: ThemeColor::Neutral,
+            font: FontName::Inter,
+            font_heading: FontHeading::Inherit,
+            icons: IconLibrary::Lucide,
+            radius: RadiusChoice::Default,
+            menu_color: MenuColor::Default,
+            menu_accent: MenuAccent::Subtle,
+        }
+    );
+    // ui.shadcn.com DEFAULT_CONFIG is all indices 0 (the svelte site's was Vega).
+    assert_eq!(Preset::from_code("b0"), Ok(p));
+    assert_eq!(p.to_code().as_deref(), Some("b0"));
+    assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
+}
+
+#[test]
+fn each_setter_changes_its_field() {
+    let p = Preset::default()
+        .style(StyleName::Vega)
+        .base_color(BaseColor::Stone)
+        .theme_color(ThemeColor::Blue)
+        .chart_color(ThemeColor::Rose)
+        .font(FontName::Geist)
+        .font_heading(FontHeading::Font(FontName::Lora))
+        .icons(IconLibrary::Tabler)
+        .radius(RadiusChoice::Large)
+        .menu_color(MenuColor::Inverted)
+        .menu_accent(MenuAccent::Bold);
+    assert_eq!(
+        p,
+        Preset {
+            style: StyleName::Vega,
+            base_color: BaseColor::Stone,
+            theme: ThemeColor::Blue,
+            chart_color: ThemeColor::Rose,
+            font: FontName::Geist,
+            font_heading: FontHeading::Font(FontName::Lora),
+            icons: IconLibrary::Tabler,
+            radius: RadiusChoice::Large,
+            menu_color: MenuColor::Inverted,
+            menu_accent: MenuAccent::Bold,
+        }
+    );
+    assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
+    assert_eq!(
+        Preset::default().radius(RadiusChoice::Px(6.0)).to_code(),
+        None
+    );
+    assert_ne!(Mode::Light, Mode::Dark);
 }
