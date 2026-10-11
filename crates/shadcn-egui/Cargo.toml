@@ -15,10 +15,17 @@ repository.workspace = true
 egui.workspace = true
 egui_extras.workspace = true
 shadcn-egui-core.workspace = true
+shadcn-egui-font-inter.workspace = true
+shadcn-egui-font-oxanium = { workspace = true, optional = true }
+
+[features]
+font-oxanium = ["dep:shadcn-egui-font-oxanium"]
 
 [dev-dependencies]
 eframe = "0.34"
 egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
+# Tests compare against a heading font that differs from the body font.
+shadcn-egui-font-oxanium.workspace = true
 
 [[example]]
 name = "settings"

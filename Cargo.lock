@@ -2936,11 +2936,27 @@ dependencies = [
  "egui_extras",
  "egui_kittest",
  "shadcn-egui-core",
+ "shadcn-egui-font-inter",
+ "shadcn-egui-font-oxanium",
 ]
 
 [[package]]
 name = "shadcn-egui-core"
 version = "0.4.0"
+
+[[package]]
+name = "shadcn-egui-font-inter"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-oxanium"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
 
 [[package]]
 name = "shlex"

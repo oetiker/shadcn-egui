@@ -370,26 +370,22 @@ fn install_fonts(ctx: &egui::Context) {
         y_offset_factor: 0.18,
         ..Default::default()
     };
+    let inter = match &shadcn_egui_font_inter::FONT.source {
+        shadcn_egui_core::FontSource::Variable { data, .. } => *data,
+        shadcn_egui_core::FontSource::Static { regular, .. } => *regular,
+    };
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         "oxanium".into(),
-        Arc::new(
-            FontData::from_static(include_bytes!("../assets/Oxanium-Regular.ttf"))
-                .tweak(tweak.clone()),
-        ),
+        Arc::new(FontData::from_static(inter).tweak(tweak.clone())),
     );
     fonts.font_data.insert(
         FAMILY_MEDIUM.into(),
-        Arc::new(
-            FontData::from_static(include_bytes!("../assets/Oxanium-Medium.ttf"))
-                .tweak(tweak.clone()),
-        ),
+        Arc::new(FontData::from_static(inter).tweak(tweak.clone())),
     );
     fonts.font_data.insert(
         FAMILY_SEMIBOLD.into(),
-        Arc::new(
-            FontData::from_static(include_bytes!("../assets/Oxanium-SemiBold.ttf")).tweak(tweak),
-        ),
+        Arc::new(FontData::from_static(inter).tweak(tweak)),
     );
     fonts
         .families
