@@ -40,10 +40,6 @@ fn committed_font_crates_are_current() {
     let mut checked = Vec::new();
     for row in rows().iter().filter(|r| r.shipped()) {
         let dir = repo().join("crates").join(row.crate_name());
-        // Phase 7 Task 2 removes this skip: from then on every shipped font has its crate.
-        if !dir.exists() && row.name != "inter" && row.name != "oxanium" {
-            continue;
-        }
         assert_eq!(
             read(dir.join("Cargo.toml")),
             crate_cargo_toml(row),
@@ -61,5 +57,59 @@ fn committed_font_crates_are_current() {
     assert!(
         checked.contains(&"inter".to_string()) && checked.contains(&"oxanium".to_string()),
         "{checked:?}"
+    );
+}
+
+#[test]
+fn shipped_fonts_are_measured() {
+    let unmeasured: Vec<String> = rows()
+        .into_iter()
+        .filter(|r| r.shipped() && r.y_offset_factor.is_none())
+        .map(|r| r.name)
+        .collect();
+    assert!(
+        unmeasured.is_empty(),
+        "measure with tests/font_offset.rs: {unmeasured:?}"
+    );
+}
+
+#[test]
+fn no_stale_font_crates() {
+    let shipped: Vec<String> = rows()
+        .iter()
+        .filter(|r| r.shipped())
+        .map(Row::crate_name)
+        .collect();
+    for entry in fs::read_dir(repo().join("crates")).unwrap() {
+        let name = entry.unwrap().file_name().into_string().unwrap();
+        if name.starts_with("shadcn-egui-font-") {
+            assert!(
+                shipped.contains(&name),
+                "{name} has no shipped FONTS.tsv row; delete the crate"
+            );
+        }
+    }
+}
+
+#[test]
+fn registry_and_cargo_blocks_are_current() {
+    let rows = rows();
+    let pin = read(repo().join("tools/fontgen/GF_PIN")).trim().to_string();
+    assert_eq!(
+        read(repo().join("crates/shadcn-egui/src/fonts/registry.rs")),
+        registry_rs(&rows, &pin).unwrap()
+    );
+    let main = read(repo().join("crates/shadcn-egui/Cargo.toml"));
+    assert_eq!(
+        replace_block(&main, &features_block(&rows)).unwrap(),
+        main,
+        "crates/shadcn-egui/Cargo.toml block"
+    );
+    let root = read(repo().join("Cargo.toml"));
+    let version = workspace_version(&root).unwrap();
+    assert_eq!(
+        replace_block(&root, &workspace_deps_block(&rows, &version)).unwrap(),
+        root,
+        "root Cargo.toml block"
     );
 }

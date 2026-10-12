@@ -11,6 +11,6 @@ pub static FONT: FontFiles = FontFiles {
         data: include_bytes!("../fonts/inter.ttf"),
         wght: 100.0..=900.0,
     },
-    y_offset_factor: -0.04,
+    y_offset_factor: -0.07,
     license: include_str!("../LICENSE-FONT.txt"),
 };

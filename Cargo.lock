@@ -2937,8 +2937,32 @@ dependencies = [
  "egui_kittest",
  "log",
  "shadcn-egui-core",
+ "shadcn-egui-font-dm-sans",
+ "shadcn-egui-font-eb-garamond",
+ "shadcn-egui-font-figtree",
+ "shadcn-egui-font-geist",
+ "shadcn-egui-font-geist-mono",
+ "shadcn-egui-font-ibm-plex-sans",
+ "shadcn-egui-font-instrument-sans",
+ "shadcn-egui-font-instrument-serif",
  "shadcn-egui-font-inter",
+ "shadcn-egui-font-jetbrains-mono",
+ "shadcn-egui-font-lora",
+ "shadcn-egui-font-manrope",
+ "shadcn-egui-font-merriweather",
+ "shadcn-egui-font-montserrat",
+ "shadcn-egui-font-noto-sans",
+ "shadcn-egui-font-noto-serif",
+ "shadcn-egui-font-nunito-sans",
+ "shadcn-egui-font-outfit",
  "shadcn-egui-font-oxanium",
+ "shadcn-egui-font-playfair-display",
+ "shadcn-egui-font-public-sans",
+ "shadcn-egui-font-raleway",
+ "shadcn-egui-font-roboto",
+ "shadcn-egui-font-roboto-slab",
+ "shadcn-egui-font-source-sans-3",
+ "shadcn-egui-font-space-grotesk",
  "shadcn-egui-icons-hugeicons",
  "shadcn-egui-icons-lucide",
  "shadcn-egui-icons-phosphor",
@@ -2951,6 +2975,62 @@ name = "shadcn-egui-core"
 version = "0.4.0"
 
 [[package]]
+name = "shadcn-egui-font-dm-sans"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-eb-garamond"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-figtree"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-geist"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-geist-mono"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-ibm-plex-sans"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-instrument-sans"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-instrument-serif"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
 name = "shadcn-egui-font-inter"
 version = "0.4.0"
 dependencies = [
@@ -2958,7 +3038,119 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadcn-egui-font-jetbrains-mono"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-lora"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-manrope"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-merriweather"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-montserrat"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-noto-sans"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-noto-serif"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-nunito-sans"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-outfit"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
 name = "shadcn-egui-font-oxanium"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-playfair-display"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-public-sans"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-raleway"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-roboto"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-roboto-slab"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-source-sans-3"
+version = "0.4.0"
+dependencies = [
+ "shadcn-egui-core",
+]
+
+[[package]]
+name = "shadcn-egui-font-space-grotesk"
 version = "0.4.0"
 dependencies = [
  "shadcn-egui-core",

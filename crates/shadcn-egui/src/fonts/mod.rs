@@ -1,23 +1,12 @@
-//! The font crates this build bundles, by upstream font id. Inter is always
-//! bundled; every other font needs its `font-<id>` feature.
+//! The font crates this build knows: [`files`] maps an upstream font id to
+//! the crate behind its `font-<id>` feature.
+
+mod registry;
 
 use crate::preset::FontName;
-use shadcn_egui_core::FontFiles;
+use registry::UNLICENSED;
 
-/// The files of `name`, or `None` when its feature is off.
-pub fn files(name: FontName) -> Option<&'static FontFiles> {
-    match name {
-        FontName::Inter => Some(&shadcn_egui_font_inter::FONT),
-        #[cfg(feature = "font-oxanium")]
-        FontName::Oxanium => Some(&shadcn_egui_font_oxanium::FONT),
-        _ => None,
-    }
-}
-
-/// Fonts that get no crate because their licence is neither OFL-1.1 nor
-/// Apache-2.0 (rows of `tools/fontgen/FONTS.tsv` whose `license` column says
-/// so, P0c). No feature can bring them in.
-const UNLICENSED: &[FontName] = &[];
+pub use registry::files;
 
 /// The warning `Preset::theme` logs when [`files`] has nothing for `name`
 /// (`heading`: the preset's heading font).

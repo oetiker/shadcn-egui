@@ -1,0 +1,11 @@
+[package]
+name = "shadcn-egui-font-roboto"
+description = "Roboto for shadcn-egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT AND OFL-1.1"
+repository.workspace = true
+
+[dependencies]
+shadcn-egui-core.workspace = true

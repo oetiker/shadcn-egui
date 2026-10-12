@@ -20,6 +20,8 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - The default font is Inter, as on the shadcn site, so all text looks
   different from 0.3. Oxanium remains available through the `font-oxanium`
   feature.
+- Text in Inter and Oxanium sits up to one pixel higher, so capital letters
+  are centred in buttons, badges and tooltips.
 - Card and dialog titles use the theme's heading font, which is the body
   font unless `Theme::fonts(body, Some(heading))` sets another one.
 - An app that installs fonts of its own calls
@@ -117,6 +119,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   constants.
 
 ### Added
+- Every font of the shadcn create page is available, each behind its own
+  feature named after the font (`font-geist`, `font-jetbrains-mono`,
+  `font-playfair-display`, …), and a preset that names the font uses it.
 - `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
   shadcn site builds for a base colour, a colour theme and a chart colour,
   for example `Palette::from_upstream("stone", "blue", "rose", true)`.
