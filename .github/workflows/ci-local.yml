@@ -57,7 +57,8 @@ jobs:
         run: cargo test --workspace --all-targets --all-features -- --test-threads 4
 
       # egui_kittest writes <name>.new.png and <name>.diff.png next to a
-      # snapshot that does not match.
+      # snapshot that does not match. The gallery test keeps the README's
+      # docs/gallery-screen.png that way too.
       - name: Keep the failed snapshot images
         if: failure()
         uses: actions/upload-artifact@v7
@@ -66,6 +67,8 @@ jobs:
           path: |
             crates/*/tests/snapshots/**/*.new.png
             crates/*/tests/snapshots/**/*.diff.png
+            docs/*.new.png
+            docs/*.diff.png
           if-no-files-found: ignore
 
   clippy-all-features:
