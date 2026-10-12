@@ -278,3 +278,17 @@ fn truncated_fonts_are_rejected() {
         }
     }
 }
+
+#[test]
+fn fonts_all_lists_every_optional_font() {
+    let block = features_block(&sample());
+    assert!(
+        block.contains("fonts-all = [\n    \"font-roboto\",\n    \"font-instrument-serif\",\n]\n"),
+        "{block}"
+    );
+    let fonts_all = block.find("fonts-all").unwrap();
+    assert!(
+        fonts_all > block.find("\n[features]\n").unwrap(),
+        "inside [features]: {block}"
+    );
+}

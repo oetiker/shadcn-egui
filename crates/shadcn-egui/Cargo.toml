@@ -155,6 +155,33 @@ font-source-sans-3 = ["dep:shadcn-egui-font-source-sans-3"]
 font-instrument-sans = ["dep:shadcn-egui-font-instrument-sans"]
 font-eb-garamond = ["dep:shadcn-egui-font-eb-garamond"]
 font-instrument-serif = ["dep:shadcn-egui-font-instrument-serif"]
+fonts-all = [
+    "font-noto-sans",
+    "font-nunito-sans",
+    "font-figtree",
+    "font-roboto",
+    "font-raleway",
+    "font-dm-sans",
+    "font-public-sans",
+    "font-outfit",
+    "font-jetbrains-mono",
+    "font-geist",
+    "font-geist-mono",
+    "font-lora",
+    "font-merriweather",
+    "font-playfair-display",
+    "font-noto-serif",
+    "font-roboto-slab",
+    "font-oxanium",
+    "font-manrope",
+    "font-space-grotesk",
+    "font-montserrat",
+    "font-ibm-plex-sans",
+    "font-source-sans-3",
+    "font-instrument-sans",
+    "font-eb-garamond",
+    "font-instrument-serif",
+]
 # END fontgen
 icons-tabler = ["dep:shadcn-egui-icons-tabler"]
 icons-phosphor = ["dep:shadcn-egui-icons-phosphor"]

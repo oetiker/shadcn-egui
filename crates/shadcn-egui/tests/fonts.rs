@@ -459,3 +459,34 @@ fn dialog_title_uses_the_heading_font_snapshot() {
         |_| {},
     );
 }
+
+/// With `fonts-all`, every font whose licence allows a crate resolves to
+/// that crate, and only those.
+#[cfg(feature = "fonts-all")]
+#[test]
+fn fonts_all_resolves_every_shipped_font() {
+    use shadcn_egui::{fonts, FontKind, FontName};
+    let tsv = include_str!("../../../tools/fontgen/FONTS.tsv");
+    for line in tsv.lines().skip(1).filter(|l| !l.trim().is_empty()) {
+        let c: Vec<&str> = line.split('\t').collect();
+        let name = FontName::from_id(c[0]).unwrap_or_else(|| panic!("{} is not a FontName", c[0]));
+        let shipped = c[3] == "OFL-1.1" || c[3] == "Apache-2.0";
+        let files = fonts::files(name);
+        assert_eq!(files.map(|f| f.name), shipped.then_some(c[0]), "{}", c[0]);
+        if let Some(f) = files {
+            let kind = match c[2] {
+                "sans" => FontKind::Sans,
+                "serif" => FontKind::Serif,
+                _ => FontKind::Mono,
+            };
+            assert_eq!(f.kind, kind, "{}", c[0]);
+            assert_eq!(&bytes(f)[..4], &[0, 1, 0, 0], "{}: TrueType header", c[0]);
+            assert!(!f.license.is_empty(), "{}: licence text", c[0]);
+            assert!(
+                (-0.5..0.5).contains(&f.y_offset_factor),
+                "{}: measured offset",
+                c[0]
+            );
+        }
+    }
+}

@@ -483,6 +483,11 @@ pub fn features_block(rows: &[Row]) -> String {
     for r in optional(rows) {
         writeln!(s, "font-{} = [\"dep:{}\"]", r.name, r.crate_name()).unwrap();
     }
+    s.push_str("fonts-all = [\n");
+    for r in optional(rows) {
+        writeln!(s, "    \"font-{}\",", r.name).unwrap();
+    }
+    s.push_str("]\n");
     s.push_str(END);
     s
 }
