@@ -35,8 +35,9 @@ egui-shadcn plugin) are recorded here. The format is based on
   `Palette::dark()` or `Palette::from_upstream(..)` and change single fields.
 - `Button::icon` and `Button::icon_end` accept any icon reference, not only
   constants.
-- Icon modules generated with an older icongen must be regenerated, because an
-  icon now holds a `shape` instead of `segs`.
+- Icon data you generated with 0.3 no longer compiles with 0.4. Use the
+  icons in `shadcn_egui::icons` (Lucide, and the other sets behind their
+  features) or regenerate your own.
 - Remix Icon stays at version 4.8.0, its last release under the Apache-2.0
   licence; later releases forbid redistribution as an icon pack.
 - Components now take their sizes, colours, radii and shadows from a shadcn
@@ -111,8 +112,7 @@ egui-shadcn plugin) are recorded here. The format is based on
   and type-ahead keys until keyboard focus moves to another control.
 - Screen readers get no name for a switch, checkbox or select on its own:
   name each one after its label with `.labelled_by(label.id)`, as the
-  reference settings screen does. A select reports its shown text as its
-  value, not as its name.
+  `settings` example does. A select reports its shown text as its value.
 - Cards fill the available width, with padding, gaps and corners from the
   style.
 - Dialogs have a thin outline ring and no shadow, a 384 px (nova) or 448 px
@@ -214,9 +214,8 @@ egui-shadcn plugin) are recorded here. The format is based on
 - An app that replaced the fonts with `ctx.set_fonts` after `Theme::apply`
   crashed with "FontFamily::Name(\"shadcn-heading-semibold\") is not bound to
   any fonts" on the next heading or the next `Theme::apply`. Headings now fall
-  back to the regular text font with a log warning. A later `Theme::apply` of
-  the same fonts, in a later frame, adds the theme's fonts back and keeps the
-  app's own fonts.
+  back to the regular text font with a log warning, and a later
+  `Theme::apply` adds the theme's fonts back and keeps the app's own.
 - Screen readers announced a standalone icon by its internal name ("mic",
   "power") and ignored a label attached with `labelled_by`. An `IconView` now
   has no name of its own; name it with `.labelled_by(label.id)`.
@@ -224,7 +223,6 @@ egui-shadcn plugin) are recorded here. The format is based on
   before a large button, sat about 2 px above the row's centre. They are now
   centred. A row shrinks back when its tallest item goes, except a row that
   holds a vertical separator or a scroll area, which keeps its tallest height.
-
 
 ## [0.3.2] - 2026-10-09
 
