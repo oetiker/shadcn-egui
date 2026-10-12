@@ -142,7 +142,14 @@ fn float_literals(code: &str) -> impl Iterator<Item = (&str, &str)> {
                 while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'.' || b[i] == b'_') {
                     i += 1;
                 }
-                let lit = &code[start..i];
+                if code[i..].starts_with("f32") || code[i..].starts_with("f64") {
+                    i += 3;
+                }
+                // The value without its type suffix: `1.0_f32` is `1.0`.
+                let lit = code[start..i]
+                    .trim_end_matches("f32")
+                    .trim_end_matches("f64")
+                    .trim_end_matches('_');
                 if lit.contains('.') && !lit.ends_with('.') {
                     return Some((lit, &code[..start]));
                 }
@@ -173,6 +180,11 @@ fn strict_scanner_catches_literals() {
     assert_eq!(strict_violations("let c = rect.height() / 2.0;").len(), 0);
     assert_eq!(strict_violations("let w = 2.0 + x;").len(), 1);
     assert_eq!(strict_violations("let z = 0.0; let o = 1.0;").len(), 0);
+    assert_eq!(
+        strict_violations("let o = 1.0_f32; let p = 1.0f64;").len(),
+        0
+    );
+    assert_eq!(strict_violations("let h = 32.0_f32;").len(), 1);
     assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
     assert_eq!(
         strict_violations("let t = 0.1; // behaviour-ok: flattening tolerance").len(),

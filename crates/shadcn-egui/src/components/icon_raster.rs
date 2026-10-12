@@ -158,8 +158,8 @@ pub(crate) fn coverage(icon: &Icon, w: usize, h: usize, scale: f32, stroke_px: f
 fn fill_coverage(cov: &mut [f32], w: usize, h: usize, fill: &FillMesh, scale: f32) {
     let map = |[x, y]: [f32; 2]| pos2(x * scale, y * scale);
     let mut inside = vec![false; w * h];
-    for t in fill.indices.chunks_exact(3) {
-        let [a, b, c] = [t[0], t[1], t[2]].map(|i| {
+    for &t in fill.indices.as_chunks::<3>().0 {
+        let [a, b, c] = t.map(|i| {
             fill.vertices
                 .get(usize::from(i))
                 .copied()

@@ -160,7 +160,7 @@ impl Widget for Badge {
             x += icon_px + gap;
         }
         let galley = if pick(&l, |r| &r.underline, st) == Some(true) {
-            layout(Stroke::new(1.0, fg))
+            layout(Stroke::new(1.0_f32, fg))
         } else {
             galley
         };
