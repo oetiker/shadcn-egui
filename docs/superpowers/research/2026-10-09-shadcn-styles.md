@@ -78,8 +78,8 @@ Tailwind px: h-6=24 h-7=28 h-8=32 h-9=36 h-10=40; p-2.5=10 p-4=16 p-6=24; `ring-
 | part | ny4 | nova | vega | class |
 |---|---|---|---|---|
 | radius | `rounded-md` | `rounded-lg` | `rounded-md` | a (style) |
-| border | none (outline only `border`) | `border border-transparent bg-clip-padding` always | same as nova | d (base) – keeps size identical across variants |
-| press | – | `active:not-aria-[haspopup]:translate-y-px` | same | c (base) |
+| border | none (outline only `border`) | `border border-transparent bg-clip-padding` always | same as nova | d (base); keeps size identical across variants |
+| press | none | `active:not-aria-[haspopup]:translate-y-px` | same | c (base) |
 | size default | `h-9 px-4 py-2 has-[>svg]:px-3`, gap-2 | `h-8 gap-1.5 px-2.5`, icon-side `pl-2`/`pr-2` | `h-9 gap-1.5 px-2.5` | a |
 | size sm | `h-8 gap-1.5 px-3` | `h-7 gap-1 px-2.5 text-[0.8rem] rounded-[min(var(--radius-md),12px)] svg size-3.5` | `h-8 … rounded-[min(var(--radius-md),10px)]` | a |
 | size lg | `h-10 px-6` | `h-9 px-2.5` | `h-10 px-2.5` | a |
@@ -90,7 +90,7 @@ Tailwind px: h-6=24 h-7=28 h-8=32 h-9=36 h-10=40; p-2.5=10 p-4=16 p-6=24; `ring-
 | outline | `border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground` | `border-border bg-background hover:bg-muted hover:text-foreground`, no shadow, `aria-expanded:bg-muted` | nova + `shadow-xs` | b (accent→muted, base), c (shadow, style) |
 | ghost | `hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50` | `hover:bg-muted hover:text-foreground dark:hover:bg-muted/50` | = nova | b (base) |
 | secondary hover | `bg-secondary/80` | `color-mix(in oklch, secondary, foreground 5%)` | = nova | b (computed colour) |
-| focus ring | `ring-[3px] ring-ring/50 border-ring` | `ring-3 ring-ring/50 border-ring` | same | – |
+| focus ring | `ring-[3px] ring-ring/50 border-ring` | `ring-3 ring-ring/50 border-ring` | same | none |
 
 ### Badge
 | part | ny4 | nova (= vega) | class |
@@ -100,7 +100,7 @@ Tailwind px: h-6=24 h-7=28 h-8=32 h-9=36 h-10=40; p-2.5=10 p-4=16 p-6=24; `ring-
 | default/secondary hover | `/90` | `/80` | a |
 | destructive | solid `bg-destructive text-white` | tinted `bg-destructive/10 text-destructive dark:bg-destructive/20` | b |
 | outline hover | `bg-accent text-accent-foreground` | `bg-muted text-muted-foreground` | b |
-| new variants | – | `ghost` (`hover:bg-muted`), `link` | d |
+| new variants | none | `ghost` (`hover:bg-muted`), `link` | d |
 
 ### Card
 | part | ny4 | nova | vega | class |
@@ -128,7 +128,7 @@ Indicator icon `size-3.5` in both.
 | close | raw button `top-4 right-4 opacity-70 rounded-xs` + ring-offset focus | `<Button variant="ghost" size="icon-sm">` at `top-2 right-2` | top-4 right-4 | d (reuses Button) |
 | title | `text-lg leading-none font-semibold` | `text-base leading-none font-medium` | `leading-none font-medium` | a |
 | footer | `flex-col-reverse gap-2 sm:flex-row sm:justify-end` | + **`bg-muted/50 -mx-4 -mb-4 rounded-b-xl border-t p-4`** | `gap-2` only | d (bleeding tinted strip via negative margins) |
-| header | `gap-2 text-center sm:text-left` | `gap-2` | | – |
+| header | `gap-2 text-center sm:text-left` | `gap-2` | | none |
 
 ### Input
 | ny4 | nova | vega | class |
@@ -164,7 +164,7 @@ sideOffset 4 in both.
 |---|---|---|---|---|
 | list | `h-9 rounded-lg p-[3px] bg-muted text-muted-foreground` | `h-8`, rest same | h-9 | a |
 | trigger | `px-2 py-1 rounded-md gap-1.5`, `text-foreground/60`, active `bg-background shadow-sm` | `px-1.5 py-0.5`, icon-side `pl-1/pr-1`; tokens same | px-2 py-1 | a |
-| line variant | `gap-1 bg-transparent`, underline via `after:` | same (base) | | – |
+| line variant | `gap-1 bg-transparent`, underline via `after:` | same (base) | | none |
 
 ### Tooltip
 Identical colours/sizes in all three: `rounded-md bg-foreground text-background px-3 py-1.5 text-xs`, arrow `size-2.5 rotate-45 rounded-[2px] bg-foreground`, sideOffset 0. nova adds `inline-flex items-center gap-1.5`, `max-w-xs`, kbd slot styling.
@@ -173,7 +173,7 @@ Identical colours/sizes in all three: `rounded-md bg-foreground text-background 
 | part | ny4 | nova | vega | class |
 |---|---|---|---|---|
 | track | `bg-muted rounded-full h-1.5` | `h-1` | h-1.5 | a |
-| range | `bg-primary` | same | | – |
+| range | `bg-primary` | same | | none |
 | thumb | `size-4 border border-primary bg-white shadow-sm hover/focus:ring-4 ring-ring/50` | `size-3 border border-ring bg-white`, no shadow, `hover/focus/active:ring-3`, **hit area `after:absolute after:-inset-2`** | = ny4 | a, b (border-primary→border-ring), c, d |
 | vertical min height | `min-h-44` | `min-h-40` | 40 | a |
 
