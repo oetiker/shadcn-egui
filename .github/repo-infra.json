@@ -1,0 +1,440 @@
+{
+  "moving_major_tag": false,
+  "rust": {
+    "test": [
+      "shadcn-egui-core"
+    ],
+    "tested_elsewhere": [
+      "shadcn-egui",
+      "shadcn-egui-font-dm-sans",
+      "shadcn-egui-font-eb-garamond",
+      "shadcn-egui-font-figtree",
+      "shadcn-egui-font-geist",
+      "shadcn-egui-font-geist-mono",
+      "shadcn-egui-font-ibm-plex-sans",
+      "shadcn-egui-font-instrument-sans",
+      "shadcn-egui-font-instrument-serif",
+      "shadcn-egui-font-inter",
+      "shadcn-egui-font-jetbrains-mono",
+      "shadcn-egui-font-lora",
+      "shadcn-egui-font-manrope",
+      "shadcn-egui-font-merriweather",
+      "shadcn-egui-font-montserrat",
+      "shadcn-egui-font-noto-sans",
+      "shadcn-egui-font-noto-serif",
+      "shadcn-egui-font-nunito-sans",
+      "shadcn-egui-font-outfit",
+      "shadcn-egui-font-oxanium",
+      "shadcn-egui-font-playfair-display",
+      "shadcn-egui-font-public-sans",
+      "shadcn-egui-font-raleway",
+      "shadcn-egui-font-roboto",
+      "shadcn-egui-font-roboto-slab",
+      "shadcn-egui-font-source-sans-3",
+      "shadcn-egui-font-space-grotesk",
+      "shadcn-egui-icons-hugeicons",
+      "shadcn-egui-icons-lucide",
+      "shadcn-egui-icons-phosphor",
+      "shadcn-egui-icons-remixicon",
+      "shadcn-egui-icons-tabler"
+    ]
+  },
+  "version_files": [
+    {
+      "path": "Cargo.toml",
+      "pattern": "^version\\s*=\\s*\"[^\"]*\"",
+      "replacement": "version = \"$VERSION\"",
+      "verify": "^version\\s*=\\s*\"$VERSION\""
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-core = \\{ path = \"crates/shadcn-egui-core\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-core = { path = \"crates/shadcn-egui-core\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-core = \\{ path = \"crates/shadcn-egui-core\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-inter = \\{ path = \"crates/shadcn-egui-font-inter\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-inter = { path = \"crates/shadcn-egui-font-inter\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-inter = \\{ path = \"crates/shadcn-egui-font-inter\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-noto-sans = \\{ path = \"crates/shadcn-egui-font-noto-sans\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-noto-sans = { path = \"crates/shadcn-egui-font-noto-sans\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-noto-sans = \\{ path = \"crates/shadcn-egui-font-noto-sans\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-nunito-sans = \\{ path = \"crates/shadcn-egui-font-nunito-sans\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-nunito-sans = { path = \"crates/shadcn-egui-font-nunito-sans\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-nunito-sans = \\{ path = \"crates/shadcn-egui-font-nunito-sans\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-figtree = \\{ path = \"crates/shadcn-egui-font-figtree\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-figtree = { path = \"crates/shadcn-egui-font-figtree\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-figtree = \\{ path = \"crates/shadcn-egui-font-figtree\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-roboto = \\{ path = \"crates/shadcn-egui-font-roboto\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-roboto = { path = \"crates/shadcn-egui-font-roboto\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-roboto = \\{ path = \"crates/shadcn-egui-font-roboto\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-raleway = \\{ path = \"crates/shadcn-egui-font-raleway\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-raleway = { path = \"crates/shadcn-egui-font-raleway\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-raleway = \\{ path = \"crates/shadcn-egui-font-raleway\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-dm-sans = \\{ path = \"crates/shadcn-egui-font-dm-sans\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-dm-sans = { path = \"crates/shadcn-egui-font-dm-sans\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-dm-sans = \\{ path = \"crates/shadcn-egui-font-dm-sans\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-public-sans = \\{ path = \"crates/shadcn-egui-font-public-sans\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-public-sans = { path = \"crates/shadcn-egui-font-public-sans\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-public-sans = \\{ path = \"crates/shadcn-egui-font-public-sans\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-outfit = \\{ path = \"crates/shadcn-egui-font-outfit\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-outfit = { path = \"crates/shadcn-egui-font-outfit\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-outfit = \\{ path = \"crates/shadcn-egui-font-outfit\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-jetbrains-mono = \\{ path = \"crates/shadcn-egui-font-jetbrains-mono\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-jetbrains-mono = { path = \"crates/shadcn-egui-font-jetbrains-mono\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-jetbrains-mono = \\{ path = \"crates/shadcn-egui-font-jetbrains-mono\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-geist = \\{ path = \"crates/shadcn-egui-font-geist\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-geist = { path = \"crates/shadcn-egui-font-geist\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-geist = \\{ path = \"crates/shadcn-egui-font-geist\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-geist-mono = \\{ path = \"crates/shadcn-egui-font-geist-mono\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-geist-mono = { path = \"crates/shadcn-egui-font-geist-mono\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-geist-mono = \\{ path = \"crates/shadcn-egui-font-geist-mono\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-lora = \\{ path = \"crates/shadcn-egui-font-lora\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-lora = { path = \"crates/shadcn-egui-font-lora\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-lora = \\{ path = \"crates/shadcn-egui-font-lora\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-merriweather = \\{ path = \"crates/shadcn-egui-font-merriweather\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-merriweather = { path = \"crates/shadcn-egui-font-merriweather\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-merriweather = \\{ path = \"crates/shadcn-egui-font-merriweather\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-playfair-display = \\{ path = \"crates/shadcn-egui-font-playfair-display\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-playfair-display = { path = \"crates/shadcn-egui-font-playfair-display\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-playfair-display = \\{ path = \"crates/shadcn-egui-font-playfair-display\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-noto-serif = \\{ path = \"crates/shadcn-egui-font-noto-serif\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-noto-serif = { path = \"crates/shadcn-egui-font-noto-serif\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-noto-serif = \\{ path = \"crates/shadcn-egui-font-noto-serif\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-roboto-slab = \\{ path = \"crates/shadcn-egui-font-roboto-slab\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-roboto-slab = { path = \"crates/shadcn-egui-font-roboto-slab\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-roboto-slab = \\{ path = \"crates/shadcn-egui-font-roboto-slab\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-oxanium = \\{ path = \"crates/shadcn-egui-font-oxanium\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-oxanium = { path = \"crates/shadcn-egui-font-oxanium\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-oxanium = \\{ path = \"crates/shadcn-egui-font-oxanium\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-manrope = \\{ path = \"crates/shadcn-egui-font-manrope\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-manrope = { path = \"crates/shadcn-egui-font-manrope\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-manrope = \\{ path = \"crates/shadcn-egui-font-manrope\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-space-grotesk = \\{ path = \"crates/shadcn-egui-font-space-grotesk\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-space-grotesk = { path = \"crates/shadcn-egui-font-space-grotesk\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-space-grotesk = \\{ path = \"crates/shadcn-egui-font-space-grotesk\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-montserrat = \\{ path = \"crates/shadcn-egui-font-montserrat\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-montserrat = { path = \"crates/shadcn-egui-font-montserrat\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-montserrat = \\{ path = \"crates/shadcn-egui-font-montserrat\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-ibm-plex-sans = \\{ path = \"crates/shadcn-egui-font-ibm-plex-sans\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-ibm-plex-sans = { path = \"crates/shadcn-egui-font-ibm-plex-sans\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-ibm-plex-sans = \\{ path = \"crates/shadcn-egui-font-ibm-plex-sans\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-source-sans-3 = \\{ path = \"crates/shadcn-egui-font-source-sans-3\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-source-sans-3 = { path = \"crates/shadcn-egui-font-source-sans-3\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-source-sans-3 = \\{ path = \"crates/shadcn-egui-font-source-sans-3\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-instrument-sans = \\{ path = \"crates/shadcn-egui-font-instrument-sans\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-instrument-sans = { path = \"crates/shadcn-egui-font-instrument-sans\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-instrument-sans = \\{ path = \"crates/shadcn-egui-font-instrument-sans\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-eb-garamond = \\{ path = \"crates/shadcn-egui-font-eb-garamond\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-eb-garamond = { path = \"crates/shadcn-egui-font-eb-garamond\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-eb-garamond = \\{ path = \"crates/shadcn-egui-font-eb-garamond\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-font-instrument-serif = \\{ path = \"crates/shadcn-egui-font-instrument-serif\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-font-instrument-serif = { path = \"crates/shadcn-egui-font-instrument-serif\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-font-instrument-serif = \\{ path = \"crates/shadcn-egui-font-instrument-serif\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-icons-lucide = \\{ path = \"crates/shadcn-egui-icons-lucide\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-icons-lucide = { path = \"crates/shadcn-egui-icons-lucide\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-icons-lucide = \\{ path = \"crates/shadcn-egui-icons-lucide\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-icons-tabler = \\{ path = \"crates/shadcn-egui-icons-tabler\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-icons-tabler = { path = \"crates/shadcn-egui-icons-tabler\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-icons-tabler = \\{ path = \"crates/shadcn-egui-icons-tabler\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-icons-phosphor = \\{ path = \"crates/shadcn-egui-icons-phosphor\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-icons-phosphor = { path = \"crates/shadcn-egui-icons-phosphor\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-icons-phosphor = \\{ path = \"crates/shadcn-egui-icons-phosphor\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-icons-remixicon = \\{ path = \"crates/shadcn-egui-icons-remixicon\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-icons-remixicon = { path = \"crates/shadcn-egui-icons-remixicon\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-icons-remixicon = \\{ path = \"crates/shadcn-egui-icons-remixicon\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.toml",
+      "pattern": "^shadcn-egui-icons-hugeicons = \\{ path = \"crates/shadcn-egui-icons-hugeicons\", version = \"[^\"]*\" \\}$",
+      "replacement": "shadcn-egui-icons-hugeicons = { path = \"crates/shadcn-egui-icons-hugeicons\", version = \"$VERSION\" }",
+      "verify": "^shadcn-egui-icons-hugeicons = \\{ path = \"crates/shadcn-egui-icons-hugeicons\", version = \"$VERSION\" \\}$"
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-core\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-core\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-core\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-dm-sans\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-dm-sans\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-dm-sans\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-eb-garamond\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-eb-garamond\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-eb-garamond\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-figtree\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-figtree\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-figtree\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-geist\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-geist\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-geist\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-geist-mono\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-geist-mono\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-geist-mono\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-ibm-plex-sans\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-ibm-plex-sans\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-ibm-plex-sans\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-instrument-sans\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-instrument-sans\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-instrument-sans\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-instrument-serif\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-instrument-serif\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-instrument-serif\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-inter\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-inter\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-inter\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-jetbrains-mono\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-jetbrains-mono\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-jetbrains-mono\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-lora\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-lora\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-lora\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-manrope\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-manrope\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-manrope\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-merriweather\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-merriweather\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-merriweather\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-montserrat\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-montserrat\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-montserrat\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-noto-sans\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-noto-sans\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-noto-sans\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-noto-serif\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-noto-serif\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-noto-serif\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-nunito-sans\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-nunito-sans\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-nunito-sans\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-outfit\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-outfit\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-outfit\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-oxanium\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-oxanium\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-oxanium\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-playfair-display\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-playfair-display\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-playfair-display\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-public-sans\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-public-sans\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-public-sans\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-raleway\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-raleway\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-raleway\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-roboto\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-roboto\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-roboto\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-roboto-slab\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-roboto-slab\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-roboto-slab\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-source-sans-3\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-source-sans-3\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-source-sans-3\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-font-space-grotesk\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-font-space-grotesk\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-font-space-grotesk\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-icons-hugeicons\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-icons-hugeicons\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-icons-hugeicons\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-icons-lucide\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-icons-lucide\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-icons-lucide\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-icons-phosphor\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-icons-phosphor\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-icons-phosphor\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-icons-remixicon\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-icons-remixicon\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-icons-remixicon\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": "Cargo.lock",
+      "pattern": "^name = \"shadcn-egui-icons-tabler\"\nversion = \"[^\"]*\"",
+      "replacement": "name = \"shadcn-egui-icons-tabler\"\nversion = \"$VERSION\"",
+      "verify": "^name = \"shadcn-egui-icons-tabler\"\nversion = \"$VERSION\""
+    }
+  ]
+}
