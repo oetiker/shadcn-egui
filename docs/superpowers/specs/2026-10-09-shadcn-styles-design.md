@@ -1,4 +1,4 @@
-# egui-shadcn 0.4.0 — shadcn styles as a parameter
+# egui-shadcn 0.4.0: shadcn styles as a parameter
 
 Date: 2026-10-09
 Status: design, revised after pushback review (2026-10-09), awaiting approval
@@ -32,7 +32,7 @@ Evidence and per-component tables: the research notes in §12.
 
 - A component's source exists **once** (shadcn-svelte
   `docs/src/lib/registry/ui/<name>/`). Its class strings contain the classes
-  every style shares plus **marker classes** naming a part, e.g.
+  every style shares plus **marker classes** naming a part, for example
   `cn-slider-thumb`, `cn-button-size-default`.
 - Each style is one flat CSS file, `style-<s>.css`, of roughly 420 rules
   `.cn-<part> { @apply <tailwind classes>; }`. Styles: vega, nova, maia, lyra,
@@ -122,7 +122,7 @@ A recipe holds exactly what the style CSS says for that marker; an empty field
 means the style does not set it, and the component uses its ported base value.
 
 `Style` and every recipe are plain structs with public fields. A consumer that
-must deviate from a style in one place (e.g. a flat focus ring for a renderer
+must deviate from a style in one place (for example a flat focus ring for a renderer
 without anti-aliasing) adjusts the value where it builds its theme:
 `let mut s = Style::nova(); s.<part>.<field> = …;`. Vendored files are never
 edited for this; re-vendoring stays free.
@@ -155,9 +155,9 @@ as component code paths, each commented with the upstream classes it mirrors:
 - shape variants that some styles need (pill switch thumb, underline-only
   input, plain-text badge) are **not** implemented in 0.4.0; see §6.
 
-Out of scope: breakpoints (`sm:`, `md:`) — the component takes the
+Out of scope: breakpoints (`sm:`, `md:`), where the component takes the
 non-prefixed value and documents it; animations and transitions;
-`menuColor` (scoped palette swap) — later.
+`menuColor` (scoped palette swap), which comes later.
 
 ## 5. The generator: `tools/stylegen`
 

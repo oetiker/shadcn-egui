@@ -1,4 +1,4 @@
-# shadcn-egui 0.4.0 — a published crate with shadcn presets
+# shadcn-egui 0.4.0: a published crate with shadcn presets
 
 Date: 2026-10-11
 Status: design approved in conversation (2026-10-11); revised after two
@@ -178,7 +178,7 @@ impl Default for Preset; // upstream DEFAULT_CONFIG (React apps/v4/registry/conf
 
 Each fallback that applies logs one `log::warn!` line, so a preset with two
 unsupported values logs two lines. The lines come from `Preset::theme()`, so
-they repeat on every call (e.g. each light/dark toggle); this is accepted.
+they repeat on every call (for example on each light/dark toggle); this is accepted.
 Every fallback still produces a usable theme. `log` becomes a runtime dependency (tiny, and the
 usual way egui crates warn).
 
@@ -236,7 +236,7 @@ only **Select** is affected.
   (`transform-menu.ts:30`), which switches both the colour vars and the
   `dark:` variants. So the menu popup draws with a derived theme: the dark
   palette **and** `dark: true`, so recipes with `State::DARK` rules
-  (e.g. `src/style/nova.rs`) resolve as in dark mode.
+  (for example `src/style/nova.rs`) resolve as in dark mode.
 - `*Translucent`: draws like the opaque variant (`DefaultTranslucent` as
   `Default`, `InvertedTranslucent` as `Inverted`) and logs a warning (§4.1).
   Upstream's `TRANSLUCENT_CLASSES` pair `bg-popover/70` with
@@ -261,7 +261,7 @@ as Regular. This is the Medium/Semibold bug; it is our bug, not egui's.
   `name`, `Variable { data, wght: RangeInclusive<f32> }` or
   `Static { regular, medium: Option<_>, semibold: Option<_>, bold: Option<_> }`
   (only for fonts with no variable version; a missing weight uses the nearest
-  weight that exists, e.g. Instrument Serif ships 400 only),
+  weight that exists; Instrument Serif, for example, ships 400 only),
   `y_offset_factor: f32`, and `LICENSE` text.
 - `Theme` holds the resolved `fonts: ThemeFonts` (body and heading
   `&'static FontFiles`); `Theme::apply` installs them (§4).
