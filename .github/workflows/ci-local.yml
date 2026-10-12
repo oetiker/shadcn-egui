@@ -51,10 +51,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
 
       - name: Test with default features
-        run: cargo test --workspace --all-targets -- --test-threads 4
+        run: cargo test --locked --workspace --all-targets -- --test-threads 4
 
       - name: Test with all features
-        run: cargo test --workspace --all-targets --all-features -- --test-threads 4
+        run: cargo test --locked --workspace --all-targets --all-features -- --test-threads 4
 
       # egui_kittest writes <name>.new.png and <name>.diff.png next to a
       # snapshot that does not match. The gallery test keeps the README's
@@ -94,7 +94,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-clippy-
 
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
   # The generators are workspaces of their own and never dependencies of a
   # crate, so the workspace jobs do not see them.
@@ -128,8 +128,8 @@ jobs:
             ${{ runner.os }}-cargo-${{ matrix.tool }}-
 
       - run: cargo fmt --check --manifest-path "$MANIFEST"
-      - run: cargo clippy --all-targets --manifest-path "$MANIFEST" -- -D warnings
-      - run: cargo test --manifest-path "$MANIFEST"
+      - run: cargo clippy --locked --all-targets --manifest-path "$MANIFEST" -- -D warnings
+      - run: cargo test --locked --manifest-path "$MANIFEST"
 
   # stylegen drift compares the crate's style comments and the copied
   # upstream files with shadcn-svelte at tools/stylegen/PIN and shadcn/ui at
@@ -211,7 +211,7 @@ jobs:
           git -C "$up/react" checkout --quiet "$(cat tools/stylegen/PIN_REACT)"
 
       - if: steps.gate.outputs.changed == 'true'
-        run: cargo run --manifest-path tools/stylegen/Cargo.toml -- drift "$RUNNER_TEMP/upstream/svelte" "$RUNNER_TEMP/upstream/react" .
+        run: cargo run --locked --manifest-path tools/stylegen/Cargo.toml -- drift "$RUNNER_TEMP/upstream/svelte" "$RUNNER_TEMP/upstream/react" .
 
   # What each crate would upload to crates.io, and whether the workspace
   # publishes (RELEASING.md, "Checks before a release").
@@ -239,4 +239,4 @@ jobs:
       - run: scripts/check-version-files.sh
       - run: scripts/check-packages.sh
       - run: scripts/check-package-size.sh
-      - run: cargo publish --dry-run --workspace
+      - run: cargo publish --locked --dry-run --workspace
