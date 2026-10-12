@@ -132,7 +132,7 @@ egui-shadcn plugin) are recorded here. The format is based on
   shadcn styles, colours, fonts and icon sets can then arrive in a minor
   release.
 
-### Added
+### New
 - A gallery example shows every component in each variant and size, under
   a preset you paste as a code or pick part by part (style, colours, fonts,
   icon library, radius, menu), in light or dark mode. Run it with
@@ -247,7 +247,7 @@ egui-shadcn plugin) are recorded here. The format is based on
   centred. A row shrinks back when its tallest item goes, except a row that
   holds a vertical separator or a scroll area, which keeps its tallest height.
 
-## [0.3.2] - 2026-10-09
+## 0.3.2 - 2026-10-09
 
 ### Changed
 - The skill, the gotchas and the registry README told you to call
@@ -258,7 +258,7 @@ egui-shadcn plugin) are recorded here. The format is based on
 - The settings example applies the theme in the eframe app creator instead
   of on every frame.
 
-## [0.3.1] - 2026-10-09
+## 0.3.1 - 2026-10-09
 
 ### Fixed
 - Ghost and Outline buttons kept their normal text colour on hover while the
@@ -268,7 +268,7 @@ egui-shadcn plugin) are recorded here. The format is based on
 - `Stroke::new(2.0, …)` in the checkbox drew a `float_literal_f32_fallback`
   warning from newer Rust compilers, which will become an error.
 
-## [0.3.0] - 2026-10-09
+## 0.3.0 - 2026-10-09
 
 ### Added
 - Dialog, Popover and Tooltip components in the shadcn style. A dialog closes
@@ -308,7 +308,7 @@ egui-shadcn plugin) are recorded here. The format is based on
 - A focused text field's border now turns the `ring` colour, like shadcn's
   inputs, instead of staying the plain `border` colour under the focus ring.
 
-## [0.2.1] - 2026-10-01
+## 0.2.1 - 2026-10-01
 
 ### Added
 - **New `references/cpu-rendering.md`** for apps that drive egui themselves and
@@ -319,7 +319,7 @@ egui-shadcn plugin) are recorded here. The format is based on
   `egui-winit`'s default clipboard feature. The skill now triggers on these
   symptoms too.
 
-## [0.2.0] - 2026-06-14
+## 0.2.0 - 2026-06-14
 
 ### Changed
 - **Slimmed the runtime dependency surface to just `egui` + `egui_extras`.**
@@ -352,7 +352,7 @@ egui-shadcn plugin) are recorded here. The format is based on
 - Snapshot coverage for all three tabs; refreshed README screenshots and added a
   component-gallery shot.
 
-## [0.1.0] - 2026-06-13
+## 0.1.0 - 2026-06-13
 
 ### Added
 - Initial release: shadcn-v4 (new-york / OKLCH) design tokens and theme for egui,
