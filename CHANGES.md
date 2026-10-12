@@ -1,25 +1,23 @@
 # Changelog
 
-All notable changes to the **egui-shadcn** plugin and the `egui_shadcn` crate are
-recorded here. The format is based on [Keep a Changelog](https://keepachangelog.com),
-and the project aims to follow [Semantic Versioning](https://semver.org).
+All notable changes to the `shadcn-egui` crates (and, up to 0.3.2, the
+egui-shadcn plugin) are recorded here. The format is based on
+[Keep a Changelog](https://keepachangelog.com), and the project aims to follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
 ### Changed
-- Remix Icon stays at version 4.8.0, its last release under the Apache-2.0
-  licence; later releases forbid redistribution as an icon pack.
-- Icon modules generated with an older icongen must be regenerated, because an
-  icon now holds a `shape` instead of `segs`.
-- A `Palette { .. }` struct literal written for 0.3 no longer compiles,
-  because `Palette` has the new field `chart`; start from `Palette::light()`,
-  `Palette::dark()` or `Palette::from_upstream(..)` and change single fields.
-- Medium and semibold text (button labels, badges, tabs, card and dialog
-  titles) now renders at its real weight; before, every weight looked like
-  regular text.
+- The crate is published on crates.io as `shadcn-egui`: add it with
+  `cargo add shadcn-egui` and change `egui_shadcn::` to `shadcn_egui::` in
+  your imports. Copying the component module into a project is no longer
+  supported; the egui-shadcn Claude Code plugin stays at 0.3.2 and keeps
+  doing that until it is rewritten for the crate.
 - The default font is Inter, as on the shadcn site, so all text looks
   different from 0.3. Oxanium remains available through the `font-oxanium`
   feature.
+- Medium and semibold text (button labels, badges, tabs, card and dialog
+  titles) now renders at its real weight; before, every weight looked like
+  regular text.
 - Text in Inter and Oxanium sits up to one pixel higher in some sizes, for
   example in badges and tooltips.
 - Card and dialog titles use the theme's heading font, which is the body
@@ -27,6 +25,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - An app that installs fonts of its own calls
   `Theme::apply_with_fonts(ctx, its_font_definitions)` instead of
   `Theme::apply`; this keeps the app's fonts next to the theme's.
+- `Theme` has the new public fields `style`, `fonts`, `icons` and `menu`, so
+  a `Theme { .. }` struct literal written for 0.3 no longer compiles; build
+  themes with `Theme::new(..)` and set the rest with `Theme::fonts(..)`,
+  `Theme::icons(..)` and `Theme::menu(..)`. Checkbox, Select and Dialog draw
+  the icons of the theme, so a preset's icon library changes them.
+- A `Palette { .. }` struct literal written for 0.3 no longer compiles,
+  because `Palette` has the new field `chart`; start from `Palette::light()`,
+  `Palette::dark()` or `Palette::from_upstream(..)` and change single fields.
+- `Button::icon` and `Button::icon_end` accept any icon reference, not only
+  constants.
+- Icon modules generated with an older icongen must be regenerated, because an
+  icon now holds a `shape` instead of `segs`.
+- Remix Icon stays at version 4.8.0, its last release under the Apache-2.0
+  licence; later releases forbid redistribution as an icon pack.
 - Components now take their sizes, colours, radii and shadows from a shadcn
   style. `Theme::new(Style::vega(), Palette::dark(), 10.0)` gives the classic
   look and `Style::nova()` the compact one, matching a web client set up with
@@ -40,8 +52,6 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   in nova, with 10 px side padding.
 - `Theme` is `Clone` and no longer `Copy`, so code that reuses a theme value
   must call `.clone()`.
-- `Theme` has a new public field `style`, so a `Theme { .. }` struct literal
-  written for 0.3 no longer compiles; build themes with `Theme::new(..)`.
 - `card_title` and `card_description` return the label's `Response`. Where
   such a call ends a block that must return nothing, add a `;`.
 - The new `ButtonSize` and `BadgeVariant` variants (see Added) break a
@@ -112,13 +122,28 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - The `settings` example takes the style and palette on the command line, for
   example `cargo run --example settings -- nova light` (default `vega dark`).
   `SettingsState` has new `slider` and `region` fields.
-- `Theme` has the new public fields `icons` and `menu`; set them with
-  `Theme::icons(..)` and `Theme::menu(..)`. Checkbox, Select and Dialog draw
-  the icons of the theme.
-- `Button::icon` and `Button::icon_end` accept any icon reference, not only
-  constants.
 
 ### Added
+- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
+  and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
+  colour, theme, chart colour, fonts, icon library, radius and menu colours.
+  `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
+  `to_code()` gives the code back. Codes from shadcn-svelte.com are not
+  supported: that site numbers colours and icon libraries differently.
+- When a preset asks for something this build cannot show, the app uses a
+  stand-in and logs a warning such as
+  `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
+  The Sera style becomes Nova, the gray base colour, theme or chart colour
+  (ui.shadcn.com has no colours for gray) becomes neutral or the base colour,
+  and a font or icon library whose Cargo feature is off becomes Inter or
+  Lucide. The translucent menu colours draw as the default or inverted menu
+  colour, because egui cannot blur what lies behind a menu.
+- With the Lyra or Sera style every corner is square, whatever radius the
+  preset names, as on the shadcn site.
+- A translucent menu colour always highlights menu items with the subtle
+  accent, also when the preset asks for the bold one, as on ui.shadcn.com.
+- An open Select list draws in the preset's menu colours: with the
+  `inverted` menu colour it is dark also on a light page.
 - Every font of the shadcn create page is available, each behind its own
   feature named after the font (`font-geist`, `font-jetbrains-mono`,
   `font-playfair-display`, …), and a preset that names the font uses it.
@@ -126,6 +151,14 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   whose feature is off renders in Inter and logs a warning.
 - The font crates carry the font's own licence next to MIT: `MIT AND OFL-1.1`
   for most fonts, `MIT AND Apache-2.0` for the Apache-licensed ones.
+- The checkbox tick, select arrow and dialog close button follow the preset's
+  icon library: Lucide by default, and Tabler, Phosphor, Remix Icon and
+  Hugeicons with the features `icons-tabler`, `icons-phosphor`,
+  `icons-remixicon` and `icons-hugeicons` (`icons-all` for all). Every icon of
+  each set is available as a constant, for example
+  `shadcn_egui::icons::tabler::HOME`.
+- Filled icons (Phosphor, Remix Icon) are drawn with smooth edges, also when
+  faded for a disabled widget or a translucent menu.
 - `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
   shadcn site builds for a base colour, a colour theme and a chart colour,
   for example `Palette::from_upstream("stone", "blue", "rose", true)`.
@@ -155,34 +188,6 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   (Tailwind's line heights for the text sizes), and `Theme::line_px(TextSize)`
   returns the line height for a text size.
 - `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
-- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
-  and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
-  colour, theme, chart colour, fonts, icon library, radius and menu colours.
-  `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
-  `to_code()` gives the code back. Codes from shadcn-svelte.com are not
-  supported: that site numbers colours and icon libraries differently.
-- When a preset asks for something this build cannot show, the app uses a
-  stand-in and logs a warning such as
-  `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
-  The Sera style becomes Nova, the gray base colour, theme or chart colour
-  (ui.shadcn.com has no colours for gray) becomes neutral or the base colour,
-  and a font or icon library whose Cargo feature is off becomes Inter or
-  Lucide. The translucent menu colours draw as the default or inverted menu
-  colour, because egui cannot blur what lies behind a menu.
-- With the Lyra or Sera style every corner is square, whatever radius the
-  preset names, as on the shadcn site.
-- A translucent menu colour always highlights menu items with the subtle
-  accent, also when the preset asks for the bold one, as on ui.shadcn.com.
-- An open Select list draws in the preset's menu colours: with the
-  `inverted` menu colour it is dark also on a light page.
-- The checkbox tick, select arrow and dialog close button follow the preset's
-  icon library: Lucide by default, and Tabler, Phosphor, Remix Icon and
-  Hugeicons with the features `icons-tabler`, `icons-phosphor`,
-  `icons-remixicon` and `icons-hugeicons` (`icons-all` for all). Every icon of
-  each set is available as a constant, for example
-  `shadcn_egui::icons::tabler::HOME`.
-- Filled icons (Phosphor, Remix Icon) are drawn with smooth edges, also when
-  faded for a disabled widget or a translucent menu.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /
@@ -219,6 +224,7 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   before a large button, sat about 2 px above the row's centre. They are now
   centred. A row shrinks back when its tallest item goes, except a row that
   holds a vertical separator or a scroll area, which keeps its tallest height.
+
 
 ## [0.3.2] - 2026-10-09
 
@@ -337,9 +343,9 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - Reference settings-form-with-tabs screen + snapshot eval; Claude Code plugin
   manifest and marketplace listing.
 
-[0.3.2]: https://github.com/oetiker/egui-shadcn/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/oetiker/egui-shadcn/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/oetiker/egui-shadcn/compare/v0.2.1...v0.3.0
-[0.2.1]: https://github.com/oetiker/egui-shadcn/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/oetiker/egui-shadcn/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/oetiker/egui-shadcn/releases/tag/v0.1.0
+[0.3.2]: https://github.com/oetiker/shadcn-egui/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/oetiker/shadcn-egui/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/oetiker/shadcn-egui/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/oetiker/shadcn-egui/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/oetiker/shadcn-egui/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/oetiker/shadcn-egui/releases/tag/v0.1.0
