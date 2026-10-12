@@ -47,7 +47,10 @@ fi
 mkdir -p target
 log=target/publish-crates.log
 for n in "${order[@]}"; do
-  status=$(curl -sS -o /dev/null -w '%{http_code}' -A "$ua" "https://crates.io/api/v1/crates/$n/$version")
+  if ! status=$(curl -sS -o /dev/null -w '%{http_code}' -A "$ua" "https://crates.io/api/v1/crates/$n/$version"); then
+    echo "publish-crates: cannot reach crates.io while checking $n $version" >&2
+    exit 1
+  fi
   case "$status" in
     200) echo "skip $n $version (already on crates.io)"; continue ;;
     404) ;;
@@ -60,8 +63,9 @@ for n in "${order[@]}"; do
   fi
   echo "publish $n $version"
   if ! cargo publish -p "$n" --locked --jobs "${JOBS:-4}" 2>&1 | tee "$log"; then
-    if grep -q '429' "$log"; then
-      echo "publish-crates: crates.io rate limit for new crates; re-run this script later, it skips what is already published" >&2
+    if grep -q 'status 429 Too Many Requests' "$log"; then
+      echo "publish-crates: crates.io rate limit (HTTP 429) while publishing $n; re-run this script later, it skips what is already published" >&2
+      grep -o 'try again after .*' "$log" >&2 || true
       exit 2
     fi
     exit 1
