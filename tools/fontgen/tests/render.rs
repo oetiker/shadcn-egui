@@ -246,3 +246,35 @@ fn definitions_mismatch_names_the_font() {
         "a definition without a FONTS.tsv row: {e}"
     );
 }
+
+#[test]
+fn changed_kind_names_the_font() {
+    let ts = "export const FONT_DEFINITIONS = [\n\t{\n\t\tname: \"inter\",\n\t\ttitle: \"Inter\",\n\t\ttype: \"sans\",\n\t},\n\
+              \t{\n\t\tname: \"roboto\",\n\t\ttitle: \"Roboto\",\n\t\ttype: \"sans\",\n\t},\n\
+              \t{\n\t\tname: \"ubu\",\n\t\ttitle: \"Ubu\",\n\t\ttype: \"sans\",\n\t},\n\
+              \t{\n\t\tname: \"instrument-serif\",\n\t\ttitle: \"Instrument Serif\",\n\t\ttype: \"serif\",\n\t\tweight: [\"400\"],\n\t},\n];\n";
+    let changed = ts.replace("type: \"serif\"", "type: \"sans\"");
+    let e = check_definitions(&sample(), &changed).unwrap_err();
+    assert!(e.contains("instrument-serif") && e.contains("kind"), "{e}");
+}
+
+#[test]
+fn truncated_fonts_are_rejected() {
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates");
+    for name in ["inter", "oxanium"] {
+        let ttf = std::fs::read(crates.join(format!("shadcn-egui-font-{name}/fonts/{name}.ttf")))
+            .unwrap();
+        check_truetype(&ttf).unwrap_or_else(|e| panic!("{name} whole: {e}"));
+        for percent in [99, 90, 50, 10] {
+            let cut = &ttf[..ttf.len() * percent / 100];
+            assert!(
+                check_truetype(cut).is_err(),
+                "{name} cut to {percent}% accepted by check_truetype"
+            );
+            assert!(
+                wght_range(cut).is_err(),
+                "{name} cut to {percent}% accepted by wght_range"
+            );
+        }
+    }
+}

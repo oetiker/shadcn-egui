@@ -284,10 +284,36 @@ pub fn check_definitions(rows: &[Row], ts: &str) -> Result<(), String> {
     }
 }
 
-/// The file starts like a TrueType font (`00 01 00 00`) and skrifa reads it.
+/// The file starts like a TrueType font (`00 01 00 00`), every table in its
+/// directory lies inside the file, and skrifa reads it.
 pub fn check_truetype(ttf: &[u8]) -> Result<(), String> {
     if ttf.get(..4) != Some(&[0, 1, 0, 0][..]) {
         return Err("not a TrueType font (header is not 00 01 00 00)".into());
+    }
+    let be16 = |at: usize| {
+        ttf.get(at..at + 2)
+            .map(|b| u16::from_be_bytes([b[0], b[1]]))
+    };
+    let be32 = |at: usize| {
+        ttf.get(at..at + 4)
+            .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    };
+    let tables = be16(4).ok_or("truncated font: no table count")? as usize;
+    for i in 0..tables {
+        let rec = 12 + 16 * i;
+        let (Some(offset), Some(length)) = (be32(rec + 8), be32(rec + 12)) else {
+            return Err(format!(
+                "truncated font: table directory ends at record {i}"
+            ));
+        };
+        if offset.checked_add(length).is_none_or(|end| end > ttf.len()) {
+            let tag = String::from_utf8_lossy(&ttf[rec..rec + 4]).into_owned();
+            return Err(format!(
+                "truncated font: table `{tag}` ends at {} but the file has {} bytes",
+                offset.saturating_add(length),
+                ttf.len()
+            ));
+        }
     }
     skrifa::FontRef::new(ttf)
         .map(|_| ())
@@ -572,6 +598,9 @@ pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
     let root_toml_path = repo.join("Cargo.toml");
     let root_toml = read_text(&root_toml_path)?;
     let version = workspace_version(&root_toml)?;
+    // Everything is read, validated and rendered first; files are written
+    // only when no step can fail any more.
+    let mut outputs: Vec<(std::path::PathBuf, Vec<u8>)> = Vec::new();
     for row in &rows {
         if !row.shipped() {
             println!(
@@ -595,27 +624,35 @@ pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
                     check_truetype(&bytes).map_err(|e| format!("{gf_path}: {e}"))?
                 }
             }
-            write(&dir.join(target), &bytes)?;
+            outputs.push((dir.join(target), bytes));
         }
         let licence_src = downloads.join(&row.license_file);
         let licence =
             std::fs::read(&licence_src).map_err(|e| format!("{}: {e}", licence_src.display()))?;
-        write(&dir.join("LICENSE-FONT.txt"), &licence)?;
-        write(&dir.join("Cargo.toml"), crate_cargo_toml(row).as_bytes())?;
-        write(&dir.join("src/lib.rs"), crate_lib_rs(row, wght)?.as_bytes())?;
-        println!("crate {}", row.crate_name());
+        outputs.push((dir.join("LICENSE-FONT.txt"), licence));
+        outputs.push((dir.join("Cargo.toml"), crate_cargo_toml(row).into_bytes()));
+        outputs.push((
+            dir.join("src/lib.rs"),
+            crate_lib_rs(row, wght)?.into_bytes(),
+        ));
     }
-    write(
-        &repo.join("crates/shadcn-egui/src/fonts/registry.rs"),
-        registry_rs(&rows, &pin)?.as_bytes(),
-    )?;
+    outputs.push((
+        repo.join("crates/shadcn-egui/src/fonts/registry.rs"),
+        registry_rs(&rows, &pin)?.into_bytes(),
+    ));
     let main_toml_path = repo.join("crates/shadcn-egui/Cargo.toml");
     let main_toml = replace_block(&read_text(&main_toml_path)?, &features_block(&rows))
         .map_err(|e| format!("{}: {e}", main_toml_path.display()))?;
-    write(&main_toml_path, main_toml.as_bytes())?;
+    outputs.push((main_toml_path, main_toml.into_bytes()));
     let root_toml = replace_block(&root_toml, &workspace_deps_block(&rows, &version))
         .map_err(|e| format!("{}: {e}", root_toml_path.display()))?;
-    write(&root_toml_path, root_toml.as_bytes())?;
+    outputs.push((root_toml_path, root_toml.into_bytes()));
+    for (path, bytes) in &outputs {
+        write(path, bytes)?;
+    }
+    for row in rows.iter().filter(|r| r.shipped()) {
+        println!("crate {}", row.crate_name());
+    }
     println!("registry and Cargo.toml blocks written");
     Ok(())
 }

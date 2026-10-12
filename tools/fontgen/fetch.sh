@@ -2,7 +2,10 @@
 # Downloads every font file and licence that FONTS.tsv names for a shipped
 # font (OFL-1.1 or Apache-2.0) from google/fonts at the commit in GF_PIN.
 # Files land under <downloads-dir> at their google/fonts path. Files already
-# there are kept, so a re-run only fetches what is missing.
+# there are kept, so a re-run only fetches what is missing. A download goes
+# to a temporary file and is moved into place only when curl succeeded, so a
+# file exists only after a complete transfer. fontgen checks every font it
+# reads (table directory and axis data), which is the guard against a bad file.
 #
 # Usage: tools/fontgen/fetch.sh <downloads-dir>
 set -euo pipefail
@@ -19,7 +22,11 @@ awk -F'\t' 'NR > 1 && ($4 == "OFL-1.1" || $4 == "Apache-2.0") {
     dest="$out/$p"
     [ -s "$dest" ] && continue
     mkdir -p "$(dirname "$dest")"
-    curl -sfL -A "$ua" -o "$dest.part" "https://raw.githubusercontent.com/google/fonts/$pin/$(enc "$p")"
-    mv "$dest.part" "$dest"
+    tmp=$(mktemp "$dest.XXXXXX")
+    trap 'rm -f "$tmp"' EXIT
+    curl -sfL -A "$ua" -o "$tmp" "https://raw.githubusercontent.com/google/fonts/$pin/$(enc "$p")"
+    chmod 644 "$tmp"
+    mv "$tmp" "$dest"
+    trap - EXIT
     echo "fetched $p"
 done
