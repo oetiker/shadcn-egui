@@ -679,7 +679,7 @@ fn unbind_lost_heading(ctx: &egui::Context) -> Option<FontId> {
     });
     let name = FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
     let mut stand_in = None;
-    ctx.global_style_mut(|s| {
+    ctx.all_styles_mut(|s| {
         if let Some(h) = s.text_styles.get_mut(&TextStyle::Heading) {
             if h.family == name {
                 h.family = FontFamily::Proportional;
@@ -706,7 +706,7 @@ fn bind_heading(ctx: &egui::Context) -> Option<FontId> {
     });
     let id = FontId::new(stand_in.size, name);
     let mut changed = false;
-    ctx.global_style_mut(|s| {
+    ctx.all_styles_mut(|s| {
         if s.text_styles.get(&TextStyle::Heading) == Some(&stand_in) {
             s.text_styles.insert(TextStyle::Heading, id.clone());
             changed = true;
@@ -771,7 +771,7 @@ impl Theme {
             ctx.data_mut(|d| d.insert_temp(pending_heading_id(), PendingHeading(heading.clone())));
         }
 
-        ctx.global_style_mut(|s| {
+        ctx.all_styles_mut(|s| {
             use FontFamily::Proportional;
             s.text_styles = [
                 (TextStyle::Small, FontId::new(m.text_xs, Proportional)),
@@ -781,7 +781,7 @@ impl Theme {
                     TextStyle::Monospace,
                     FontId::new(m.text_mono, FontFamily::Monospace),
                 ),
-                (TextStyle::Heading, heading),
+                (TextStyle::Heading, heading.clone()),
             ]
             .into();
 

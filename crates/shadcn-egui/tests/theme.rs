@@ -238,3 +238,52 @@ fn theme_stays_small() {
         std::mem::size_of::<Theme>()
     );
 }
+
+/// Assert that both of egui's styles carry `t`, whichever one is active.
+fn assert_both_styles(ctx: &egui::Context, t: &Theme) {
+    for which in [egui::Theme::Dark, egui::Theme::Light] {
+        let s = ctx.style_of(which);
+        assert_eq!(s.visuals.panel_fill, t.palette.background, "{which:?}");
+        assert_eq!(
+            s.text_styles[&egui::TextStyle::Body].size,
+            t.metrics.text_sm,
+            "{which:?}"
+        );
+        assert_eq!(
+            s.spacing.item_spacing,
+            ctx.global_style().spacing.item_spacing,
+            "{which:?}"
+        );
+    }
+}
+
+#[test]
+fn apply_reaches_both_styles_on_a_light_context() {
+    let ctx = egui::Context::default();
+    ctx.set_theme(egui::Theme::Light);
+    let t = Theme::vega_dark();
+    t.apply(&ctx);
+    let _ = ctx.run_ui(Default::default(), |_ui| {});
+    assert_eq!(ctx.global_style().visuals.panel_fill, t.palette.background);
+    assert_both_styles(&ctx, &t);
+}
+
+#[test]
+fn apply_survives_a_system_theme_switch() {
+    let ctx = egui::Context::default();
+    let t = Theme::vega_light();
+    t.apply(&ctx);
+    for sys in [egui::Theme::Light, egui::Theme::Dark] {
+        let input = egui::RawInput {
+            system_theme: Some(sys),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |_ui| {});
+        assert_eq!(
+            ctx.global_style().visuals.panel_fill,
+            t.palette.background,
+            "{sys:?}"
+        );
+        assert_both_styles(&ctx, &t);
+    }
+}

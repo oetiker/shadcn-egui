@@ -210,6 +210,10 @@ egui-shadcn plugin) are recorded here. The format is based on
   other Lucide icon (2141 in all).
 
 ### Fixed
+- On a desktop with a light system theme, an app that called `Theme::apply`
+  showed egui's own light look instead of the shadcn theme, and the theme
+  also vanished when the desktop switched between light and dark. The theme
+  now holds in both cases.
 - Faded and disabled icons are evenly transparent: line ends, crossings and
   filled shapes no longer show darker spots.
 - An app that called `Theme::apply` while drawing a frame crashed with
