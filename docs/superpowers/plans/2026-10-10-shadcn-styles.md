@@ -1,4 +1,4 @@
-# egui-shadcn 0.4.0 — shadcn styles as a parameter: Implementation Plan
+# egui-shadcn 0.4.0 implementation plan: shadcn styles as a parameter
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -87,7 +87,7 @@ The user must confirm both at plan review.
    checkbox, slider or input must not show hover, active (press nudge) or
    focus styles, and must not change value. Pinned in Tasks 10, 14, 15, 16.
 3. **Unusual theme radius:** `radius: 0.0` gives square corners everywhere;
-   a large radius (e.g. 40.0) with `rounded-4xl` must clamp to half the
+   a large radius (for example 40.0) with `rounded-4xl` must clamp to half the
    short side and never overflow egui's `u8` corner radius. Pinned in Task 7.
 4. **`Theme::current` before `Theme::apply`:** a widget painted before any
    theme is applied falls back to vega dark without building a new `Style`
@@ -938,7 +938,7 @@ marker list per component is markers.txt."
 - Consumes: `class::split` (Task 3).
 - Produces:
   - `model::Field` (one variant per `Recipe` field, `fn rust_name(self) -> &'static str` giving the exact field name from Task 2), `model::Value` (`Px(f32)`, `Factor(f32)`, `Bool(bool)`, `Text(&'static str)` for `TextSize` variants or `Value::TextPx(f32)`, `Paint{role:&'static str, alpha:f32}`, `Mix(&'static str,&'static str,f32)`, `Radius(RadiusV)`, `Weight(&'static str)`, `Shadow(&'static str)`, `Shift(ShiftV)`) with `fn rust(&self) -> String` giving a Rust expression in terms of `crate::style` types.
-  - `model::FLAGS: &[(&str, u32)]` — the `State` const names and bits, identical to Task 2.
+  - `model::FLAGS: &[(&str, u32)]`: the `State` const names and bits, identical to Task 2.
   - `variant::{variant, V, Pseudo}`: `V::Cond { all: u32, none: u32, rank: u32 }`, `V::Always { rank: u32 }`, `V::Pseudo(Pseudo, u32)`, `V::Ignore(&'static str)`, `V::Unsupported`.
   - `utility::{utility, U}`: `U::Set(Vec<(Field, Value)>)`, `U::UseVar(Vec<Field>, String)`, `U::VarDef(String, f32)`, `U::Ignore(&'static str)`, `U::Unsupported(&'static str)`.
 
@@ -1062,7 +1062,7 @@ fn variants() {
 
 - [ ] **Step 4: Implement `model.rs`, `variant.rs`, `utility.rs`.**
 
-`model.rs` — field and value model, mirroring `src/style/recipe.rs` exactly:
+`model.rs`: field and value model, mirroring `src/style/recipe.rs` exactly:
 
 ```rust
 /// One recipe field; `rust_name` is the field name in `src/style/recipe.rs`.
@@ -1164,7 +1164,7 @@ pub fn state_expr(bits: u32) -> String {
 }
 ```
 
-`variant.rs` — every variant the shipped markers use (see the variant census
+`variant.rs`: every variant the shipped markers use (see the variant census
 in this plan's research: `dark`, `hover`, `focus-visible`, `aria-invalid`,
 `data-checked`, …). Shape:
 
@@ -1286,7 +1286,7 @@ pub fn variant(v: &str) -> V {
   flag yet is a spec gap: add a flag to `State` (Task 2) **and** `FLAGS` in
   the same commit, and tell the controller.
 
-`utility.rs` — shape (complete it until the census in Step 5 shows no
+`utility.rs`: shape (complete it until the census in Step 5 shows no
 unsupported utility in vega or nova):
 
 ```rust
@@ -1598,11 +1598,11 @@ tailwindcss 4.3.3's variant order."
   - `emit::{emit_struct, emit_style}` → Rust source strings.
   - `report::report(style: &str, pin: &str, markers: &[(String, Marker)]) -> String`.
   - CLI: `stylegen generate <shadcn-svelte> <crate-root>`, `stylegen drift <shadcn-svelte> <crate-root>` (drift lands in Task 6).
-  - Crate: `crate::style::Style` with `pub name: &'static str` plus one `pub <marker>: Recipe` per marker in `markers.txt` (field name = marker without `cn-`, `-` → `_`, e.g. `button_size_icon_xs`, `slider_thumb`, `card_footer`); `Style::vega()`, `Style::nova()`, `impl Default for Style` (vega).
+  - Crate: `crate::style::Style` with `pub name: &'static str` plus one `pub <marker>: Recipe` per marker in `markers.txt` (field name = marker without `cn-`, `-` → `_`, for example `button_size_icon_xs`, `slider_thumb`, `card_footer`); `Style::vega()`, `Style::nova()`, `impl Default for Style` (vega).
 
 - [ ] **Step 1: Write the failing tests.**
 
-`tools/stylegen/tests/golden.rs` — hand-checked values from the research
+`tools/stylegen/tests/golden.rs`: hand-checked values from the research
 tables:
 
 ```rust
@@ -1677,7 +1677,7 @@ fn later_class_wins_under_same_condition() {
 }
 ```
 
-`tools/stylegen/tests/published.rs` — the parse check against shadcn-svelte's
+`tools/stylegen/tests/published.rs`: the parse check against shadcn-svelte's
 published per-style output. Copy the JSON from
 `<scratch>/egui-shadcn-styles-research/dl/reg/{vega,nova}/`
 into `tests/fixtures/published/{vega,nova}/` (fetched 2026-10-09 from
@@ -2234,7 +2234,7 @@ disappeared upstream; each is a re-port job."
 **Interfaces:**
 - Consumes: `crate::style::{Style, State, Paint, Role, Radius, Rung, TextSize, Weight, ShadowLevel, Shift}` (Tasks 2, 5); `color::{srgb_to_oklch, mix_oklch}` (Task 1).
 - Produces (later tasks rely on these exact names):
-  - `Theme { pub style: Arc<Style>, pub palette: Palette, pub radius: f32, pub metrics: Metrics, pub dark: bool }` — `Clone`, no longer `Copy`.
+  - `Theme { pub style: Arc<Style>, pub palette: Palette, pub radius: f32, pub metrics: Metrics, pub dark: bool }`; it is `Clone` and no longer `Copy`.
   - `Theme::new(style: Style, palette: Palette, radius: f32) -> Theme` (dark = palette background OKLCH L < 0.5).
   - `Theme::vega_dark()`, `Theme::vega_light()`. `Theme::dark()`/`light()` stay as aliases of these until Task 24.
   - `Theme::state(&self, s: State) -> State` (adds `DARK`).
@@ -2530,7 +2530,7 @@ no longer Copy."
 - Produces:
   - `common::themes() -> Vec<(&'static str, Theme)>` → `vega_dark`, `vega_light`, `nova_dark`, `nova_light`.
   - `common::snapshot_all(name: &str, size: egui::Vec2, ui_fn: impl FnMut(&mut egui::Ui))` → writes/compares `tests/snapshots/{name}_{theme}.png`, painting a background-filled `CentralPanel` with 16px margin around `ui_fn`.
-  - `tests/tokens.rs`: `const PORTED: &[&str]` — file names that get the strict scan; each port task adds its file.
+  - `tests/tokens.rs`: `const PORTED: &[&str]`, the file names that get the strict scan; each port task adds its file.
 
 - [ ] **Step 1: `tests/common/mod.rs`:**
 
@@ -3228,7 +3228,7 @@ next to `CLOSE`, with the same licence note.
 indicator `icon_size` (`[&>svg]:size-3.5`), ring.
 
 **Base classes to quote:** `after:absolute after:-inset-x-3 after:-inset-y-2`
-— the hit area. Allocate the visual size, then
+is the hit area. Allocate the visual size, then
 `ui.interact(rect.expand2(vec2(12.0, 8.0)), id, Sense::click())` with the
 quote on the line above; the 12/8 are those base classes.
 `group-has-disabled/field:opacity-50`, `disabled:cursor-not-allowed disabled:opacity-50`.
@@ -3266,7 +3266,7 @@ the thumb sits inside the 1px border (thumb rect left = track left + border).
 **Behaviour (bits-ui Switch):** click/Space/Enter toggle; disabled
 inert; `widget_info selected(Checkbox, …)` (egui has no switch role).
 
-**Tests:** nova default track is 32×18.4 (`rect.size()` ≈ (32, 18.4) — egui
+**Tests:** nova default track is 32×18.4 (`rect.size()` ≈ (32, 18.4), since egui
 rounds allocation to points; assert with 0.5 tolerance), sm is 24×14;
 checked thumb right edge is 1px inside the track's right edge (from the
 shift); disabled click no toggle; snapshot default/sm × off/on × enabled/disabled.
@@ -3306,7 +3306,7 @@ impl Widget for Slider<'_> { … }
 
 **Geometry:** horizontal width = available width (`w-full` of the base
 root; this is the one place `ui.available_width()` is the upstream
-intent — quote `"relative flex w-full touch-none items-center"`), height =
+intent; quote `"relative flex w-full touch-none items-center"`), height =
 max(thumb height, track height). Track thickness from `height` under
 `HORIZONTAL` (`data-horizontal:h-1` nova / `h-1.5` vega). Thumb `size-3`
 (nova) / `size-4` (vega), `border` + `border-ring` (nova) /
@@ -3424,8 +3424,8 @@ fn slider_snapshot() {
 snapshots `tabs_*`; `git rm tests/snapshots/tabs.png` and its test.
 
 **API:** `tab_bar(ui, &mut usize, labels) -> bool` stays; add
-`Tabs::new(&mut usize, labels).variant(TabsVariant::{Default, Line}).orientation(…)`
-— offer `Horizontal` only in 0.4.0 if vertical needs content layout the
+`Tabs::new(&mut usize, labels).variant(TabsVariant::{Default, Line}).orientation(…)`;
+offer `Horizontal` only in 0.4.0 if vertical needs content layout the
 crate lacks (state it in the doc comment).
 
 **Layers:** list `[&s.tabs_list, &s.tabs_list_variant_<v>]`, trigger
@@ -3446,7 +3446,7 @@ sum of trigger widths. Quote the base class.
 
 **Behaviour (bits-ui Tabs):** click selects; Left/Right move selection
 (automatic activation); Home/End first/last; `widget_info` per trigger
-`selected(SelectableLabel… )` — use `WidgetType::SelectableLabel` with
+`selected(SelectableLabel… )`: use `WidgetType::SelectableLabel` with
 `selected`.
 
 **Tests:** click selects; ArrowRight moves; trigger widths differ with label
@@ -3464,7 +3464,7 @@ snapshots `tooltip_*`; `git rm tests/snapshots/tooltip.png` and its test.
 **Layers:** content `[&s.tooltip_content]`, arrow `[&s.tooltip_arrow]`.
 Colours: the base `TooltipContent` uses `bg-foreground text-background`
 (read `ui/tooltip/tooltip-content.svelte`; 0.3 used `primary`, which is a
-new-york-era choice — follow the base). Values: `pad_*` (`px-3 py-1.5`),
+new-york-era choice; follow the base). Values: `pad_*` (`px-3 py-1.5`),
 `text_size` (`text-xs`), `radius` (`rounded-md`), `gap`. Arrow: `size-2.5`
 square, `rounded-[2px]`, rotated 45° (base `rotate-45` ignored by stylegen,
 painted here: four points of a diamond centred on the content edge;
@@ -3518,7 +3518,7 @@ trigger + popup list. Port both: the trigger is a custom-painted widget
 for the keyboard-highlighted/hovered row, `CHECKED`/`SELECTED` for the
 chosen one), and `cn-select-item-indicator` (`CHECK` icon at `right-2`,
 `size-4`). Scroll buttons are replaced by an egui `ScrollArea` (state it;
-markers `cn-select-scroll-*` resolved but unused — note in the doc).
+markers `cn-select-scroll-*` resolved but unused; note it in the doc).
 `cn-select-group`, `-label`, `-separator` are not offered by the
 options-list API in 0.4.0; note it in the doc and in `component-map.md`.
 
@@ -3547,8 +3547,8 @@ snapshots `card_*`; `git rm tests/snapshots/card_badge_select.png`,
 `tests/snapshots/layout_card.png` and their tests.
 
 **API:** `layout::card(ui, add)` stays (default size); add
-`layout::card_with(ui, CardOptions { size: CardSize::{Default, Sm}, footer: Option<&mut dyn FnMut(&mut Ui)> }, add)`
-— or a builder `Card::new().size(..).footer(|ui| …).show(ui, |ui| …)` in
+`layout::card_with(ui, CardOptions { size: CardSize::{Default, Sm}, footer: Option<&mut dyn FnMut(&mut Ui)> }, add)`,
+or a builder `Card::new().size(..).footer(|ui| …).show(ui, |ui| …)` in
 `components/card.rs` with `layout::card` delegating to it. Keep
 `card_title`, `card_description`; add `card_header(ui, title, description)`,
 `card_action` slot in the header (right-aligned).
@@ -3560,7 +3560,7 @@ snapshots `card_*`; `git rm tests/snapshots/card_badge_select.png`,
 `HAS_FOOTER`; header/content/footer `px-(--card-spacing)`; `gap`;
 `ring-1 ring-foreground/10` (no border) and vega `shadow-xs`… check the
 generated values; `rounded-xl`; footer `bg-muted/50 border-t
-rounded-b-xl` strip that reaches the card edges (nova) — paint the footer
+rounded-b-xl` strip that reaches the card edges (nova): paint the footer
 background as a rect spanning the card's full width with bottom corners
 `radius_bottom`, and the top border line, then lay out the footer content
 inside `p-(--card-spacing)`.
@@ -3651,7 +3651,7 @@ fn main() -> eframe::Result<()> {
 **Accessibility test (spec §7, "every custom-painted widget reports
 `widget_info`"):** in `settings_snapshot.rs`, render each tab once and
 query every component on it by its label with kittest (`get_by_label`),
-e.g. the Save button, the Volume slider, the role select, each switch and
+for example the Save button, the Volume slider, the role select, each switch and
 checkbox, each tab trigger. A widget without `widget_info` is not found.
 
 **Commit:** `feat(reference): settings gallery per style; example takes a style`.
@@ -3682,7 +3682,7 @@ items; registry copy.
 - [ ] **Step 5:** In `tests/tokens.rs`, replace the `PORTED` list with all
   files in `src/components/` plus `layout.rs` (keep the `assert!(files.len() > 5)`
   guard). `icon.rs` path data and `shared.rs` helpers will hit the geometry
-  rule: icon path coordinates are Lucide data — mark the `CLOSE`/`CHECK`/
+  rule: icon path coordinates are Lucide data, so mark the `CLOSE`/`CHECK`/
   `CHEVRON_DOWN` blocks with a file-level allow (skip lines inside
   `pub const …: Icon = Icon {` … `};`), not with per-line quotes.
 - [ ] **Step 6:** Delete every remaining new-york snapshot PNG that no test
@@ -3705,7 +3705,7 @@ names `Theme::dark()`.
 - [ ] **Step 1: Export gate.** Re-run `stylegen generate`. For each of maia,
   lyra, mira, luma, sera, rhea: if its report says "(exportable)", add it
   to `EXPORT`, re-generate, add `mod <s>;` and `pub fn <s>() -> Self` to
-  `src/style/mod.rs`, add it to `common::themes()`? — No: snapshots stay
+  `src/style/mod.rs`, add it to `common::themes()`? No: snapshots stay
   vega/nova (spec §7); add a unit test that the style constructs and a
   button resolves a height. Otherwise leave it unexported. Record the
   outcome in `references/styles.md` ("exported: …; not exported, with the
@@ -3793,7 +3793,7 @@ rendering of the same style.
   consumer migration is not in this release (docs only, Task 25); §11 marker
   list → `markers.txt` in Task 3.
 - **Deviations to confirm with the user:** breakpoints (sm/md matched) and
-  ignored-vs-unsupported in the report — see "Two decisions" at the top.
+  ignored-vs-unsupported in the report; see "Two decisions" at the top.
 - **Port tasks 11–22** state API, layering, states, base classes and
   behaviour lists, and full tests for the risky parts (Slider); their paint
   code follows Task 10's pattern rather than being written out here,
