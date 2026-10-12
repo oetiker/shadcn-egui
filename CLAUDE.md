@@ -21,7 +21,12 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
 - `tools/stylegen`, `tools/icongen`, `tools/fontgen` — generators, each its
   own workspace; never dependencies of a crate.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
-  `publish-crates.sh`.
+  `check-version-files.sh`, `publish-crates.sh`.
+- `.github/` — CI and release on the repo-infra standard. The project
+  owns `workflows/ci-local.yml`, the callers `ci.yml`, `release-build.yml`
+  and `release-publish.yml`, and `repo-infra.json`; every other workflow,
+  `workflows/lib/` and `dependabot.yml` are installed from repo-infra and
+  never edited by hand.
 
 ## Start here — read the source docs, don't restate them
 
@@ -72,6 +77,7 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
     cargo fmt --check --manifest-path tools/$t/Cargo.toml
   done
   cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift <shadcn-svelte checkout> <shadcn-ui checkout> .
+  scripts/check-version-files.sh
   scripts/check-packages.sh
   scripts/check-package-size.sh
   cargo publish --dry-run --workspace --jobs 4
