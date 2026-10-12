@@ -1,4 +1,4 @@
-# Phase 6 — Icons: filled icons, blob storage, icon crates
+# Phase 6: Icons (filled icons, blob storage, icon crates)
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first, and
 > section D ("Icons (Phase 6)") of "Cross-phase interfaces and design notes":
@@ -47,9 +47,9 @@ command from `$WT`.
 **Interfaces:**
 - Consumes: usvg 0.48 (`Path::fill()`, `Fill::rule()`, `usvg::FillRule`), `lyon_tessellation` 1.x.
 - Produces (crate `icongen`, tool-only):
-  - `pub struct Converted { pub name: String, pub size: f32, pub segs: Vec<Seg>, pub fill: Option<Fill> }` — `segs` in the SVG's own units (side `size`), `fill` already in the 24-unit box and quantised.
-  - `pub fn convert(name: &str, svg: &str) -> Result<Converted, String>` — fills are no longer an error.
-  - `pub fn ensure_stroke_only(icon: &Converted) -> Result<(), String>` — the `--out` mode check.
+  - `pub struct Converted { pub name: String, pub size: f32, pub segs: Vec<Seg>, pub fill: Option<Fill> }`: `segs` in the SVG's own units (side `size`), `fill` already in the 24-unit box and quantised.
+  - `pub fn convert(name: &str, svg: &str) -> Result<Converted, String>`: fills are no longer an error.
+  - `pub fn ensure_stroke_only(icon: &Converted) -> Result<(), String>`: the `--out` mode check.
   - `fill::{FillRule, FillPath, Fill, FLATTEN_TOLERANCE, flatten, build, inside, miter}`:
     `pub enum FillRule { NonZero, EvenOdd }`,
     `pub struct FillPath { pub rule: FillRule, pub contours: Vec<Vec<[f32; 2]>> }`,
@@ -1236,9 +1236,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces (all `pub` in `shadcn_egui_core`, re-exported at the `shadcn_egui` root):
   - `struct Icon { pub name: &'static str, pub size: f32, pub shape: IconShape }` (`Clone, Copy, Debug, PartialEq`)
   - `enum IconShape { Segs(&'static [Seg]), Blob(BlobRange) }` (`Clone, Copy, Debug, PartialEq`)
-  - `struct BlobRange { pub blob: &'static [u8], pub start: u32, pub len: u32 }` — `Clone, Copy`; `PartialEq` by blob pointer, start, len; `Debug` prints `BlobRange { start: …, len: … }`.
+  - `struct BlobRange { pub blob: &'static [u8], pub start: u32, pub len: u32 }`: `Clone, Copy`; `PartialEq` by blob pointer, start, len; `Debug` prints `BlobRange { start: …, len: … }`.
   - `Icon::segs(&self) -> SegIter`; `enum SegIter { Slice(core::slice::Iter<'static, Seg>), Words(BlobSegs) }: Iterator<Item = Seg>` (`Clone, Debug`).
-  - **NEW INTERFACE:** `pub struct BlobSegs` (opaque iterator over a record's stroke words; `Clone`, `Debug` without bytes) — the payload type of `SegIter::Words`, which the index leaves as `Words(..)`.
+  - **NEW INTERFACE:** `pub struct BlobSegs` (opaque iterator over a record's stroke words; `Clone`, `Debug` without bytes), the payload type of `SegIter::Words`, which the index leaves as `Words(..)`.
   - `Icon::fill_mesh(&self) -> Option<FillMesh>`; `struct FillMesh { pub vertices: Vec<[f32; 2]>, pub indices: Vec<u16>, pub contours: Vec<Vec<([f32; 2], [f32; 2])>> }` (`Clone, Debug, Default, PartialEq`).
   - `shadcn_egui::components::icon::IconShape` (re-export, for `--out` modules).
   - Test fixture crate source `crates/shadcn-egui/tests/icons/fixture/src/lib.rs` with consts `BIG_BOX, MIXED, RING, SQUARE_HOLE, STAR_EVENODD, X`, `ALL`, `SLOTS` (Task 6.4 uses it).
@@ -1536,7 +1536,7 @@ impl Iterator for SegIter {
 ```
 
 `crates/shadcn-egui-core/src/lib.rs`: keep `mod blob;` and extend the
-re-exports (keep whatever Phase 2/4 added, e.g. the font types and `IconSlots`):
+re-exports (keep whatever Phase 2/4 added, such as the font types and `IconSlots`):
 
 ```rust
 pub use blob::{BlobRange, BlobSegs, FillMesh};
@@ -1554,7 +1554,7 @@ grep -rn "segs:" crates/ --include=*.rs | grep -v "tests/icons/"
 
 Expected: the three consts in `crates/shadcn-egui/src/components/icon.rs`
 (and any other hand-written `Icon { .. segs: .. }` Phase 4 added). Change
-each `segs: &[…],` to `shape: IconShape::Segs(&[…]),`, e.g.:
+each `segs: &[…],` to `shape: IconShape::Segs(&[…]),`, for example:
 
 ```rust
 pub const CHECK: Icon = Icon {
@@ -1870,13 +1870,13 @@ fn filled_icon_edges_zoomed_half() {
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `cargo test -p shadcn-egui --jobs 4 --test icon_fill -- --test-threads 4`
-Expected: FAIL — `fill_is_one_mesh_with_an_outward_fringe` ("one mesh per
+Expected: FAIL in `fill_is_one_mesh_with_an_outward_fringe` ("one mesh per
 icon", found 0), `fill_is_painted_before_strokes`, the seam test (the fill
 is not painted, interior green ≈ 255), and both snapshots (missing baseline).
 
 - [ ] **Step 3: Implement**
 
-`crates/shadcn-egui/src/components/icon.rs` — module doc, replace the first
+`crates/shadcn-egui/src/components/icon.rs`: in the module doc, replace the first
 paragraph with:
 
 ```rust
@@ -1976,7 +1976,7 @@ the ring's hole edge is soft towards the hole; at 50 % no line along the
 edge is darker than the interior, and no triangle seams inside the fill;
 the star's centre is empty; the `mixed` dot sits above an even stroke.
 
-- [ ] **Step 6: STOP — user reviews the PNGs**
+- [ ] **Step 6: STOP; the user reviews the PNGs**
 
 Show the user the two PNGs and ask them to review and approve them. Do not
 continue until they approve; apply their requested changes first.
@@ -2014,9 +2014,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: icongen `--crate-dir` (Task 6.1), `IconShape::Blob` (Task 6.3), Phase 4's `icons::slots(IconLibrary) -> Option<IconSlots>`, `Theme.icons`, `IconLibrary`.
 - Produces:
-  - crate `shadcn_egui_icons_lucide`: `pub const <NAME>: Icon` per Lucide icon (e.g. `CHECK`, `CHEVRON_DOWN`, `X`, `MIC`), `pub const ALL: &[&Icon]`, `pub const SLOTS: IconSlots` (check / chevron-down / x).
+  - crate `shadcn_egui_icons_lucide`: `pub const <NAME>: Icon` per Lucide icon (for example `CHECK`, `CHEVRON_DOWN`, `X`, `MIC`), `pub const ALL: &[&Icon]`, `pub const SLOTS: IconSlots` (check / chevron-down / x).
   - **NEW INTERFACE:** `shadcn_egui::icons::lucide` = `pub use shadcn_egui_icons_lucide as lucide;` (and in Task 6.6 `icons::{tabler, phosphor, remixicon, hugeicons}` behind their features), so users reach every icon without naming the icon crate.
-  - **NEW INTERFACE:** `tools/icongen/scripts/generate-crates.sh <scratch dir> [lib…]` — reads `SETS.tsv`, downloads each pinned package into `<scratch>/npm/<pkg>-<v>/`, writes `crates/shadcn-egui-icons-<lib>/src/{lib.rs,icons.bin}` and `LICENSE-ICONS.txt` for each `ship=yes` lib asked for (all when none given).
+  - **NEW INTERFACE:** `tools/icongen/scripts/generate-crates.sh <scratch dir> [lib…]`: reads `SETS.tsv`, downloads each pinned package into `<scratch>/npm/<pkg>-<v>/`, writes `crates/shadcn-egui-icons-<lib>/src/{lib.rs,icons.bin}` and `LICENSE-ICONS.txt` for each `ship=yes` lib asked for (all when none given).
   - `Theme::new(..).icons == shadcn_egui::icons::lucide::SLOTS`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -2199,7 +2199,7 @@ the const count equals the number of SVGs in the package; both files exist.
 
 - [ ] **Step 5: Switch the crate to the generated set**
 
-`crates/shadcn-egui/src/icons.rs` — at the top, below the module doc:
+`crates/shadcn-egui/src/icons.rs`: at the top, below the module doc:
 
 ```rust
 /// Lucide, the default icon set (always available).
@@ -2251,7 +2251,7 @@ as they are):
 Delete from `crates/shadcn-egui/src/components/icon.rs` the consts `CLOSE`,
 `CHECK`, `CHEVRON_DOWN` and `LUCIDE_SLOTS` with their doc comments, and the
 now unused imports. Re-run the grep. Expected: no hits; `cargo build --workspace --all-targets --jobs 4`
-reports any use the grep missed (e.g. `use super::*` inside `components/`).
+reports any use the grep missed (for example `use super::*` inside `components/`).
 
 - [ ] **Step 6: Run the tests, existing snapshots must not change**
 
@@ -2515,7 +2515,7 @@ shadcn-egui-icons-remixicon = { path = "crates/shadcn-egui-icons-remixicon", ver
 shadcn-egui-icons-hugeicons = { path = "crates/shadcn-egui-icons-hugeicons", version = "0.4.0" }  # ship=yes only
 ```
 
-`crates/shadcn-egui/Cargo.toml` — `[dependencies]` (outside the fontgen markers):
+`crates/shadcn-egui/Cargo.toml`, `[dependencies]` (outside the fontgen markers):
 
 ```toml
 shadcn-egui-icons-tabler = { workspace = true, optional = true }
@@ -2644,7 +2644,7 @@ sets (Phosphor, Remix) have smooth edges and visible holes (Phosphor `x`
 and `check` are outlines, not solid blobs); the checkbox tick sits centred
 in the box; the icons are the same visual size as the Lucide row.
 
-- [ ] **Step 8: STOP — user reviews the PNGs**
+- [ ] **Step 8: STOP; the user reviews the PNGs**
 
 Show the user the new PNGs (`git status --short crates/shadcn-egui/tests/snapshots`)
 and ask them to review and approve them. Do not continue until they approve;
@@ -2683,7 +2683,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: every workspace crate; `cargo metadata`, `jq`.
-- Produces: `scripts/check-package-size.sh` — runs `cargo package --workspace --no-verify --allow-dirty --jobs 4` once, prints each crate's `.crate` size, exits 1 if any is above the limit. **NEW INTERFACE:** env `PACKAGE_SIZE_LIMIT` (bytes, default `8388608` = 8 MB) overrides the limit, so the failure path can be tested.
+- Produces: `scripts/check-package-size.sh`: runs `cargo package --workspace --no-verify --allow-dirty --jobs 4` once, prints each crate's `.crate` size, exits 1 if any is above the limit. **NEW INTERFACE:** env `PACKAGE_SIZE_LIMIT` (bytes, default `8388608` = 8 MB) overrides the limit, so the failure path can be tested.
 
 - [ ] **Step 1: See the gate missing**
 

@@ -1,4 +1,4 @@
-# Phase 8 — Release: metadata, publish loop, docs, the user's steps
+# Phase 8: Release (metadata, publish loop, docs, the user's steps)
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -37,7 +37,7 @@ before Tasks 8.4–8.6):
 **Phase review focus:**
 
 1. A publish run stopped half-way (HTTP 429, a network error) and re-run:
-   it must skip what is out and continue, never fail on "already exists" —
+   it must skip what is out and continue, never fail on "already exists":
    `scripts/publish-crates.sh` checks each version first (Task 8.3, DRY_RUN
    check against a crate that is already on crates.io).
 2. A crate whose package contains `tests/snapshots` or lacks its licence
@@ -50,7 +50,7 @@ before Tasks 8.4–8.6):
 
 ---
 
-### Task 8.1: STOP (user) — pin the marketplace plugin to v0.3.2
+### Task 8.1: STOP (user), pin the marketplace plugin to v0.3.2
 
 **Files:** none in this repository.
 
@@ -69,13 +69,13 @@ gh api repos/oposs/claude-plugins/contents/.claude-plugin/marketplace.json -q .c
 Expected: an entry whose `source` names `oetiker/egui-shadcn` with no
 `ref`.
 
-- [ ] **Step 2: STOP — ask the user**
+- [ ] **Step 2: STOP and ask the user**
 
 Tell the user:
 
 > Before anything of 0.4 reaches `main`, the `egui-shadcn` entry in
 > `oposs/claude-plugins` (`.claude-plugin/marketplace.json`) must pin the
-> plugin to `v0.3.2`, e.g. `"source": { "source": "github", "repo":
+> plugin to `v0.3.2`, for example `"source": { "source": "github", "repo":
 > "oetiker/egui-shadcn", "ref": "v0.3.2" }`. The marketplace tracks
 > `main` HEAD today and would otherwise ship a skill whose `registry/` is
 > gone. This is a change in another repository: will you make it (or
@@ -105,7 +105,7 @@ pinned to v0.3.2 (oposs/claude-plugins).`).
 **Interfaces:**
 - Consumes: `cargo metadata`, `cargo package --list`; FONTS.tsv column 4
   and SETS.tsv column 5 (licences); `scripts/check-package-size.sh` (Phase 6).
-- Produces (NEW INTERFACE): `scripts/check-packages.sh` — exits 0 and
+- Produces (NEW INTERFACE): `scripts/check-packages.sh`: exits 0 and
   prints `check-packages: ok` when every workspace crate has a description,
   the expected SPDX licence (`MIT` for `shadcn-egui` and
   `shadcn-egui-core`; `MIT AND <licence>` for font and icon crates, plain
@@ -325,13 +325,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   404 = not yet); `CARGO_REGISTRY_TOKEN` (only for a real publish); the
   P0d notes (rate limits, for the header comment).
 - Produces (NEW INTERFACE beyond the index: `PLAN_ONLY=1`):
-  - `scripts/publish-crates.sh` — publishes and ends with `all published`;
+  - `scripts/publish-crates.sh`: publishes and ends with `all published`;
     exits 2 on HTTP 429 (re-run later), 1 on any other error.
-  - `DRY_RUN=1` — asks crates.io and prints `skip <name> <v>` /
+  - `DRY_RUN=1`: asks crates.io and prints `skip <name> <v>` /
     `publish <name> <v> (dry run)`; publishes nothing.
-  - `PLAN_ONLY=1` — prints `<name> <v>` per crate in publish order, no
+  - `PLAN_ONLY=1`: prints `<name> <v>` per crate in publish order, no
     network.
-  - `JOBS` (default 4) — passed to `cargo publish --jobs`.
+  - `JOBS` (default 4): passed to `cargo publish --jobs`.
 
 - [ ] **Step 1: Run the missing script (the failing test)**
 
@@ -467,7 +467,7 @@ nothing from it.
 
 Run: `DRY_RUN=1 scripts/publish-crates.sh`
 Expected (before the first release): one `publish <name> 0.4.0 (dry run)`
-line per crate, in the Step 3 order, then `dry run: nothing published` —
+line per crate, in the Step 3 order, then `dry run: nothing published`:
 the names are free (P0d) and nothing is uploaded. If any line says `skip`, a name was
 taken since P0d: **STOP** and tell the user.
 
@@ -479,7 +479,7 @@ v=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "eg
 curl -sS -o /dev/null -w '%{http_code}\n' -A 'shadcn-egui-release (https://github.com/oetiker/shadcn-egui)' "https://crates.io/api/v1/crates/egui/$v"
 ```
 
-Expected: `200` — the same request the script makes answers 200 for a
+Expected: `200`. The same request the script makes answers 200 for a
 published version, which the script turns into `skip`.
 
 - [ ] **Step 6: Commit**
@@ -550,7 +550,7 @@ fn readme_names_every_icon_feature_and_the_all_features() {
 ```
 
 Run: `cargo test -p shadcn-egui --jobs 4 --test readme -- --test-threads 4`
-Expected: FAIL — the current README has no `Preset::from_code`.
+Expected: FAIL, because the current README has no `Preset::from_code`.
 
 - [ ] **Step 2: Rewrite `README.md`**
 
@@ -843,7 +843,7 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
 If Phase 6 documented the icongen commands elsewhere than
 `references/icons.md`, point the icongen line at that file.
 
-- [ ] **Step 5: CHANGES.md — one user-facing 0.4.0 entry**
+- [ ] **Step 5: One user-facing 0.4.0 entry in CHANGES.md**
 
 1. The intro sentence becomes: `All notable changes to the `shadcn-egui`
    crates (and, up to 0.3.2, the egui-shadcn plugin) are recorded here.`
@@ -886,7 +886,7 @@ If Phase 6 documented the icongen commands elsewhere than
        compiles (Phase 3);
      - [ ] `Theme` gained `fonts`, `icons` and `menu`: a `Theme { .. }`
        literal no longer compiles; use `Theme::new(..)` and the builders
-       (Phases 2 and 4 — merge them into one entry if both are there);
+       (Phases 2 and 4; merge them into one entry if both are there);
      - [ ] Checkbox, Select and Dialog draw their icons from `Theme::icons`
        (the theme's slots), so a preset's icon library changes them (Phases 4
        and 6);
@@ -922,7 +922,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 8.5: STOP (user) — repository rename, CI, token
+### Task 8.5: STOP (user), repository rename, CI, token
 
 **Files:** none until the user decides (repo-infra:apply makes its own
 changes through its own pull request).
@@ -935,7 +935,7 @@ changes through its own pull request).
 
 Each step below is the user's or needs the user's explicit yes first.
 
-- [ ] **Step 1: STOP — rename the GitHub repository**
+- [ ] **Step 1: STOP, rename the GitHub repository**
 
 Ask the user to rename `oetiker/egui-shadcn` to `oetiker/shadcn-egui`
 (D2), in the GitHub settings or, with their go-ahead, with
@@ -952,7 +952,7 @@ Expected: the URL names `shadcn-egui`, and `ls-remote` answers. GitHub
 redirects the old name, so the marketplace pin of Task 8.1 keeps working;
 `.claude-plugin/*.json` keep their old URLs (D16).
 
-- [ ] **Step 2: STOP — repo-infra:apply**
+- [ ] **Step 2: STOP, repo-infra:apply**
 
 Ask the user whether to run `repo-infra:apply` now (it works on a branch
 and through a pull request). Running it on top of `feat/shadcn-egui-0.4`
@@ -984,7 +984,7 @@ lets the first CI run see the workspace; if it insists on a branch from
   "Publishing to crates.io", "Checks before a release", "Adding a font or
   an icon set" and "The Claude Code plugin" from Task 8.4.
 
-- [ ] **Step 3: STOP — crates.io token secret**
+- [ ] **Step 3: STOP, crates.io token secret**
 
 Ask the user to create a crates.io API token with the scopes
 `publish-new` and `publish-update`, limited to the crate pattern
@@ -993,7 +993,7 @@ Ask the user to create a crates.io API token with the scopes
 `gh secret set CARGO_REGISTRY_TOKEN -R oetiker/shadcn-egui`, which reads
 the token from the terminal). Never handle the token yourself.
 
-- [ ] **Step 4: STOP — optional: raised new-crate limit**
+- [ ] **Step 4: STOP, optional raised new-crate limit**
 
 Tell the user how many new crates 0.4.0 creates
 (`PLAN_ONLY=1 scripts/publish-crates.sh | wc -l`) and the new-crate limit
@@ -1004,7 +1004,7 @@ publish job stops with HTTP 429 after the burst and needs re-runs
 
 ---
 
-### Task 8.6: STOP (user) — merge, release 0.4.0, watch the publish
+### Task 8.6: STOP (user), merge, release 0.4.0, watch the publish
 
 **Files:** none.
 
@@ -1018,13 +1018,13 @@ publish job stops with HTTP 429 after the burst and needs re-runs
 Re-run Task 8.1 Step 1. Expected: `"ref": "v0.3.2"`. **If the pin is not
 there, stop: `main` must not be pushed.**
 
-- [ ] **Step 2: STOP — push and merge the feature branch**
+- [ ] **Step 2: STOP, push and merge the feature branch**
 
 Ask the user for the go-ahead to push `feat/shadcn-egui-0.4` and open a
 pull request into `main`; the user merges it once CI is green. Nothing is
 pushed without that yes.
 
-- [ ] **Step 3: STOP — the release**
+- [ ] **Step 3: STOP, the release**
 
 Ask the user to run **Create release PR** with `feature`. Check the pull
 request it opens (read-only):

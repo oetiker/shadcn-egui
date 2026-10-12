@@ -1,4 +1,4 @@
-# Phase 7 — Font crates for every upstream font
+# Phase 7: Font crates for every upstream font
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -995,7 +995,7 @@ fn registry_and_cargo_blocks_are_current() {
 ```
 
 Run: `cargo test --manifest-path tools/fontgen/Cargo.toml --jobs 4 -- --test-threads 4`
-Expected: FAIL — `committed_font_crates_are_current` (no crate for e.g.
+Expected: FAIL in `committed_font_crates_are_current` (no crate yet, for example for
 `geist`), `shipped_fonts_are_measured` (every row but inter and oxanium is
 `-`), `registry_and_cargo_blocks_are_current` (no registry file).
 `no_stale_font_crates` passes.
@@ -1175,7 +1175,7 @@ git status --short crates/shadcn-egui/tests/snapshots
 Expected: fontgen 16 passed; both workspace test runs pass with the same
 counts as at the end of Phase 6 (no test added in the crate yet);
 the `rustfmt --check` of the generated files is clean;
-`check-package-size.sh` passes (no `.crate` above 8 MB — the largest font
+`check-package-size.sh` passes (no `.crate` above 8 MB; the largest font
 crates are the Noto variable fonts); no snapshot changed (Inter and
 Oxanium keep their values).
 
@@ -1313,7 +1313,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7.4: One Button snapshot per font crate — user review
+### Task 7.4: One Button snapshot per font crate (user review)
 
 **Files:**
 - Create: `crates/shadcn-egui/tests/font_crates.rs`
@@ -1383,7 +1383,7 @@ heavier than "Body text" (Instrument Serif, static 400 only, is the
 exception: both look regular); the capitals of "Save changes" sit centred
 between the top and bottom edges of the button; no text is clipped.
 
-- [ ] **Step 4: STOP — user review**
+- [ ] **Step 4: STOP for user review**
 
 Show the user the list of new PNGs (`git status --short crates/shadcn-egui/tests/snapshots`)
 and ask them to review and approve them. Do not continue until they

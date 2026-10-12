@@ -1,4 +1,4 @@
-# Phase 4 — `Preset`: enums, codes, resolution to a `Theme`, fallbacks
+# Phase 4: `Preset` (enums, codes, resolution to a `Theme`, fallbacks)
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -838,7 +838,7 @@ Expected: FAIL to compile (`Preset`, `FontHeading`, `PresetCodeError` missing).
 
 - [ ] **Step 3: Implement**
 
-`crates/shadcn-egui/src/preset/mod.rs` — remove the `#[allow(dead_code)]`
+`crates/shadcn-egui/src/preset/mod.rs`: remove the `#[allow(dead_code)]`
 and its comment above `mod generated;`, add `mod code;` and:
 
 ```rust
@@ -1036,7 +1036,7 @@ impl Preset {
 }
 ```
 
-`crates/shadcn-egui/src/lib.rs` — the preset re-export becomes:
+`crates/shadcn-egui/src/lib.rs`: the preset re-export becomes:
 
 ```rust
 pub use preset::{BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, PresetCodeError, RadiusChoice, StyleName, ThemeColor};
@@ -1533,8 +1533,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: everything from Tasks 4.1–4.4; `Palette::from_upstream`, `with_bold_menu_accent` (Phase 3); `Theme::new`, `Theme::fonts` (Phase 2).
 - Produces (index C): `Preset::theme(&self, mode: Mode) -> Theme`, `Preset::apply(&self, ctx: &egui::Context, mode: Mode)`; `pub(crate) fn palette::base_radius_px(base: &str) -> Option<f32>`.
-- NEW INTERFACE: `pub(crate) fn icons::fallback_warning(lib: IconLibrary) -> String` — the exact warning line for an icon library `slots` does not bundle. Phase 6 adds the Hugeicons "not available (licence)" arm here when `SETS.tsv` says `ship=no`.
-- NEW INTERFACE: `pub(crate) fn fonts::fallback_warning(name: FontName, heading: bool) -> String` — the "needs the feature" line, or "is not available (licence)" for a font P0c left out — and the private `fonts::UNLICENSED: &[FontName]`. Phase 7 generates `UNLICENSED` into `fonts/registry.rs`.
+- NEW INTERFACE: `pub(crate) fn icons::fallback_warning(lib: IconLibrary) -> String`: the exact warning line for an icon library `slots` does not bundle. Phase 6 adds the Hugeicons "not available (licence)" arm here when `SETS.tsv` says `ship=no`.
+- NEW INTERFACE: `pub(crate) fn fonts::fallback_warning(name: FontName, heading: bool) -> String`: the "needs the feature" line, or "is not available (licence)" for a font P0c left out, and the private `fonts::UNLICENSED: &[FontName]`. Phase 7 generates `UNLICENSED` into `fonts/registry.rs`.
 
 - [ ] **Step 1: Write the failing tests**
 

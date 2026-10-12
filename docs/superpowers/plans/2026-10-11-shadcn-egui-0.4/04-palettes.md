@@ -1,4 +1,4 @@
-# Phase 3 — Palettes: generated base colours and themes, chart colours
+# Phase 3: Palettes (generated base colours and themes, chart colours)
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -40,10 +40,10 @@ No rendering changes in this phase: no snapshot changes, no PNG review.
   - `struct Oklch { pub l: f32, pub c: f32, pub h: f32, pub alpha: f32 }` (`Clone, Copy, Debug, PartialEq`)
   - `struct ThemeEntry { pub name: String, pub radius_rem: Option<f32>, pub light: Vec<(String, Oklch)>, pub dark: Vec<(String, Oklch)> }` (`Clone, Debug, Default, PartialEq`)
   - `struct Themes { pub bases: Vec<ThemeEntry>, pub overlays: Vec<ThemeEntry> }` (`Clone, Debug, Default, PartialEq`)
-  - `const VARS: [(&str, &str); 23]` — upstream var name → crate `Var` variant, in `Var` order.
+  - `const VARS: [(&str, &str); 23]`: upstream var name → crate `Var` variant, in `Var` order.
   - `fn parse_oklch(s: &str) -> Result<Oklch, String>`
-  - `fn parse_themes(themes_ts: &str, base_colors_ts: &str) -> Result<Themes, String>` — React `THEMES` entries; the names `base-colors.ts` filters are the bases (in `THEMES` order), all others overlays
-  - `fn emit_palettes(pin: &str, themes: &Themes) -> Result<String, String>` — the text of `palette/generated.rs` (index C).
+  - `fn parse_themes(themes_ts: &str, base_colors_ts: &str) -> Result<Themes, String>`: React `THEMES` entries; the names `base-colors.ts` filters are the bases (in `THEMES` order), all others overlays
+  - `fn emit_palettes(pin: &str, themes: &Themes) -> Result<String, String>`: the text of `palette/generated.rs` (index C).
 
 - [ ] **Step 1: Pin the React checkout and copy the fixtures**
 
@@ -845,7 +845,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `Palette::from_upstream`, `Palette::with_bold_menu_accent` (Task 3.2); `shadcn_egui::color::oklch_to_srgb_a`.
 - Produces: fixture `registry_themes.txt`, one line per var:
   `<base> <theme> <chart> <subtle|bold> <light|dark> <var> <value…>` (value
-  is the rest of the line, e.g. `oklch(1 0 0 / 10%)`); `#` lines are comments.
+  is the rest of the line, for example `oklch(1 0 0 / 10%)`); `#` lines are comments.
   The script follows the index A convention: arguments
   `<shadcn-ui checkout> <scratch dir>`, output on stdout.
 
@@ -1092,7 +1092,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `stylegen::sources::sources()` (Task 3.2).
-- Produces: `stylegen::drift::check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String>` — one line per fixture copy that is missing or differs from its checkout (`up`: svelte, `up_react`: React), each ending in `re-run stylegen generate`; empty means clean.
+- Produces: `stylegen::drift::check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String>`: one line per fixture copy that is missing or differs from its checkout (`up`: svelte, `up_react`: React), each ending in `re-run stylegen generate`; empty means clean.
 
 - [ ] **Step 1: Write the failing test**
 

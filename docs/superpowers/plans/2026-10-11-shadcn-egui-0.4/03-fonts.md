@@ -1,4 +1,4 @@
-# Phase 2 — Fonts: real weights, Inter, heading font
+# Phase 2: Fonts (real weights, Inter, heading font)
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -32,9 +32,9 @@ reviewed by the user. Every non-snapshot test stays green throughout.
   - `enum FontKind { Sans, Serif, Mono }`
   - `const WEIGHTS: [u16; 4] = [400, 500, 600, 700]`
   - `enum FontSource { Variable { data: &'static [u8], wght: RangeInclusive<f32> }, Static { regular: &'static [u8], medium: Option<&'static [u8]>, semibold: Option<&'static [u8]>, bold: Option<&'static [u8]> } }` (`Clone`)
-  - `struct FontFiles { name: &'static str, kind: FontKind, source: FontSource, y_offset_factor: f32, license: &'static str }` — `Clone`; `Debug` prints only `name`; `PartialEq` compares `name` (upstream ids are unique; comparing megabytes of font data on every `Theme` comparison would be wasteful).
+  - `struct FontFiles { name: &'static str, kind: FontKind, source: FontSource, y_offset_factor: f32, license: &'static str }`: `Clone`; `Debug` prints only `name`; `PartialEq` compares `name` (upstream ids are unique; comparing megabytes of font data on every `Theme` comparison would be wasteful).
   - `struct Face { data: &'static [u8], wght: Option<f32> }` (`Clone, Copy, Debug, PartialEq`)
-  - `FontFiles::face(&self, weight: u16) -> Face` — variable: the font's data with `wght` clamped into its range; static: the nearest existing file, on a tie the lighter one for weights ≤ 500 and the heavier one above (CSS font matching), `wght: None`.
+  - `FontFiles::face(&self, weight: u16) -> Face`: variable: the font's data with `wght` clamped into its range; static: the nearest existing file, on a tie the lighter one for weights ≤ 500 and the heavier one above (CSS font matching), `wght: None`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -97,7 +97,7 @@ mod tests {
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `cargo test -p shadcn-egui-core --jobs 4 -- --test-threads 4`
-Expected: FAIL to compile (`FontFiles` not found) — only after Step 3's
+Expected: FAIL to compile (`FontFiles` not found), only after Step 3's
 module line exists; write `mod font;` into `lib.rs` first so the test module
 is compiled.
 
@@ -612,7 +612,7 @@ fn switching_fonts_on_a_live_context_does_not_panic() {
 Run: `cargo test -p shadcn-egui --jobs 4 --test fonts -- --test-threads 4`
 Expected: FAIL to compile (`heading_family_for`, `FAMILY_BOLD`, `Theme::fonts`, `apply_with_fonts` missing).
 
-- [ ] **Step 3: Implement — `Theme` field and builder**
+- [ ] **Step 3: Implement the `Theme` field and builder**
 
 In `crates/shadcn-egui/src/theme.rs`, the `Theme` struct gains (after `dark`):
 
@@ -638,7 +638,7 @@ and a builder after `vega_light`:
     }
 ```
 
-- [ ] **Step 4: Implement — replace the whole `// ---- Font + apply + accessor ----` font part**
+- [ ] **Step 4: Implement by replacing the whole `// ---- Font + apply + accessor ----` font part**
 
 Replace everything from `/// Named font families for shadcn-style weight emphasis.` down to the end of
 `fn install_fonts` with:
@@ -764,7 +764,7 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
 }
 ```
 
-- [ ] **Step 5: Implement — `apply` and `apply_with_fonts`**
+- [ ] **Step 5: Implement `apply` and `apply_with_fonts`**
 
 Replace the doc comment and signature of `apply` and its first line:
 
@@ -1081,7 +1081,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 2.6: Regenerate baselines, docs, changelog — user review
+### Task 2.6: Regenerate baselines, docs, changelog (user review)
 
 **Files:**
 - Modify: every PNG under `crates/shadcn-egui/tests/snapshots/`
@@ -1107,7 +1107,7 @@ card titles) are visibly heavier than body text; capitals sit centred in
 buttons, badges and tabs; no text clipped at the top or bottom of inputs and
 selects; emoji/symbol glyphs (if any) still render.
 
-- [ ] **Step 3: STOP — user review**
+- [ ] **Step 3: STOP for user review**
 
 Show the user the list of changed PNGs (`git status --short crates/shadcn-egui/tests/snapshots`)
 and ask them to review and approve them. Do not continue until they approve;
@@ -1115,7 +1115,7 @@ apply their requested changes first.
 
 - [ ] **Step 4: Docs**
 
-`skills/egui-shadcn/references/gotchas.md` — replace the bullet that starts
+`skills/egui-shadcn/references/gotchas.md`: replace the bullet that starts
 `- **\`cn-font-heading\` is ignored.**` with:
 
 ```markdown
@@ -1125,7 +1125,7 @@ apply their requested changes first.
   the body font when none is set.
 ```
 
-`skills/egui-shadcn/references/token-map.md` — the row becomes:
+`skills/egui-shadcn/references/token-map.md`: the row becomes:
 
 ```markdown
 | 14px / medium | `text_styles[Body]` + `theme::family_for(ctx, Weight::Medium)` |

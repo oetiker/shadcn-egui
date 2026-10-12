@@ -1,4 +1,4 @@
-# Phase 0 — Verification spikes
+# Phase 0: Verification spikes
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -270,7 +270,7 @@ done
 
 The licence follows from the top directory (`ofl/` = OFL-1.1, `apache/` =
 Apache-2.0, `ufl/` = Ubuntu Font Licence, not allowed). Confirm three of them
-by reading the licence blob, e.g.
+by reading the licence blob, for example
 `git -C "$SCRATCH/gfonts" show HEAD:ofl/inter/OFL.txt | head -5`.
 Variable files carry `[` in the name (`Inter[opsz,wght].ttf`); a font with
 only static files (expected: Instrument Serif, `InstrumentSerif-Regular.ttf`)
@@ -371,7 +371,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 Read crates.io's documentation and source (generic User-Agent):
 `https://crates.io/policies`, and in `https://github.com/rust-lang/crates.io`
 the rate-limiter defaults (search the source for `PublishNew` and
-`PublishUpdate`, e.g. `src/rate_limiter.rs`). Record burst and refill for
+`PublishUpdate`, for example in `src/rate_limiter.rs`). Record burst and refill for
 `PublishNew` and `PublishUpdate`, and the date read.
 
 - [ ] **Step 2: Check the names**

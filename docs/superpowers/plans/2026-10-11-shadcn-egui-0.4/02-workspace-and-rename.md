@@ -1,4 +1,4 @@
-# Phase 1 — Workspace and rename to `shadcn-egui`
+# Phase 1: Workspace and rename to `shadcn-egui`
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -98,7 +98,7 @@ persisted, so nothing visible changes.
 
 - [ ] **Step 5: Point stylegen at the new crate path**
 
-`tools/stylegen/src/main.rs` — the crate lives below the repository root now:
+`tools/stylegen/src/main.rs`: the crate lives below the repository root now:
 
 ```rust
 //! stylegen generate <shadcn-svelte checkout> <repository root>
@@ -230,7 +230,7 @@ mod icon;
 pub use icon::{Icon, Seg};
 ```
 
-`crates/shadcn-egui-core/src/icon.rs` — move the two type definitions out of
+`crates/shadcn-egui-core/src/icon.rs`: move the two type definitions out of
 `crates/shadcn-egui/src/components/icon.rs` unchanged:
 
 ```rust

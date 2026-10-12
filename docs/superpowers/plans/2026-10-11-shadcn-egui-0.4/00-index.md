@@ -1,4 +1,4 @@
-# shadcn-egui 0.4.0 — published crate with shadcn presets: Implementation Plan
+# shadcn-egui 0.4.0 implementation plan: published crate with shadcn presets
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -131,7 +131,7 @@ and `scripts/check-package-size.sh`.
 
 | # | File | Spec sections | Depends on | Tasks |
 |---|------|---------------|------------|-------|
-| 0 | [01-verification-spikes.md](01-verification-spikes.md) | D12, D13, D14, §6.1 licences, §6.3, §9 rate limit | — | 4 |
+| 0 | [01-verification-spikes.md](01-verification-spikes.md) | D12, D13, D14, §6.1 licences, §6.3, §9 rate limit | none | 4 |
 | 1 | [02-workspace-and-rename.md](02-workspace-and-rename.md) | D1, D2, D3, D4, §3, §8 imports | 0 | 3 |
 | 2 | [03-fonts.md](03-fonts.md) | D8, D12, D17, §6.1, §7 fonts + heading | 0b, 0c, 1 | 6 |
 | 3 | [04-palettes.md](04-palettes.md) | D6, D19, §5.1, §7 palettes | 1 | 4 |
@@ -165,9 +165,9 @@ Execution order is the table order. Each phase ends green and committed.
 | Spike | Notes file | Data file(s) | Used by |
 |---|---|---|---|
 | 0a | `docs/superpowers/notes/0.4/p0a-preset-codes.md` | `tools/stylegen/upstream/preset-codes.txt` | Phase 4 |
-| 0b | `docs/superpowers/notes/0.4/p0b-variable-font.md` | — | Phase 2 |
+| 0b | `docs/superpowers/notes/0.4/p0b-variable-font.md` | none | Phase 2 |
 | 0c | `docs/superpowers/notes/0.4/p0c-licences.md` | `tools/fontgen/FONTS.tsv`, `tools/fontgen/GF_PIN`, `tools/icongen/SETS.tsv` | Phases 2, 6, 7, 8 |
-| 0d | `docs/superpowers/notes/0.4/p0d-crates-io.md` | — | Phase 8 |
+| 0d | `docs/superpowers/notes/0.4/p0d-crates-io.md` | none | Phase 8 |
 
 ### User stop points (never automated)
 
@@ -513,7 +513,7 @@ Release pieces (Phase 8):
      - `to_code(from_code(c)) == c` where canonical;
      - each `PresetCodeError`;
      - TooLong for 2^53+1;
-     - Review Focus 1, `malformed_codes_are_errors_not_panics`: whitespace, `\n`, `é`, emoji, 1000 chars, all 1–2 char ASCII strings — Err, no panic.
+     - Review Focus 1, `malformed_codes_are_errors_not_panics`: whitespace, `\n`, `é`, emoji, 1000 chars, all 1–2 char ASCII strings: Err, no panic.
 3. *Preset struct, Default, setters, Mode.*
    - Tests: Default equals React DEFAULT_CONFIG (Nova) and equals `from_code("b0")`; setters.
 4. *IconSlots, MenuColors, Theme.icons/menu + builders; components read t.icons; fonts.rs/icons.rs registries.*
@@ -552,7 +552,7 @@ Release pieces (Phase 8):
 2. *Measure Remixicon + Phosphor full sets.* Download per SETS.tsv, `--measure`, then `cargo package` size. Record in `docs/superpowers/notes/0.4/p6-icon-sizes.md`; apply the branch in D if needed.
 3. *Core `IconShape`/`BlobRange`/`SegIter`/`FillMesh` decoders.* Tests decode a committed blob fixture produced by icongen from `tests/fixtures` and compare with the Segs. Update `tests/icons/lucide.rs` to `shape: IconShape::Segs` (regenerate).
 4. *Painter: fill mesh + outward fringe.* Zoomed snapshots at alpha 1 and 0.5; the seam test from Review Focus 4. STOP for the user's PNG review.
-5. *Lucide crate generated (full set) + SLOTS.* `Theme::new` uses `shadcn_egui_icons_lucide::SLOTS`; delete CHECK/CHEVRON_DOWN/CLOSE/LUCIDE_SLOTS; `icons::slots(Lucide)`. Snapshots unchanged (same paths, quantised) — verify.
+5. *Lucide crate generated (full set) + SLOTS.* `Theme::new` uses `shadcn_egui_icons_lucide::SLOTS`; delete CHECK/CHEVRON_DOWN/CLOSE/LUCIDE_SLOTS; `icons::slots(Lucide)`. Snapshots unchanged (same paths, quantised); verify.
 6. *Tabler, Phosphor, Remixicon (pinned), Hugeicons (if ship=yes) crates + features + `icons::slots` + `icons-all`.*
    - One slot snapshot per crate (`--all-features`). STOP for review.
    - Hugeicons: if `ship=no`, there is no crate and no feature, and `slots(Hugeicons)` logs the "not available (licence)" line; test it.
@@ -660,7 +660,7 @@ Second upstream: `$UP_REACT`, a shadcn-ui/ui checkout pinned in
 | example codes for fixtures | React | `packages/shadcn/src/preset/defaults.ts` `DEFAULT_PRESETS`; `config.ts` `PRESETS` | |
 | Lyra/Sera radius 0, Rhea Large→Default | React (same rule) | `apps/v4/app/(app)/(create)/components/design-system-provider.tsx:144-151` | matches preflight Addendum A |
 | style CSS (`style-*.css`) | shadcn-svelte (unchanged) | `apps/v4/registry/styles/` | byte-identical at both pins |
-| UI component `// base:` quotes, `transform-menu.ts` | shadcn-svelte (unchanged) | — | not part of this decision |
+| UI component `// base:` quotes, `transform-menu.ts` | shadcn-svelte (unchanged) | none | not part of this decision |
 
 `gray`: React has it at index 3 of `PRESET_BASE_COLORS` and `PRESET_THEMES`
 since the first preset commit, but `themes.ts` has no `gray` entry; the site

@@ -1,4 +1,4 @@
-# Phase 5 — Menu colours: inverted and translucent Select lists
+# Phase 5: Menu colours (inverted and translucent Select lists)
 
 > Part of [00-index.md](00-index.md). Read its Global Constraints first.
 
@@ -255,7 +255,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `skills/egui-shadcn/references/gotchas.md`
 - Modify: `CHANGES.md`
 
-- [ ] **Step 1: STOP — user reviews the PNGs**
+- [ ] **Step 1: STOP; the user reviews the PNGs**
 
 Show the user the four new PNGs (`git show --stat HEAD -- crates/shadcn-egui/tests/snapshots`)
 and ask them to review and approve them. Do not continue until they
