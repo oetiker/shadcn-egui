@@ -24,9 +24,9 @@
 //! ```
 //!
 //! Fonts other than Inter and icon sets other than Lucide are Cargo
-//! features; the README lists them. The `gallery` example shows every
-//! component under any preset:
-//! `cargo run --example gallery --features fonts-all,icons-all`.
+//! features; the README lists them. The `gallery` example in the git
+//! repository (not in the crates.io package) shows every component under
+//! any preset: `cargo run --example gallery --features fonts-all,icons-all`.
 
 pub mod color;
 pub mod components;
