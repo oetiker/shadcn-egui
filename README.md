@@ -1,5 +1,10 @@
 # shadcn-egui
 
+[![CI](https://github.com/oetiker/shadcn-egui/actions/workflows/ci.yml/badge.svg)](https://github.com/oetiker/shadcn-egui/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/oetiker/shadcn-egui)](https://github.com/oetiker/shadcn-egui/releases/latest)
+[![crates.io](https://img.shields.io/crates/v/shadcn-egui)](https://crates.io/crates/shadcn-egui)
+[![docs.rs](https://img.shields.io/docsrs/shadcn-egui)](https://docs.rs/shadcn-egui)
+
 The [shadcn/ui](https://ui.shadcn.com/) design system for
 [egui](https://github.com/emilk/egui): the shadcn v4 styles (vega, nova,
 maia, lyra, mira, luma, rhea), their colour themes, fonts, icon sets and
@@ -41,7 +46,7 @@ they change. An app that installs fonts of its own uses
 ## Components
 
 Button, Badge, Input, Label, Card, Tabs, Switch, Checkbox, Select, Slider,
-Separator, Tooltip, Popover and Dialog:
+Separator, Tooltip, Popover, Dialog and Icon (`IconView`):
 
 ```rust
 use shadcn_egui::components::button::Button;
