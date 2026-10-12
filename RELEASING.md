@@ -34,9 +34,9 @@ Settings, Trusted Publishing). The job skips every crate whose version is
 already on crates.io, so **Re-run failed jobs** finishes a publish that
 stopped part-way. The GitHub release stays a draft until every crate is up.
 
-Trusted Publishing cannot create a crate. A release that brings a new crate
-(0.4.0, which creates all 33, or one that adds a font or icon set) publishes
-that crate from your machine with `scripts/publish-crates.sh`:
+Trusted Publishing cannot create a crate. A release that brings a new
+crate (one that adds a font or icon set) publishes that crate from your
+machine with `scripts/publish-crates.sh`:
 
 1. Merge the release pull request. The publish workflow tags `vX.Y.Z` and
    its crates.io job fails on the new crates.
@@ -59,13 +59,18 @@ that crate from your machine with `scripts/publish-crates.sh`:
 crates.io limits new crates per account: a burst of 5, then one per 10
 minutes; new versions of existing crates: a burst of 30, then one per
 minute (read 2026-10-11 in the crates.io source; the live values can
-differ). A release that creates many crates, like 0.4.0 or one that adds a
-font or icon set, hits HTTP 429. The script then waits until the time
-crates.io names ("try again after …", else 10 minutes) and retries the same
-crate, so one run takes about 4 h 40 min for 0.4.0 and ends with
-`all published`. `NO_WAIT=1` makes it exit with status 2 instead; re-run it
-later, it skips what is out. Before such a release you can ask crates.io
-(help@crates.io) to raise the account's new-crate limit for the workspace.
+differ). A local run that creates many crates hits HTTP 429. The script
+then waits until the time crates.io names ("try again after …", else 10
+minutes) and retries the same crate, so 33 new crates take about 4 h
+40 min and the run ends with `all published`. `NO_WAIT=1` makes it exit
+with status 2 instead; re-run it later, it skips what is out. Before such a
+release you can ask crates.io (help@crates.io) to raise the account's
+new-crate limit for the workspace.
+
+The publish job does not wait: when a release of all 33 crates runs into
+the limit for new versions near the end, the job fails. **Re-run failed
+jobs** a few minutes later publishes the rest; the job asks crates.io for
+each crate first and leaves out every version that is already there.
 
 To see what a publish would do:
 
@@ -73,6 +78,31 @@ To see what a publish would do:
 PLAN_ONLY=1 scripts/publish-crates.sh   # the order, offline
 DRY_RUN=1 scripts/publish-crates.sh     # skip/publish per crate, asks crates.io
 ```
+
+### 0.4.0
+
+All 33 crates of 0.4.0 were published from a local machine before the
+feature branch reached `main`, from the branch commits `bf368ae` and
+`6795db9`; their `.cargo_vcs_info.json` records these commits. The release
+then lands like this:
+
+1. Merge the 0.4 pull request into `main` with a **merge commit**, not a
+   squash or rebase merge, so the recorded commits stay in the history of
+   `main`.
+2. The merge commit's **Tag and publish** check fails with "CHANGES.md
+   says 0.3.2 but these disagree": `CHANGES.md` has no 0.4.0 heading yet,
+   while `Cargo.toml` and `Cargo.lock` already say 0.4.0. This is expected
+   and tags nothing.
+3. Create release PR refuses a commit that carries a failed check, so land
+   one more commit on `main`, a pull request labelled `no-changelog`.
+4. Run **Create release PR** on it and choose **feature** (0.3.2 to 0.4.0;
+   bugfix would give 0.3.3). Merge the release pull request.
+5. The crates.io job of that publish run fails until the trusted publisher
+   is registered: its first step exchanges the job's identity for a
+   crates.io token, and that exchange needs the registration. Register
+   `oetiker/shadcn-egui` and `release-publish.yml` on all 33 crates, then
+   use **Re-run failed jobs**. The job finds 0.4.0 of every crate on
+   crates.io, publishes nothing and lets the GitHub release go public.
 
 ## Checks before a release
 
