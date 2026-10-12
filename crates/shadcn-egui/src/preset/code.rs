@@ -134,15 +134,15 @@ impl Preset {
 
     fn set_index(&mut self, field: Field, idx: usize) {
         match field {
-            Field::MenuColor => self.menu_color = pick(&MenuColor::ALL, idx),
-            Field::MenuAccent => self.menu_accent = pick(&MenuAccent::ALL, idx),
-            Field::Radius => self.radius = pick(&RadiusChoice::ALL, idx),
-            Field::Font => self.font = pick(&FontName::ALL, idx),
-            Field::IconLibrary => self.icons = pick(&IconLibrary::ALL, idx),
-            Field::Theme => self.theme = pick(&ThemeColor::ALL, idx),
-            Field::BaseColor => self.base_color = pick(&BaseColor::ALL, idx),
-            Field::Style => self.style = pick(&StyleName::ALL, idx),
-            Field::ChartColor => self.chart_color = pick(&ThemeColor::ALL, idx),
+            Field::MenuColor => self.menu_color = pick(MenuColor::ALL, idx),
+            Field::MenuAccent => self.menu_accent = pick(MenuAccent::ALL, idx),
+            Field::Radius => self.radius = pick(RadiusChoice::ALL, idx),
+            Field::Font => self.font = pick(FontName::ALL, idx),
+            Field::IconLibrary => self.icons = pick(IconLibrary::ALL, idx),
+            Field::Theme => self.theme = pick(ThemeColor::ALL, idx),
+            Field::BaseColor => self.base_color = pick(BaseColor::ALL, idx),
+            Field::Style => self.style = pick(StyleName::ALL, idx),
+            Field::ChartColor => self.chart_color = pick(ThemeColor::ALL, idx),
             Field::FontHeading => {
                 self.font_heading = match idx.checked_sub(1).and_then(|i| FontName::ALL.get(i)) {
                     Some(&f) => FontHeading::Font(f),
@@ -158,18 +158,18 @@ impl Preset {
             all.iter().position(|x| x == v)
         }
         match field {
-            Field::MenuColor => pos(&MenuColor::ALL, &self.menu_color),
-            Field::MenuAccent => pos(&MenuAccent::ALL, &self.menu_accent),
-            Field::Radius => pos(&RadiusChoice::ALL, &self.radius),
-            Field::Font => pos(&FontName::ALL, &self.font),
-            Field::IconLibrary => pos(&IconLibrary::ALL, &self.icons),
-            Field::Theme => pos(&ThemeColor::ALL, &self.theme),
-            Field::BaseColor => pos(&BaseColor::ALL, &self.base_color),
-            Field::Style => pos(&StyleName::ALL, &self.style),
-            Field::ChartColor => pos(&ThemeColor::ALL, &self.chart_color),
+            Field::MenuColor => pos(MenuColor::ALL, &self.menu_color),
+            Field::MenuAccent => pos(MenuAccent::ALL, &self.menu_accent),
+            Field::Radius => pos(RadiusChoice::ALL, &self.radius),
+            Field::Font => pos(FontName::ALL, &self.font),
+            Field::IconLibrary => pos(IconLibrary::ALL, &self.icons),
+            Field::Theme => pos(ThemeColor::ALL, &self.theme),
+            Field::BaseColor => pos(BaseColor::ALL, &self.base_color),
+            Field::Style => pos(StyleName::ALL, &self.style),
+            Field::ChartColor => pos(ThemeColor::ALL, &self.chart_color),
             Field::FontHeading => match self.font_heading {
                 FontHeading::Inherit => Some(0),
-                FontHeading::Font(f) => pos(&FontName::ALL, &f).map(|i| i + 1),
+                FontHeading::Font(f) => pos(FontName::ALL, &f).map(|i| i + 1),
             },
         }
     }

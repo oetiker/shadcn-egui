@@ -124,7 +124,8 @@ egui-shadcn plugin) are recorded here. The format is based on
   `SettingsState` has new `slider` and `region` fields.
 - A `match` on a preset enum (`StyleName`, `BaseColor`, `ThemeColor`,
   `FontName`, `IconLibrary`, `MenuColor`, `MenuAccent`, `RadiusChoice`) or
-  on `Role`, `TabsOrientation` or `PresetCodeError` needs a `_ =>` arm. New
+  on `Role`, `TabsOrientation` or `PresetCodeError` needs a `_ =>` arm, and
+  each preset enum's `ALL` is a slice (`&'static [Self]`), not an array. New
   shadcn styles, colours, fonts and icon sets can then arrive in a minor
   release.
 

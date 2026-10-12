@@ -11,7 +11,8 @@ use shadcn_egui::{fonts, FontName, Mode, Preset, StyleName, Theme};
 #[test]
 fn every_font_crate_renders_a_button() {
     let themes: Vec<(&'static str, Theme)> = FontName::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .filter(|n| fonts::files(*n).is_some())
         .map(|n| {
             (

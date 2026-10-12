@@ -124,12 +124,20 @@ fn emit_is_deterministic() {
     let a = emit_preset("c2a67849", &l);
     assert_eq!(a, emit_preset("c2a67849", &l));
     assert!(a.contains("    Gray,"));
-    assert!(a.contains("pub const ALL: [Self; 25] = ["));
+    // Each enum's `ALL` lists every value: 25 theme colours, 26 fonts.
+    let all_lens: Vec<usize> = a
+        .lines()
+        .filter(|l| l.contains("pub const ALL: &'static [Self] = &["))
+        .map(|l| l.matches("Self::").count())
+        .collect();
+    assert!(
+        all_lens.contains(&25) && all_lens.contains(&26),
+        "{all_lens:?}"
+    );
     assert!(a.contains("(ThemeColor::Neutral, ThemeColor::Blue),"));
     assert!(a.contains("Self::Default => None,"));
     assert!(a.contains("pub enum FontName {"));
     assert!(a.contains("Self::SourceSans3 => \"source-sans-3\","));
-    assert!(a.contains("pub const ALL: [Self; 26] = ["));
     assert!(a.contains("Px(f32),"));
     assert!(a.contains("pub(crate) const FIELDS_V2: [(Field, u32); 10] = ["));
 }

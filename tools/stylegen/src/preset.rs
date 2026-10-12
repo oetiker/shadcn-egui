@@ -249,8 +249,7 @@ fn emit_enum(s: &mut String, name: &str, doc: &str, ids: &[String]) {
     }
     *s += &format!("}}\n\nimpl {name} {{\n    /// Every value, in upstream list order (the index in a preset code).\n");
     *s += &format!(
-        "    pub const ALL: [Self; {}] = [{}];\n\n",
-        ids.len(),
+        "    pub const ALL: &'static [Self] = &[{}];\n\n",
         ids.iter()
             .map(|i| format!("Self::{}", pascal(i)))
             .collect::<Vec<_>>()
@@ -261,7 +260,7 @@ fn emit_enum(s: &mut String, name: &str, doc: &str, ids: &[String]) {
         *s += &format!("            Self::{} => \"{id}\",\n", pascal(id));
     }
     *s += "        }\n    }\n\n    /// The value with this upstream id.\n    pub fn from_id(id: &str) -> Option<Self> {\n";
-    *s += "        Self::ALL.into_iter().find(|v| v.id() == id)\n    }\n}\n\n";
+    *s += "        Self::ALL.iter().copied().find(|v| v.id() == id)\n    }\n}\n\n";
 }
 
 pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
@@ -328,8 +327,7 @@ pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
     s += "    /// Any radius in logical px; such a preset has no code.\n    Px(f32),\n}\n\nimpl RadiusChoice {\n";
     s += "    /// The coded values, in upstream list order.\n";
     s += &format!(
-        "    pub const ALL: [Self; {}] = [{}];\n\n",
-        l.radii.len(),
+        "    pub const ALL: &'static [Self] = &[{}];\n\n",
         l.radii
             .iter()
             .map(|(i, _)| format!("Self::{}", pascal(i)))
@@ -347,7 +345,7 @@ pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
     }
     s += "            Self::Px(_) => None,\n        }\n    }\n\n";
     s += "    /// The coded value with this upstream id.\n    pub fn from_id(id: &str) -> Option<Self> {\n";
-    s += "        Self::ALL.into_iter().find(|v| v.id() == Some(id))\n    }\n}\n\n";
+    s += "        Self::ALL.iter().copied().find(|v| v.id() == Some(id))\n    }\n}\n\n";
     s += "/// The fields of a preset code (upstream `PRESET_FIELDS_V2` keys).\n";
     s += "#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub(crate) enum Field {\n";
     for (k, _) in &l.fields_v2 {

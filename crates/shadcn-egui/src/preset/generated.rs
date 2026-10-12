@@ -25,7 +25,7 @@ pub enum StyleName {
 
 impl StyleName {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 8] = [Self::Nova, Self::Vega, Self::Maia, Self::Lyra, Self::Mira, Self::Luma, Self::Sera, Self::Rhea];
+    pub const ALL: &'static [Self] = &[Self::Nova, Self::Vega, Self::Maia, Self::Lyra, Self::Mira, Self::Luma, Self::Sera, Self::Rhea];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -43,7 +43,7 @@ impl StyleName {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -71,7 +71,7 @@ pub enum BaseColor {
 
 impl BaseColor {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 8] = [Self::Neutral, Self::Stone, Self::Zinc, Self::Gray, Self::Mauve, Self::Olive, Self::Mist, Self::Taupe];
+    pub const ALL: &'static [Self] = &[Self::Neutral, Self::Stone, Self::Zinc, Self::Gray, Self::Mauve, Self::Olive, Self::Mist, Self::Taupe];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -89,7 +89,7 @@ impl BaseColor {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -151,7 +151,7 @@ pub enum ThemeColor {
 
 impl ThemeColor {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 25] = [Self::Neutral, Self::Stone, Self::Zinc, Self::Gray, Self::Amber, Self::Blue, Self::Cyan, Self::Emerald, Self::Fuchsia, Self::Green, Self::Indigo, Self::Lime, Self::Orange, Self::Pink, Self::Purple, Self::Red, Self::Rose, Self::Sky, Self::Teal, Self::Violet, Self::Yellow, Self::Mauve, Self::Olive, Self::Mist, Self::Taupe];
+    pub const ALL: &'static [Self] = &[Self::Neutral, Self::Stone, Self::Zinc, Self::Gray, Self::Amber, Self::Blue, Self::Cyan, Self::Emerald, Self::Fuchsia, Self::Green, Self::Indigo, Self::Lime, Self::Orange, Self::Pink, Self::Purple, Self::Red, Self::Rose, Self::Sky, Self::Teal, Self::Violet, Self::Yellow, Self::Mauve, Self::Olive, Self::Mist, Self::Taupe];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -186,7 +186,7 @@ impl ThemeColor {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -250,7 +250,7 @@ pub enum FontName {
 
 impl FontName {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 26] = [Self::Inter, Self::NotoSans, Self::NunitoSans, Self::Figtree, Self::Roboto, Self::Raleway, Self::DmSans, Self::PublicSans, Self::Outfit, Self::JetbrainsMono, Self::Geist, Self::GeistMono, Self::Lora, Self::Merriweather, Self::PlayfairDisplay, Self::NotoSerif, Self::RobotoSlab, Self::Oxanium, Self::Manrope, Self::SpaceGrotesk, Self::Montserrat, Self::IbmPlexSans, Self::SourceSans3, Self::InstrumentSans, Self::EbGaramond, Self::InstrumentSerif];
+    pub const ALL: &'static [Self] = &[Self::Inter, Self::NotoSans, Self::NunitoSans, Self::Figtree, Self::Roboto, Self::Raleway, Self::DmSans, Self::PublicSans, Self::Outfit, Self::JetbrainsMono, Self::Geist, Self::GeistMono, Self::Lora, Self::Merriweather, Self::PlayfairDisplay, Self::NotoSerif, Self::RobotoSlab, Self::Oxanium, Self::Manrope, Self::SpaceGrotesk, Self::Montserrat, Self::IbmPlexSans, Self::SourceSans3, Self::InstrumentSans, Self::EbGaramond, Self::InstrumentSerif];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -286,7 +286,7 @@ impl FontName {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -308,7 +308,7 @@ pub enum IconLibrary {
 
 impl IconLibrary {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 5] = [Self::Lucide, Self::Hugeicons, Self::Tabler, Self::Phosphor, Self::Remixicon];
+    pub const ALL: &'static [Self] = &[Self::Lucide, Self::Hugeicons, Self::Tabler, Self::Phosphor, Self::Remixicon];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -323,7 +323,7 @@ impl IconLibrary {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -343,7 +343,7 @@ pub enum MenuColor {
 
 impl MenuColor {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 4] = [Self::Default, Self::Inverted, Self::DefaultTranslucent, Self::InvertedTranslucent];
+    pub const ALL: &'static [Self] = &[Self::Default, Self::Inverted, Self::DefaultTranslucent, Self::InvertedTranslucent];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -357,7 +357,7 @@ impl MenuColor {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -373,7 +373,7 @@ pub enum MenuAccent {
 
 impl MenuAccent {
     /// Every value, in upstream list order (the index in a preset code).
-    pub const ALL: [Self; 2] = [Self::Subtle, Self::Bold];
+    pub const ALL: &'static [Self] = &[Self::Subtle, Self::Bold];
 
     /// The upstream id.
     pub const fn id(self) -> &'static str {
@@ -385,7 +385,7 @@ impl MenuAccent {
 
     /// The value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == id)
+        Self::ALL.iter().copied().find(|v| v.id() == id)
     }
 }
 
@@ -409,7 +409,7 @@ pub enum RadiusChoice {
 
 impl RadiusChoice {
     /// The coded values, in upstream list order.
-    pub const ALL: [Self; 5] = [Self::Default, Self::None, Self::Small, Self::Medium, Self::Large];
+    pub const ALL: &'static [Self] = &[Self::Default, Self::None, Self::Small, Self::Medium, Self::Large];
 
     /// The upstream id; `None` for `Px`.
     pub const fn id(self) -> Option<&'static str> {
@@ -438,7 +438,7 @@ impl RadiusChoice {
 
     /// The coded value with this upstream id.
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|v| v.id() == Some(id))
+        Self::ALL.iter().copied().find(|v| v.id() == Some(id))
     }
 }
 

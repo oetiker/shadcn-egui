@@ -6,11 +6,11 @@ use shadcn_egui::{
 #[test]
 fn enums_follow_upstream_list_order() {
     assert_eq!(
-        StyleName::ALL.map(|s| s.id()),
+        StyleName::ALL.iter().map(|s| s.id()).collect::<Vec<_>>(),
         ["nova", "vega", "maia", "lyra", "mira", "luma", "sera", "rhea"]
     );
     assert_eq!(
-        BaseColor::ALL.map(|b| b.id()),
+        BaseColor::ALL.iter().map(|b| b.id()).collect::<Vec<_>>(),
         ["neutral", "stone", "zinc", "gray", "mauve", "olive", "mist", "taupe"]
     );
     assert_eq!(ThemeColor::ALL.len(), 25);
@@ -29,11 +29,11 @@ fn enums_follow_upstream_list_order() {
     );
     assert_eq!(FontName::SourceSans3.id(), "source-sans-3");
     assert_eq!(
-        IconLibrary::ALL.map(|l| l.id()),
+        IconLibrary::ALL.iter().map(|l| l.id()).collect::<Vec<_>>(),
         ["lucide", "hugeicons", "tabler", "phosphor", "remixicon"]
     );
     assert_eq!(
-        MenuColor::ALL.map(|m| m.id()),
+        MenuColor::ALL.iter().map(|m| m.id()).collect::<Vec<_>>(),
         [
             "default",
             "inverted",
@@ -41,37 +41,43 @@ fn enums_follow_upstream_list_order() {
             "inverted-translucent"
         ]
     );
-    assert_eq!(MenuAccent::ALL.map(|m| m.id()), ["subtle", "bold"]);
     assert_eq!(
-        RadiusChoice::ALL.map(|r| r.rem()),
+        MenuAccent::ALL.iter().map(|m| m.id()).collect::<Vec<_>>(),
+        ["subtle", "bold"]
+    );
+    assert_eq!(
+        RadiusChoice::ALL
+            .iter()
+            .map(|r| r.rem())
+            .collect::<Vec<_>>(),
         [None, Some(0.0), Some(0.45), Some(0.625), Some(0.875)]
     );
 }
 
 #[test]
 fn ids_round_trip_and_unknown_ids_are_none() {
-    for v in StyleName::ALL {
+    for &v in StyleName::ALL {
         assert_eq!(StyleName::from_id(v.id()), Some(v));
     }
-    for v in BaseColor::ALL {
+    for &v in BaseColor::ALL {
         assert_eq!(BaseColor::from_id(v.id()), Some(v));
     }
-    for v in ThemeColor::ALL {
+    for &v in ThemeColor::ALL {
         assert_eq!(ThemeColor::from_id(v.id()), Some(v));
     }
-    for v in FontName::ALL {
+    for &v in FontName::ALL {
         assert_eq!(FontName::from_id(v.id()), Some(v));
     }
-    for v in IconLibrary::ALL {
+    for &v in IconLibrary::ALL {
         assert_eq!(IconLibrary::from_id(v.id()), Some(v));
     }
-    for v in MenuColor::ALL {
+    for &v in MenuColor::ALL {
         assert_eq!(MenuColor::from_id(v.id()), Some(v));
     }
-    for v in MenuAccent::ALL {
+    for &v in MenuAccent::ALL {
         assert_eq!(MenuAccent::from_id(v.id()), Some(v));
     }
-    for v in RadiusChoice::ALL {
+    for &v in RadiusChoice::ALL {
         assert_eq!(RadiusChoice::from_id(v.id().expect("coded")), Some(v));
     }
     assert_eq!(
@@ -291,8 +297,8 @@ fn to_code_keeps_values_that_fall_back() {
 /// resolves every combination.
 #[test]
 fn every_palette_id_resolves() {
-    for b in BaseColor::ALL {
-        for c in ThemeColor::ALL {
+    for &b in BaseColor::ALL {
+        for &c in ThemeColor::ALL {
             let has = Palette::from_upstream(b.id(), c.id(), c.id(), false).is_some();
             assert_eq!(
                 has,
@@ -322,7 +328,7 @@ fn preset_theme_builds_on_a_small_stack() {
     let built = std::thread::Builder::new()
         .stack_size(256 * 1024)
         .spawn(|| {
-            for s in StyleName::ALL {
+            for &s in StyleName::ALL {
                 let _ = Preset::default().style(s).theme(Mode::Dark);
             }
             Preset::default().theme(Mode::Dark).style.name

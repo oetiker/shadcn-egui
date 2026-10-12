@@ -474,7 +474,8 @@ fn preset_selects(ui: &mut egui::Ui, p: &mut Preset) {
 fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
     let fonts = || -> Vec<FontName> {
         FontName::ALL
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|&f| crate::fonts::files(f).is_some())
             .collect()
     };
@@ -482,7 +483,7 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
         0 => enum_select(
             ui,
             ("Style", None),
-            &StyleName::ALL,
+            StyleName::ALL,
             StyleName::id,
             &mut p.style,
         ),
@@ -492,7 +493,7 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
                 "Base colour",
                 Some("Greys for backgrounds, text and borders."),
             ),
-            &BaseColor::ALL,
+            BaseColor::ALL,
             BaseColor::id,
             &mut p.base_color,
         ),
@@ -502,7 +503,7 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
                 "Theme colour",
                 Some("Accent for buttons, focus ring and active controls."),
             ),
-            &ThemeColor::ALL,
+            ThemeColor::ALL,
             ThemeColor::id,
             &mut p.theme,
         ),
@@ -512,7 +513,7 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
                 "Chart colour (charts only)",
                 Some("Used by charts; no effect on these components."),
             ),
-            &ThemeColor::ALL,
+            ThemeColor::ALL,
             ThemeColor::id,
             &mut p.chart_color,
         ),
@@ -535,7 +536,8 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
         }
         6 => {
             let libraries: Vec<IconLibrary> = IconLibrary::ALL
-                .into_iter()
+                .iter()
+                .copied()
                 .filter(|&l| crate::icons::slots(l).is_some())
                 .collect();
             enum_select(
@@ -550,14 +552,14 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
         7 => enum_select(
             ui,
             ("Radius", None),
-            &RadiusChoice::ALL,
+            RadiusChoice::ALL,
             |r| r.id().unwrap_or("custom"),
             &mut p.radius,
         ),
         8 => enum_select(
             ui,
             ("Menu colour", Some("Normal or inverted menus.")),
-            &MenuColor::ALL,
+            MenuColor::ALL,
             MenuColor::id,
             &mut p.menu_color,
         ),
@@ -567,7 +569,7 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
                 "Menu accent",
                 Some("Strength of the highlighted menu item."),
             ),
-            &MenuAccent::ALL,
+            MenuAccent::ALL,
             MenuAccent::id,
             &mut p.menu_accent,
         ),
