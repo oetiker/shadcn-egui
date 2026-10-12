@@ -45,6 +45,30 @@ pub fn snapshot_all_with(
     snapshot_with_themes(name, size, themes(), ui_fn, prepare);
 }
 
+/// `ui_fn` on a page of `theme`'s background colour, after one run.
+pub fn page_harness<'a>(
+    size: egui::Vec2,
+    theme: Theme,
+    mut ui_fn: impl FnMut(&mut egui::Ui) + 'a,
+) -> Harness<'a> {
+    let bg = theme.palette.background;
+    let mut h = Harness::builder().with_size(size).build_ui(move |ui| {
+        theme.apply(ui.ctx());
+        // kittest wraps the ui in an 8px outer margin; paint the page
+        // colour under all of it, so no band of another colour shows.
+        let page = ui.ctx().viewport_rect();
+        ui.ctx()
+            .layer_painter(egui::LayerId::background())
+            .rect_filled(page, 0.0, bg);
+        egui::Frame::new().fill(bg).inner_margin(16).show(ui, |ui| {
+            ui.set_min_size(ui.available_size());
+            ui_fn(ui);
+        });
+    });
+    h.run();
+    h
+}
+
 /// One snapshot per `(suffix, theme)`: `{name}_{suffix}.png`.
 pub fn snapshot_with_themes(
     name: &str,
@@ -56,21 +80,7 @@ pub fn snapshot_with_themes(
     // One result set for all harnesses, so a failing style does not abort the rest.
     let mut results = SnapshotResults::new();
     for (suffix, theme) in themes {
-        let bg = theme.palette.background;
-        let mut h = Harness::builder().with_size(size).build_ui(|ui| {
-            theme.apply(ui.ctx());
-            // kittest wraps the ui in an 8px outer margin; paint the page
-            // colour under all of it, so no band of another colour shows.
-            let page = ui.ctx().viewport_rect();
-            ui.ctx()
-                .layer_painter(egui::LayerId::background())
-                .rect_filled(page, 0.0, bg);
-            egui::Frame::new().fill(bg).inner_margin(16).show(ui, |ui| {
-                ui.set_min_size(ui.available_size());
-                ui_fn(ui);
-            });
-        });
-        h.run();
+        let mut h = page_harness(size, theme, &mut ui_fn);
         prepare(&mut h);
         h.snapshot(format!("{name}_{suffix}"));
         results.extend(h.take_snapshot_results());

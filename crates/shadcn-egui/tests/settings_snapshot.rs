@@ -2,7 +2,7 @@ mod common;
 
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
-use egui_kittest::Harness;
+use egui_kittest::{Harness, SnapshotOptions};
 use shadcn_egui::reference::{settings_ui, SettingsState};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
@@ -40,6 +40,19 @@ fn settings_notifications_tab() {
 #[test]
 fn settings_components_tab() {
     snapshot_tab(2, "settings_components");
+}
+
+/// `docs/settings-screen.png`, the README's first image: the Account tab as
+/// `cargo run --example settings` starts (vega, dark, radius 10).
+#[test]
+fn readme_settings_screen() {
+    let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    let mut state = state(0);
+    let mut h = common::page_harness(egui::vec2(640.0, 840.0), theme, move |ui| {
+        settings_ui(ui, &mut state)
+    });
+    let docs = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs");
+    h.snapshot_options("settings-screen", &SnapshotOptions::new().output_path(docs));
 }
 
 #[test]
