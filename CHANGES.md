@@ -25,6 +25,9 @@ egui-shadcn plugin) are recorded here. The format is based on
 - An app that installs fonts of its own calls
   `Theme::apply_with_fonts(ctx, its_font_definitions)` instead of
   `Theme::apply`; this keeps the app's fonts next to the theme's.
+- `Theme::apply` sets egui's light and its dark style alike: text sizes,
+  spacing and colours that an app set with `ctx.set_style_of` or
+  `ctx.style_mut_of` before the call are overwritten in both modes.
 - `Theme` has the new public fields `style`, `fonts`, `icons` and `menu`, so
   a `Theme { .. }` struct literal written for 0.3 no longer compiles; build
   themes with `Theme::new(..)` and set the rest with `Theme::fonts(..)`,
@@ -216,10 +219,11 @@ egui-shadcn plugin) are recorded here. The format is based on
   other Lucide icon (2141 in all).
 
 ### Fixed
-- After `Theme::apply_with_fonts` with the context's current fonts switched
-  from a monospace body font to a sans one, code and other monospace text
-  still showed in the old body font. Each such call also added the body font
-  to the font list once more; it is now listed once.
+- Every `Theme::apply_with_fonts` that passed the context's current fonts
+  added the body font to the font list once more, so the list grew with each
+  call. After such a call switched from a monospace body font to a sans one,
+  code and other monospace text still showed in the old body font. Both
+  are fixed.
 - On a desktop with a light system theme, an app that called `Theme::apply`
   showed egui's own light look instead of the shadcn theme, and the theme
   also vanished when the desktop switched between light and dark. The theme
