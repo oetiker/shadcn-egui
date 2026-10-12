@@ -34,9 +34,11 @@ crates.io limits new crates per account: a burst of 5, then one per 10
 minutes; new versions of existing crates: a burst of 30, then one per
 minute (read 2026-10-11 in the crates.io source; the live values can
 differ). A release that creates many crates, like 0.4.0 or one that adds a
-font or icon set, stops with HTTP 429 and exit status 2. Wait, then use
-**Re-run failed jobs** on the publish run until its log ends with
-`all published`. Before such a release you can ask crates.io
+font or icon set, hits HTTP 429. The script then waits until the time
+crates.io names ("try again after …", else 10 minutes) and retries the same
+crate, so one run takes about 4 h 40 min for 0.4.0 and ends with
+`all published`. `NO_WAIT=1` makes it exit with status 2 instead; re-run it
+later, it skips what is out. Before such a release you can ask crates.io
 (help@crates.io) to raise the account's new-crate limit for the workspace.
 
 To see what a publish would do:
