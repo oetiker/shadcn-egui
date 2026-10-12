@@ -23,10 +23,7 @@ awk -F'\t' 'NR > 1 && ($4 == "OFL-1.1" || $4 == "Apache-2.0") {
     [ -s "$dest" ] && continue
     mkdir -p "$(dirname "$dest")"
     tmp=$(mktemp "$dest.XXXXXX")
-    trap 'rm -f "$tmp"' EXIT
-    curl -sfL -A "$ua" -o "$tmp" "https://raw.githubusercontent.com/google/fonts/$pin/$(enc "$p")"
-    chmod 644 "$tmp"
-    mv "$tmp" "$dest"
-    trap - EXIT
+    curl -sfL -A "$ua" -o "$tmp" "https://raw.githubusercontent.com/google/fonts/$pin/$(enc "$p")" || { rm -f "$tmp"; exit 1; }
+    chmod 644 "$tmp" && mv "$tmp" "$dest" || { rm -f "$tmp"; exit 1; }
     echo "fetched $p"
 done
