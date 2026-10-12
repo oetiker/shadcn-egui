@@ -1,0 +1,54 @@
+name: Publish release (automatic)
+
+# Tags and publishes the release once its pull request merges (D28).
+#
+# There is deliberately no workflow_dispatch. Publishing should be a
+# consequence of merging a release pull request, never something started from
+# a dropdown.
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGES.md
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    uses: ./.github/workflows/ri-publish-tag.yml
+    permissions:
+      contents: write
+      pull-requests: read
+
+  # crates.io Trusted Publishing: every crate of the workspace names this
+  # repository and release-publish.yml as its trusted publisher. A crate that
+  # is new on crates.io cannot be created this way; RELEASING.md says how such
+  # a release publishes. Crates already on crates.io at this version are
+  # skipped, so Re-run failed jobs finishes a release that stopped halfway.
+  crates:
+    needs: [publish]
+    if: needs.publish.outputs.release_id != ''
+    uses: ./.github/workflows/ri-publish-crates-io.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      head: ${{ needs.publish.outputs.head }}
+
+  # finalize needs every other job of this file; check verifies it (D30).
+  finalize:
+    needs: [publish, crates]
+    if: needs.publish.outputs.release_id != ''
+    uses: ./.github/workflows/ri-publish-finalize.yml
+    permissions:
+      contents: write
+      actions: write
+    with:
+      release_id: ${{ needs.publish.outputs.release_id }}
+      tag: ${{ needs.publish.outputs.tag }}
+      head: ${{ needs.publish.outputs.head }}

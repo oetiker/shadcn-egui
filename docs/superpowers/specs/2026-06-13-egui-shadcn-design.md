@@ -1,4 +1,4 @@
-# egui-shadcn — Design Spec
+# egui-shadcn: design spec
 
 **Date:** 2026-06-13
 **Status:** Approved (brainstorming → spec)
@@ -9,8 +9,8 @@ Building polished GUIs with Rust `egui`/`eframe` requires a lot of iterative
 back-and-forth. Unlike the web ecosystem (where shadcn/ui and similar provide a
 deep corpus of positive examples), there is no good body of reference egui code
 that produces modern, professional-looking interfaces on the first try. The goal
-is not to style a single button here and there — it is to **construct beautiful,
-composite GUIs** (forms, panels, dialogs with many aligned elements).
+is to **construct beautiful, composite GUIs** (forms, panels, dialogs with many
+aligned elements), beyond styling a single button here and there.
 
 ## Key finding (grounds the whole design)
 
@@ -18,9 +18,9 @@ shadcn/ui has three layers, and they translate to egui very differently:
 
 | Layer | Translates to egui? |
 |---|---|
-| **Design tokens** — color pairs (`X`/`X-foreground`), `--radius`, the 4px spacing grid, 14px/medium type scale, subtle shadows, 3px focus rings | **Cleanly.** Map ~1:1 onto `egui::Visuals` / `Spacing` / `Frame` / `text_styles`. |
-| **Component anatomy** — Button variants, Card, Input, Tabs, Switch, etc. | **Cleanly, as helper widgets.** Each cva variant → a Rust enum → paint params. |
-| **Layout** — flexbox `flex-grow`/`gap`/`justify-content`, CSS Grid, intrinsic sizing, responsive reflow | **Does NOT translate.** egui is single-pass immediate mode with no parent↔child size negotiation. Must be re-derived imperatively. |
+| **Design tokens**: color pairs (`X`/`X-foreground`), `--radius`, the 4px spacing grid, 14px/medium type scale, subtle shadows, 3px focus rings | **Cleanly.** Map ~1:1 onto `egui::Visuals` / `Spacing` / `Frame` / `text_styles`. |
+| **Component anatomy**: Button variants, Card, Input, Tabs, Switch, etc. | **Cleanly, as helper widgets.** Each cva variant → a Rust enum → paint params. |
+| **Layout**: flexbox `flex-grow`/`gap`/`justify-content`, CSS Grid, intrinsic sizing, responsive reflow | **Does NOT translate.** egui is single-pass immediate mode with no parent↔child size negotiation. Must be re-derived imperatively. |
 
 The scarce knowledge Claude lacks is therefore **layout recipes**, not per-widget
 styling. The good news: `egui_extras::StripBuilder` provides
@@ -28,7 +28,7 @@ styling. The good news: `egui_extras::StripBuilder` provides
 thing to flexbox `fr` / `flex-grow` distribution and is the foundation for a
 usable layout layer.
 
-A *literal* "shadcn code → egui code" transform is the wrong target — the
+A *literal* "shadcn code → egui code" transform is the wrong target: the
 Tailwind/layout classes are exactly the part that doesn't carry over. The
 **design language** carries; layout must be rebuilt. Screenshot and component
 code are complementary inputs: code tells you *which component / variant / token*;
@@ -50,10 +50,10 @@ code") and egui (per-widget styling = editing the widget), and directly attacks
 "no positive examples" by making the examples real, tested, in-repo, and editable.
 
 Rejected alternatives:
-- **Standalone crate dependency** — most reusable, but fights egui's styling model
+- **Standalone crate dependency**: most reusable, but fights egui's styling model
   and shadcn's philosophy; when a needed variant isn't in the crate, it's back to
   from-scratch code.
-- **Pure knowledge skill (markdown only)** — layout-by-prose is precisely what
+- **Pure knowledge skill (markdown only)**: layout-by-prose is precisely what
   causes the endless iteration.
 
 ## Artifact
@@ -71,30 +71,30 @@ Plus the settings-form-with-tabs reference, built entirely from the module.
 A small Rust workspace in this repo: a library crate (source-of-truth
 components) + an example binary rendering the reference screen.
 
-- **`theme.rs`** — design tokens. `Theme { light: Palette, dark: Palette, radius,
+- **`theme.rs`**: design tokens. `Theme { light: Palette, dark: Palette, radius,
   spacing, type_scale }`; `Palette` = the ~27 semantic shadcn tokens as
   `Color32`. Precompute the **shadcn v4 / new-york / OKLCH** defaults into sRGB
   literals (no runtime color math). `theme.apply(ctx)` pushes everything into
   `egui::Style`/`Visuals`/`Spacing`/`text_styles` and loads the bundled
   **Oxanium** font. Ships **both light + dark**. Font selection is a single
-  swappable knob (Oxanium is a geometric/display face — gives a squared, sci-fi
+  swappable knob (Oxanium is a geometric/display face that gives a squared, sci-fi
   flavor distinct from vanilla shadcn; type sizes/weights kept easy to nudge for
   readability at the 14px body size).
-- **`layout.rs`** — the flexbox substitute (the high-value part). Ergonomic
+- **`layout.rs`**: the flexbox substitute (the high-value part). Ergonomic
   wrappers over `egui_extras::StripBuilder`: `row` / `vstack` with **gap,
   grow-weights, justify (start/center/end/space-between), align**;
   `form_row(label, control)` with a shared label column; `card(...)`; a reflowing
   `grid`.
-- **`components/`** — themed widgets, cva variants → Rust enums. v1 set:
+- **`components/`**: themed widgets, cva variants → Rust enums. v1 set:
   **Button** (Default/Destructive/Outline/Secondary/Ghost/Link × Sm/Default/Lg/
   Icon), **Input**, **Label**, **Tabs** (raised-pill active state), **Card**,
   **Switch**, **Checkbox**, **Select** (styled `ComboBox`), **Separator**,
   **Badge**. Shared helpers: one focus-ring routine + "hover/active = opacity
   modulation," applied uniformly.
-- **`examples/settings.rs`** — the reference screen.
+- **`examples/settings.rs`**: the reference screen.
 
-**Deferred (YAGNI for v1):** Dialog/Popover, Table, Tooltip, menus, gradients —
-add when a real design needs them.
+**Deferred (YAGNI for v1):** Dialog/Popover, Table, Tooltip, menus, gradients;
+add them when a real design needs them.
 
 ### The workflow (`SKILL.md`)
 
@@ -107,12 +107,12 @@ or description):
    components + variants → token deviations.
 3. **Map**, using three reference tables baked into the skill:
    - app shell → egui panels (`SidePanel` / `TopBottomPanel` / `CentralPanel`)
-   - **layout intent → layout helper** (the flexbox-property → egui table — the
+   - **layout intent → layout helper** (the flexbox-property → egui table, the
      high-value part)
    - cva variant → Rust enum; tokens → theme (customize only what differs)
 4. **Build** from the vendored components; only drop to raw egui when no helper
-   fits — and when that happens, add a new helper rather than inlining.
-5. **Verify visually** — render and screenshot, compare to the design, iterate on
+   fits, and when that happens, add a new helper rather than inlining.
+5. **Verify visually**: render and screenshot, compare to the design, iterate on
    the layout numbers.
 
 It also carries an **"egui gotchas"** section (single-pass; no `flex-grow` across
@@ -128,7 +128,7 @@ comparison, so the eval runs without a real window.
 "snapshot"]` renders egui UIs to PNG headlessly on the target machine via
 `wgpu` over mesa (no display server needed). A throwaway spike produced a correct
 800×600 RGBA render of a heading + button. This also enables the development loop:
-the rendered PNG can be inspected directly to iterate on the layout visually —
+the rendered PNG can be inspected directly to iterate on the layout visually:
 the missing "web-like" feedback loop.
 
 ## Defaults (settled)
@@ -201,4 +201,4 @@ control radius `rounded-md` = 8px.
   `available_width()` + `add_sized` for manual cases; panels for the app shell.
 - Hard mismatches: `flex-grow` across siblings, `gap`, `justify-content:
   space-between` over wrapped rows, CSS Grid tracks, intrinsic min/max-content,
-  automatic responsive reflow — none declarative; emulate imperatively.
+  automatic responsive reflow. None is declarative; emulate them imperatively.

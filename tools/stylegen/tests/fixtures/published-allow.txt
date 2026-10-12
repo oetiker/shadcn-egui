@@ -1,0 +1,11 @@
+# <style> <marker> <class>  # why the class is not in the published component
+# The published build spells calc() operators with underscores
+# (`calc(100%_-_2rem)`); the class is the same, only its spelling differs.
+vega cn-dialog-content max-w-[calc(100%-2rem)]  # published as max-w-[calc(100%_-_2rem)]
+vega cn-switch-thumb group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)]  # published as ...translate-x-[calc(100%_-_2px)]
+vega cn-switch-thumb group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)]  # published as ...translate-x-[calc(100%_-_2px)]
+vega cn-tooltip-arrow translate-y-[calc(-50%-2px)]  # published as translate-y-[calc(-50%_-_2px)]
+nova cn-dialog-content max-w-[calc(100%-2rem)]  # published as max-w-[calc(100%_-_2rem)]
+nova cn-switch-thumb group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)]  # published as ...translate-x-[calc(100%_-_2px)]
+nova cn-switch-thumb group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)]  # published as ...translate-x-[calc(100%_-_2px)]
+nova cn-tooltip-arrow translate-y-[calc(-50%-2px)]  # published as translate-y-[calc(-50%_-_2px)]

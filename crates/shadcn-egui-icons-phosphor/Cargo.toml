@@ -1,0 +1,12 @@
+[package]
+name = "shadcn-egui-icons-phosphor"
+description = "Phosphor Icons (regular) for shadcn-egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+repository.workspace = true
+include = ["src/**", "LICENSE*", "README*"]
+
+[dependencies]
+shadcn-egui-core.workspace = true

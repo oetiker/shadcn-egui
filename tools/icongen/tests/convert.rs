@@ -1,7 +1,11 @@
 use icongen::{const_name, convert, render_module, Seg};
 
 fn fixture(name: &str) -> String {
-    std::fs::read_to_string(format!("{}/tests/fixtures/{name}.svg", env!("CARGO_MANIFEST_DIR"))).expect("fixture")
+    std::fs::read_to_string(format!(
+        "{}/tests/fixtures/{name}.svg",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("fixture")
 }
 
 fn subpaths(segs: &[Seg]) -> usize {
@@ -26,7 +30,13 @@ fn near_zero_length_dot_survives() {
     // dropped, or the icon loses its dot.
     let icon = convert("circle-alert", &fixture("circle-alert")).expect("converts");
     assert_eq!(subpaths(&icon.segs), 3, "{:?}", icon.segs);
-    assert!(icon.segs.windows(2).any(|w| w == [Seg::M(12.0, 16.0), Seg::L(12.01, 16.0)]), "{:?}", icon.segs);
+    assert!(
+        icon.segs
+            .windows(2)
+            .any(|w| w == [Seg::M(12.0, 16.0), Seg::L(12.01, 16.0)]),
+        "{:?}",
+        icon.segs
+    );
 }
 
 #[test]
@@ -41,7 +51,10 @@ fn all_fixtures_convert() {
                 Seg::C(a, b, c, d, x, y) => vec![a, b, c, d, x, y],
                 Seg::Z => vec![],
             };
-            assert!(coords.iter().all(|v| (-1.0..=25.0).contains(v)), "{n}: {s:?} outside the view box");
+            assert!(
+                coords.iter().all(|v| (-1.0..=25.0).contains(v)),
+                "{n}: {s:?} outside the view box"
+            );
         }
     }
 }
@@ -65,9 +78,11 @@ fn moveto_is_restored_after_close() {
 }
 
 #[test]
-fn fills_are_rejected() {
+fn stroke_only_check_rejects_fills() {
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="4" height="4" fill="black"/></svg>"#;
-    let err = convert("filled", svg).expect_err("fills must be rejected");
+    let icon = convert("filled", svg).expect("fills convert now");
+    assert!(icon.fill.is_some());
+    let err = icongen::ensure_stroke_only(&icon).expect_err("--out writes strokes only");
     assert!(err.contains("filled"), "{err}");
 }
 
@@ -82,9 +97,21 @@ fn names_and_module_render() {
     assert_eq!(const_name("circle-alert"), "CIRCLE_ALERT");
     assert_eq!(const_name("3d-box"), "I_3D_BOX");
     let icon = convert("x", &fixture("x")).expect("converts");
-    let src = render_module(&[icon], "crate::shadcn::components::icon", "Lucide v1.54.0 (ISC)");
-    assert!(src.contains("use crate::shadcn::components::icon::{Icon, Seg::*};"), "{src}");
-    assert!(src.contains("pub const X: Icon = Icon {"), "{src}");
+    let src = render_module(
+        &[icon],
+        "crate::shadcn::components::icon",
+        "Lucide v1.54.0 (ISC)",
+    );
+    assert!(
+        src.contains("use crate::shadcn::components::icon::{Icon, IconShape, Seg::*};"),
+        "{src}"
+    );
+    assert!(
+        src.contains(
+            "pub const X: Icon = Icon {\n    name: \"x\",\n    size: 24.0,\n    shape: IconShape::Segs(&[\n"
+        ),
+        "{src}"
+    );
     assert!(src.contains("        M(18.0, 6.0),"), "{src}");
     assert!(src.contains("// Lucide v1.54.0 (ISC)"));
     assert!(src.contains("pub const ALL: &[&Icon] = &[&X];"));

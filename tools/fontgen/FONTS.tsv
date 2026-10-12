@@ -1,0 +1,27 @@
+name	title	kind	license	files	license_file	y_offset_factor
+inter	Inter	sans	OFL-1.1	ofl/inter/Inter[opsz,wght].ttf	ofl/inter/OFL.txt	-0.07
+noto-sans	Noto Sans	sans	OFL-1.1	ofl/notosans/NotoSans[wdth,wght].ttf	ofl/notosans/OFL.txt	-0.07
+nunito-sans	Nunito Sans	sans	OFL-1.1	ofl/nunitosans/NunitoSans[YTLC,opsz,wdth,wght].ttf	ofl/nunitosans/OFL.txt	0.00
+figtree	Figtree	sans	OFL-1.1	ofl/figtree/Figtree[wght].ttf	ofl/figtree/OFL.txt	-0.07
+roboto	Roboto	sans	OFL-1.1	ofl/roboto/Roboto[wdth,wght].ttf	ofl/roboto/OFL.txt	0.00
+raleway	Raleway	sans	OFL-1.1	ofl/raleway/Raleway[wght].ttf	ofl/raleway/OFL.txt	0.07
+dm-sans	DM Sans	sans	OFL-1.1	ofl/dmsans/DMSans[opsz,wght].ttf	ofl/dmsans/OFL.txt	0.00
+public-sans	Public Sans	sans	OFL-1.1	ofl/publicsans/PublicSans[wght].ttf	ofl/publicsans/OFL.txt	0.00
+outfit	Outfit	sans	OFL-1.1	ofl/outfit/Outfit[wght].ttf	ofl/outfit/OFL.txt	0.00
+jetbrains-mono	JetBrains Mono	mono	OFL-1.1	ofl/jetbrainsmono/JetBrainsMono[wght].ttf	ofl/jetbrainsmono/OFL.txt	0.00
+geist	Geist	sans	OFL-1.1	ofl/geist/Geist[wght].ttf	ofl/geist/OFL.txt	0.00
+geist-mono	Geist Mono	mono	OFL-1.1	ofl/geistmono/GeistMono[wght].ttf	ofl/geistmono/OFL.txt	0.00
+lora	Lora	serif	OFL-1.1	ofl/lora/Lora[wght].ttf	ofl/lora/OFL.txt	0.00
+merriweather	Merriweather	serif	OFL-1.1	ofl/merriweather/Merriweather[opsz,wdth,wght].ttf	ofl/merriweather/OFL.txt	0.00
+playfair-display	Playfair Display	serif	OFL-1.1	ofl/playfairdisplay/PlayfairDisplay[wght].ttf	ofl/playfairdisplay/OFL.txt	-0.14
+noto-serif	Noto Serif	serif	OFL-1.1	ofl/notoserif/NotoSerif[wdth,wght].ttf	ofl/notoserif/OFL.txt	-0.07
+roboto-slab	Roboto Slab	serif	Apache-2.0	apache/robotoslab/RobotoSlab[wght].ttf	apache/robotoslab/LICENSE.txt	0.00
+oxanium	Oxanium	sans	OFL-1.1	ofl/oxanium/Oxanium[wght].ttf	ofl/oxanium/OFL.txt	0.14
+manrope	Manrope	sans	OFL-1.1	ofl/manrope/Manrope[wght].ttf	ofl/manrope/OFL.txt	-0.07
+space-grotesk	Space Grotesk	sans	OFL-1.1	ofl/spacegrotesk/SpaceGrotesk[wght].ttf	ofl/spacegrotesk/OFL.txt	0.00
+montserrat	Montserrat	sans	OFL-1.1	ofl/montserrat/Montserrat[wght].ttf	ofl/montserrat/OFL.txt	-0.07
+ibm-plex-sans	IBM Plex Sans	sans	OFL-1.1	ofl/ibmplexsans/IBMPlexSans[wdth,wght].ttf	ofl/ibmplexsans/OFL.txt	0.00
+source-sans-3	Source Sans 3	sans	OFL-1.1	ofl/sourcesans3/SourceSans3[wght].ttf	ofl/sourcesans3/OFL.txt	0.07
+instrument-sans	Instrument Sans	sans	OFL-1.1	ofl/instrumentsans/InstrumentSans[wdth,wght].ttf	ofl/instrumentsans/OFL.txt	-0.07
+eb-garamond	EB Garamond	serif	OFL-1.1	ofl/ebgaramond/EBGaramond[wght].ttf	ofl/ebgaramond/OFL.txt	0.00
+instrument-serif	Instrument Serif	serif	OFL-1.1	400=ofl/instrumentserif/InstrumentSerif-Regular.ttf	ofl/instrumentserif/OFL.txt	0.07

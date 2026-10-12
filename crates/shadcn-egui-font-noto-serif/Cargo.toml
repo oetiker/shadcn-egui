@@ -1,0 +1,12 @@
+[package]
+name = "shadcn-egui-font-noto-serif"
+description = "Noto Serif for shadcn-egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT AND OFL-1.1"
+repository.workspace = true
+include = ["src/**", "fonts/**", "LICENSE*", "README*"]
+
+[dependencies]
+shadcn-egui-core.workspace = true

@@ -17,6 +17,24 @@
   with `painter().layout_no_wrap(text, font_id, explicit_color)` (see `button.rs`).
 - **`strong()` is not a bold font.** egui's `strong` brightens color. For weight use the
   named families via `theme::family(ctx, FAMILY_MEDIUM|FAMILY_SEMIBOLD)`.
+- **Geometry is resolved without interaction states.** Sizes, paddings and
+  gaps are picked before hover, press or focus are known, so a style rule that
+  changes a size on `hover:` or `active:` does not move the layout. Only colours,
+  borders, rings, shadows and the 1px press nudge follow those states.
+- **egui has no backdrop blur.** `backdrop-blur-*` on a dialog overlay is not
+  drawn; the overlay is only the translucent fill.
+- **Translucent menus draw opaque.** The menu colours
+  `default-translucent` and `inverted-translucent` draw like `default`
+  and `inverted`, and log a warning. Upstream blurs what lies behind the
+  menu (`backdrop-blur-2xl`); egui cannot, and alpha without the blur
+  makes the text behind the list compete with the list.
+- **The ring is drawn outside the border box.** A focus ring (`ring-3`) is
+  painted around the control and takes no layout space, as in CSS. Leave room
+  around a control at the edge of a clipped area, or the ring is cut off.
+- **Heading font.** Upstream marks card and dialog titles with
+  `cn-font-heading`; the crate draws them with `heading_family_for(ctx, weight)`,
+  which is the theme's heading font (`Theme::fonts(body, Some(heading))`) or
+  the body font when none is set.
 - **No CSS transitions.** Animate manually with `ctx.animate_bool(id, on)` and lerp
   (see `switch.rs`). `animate_*` honours `animation_time`; set to 0 (as
   `cpu-rendering.md` advises) it jumps to the target, which is what you want.
@@ -44,3 +62,6 @@
   (styles are not saved). Re-applying every frame buys nothing and hides bugs:
   code that overwrites the style is silently repainted over on the next frame
   instead of showing. Read tokens via `Theme::current(ctx)` inside widgets.
+- **Icons are rasterised.** `paint_icon` draws each icon from a cached
+  coverage texture at the physical pixel size, so a translucent colour
+  applies once; very large icons cost a texture each.

@@ -1,1 +1,6 @@
 target/
+# egui_kittest leftovers of a failed or updated snapshot comparison; the
+# gallery test also snapshots into docs/
+**/*.new.png
+**/*.diff.png
+**/*.old.png

@@ -1,78 +1,112 @@
-# egui-shadcn
+# shadcn-egui
 
-A [Claude Code](https://claude.com/claude-code) plugin that lets Claude build
-polished Rust [egui](https://github.com/emilk/egui) GUIs from
-[shadcn/ui](https://ui.shadcn.com/) designs — without the usual endless iteration.
-The components are plain egui widgets (just `egui` + `egui_extras`), so they drop
-into any backend — eframe, `egui-winit` + a custom rasterizer, glow, or wgpu.
+[![CI](https://github.com/oetiker/shadcn-egui/actions/workflows/ci.yml/badge.svg)](https://github.com/oetiker/shadcn-egui/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/oetiker/shadcn-egui)](https://github.com/oetiker/shadcn-egui/releases/latest)
+[![crates.io](https://img.shields.io/crates/v/shadcn-egui)](https://crates.io/crates/shadcn-egui)
+[![docs.rs](https://img.shields.io/docsrs/shadcn-egui)](https://docs.rs/shadcn-egui)
 
-## Why
+The [shadcn/ui](https://ui.shadcn.com/) design system for
+[egui](https://github.com/emilk/egui): the shadcn v4 styles (vega, nova,
+maia, lyra, mira, luma, rhea), their colour themes, fonts, icon sets and
+presets, and components drawn as plain egui widgets. It works with any egui
+backend (eframe, egui-winit, glow, wgpu).
 
-egui is an immediate-mode GUI toolkit with no flexbox and no CSS, and there is
-little reference code showing how to make it look *modern*. So building a nice
-egui UI from a web design normally means many rounds of guess-and-tweak.
+![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/gallery-screen.png)
 
-This plugin fixes that by shipping three things:
-
-1. **A tested, compiling component module** (`registry/`) that ports the
-   shadcn-v4 (new-york / OKLCH) design system to egui — theme & tokens, a
-   flexbox-substitute layout layer, and themed components (Button, Input, Label,
-   Card, Tabs, Switch, Checkbox, Select, Separator, Badge). Runtime deps are just
-   `egui` + `egui_extras` — no eframe/wgpu coupling; eframe and `egui_kittest`+wgpu
-   are dev-only (the example and the snapshot harness).
-2. **A layout-first workflow** (`skills/egui-shadcn/SKILL.md`): vendor the module
-   into your project → decompose the design top-down → map it with the reference
-   tables → build from the tested parts → verify with a headless render.
-3. **Reference tables**: shadcn-token → egui field, web-layout-intent → egui
-   helper, component → widget, and the egui gotchas that trip up web habits.
-
-The key unlock is a **web-like feedback loop**: components render headlessly to
-PNG via [`egui_kittest`](https://docs.rs/egui_kittest), so Claude can *look at its
-own output and self-correct* instead of guessing.
-
-## The reference screen
-
-The skill is validated against a settings screen whose tabs double as a gallery
-of every component, built entirely from the module:
-
-![egui-shadcn settings screen](docs/settings-screen.png)
-
-![egui-shadcn component gallery](docs/components-screen.png)
-
-These are the actual `egui_kittest` snapshot renders (dark theme, Oxanium type).
-Run it live:
+## Install
 
 ```bash
-cargo run --example settings
+cargo add shadcn-egui
 ```
 
-## Install (as a Claude Code plugin)
+## Use a shadcn preset
 
+Build a look on the shadcn create page (ui.shadcn.com), copy its preset code
+and apply it. Codes from shadcn-svelte.com number colours differently and
+are not supported.
+
+```rust
+use shadcn_egui::{Mode, Preset};
+
+fn setup(ctx: &egui::Context) -> Result<(), shadcn_egui::PresetCodeError> {
+    Preset::from_code("b2D0wqNxT")?.apply(ctx, Mode::Dark);
+    Ok(())
+}
 ```
-/plugin marketplace add oposs/claude-plugins
-/plugin install egui-shadcn@oposs-plugins
+
+This preset uses the Geist font and the Hugeicons icons, which need
+`--features font-geist,icons-hugeicons`; without them it falls back to
+Inter and Lucide. Its translucent menu colour always falls back to the
+opaque one, with a log warning.
+
+`apply` again to switch mode or preset; the fonts are reinstalled only when
+they change. An app that installs fonts of its own uses
+`Theme::apply_with_fonts` instead (see the `Theme` docs). Without a preset,
+`Theme::vega_dark().apply(ctx)` gives the default look.
+
+## Components
+
+Button, Badge, Input, Label, Card, Tabs, Switch, Checkbox, Select, Slider,
+Separator, Tooltip, Popover, Dialog and Icon (`IconView`):
+
+```rust
+use shadcn_egui::components::button::Button;
+
+fn ui(ui: &mut egui::Ui) {
+    if ui.add(Button::new("Save changes")).clicked() {
+        // ...
+    }
+}
 ```
 
-Then just ask Claude things like:
+In a git checkout of this repository,
+`cargo run --example gallery --features fonts-all,icons-all` shows every
+component, each variant and size, and the icons of the chosen icon library.
+Paste a preset code or pick each preset part (style, colours, fonts, icon
+library, radius, menu) and the light or dark mode, and the gallery restyles
+live.
 
-- *"Build an egui settings screen with tabs from this shadcn design"* (attach a screenshot)
-- *"Port this shadcn Card + form to egui"*
-- *"Make my eframe app look like shadcn"*
+`cargo run --example settings` opens a settings page built from Badge,
+Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
+Tabs, with a toolbar that switches style, mode and radius.
 
-## Repository layout
+![shadcn-egui settings screen](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/settings-screen.png)
 
-| Path | What |
-|------|------|
-| `src/`, `examples/`, `tests/` | The canonical `egui_shadcn` crate (source of truth) + the live example + `egui_kittest` snapshot tests |
-| `skills/egui-shadcn/` | The plugin skill: `SKILL.md`, `references/`, and the vendored `registry/` copied into target projects |
-| `docs/superpowers/` | Design spec and implementation plan |
+## Features
 
-## Licenses
+Inter and the Lucide icons are always included. Everything else is a Cargo
+feature named after the shadcn id:
 
-- Code: MIT (see `LICENSE`).
-- The bundled **Oxanium** font is licensed under the SIL Open Font License 1.1
-  (see `assets/Oxanium-OFL.txt`).
+| Feature | Adds |
+|---|---|
+| `font-<id>` | one font of the create page, for example `font-geist`, `font-jetbrains-mono`, `font-playfair-display` |
+| `fonts-all` | every font |
+| `icons-tabler` | Tabler icons |
+| `icons-phosphor` | Phosphor icons |
+| `icons-remixicon` | Remix Icon |
+| `icons-hugeicons` | Hugeicons |
+| `icons-all` | every icon set |
 
----
+A preset that names a font or icon set whose feature is off renders with
+Inter or Lucide and logs a warning through the `log` crate. The `sera`
+style has no egui version yet and falls back to `nova`.
 
-Built with [Claude Code](https://claude.com/claude-code).
+## Licences
+
+The code is MIT (`LICENSE`). Each font crate also ships its font's licence
+(SIL Open Font License 1.1 or Apache License 2.0). The icon crates ship
+theirs: Lucide ISC, Tabler and Phosphor MIT, Remix Icon Apache-2.0 (version
+4.8.0, the last release under that licence; later releases are not used),
+Hugeicons MIT. Each crate's `license` field names both the code and the
+bundled licence.
+
+## The Claude Code plugin
+
+This repository also hosts the `egui-shadcn` Claude Code plugin, which
+copied the 0.3 component code into projects. It stays at 0.3.2 until its
+skill is rewritten for this crate.
+
+## Development
+
+See [CLAUDE.md](CLAUDE.md) for the layout, generators and checks, and
+[RELEASING.md](RELEASING.md) for releases.
