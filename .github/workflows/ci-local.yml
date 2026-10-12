@@ -1,0 +1,186 @@
+name: CI (shadcn-egui)
+
+# The project's own CI jobs, called from ci.yml (D20). ri-ci-rust covers
+# the workspace fmt and clippy with default features and the tests of the
+# crates under "rust" in .github/repo-infra.json; everything else that
+# CLAUDE.md lists as a gate runs here.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to check out; empty takes the commit that triggered the run (D28).
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Every workspace test, with default features and with --all-features.
+  # The snapshot tests render through egui_kittest and wgpu and need a
+  # Vulkan driver.
+  workspace-tests:
+    name: Workspace tests (snapshots on lavapipe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-tests-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tests-
+
+      - name: Test with default features
+        run: cargo test --workspace --all-targets -- --test-threads 4
+
+      - name: Test with all features
+        run: cargo test --workspace --all-targets --all-features -- --test-threads 4
+
+      # egui_kittest writes <name>.new.png and <name>.diff.png next to a
+      # snapshot that does not match.
+      - name: Keep the failed snapshot images
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapshot-diffs
+          path: |
+            crates/*/tests/snapshots/**/*.new.png
+            crates/*/tests/snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
+  clippy-all-features:
+    name: Clippy with all features
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-clippy-
+
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # The generators are workspaces of their own and never dependencies of a
+  # crate, so the workspace jobs do not see them.
+  tools:
+    name: Tool ${{ matrix.tool }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [stylegen, icongen, fontgen]
+    env:
+      MANIFEST: tools/${{ matrix.tool }}/Cargo.toml
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/${{ matrix.tool }}/target
+          key: ${{ runner.os }}-cargo-${{ matrix.tool }}-${{ hashFiles(format('tools/{0}/Cargo.lock', matrix.tool)) }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.tool }}-
+
+      - run: cargo fmt --check --manifest-path "$MANIFEST"
+      - run: cargo clippy --all-targets --manifest-path "$MANIFEST" -- -D warnings
+      - run: cargo test --manifest-path "$MANIFEST"
+
+  # stylegen drift compares the crate's style comments and the copied
+  # upstream files with shadcn-svelte at tools/stylegen/PIN and shadcn/ui at
+  # tools/stylegen/PIN_REACT.
+  stylegen-drift:
+    name: Styles match the pinned upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/stylegen/target
+          key: ${{ runner.os }}-cargo-stylegen-${{ hashFiles('tools/stylegen/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-stylegen-
+
+      - name: Check out the pinned upstreams
+        run: |
+          set -euo pipefail
+          up="$RUNNER_TEMP/upstream"
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/huntabyte/shadcn-svelte.git "$up/svelte"
+          git -C "$up/svelte" checkout --quiet "$(cat tools/stylegen/PIN)"
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/shadcn-ui/ui.git "$up/react"
+          git -C "$up/react" checkout --quiet "$(cat tools/stylegen/PIN_REACT)"
+
+      - run: cargo run --manifest-path tools/stylegen/Cargo.toml -- drift "$RUNNER_TEMP/upstream/svelte" "$RUNNER_TEMP/upstream/react" .
+
+  # What each crate would upload to crates.io, and whether the workspace
+  # publishes (RELEASING.md, "Checks before a release").
+  packages:
+    name: Crate packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-packages-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-packages-
+
+      - run: scripts/check-version-files.sh
+      - run: scripts/check-packages.sh
+      - run: scripts/check-package-size.sh
+      - run: cargo publish --dry-run --workspace
