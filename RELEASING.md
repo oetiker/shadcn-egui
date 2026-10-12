@@ -109,6 +109,7 @@ then lands like this:
 The CI runs them; to run them locally:
 
 ```bash
+scripts/check-version-files.sh
 scripts/check-packages.sh
 scripts/check-package-size.sh
 cargo publish --dry-run --workspace --jobs 4
