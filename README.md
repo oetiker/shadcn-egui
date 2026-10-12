@@ -11,7 +11,7 @@ maia, lyra, mira, luma, rhea), their colour themes, fonts, icon sets and
 presets, and components drawn as plain egui widgets. It works with any egui
 backend (eframe, egui-winit, glow, wgpu).
 
-![shadcn-egui settings screen](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/settings-screen.png)
+![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/gallery-screen.png)
 
 ## Install
 
@@ -66,11 +66,11 @@ Paste a preset code or pick each preset part (style, colours, fonts, icon
 library, radius, menu) and the light or dark mode, and the gallery restyles
 live.
 
-![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/gallery-screen.png)
-
 `cargo run --example settings` opens a settings page built from Badge,
 Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
 Tabs, with a toolbar that switches style, mode and radius.
+
+![shadcn-egui settings screen](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/settings-screen.png)
 
 ## Features
 
