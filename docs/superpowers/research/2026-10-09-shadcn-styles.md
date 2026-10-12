@@ -9,16 +9,16 @@ Evidence base: shallow clones and registry JSON fetched on 2026-10-09:
 
 **A style is a class map applied to one shared set of component sources at registry build time.** It is neither a separate hand-written set of components nor a runtime CSS layer.
 
-1. Component sources exist once ("base"): `ss/docs/src/lib/registry/ui/<comp>/*.svelte` (React: `ui/apps/v4/registry/bases/{radix,base}/ui/*`). Their class strings carry **style-invariant structural classes plus marker classes** `cn-<component>-<part>[-variant-x|-size-y]`, e.g. slider thumb:
+1. Component sources exist once ("base"): `ss/docs/src/lib/registry/ui/<comp>/*.svelte` (React: `ui/apps/v4/registry/bases/{radix,base}/ui/*`). Their class strings carry **style-invariant structural classes plus marker classes** `cn-<component>-<part>[-variant-x|-size-y]`, for example the slider thumb:
    `"cn-slider-thumb block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"`;
    button cva: `base: "cn-button group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 …"`, `variants.size.default: "cn-button-size-default"`, `variants.variant.outline: "cn-button-variant-outline"`.
-2. Each style is one flat CSS file of `@apply` rules keyed by those markers: `ui/apps/v4/registry/styles/style-{vega,nova,maia,lyra,mira,luma,sera,rhea}.css` (~1750 lines, 422 `@apply` in nova), e.g.
+2. Each style is one flat CSS file of `@apply` rules keyed by those markers: `ui/apps/v4/registry/styles/style-{vega,nova,maia,lyra,mira,luma,sera,rhea}.css` (~1750 lines, 422 `@apply` in nova), for example
    ```css
    .style-nova {
      .cn-slider-thumb { @apply border-ring ring-ring/50 relative size-3 rounded-full border bg-white transition-[color,box-shadow] after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3; }
    ```
    shadcn-svelte copies these **byte-for-byte** from upstream (`ss/docs/src/lib/registry/styles/README.md`: "DO NOT EDIT … `pnpm pull:styles`"; `ss/docs/scripts/pull-styles.ts` fetches `https://raw.githubusercontent.com/shadcn-ui/ui/refs/heads/main/apps/v4/registry/styles/style-${style}.css`). I verified `cmp` identity for nova, vega, luma.
-3. Build step `ss/docs/scripts/build-registry.ts` -> `rewriteRegistryForStyle()` parses the CSS into `Record<cnClass, applyString>` (`parseStyleCss`, subject = *last* `cn-*` ident in the selector, multiple rules concatenated) and `injectStyleClasses()` (`ss/packages/parity/src/inject-style-classes.ts`) replaces each `cn-x` marker with its `@apply` list, inserted **in front of** the base classes; `tailwind-merge` then resolves conflicts by position ("the order of each `@apply` list is semantic", README). Result: e.g. nova slider root = `"data-vertical:min-h-40 relative flex w-full …"`.
+3. Build step `ss/docs/scripts/build-registry.ts` -> `rewriteRegistryForStyle()` parses the CSS into `Record<cnClass, applyString>` (`parseStyleCss`, subject = *last* `cn-*` ident in the selector, multiple rules concatenated) and `injectStyleClasses()` (`ss/packages/parity/src/inject-style-classes.ts`) replaces each `cn-x` marker with its `@apply` list, inserted **in front of** the base classes; `tailwind-merge` then resolves conflicts by position ("the order of each `@apply` list is semantic", README). Result, for example the nova slider root: `"data-vertical:min-h-40 relative flex w-full …"`.
 4. A few markers are *not* inlined at build time but left for the CLI (`SKIP_CN_CLASSES`): `cn-menu-target`, `cn-menu-translucent` (menuColor), `cn-font-heading` (font), `cn-logical-sides`/`cn-rtl-flip`/`*-logical` (RTL), `cn-toast`, `cn-input-otp`.
 
 So the most faithful thing to mirror is exactly this two-layer split: **base component (structure, invariant classes) + per-style map `cn-part -> class list`**.
@@ -64,7 +64,7 @@ All parameters except `style` are **token/CSS-variable or icon/font changes, not
 - React: `https://ui.shadcn.com/r/styles/new-york-v4/<name>.json` (200) and `https://ui.shadcn.com/r/styles/{radix|base}-<style>/<name>.json` (radix-nova, base-nova, radix-vega: 200). radix-nova button default size = `"h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2"`, same as svelte nova.
 - Raw style maps: `https://raw.githubusercontent.com/shadcn-ui/ui/refs/heads/main/apps/v4/registry/styles/style-<style>.css`.
 
-**Drift note:** installed nova components in an existing project can be an *older* snapshot (e.g. `[a]:hover:bg-primary/80` vs current `hover:bg-primary/80`, and `hover:bg-secondary/80` vs current `hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]`). Styles evolve; egui-shadcn pins one upstream commit for its style tables.
+**Drift note:** installed nova components in an existing project can be an *older* snapshot (for example `[a]:hover:bg-primary/80` vs current `hover:bg-primary/80`, and `hover:bg-secondary/80` vs current `hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]`). Styles evolve; egui-shadcn pins one upstream commit for its style tables.
 
 **Radius note:** projects initialised with an older CLI define only the additive scale (`--radius-md: calc(var(--radius) - 2px)`, `--radius-sm: calc(var(--radius) - 4px)`) and no `--radius-xl…4xl`; there `rounded-xl`/`rounded-4xl` resolve to Tailwind defaults (0.75rem / 2rem). Current CLI output is the multiplying scale, which egui-shadcn reproduces.
 
@@ -195,7 +195,7 @@ Most style deltas are (a) sizes/radii/ring widths, but the styles also change co
 Expressible as a per-style table of per-component parameters (numbers / token refs / bools):
 - heights, paddings, gaps, icon sizes, font size/weight/line-height (a);
 - radius as a token reference (`md`/`lg`/`xl`/`4xl`/`none`/`min(md, Npx)`) evaluated against `--radius` and the chosen radius scale (a);
-- fill/stroke/text colour role per part and state: token + alpha, e.g. `Destructive@0.10`, `Muted`, `Input@0.5`, `Foreground@0.10` (b);
+- fill/stroke/text colour role per part and state: token + alpha, such as `Destructive@0.10`, `Muted`, `Input@0.5`, `Foreground@0.10` (b);
 - outline kind: `Border(token)` vs `Ring1(token@alpha)` vs `UnderlineBottom(token)` vs none; shadow level none/xs/sm/md/xl; focus-ring width 1/2/3 px and alpha 0.3/0.5 (b, c);
 - booleans: press-nudge, tinted footer strip, backdrop blur on overlay, uppercase/tracking (c);
 - hit-area inflation (px) for checkbox/switch/slider (d, but a single number).
@@ -208,7 +208,7 @@ Not cleanly a flat parameter set (needs code paths or a richer model):
 5. **Responsive**: `sm:max-w-sm`, `text-base md:text-sm` - breakpoint-dependent.
 6. **menuColor = inverted**: a *scoped theme swap* (popup subtree rendered with the dark palette) and translucent = `bg-popover/70` + backdrop blur. Requires per-subtree theme override, not a component parameter.
 7. **menuAccent = bold / baseColor / theme / radius / font**: pure token-layer changes; belong in `Theme`, not in the style table. Fonts include a separate heading font slot (`cn-font-heading` on card and dialog titles).
-8. **tailwind-merge ordering**: style classes are prepended and twMerge resolves conflicts; a few base classes get overridden (e.g. nova slider `data-vertical:min-h-40` vs older base). Mirroring the resolved output (the published per-style JSON) avoids having to emulate twMerge.
+8. **tailwind-merge ordering**: style classes are prepended and twMerge resolves conflicts; a few base classes get overridden (for example nova slider `data-vertical:min-h-40` vs older base). Mirroring the resolved output (the published per-style JSON) avoids having to emulate twMerge.
 9. Animations (`duration-100 zoom-in-95`, slide-in) and `transition-*` lists - probably out of scope.
 
 Recommended source of truth for a generator: `style-<name>.css` parsed into the `cn-*` map (same algorithm as `parseStyleCss`), joined with the base component sources from shadcn-svelte (`docs/src/lib/registry/ui`), pinned to one shadcn/ui commit; or simply the resolved per-style JSON at `https://shadcn-svelte.com/registry/styles/<style>/<comp>.json`.
