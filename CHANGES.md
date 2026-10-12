@@ -122,7 +122,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 - Every font of the shadcn create page is available, each behind its own
   feature named after the font (`font-geist`, `font-jetbrains-mono`,
   `font-playfair-display`, …), and a preset that names the font uses it.
-  The `fonts-all` feature turns them all on.
+  The `fonts-all` feature turns them all on. A preset that names a font
+  whose feature is off renders in Inter and logs a warning.
+- The font crates carry the font's own licence next to MIT: `MIT AND OFL-1.1`
+  for most fonts, `MIT AND Apache-2.0` for the Apache-licensed ones.
 - `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
   shadcn site builds for a base colour, a colour theme and a chart colour,
   for example `Palette::from_upstream("stone", "blue", "rose", true)`.
