@@ -89,8 +89,10 @@ pub fn stroke_bytes(record: &[u8]) -> usize {
 /// Reference decoder for tests: one record back into strokes and fill.
 pub fn decode(bytes: &[u8]) -> (Vec<Seg>, Option<Fill>) {
     let mut words = bytes
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]));
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&c| u16::from_le_bytes(c));
     let mut next = || words.next().expect("truncated record");
     let c = |w: u16| f32::from(w as i16) / COORD_SCALE;
     let m = |w: u16| f32::from(w as i16) / MITER_SCALE;
