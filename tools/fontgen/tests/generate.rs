@@ -23,6 +23,7 @@ fn missing_licence_fails_and_writes_nothing() {
          inter\tInter\tsans\tOFL-1.1\tofl/inter/Inter[opsz,wght].ttf\tofl/inter/OFL.txt\t-0.04\n",
     );
     put(&repo.join("tools/fontgen/GF_PIN"), "abc\n");
+    put(&repo.join("LICENSE"), "MIT\n");
     put(
         &repo.join("tools/stylegen/tests/fixtures/font-definitions.ts"),
         "\t\tname: \"inter\",\n\t\ttitle: \"Inter\",\n\t\ttype: \"sans\",\n",

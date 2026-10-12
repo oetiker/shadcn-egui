@@ -110,6 +110,13 @@ fn apache_and_static_crates_render() {
         "unmeasured renders as 0.0: {roboto}"
     );
     assert!(crate_cargo_toml(&rows[1]).contains("license = \"MIT AND Apache-2.0\"\n"));
+    assert!(
+        crate_cargo_toml(&rows[1]).contains(
+            "repository.workspace = true\ninclude = [\"src/**\", \"fonts/**\", \"LICENSE*\", \"README*\"]\n"
+        ),
+        "{}",
+        crate_cargo_toml(&rows[1])
+    );
     let serif = crate_lib_rs(&rows[3], None).unwrap();
     assert!(
         serif.contains("/// Instrument Serif, static weights 400.\n"),

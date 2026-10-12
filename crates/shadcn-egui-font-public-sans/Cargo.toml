@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND OFL-1.1"
 repository.workspace = true
+include = ["src/**", "fonts/**", "LICENSE*", "README*"]
 
 [dependencies]
 shadcn-egui-core.workspace = true

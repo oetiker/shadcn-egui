@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+include = ["src/**", "LICENSE*", "README*"]
 
 # A leaf crate: font and icon crates depend on it, shadcn-egui re-exports it.
 # It must stay free of dependencies (Cargo forbids cycles, also through

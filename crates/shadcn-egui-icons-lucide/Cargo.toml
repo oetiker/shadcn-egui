@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND ISC"
 repository.workspace = true
+include = ["src/**", "LICENSE*", "README*"]
 
 [dependencies]
 shadcn-egui-core.workspace = true

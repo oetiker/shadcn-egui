@@ -343,6 +343,7 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND {license}"
 repository.workspace = true
+include = ["src/**", "fonts/**", "LICENSE*", "README*"]
 
 [dependencies]
 shadcn-egui-core.workspace = true
@@ -603,6 +604,7 @@ pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
     let root_toml_path = repo.join("Cargo.toml");
     let root_toml = read_text(&root_toml_path)?;
     let version = workspace_version(&root_toml)?;
+    let code_licence = std::fs::read(repo.join("LICENSE")).map_err(|e| format!("LICENSE: {e}"))?;
     // Everything is read, validated and rendered first; files are written
     // only when no step can fail any more.
     let mut outputs: Vec<(std::path::PathBuf, Vec<u8>)> = Vec::new();
@@ -635,6 +637,7 @@ pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
         let licence =
             std::fs::read(&licence_src).map_err(|e| format!("{}: {e}", licence_src.display()))?;
         outputs.push((dir.join("LICENSE-FONT.txt"), licence));
+        outputs.push((dir.join("LICENSE"), code_licence.clone()));
         outputs.push((dir.join("Cargo.toml"), crate_cargo_toml(row).into_bytes()));
         outputs.push((
             dir.join("src/lib.rs"),
