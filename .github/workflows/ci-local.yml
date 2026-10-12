@@ -130,7 +130,11 @@ jobs:
 
   # stylegen drift compares the crate's style comments and the copied
   # upstream files with shadcn-svelte at tools/stylegen/PIN and shadcn/ui at
-  # tools/stylegen/PIN_REACT.
+  # tools/stylegen/PIN_REACT. It clones about 300 MB, and while the pins
+  # stay put its result does not change, so it runs only when a push or a
+  # pull request changes PIN or PIN_REACT. Any other event, and any case
+  # where the step cannot tell (a new branch, a commit it cannot fetch),
+  # runs it.
   stylegen-drift:
     name: Styles match the pinned upstream
     runs-on: ubuntu-latest
@@ -140,9 +144,47 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      # A called workflow sees the caller's event, so this is the push or
+      # pull request that started ci.yml. Comparing two trees needs only the
+      # two commits, not the history between them.
+      - name: Did the pins change?
+        id: pins
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ inputs.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          decide() { echo "changed=$1" >> "$GITHUB_OUTPUT"; echo "pins changed: $1 ($2)"; }
+          base='' head=''
+          if [ -z "$REF" ] && [ "$EVENT" = pull_request ]; then
+            base=$PR_BASE head=$PR_HEAD
+          elif [ -z "$REF" ] && [ "$EVENT" = push ]; then
+            base=$PUSH_BEFORE head=$PUSH_AFTER
+          fi
+          case "$base" in
+            ''|*[!0-9a-f]*|0000000000000000000000000000000000000000)
+              decide true "no base commit for event $EVENT${REF:+ with ref $REF}"; exit 0 ;;
+          esac
+          if ! git fetch --quiet --no-tags --depth=1 origin "$base" "$head"; then
+            decide true "cannot fetch $base and $head"; exit 0
+          fi
+          rc=0
+          git diff --quiet "$base" "$head" -- tools/stylegen/PIN tools/stylegen/PIN_REACT || rc=$?
+          case $rc in
+            0) decide false "$base..$head" ;;
+            1) decide true "$base..$head" ;;
+            *) decide true "cannot compare $base and $head" ;;
+          esac
 
-      - uses: actions/cache@v6
+      - if: steps.pins.outputs.changed == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - if: steps.pins.outputs.changed == 'true'
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -153,6 +195,7 @@ jobs:
             ${{ runner.os }}-cargo-stylegen-
 
       - name: Check out the pinned upstreams
+        if: steps.pins.outputs.changed == 'true'
         run: |
           set -euo pipefail
           up="$RUNNER_TEMP/upstream"
@@ -161,7 +204,8 @@ jobs:
           git clone --quiet --filter=blob:none --no-checkout https://github.com/shadcn-ui/ui.git "$up/react"
           git -C "$up/react" checkout --quiet "$(cat tools/stylegen/PIN_REACT)"
 
-      - run: cargo run --manifest-path tools/stylegen/Cargo.toml -- drift "$RUNNER_TEMP/upstream/svelte" "$RUNNER_TEMP/upstream/react" .
+      - if: steps.pins.outputs.changed == 'true'
+        run: cargo run --manifest-path tools/stylegen/Cargo.toml -- drift "$RUNNER_TEMP/upstream/svelte" "$RUNNER_TEMP/upstream/react" .
 
   # What each crate would upload to crates.io, and whether the workspace
   # publishes (RELEASING.md, "Checks before a release").
