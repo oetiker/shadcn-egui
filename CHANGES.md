@@ -129,7 +129,7 @@ egui-shadcn plugin) are recorded here. The format is based on
   must call `.clone()`.
 - `card_title` and `card_description` return the label's `Response`. Where
   such a call ends a block that must return nothing, add a `;`.
-- The new `ButtonSize` and `BadgeVariant` variants (see Added) break a
+- The new `ButtonSize` and `BadgeVariant` variants (see New) break a
   `match` that lists every variant of these enums; add the new arms or a `_`
   arm.
 - The `sm` to `4xl` corner radii scale with `radius` by a factor
