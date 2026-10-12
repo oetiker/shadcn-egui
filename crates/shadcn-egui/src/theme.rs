@@ -499,8 +499,17 @@ pub fn heading_family_for(ctx: &egui::Context, w: Weight) -> egui::FontFamily {
 
 /// `base` plus the theme's fonts: one registration per weight with the
 /// `wght` coordinate, each family followed by `base`'s Proportional list so
-/// glyphs the font lacks (emoji, CJK, symbols) still render.
+/// glyphs the font lacks (emoji, CJK, symbols) still render. A theme's
+/// fonts already in `base` (the context's current definitions) are dropped
+/// first, so a reinstall neither stacks them nor keeps an earlier theme's.
 fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinitions {
+    let ours = |name: &str| name.starts_with("shadcn-");
+    base.font_data.retain(|key, _| !ours(key));
+    base.families
+        .retain(|family, _| !matches!(family, FontFamily::Name(name) if ours(name)));
+    for list in base.families.values_mut() {
+        list.retain(|key| !ours(key));
+    }
     let fallback = base
         .families
         .get(&FontFamily::Proportional)

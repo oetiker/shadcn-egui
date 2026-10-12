@@ -210,6 +210,10 @@ egui-shadcn plugin) are recorded here. The format is based on
   other Lucide icon (2141 in all).
 
 ### Fixed
+- After `Theme::apply_with_fonts` with the context's current fonts switched
+  from a monospace body font to a sans one, code and other monospace text
+  still showed in the old body font. Each such call also added the body font
+  to the font list once more; it is now listed once.
 - On a desktop with a light system theme, an app that called `Theme::apply`
   showed egui's own light look instead of the shadcn theme, and the theme
   also vanished when the desktop switched between light and dark. The theme

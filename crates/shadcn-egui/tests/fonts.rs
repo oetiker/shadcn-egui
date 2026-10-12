@@ -490,3 +490,47 @@ fn fonts_all_resolves_every_shipped_font() {
         }
     }
 }
+
+/// `apply_with_fonts` over the context's current definitions, then one pass.
+fn reapply_over_current(ctx: &egui::Context, theme: &Theme) -> FontDefinitions {
+    let defs = ctx.fonts(|f| f.definitions().clone());
+    theme.apply_with_fonts(ctx, defs);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    ctx.fonts(|f| f.definitions().clone())
+}
+
+#[test]
+fn apply_with_current_fonts_adds_no_duplicates() {
+    let ctx = egui::Context::default();
+    let t = Theme::vega_light();
+    t.apply(&ctx);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    let first = ctx.fonts(|f| f.definitions().clone());
+    for _ in 0..3 {
+        let defs = reapply_over_current(&ctx, &t);
+        for (family, list) in &defs.families {
+            let n = list.iter().filter(|k| *k == "shadcn-body-400").count();
+            assert!(n <= 1, "{family:?} lists shadcn-body-400 {n} times");
+        }
+        assert_eq!(defs.families, first.families);
+    }
+}
+
+#[test]
+fn a_sans_body_after_a_mono_body_leaves_monospace_alone() {
+    let mono: &'static shadcn_egui::FontFiles = Box::leak(Box::new(shadcn_egui::FontFiles {
+        name: "fake-mono",
+        kind: FontKind::Mono,
+        ..shadcn_egui_font_inter::FONT.clone()
+    }));
+    let ctx = egui::Context::default();
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    let defs = reapply_over_current(&ctx, &Theme::vega_light().fonts(mono, None));
+    assert_eq!(defs.families[&FontFamily::Monospace][0], "shadcn-body-400");
+    let defs = reapply_over_current(&ctx, &Theme::vega_light());
+    let monospace = &defs.families[&FontFamily::Monospace];
+    assert!(
+        !monospace.iter().any(|k| k.starts_with("shadcn-")),
+        "Monospace still lists {monospace:?}"
+    );
+}
