@@ -1,0 +1,14 @@
+[package]
+name = "fontgen"
+version = "0.1.0"
+edition = "2021"
+description = "Generate the shadcn-egui font crates from google/fonts files"
+license = "MIT"
+publish = false
+
+# Its own workspace: this tool never becomes a dependency of a shadcn-egui
+# crate. skrifa reads the wght axis range of each variable font.
+[workspace]
+
+[dependencies]
+skrifa = "0.48"
