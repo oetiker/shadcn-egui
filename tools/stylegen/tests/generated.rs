@@ -33,7 +33,11 @@ fn committed_sources_are_current_and_output_is_deterministic() {
         read("../../crates/shadcn-egui/src/style/generated.rs"),
         "re-run stylegen generate"
     );
-    for style in ["vega", "nova"] {
+    // The styles `stylegen generate` writes: the ones listed in EXPORT.
+    let export = read("EXPORT");
+    let styles: Vec<&str> = export.split_whitespace().collect();
+    assert!(!styles.is_empty(), "EXPORT names no style");
+    for style in styles {
         let first = style_source(style, &pin);
         assert_eq!(
             first,
