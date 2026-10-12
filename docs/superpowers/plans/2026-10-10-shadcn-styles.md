@@ -104,21 +104,21 @@ The user must confirm both at plan review.
 Work in a worktree on a new branch, not on `spec/shadcn-styles`:
 
 ```bash
-cd /home/oetiker/checkouts/egui-shadcn
-git worktree add -b feat/shadcn-styles /scratch/oetiker/claude-worktrees/egui-shadcn-styles spec/shadcn-styles
-cd /scratch/oetiker/claude-worktrees/egui-shadcn-styles
+cd <checkout>
+git worktree add -b feat/shadcn-styles <scratch>/worktrees/egui-shadcn-styles spec/shadcn-styles
+cd <scratch>/worktrees/egui-shadcn-styles
 ```
 
 Upstream checkout at the pin (read-only input for stylegen and for porting):
 
 ```bash
-UP=/scratch/oetiker/claude-tmp/shadcn-svelte-493481fa
+UP=<scratch>/shadcn-svelte-493481fa
 git clone --filter=blob:none https://github.com/huntabyte/shadcn-svelte.git "$UP"
 git -C "$UP" checkout 493481fa
 ```
 
 If the clone is impossible, the research clone at
-`/scratch/oetiker/claude-tmp/egui-shadcn-styles-research/dl/ss` is at the same
+`<scratch>/egui-shadcn-styles-research/dl/ss` is at the same
 commit (`git -C … log -1` shows `493481f`). Below, `$UP` is that directory.
 
 All paths below are relative to the worktree root.
@@ -1679,7 +1679,7 @@ fn later_class_wins_under_same_condition() {
 
 `tools/stylegen/tests/published.rs` — the parse check against shadcn-svelte's
 published per-style output. Copy the JSON from
-`/scratch/oetiker/claude-tmp/egui-shadcn-styles-research/dl/reg/{vega,nova}/`
+`<scratch>/egui-shadcn-styles-research/dl/reg/{vega,nova}/`
 into `tests/fixtures/published/{vega,nova}/` (fetched 2026-10-09 from
 `https://shadcn-svelte.com/registry/styles/<s>/<c>.json`):
 

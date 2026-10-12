@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 1.95, `egui` 0.34, `eframe` 0.34, `egui_extras` 0.34, `egui_kittest` 0.34 (features `wgpu`, `snapshot`), Oxanium font (OFL).
 
-**Environment constraints:** Compiler/tests must use **no more than 4 cores** — every cargo command in this plan passes `--jobs 4` and sets `CARGO_BUILD_JOBS=4`. Cargo target dir is `/home/oetiker/scratch/cargo-target` (already configured on this machine). Run all commands from the repo root `/home/oetiker/checkouts/egui-skill`.
+**Environment constraints:** Compiler/tests must use **no more than 4 cores** — every cargo command in this plan passes `--jobs 4` and sets `CARGO_BUILD_JOBS=4`. Cargo target dir is `$CARGO_TARGET_DIR` (already configured on this machine). Run all commands from the repo root `<checkout>`.
 
 ---
 
