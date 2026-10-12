@@ -22,7 +22,8 @@ env:
 jobs:
   # Every workspace test, with default features and with --all-features.
   # The snapshot tests render through egui_kittest and wgpu and need a
-  # Vulkan driver.
+  # Vulkan driver; the runner has no GPU, so mesa's software driver
+  # (lavapipe) provides one.
   workspace-tests:
     name: Workspace tests (snapshots on lavapipe)
     runs-on: ubuntu-latest
@@ -43,6 +44,11 @@ jobs:
           key: ${{ runner.os }}-cargo-tests-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-tests-
+
+      - name: Install the Vulkan software driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
 
       - name: Test with default features
         run: cargo test --workspace --all-targets -- --test-threads 4
