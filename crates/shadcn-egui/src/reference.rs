@@ -357,26 +357,34 @@ const PART_WIDTH: f32 = 192.0;
 
 /// One preset part: its label over a select of `options`, `current` the
 /// index of the preset's value (`None`: not offered, shown as the
-/// placeholder `missing`). Returns the newly picked index.
+/// placeholder `missing`), and a muted `help` line under it. Returns the
+/// newly picked index.
 fn part_select(
     ui: &mut egui::Ui,
-    name: &str,
+    (name, help): (&str, Option<&str>),
     options: &[&str],
     current: Option<usize>,
     missing: &str,
 ) -> Option<usize> {
     let mut idx = current.unwrap_or(usize::MAX);
     let mut picked = None;
-    field(ui, name, |ui| {
-        let resp = ui.add(
-            Select::new(name, &mut idx, options)
-                .placeholder(missing)
-                .width(PART_WIDTH),
-        );
-        if resp.changed() && idx < options.len() {
-            picked = Some(idx);
+    layout::vstack(ui, 6.0, |ui| {
+        // The help line wraps at the select's width.
+        ui.set_max_width(PART_WIDTH);
+        field(ui, name, |ui| {
+            let resp = ui.add(
+                Select::new(name, &mut idx, options)
+                    .placeholder(missing)
+                    .width(PART_WIDTH),
+            );
+            if resp.changed() && idx < options.len() {
+                picked = Some(idx);
+            }
+            resp
+        });
+        if let Some(help) = help {
+            description(ui, help);
         }
-        resp
     });
     picked
 }
@@ -384,7 +392,7 @@ fn part_select(
 /// [`part_select`] over `all`, named by `id`; the preset's value is `value`.
 fn enum_select<T: Copy + PartialEq>(
     ui: &mut egui::Ui,
-    name: &str,
+    name: (&str, Option<&str>),
     all: &[T],
     id: impl Fn(T) -> &'static str,
     value: &mut T,
@@ -442,16 +450,17 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
 /// The preset parts, one select each, in the order of the shadcn create page.
 const PART_COUNT: usize = 10;
 
-/// The preset part selects in rows of as many as fit the width. egui's
-/// wrapping layout cannot wrap a label-over-select stack, so the rows are
-/// counted here.
+/// The preset part selects in rows of as many as fit the width, aligned at
+/// the top (only some parts have a help line). egui's wrapping layout cannot
+/// wrap a label-over-select stack, so the rows are counted here.
 fn preset_selects(ui: &mut egui::Ui, p: &mut Preset) {
     let gap = 12.0;
     let per_row = (((ui.available_width() + gap) / (PART_WIDTH + gap)) as usize).max(1);
     let parts: Vec<usize> = (0..PART_COUNT).collect();
     layout::vstack(ui, gap, |ui| {
         for chunk in parts.chunks(per_row) {
-            layout::row(ui, gap, |ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                ui.spacing_mut().item_spacing.x = gap;
                 for &i in chunk {
                     preset_part(ui, i, p);
                 }
@@ -470,23 +479,44 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
             .collect()
     };
     match i {
-        0 => enum_select(ui, "Style", &StyleName::ALL, StyleName::id, &mut p.style),
+        0 => enum_select(
+            ui,
+            ("Style", None),
+            &StyleName::ALL,
+            StyleName::id,
+            &mut p.style,
+        ),
         1 => enum_select(
             ui,
-            "Base colour",
+            (
+                "Base colour",
+                Some("Greys for backgrounds, text and borders."),
+            ),
             &BaseColor::ALL,
             BaseColor::id,
             &mut p.base_color,
         ),
-        2 => enum_select(ui, "Theme", &ThemeColor::ALL, ThemeColor::id, &mut p.theme),
+        2 => enum_select(
+            ui,
+            (
+                "Theme colour",
+                Some("Accent for buttons, focus ring and active controls."),
+            ),
+            &ThemeColor::ALL,
+            ThemeColor::id,
+            &mut p.theme,
+        ),
         3 => enum_select(
             ui,
-            "Chart colour",
+            (
+                "Chart colour (charts only)",
+                Some("Used by charts; no effect on these components."),
+            ),
             &ThemeColor::ALL,
             ThemeColor::id,
             &mut p.chart_color,
         ),
-        4 => enum_select(ui, "Font", &fonts(), FontName::id, &mut p.font),
+        4 => enum_select(ui, ("Font", None), &fonts(), FontName::id, &mut p.font),
         5 => {
             let headings: Vec<FontHeading> = std::iter::once(FontHeading::Inherit)
                 .chain(fonts().into_iter().map(FontHeading::Font))
@@ -495,7 +525,13 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
                 FontHeading::Inherit => "inherit",
                 FontHeading::Font(f) => f.id(),
             };
-            enum_select(ui, "Heading font", &headings, id, &mut p.font_heading);
+            enum_select(
+                ui,
+                ("Heading font", None),
+                &headings,
+                id,
+                &mut p.font_heading,
+            );
         }
         6 => {
             let libraries: Vec<IconLibrary> = IconLibrary::ALL
@@ -504,7 +540,7 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
                 .collect();
             enum_select(
                 ui,
-                "Icon library",
+                ("Icon library", None),
                 &libraries,
                 IconLibrary::id,
                 &mut p.icons,
@@ -513,21 +549,24 @@ fn preset_part(ui: &mut egui::Ui, i: usize, p: &mut Preset) {
         // Every listed radius has an id; only `Px`, which no code names, lacks one.
         7 => enum_select(
             ui,
-            "Radius",
+            ("Radius", None),
             &RadiusChoice::ALL,
             |r| r.id().unwrap_or("custom"),
             &mut p.radius,
         ),
         8 => enum_select(
             ui,
-            "Menu colour",
+            ("Menu colour", Some("Normal or inverted menus.")),
             &MenuColor::ALL,
             MenuColor::id,
             &mut p.menu_color,
         ),
         _ => enum_select(
             ui,
-            "Menu accent",
+            (
+                "Menu accent",
+                Some("Strength of the highlighted menu item."),
+            ),
             &MenuAccent::ALL,
             MenuAccent::id,
             &mut p.menu_accent,
