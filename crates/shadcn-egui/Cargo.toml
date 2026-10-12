@@ -204,3 +204,7 @@ shadcn-egui-font-oxanium.workspace = true
 
 [[example]]
 name = "settings"
+
+[[example]]
+name = "gallery"
+required-features = ["fonts-all", "icons-all"]

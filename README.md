@@ -49,12 +49,17 @@ fn ui(ui: &mut egui::Ui) {
 }
 ```
 
+`cargo run --example gallery --features fonts-all,icons-all` shows every
+component, each variant and size, and the icons of the chosen icon library.
+Paste a preset code or pick each preset part (style, colours, fonts, icon
+library, radius, menu) and the light or dark mode, and the gallery restyles
+live.
+
+![shadcn-egui component gallery](docs/gallery-screen.png)
+
 `cargo run --example settings` opens a settings page built from Badge,
 Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
-Tabs, with a toolbar that switches style, mode and radius. Dialog, Popover
-and Tooltip are not in it.
-
-![shadcn-egui component gallery](docs/components-screen.png)
+Tabs, with a toolbar that switches style, mode and radius.
 
 ## Features
 

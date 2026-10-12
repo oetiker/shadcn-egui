@@ -124,6 +124,11 @@ egui-shadcn plugin) are recorded here. The format is based on
   `SettingsState` has new `slider` and `region` fields.
 
 ### Added
+- A gallery example shows every component in each variant and size, under
+  a preset you paste as a code or pick part by part (style, colours, fonts,
+  icon library, radius, menu), in light or dark mode. Run it with
+  `cargo run --example gallery --features fonts-all,icons-all`; an app shows
+  the same screen with `reference::gallery_ui`.
 - `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
   and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
   colour, theme, chart colour, fonts, icon library, radius and menu colours.
