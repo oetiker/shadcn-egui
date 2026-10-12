@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 1.95, `egui` 0.34, `eframe` 0.34, `egui_extras` 0.34, `egui_kittest` 0.34 (features `wgpu`, `snapshot`), Oxanium font (OFL).
 
-**Environment constraints:** Compiler/tests must use **no more than 4 cores** — every cargo command in this plan passes `--jobs 4` and sets `CARGO_BUILD_JOBS=4`. Cargo target dir is `$CARGO_TARGET_DIR` (already configured on this machine). Run all commands from the repo root `<checkout>`.
+**Environment constraints:** Compiler/tests must use **no more than 4 cores**: every cargo command in this plan passes `--jobs 4` and sets `CARGO_BUILD_JOBS=4`. Cargo target dir is `$CARGO_TARGET_DIR` (already configured on this machine). Run all commands from the repo root `<checkout>`.
 
 ---
 
@@ -61,7 +61,7 @@ Each `src/components/*.rs` owns exactly one component. `theme.rs` owns tokens+st
 
 ---
 
-## Phase 0 — Scaffold
+## Phase 0: Scaffold
 
 ### Task 0: Cargo project + deps + first green test
 
@@ -108,18 +108,18 @@ fn white_is_white() {
 }
 ```
 
-- [ ] **Step 4: Run it — expect a COMPILE failure (module `color` missing)**
+- [ ] **Step 4: Run it and expect a COMPILE failure (module `color` missing)**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test color 2>&1 | tail -20`
-Expected: build error — `file not found for module \`color\`` / `oklch_to_srgb` unresolved.
+Expected: build error, `file not found for module \`color\`` / `oklch_to_srgb` unresolved.
 
-- [ ] **Step 5: Commit the scaffold (red state intentionally not committed yet — proceed to Task 1).**
+- [ ] **Step 5: Commit the scaffold (red state intentionally not committed yet; proceed to Task 1).**
 
 No commit here; Task 1 makes it green and commits together.
 
 ---
 
-## Phase 1 — Color + Theme
+## Phase 1: Color + Theme
 
 ### Task 1: OKLCH → sRGB converter
 
@@ -176,7 +176,7 @@ fn alpha_is_passed_through() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL (unresolved symbols)**
+- [ ] **Step 2: Run and expect FAIL (unresolved symbols)**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test color 2>&1 | tail -20`
 Expected: compile error, `oklch_to_srgb`/`oklch_to_srgb_a` not found.
@@ -230,7 +230,7 @@ pub fn oklch_to_srgb_a(l: f32, c: f32, h: f32, alpha: f32) -> Color32 {
 }
 ```
 
-- [ ] **Step 4: Run — expect PASS**
+- [ ] **Step 4: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test color 2>&1 | tail -20`
 Expected: `test result: ok. 4 passed`.
@@ -284,7 +284,7 @@ fn dark_border_is_low_alpha_white() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL (module missing)**
+- [ ] **Step 2: Run and expect FAIL (module missing)**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test theme 2>&1 | tail -20`
 Expected: unresolved `egui_shadcn::theme`.
@@ -402,7 +402,7 @@ pub mod theme;
 pub use theme::{Palette, Theme};
 ```
 
-- [ ] **Step 5: Run — expect PASS**
+- [ ] **Step 5: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test theme 2>&1 | tail -20`
 Expected: `test result: ok. 3 passed`.
@@ -438,7 +438,7 @@ curl -sfL "$base/Oxanium-Medium.ttf"   -o assets/Oxanium-Medium.ttf
 curl -sfL "$base/Oxanium-SemiBold.ttf" -o assets/Oxanium-SemiBold.ttf
 file assets/Oxanium-*.ttf
 ```
-Expected: three `TrueType Font data` files. If the path 404s, find the correct raw URLs under `github.com/google/fonts/tree/main/ofl/oxanium` (variable font fallback: download `Oxanium[wght].ttf` and register it three times — egui will use it at one weight; note this limitation in a comment).
+Expected: three `TrueType Font data` files. If the path 404s, find the correct raw URLs under `github.com/google/fonts/tree/main/ofl/oxanium` (variable font fallback: download `Oxanium[wght].ttf` and register it three times (egui will use it at one weight); note this limitation in a comment).
 
 - [ ] **Step 2: Extend `tests/theme.rs` with an apply round-trip test**
 
@@ -458,7 +458,7 @@ fn apply_sets_panel_fill_and_stores_theme() {
 }
 ```
 
-- [ ] **Step 3: Run — expect FAIL**
+- [ ] **Step 3: Run and expect FAIL**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test theme 2>&1 | tail -20`
 Expected: `apply`/`theme` unresolved.
@@ -581,7 +581,7 @@ pub mod theme;
 pub use theme::{theme, Palette, Theme};
 ```
 
-- [ ] **Step 6: Run — expect PASS**
+- [ ] **Step 6: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test theme 2>&1 | tail -20`
 Expected: all theme tests pass.
@@ -597,7 +597,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-## Phase 2 — Layout (the flex substitute)
+## Phase 2: Layout (the flex substitute)
 
 ### Task 4: `row`, `vstack`, `justify`
 
@@ -632,7 +632,7 @@ fn row_and_vstack_compose() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL (unresolved `layout`)**
+- [ ] **Step 2: Run and expect FAIL (unresolved `layout`)**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test layout 2>&1 | tail -20`
 Expected: `layout` unresolved.
@@ -699,7 +699,7 @@ pub mod theme;
 pub use theme::{theme, Palette, Theme};
 ```
 
-- [ ] **Step 5: Run — expect PASS**
+- [ ] **Step 5: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test layout 2>&1 | tail -20`
 Expected: pass. If `used_rect` API differs, replace the assertion with `assert!(h.ctx.screen_rect().width() > 0.0);`.
@@ -743,7 +743,7 @@ fn card_and_form_row_render() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL (card/form_row missing + missing snapshot)**
+- [ ] **Step 2: Run and expect FAIL (card/form_row missing + missing snapshot)**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test layout 2>&1 | tail -20`
 Expected: unresolved `card`/`form_row`.
@@ -795,7 +795,7 @@ pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce
 }
 ```
 
-- [ ] **Step 4: Run — first run WRITES the snapshot and FAILS with "Missing snapshot"**
+- [ ] **Step 4: Run; the first run WRITES the snapshot and FAILS with "Missing snapshot"**
 
 Run: `CARGO_BUILD_JOBS=4 UPDATE_SNAPSHOTS=1 cargo test --jobs 4 --test layout 2>&1 | tail -20`
 Expected: snapshot `tests/snapshots/layout_card.png` created; rerun without the env var passes.
@@ -804,7 +804,7 @@ Expected: snapshot `tests/snapshots/layout_card.png` created; rerun without the 
 
 Read `tests/snapshots/layout_card.png` as an image. Confirm: a dark rounded card with a visible 1px border, a left-aligned "Name" label, and a text field to its right. If the border/radius/padding look wrong, adjust the values in `card`/`form_row` and re-run with `UPDATE_SNAPSHOTS=1`.
 
-- [ ] **Step 6: Run normally — expect PASS**
+- [ ] **Step 6: Run normally and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test layout 2>&1 | tail -20`
 Expected: pass.
@@ -820,7 +820,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-## Phase 3 — Components
+## Phase 3: Components
 
 ### Task 6: shared helpers (hover mix + focus ring)
 
@@ -844,7 +844,7 @@ fn mix_toward_blends() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL**
+- [ ] **Step 2: Run and expect FAIL**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: unresolved `components::shared`.
@@ -903,7 +903,7 @@ pub mod theme;
 pub use theme::{theme, Palette, Theme};
 ```
 
-- [ ] **Step 6: Run — expect PASS**
+- [ ] **Step 6: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: pass.
@@ -973,7 +973,7 @@ fn button_click_sets_flag() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL (Button missing)**
+- [ ] **Step 2: Run and expect FAIL (Button missing)**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: unresolved `components::button`.
@@ -1107,7 +1107,7 @@ pub mod button;
 pub mod shared;
 ```
 
-- [ ] **Step 5: Run — expect PASS**
+- [ ] **Step 5: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: `button_click_sets_flag` passes. If `into_galley` / `galley()` signatures differ in 0.34, fix per compiler guidance (the intent: lay out button text, center it, paint).
@@ -1139,7 +1139,7 @@ fn button_variants_snapshot() {
 ```
 
 Run: `CARGO_BUILD_JOBS=4 UPDATE_SNAPSHOTS=1 cargo test --jobs 4 --test components 2>&1 | tail -20`
-Then Read `tests/snapshots/button_variants.png`. Confirm: filled light "Default", gray "Secondary", bordered "Outline", borderless "Ghost", red "Delete" — all with 8px rounded corners and Oxanium text. Adjust colors/padding if off; re-run with `UPDATE_SNAPSHOTS=1`.
+Then Read `tests/snapshots/button_variants.png`. Confirm: filled light "Default", gray "Secondary", bordered "Outline", borderless "Ghost", red "Delete", all with 8px rounded corners and Oxanium text. Adjust colors/padding if off; re-run with `UPDATE_SNAPSHOTS=1`.
 
 - [ ] **Step 7: Run normally + commit**
 
@@ -1179,7 +1179,7 @@ fn input_accepts_text() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL**
+- [ ] **Step 2: Run and expect FAIL**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: unresolved `components::input`.
@@ -1267,7 +1267,7 @@ pub mod label;
 pub mod shared;
 ```
 
-- [ ] **Step 6: Run — expect PASS**
+- [ ] **Step 6: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: pass. If `TextEdit::margin`/`background_color` signatures differ, adapt (intent: 12/8 padding, input-colored bg).
@@ -1315,7 +1315,7 @@ fn switch_toggles() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL**
+- [ ] **Step 2: Run and expect FAIL**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: unresolved `components::switch`. If `get_by_role`/`Role` path differs, the subagent substitutes the correct kittest query (fallback: `h.get_by_label`).
@@ -1399,7 +1399,7 @@ pub mod shared;
 pub mod switch;
 ```
 
-- [ ] **Step 6: Run — expect PASS**
+- [ ] **Step 6: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: pass.
@@ -1445,7 +1445,7 @@ fn tabs_select() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL**
+- [ ] **Step 2: Run and expect FAIL**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: unresolved `components::tabs`.
@@ -1514,7 +1514,7 @@ pub mod switch;
 pub mod tabs;
 ```
 
-- [ ] **Step 5: Run — expect PASS**
+- [ ] **Step 5: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: `tabs_select` passes. (kittest clicks the rect carrying the "Notifications" widget-info label.)
@@ -1557,7 +1557,7 @@ fn select_and_badge_render() {
 }
 ```
 
-- [ ] **Step 2: Run — expect FAIL**
+- [ ] **Step 2: Run and expect FAIL**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: unresolved modules.
@@ -1683,7 +1683,7 @@ pub mod switch;
 pub mod tabs;
 ```
 
-- [ ] **Step 8: Run — expect PASS**
+- [ ] **Step 8: Run and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test components 2>&1 | tail -20`
 Expected: pass. Fix any 0.34 API drift (`from_id_salt` vs `from_id_source`, `layout_no_wrap` signature) per compiler.
@@ -1699,7 +1699,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-## Phase 4 — Reference screen
+## Phase 4: Reference screen
 
 ### Task 12: Settings-form-with-tabs example
 
@@ -1819,13 +1819,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ---
 
-## Phase 5 — Eval + Skill
+## Phase 5: Eval + Skill
 
 ### Task 13: Snapshot eval for the settings screen
 
 **Files:**
 - Create: `tests/settings_snapshot.rs`
-- Modify: `examples/settings.rs` is reused — but examples aren't importable from tests. Move the render fn into the library.
+- Modify: `examples/settings.rs` is reused, but examples aren't importable from tests. Move the render fn into the library.
 
 - [ ] **Step 1: Move `SettingsState` + `settings_ui` into the library**
 
@@ -1868,7 +1868,7 @@ fn settings_account_tab() {
 Run: `CARGO_BUILD_JOBS=4 UPDATE_SNAPSHOTS=1 cargo test --jobs 4 --test settings_snapshot 2>&1 | tail -20`
 Read `tests/snapshots/settings_account.png`. **This is the acceptance check.** Confirm it reads as shadcn-grade: dark background, a "Settings" heading, a muted tab track with "Account" raised, a bordered rounded card containing a title/description, a separator, two labeled inputs, and a light "Save" button bottom-right. Iterate on spacing/colors/sizes across `theme.rs`/`layout.rs`/components until it looks right; re-run with `UPDATE_SNAPSHOTS=1` after each change.
 
-- [ ] **Step 4: Lock the snapshot — run normally, expect PASS**
+- [ ] **Step 4: Lock the snapshot: run normally and expect PASS**
 
 Run: `CARGO_BUILD_JOBS=4 cargo test --jobs 4 --test settings_snapshot 2>&1 | tail -20`
 Expected: pass against the committed PNG.
@@ -2093,9 +2093,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ## Notes on egui 0.34 API drift
 
 This plan targets egui 0.34. A few method names may differ slightly at execution
-time (e.g. `ComboBox::from_id_salt` vs `from_id_source`, `Margin::same(i8)` vs
+time (for example `ComboBox::from_id_salt` vs `from_id_source`, `Margin::same(i8)` vs
 `f32`, `rect_stroke` `StrokeKind` arg, kittest `get_by_role`/`Role` path,
-`Harness::builder().with_size`). When the compiler disagrees, follow it — the
+`Harness::builder().with_size`). When the compiler disagrees, follow it: the
 *intent* in each step is the spec; adjust the call to match the installed 0.34.x
 API. The snapshot/render loop is the ground truth for visual correctness.
 ```
