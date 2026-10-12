@@ -7,6 +7,10 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
 ## [Unreleased]
 
 ### Changed
+- Remix Icon stays at version 4.8.0, its last release under the Apache-2.0
+  licence; later releases forbid redistribution as an icon pack.
+- Icon modules generated with an older icongen must be regenerated, because an
+  icon now holds a `shape` instead of `segs`.
 - A `Palette { .. }` struct literal written for 0.3 no longer compiles,
   because `Palette` has the new field `chart`; start from `Palette::light()`,
   `Palette::dark()` or `Palette::from_upstream(..)` and change single fields.
@@ -162,10 +166,14 @@ and the project aims to follow [Semantic Versioning](https://semver.org).
   accent, also when the preset asks for the bold one, as on ui.shadcn.com.
 - An open Select list draws in the preset's menu colours: with the
   `inverted` menu colour it is dark also on a light page.
-- Four more icon sets, each behind its own feature: `icons-tabler`,
-  `icons-phosphor`, `icons-remixicon` and `icons-hugeicons`; `icons-all` turns
-  them all on. A preset that names one of these libraries then draws its
-  checkbox tick, select arrows and close buttons in that set.
+- The checkbox tick, select arrow and dialog close button follow the preset's
+  icon library: Lucide by default, and Tabler, Phosphor, Remix Icon and
+  Hugeicons with the features `icons-tabler`, `icons-phosphor`,
+  `icons-remixicon` and `icons-hugeicons` (`icons-all` for all). Every icon of
+  each set is available as a constant, for example
+  `shadcn_egui::icons::tabler::HOME`.
+- Filled icons (Phosphor, Remix Icon) are drawn with smooth edges, also when
+  faded for a disabled widget or a translucent menu.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /
