@@ -242,7 +242,7 @@ fn pascal(id: &str) -> String {
 
 fn emit_enum(s: &mut String, name: &str, doc: &str, ids: &[String]) {
     *s += &format!(
-        "/// {doc}\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub enum {name} {{\n"
+        "/// {doc}\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\n#[non_exhaustive]\npub enum {name} {{\n"
     );
     for id in ids {
         *s += &format!("    /// `\"{id}\"`\n    {},\n", pascal(id));
@@ -313,7 +313,7 @@ pub fn emit_preset(pin: &str, l: &PresetLists) -> String {
     );
     // RadiusChoice: the coded radii plus `Px`, which has no code.
     s += "/// A radius (upstream `PRESET_RADII`), or `Px` for any other radius.\n";
-    s += "#[derive(Clone, Copy, Debug, PartialEq)]\npub enum RadiusChoice {\n";
+    s += "#[derive(Clone, Copy, Debug, PartialEq)]\n#[non_exhaustive]\npub enum RadiusChoice {\n";
     for (id, rem) in &l.radii {
         match rem {
             Some(r) => s += &format!("    /// `\"{id}\"` ({r:?}rem)\n    {},\n", pascal(id)),

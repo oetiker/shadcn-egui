@@ -122,6 +122,11 @@ egui-shadcn plugin) are recorded here. The format is based on
 - The `settings` example takes the style and palette on the command line, for
   example `cargo run --example settings -- nova light` (default `vega dark`).
   `SettingsState` has new `slider` and `region` fields.
+- A `match` on a preset enum (`StyleName`, `BaseColor`, `ThemeColor`,
+  `FontName`, `IconLibrary`, `MenuColor`, `MenuAccent`, `RadiusChoice`) or
+  on `Role`, `TabsOrientation` or `PresetCodeError` needs a `_ =>` arm. New
+  shadcn styles, colours, fonts and icon sets can then arrive in a minor
+  release.
 
 ### Added
 - A gallery example shows every component in each variant and size, under

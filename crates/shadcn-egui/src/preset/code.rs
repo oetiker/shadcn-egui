@@ -16,6 +16,7 @@ const MAX_PAYLOAD: u64 = 1 << 53;
 
 /// Why a string is not a preset code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PresetCodeError {
     /// Empty or a single character.
     TooShort,

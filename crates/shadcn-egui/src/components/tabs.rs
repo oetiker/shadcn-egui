@@ -24,6 +24,7 @@ pub enum TabsVariant {
 /// shadcn `Tabs` `orientation`. 0.4.0 offers `Horizontal` only: a vertical
 /// list needs a content layout beside the list that the crate does not have.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TabsOrientation {
     #[default]
     Horizontal,

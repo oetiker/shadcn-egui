@@ -181,6 +181,7 @@ fn pick_props<'a, T: Copy + 'a>(
 
 /// A palette colour role (shadcn CSS variable), or a fixed colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Role {
     Background,
     Foreground,

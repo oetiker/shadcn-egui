@@ -3,6 +3,7 @@
 
 /// A shadcn style (upstream `PRESET_STYLES`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum StyleName {
     /// `"nova"`
     Nova,
@@ -48,6 +49,7 @@ impl StyleName {
 
 /// A base colour (upstream `PRESET_BASE_COLORS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BaseColor {
     /// `"neutral"`
     Neutral,
@@ -93,6 +95,7 @@ impl BaseColor {
 
 /// A colour theme, also used for chart colours (upstream `PRESET_THEMES`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ThemeColor {
     /// `"neutral"`
     Neutral,
@@ -189,6 +192,7 @@ impl ThemeColor {
 
 /// A font (upstream `PRESET_FONTS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum FontName {
     /// `"inter"`
     Inter,
@@ -288,6 +292,7 @@ impl FontName {
 
 /// An icon library (upstream `PRESET_ICON_LIBRARIES`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum IconLibrary {
     /// `"lucide"`
     Lucide,
@@ -324,6 +329,7 @@ impl IconLibrary {
 
 /// Menu content colours (upstream `PRESET_MENU_COLORS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MenuColor {
     /// `"default"`
     Default,
@@ -357,6 +363,7 @@ impl MenuColor {
 
 /// Menu highlight (upstream `PRESET_MENU_ACCENTS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MenuAccent {
     /// `"subtle"`
     Subtle,
@@ -384,6 +391,7 @@ impl MenuAccent {
 
 /// A radius (upstream `PRESET_RADII`), or `Px` for any other radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum RadiusChoice {
     /// `"default"` (the base colour's own radius)
     Default,
