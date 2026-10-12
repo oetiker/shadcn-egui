@@ -20,15 +20,41 @@ version in the root `Cargo.toml`.
 Do not push tags by hand, and do not add release headers to `CHANGES.md`:
 the workflows do both.
 
+Entries go under `## [Unreleased]` in `CHANGES.md`, in the subsections
+`### New`, `### Changed`, `### Removed` and `### Fixed`. Every pull request
+adds an entry there or carries the label `no-changelog`.
+
 ## Publishing to crates.io
 
-The publish job runs `scripts/publish-crates.sh` with the repository
-secret `CARGO_REGISTRY_TOKEN` (a crates.io token with the scopes
-`publish-new` and `publish-update`). The script publishes
-`shadcn-egui-core`, then the font and icon crates, then `shadcn-egui`, and
-skips every crate whose version is already on crates.io. It refuses to
-start when a workspace crate is missing from that order or when the crates
-disagree on the version.
+The publish workflow (`.github/workflows/release-publish.yml`) uploads the
+crates with crates.io Trusted Publishing: no token is stored on GitHub.
+Every crate names `oetiker/shadcn-egui` and the workflow
+`release-publish.yml` as its trusted publisher (crates.io, the crate's
+Settings, Trusted Publishing). The job skips every crate whose version is
+already on crates.io, so **Re-run failed jobs** finishes a publish that
+stopped part-way. The GitHub release stays a draft until every crate is up.
+
+Trusted Publishing cannot create a crate. A release that brings a new crate
+(0.4.0, which creates all 33, or one that adds a font or icon set) publishes
+that crate from your machine with `scripts/publish-crates.sh`:
+
+1. Merge the release pull request. The publish workflow tags `vX.Y.Z` and
+   its crates.io job fails on the new crates.
+2. Check out the tag and publish with a crates.io token that has the scopes
+   `publish-new` and `publish-update`:
+
+   ```bash
+   git checkout vX.Y.Z
+   CARGO_REGISTRY_TOKEN=... scripts/publish-crates.sh
+   ```
+
+   The script publishes `shadcn-egui-core`, then the font and icon crates,
+   then `shadcn-egui`, and skips every crate whose version is already on
+   crates.io. It refuses to start when a workspace crate is missing from
+   that order or when the crates disagree on the version.
+3. Register the trusted publisher on each new crate.
+4. Use **Re-run failed jobs** on the publish run. It finds every crate on
+   crates.io and makes the GitHub release public.
 
 crates.io limits new crates per account: a burst of 5, then one per 10
 minutes; new versions of existing crates: a burst of 30, then one per
@@ -62,8 +88,17 @@ cargo publish --dry-run --workspace --jobs 4
 
 A new font comes from `tools/fontgen` (row in `tools/fontgen/FONTS.tsv`,
 then regenerate), a new icon set from `tools/icongen` (row in
-`tools/icongen/SETS.tsv`). Its crate is new on crates.io, so the next
-release creates a crate: see the rate limit above.
+`tools/icongen/SETS.tsv`). Its crate also needs two entries in
+`.github/repo-infra.json`:
+
+- under `version_files`, one for its line in `[workspace.dependencies]` of
+  `Cargo.toml` and one for its entry in `Cargo.lock`, copied from a crate of
+  the same family;
+- its name under `rust`, `tested_elsewhere`.
+
+`scripts/check-version-files.sh` and the CI name a crate that lacks them.
+The crate is new on crates.io, so the next release publishes it from your
+machine: see "Publishing to crates.io".
 
 ## The Claude Code plugin
 
