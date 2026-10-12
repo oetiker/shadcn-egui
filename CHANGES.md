@@ -6,6 +6,77 @@ egui-shadcn plugin) are recorded here. The format is based on
 
 ## [Unreleased]
 
+### New
+- A gallery example shows every component in each variant and size, under
+  a preset you paste as a code or pick part by part (style, colours, fonts,
+  icon library, radius, menu), in light or dark mode. Run it with
+  `cargo run --example gallery --features fonts-all,icons-all`; an app shows
+  the same screen with `reference::gallery_ui`.
+- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
+  and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
+  colour, theme, chart colour, fonts, icon library, radius and menu colours.
+  `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
+  `to_code()` gives the code back. Codes from shadcn-svelte.com are not
+  supported: that site numbers colours and icon libraries differently.
+- When a preset asks for something this build cannot show, the app uses a
+  stand-in and logs a warning such as
+  `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
+  The Sera style becomes Nova, the gray base colour, theme or chart colour
+  (ui.shadcn.com has no colours for gray) becomes neutral or the base colour,
+  and a font or icon library whose Cargo feature is off becomes Inter or
+  Lucide. The translucent menu colours draw as the default or inverted menu
+  colour, because egui cannot blur what lies behind a menu.
+- With the Lyra or Sera style every corner is square, whatever radius the
+  preset names, as on the shadcn site.
+- A translucent menu colour always highlights menu items with the subtle
+  accent, also when the preset asks for the bold one, as on ui.shadcn.com.
+- An open Select list draws in the preset's menu colours: with the
+  `inverted` menu colour it is dark also on a light page.
+- Every font of the shadcn create page is available, each behind its own
+  feature named after the font (`font-geist`, `font-jetbrains-mono`,
+  `font-playfair-display`, …), and a preset that names the font uses it.
+  The `fonts-all` feature turns them all on. A preset that names a font
+  whose feature is off renders in Inter and logs a warning.
+- The font crates carry the font's own licence next to MIT: `MIT AND OFL-1.1`
+  for most fonts, `MIT AND Apache-2.0` for the Apache-licensed ones.
+- The checkbox tick, select arrow and dialog close button follow the preset's
+  icon library: Lucide by default, and Tabler, Phosphor, Remix Icon and
+  Hugeicons with the features `icons-tabler`, `icons-phosphor`,
+  `icons-remixicon` and `icons-hugeicons` (`icons-all` for all). Every icon of
+  each set is available as a constant, for example
+  `shadcn_egui::icons::tabler::HOME`.
+- Filled icons (Phosphor, Remix Icon) are drawn with smooth edges, also when
+  faded for a disabled widget or a translucent menu.
+- `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
+  shadcn site builds for a base colour, a colour theme and a chart colour,
+  for example `Palette::from_upstream("stone", "blue", "rose", true)`.
+- `Palette` has the five chart colours (`chart-1` … `chart-5`) as `chart`.
+- The `settings` example has a toolbar with a style select (vega, nova, maia,
+  lyra, mira, luma, rhea), a Dark/Light tab pair and a radius slider from 0 to
+  20 px, so the look can be changed while the window is open.
+- `Slider` with one thumb, horizontal or vertical. A click or drag sets the
+  value, the arrow, Page Up/Down, Home and End keys step it, and
+  `.enabled(false)` draws it at half opacity and ignores input.
+- Button sizes `Xs`, `IconXs`, `IconSm` and `IconLg`, and leading or trailing
+  button icons. Buttons also show the expanded, invalid and has-popup states.
+- Badge variants `Ghost` and `Link`, and leading or trailing badge icons.
+- `SwitchSize::Sm` (24 x 14 px) and `Tabs::new(..).variant(TabsVariant::Line)`,
+  which draws an underline under the active tab.
+- `Input::invalid`, `Checkbox::invalid`, `Switch::invalid` and
+  `Select::new(..)` options `.width(..)`, `.size(SelectSize::Sm)`,
+  `.placeholder(..)`, `.invalid(..)` and `.enabled(..)`; `Dialog` gets
+  `show_close_button(false)`.
+- `Card::new().size(CardSize::Sm).footer(..).show(ui, ..)` with
+  `card_header`, `card_header_with_action` and `card_content`, and
+  `popover_header(ui, title, description)`; the card footer is a tinted strip
+  reaching the card edges in nova.
+- `separator_vertical` draws a vertical line.
+- `Palette::with_bold_menu_accent()` for shadcn's `menuAccent: "bold"`.
+- `Metrics` has new fields `line_xs`, `line_sm`, `line_base` and `line_lg`
+  (Tailwind's line heights for the text sizes), and `Theme::line_px(TextSize)`
+  returns the line height for a text size.
+- `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
+
 ### Changed
 - The crate is published on crates.io as `shadcn-egui`: add it with
   `cargo add shadcn-egui` and change `egui_shadcn::` to `shadcn_egui::` in
@@ -131,77 +202,6 @@ egui-shadcn plugin) are recorded here. The format is based on
   each preset enum's `ALL` is a slice (`&'static [Self]`), not an array. New
   shadcn styles, colours, fonts and icon sets can then arrive in a minor
   release.
-
-### New
-- A gallery example shows every component in each variant and size, under
-  a preset you paste as a code or pick part by part (style, colours, fonts,
-  icon library, radius, menu), in light or dark mode. Run it with
-  `cargo run --example gallery --features fonts-all,icons-all`; an app shows
-  the same screen with `reference::gallery_ui`.
-- `Preset::from_code("b…")` reads a preset code copied from ui.shadcn.com,
-  and `preset.apply(ctx, Mode::Dark)` sets up the app with its style, base
-  colour, theme, chart colour, fonts, icon library, radius and menu colours.
-  `Preset::default()` is the site's default (Nova, neutral, Inter, Lucide);
-  `to_code()` gives the code back. Codes from shadcn-svelte.com are not
-  supported: that site numbers colours and icon libraries differently.
-- When a preset asks for something this build cannot show, the app uses a
-  stand-in and logs a warning such as
-  `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`.
-  The Sera style becomes Nova, the gray base colour, theme or chart colour
-  (ui.shadcn.com has no colours for gray) becomes neutral or the base colour,
-  and a font or icon library whose Cargo feature is off becomes Inter or
-  Lucide. The translucent menu colours draw as the default or inverted menu
-  colour, because egui cannot blur what lies behind a menu.
-- With the Lyra or Sera style every corner is square, whatever radius the
-  preset names, as on the shadcn site.
-- A translucent menu colour always highlights menu items with the subtle
-  accent, also when the preset asks for the bold one, as on ui.shadcn.com.
-- An open Select list draws in the preset's menu colours: with the
-  `inverted` menu colour it is dark also on a light page.
-- Every font of the shadcn create page is available, each behind its own
-  feature named after the font (`font-geist`, `font-jetbrains-mono`,
-  `font-playfair-display`, …), and a preset that names the font uses it.
-  The `fonts-all` feature turns them all on. A preset that names a font
-  whose feature is off renders in Inter and logs a warning.
-- The font crates carry the font's own licence next to MIT: `MIT AND OFL-1.1`
-  for most fonts, `MIT AND Apache-2.0` for the Apache-licensed ones.
-- The checkbox tick, select arrow and dialog close button follow the preset's
-  icon library: Lucide by default, and Tabler, Phosphor, Remix Icon and
-  Hugeicons with the features `icons-tabler`, `icons-phosphor`,
-  `icons-remixicon` and `icons-hugeicons` (`icons-all` for all). Every icon of
-  each set is available as a constant, for example
-  `shadcn_egui::icons::tabler::HOME`.
-- Filled icons (Phosphor, Remix Icon) are drawn with smooth edges, also when
-  faded for a disabled widget or a translucent menu.
-- `Palette::from_upstream(base, theme, chart, dark)` gives the palette the
-  shadcn site builds for a base colour, a colour theme and a chart colour,
-  for example `Palette::from_upstream("stone", "blue", "rose", true)`.
-- `Palette` has the five chart colours (`chart-1` … `chart-5`) as `chart`.
-- The `settings` example has a toolbar with a style select (vega, nova, maia,
-  lyra, mira, luma, rhea), a Dark/Light tab pair and a radius slider from 0 to
-  20 px, so the look can be changed while the window is open.
-- `Slider` with one thumb, horizontal or vertical. A click or drag sets the
-  value, the arrow, Page Up/Down, Home and End keys step it, and
-  `.enabled(false)` draws it at half opacity and ignores input.
-- Button sizes `Xs`, `IconXs`, `IconSm` and `IconLg`, and leading or trailing
-  button icons. Buttons also show the expanded, invalid and has-popup states.
-- Badge variants `Ghost` and `Link`, and leading or trailing badge icons.
-- `SwitchSize::Sm` (24 x 14 px) and `Tabs::new(..).variant(TabsVariant::Line)`,
-  which draws an underline under the active tab.
-- `Input::invalid`, `Checkbox::invalid`, `Switch::invalid` and
-  `Select::new(..)` options `.width(..)`, `.size(SelectSize::Sm)`,
-  `.placeholder(..)`, `.invalid(..)` and `.enabled(..)`; `Dialog` gets
-  `show_close_button(false)`.
-- `Card::new().size(CardSize::Sm).footer(..).show(ui, ..)` with
-  `card_header`, `card_header_with_action` and `card_content`, and
-  `popover_header(ui, title, description)`; the card footer is a tinted strip
-  reaching the card edges in nova.
-- `separator_vertical` draws a vertical line.
-- `Palette::with_bold_menu_accent()` for shadcn's `menuAccent: "bold"`.
-- `Metrics` has new fields `line_xs`, `line_sm`, `line_base` and `line_lg`
-  (Tailwind's line heights for the text sizes), and `Theme::line_px(TextSize)`
-  returns the line height for a text size.
-- `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
 
 ### Removed
 - `Theme::dark()` and `Theme::light()`: use `Theme::vega_dark()` /
