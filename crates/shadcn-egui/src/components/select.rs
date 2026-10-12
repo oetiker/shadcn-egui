@@ -3,7 +3,8 @@
 //! padding, radius, colours, ring and shadow come from the style's
 //! `cn-select-trigger`, `cn-select-trigger-icon`, `cn-select-content`,
 //! `cn-select-group`, `cn-select-item` and `cn-select-item-indicator`
-//! recipes. The chevron is Lucide `chevron-down`, the tick Lucide `check`.
+//! recipes. The chevron and the tick are the theme's `chevron_down` and
+//! `check` icons ([`crate::Theme::icons`]).
 //!
 //! The trigger is a custom-painted box (an `egui::ComboBox` cannot take
 //! these metrics) and the list an `egui::Popup` below it. Behaviour follows

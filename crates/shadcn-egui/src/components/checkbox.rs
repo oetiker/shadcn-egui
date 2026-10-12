@@ -1,7 +1,8 @@
 //! shadcn Checkbox, ported from shadcn-svelte `ui/checkbox/checkbox.svelte`
 //! at `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
 //! other values come from the style's `cn-checkbox` and
-//! `cn-checkbox-indicator` recipes. The tick is Lucide `check`.
+//! `cn-checkbox-indicator` recipes. The tick is the theme's `check` icon
+//! ([`crate::Theme::icons`]).
 //!
 //! The indeterminate state of the upstream component is not offered: the
 //! value is a plain `bool`.

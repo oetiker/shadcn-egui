@@ -6,7 +6,7 @@ maia, lyra, mira, luma, rhea), their colour themes, fonts, icon sets and
 presets, and components drawn as plain egui widgets. It works with any egui
 backend (eframe, egui-winit, glow, wgpu).
 
-![shadcn-egui settings screen](docs/settings-screen.png)
+![shadcn-egui settings screen](https://raw.githubusercontent.com/oetiker/shadcn-egui/main/docs/settings-screen.png)
 
 ## Install
 
@@ -28,6 +28,10 @@ fn setup(ctx: &egui::Context) -> Result<(), shadcn_egui::PresetCodeError> {
     Ok(())
 }
 ```
+
+This preset uses the Geist font and the Hugeicons icons: add
+`--features font-geist,icons-hugeicons`, else it falls back to Inter and
+Lucide with log warnings.
 
 `apply` again to switch mode or preset; the fonts are reinstalled only when
 they change. An app that installs fonts of its own uses
@@ -55,7 +59,7 @@ Paste a preset code or pick each preset part (style, colours, fonts, icon
 library, radius, menu) and the light or dark mode, and the gallery restyles
 live.
 
-![shadcn-egui component gallery](docs/gallery-screen.png)
+![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/main/docs/gallery-screen.png)
 
 `cargo run --example settings` opens a settings page built from Badge,
 Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
