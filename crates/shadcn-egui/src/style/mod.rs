@@ -65,6 +65,21 @@ impl Default for Style {
 mod tests {
     use super::*;
 
+    /// stylegen ranks an `!important` class with bit 127; `Rule::IMPORTANT`
+    /// must be that bit, or an app's important rule would lose to upstream's.
+    #[test]
+    fn generated_important_rank_is_rule_important() {
+        let luma = Style::luma();
+        let r = luma
+            .tabs_trigger
+            .border_color
+            .rules
+            .iter()
+            .find(|r| r.when == When::ALWAYS && r.value == Paint::Role(Role::Transparent, 1.0))
+            .expect("luma cn-tabs-trigger border-transparent!");
+        assert_eq!(r.rank, Rule::<Paint>::IMPORTANT);
+    }
+
     #[test]
     fn generated_styles_carry_known_values() {
         let (v, n) = (Style::vega(), Style::nova());

@@ -98,6 +98,13 @@ impl When {
     pub const fn new(all: State, none: State) -> When {
         When { all, none }
     }
+    /// Matches when every flag in `all` is set, whatever else is.
+    pub const fn all(all: State) -> When {
+        When {
+            all,
+            none: State::NONE,
+        }
+    }
     pub fn matches(self, s: State) -> bool {
         s.contains(self.all) && s.0 & self.none.0 == 0
     }
@@ -113,6 +120,35 @@ pub struct Rule<T> {
     pub when: When,
     pub rank: u128,
     pub value: T,
+}
+
+impl<T> Rule<T> {
+    /// The rank bit of an `!important` class (`bg-primary!`). A rule with
+    /// it beats every rule without it that also matches, whatever their
+    /// variants. Spell it `Rule::<Paint>::IMPORTANT` (any `T`).
+    pub const IMPORTANT: u128 = 1 << 127;
+
+    /// An app's override, ranked like a Tailwind `!` class: it beats every
+    /// generated rule that is not important. Against an upstream `!` class
+    /// of the same rank it wins because it comes later in the rule list.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use shadcn_egui::style::{Paint, Role, Rule, State, When};
+    /// let mut theme = shadcn_egui::Theme::vega_light();
+    /// let style = Arc::make_mut(&mut theme.style);
+    /// style.tabs_trigger.bg.rules.push(Rule::important(
+    ///     When::all(State::SELECTED),
+    ///     Paint::Role(Role::Primary, 1.0),
+    /// ));
+    /// ```
+    pub fn important(when: When, value: T) -> Rule<T> {
+        Rule {
+            when,
+            rank: Self::IMPORTANT,
+            value,
+        }
+    }
 }
 
 /// One property of a recipe. Set `base` to change the unconditional value;
@@ -346,6 +382,40 @@ mod tests {
             rank,
             value,
         }
+    }
+
+    #[test]
+    fn important_rule_beats_every_normal_rule() {
+        // dark:data-active:bg-input/30 has two high variant bits; an app's
+        // important rule under SELECTED alone still wins.
+        let mut p = Prop {
+            base: Some(0),
+            rules: vec![rule(
+                State::DARK.or(State::SELECTED),
+                (1 << 120) | (1 << 100),
+                1,
+            )],
+        };
+        p.rules.push(Rule::important(When::all(State::SELECTED), 2));
+        assert_eq!(p.get(State::DARK | State::SELECTED), Some(2));
+        assert_eq!(p.get(State::DARK), Some(0));
+        // An upstream `!` class without variants (luma `border-transparent!`)
+        // has the same rank: the later rule, the app's, wins.
+        let mut q = Prop {
+            base: None,
+            rules: vec![rule(State::NONE, Rule::<i32>::IMPORTANT, 1)],
+        };
+        q.rules.push(Rule::important(When::all(State::SELECTED), 2));
+        assert_eq!(q.get(State::SELECTED), Some(2));
+        assert_eq!(q.get(State::NONE), Some(1));
+    }
+
+    #[test]
+    fn when_all_needs_every_flag() {
+        let w = When::all(State::SELECTED | State::DARK);
+        assert!(w.matches(State::SELECTED | State::DARK | State::HOVER));
+        assert!(!w.matches(State::SELECTED));
+        assert_eq!(w.none, State::NONE);
     }
 
     #[test]

@@ -1,8 +1,39 @@
 //! Shared painting helpers for shadcn-style components.
 
-use crate::style::{Shift, State};
+use crate::style::{pick, Recipe, Shift, State};
 use crate::Theme;
 use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
+
+/// CSS's initial `opacity`.
+const INITIAL_OPACITY: f32 = 1.0; // behaviour-ok: CSS initial value of opacity
+
+/// shadcn's `bits-ui` `sideOffset` default of `SelectContent` and
+/// `PopoverContent`: a component prop, not a class.
+pub const DEFAULT_SIDE_OFFSET: f32 = 4.0; // behaviour-ok: upstream prop default, not a class
+
+/// A part's `opacity` under `s`, multiplied down the part tree as CSS does:
+/// `chain` is the part's recipe stack, then its parent's, and so on.
+pub fn opacity(chain: &[&[&Recipe]], s: State) -> f32 {
+    chain
+        .iter()
+        .map(|stack| pick(stack, |r| &r.opacity, s).unwrap_or(INITIAL_OPACITY))
+        .product()
+}
+
+/// The `Ui`'s painter, faded by `opacity` (a part's resolved [`opacity`],
+/// for example the style's `disabled:opacity-50`). In a disabled `Ui`
+/// (`ui.add_enabled(false, ..)`, `Ui::disable`) egui has faded the painter
+/// already, and fading again would paint at a quarter, so there it is left
+/// as it is. egui fades shape by shape: where a part lies on another (a
+/// switch thumb on its track) the lower part shows through, which CSS
+/// opacity on the whole group would not show.
+pub fn style_painter(ui: &Ui, opacity: f32) -> Painter {
+    let mut painter = ui.painter().clone();
+    if ui.is_enabled() {
+        painter.multiply_opacity(opacity);
+    }
+    painter
+}
 
 /// Build a CornerRadius from an f32 radius, rounding to the nearest pixel.
 pub fn corner(r: f32) -> CornerRadius {

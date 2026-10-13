@@ -131,3 +131,44 @@ pub fn measure_output(
 pub fn measure(theme: &Theme, add: impl FnMut(&mut egui::Ui) -> egui::Response) -> egui::Rect {
     measure_output(theme, add).0
 }
+
+/// Every rect shape a frame painted, in paint order.
+pub fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
+    fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match s {
+            egui::Shape::Rect(r) => out.push(r.clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut rects = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
+    rects
+}
+
+/// The colour of the first text a frame painted, as its glyphs carry it
+/// (a painter's opacity fades the glyphs, not the layout job).
+pub fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
+    fn walk(s: &egui::Shape) -> Option<egui::Color32> {
+        match s {
+            egui::Shape::Text(t) => t
+                .galley
+                .rows
+                .iter()
+                .find_map(|r| r.visuals.mesh.vertices.first())
+                .map(|v| v.color),
+            egui::Shape::Vec(v) => v.iter().find_map(walk),
+            _ => None,
+        }
+    }
+    out.shapes
+        .iter()
+        .find_map(|c| walk(&c.shape))
+        .expect("a text shape")
+}
+
+/// `theme` with `f` applied to its style: what an app does in its setup.
+pub fn restyled(mut theme: Theme, f: impl FnOnce(&mut Style)) -> Theme {
+    f(std::sync::Arc::make_mut(&mut theme.style));
+    theme
+}

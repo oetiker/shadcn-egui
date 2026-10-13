@@ -127,20 +127,6 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     assert_eq!(disabled, State::INVALID | State::DISABLED | State::DARK);
 }
 
-/// Every rect shape a frame painted, in paint order.
-fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
-    fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
-        match s {
-            egui::Shape::Rect(r) => out.push(r.clone()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
-            _ => {}
-        }
-    }
-    let mut rects = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
-    rects
-}
-
 /// shadcn `bg-clip-padding` with `border border-transparent`: a solid
 /// button's fill stops inside its 1px transparent border.
 #[test]
@@ -150,7 +136,7 @@ fn button_fill_stops_inside_transparent_border() {
     let theme = Theme::vega_light();
     let (rect, out) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
     let fill = theme.palette.primary;
-    let fills: Vec<_> = rect_shapes(&out)
+    let fills: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == fill)
         .collect();
@@ -171,7 +157,7 @@ fn focused_button_shows_ring_and_ring_border() {
         resp
     });
     let ring = theme.palette.ring;
-    let shapes = rect_shapes(&out);
+    let shapes = common::rect_shapes(&out);
     let ring_shape = shapes.iter().find(|r| r.stroke.width == 3.0);
     let ring_shape = ring_shape.unwrap_or_else(|| panic!("no 3px ring in {shapes:?}"));
     assert_eq!(ring_shape.stroke.color, ring.gamma_multiply(0.5));
@@ -488,27 +474,6 @@ fn badge_snapshot() {
     });
 }
 
-/// The colour of the first text a frame painted, as its glyphs carry it
-/// (a painter's opacity fades the glyphs, not the layout job).
-fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
-    fn walk(s: &egui::Shape) -> Option<egui::Color32> {
-        match s {
-            egui::Shape::Text(t) => t
-                .galley
-                .rows
-                .iter()
-                .find_map(|r| r.visuals.mesh.vertices.first())
-                .map(|v| v.color),
-            egui::Shape::Vec(v) => v.iter().find_map(walk),
-            _ => None,
-        }
-    }
-    out.shapes
-        .iter()
-        .find_map(|c| walk(&c.shape))
-        .expect("a text shape")
-}
-
 /// shadcn `peer-disabled:opacity-50`: a label of a disabled control paints
 /// its text at half alpha, and `text-sm leading-none` makes it 14px high.
 #[test]
@@ -520,8 +485,8 @@ fn disabled_label_paints_half_alpha_text() {
         let (_, off) =
             common::measure_output(&theme, |ui| ui.add(Label::new("Email").enabled(false)));
         let fg = theme.palette.foreground;
-        assert_eq!(text_colour(&on), fg, "{name}");
-        assert_eq!(text_colour(&off), fg.gamma_multiply(0.5), "{name}");
+        assert_eq!(common::text_colour(&on), fg, "{name}");
+        assert_eq!(common::text_colour(&off), fg.gamma_multiply(0.5), "{name}");
         assert_eq!(rect.height(), 14.0, "{name}");
         assert_eq!(
             pick(&[&theme.style.label], |r| &r.opacity, State::DISABLED),
@@ -542,7 +507,7 @@ fn separators_are_one_pixel_border_lines() {
         separator(ui);
         ui.allocate_response(egui::vec2(0.0, 0.0), egui::Sense::hover())
     });
-    let lines: Vec<_> = rect_shapes(&out)
+    let lines: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == theme.palette.border)
         .collect();
@@ -556,7 +521,7 @@ fn separators_are_one_pixel_border_lines() {
         })
         .response
     });
-    let v: Vec<_> = rect_shapes(&out)
+    let v: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == theme.palette.border)
         .collect();
@@ -678,7 +643,7 @@ fn nova_footer_strip_reaches_card_bottom() {
         shadcn_egui::style::Role::Muted,
         0.5,
     ));
-    let strips: Vec<_> = rect_shapes(&out)
+    let strips: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == strip)
         .collect();
@@ -855,7 +820,7 @@ fn disabled_button_ignores_clicks() {
                     rect = ui.add(Button::new("Save").enabled(enabled)).rect;
                 },
             );
-            (rect, rect_shapes(&out))
+            (rect, common::rect_shapes(&out))
         }
         let ctx = egui::Context::default();
         frame(&ctx, enabled, vec![]);
@@ -891,7 +856,7 @@ fn focused_input_border_turns_ring_colored() {
                 }
                 resp
             });
-            (rect, rect_shapes(&out))
+            (rect, common::rect_shapes(&out))
         };
         let (rect, idle) = shapes(false);
         let border = |s: &[egui::epaint::RectShape]| {
@@ -929,7 +894,7 @@ fn invalid_input_border_is_destructive() {
         let mut text = String::new();
         let (_, out) =
             common::measure_output(&theme, |ui| ui.add(Input::new(&mut text).invalid(true)));
-        let shapes = rect_shapes(&out);
+        let shapes = common::rect_shapes(&out);
         let d = theme.palette.destructive;
         let (border, ring) = if name.ends_with("dark") {
             (d.gamma_multiply(0.5), d.gamma_multiply(0.4))
@@ -1540,7 +1505,7 @@ fn slider_snapshot() {
 
 /// Every rect shape of a frame with its fill and stroke, in paint order.
 fn rect_paint(out: &egui::FullOutput) -> Vec<(egui::Rect, egui::Color32, egui::Stroke)> {
-    rect_shapes(out)
+    common::rect_shapes(out)
         .into_iter()
         .map(|r| (r.rect, r.fill, r.stroke))
         .collect()
@@ -1607,7 +1572,7 @@ fn disabled_widgets_fade_once() {
     // And the fade is a half: a solid button's fill.
     let (rect, out) =
         common::measure_output(&theme, |ui| ui.add_enabled(false, Button::new("Save")));
-    let fill = rect_shapes(&out)
+    let fill = common::rect_shapes(&out)
         .into_iter()
         .find(|r| r.rect == rect.shrink(1.0))
         .expect("button fill")
@@ -1676,7 +1641,7 @@ fn switch_paints_its_style_shadow() {
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
     // egui paints a shadow as a blurred rect.
     assert!(
-        rect_shapes(&out).iter().any(|r| r.blur_width > 0.0),
+        common::rect_shapes(&out).iter().any(|r| r.blur_width > 0.0),
         "no shadow painted"
     );
 }
