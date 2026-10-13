@@ -62,6 +62,7 @@ pub const TRANSLATED: &[(&str, Meaning)] = &[
     ("hover", Is("HOVER")),
     ("focus", Is("FOCUS")),
     ("focus-visible", Is("FOCUS_VISIBLE")),
+    ("data-highlighted", Is("FOCUS")),
     ("active", Is("ACTIVE")),
     ("disabled", Is("DISABLED")),
     ("data-disabled", Is("DISABLED")),
@@ -85,6 +86,7 @@ pub const TRANSLATED: &[(&str, Meaning)] = &[
     ("data-selected", Is("SELECTED")),
     ("not-data-selected", IsNot("SELECTED")),
     ("data-placeholder", Is("PLACEHOLDER")),
+    ("placeholder", Is("PLACEHOLDER")),
     ("has-data-[icon=inline-start]", Is("ICON_START")),
     ("has-data-[icon=inline-end]", Is("ICON_END")),
     ("in-data-[slot=button-group]", Is("IN_BUTTON_GROUP")),
@@ -119,7 +121,7 @@ pub const TRANSLATED: &[(&str, Meaning)] = &[
 ];
 
 const ANIM: &str = "open/close animation state; egui shows and hides at once";
-const SIDE: &str = "slide-in direction of an open animation";
+const SIDE: &str = "the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)";
 const LEADING_IMAGE: &str = "card with a leading image is not offered";
 const KBD: &str = "keyboard-shortcut chip in a tooltip; the crate does not ship Kbd";
 
@@ -154,6 +156,10 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("data-[slot=select-value]", "select value wrapper; the crate draws the value itself"),
     ("data-[slot=kbd]", KBD),
     ("has-data-[slot=kbd]", KBD),
+    ("rtl", "right-to-left layout; the crate lays out left to right"),
+    ("[&_svg]", "svg child behaviour (pointer events, shrink); the crate paints icons itself"),
+    ("has-data-[slot=card-action]", "card header grid template; the crate lays out the header itself"),
+    ("has-data-[slot=card-description]", "card header grid template; the crate lays out the header itself"),
 ];
 
 /// Registration order of the variant roots this tool meets: the line of the

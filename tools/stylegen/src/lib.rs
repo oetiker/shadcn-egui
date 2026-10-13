@@ -1,4 +1,5 @@
 //! stylegen: shadcn `style-<s>.css` → shadcn_egui style recipes.
+pub mod build;
 pub mod class;
 pub mod css;
 pub mod drift;

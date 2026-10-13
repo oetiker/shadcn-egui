@@ -141,4 +141,46 @@ mod tests {
             .join();
         assert_eq!(theme.ok(), Some("vega"));
     }
+
+    /// Base classes come after the style's classes in each part's string,
+    /// so they win under the same condition, as in the published component.
+    #[test]
+    fn base_classes_reach_every_style() {
+        let line_active = State::HORIZONTAL | State::VARIANT_LINE | State::SELECTED;
+        for (name, make, _) in MAKERS {
+            let s = make();
+            assert_eq!(s.dialog_footer.gap.get(State::NONE), Some(8.0), "{name}");
+            assert_eq!(
+                s.tooltip_content.max_width.get(State::NONE),
+                Some(320.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.popover_content.width.get(State::NONE),
+                Some(288.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.tabs_trigger.height_inset.get(State::NONE),
+                Some(1.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.separator.bg.get(State::NONE),
+                Some(Paint::Role(Role::Border, 1.0)),
+                "{name}"
+            );
+            assert_eq!(
+                s.tabs_trigger_after.opacity.get(line_active),
+                Some(1.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.tabs_trigger_after.opacity.get(State::HORIZONTAL),
+                Some(0.0),
+                "{name}"
+            );
+            assert_eq!(s.button.opacity.get(State::DISABLED), Some(0.5), "{name}");
+        }
+    }
 }

@@ -2,8 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
-use stylegen::sources::STYLES;
-use stylegen::{css, emit, markers, preset, report, resolve, themes};
+use stylegen::{markers, preset, themes};
 
 /// The crate stylegen writes into, relative to the repository root.
 const CRATE: &str = "crates/shadcn-egui";
@@ -70,42 +69,28 @@ fn generate(
 ) -> ExitCode {
     stylegen::sources::refresh(up, up_react, tool, lines)
         .expect("copy the upstream sources into tests/fixtures");
-    let shipped: Vec<String> = lines.iter().flat_map(|l| l.markers.clone()).collect();
-    let export: Vec<String> = std::fs::read_to_string(tool.join("EXPORT"))
-        .expect("EXPORT")
-        .split_whitespace()
-        .map(str::to_owned)
-        .collect();
     let out_dir = root.join(CRATE).join("src/style");
     let reports = tool.join("reports");
     std::fs::create_dir_all(&reports).expect("reports dir");
-    write(
-        &out_dir.join("generated.rs"),
-        &emit::emit_struct(pin, &shipped),
-    );
-    // An export style that fails the gate must not stop the other reports.
-    let mut failed = false;
-    for style in STYLES {
-        let parsed = css::parse_style_css(&read(
-            &tool.join(format!("tests/fixtures/style-{style}.css")),
-        ));
-        let translated = resolve::markers(&parsed, &shipped);
-        write(
-            &reports.join(format!("{style}.md")),
-            &report::report(style, pin, &translated),
-        );
-        if export.iter().any(|e| e == style) {
-            let unsupported: usize = translated.iter().map(|(_, m)| m.unsupported.len()).sum();
-            if unsupported != 0 {
-                eprintln!("{style} is in EXPORT but has {unsupported} unsupported classes; see reports/{style}.md");
-                failed = true;
-                continue;
-            }
-            write(
-                &out_dir.join(format!("{style}.rs")),
-                &emit::emit_style(style, pin, &translated),
-            );
+    let built = match stylegen::build::styles(tool, pin) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
         }
+    };
+    write(&out_dir.join("generated.rs"), &built.generated);
+    for (style, src) in &built.exported {
+        write(&out_dir.join(format!("{style}.rs")), src);
+    }
+    for (style, md) in &built.reports {
+        write(&reports.join(format!("{style}.md")), md);
+    }
+    // An export style that fails the gate must not stop the other outputs.
+    let mut failed = false;
+    for (style, n) in &built.failed {
+        eprintln!("{style} is in EXPORT but has {n} unsupported classes; see reports/{style}.md");
+        failed = true;
     }
     let palettes = themes::parse_themes(
         &read(&tool.join("tests/fixtures/themes.ts")),

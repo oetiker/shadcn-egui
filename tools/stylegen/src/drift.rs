@@ -70,11 +70,17 @@ pub fn check(up: &Path, crate_root: &Path, lines: &[MarkerLine]) -> Vec<String> 
                 }
             }
         }
-        if line.markers.is_empty() {
+        // `slot:` parts have no marker to compare.
+        let ours: BTreeSet<String> = line
+            .markers
+            .iter()
+            .filter(|m| !m.starts_with("slot:"))
+            .cloned()
+            .collect();
+        if ours.is_empty() {
             continue;
         }
         let up_set = upstream_markers(&upstream);
-        let ours: BTreeSet<String> = line.markers.iter().cloned().collect();
         for m in up_set.difference(&ours) {
             problems.push(format!(
                 "{}: marker {m} appeared upstream; re-port",

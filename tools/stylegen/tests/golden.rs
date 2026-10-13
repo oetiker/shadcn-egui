@@ -1,6 +1,9 @@
 use stylegen::css::parse_style_css;
+use stylegen::extract::part_strings;
+use stylegen::markers::parse_markers;
+use stylegen::model::flag;
 use stylegen::model::{Field, Value};
-use stylegen::resolve::{collect_vars, translate, Marker};
+use stylegen::resolve::{collect_vars, parts, translate, Marker, Part, Vars};
 
 fn style(name: &str) -> Vec<(String, Vec<String>)> {
     let p = format!(
@@ -143,4 +146,200 @@ fn nova_card_small_with_footer_has_no_bottom_padding() {
         when(&m, Field::PadBottom, (1 << 19) | (1 << 25)),
         Some(Value::Px(0.0))
     );
+}
+
+fn classes(v: &[&str]) -> Vec<String> {
+    v.iter().map(|s| s.to_string()).collect()
+}
+
+fn part_of(style_name: &str, part: &str) -> Part {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let lines = parse_markers(&std::fs::read_to_string(format!("{root}/markers.txt")).unwrap());
+    let comps = part_strings(
+        &std::path::Path::new(root).join("tests/fixtures/ui"),
+        &lines,
+    )
+    .unwrap();
+    parts(&style(style_name), &comps)
+        .into_iter()
+        .find(|p| p.name == part)
+        .unwrap_or_else(|| panic!("{part}"))
+}
+
+fn after_when(p: &Part, field: Field, all: u32) -> Option<Value> {
+    p.marker
+        .after
+        .iter()
+        .rfind(|d| d.field == field && d.all == all)
+        .map(|d| d.value)
+}
+
+#[test]
+fn outline_classes_set_the_outline_fields() {
+    let m = translate(
+        &classes(&[
+            "outline-none",
+            "focus-visible:outline-1",
+            "focus-visible:outline-ring",
+        ]),
+        &Vars::new(),
+    );
+    assert_eq!(base(&m, Field::OutlineWidth), Some(Value::Px(0.0)));
+    let fv = flag("FOCUS_VISIBLE");
+    assert_eq!(when(&m, Field::OutlineWidth, fv), Some(Value::Px(1.0)));
+    assert_eq!(
+        when(&m, Field::OutlineColor, fv),
+        Some(Value::Paint {
+            role: "Ring",
+            alpha: 1.0
+        })
+    );
+    let hidden = translate(&classes(&["outline-hidden"]), &Vars::new());
+    assert_eq!(base(&hidden, Field::OutlineWidth), Some(Value::Px(0.0)));
+}
+
+#[test]
+fn calc_height_is_a_height_inset() {
+    let m = translate(&classes(&["h-[calc(100%-1px)]"]), &Vars::new());
+    assert_eq!(base(&m, Field::HeightInset), Some(Value::Px(1.0)));
+    assert_eq!(base(&m, Field::Height), None);
+}
+
+#[test]
+fn tab_line_indicator_is_an_after_part() {
+    let p = part_of("vega", "cn-tabs-trigger");
+    let (h, line, sel) = (flag("HORIZONTAL"), flag("VARIANT_LINE"), flag("SELECTED"));
+    assert_eq!(base(&p.marker, Field::HeightInset), Some(Value::Px(1.0)));
+    let after_base = |f: Field| {
+        p.marker
+            .after
+            .iter()
+            .rfind(|d| d.field == f && d.all == 0 && d.rank == 0)
+            .map(|d| d.value)
+    };
+    assert_eq!(after_base(Field::Opacity), Some(Value::Factor(0.0)));
+    assert_eq!(
+        after_base(Field::Bg),
+        Some(Value::Paint {
+            role: "Foreground",
+            alpha: 1.0
+        })
+    );
+    assert_eq!(after_when(&p, Field::Height, h), Some(Value::Px(2.0)));
+    assert_eq!(after_when(&p, Field::InsetBottom, h), Some(Value::Px(-5.0)));
+    assert_eq!(after_when(&p, Field::InsetLeft, h), Some(Value::Px(0.0)));
+    assert_eq!(
+        after_when(&p, Field::Opacity, line | sel),
+        Some(Value::Factor(1.0))
+    );
+    // The trigger's own decls hold none of these.
+    assert_eq!(when(&p.marker, Field::Height, h), None);
+}
+
+#[test]
+fn separator_is_a_slot_part() {
+    let p = part_of("vega", "slot:separator");
+    assert_eq!(
+        base(&p.marker, Field::Bg),
+        Some(Value::Paint {
+            role: "Border",
+            alpha: 1.0
+        })
+    );
+    assert_eq!(
+        when(&p.marker, Field::Height, flag("HORIZONTAL")),
+        Some(Value::Px(1.0))
+    );
+    assert_eq!(
+        when(&p.marker, Field::Width, flag("VERTICAL")),
+        Some(Value::Px(1.0))
+    );
+    assert!(
+        p.marker.unsupported.is_empty(),
+        "{:?}",
+        p.marker.unsupported
+    );
+}
+
+#[test]
+fn slider_thumb_drops_disabled_classes_by_name() {
+    let p = part_of("vega", "cn-slider-thumb");
+    assert!(
+        !p.marker.decls.iter().any(|d| d.field == Field::Opacity),
+        "{:?}",
+        p.marker.decls
+    );
+    assert!(p
+        .marker
+        .ignored
+        .iter()
+        .any(|(c, _)| c == "disabled:opacity-50"));
+}
+
+#[test]
+fn checkbox_and_switch_hit_area_come_from_the_base_classes() {
+    for part in ["cn-checkbox", "cn-switch"] {
+        let p = part_of("vega", part);
+        assert_eq!(
+            base(&p.marker, Field::HitInsetX),
+            Some(Value::Px(12.0)),
+            "{part}"
+        );
+        assert_eq!(
+            base(&p.marker, Field::HitInsetY),
+            Some(Value::Px(8.0)),
+            "{part}"
+        );
+    }
+}
+
+#[test]
+fn highlighted_item_and_placeholder_text_have_their_states() {
+    let item = part_of("vega", "cn-select-item");
+    assert_eq!(
+        when(&item.marker, Field::Bg, flag("FOCUS")),
+        Some(Value::Paint {
+            role: "Accent",
+            alpha: 1.0
+        })
+    );
+    let input = part_of("vega", "cn-input");
+    assert_eq!(
+        when(&input.marker, Field::Text, flag("PLACEHOLDER")),
+        Some(Value::Paint {
+            role: "MutedForeground",
+            alpha: 1.0
+        })
+    );
+}
+
+#[test]
+fn luma_trigger_border_stays_important() {
+    let p = part_of("luma", "cn-tabs-trigger");
+    assert!(p
+        .marker
+        .decls
+        .iter()
+        .any(|d| d.field == Field::BorderColor && d.all == 0 && d.rank == 1 << 127));
+}
+
+#[test]
+fn every_exported_style_translates_every_part() {
+    for s in ["vega", "nova", "maia", "lyra", "mira", "luma", "rhea"] {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let lines = parse_markers(&std::fs::read_to_string(format!("{root}/markers.txt")).unwrap());
+        let comps = part_strings(
+            &std::path::Path::new(root).join("tests/fixtures/ui"),
+            &lines,
+        )
+        .unwrap();
+        for p in parts(&style(s), &comps) {
+            assert!(
+                p.marker.unsupported.is_empty(),
+                "{s} {}: {:?}",
+                p.name,
+                p.marker.unsupported
+            );
+        }
+    }
 }

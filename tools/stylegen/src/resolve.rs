@@ -22,6 +22,8 @@ pub struct Decl {
 #[derive(Debug, Default)]
 pub struct Marker {
     pub decls: Vec<Decl>,
+    /// Decls of the part's `after:` pseudo-element.
+    pub after: Vec<Decl>,
     pub ignored: Vec<(String, &'static str)>,
     pub unsupported: Vec<(String, String)>,
 }
@@ -85,6 +87,18 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                     });
                 }
             }
+            U::After(list) => {
+                for (field, value) in list {
+                    m.after.push(Decl {
+                        field,
+                        value,
+                        all: v.all,
+                        none: v.none,
+                        rank: v.rank,
+                        idx,
+                    });
+                }
+            }
             // Approximation of CSS: a rule derived from a variable inherits
             // the rank of the variable's definition (`rank: v.rank | d.rank`),
             // not the specificity of the element the variable is set on.
@@ -113,22 +127,74 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
         }
     }
     m.decls = merge(std::mem::take(&mut m.decls));
+    m.after = merge(std::mem::take(&mut m.after));
     m
 }
 
-/// Translate every shipped marker of one parsed style, in `shipped` order.
-/// A marker the style does not define translates to nothing.
-pub fn markers(css: &[(String, Vec<String>)], shipped: &[String]) -> Vec<(String, Marker)> {
-    let vars = collect_vars(css);
-    shipped
+/// Base classes dropped by name for one part: `(part, variant, why)`. The
+/// component source does not say which element a bits-ui primitive renders.
+pub const EXCEPTIONS: &[(&str, &str, &str)] = &[(
+    "cn-slider-thumb",
+    "disabled",
+    "bits-ui renders the slider thumb as a <span>, where `disabled:` never matches",
+)];
+
+/// One part of one style, translated.
+#[derive(Debug)]
+pub struct Part {
+    /// As in `markers.txt`: `cn-tabs-trigger`, `slot:separator`.
+    pub name: String,
+    pub marker: Marker,
+}
+
+/// A part's classes for one style: its marker replaced in place by the
+/// style's classes for it (nothing where the style does not define it).
+pub fn expand(component: &[String], part: &str, css: &[(String, Vec<String>)]) -> Vec<String> {
+    let style: &[String] = css
         .iter()
-        .map(|m| {
-            let classes = css
-                .iter()
-                .find(|(n, _)| n == m)
-                .map(|(_, c)| c.as_slice())
-                .unwrap_or_default();
-            (m.clone(), translate(classes, &vars))
+        .find(|(n, _)| n == part)
+        .map(|(_, c)| c.as_slice())
+        .unwrap_or_default();
+    component
+        .iter()
+        .flat_map(|c| {
+            if c == part {
+                style.to_vec()
+            } else {
+                vec![c.clone()]
+            }
+        })
+        .collect()
+}
+
+/// Translate every part for one style, in `components` order.
+pub fn parts(css: &[(String, Vec<String>)], components: &[(String, Vec<String>)]) -> Vec<Part> {
+    let vars = collect_vars(css);
+    components
+        .iter()
+        .map(|(name, classes)| {
+            let mut dropped = Vec::new();
+            let kept: Vec<String> = expand(classes, name, css)
+                .into_iter()
+                .filter(|c| {
+                    let hit = EXCEPTIONS.iter().find(|(p, v, _)| {
+                        *p == name.as_str() && split(c).variants.iter().any(|x| x == v)
+                    });
+                    match hit {
+                        Some((_, _, why)) => {
+                            dropped.push((c.clone(), *why));
+                            false
+                        }
+                        None => true,
+                    }
+                })
+                .collect();
+            let mut marker = translate(&kept, &vars);
+            marker.ignored.extend(dropped);
+            Part {
+                name: name.clone(),
+                marker,
+            }
         })
         .collect()
 }
