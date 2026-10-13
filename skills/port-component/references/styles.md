@@ -1,6 +1,6 @@
 # shadcn styles
 
-egui_shadcn ports shadcn-svelte's *styles* (vega, nova, …) as data. A component
+shadcn-egui ports shadcn-svelte's *styles* (vega, nova, …) as data. A component
 draws itself from the active style's recipes; it does not hard-code a look.
 
 ## The style model
@@ -35,19 +35,23 @@ draws itself from the active style's recipes; it does not hard-code a look.
   A rule's rank is the OR of one bit per Tailwind variant it uses, in the order
   of Tailwind v4.3.3 `Variants.compare` (arbitrary variants after named ones);
   an `!important` class has bit 127. This matches the CSS order shadcn gets.
-  A rule derived from a CSS variable (e.g. `--card-spacing`) takes the rank of
+  A rule derived from a CSS variable (for example `--card-spacing`) takes the rank of
   the variable's definition, an approximation.
 - **Deviating in a project.** Adjust the style when you build the theme, never
-  in vendored files:
+  in copies of crate code:
   ```rust
-  let mut s = Style::vega();
-  s.button_size_default.height.base = Some(40.0);
-  let theme = Theme::new(s, Palette::dark(), 10.0);
+  use shadcn_egui::{Palette, Style, Theme};
+
+  fn tall_buttons() -> Theme {
+      let mut s = Style::vega();
+      s.button_size_default.height.base = Some(40.0);
+      Theme::new(s, Palette::dark(), 10.0)
+  }
   ```
 
 ## Recipe fields and conditions
 
-`Recipe` fields (`src/style/recipe.rs`) and the Tailwind utilities that set them:
+`Recipe` fields (`crates/shadcn-egui/src/style/recipe.rs`) and the Tailwind utilities that set them:
 
 | Field | Tailwind utilities |
 |---|---|
@@ -84,7 +88,7 @@ part lies on another (a switch or slider thumb on its track) the lower part
 shows through. The fade comes from `shared::disabled_painter` and applies
 once: a widget inside a disabled `Ui` is not faded again by its own flag.
 
-`State` flags (`src/style/recipe.rs`) and the variants they stand for.
+`State` flags (`crates/shadcn-egui/src/style/recipe.rs`) and the variants they stand for.
 `Theme::state(s)` adds `DARK`.
 
 | Flag | Variants |
@@ -127,16 +131,18 @@ cannot be exported.
 ## The generator
 
 `tools/stylegen` reads the upstream style CSS and writes Rust. It is its own
-workspace; run it from the crate root with a shadcn-svelte checkout at the
-commit in `tools/stylegen/PIN`:
+workspace; run it from the repository root with a shadcn-svelte checkout at
+the commit in `tools/stylegen/PIN` and a shadcn-ui checkout at the commit in
+`tools/stylegen/PIN_REACT`:
 
 ```bash
-cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- generate <shadcn-svelte> .
-cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift    <shadcn-svelte> .
+cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- generate <shadcn-svelte> <shadcn-ui> .
+cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift    <shadcn-svelte> <shadcn-ui> .
 ```
 
-- `generate` writes `src/style/generated.rs` (the `Style` struct, one field per
-  marker in `tools/stylegen/markers.txt`), a `src/style/<name>.rs` for each style
+- `generate` writes `crates/shadcn-egui/src/style/generated.rs` (the `Style` struct, one field per
+  marker in `tools/stylegen/markers.txt`), a
+  `crates/shadcn-egui/src/style/<name>.rs` for each style
   in `tools/stylegen/EXPORT`, and `tools/stylegen/reports/<style>.md` for **all**
   eight upstream styles. Generated files carry a "do not edit" header. Commit
   them with the reports.
@@ -171,11 +177,16 @@ first (see `tools/stylegen/reports/sera.md`).
 
 ## Choosing a style
 
-Read `style` in the web project's `components.json`. Build the theme with it and
-with the web project's `--radius`:
+Read `style` in the web project's `components.json`. An app sets it through a
+preset (the `build-ui` skill). A theme built directly takes the style and the
+web project's `--radius` in px:
 
 ```rust
-Theme::new(Style::nova(), Palette::dark(), 10.0).apply(&ctx);
+use shadcn_egui::{Palette, Style, Theme};
+
+fn setup(ctx: &egui::Context) {
+    Theme::new(Style::nova(), Palette::dark(), 10.0).apply(ctx);
+}
 ```
 
 `Style::vega()` is the default. Take the radius in px from `--radius` in the web
@@ -188,7 +199,8 @@ it changes.
 2. Check out upstream at that commit.
 3. Run `stylegen generate`, then `stylegen drift`.
 4. Re-port every component that `drift` lists (a quote no longer upstream, a
-   marker that appeared or disappeared), following Part B of `SKILL.md`.
+   marker that appeared or disappeared), following the standard in
+   `SKILL.md` and `references/upstream.md`.
 5. Re-baseline the snapshots (`UPDATE_SNAPSHOTS=1 cargo test`) and look at the
    PNGs that changed.
 6. Commit the generated files, the reports and the PNGs together.

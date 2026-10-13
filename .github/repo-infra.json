@@ -435,6 +435,24 @@
       "pattern": "^name = \"shadcn-egui-icons-tabler\"\nversion = \"[^\"]*\"",
       "replacement": "name = \"shadcn-egui-icons-tabler\"\nversion = \"$VERSION\"",
       "verify": "^name = \"shadcn-egui-icons-tabler\"\nversion = \"$VERSION\""
+    },
+    {
+      "path": ".claude-plugin/plugin.json",
+      "pattern": "^  \"version\": \"[^\"]*\"",
+      "replacement": "  \"version\": \"$VERSION\"",
+      "verify": "^  \"version\": \"$VERSION\""
+    },
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "pattern": "^      \"version\": \"[^\"]*\"",
+      "replacement": "      \"version\": \"$VERSION\"",
+      "verify": "^      \"version\": \"$VERSION\""
+    },
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "pattern": "^        \"ref\": \"v[^\"]*\"",
+      "replacement": "        \"ref\": \"v$VERSION\"",
+      "verify": "^        \"ref\": \"v$VERSION\""
     }
   ]
 }

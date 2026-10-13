@@ -1,11 +1,11 @@
 {
-  "name": "egui-shadcn",
-  "description": "Build polished Rust egui GUIs from shadcn designs — backend-agnostic plain egui widgets (eframe, egui-winit, or any backend). Vendors a tested shadcn-v4 component module (theme/tokens, flexbox-substitute layout helpers, and components) plus a layout-first workflow with headless egui_kittest render verification.",
-  "version": "0.3.2",
+  "name": "shadcn-egui",
+  "description": "Build Rust egui GUIs from shadcn designs with the shadcn-egui crate, and port missing shadcn components to the crate's standard.",
+  "version": "0.4.0",
   "author": {
     "name": "Tobias Oetiker <tobi@oetiker.ch>"
   },
-  "homepage": "https://github.com/oetiker/egui-shadcn",
-  "repository": "https://github.com/oetiker/egui-shadcn",
+  "homepage": "https://github.com/oetiker/shadcn-egui",
+  "repository": "https://github.com/oetiker/shadcn-egui",
   "keywords": ["egui", "eframe", "rust", "gui", "shadcn", "design-system", "frontend"]
 }

@@ -1,7 +1,7 @@
 # Changelog
 
-All notable changes to the `shadcn-egui` crates (and, up to 0.3.2, the
-egui-shadcn plugin) are recorded here. The format is based on
+All notable changes to the `shadcn-egui` crates and the Claude Code plugin
+are recorded here. The format is based on
 [Keep a Changelog](https://keepachangelog.com), and the project aims to follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
@@ -78,11 +78,18 @@ egui-shadcn plugin) are recorded here. The format is based on
 - `Theme::vega_dark()` and `Theme::vega_light()` for the default vega style.
 
 ### Changed
+- The Claude Code plugin is now called `shadcn-egui` and builds on the
+  crate instead of copying code into the project; its skill `build-ui`
+  builds a UI and `port-component` ports a missing component. It installs
+  from the release tag, so it updates only with a crate release. Remove an
+  `egui-shadcn` install with `/plugin uninstall egui-shadcn@egui-shadcn-dev`
+  and `/plugin marketplace remove egui-shadcn-dev`, and install the new
+  plugin with `/plugin marketplace add oetiker/shadcn-egui` and
+  `/plugin install shadcn-egui@shadcn-egui`.
 - The crate is published on crates.io as `shadcn-egui`: add it with
   `cargo add shadcn-egui` and change `egui_shadcn::` to `shadcn_egui::` in
   your imports. Copying the component module into a project is no longer
-  supported; the egui-shadcn Claude Code plugin stays at 0.3.2 and keeps
-  doing that until it is rewritten for the crate.
+  supported.
 - The default font is Inter, as on the shadcn site, so all text looks
   different from 0.3. Oxanium remains available through the `font-oxanium`
   feature.

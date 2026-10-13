@@ -1,5 +1,5 @@
 //! The blob fixture under crates/shadcn-egui/tests/icons/fixture is generated
-//! by the command in skills/egui-shadcn/references/icons.md; this test fails
+//! by the command in skills/port-component/references/upstream.md; this test fails
 //! when icongen's output for it changes and the fixture was not regenerated.
 
 use icongen::{convert, parse_slots, render_crate};

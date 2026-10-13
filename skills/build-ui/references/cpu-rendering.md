@@ -1,7 +1,7 @@
 # Fast egui without a GPU (CPU rasterizer, custom integration)
 
 Applies when you drive egui yourself (`egui-winit` + `begin_pass`/`end_pass`,
-not eframe) and rasterize its meshes on the CPU, e.g. into a `softbuffer`
+not eframe) and rasterize its meshes on the CPU, for example into a `softbuffer`
 surface on a box with no usable GPU. eframe + wgpu/glow handles most of this
 for you; a hand-rolled loop does not.
 
@@ -16,9 +16,9 @@ killer is *how often* you raster, not how long one raster takes.
 |---|---|---|
 | New screen, cursor blink or animation appears only after the next mouse move | loop runs `ControlFlow::Wait` and ignores egui's own repaint requests | read `full_output.viewport_output[&ViewportId::ROOT].repaint_delay`: zero → `request_redraw()` now; finite → `ControlFlow::WaitUntil(now + delay)`; `Duration::MAX` → wait for the next OS event |
 | 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 3) |
-| Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | `ctx.style_mut(\|s\| s.animation_time = 0.0)` — `animate_bool` then returns its target at once; the registry's `switch.rs` keeps working |
+| Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
 
-The deferred first-frame font-atlas build (`set_fonts` lands next frame) also
+The deferred first-frame build of the font atlas (`set_fonts` lands next frame) also
 arrives as a repaint request, so ignoring `repaint_delay` leaves the first
 screen with fallback fonts until the user moves the mouse.
 
@@ -87,9 +87,11 @@ screen with fallback fonts until the user moves the mouse.
   widget (a button reached by Tab). For "is the pointer over floating UI":
 
   ```rust
-  ctx.pointer_interact_pos()
-      .and_then(|p| ctx.layer_id_at(p))
-      .is_some_and(|l| l.order != egui::Order::Background)
+  fn pointer_over_floating_ui(ctx: &egui::Context) -> bool {
+      ctx.pointer_interact_pos()
+          .and_then(|p| ctx.layer_id_at(p))
+          .is_some_and(|l| l.order != egui::Order::Background)
+  }
   ```
 
   For keyboard routing use `ctx.text_edit_focused()` plus an explicit modal

@@ -3,8 +3,9 @@
 `shadcn-egui` is a Cargo workspace that ports the shadcn-v4 (OKLCH) design
 system, its styles, palettes, fonts, icon sets and presets to egui as
 crates published on crates.io. The repository also hosts the
-`egui-shadcn` Claude Code plugin (`skills/egui-shadcn/`, `.claude-plugin/`),
-frozen at 0.3.2 until the skill is rewritten for the crate.
+`shadcn-egui` Claude Code plugin (`skills/build-ui/`,
+`skills/port-component/`, `.claude-plugin/`), whose version follows the
+crates.
 
 ## Layout
 
@@ -30,11 +31,12 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
 
 ## Start here — read the source docs, don't restate them
 
-- **Using and porting components, dependency discipline:**
-  [`skills/egui-shadcn/SKILL.md`](skills/egui-shadcn/SKILL.md) (still
-  describes the 0.3 vendoring flow; the porting standards apply to
-  `crates/shadcn-egui/src/`).
-- **Mapping tables:** `skills/egui-shadcn/references/`.
+- **Porting standards, dependency discipline:**
+  [`skills/port-component/SKILL.md`](skills/port-component/SKILL.md) and
+  `skills/port-component/references/upstream.md`.
+- **Building a UI with the crate, mapping tables:**
+  [`skills/build-ui/SKILL.md`](skills/build-ui/SKILL.md) and
+  `skills/build-ui/references/`.
 - **Cutting a release:** [`RELEASING.md`](RELEASING.md).
 - **What changed per version:** [`CHANGES.md`](CHANGES.md).
 
@@ -52,11 +54,13 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
     `crates/shadcn-egui/tests/icons/lucide.rs`
 - All crates share one version; font and icon crates depend only on
   `shadcn-egui-core`.
-- Keep runtime `[dependencies]` minimal — read the dependency-discipline
-  section of `SKILL.md` before adding any.
+- Keep runtime `[dependencies]` minimal: read the dependency-discipline
+  section of `skills/port-component/SKILL.md` before adding any.
 - Any component change needs its kittest snapshot PNG regenerated, reviewed
   and committed.
-- `.claude-plugin/*.json` stay at 0.3.2.
+- The skills name crate APIs and their rust fences compile as doctests
+  (`skill_docs` in `crates/shadcn-egui/src/lib.rs`); an API change updates
+  the skills in the same PR.
 - The repository is public: no private project names or paths.
 
 ## Build & verify
@@ -86,7 +90,7 @@ frozen at 0.3.2 until the skill is rewritten for the crate.
 - Generators run from the repository root: `stylegen generate|drift
   <shadcn-svelte checkout> <shadcn-ui checkout> .`; `tools/fontgen/fetch.sh <downloads-dir>`
   then `fontgen <downloads-dir> .`; icongen as described in
-  `skills/egui-shadcn/references/icons.md`. Downloads go to a scratch
+  `skills/port-component/references/upstream.md`. Downloads go to a scratch
   directory, never into the repository.
 - Snapshot tests render headlessly (egui_kittest + wgpu, mesa software
   adapter). Regenerate baselines with `UPDATE_SNAPSHOTS=1 cargo test`, then
