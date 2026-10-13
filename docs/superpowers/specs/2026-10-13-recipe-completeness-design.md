@@ -8,7 +8,8 @@ through `Style`. Ten other component files fix colours or sizes the same
 way. This spec makes every visual value of every component come from the
 style data (a recipe or the theme metrics), so an app can change any of them
 through `theme.style`. That closes #6: its use case (a filled `primary`
-active tab, a solid 2 px focus ring) is two recipe edits.
+active tab, a solid 2 px focus ring) becomes a few recipe edits with the
+`Rule::important` helper (see "Overriding a value").
 
 App colours and app variants, which let an app define its own kinds of
 components, are a follow-up with its own spec (see "Follow-up").
@@ -74,21 +75,24 @@ fallbacks used only when the recipe has no value; they stay, each with a
 | `tabs.rs:100` | trigger height: list content height minus 1 px | `tabs_trigger.height_inset` (new) |
 | `tabs.rs` | line indicator `Foreground`, 2 px, 5 px below, shown when active | `tabs_trigger_after`: `bg`, `height`, `inset_bottom`, `opacity` |
 | `tabs.rs` | disabled opacity 0.5 | `tabs_trigger.opacity` with the `DISABLED` rule |
-| `tabs.rs:224` | list track `Muted` | `tabs_list_variant_default.bg` |
+| `tabs.rs:229` | list track `Muted` | `tabs_list_variant_default.bg` |
 | `tabs.rs` | line variant gap 4 | `tabs_list_variant_line.gap` |
 | `tooltip.rs:40` | fill `Foreground`, text `Background` | `tooltip_content.bg`, `text` |
 | `tooltip.rs` | arrow fill `Foreground` | `tooltip_arrow.bg` |
 | `tooltip.rs` | max width 320 | `tooltip_content.max_width` |
 | `separator.rs:16` | line colour `Border` | `separator.bg` (new base-only recipe) |
+| `separator.rs:12` | thickness `metrics.border` | `separator.height` / `width`, falling back to `metrics.border` |
 | `button.rs`, `input.rs`, `select.rs`, `switch.rs`, `slider.rs` | disabled opacity 0.5 | `opacity` with the `DISABLED` rule |
 | `button.rs:263`, `badge.rs:163` | link underline 1 px | `t.metrics.border` (upstream sets no thickness) |
 | `checkbox.rs:59`, `switch.rs:77` | hit area 12 px by 8 px around the control | `checkbox.hit_inset_x`/`_y`, `switch.hit_inset_x`/`_y` |
 | `popover.rs` | width 288 | `popover_content.width` |
 | `dialog.rs` | footer gap 8 | `dialog_footer.gap` |
 
-The separator thickness and the link underline keep reading
-`t.metrics.border`: the metric is style data an app can already change,
-and upstream's `h-px` equals its default.
+The separator reads its thickness from the recipe (`data-horizontal:h-px`,
+`data-vertical:w-px`) and falls back to `metrics.border`. An app that
+changed `metrics.border` to restyle separators now changes the recipe
+instead; a CHANGES entry says so. The link underline keeps reading
+`t.metrics.border`: upstream sets no thickness for it.
 
 `sideOffset = 4` in popover (`popover.rs:24`) and select (`select.rs:387`)
 is a component prop upstream, not a class. It becomes a builder method
@@ -136,16 +140,19 @@ Where a file has the same part in several `{#if}` branches (input's
 `type === "file"` branch), the plan names the branch the crate draws; the
 extractor takes that one and the test asserts the choice.
 
-The extractor records the element of each part. `disabled:` on a part
-whose element is not a form control (the slider thumb `<span>`) never
-matches upstream and is ignored.
+`disabled:` on the slider thumb is ignored by a named exception: bits-ui
+renders the thumb as a `<span>`, where `disabled:` never matches. The
+source does not say which element a bits-ui primitive renders, so further
+cases are added to the exception list by name, each with its reason.
 
 ### Building the string
 
 For each style and each part, stylegen:
 
 1. takes the part's extracted class string;
-2. removes the markers only the shadcn CLI rewrites, as the registry does:
+2. removes the markers only the shadcn CLI rewrites (the registry keeps
+   some as text and drops the classes of `*-logical`; the crate models
+   none of them):
    `cn-font-heading`, `cn-menu-*`, `*-logical`, `cn-rtl-flip`,
    `cn-logical-sides` (the list `drift::upstream_markers` already uses,
    moved to one shared place);
@@ -158,7 +165,8 @@ For each style and each part, stylegen:
 Each generated `<style>.rs` then holds complete recipes. A part without a
 `cn-*` marker gets a recipe named after its `data-slot`. In `markers.txt`
 such a part is written `slot:<data-slot>`, for example
-`separator.rs separator: slot:separator`.
+`separator.rs separator: slot:separator`. `drift` skips `slot:` entries
+when it compares markers with upstream.
 
 ### New fields and translations
 
@@ -174,6 +182,9 @@ such a part is written `slot:<data-slot>`, for example
   (`bg`, `width`, `height`, `inset_*`, `opacity`). The tab line indicator
   is the only such part today.
 - `placeholder:` maps to the `PLACEHOLDER` state.
+- `data-highlighted:` (select item) maps to the `FOCUS` state.
+- `inset-0`, `inset-x-*`, `inset-y-*` (also under `after:`) map to the
+  `inset_*` fields.
 - `fill-<colour>` maps to `bg` (the tooltip arrow is painted as a shape).
 - `ring-0` sets `ring_width` to 0. `text-current` leaves `text` empty
   (inherit).
@@ -195,7 +206,9 @@ Each is listed in `utility.rs` or `variant.rs` with a reason, by group:
 - Browser behaviour: `transition-*`, `pointer-events-none`, `select-none`,
   `touch-none`, `cursor-*`, `scroll-my-*`, `isolate`, `z-*`,
   `whitespace-nowrap`, `line-clamp-*`, `overflow-*`, `peer`, `group/*`.
-- Selectors the crate does not model: `[&_svg]:…`, `rtl:…`,
+- Sizing that is the component's default: `h-fit`.
+- Selectors the crate does not model: `[&_svg]:…`, `[&>svg]:…` other than
+  `size-*`, `rtl:…`,
   `has-data-[slot=card-action]:…`, `has-data-[slot=card-description]:…`.
   The plan checks each against today's drawing; one that changes a pixel
   gets a field or a state instead.
@@ -203,20 +216,48 @@ Each is listed in `utility.rs` or `variant.rs` with a reason, by group:
   (`h-(--bits-select-anchor-height)`, `origin-(--bits-…)`, …) and the
   dialog centring (`top-1/2 left-1/2 -translate-*-1/2`).
 
-The tooltip arrow offsets (`translate-y-[calc(-50%+2px)]` and similar) are
-decided in the plan: a `translate_*` field if they are geometry, an ignore
-with a reason if they are placement.
+The tooltip arrow offsets (`data-[side=*]:translate-*`) stay ignored: the
+arrow sits at the edge egui places the tooltip on, which is placement. The
+reason text of that ignore in `variant.rs` changes from "slide-in direction
+of an open animation" to say so.
 
 `reports/<style>.md` lists the ignored classes per part. An exported style
 with an unsupported class still fails generation.
 
 ### Tests
 
-- `tests/published.rs` compares the whole merged class string of each part,
-  after the CLI-marker removal, with the published vega and nova JSON.
+- `tests/published.rs` compares the concatenated class string of each part
+  (style classes in place of the marker, then the base classes, before any
+  merge) with the published vega and nova JSON. Both sides are normalised
+  first: CLI markers removed (the published JSON keeps `cn-menu-target`,
+  `cn-menu-translucent` and `cn-font-heading` as text) and `calc()` spacing
+  unified (`calc(100%_-_1px)` equals `calc(100%-1px)`).
 - Golden tests for `outline_*`, `height_inset`, a `<marker>_after` part, a
   `slot:` part, CLI-marker removal and the extractor's string forms.
 - The `base_quotes` check in `drift` is removed with the `// base:` quotes.
+
+## Overriding a value
+
+A rule's rank is a Tailwind variant bitmask that an app cannot work out by
+hand, and the rule an app adds must beat rules such as
+`dark:data-active:bg-input/30`. The crate exports the important rank bit
+as `Rule::IMPORTANT` and a helper `Rule::important(when, value)`, which
+builds a rule with that bit, as a Tailwind `!` class does. An important
+app rule beats every non-important generated rule under the same
+condition. Against upstream's own `!` classes (luma and rhea
+`border-transparent!`) the normal variant order decides, and on equal rank
+the app rule wins because it comes later in the rule list.
+
+```rust
+let style = Arc::make_mut(&mut theme.style);
+style.tabs_trigger.bg.rules.push(Rule::important(
+    When::all(State::SELECTED),
+    Paint::Role(Role::Primary, 1.0),
+));
+```
+
+The plan may adjust spelling (`When::all`), not shape. The build-ui skill
+shows this idiom.
 
 ## Components
 
@@ -240,18 +281,27 @@ not a CI gate.
 ## Tests
 
 - Snapshots: `snapshot_all` covers vega, nova, maia, lyra, mira, luma and
-  rhea, light and dark, for every component. For tabs the state matrix is:
-  default and line variant; inactive, hovered, active; focused active; each
-  in light and dark.
+  rhea, light and dark, for every component. It gets its own seven-style
+  theme list; `common::themes()` and the measurement tests that use it
+  (for example `button_height_follows_style`, which expects 32 for nova and
+  36 for the rest) stay on vega and nova. For tabs the state matrix is:
+  default and line variant; inactive, hovered, active, disabled; focused
+  active; each in light and dark.
 - Through the stylegen and component steps, every snapshot stays identical
   except the listed upstream disagreements.
-- Issue #6: a test changes `tabs_trigger` through `theme.style` (active
-  fill `Primary`, text `PrimaryForeground`, solid 2 px ring, no outline)
-  and the snapshot shows all four.
+- Issue #6: a test changes `tabs_trigger` through `theme.style` with
+  `Rule::important` (active fill `Primary`, text `PrimaryForeground`, solid
+  2 px ring, no outline), in light and dark, and the snapshot shows all
+  four.
 - `tests/tokens.rs`: a `Role::…` or a float literal in a component needs
   `// behaviour-ok: <reason>`; `// base:` no longer exempts a value, and
   `1.0` is exempt only as a factor (`* 1.0`, `/ 1.0`), not as a length or a
-  width (`- 1.0`, `Stroke::new(1.0…`).
+  width (`- 1.0`, `Stroke::new(1.0…`). Arithmetic that is not a design
+  value gets `// behaviour-ok:` with its reason: the `clamp(0.0, 1.0)` and
+  ±1.0 direction signs in `slider.rs`, `.max(1.0)` in `icon.rs`, the
+  `unwrap_or(1.0)` scale factors in `label.rs` and `checkbox.rs`.
+  `icon_raster.rs` is a rasterizer, not a component, and is skipped as a
+  file.
 
 ## Order of work
 
@@ -265,10 +315,12 @@ not a CI gate.
 4. Components, one at a time; after each, snapshots unchanged except listed
    disagreements. Stricter `tokens.rs`; `base_quotes` removed; `side_offset`
    builder methods. Second measurement.
-5. Skills: build-ui shows restyling through `theme.style`; port-component
+5. Skills: build-ui shows restyling through `theme.style` with
+   `Rule::important`; port-component
    states that base classes are generated and that a component holds no
    literal colour or size. CHANGES entries ending with `(#6)`, one of them
-   naming the luma and rhea tab border change.
+   naming the luma and rhea tab border change and one the separator
+   thickness.
 
 Steps 2 to 5 are pull request B.
 
