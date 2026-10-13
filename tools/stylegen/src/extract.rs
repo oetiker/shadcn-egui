@@ -17,15 +17,18 @@ pub const BRANCHES: &[(&str, &str, usize, &str)] = &[(
 /// arguments of each `cn(…)` joined with a space, the `base` string and each
 /// string in `variants` of a `tv({…})`, and each static `class="…"`, also
 /// on a nested component. HTML comments and `//` comments are skipped, and
-/// so are non-string arguments (`className`, `arrowClasses`).
-pub fn class_strings(src: &str) -> Vec<String> {
-    let src = strip_html_comments(src);
+/// so are identifier arguments (`className`, `arrowClasses`) and calls
+/// (`buttonVariants(..)`). Syntax whose value depends on runtime state
+/// (`open && "y"`, `a ? "p" : "q"`, `{"z": on}`, `${..}` in a template
+/// literal, `{..}` in `class="…"`) is an error: it has no single string.
+pub fn class_strings(src: &str) -> Result<Vec<String>, String> {
+    let src = mask_js_comments(&strip_html_comments(src));
     let mut found: Vec<(usize, String)> = Vec::new();
     for (at, args) in calls(&src, "cn") {
-        found.push((at, top_level_strings(args).join(" ")));
+        found.push((at, cn_strings(args)?.join(" ")));
     }
     for (at, args) in calls(&src, "tv") {
-        for s in tv_strings(args) {
+        for s in tv_strings(args)? {
             found.push((at, s));
         }
     }
@@ -35,16 +38,20 @@ pub fn class_strings(src: &str) -> Vec<String> {
         let Some(len) = src[start..].find('"') else {
             break;
         };
-        found.push((start, src[start..start + len].to_owned()));
+        let value = &src[start..start + len];
+        if value.contains('{') {
+            return Err(format!("dynamic class attribute: class=\"{value}\""));
+        }
+        found.push((start, value.to_owned()));
         from = start + len + 1;
     }
     // Stable: the strings of one `tv` keep their order.
     found.sort_by_key(|(at, _)| *at);
-    found
+    Ok(found
         .into_iter()
         .map(|(_, s)| normalise(&s))
         .filter(|s| !s.is_empty())
-        .collect()
+        .collect())
 }
 
 /// Whitespace collapsed to single spaces.
@@ -111,6 +118,7 @@ fn svelte_sources(dir: &Path) -> std::io::Result<Vec<(String, Vec<String>)>> {
         .map(|n| {
             let src = std::fs::read_to_string(dir.join(&n))?;
             let strings = class_strings(&src)
+                .map_err(|e| std::io::Error::other(format!("{n}: {e}")))?
                 .iter()
                 .map(|s| strip_cli_markers(s))
                 .collect();
@@ -271,12 +279,110 @@ fn skip_string(b: &[u8], i: usize) -> Option<usize> {
 }
 
 /// String literals at bracket depth 0 of `args`.
-fn top_level_strings(args: &str) -> Vec<String> {
+fn top_level_strings(args: &str) -> Result<Vec<String>, String> {
     strings(args, false)
 }
 
+/// The string arguments of a `cn(…)` call. Identifiers, member chains and
+/// calls are skipped; any other argument is an error.
+fn cn_strings(args: &str) -> Result<Vec<String>, String> {
+    let b = args.as_bytes();
+    let (mut out, mut i) = (Vec::new(), 0usize);
+    let bad = |at: usize| {
+        Err(format!(
+            "cn() argument the extractor cannot evaluate: {}",
+            args[at..].lines().next().unwrap_or("").trim()
+        ))
+    };
+    while i < b.len() {
+        let c = b[i];
+        if c.is_ascii_whitespace() || c == b',' {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        if matches!(c, b'"' | b'\'' | b'`') {
+            let Some(end) = skip_string(b, i) else {
+                return bad(start);
+            };
+            check_literal(&args[i + 1..end], c)?;
+            out.push(args[i + 1..end].to_owned());
+            i = end + 1;
+        } else if c.is_ascii_alphabetic() || matches!(c, b'_' | b'$') {
+            while i < b.len()
+                && (b[i].is_ascii_alphanumeric() || matches!(b[i], b'_' | b'$' | b'.'))
+            {
+                i += 1;
+            }
+            if b.get(i) == Some(&b'(') {
+                let Some(end) = closing(args, i) else {
+                    return bad(start);
+                };
+                i = end + 1;
+            }
+        } else {
+            return bad(start);
+        }
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i < b.len() && b[i] != b',' {
+            return bad(start);
+        }
+    }
+    Ok(out)
+}
+
+fn check_literal(body: &str, quote: u8) -> Result<(), String> {
+    if quote == b'`' && body.contains("${") {
+        return Err(format!("template literal with interpolation: `{body}`"));
+    }
+    Ok(())
+}
+
+/// `src` with `//` comments overwritten by spaces (same length), so
+/// positions stay valid. A `//` inside a quoted string on its line, or
+/// right after `:` (a URL), is not a comment.
+fn mask_js_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    for line in src.split_inclusive('\n') {
+        let b = line.as_bytes();
+        let mut quote = 0u8;
+        let mut cut = None;
+        let mut i = 0;
+        while i < b.len() {
+            let c = b[i];
+            if quote != 0 {
+                if c == b'\\' {
+                    i += 1;
+                } else if c == quote {
+                    quote = 0;
+                }
+            } else if matches!(c, b'"' | b'\'' | b'`') {
+                quote = c;
+            } else if c == b'/' && b.get(i + 1) == Some(&b'/') && (i == 0 || b[i - 1] != b':') {
+                cut = Some(i);
+                break;
+            }
+            i += 1;
+        }
+        match cut {
+            Some(at) => {
+                out.push_str(&line[..at]);
+                out.extend(
+                    line[at..]
+                        .chars()
+                        .map(|c| if c == '\n' { '\n' } else { ' ' }),
+                );
+            }
+            None => out.push_str(line),
+        }
+    }
+    out
+}
+
 /// String literals of `args`, at depth 0 only or at any depth.
-fn strings(args: &str, any_depth: bool) -> Vec<String> {
+fn strings(args: &str, any_depth: bool) -> Result<Vec<String>, String> {
     let b = args.as_bytes();
     let (mut out, mut depth, mut i) = (Vec::new(), 0i32, 0usize);
     while i < b.len() {
@@ -286,6 +392,7 @@ fn strings(args: &str, any_depth: bool) -> Vec<String> {
                     break;
                 };
                 if any_depth || depth == 0 {
+                    check_literal(&args[i + 1..end], b[i])?;
                     out.push(args[i + 1..end].to_owned());
                 }
                 i = end;
@@ -301,17 +408,17 @@ fn strings(args: &str, any_depth: bool) -> Vec<String> {
         }
         i += 1;
     }
-    out
+    Ok(out)
 }
 
 /// The `base` string and every string in `variants` of a `tv({…})` call.
 /// Quoted variant keys (`"icon-xs":`) come along; they hold no marker, so
 /// no part takes them.
-fn tv_strings(args: &str) -> Vec<String> {
+fn tv_strings(args: &str) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
     if let Some(i) = args.find("base:") {
         out.extend(
-            top_level_strings(&args[i + "base:".len()..])
+            top_level_strings(&args[i + "base:".len()..])?
                 .into_iter()
                 .take(1),
         );
@@ -319,9 +426,9 @@ fn tv_strings(args: &str) -> Vec<String> {
     if let Some(i) = args.find("variants:") {
         if let Some(open) = args[i..].find('{').map(|o| i + o) {
             if let Some(close) = closing(args, open) {
-                out.extend(strings(&args[open..=close], true));
+                out.extend(strings(&args[open..=close], true)?);
             }
         }
     }
-    out
+    Ok(out)
 }

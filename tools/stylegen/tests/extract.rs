@@ -38,7 +38,7 @@ fn reads_every_string_form() {
 )}></div>
 <Button variant="ghost" class="cn-x-close g" />
 "#;
-    let s = class_strings(src);
+    let s = class_strings(src).unwrap();
     assert!(s.contains(&"cn-x-base a b".to_string()), "{s:?}");
     assert!(s.contains(&"cn-x-sm c".to_string()), "{s:?}");
     assert!(s.contains(&"cn-x-icon d".to_string()), "{s:?}");
@@ -109,6 +109,7 @@ fn input_takes_the_else_branch() {
         .any(|(f, m, k, _)| *f == "input/input.svelte" && *m == "cn-input" && *k == 1));
     let src = std::fs::read_to_string(ui().join("input/input.svelte")).unwrap();
     let hits: Vec<String> = class_strings(&src)
+        .unwrap()
         .into_iter()
         .filter(|s| s.split_whitespace().any(|t| t == "cn-input"))
         .collect();
@@ -152,4 +153,26 @@ fn every_shipped_part_has_a_string() {
     let parts = part_strings(&ui(), &lines).expect("every part found");
     let shipped: usize = lines.iter().map(|l| l.markers.len()).sum();
     assert_eq!(parts.len(), shipped);
+}
+
+#[test]
+fn unevaluable_class_syntax_is_an_error() {
+    let cases = [
+        r#"<div class={cn("cn-a x", open && "y")}></div>"#,
+        r#"<div class={cn("cn-a x", {"z": on})}></div>"#,
+        r#"<div class={cn("cn-a x", big ? "p" : "q")}></div>"#,
+        "<div class={cn(`cn-a w-${n}`)}></div>",
+        r#"<div class="cn-a {extra} x"></div>"#,
+    ];
+    for c in cases {
+        assert!(class_strings(c).is_err(), "{c}");
+    }
+}
+
+#[test]
+fn comments_hide_keys_and_calls() {
+    let tv = "const v = tv({\n// base: \"wrong\"\nbase: \"cn-r right\",\n});";
+    assert_eq!(class_strings(tv).unwrap(), vec!["cn-r right".to_string()]);
+    let call = "// see cn(\"cn-f ghost\")\n<div class={cn(\"cn-f real\", className)}></div>";
+    assert_eq!(class_strings(call).unwrap(), vec!["cn-f real".to_string()]);
 }
