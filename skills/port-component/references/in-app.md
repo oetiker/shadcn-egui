@@ -34,8 +34,7 @@ builds the recipes itself:
 - A rule's `rank` orders it the way Tailwind orders the CSS. Take the bit of
   each variant from a generated recipe in the crate that uses the same
   variant (`crates/shadcn-egui/src/style/nova.rs`); a rule with several
-  variants ORs their bits. The bits used below: `disabled:` `1 << 5`,
-  `focus-visible:` `1 << 19`, `aria-checked:` `1 << 26`, `aria-invalid:`
+  variants ORs their bits. The bits used below: `focus-visible:` `1 << 19`, `aria-checked:` `1 << 26`, `aria-invalid:`
   `1 << 28`, `data-checked:` `1 << 30`, `dark:` `1 << 50`.
 - Classes the crate ignores stay out of the recipe: layout keywords (`flex`,
   `items-center`), transitions and animations, and variants for slots the
