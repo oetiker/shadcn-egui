@@ -29,7 +29,31 @@ pub fn themes() -> Vec<(&'static str, Theme)> {
     ]
 }
 
-/// One snapshot per style x {dark, light}: `{name}_{vega_dark|...}.png`.
+/// The seven exported styles, dark and light: what every component snapshot
+/// covers. Measurement tests use [`themes`] (vega and nova) instead.
+pub fn snapshot_themes() -> Vec<(&'static str, Theme)> {
+    type Make = fn() -> Style;
+    const STYLES: [(&str, &str, Make); 7] = [
+        ("vega_dark", "vega_light", Style::vega),
+        ("nova_dark", "nova_light", Style::nova),
+        ("maia_dark", "maia_light", Style::maia),
+        ("lyra_dark", "lyra_light", Style::lyra),
+        ("mira_dark", "mira_light", Style::mira),
+        ("luma_dark", "luma_light", Style::luma),
+        ("rhea_dark", "rhea_light", Style::rhea),
+    ];
+    STYLES
+        .iter()
+        .flat_map(|(dark, light, make)| {
+            [
+                (*dark, Theme::new(make(), Palette::dark(), 10.0)),
+                (*light, Theme::new(make(), Palette::light(), 10.0)),
+            ]
+        })
+        .collect()
+}
+
+/// One snapshot per exported style x {dark, light}: `{name}_{style}_{mode}.png`.
 pub fn snapshot_all(name: &str, size: egui::Vec2, ui_fn: impl FnMut(&mut egui::Ui)) {
     snapshot_all_with(name, size, ui_fn, |_| {});
 }
@@ -42,7 +66,7 @@ pub fn snapshot_all_with(
     ui_fn: impl FnMut(&mut egui::Ui),
     prepare: impl FnMut(&mut Harness<'_>),
 ) {
-    snapshot_with_themes(name, size, themes(), ui_fn, prepare);
+    snapshot_with_themes(name, size, snapshot_themes(), ui_fn, prepare);
 }
 
 /// `ui_fn` on a page of `theme`'s background colour, after one run.

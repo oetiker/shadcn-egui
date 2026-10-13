@@ -410,6 +410,56 @@ fn tabs_snapshot() {
     });
 }
 
+/// Every trigger state of one tabs variant: in an enabled list the active,
+/// an inactive and a hovered trigger; a disabled list (its active and its
+/// inactive trigger); and a focused active trigger.
+fn tabs_matrix(variant: shadcn_egui::components::tabs::TabsVariant) -> impl FnMut(&mut egui::Ui) {
+    use shadcn_egui::components::tabs::Tabs;
+    move |ui| {
+        ui.add(Tabs::new(&mut 0, &["Active", "Inactive", "Hovered"]).variant(variant));
+        ui.add_space(24.0);
+        ui.add(
+            Tabs::new(&mut 0, &["Disabled", "Off"])
+                .variant(variant)
+                .enabled(false),
+        );
+        ui.add_space(24.0);
+        let mut sel = 0;
+        let resp = ui.add(Tabs::new(&mut sel, &["Focused", "Next"]).variant(variant));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 0))));
+    }
+}
+
+#[test]
+fn tabs_matrix_default_snapshot() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::tabs::TabsVariant;
+    common::snapshot_all_with(
+        "tabs_matrix_default",
+        egui::vec2(360.0, 220.0),
+        tabs_matrix(TabsVariant::Default),
+        |h| {
+            h.get_by_label("Hovered").hover();
+            h.run();
+        },
+    );
+}
+
+#[test]
+fn tabs_matrix_line_snapshot() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::tabs::TabsVariant;
+    common::snapshot_all_with(
+        "tabs_matrix_line",
+        egui::vec2(360.0, 220.0),
+        tabs_matrix(TabsVariant::Line),
+        |h| {
+            h.get_by_label("Hovered").hover();
+            h.run();
+        },
+    );
+}
+
 #[test]
 fn badge_is_h5_in_both_styles() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
