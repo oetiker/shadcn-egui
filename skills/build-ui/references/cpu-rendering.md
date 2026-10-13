@@ -18,7 +18,7 @@ killer is *how often* you raster, not how long one raster takes.
 | 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 3) |
 | Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
 
-The deferred first-frame font-atlas build (`set_fonts` lands next frame) also
+The deferred first-frame build of the font atlas (`set_fonts` lands next frame) also
 arrives as a repaint request, so ignoring `repaint_delay` leaves the first
 screen with fallback fonts until the user moves the mouse.
 

@@ -1,103 +1,80 @@
-# Icons without an image loader
+# Icons
 
-shadcn uses Lucide icons. Loading them as SVG images would pull `resvg` into
-every consumer, so the registry draws them with egui shapes instead:
-`components/icon.rs` paints path data, and `icongen` (in this plugin's
-`tools/icongen/`) turns SVG files into that data ahead of time. A project
-carries only the icons it lists, as plain Rust constants, and gains no runtime
-dependency.
+shadcn-egui draws icons from vector data compiled into the binary, with no
+image loader and no SVG library at runtime.
 
-## Generate
+## Icon libraries
 
-1. Get the SVGs. Lucide's are in the `lucide-static` npm package, one file per
-   icon, and can be fetched individually (pin the version you note in step 2):
+The five icon libraries of the shadcn create page are one crate each, re-exported
+under `shadcn_egui::icons`:
 
-   ```bash
-   V=1.54.0; mkdir -p assets/lucide
-   for n in mic power monitor x; do
-     curl -sfL -o assets/lucide/$n.svg https://unpkg.com/lucide-static@$V/icons/$n.svg
-   done
-   ```
+| `IconLibrary` | Module | Feature |
+|---|---|---|
+| `Lucide` | `shadcn_egui::icons::lucide` | none, always present |
+| `Hugeicons` | `shadcn_egui::icons::hugeicons` | `icons-hugeicons` |
+| `Tabler` | `shadcn_egui::icons::tabler` | `icons-tabler` |
+| `Phosphor` | `shadcn_egui::icons::phosphor` | `icons-phosphor` |
+| `Remixicon` | `shadcn_egui::icons::remixicon` | `icons-remixicon` |
 
-   Any outline icon set works if its icons are square and drawn with strokes.
+`icons-all` enables every library. Each module holds every icon of its
+library as a `pub const` named after the upstream file name in upper snake
+case (`circle-alert` is `CIRCLE_ALERT`), plus `ALL` and `SLOTS`. Remix Icon
+stays at 4.8.0, its last Apache-2.0 release.
 
-2. Run the generator from the plugin directory (two levels above this skill):
+The library comes from the design: a preset code or `components.json`'s
+`iconLibrary` picks it, and `Preset::icons(IconLibrary::…)` sets it (see
+`presets.md`). Use the icons of the same library in the app's own screens, so
+they match the icons the components draw.
 
-   ```bash
-   cargo run --release --manifest-path <plugin>/tools/icongen/Cargo.toml -- \
-     --out src/ui/icons.rs \
-     --module-path crate::shadcn::components::icon \
-     --provenance "Lucide v1.54.0 (ISC)" \
-     assets/lucide/*.svg
-   ```
+## Drawing an icon
 
-   `--module-path` is where the vendored `icon.rs` lives in the target crate.
-   Each SVG becomes a `pub const` named after its file stem (`circle-alert` →
-   `CIRCLE_ALERT`), plus `ALL` listing every icon. Re-run it whenever the list
-   changes; the output says "do not edit".
+`IconView` is a widget. It is `Metrics.icon` px square, drawn in the
+foreground colour, unless `.size(..)` or `.color(..)` say otherwise:
 
-3. Keep Lucide's ISC license notice with the generated file or the SVGs.
+```rust
+use shadcn_egui::components::icon::IconView;
 
-## Use
-
-```rust,ignore
-ui.add(IconView::new(&icons::MIC));                       // Metrics.icon, foreground
-ui.add(IconView::new(&icons::MIC).size(24.0).color(p.destructive));
-ui.add(Button::new("Mute").icon(&icons::MIC));            // icon + text
-ui.add(Button::new("Close").icon(&icons::X).size(ButtonSize::Icon)); // icon only
-paint_icon(ui.painter(), rect, &icons::MIC, color, t.metrics.icon_stroke); // custom widgets
+fn mic(ui: &mut egui::Ui) {
+    ui.add(IconView::new(&shadcn_egui::icons::lucide::MIC));
+}
 ```
 
-Stroke width is `Metrics.icon_stroke` in icon units (Lucide draws with 2 on a
-24 grid; 1.5–1.6 reads lighter at small sizes) and scales with the icon.
+```rust
+use shadcn_egui::components::badge::Badge;
+use shadcn_egui::components::button::{Button, ButtonSize};
+use shadcn_egui::components::icon::IconView;
+use shadcn_egui::icons::lucide;
+use shadcn_egui::Theme;
 
-## What it does and refuses
-
-- usvg resolves `<circle>`, `<rect rx>`, `<line>`, arcs and transforms into
-  lines and Béziers; the rasteriser flattens curves to sub-pixel accuracy.
-- Open subpaths get round cap discs at both ends. Lucide draws dots as
-  near-zero-length lines (`circle-alert`'s dot is 0.01 units long); without the
-  caps they vanish.
-- Filled shapes are supported in icon crates (`--crate-dir`): icongen
-  flattens them at 0.02 units and triangulates them under their fill rule
-  into the crate's blob, together with the boundary contours. The painter
-  rasterises each icon (strokes and fills) on the CPU into a cached coverage
-  texture, so edges are smooth and an overlapping or faded icon shows no
-  darker seam. `--out` modules hold strokes only and reject fills.
-- Embedded images, text and non-square view boxes are errors, not silent
-  omissions: the generator names the file and stops.
-- Works the same under a CPU rasterizer: the texture is built on the CPU and
-  drawn as one textured quad.
-
-With the crate, every icon of the theme's sets is a const:
-`shadcn_egui::icons::lucide::MIC`, `shadcn_egui::icons::tabler::HOME`
-(feature `icons-tabler`). The components draw `Theme.icons` (the slots).
-
-## Icon crates (maintainers)
-
-The crates `shadcn-egui-icons-<lib>` are generated from the pinned npm
-packages in `tools/icongen/SETS.tsv`; never edit their `src/`:
-
-```bash
-tools/icongen/scripts/generate-crates.sh <scratch dir> [lib...]
+fn icons(ui: &mut egui::Ui) {
+    let t = Theme::current(ui.ctx());
+    ui.add(IconView::new(&lucide::MIC).size(24.0).color(t.palette.destructive));
+    ui.add(Button::new("Mute").icon(&lucide::MIC));
+    ui.add(Button::new("Close").icon(&lucide::X).size(ButtonSize::Icon));
+    ui.add(Badge::new("Live").icon_end(&lucide::RADIO));
+}
 ```
 
-Each crate holds every icon as a `pub const` (a range into one `icons.bin`
-blob), `ALL`, and `SLOTS` for the checkbox tick, select trigger and close
-button. Remix Icon stays at its last Apache-2.0 release. After changing
-icongen, regenerate the test fixtures:
+- Buttons and badges take an icon through `.icon(..)` (before the text) and
+  `.icon_end(..)` (after it). An icon-only button uses `ButtonSize::Icon`
+  (or `IconXs`, `IconSm`, `IconLg`); its text becomes the accessible name.
+- An `IconView` has no accessible name; give it one with
+  `.labelled_by(label.id)` when it carries meaning.
+- A custom-painted widget draws an icon with
+  `shadcn_egui::components::icon::paint_icon(painter, rect, &icon, colour, t.metrics.icon_stroke)`.
+- The stroke width is `Metrics.icon_stroke` in icon units (Lucide draws 2 on
+  a 24 grid) and scales with the icon.
+- Icons are rasterised on the CPU into a cached texture per icon and pixel
+  size, so a translucent colour applies once and very large icons cost a
+  texture each. This works the same under a CPU rasterizer.
 
-```bash
-cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
-  --out crates/shadcn-egui/tests/icons/lucide.rs \
-  --module-path shadcn_egui::components::icon \
-  --provenance "Lucide v1.54.0 (ISC), test fixtures from tools/icongen/tests/fixtures" \
-  tools/icongen/tests/fixtures/{mic,circle-alert,settings,x,power,monitor}.svg
-cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
-  --crate-dir crates/shadcn-egui/tests/icons/fixture \
-  --slots check=mixed,chevron_down=ring,close=x \
-  --provenance "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)" \
-  tools/icongen/tests/fixtures/{big-box,mixed,ring,square-hole,star-evenodd,x}.svg
-```
+## Icon slots
 
-`scripts/check-package-size.sh` fails when any crate packages above 8 MB.
+Components draw a few icons of their own: the checkbox tick and the selected
+Select item (`check`), the Select trigger chevron (`chevron_down`) and the
+Dialog close button (`close`). These come from `Theme::icons`, an
+`IconSlots` value. A preset fills the slots from its icon library's `SLOTS`,
+so switching the library changes these icons too. Without a preset, a theme
+uses Lucide's slots; `theme.icons(shadcn_egui::icons::lucide::SLOTS)` sets
+them explicitly, and `shadcn_egui::icons::slots(IconLibrary::…)` returns a
+library's slots, or `None` when its feature is off.

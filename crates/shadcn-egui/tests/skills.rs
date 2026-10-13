@@ -126,3 +126,66 @@ fn every_fence_has_a_language() {
         }
     }
 }
+
+const COMPONENT_MAP: &str = include_str!("../../../skills/build-ui/references/component-map.md");
+const MANIFEST: &str = include_str!("../Cargo.toml");
+
+#[test]
+fn component_map_has_every_component() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/components");
+    for e in std::fs::read_dir(dir).unwrap() {
+        let f = e.unwrap().file_name().into_string().unwrap();
+        let Some(module) = f.strip_suffix(".rs") else {
+            continue;
+        };
+        if ["mod", "shared", "icon_raster"].contains(&module) {
+            continue;
+        }
+        let path = format!("shadcn_egui::components::{module}::");
+        assert!(
+            COMPONENT_MAP.contains(&path),
+            "component-map.md has no row for {module}"
+        );
+    }
+}
+
+#[test]
+fn skills_name_only_existing_features() {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");
+    let features: Vec<&str> = MANIFEST
+        .lines()
+        .filter_map(|l| l.split_once(" = [").map(|(k, _)| k.trim()))
+        .collect();
+    // Tailwind's font utilities, which styles.md maps to recipe fields.
+    let tailwind = [
+        "font-thin",
+        "font-extralight",
+        "font-light",
+        "font-normal",
+        "font-medium",
+        "font-semibold",
+        "font-bold",
+        "font-extrabold",
+        "font-black",
+        "font-sans",
+        "font-serif",
+        "font-mono",
+    ];
+    for f in skill_files() {
+        let text = std::fs::read_to_string(format!("{root}{f}")).unwrap();
+        for word in text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')) {
+            if tailwind.contains(&word) {
+                continue;
+            }
+            let named = ["font-", "fonts-", "icons-"]
+                .iter()
+                .any(|p| word.starts_with(p));
+            if named && word.len() > 6 && !word.ends_with('-') {
+                assert!(
+                    features.contains(&word),
+                    "{f} names feature `{word}`, which Cargo.toml lacks"
+                );
+            }
+        }
+    }
+}

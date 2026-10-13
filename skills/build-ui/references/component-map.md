@@ -1,30 +1,40 @@
-# shadcn component → egui widget
+# shadcn component to egui widget
 
-| shadcn | module widget |
+Every widget lives in `shadcn_egui::components::<module>`. Builders go
+through `ui.add(..)` and return an `egui::Response`. The markers are the
+`cn-*` classes of the style CSS whose recipes the widget reads.
+
+| shadcn | shadcn-egui |
 |---|---|
-| `<Button variant size>` | `components::button::Button::new(t).variant(..).size(..)` via `ui.add(..)` — variants Default/Outline/Secondary/Ghost/Destructive/Link; sizes Xs/Sm/Default/Lg/Icon/IconXs/IconSm/IconLg; `.enabled(..)`, `.expanded(..)` (aria-expanded), `.invalid(..)` (aria-invalid), `.has_popup(..)` (aria-haspopup). Markers: `cn-button`, `cn-button-variant-*`, `cn-button-size-*` |
-| `<Input>` | `components::input::Input::new(&mut s).hint(..).password(..).max_width(..)` via `ui.add(..)`; `.enabled(..)`, `.invalid(..)` (aria-invalid). Marker: `cn-input` |
-| `<Label>` | `components::label::label(ui, "..")`, or `Label::new("..").enabled(..)` via `ui.add(..)` (`peer-disabled:opacity-50`). Marker: `cn-label` |
-| description text | `components::label::description(ui, "..")` — reads `cn-card-description` (no marker of its own) |
-| `<Card size>` + Header/Title/Description/Action/Content/Footer | `layout::card(ui, |ui| ...)` or `components::card::Card::new().size(CardSize::Sm).footer(|ui| ..).show(ui, |ui| ..)`; inside: `card_header(ui, title, desc)`, `card_header_with_action(ui, title, desc, |ui| ..)`, `card_content(ui, |ui| ..)`, `card_title`, `card_description`. The card fills the available width. Markers: `cn-card`, `cn-card-header`, `cn-card-title`, `cn-card-description`, `cn-card-action`, `cn-card-content`, `cn-card-footer` |
-| `<Tabs>` + List/Trigger | `components::tabs::tab_bar(ui, &mut active, &[..])` or `ui.add(Tabs::new(&mut active, &[..]).variant(TabsVariant::Line).enabled(..))`; content sits `Tabs::content_gap(ui)` below. Horizontal only. Markers: `cn-tabs`, `cn-tabs-list`, `cn-tabs-list-variant-default`, `cn-tabs-list-variant-line`, `cn-tabs-trigger`, `cn-tabs-content` |
-| `<Switch size>` | `components::switch::toggle(ui, &mut on)` or `ui.add(Switch::new(&mut on).size(SwitchSize::Sm).enabled(..).invalid(..))`. Markers: `cn-switch`, `cn-switch-thumb` |
-| `<Slider orientation>` | `ui.add(Slider::new(&mut v, 0.0..=100.0).step(5.0).orientation(SliderOrientation::Vertical).enabled(..).label(..))`. One thumb. Markers: `cn-slider`, `cn-slider-track`, `cn-slider-range`, `cn-slider-thumb` |
-| `<Checkbox>` | `components::checkbox::checkbox(ui, &mut checked)` or `ui.add(Checkbox::new(&mut checked).enabled(..).invalid(..))`. Markers: `cn-checkbox`, `cn-checkbox-indicator`. No indeterminate state |
-| `<Select>` + Trigger/Content/Item | `ui.add(Select::new("id", &mut idx, &[..]).size(SelectSize::Sm).placeholder(..).enabled(..).invalid(..).width(..))`, or `select(ui, "id", &mut idx, &[..])`. Markers: `cn-select-trigger`, `cn-select-trigger-icon`, `cn-select-content`, `cn-select-group` (its padding frames the rows), `cn-select-item`, `cn-select-item-indicator`. Not offered (options-list API): `cn-select-label`, `cn-select-separator`, per-option disabled; `cn-select-scroll-*` resolved but unused (an egui `ScrollArea` scrolls) |
-| `<Separator>` | `components::separator::separator(ui)`, `separator_vertical(ui)`. No marker: base classes only |
-| `<Badge variant>` | `components::badge::Badge::new(t).variant(..).icon(..).icon_end(..)` via `ui.add(..)`, or `badge(ui, t, v)` — variants Default/Secondary/Destructive/Outline/Ghost/Link. Markers: `cn-badge`, `cn-badge-variant-*` |
-| `<Dialog>` + Header/Title/Description/Footer | `components::dialog::Dialog::new("id", "Title").description(..).show_close_button(..).show(ctx, &mut open, \|ui\| { ..; dialog::footer(ui, \|ui\| { primary; secondary }) })` — closes on Esc, backdrop, the close button; footer runs right to left, and in nova its muted strip bleeds to the panel edges. Width is the style's `sm:max-w-*`, capped to the window minus 32. Overlay blur is not drawn. Markers: `cn-dialog-overlay`, `cn-dialog-content`, `cn-dialog-close`, `cn-dialog-header`, `cn-dialog-footer`, `cn-dialog-title`, `cn-dialog-description` |
-| `<Popover>` + Trigger/Content | `let t = ui.add(Button::..); components::popover::Popover::new(&t).show(\|ui\| ..)` — click toggles, Esc or click outside closes; `popover::popover_header(ui, title, description)` (content `popover_content`, `popover_header`, `popover_title`, `popover_description`) |
-| `<Tooltip>` | `components::tooltip::tooltip(ui.add(..), "text")` (content `tooltip_content`, arrow `tooltip_arrow`) |
-| Lucide `<Mic />` | `components::icon::IconView::new(&icons::MIC)` via `ui.add(..)`; `.size(..)`, `.color(..)`; data from `icongen` (see `references/icons.md`) |
-| `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&icons::MIC)` (`data-icon="inline-start"`), `.icon_end(..)` (`inline-end`); icon-only: `.size(ButtonSize::Icon)`, the text becomes the accessible name |
-| `<Label for="x">` + control | Name the control after the label: `let l = label(ui, "Email"); ui.add(Input::new(&mut s)).labelled_by(l.id);` (egui's `Response::labelled_by`). Switch, Checkbox and Select have no accessible name of their own (a Select reports its shown text as the value), so do this for every one of them |
+| `<Button variant size>` | `shadcn_egui::components::button::Button::new(text)` with `.variant(ButtonVariant::…)` (`Default`, `Outline`, `Secondary`, `Ghost`, `Destructive`, `Link`), `.size(ButtonSize::…)` (`Xs`, `Sm`, `Default`, `Lg`, `Icon`, `IconXs`, `IconSm`, `IconLg`), `.enabled(..)`, `.expanded(..)` (aria-expanded), `.invalid(..)` (aria-invalid), `.has_popup(..)` (aria-haspopup). Markers: `cn-button`, `cn-button-variant-*`, `cn-button-size-*` |
+| `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&MIC)` (`data-icon="inline-start"`), `.icon_end(&MIC)` (`inline-end`). Icon only: `.size(ButtonSize::Icon)`; the text becomes the accessible name |
+| `<Badge variant>` | `shadcn_egui::components::badge::Badge::new(text)` with `.variant(BadgeVariant::…)` (`Default`, `Secondary`, `Destructive`, `Outline`, `Ghost`, `Link`), `.icon(..)`, `.icon_end(..)`; or `badge(ui, text, variant)`. Markers: `cn-badge`, `cn-badge-variant-*` |
+| `<Input>` | `shadcn_egui::components::input::Input::new(&mut text)` with `.hint(..)`, `.password(..)`, `.max_width(..)`, `.id_source(..)`, `.enabled(..)`, `.invalid(..)` (aria-invalid). Marker: `cn-input` |
+| `<Label>` | `shadcn_egui::components::label::label(ui, text)`, or `Label::new(text).enabled(..)` (`peer-disabled:opacity-50`). Marker: `cn-label` |
+| description text | `shadcn_egui::components::label::description(ui, text)`; reads `cn-card-description` (no marker of its own) |
+| `<Label for="x">` + control | Name the control after the label: `let l = label(ui, "Email"); ui.add(Input::new(&mut s)).labelled_by(l.id);` (egui's `Response::labelled_by`). Switch, Checkbox and Select have no accessible name of their own (a Select reports its shown text as the value), so do this for each of them |
+| `<Card size>` + Header/Title/Description/Action/Content/Footer | `shadcn_egui::components::card::Card::new().size(CardSize::Sm).footer(\|ui\| ..).show(ui, \|ui\| ..)`, or `shadcn_egui::layout::card(ui, \|ui\| ..)`. Inside: `card_header(ui, title, description)`, `card_header_with_action(ui, title, description, \|ui\| ..)`, `card_content(ui, \|ui\| ..)`, `card_title(ui, text)`, `card_description(ui, text)`. The card fills the available width. Markers: `cn-card`, `cn-card-header`, `cn-card-title`, `cn-card-description`, `cn-card-action`, `cn-card-content`, `cn-card-footer` |
+| `<Tabs>` + List/Trigger | `shadcn_egui::components::tabs::tab_bar(ui, &mut active, &labels)`, or `Tabs::new(&mut active, &labels)` with `.variant(TabsVariant::Line)`, `.enabled(..)`; the content sits `Tabs::content_gap(ui)` below. Horizontal only (`TabsOrientation::Horizontal`). Markers: `cn-tabs`, `cn-tabs-list`, `cn-tabs-list-variant-default`, `cn-tabs-list-variant-line`, `cn-tabs-trigger`, `cn-tabs-content` |
+| `<Switch size>` | `shadcn_egui::components::switch::toggle(ui, &mut on)`, or `Switch::new(&mut on)` with `.size(SwitchSize::Sm)`, `.enabled(..)`, `.invalid(..)`. Markers: `cn-switch`, `cn-switch-thumb` |
+| `<Checkbox>` | `shadcn_egui::components::checkbox::checkbox(ui, &mut checked)`, or `Checkbox::new(&mut checked)` with `.enabled(..)`, `.invalid(..)`. No indeterminate state. Markers: `cn-checkbox`, `cn-checkbox-indicator` |
+| `<Slider orientation>` | `shadcn_egui::components::slider::Slider::new(&mut v, 0.0..=100.0)` with `.step(5.0)`, `.orientation(SliderOrientation::Vertical)`, `.enabled(..)`, `.label(..)`. One thumb. Markers: `cn-slider`, `cn-slider-track`, `cn-slider-range`, `cn-slider-thumb` |
+| `<Select>` + Trigger/Content/Item | `shadcn_egui::components::select::Select::new("id", &mut index, &options)` with `.size(SelectSize::Sm)`, `.placeholder(..)`, `.enabled(..)`, `.invalid(..)`, `.width(..)`; or `select(ui, "id", &mut index, &options)`, which returns whether the choice changed. Markers: `cn-select-trigger`, `cn-select-trigger-icon`, `cn-select-content`, `cn-select-group` (its padding frames the rows), `cn-select-item`, `cn-select-item-indicator`. Not offered (options-list API): `cn-select-label`, `cn-select-separator`, per-option disabled; `cn-select-scroll-*` are resolved but unused (an egui `ScrollArea` scrolls) |
+| `<Separator>` | `shadcn_egui::components::separator::separator(ui)`, `separator_vertical(ui)`. No marker: base classes only |
+| `<Dialog>` + Header/Title/Description/Footer | `shadcn_egui::components::dialog::Dialog::new("id", "Title")` with `.description(..)`, `.width(..)`, `.backdrop(..)`, `.show_close_button(..)`, then `.show(ctx, &mut open, \|ui\| { ..; footer(ui, \|ui\| { primary; secondary }) })`. Closes on Esc, a backdrop click or the close button; the footer runs right to left, and in nova its muted strip reaches the panel edges. The width is the style's `sm:max-w-*`, capped to the window minus 32. The overlay blur is not drawn. Markers: `cn-dialog-overlay`, `cn-dialog-content`, `cn-dialog-close`, `cn-dialog-header`, `cn-dialog-footer`, `cn-dialog-title`, `cn-dialog-description` |
+| `<Popover>` + Trigger/Content | `let t = ui.add(Button::new("Open")); shadcn_egui::components::popover::Popover::new(&t).width(..).show(\|ui\| ..)`. A click on the trigger toggles it; Esc or a click outside closes it. `popover_header(ui, title, description)` inside. Markers: `cn-popover-content`, `cn-popover-header`, `cn-popover-title`, `cn-popover-description` |
+| `<Tooltip>` | `shadcn_egui::components::tooltip::tooltip(ui.add(..), "text")`. Markers: `cn-tooltip-content`, `cn-tooltip-arrow` |
+| Lucide `<Mic />` | `shadcn_egui::components::icon::IconView::new(&shadcn_egui::icons::lucide::MIC)` with `.size(..)`, `.color(..)`; `paint_icon(painter, rect, icon, color, stroke)` for custom widgets. See `icons.md` |
 
-Not yet ported (add when needed): RadioGroup, Tags/Chips, Menubar, Table,
-DropdownMenu, Accordion, gradients. Build them as new
-files under `components/` following the custom-paint pattern in `button.rs`
-(floating components like Menubar/Dropdown/Dialog can lean on egui's native
-`menu`/`Area`/`Window` primitives, then theme them with the tokens). After it
-renders correctly, follow SKILL.md Part B and **offer to open a PR upstream** so
-the registry grows for everyone.
+Not yet ported: RadioGroup, Tags or Chips, Menubar, Table, DropdownMenu,
+Accordion, gradients. Port a missing one with `shadcn-egui:port-component`
+before using it; do not paint it ad hoc in the screen.
+
+```rust
+use shadcn_egui::components::badge::{Badge, BadgeVariant};
+use shadcn_egui::components::switch::Switch;
+
+fn row(ui: &mut egui::Ui, on: &mut bool) {
+    ui.add(Badge::new("Beta").variant(BadgeVariant::Secondary));
+    ui.add(Switch::new(on));
+}
+```
