@@ -14,7 +14,7 @@
 
 - Every cargo command gets `--jobs 4`; every `cargo test` also `-- --test-threads 4`.
 - Every `cargo test` and every benchmark run goes under a memory cap: `systemd-run --user --scope -p MemoryMax=4G -- <command>`.
-- No `/tmp`. Scratch files and upstream checkouts go under `/scratch/oetiker/claude-tmp/`.
+- No `/tmp`. Scratch files and upstream checkouts go under `<scratch>`, a scratch directory outside the repository; worktrees go under `<worktrees>`; `<repo>` is the primary checkout.
 - Generated files are never edited by hand: `crates/shadcn-egui/src/style/{generated,vega,nova,maia,lyra,mira,luma,rhea}.rs`, `tools/stylegen/reports/*.md`. Fix the generator and regenerate.
 - Snapshot rule (every PR B task): all snapshots stay identical except the spec's "Known upstream disagreements" (luma and rhea tabs: no `Ring` border on focus, no `Input` border on the dark active tab). Any other snapshot difference is a STOP: show the maintainer the baseline PNG and the `.new.png` (and `.diff.png`) kittest wrote, wait for a decision, and only after approval add the case to the spec's "Known upstream disagreements" list and re-baseline with `UPDATE_SNAPSHOTS=1`.
 - Upstream wins: where upstream and today's code disagree, the generated data is right; the STOP rule above decides whether a visible difference is accepted.
@@ -29,11 +29,11 @@
 ### Upstream checkouts (PR B, stylegen tasks)
 
 ```bash
-SVELTE=/scratch/oetiker/claude-tmp/upstream/shadcn-svelte
-REACT=/scratch/oetiker/claude-tmp/upstream/shadcn-ui
+SVELTE=<scratch>/upstream/shadcn-svelte
+REACT=<scratch>/upstream/shadcn-ui
 ```
 
-Task B0 creates both (see `skills/port-component/references/upstream.md`): shadcn-svelte at the commit in `tools/stylegen/PIN` (`493481fa`), shadcn-ui at `tools/stylegen/PIN_REACT` (`c2a67849`). A pinned shadcn-svelte checkout may already exist at `/scratch/oetiker/claude-tmp/claude-1003/-home-oetiker-checkouts-shadcn-egui/e843c790-fb3e-490e-a3c8-ce246f23995a/scratchpad/up/svelte`; it is session scratch and may vanish, so B0 clones its own.
+Task B0 creates both (see `skills/port-component/references/upstream.md`): shadcn-svelte at the commit in `tools/stylegen/PIN` (`493481fa`), shadcn-ui at `tools/stylegen/PIN_REACT` (`c2a67849`).
 
 ### Commands used in many tasks
 
@@ -109,7 +109,7 @@ PR B, crate (`crates/shadcn-egui/`):
 
 # Part 1: Pull request A (snapshot coverage)
 
-PR A is built on the current branch `feat/recipe-completeness` in `/scratch/oetiker/claude-worktrees/shadcn-egui-recipes`, which already holds the spec and this plan. It changes tests only.
+PR A is built on the current branch `feat/recipe-completeness` in `<worktrees>/shadcn-egui-recipes`, which already holds the spec and this plan. It changes tests only.
 
 ### Task A1: Seven-style snapshot theme list
 
@@ -349,9 +349,9 @@ PR B does not start until PR A is merged into `main`.
 - [ ] **Step 1: Create the PR B worktree from the merged main**
 
 ```bash
-git -C /home/oetiker/checkouts/shadcn-egui fetch origin
-git -C /home/oetiker/checkouts/shadcn-egui worktree add /scratch/oetiker/claude-worktrees/shadcn-egui-recipe-data -b feat/recipe-data origin/main
-cd /scratch/oetiker/claude-worktrees/shadcn-egui-recipe-data
+git -C <repo> fetch origin
+git -C <repo> worktree add <worktrees>/shadcn-egui-recipe-data -b feat/recipe-data origin/main
+cd <worktrees>/shadcn-egui-recipe-data
 git log --oneline -3
 ls crates/shadcn-egui/tests/snapshots | grep -c tabs_matrix
 ```
@@ -360,9 +360,9 @@ Expected: the log shows PR A's merge; the count is 28. Every later PR B command 
 - [ ] **Step 2: Clone the pinned upstream checkouts**
 
 ```bash
-mkdir -p /scratch/oetiker/claude-tmp/upstream
-SVELTE=/scratch/oetiker/claude-tmp/upstream/shadcn-svelte
-REACT=/scratch/oetiker/claude-tmp/upstream/shadcn-ui
+mkdir -p <scratch>/upstream
+SVELTE=<scratch>/upstream/shadcn-svelte
+REACT=<scratch>/upstream/shadcn-ui
 git clone --filter=blob:none https://github.com/huntabyte/shadcn-svelte "$SVELTE"
 git -C "$SVELTE" checkout "$(cat tools/stylegen/PIN)"
 git clone --filter=blob:none https://github.com/shadcn-ui/ui "$REACT"
