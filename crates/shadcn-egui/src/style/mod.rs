@@ -71,13 +71,13 @@ mod tests {
     fn generated_important_rank_is_rule_important() {
         let luma = Style::luma();
         let r = luma
-            .tabs_trigger
-            .border_color
+            .badge
+            .icon_size
             .rules
             .iter()
-            .find(|r| r.when == When::ALWAYS && r.value == Paint::Role(Role::Transparent, 1.0))
-            .expect("luma cn-tabs-trigger border-transparent!");
-        assert_eq!(r.rank, Rule::<Paint>::IMPORTANT);
+            .find(|r| r.when == When::ALWAYS && r.value == 12.0)
+            .expect("luma cn-badge [&>svg]:size-3!");
+        assert_eq!(r.rank, Rule::<f32>::IMPORTANT);
     }
 
     #[test]

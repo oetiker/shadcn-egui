@@ -160,7 +160,8 @@ fn part_of(style_name: &str, part: &str) -> Part {
         &lines,
     )
     .unwrap();
-    parts(&style(style_name), &comps)
+    parts(style_name, &style(style_name), &comps)
+        .unwrap()
         .into_iter()
         .find(|p| p.name == part)
         .unwrap_or_else(|| panic!("{part}"))
@@ -314,16 +315,6 @@ fn highlighted_item_and_placeholder_text_have_their_states() {
 }
 
 #[test]
-fn luma_trigger_border_stays_important() {
-    let p = part_of("luma", "cn-tabs-trigger");
-    assert!(p
-        .marker
-        .decls
-        .iter()
-        .any(|d| d.field == Field::BorderColor && d.all == 0 && d.rank == 1 << 127));
-}
-
-#[test]
 fn every_exported_style_translates_every_part() {
     for s in ["vega", "nova", "maia", "lyra", "mira", "luma", "rhea"] {
         let root = env!("CARGO_MANIFEST_DIR");
@@ -333,7 +324,7 @@ fn every_exported_style_translates_every_part() {
             &lines,
         )
         .unwrap();
-        for p in parts(&style(s), &comps) {
+        for p in parts(s, &style(s), &comps).unwrap() {
             assert!(
                 p.marker.unsupported.is_empty(),
                 "{s} {}: {:?}",

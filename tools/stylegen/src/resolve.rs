@@ -139,12 +139,113 @@ pub const EXCEPTIONS: &[(&str, &str, &str)] = &[(
     "bits-ui renders the slider thumb as a <span>, where `disabled:` never matches",
 )];
 
+/// A design correction's edit of a part's class string.
+#[derive(Clone, Copy, Debug)]
+pub enum Edit {
+    /// Replace the class `from` with `to`; `from` must be in the string.
+    Replace(&'static str, &'static str),
+    /// Add classes at the end; none of them may be in the string already.
+    Append(&'static [&'static str]),
+}
+
+/// A design correction (spec, "Design corrections"): where upstream's
+/// string loses information the user needs, the crate edits it, with the
+/// maintainer's approval.
+#[derive(Clone, Copy, Debug)]
+pub struct Correction {
+    /// The spec's name for it: `C1`.
+    pub id: &'static str,
+    /// The styles it applies to; `None` for every style.
+    pub styles: Option<&'static [&'static str]>,
+    /// As in `markers.txt`.
+    pub part: &'static str,
+    pub edit: Edit,
+    pub reason: &'static str,
+}
+
+/// Applied to a part's full class string after marker expansion and before
+/// translation, in list order.
+pub const CORRECTIONS: &[Correction] = &[
+    Correction {
+        id: "C1",
+        styles: Some(&["luma", "rhea"]),
+        part: "cn-tabs-trigger",
+        edit: Edit::Replace("border-transparent!", "border-transparent"),
+        reason: "the important border hides the focus border and leaves the dark active tab marked only by a faint fill; the base classes' `Ring` and `Input` borders win again",
+    },
+    Correction {
+        id: "C2",
+        styles: None,
+        part: "cn-tabs-trigger",
+        edit: Edit::Append(&[
+            "group-data-[variant=line]/tabs-list:focus-visible:ring-0",
+            "group-data-[variant=line]/tabs-list:focus-visible:outline-0",
+            "group-data-[variant=line]/tabs-list:focus-visible:border-transparent",
+            "group-data-[variant=line]/tabs-list:focus-visible:after:opacity-100",
+            "group-data-[variant=line]/tabs-list:focus-visible:after:bg-ring",
+        ]),
+        reason: "a line list draws no pills, so a focused trigger shows its underline in `Ring` instead of a pill-shaped ring, outline and border",
+    },
+];
+
+/// `classes` (one part of one style, expanded) with every correction for
+/// them applied, and one report line per applied correction. An edit that
+/// does not match the string is an error: a pin bump must not drop a
+/// correction silently.
+pub fn correct(
+    corrections: &[Correction],
+    style: &str,
+    part: &str,
+    mut classes: Vec<String>,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    let mut applied = Vec::new();
+    for c in corrections {
+        if c.part != part || c.styles.is_some_and(|s| !s.contains(&style)) {
+            continue;
+        }
+        match c.edit {
+            Edit::Replace(from, to) => {
+                let i = classes.iter().position(|x| x == from).ok_or_else(|| {
+                    format!(
+                        "{} ({style} {part}): `{from}` is not in the class string",
+                        c.id
+                    )
+                })?;
+                classes[i] = to.to_owned();
+                applied.push(format!(
+                    "corrected ({}) `{from}` to `{to}`: {}",
+                    c.id, c.reason
+                ));
+            }
+            Edit::Append(add) => {
+                if let Some(x) = add.iter().find(|a| classes.iter().any(|x| x == *a)) {
+                    return Err(format!(
+                        "{} ({style} {part}): `{x}` is in the class string already",
+                        c.id
+                    ));
+                }
+                classes.extend(add.iter().map(|a| (*a).to_owned()));
+                let list: Vec<String> = add.iter().map(|a| format!("`{a}`")).collect();
+                applied.push(format!(
+                    "corrected ({}) added {}: {}",
+                    c.id,
+                    list.join(" "),
+                    c.reason
+                ));
+            }
+        }
+    }
+    Ok((classes, applied))
+}
+
 /// One part of one style, translated.
 #[derive(Debug)]
 pub struct Part {
     /// As in `markers.txt`: `cn-tabs-trigger`, `slot:separator`.
     pub name: String,
     pub marker: Marker,
+    /// One line per design correction applied to the part.
+    pub corrections: Vec<String>,
 }
 
 /// A part's classes for one style: its marker replaced in place by the
@@ -167,14 +268,21 @@ pub fn expand(component: &[String], part: &str, css: &[(String, Vec<String>)]) -
         .collect()
 }
 
-/// Translate every part for one style, in `components` order.
-pub fn parts(css: &[(String, Vec<String>)], components: &[(String, Vec<String>)]) -> Vec<Part> {
+/// Translate every part for one style, in `components` order, with the
+/// style's [`CORRECTIONS`] applied.
+pub fn parts(
+    style: &str,
+    css: &[(String, Vec<String>)],
+    components: &[(String, Vec<String>)],
+) -> Result<Vec<Part>, String> {
     let vars = collect_vars(css);
     components
         .iter()
         .map(|(name, classes)| {
             let mut dropped = Vec::new();
-            let kept: Vec<String> = expand(classes, name, css)
+            let (full, corrections) =
+                correct(CORRECTIONS, style, name, expand(classes, name, css))?;
+            let kept: Vec<String> = full
                 .into_iter()
                 .filter(|c| {
                     let hit = EXCEPTIONS.iter().find(|(p, v, _)| {
@@ -191,10 +299,11 @@ pub fn parts(css: &[(String, Vec<String>)], components: &[(String, Vec<String>)]
                 .collect();
             let mut marker = translate(&kept, &vars);
             marker.ignored.extend(dropped);
-            Part {
+            Ok(Part {
                 name: name.clone(),
                 marker,
-            }
+                corrections,
+            })
         })
         .collect()
 }

@@ -422,6 +422,7 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-tabs-trigger`
 
+- corrected (C2) added `group-data-[variant=line]/tabs-list:focus-visible:ring-0` `group-data-[variant=line]/tabs-list:focus-visible:outline-0` `group-data-[variant=line]/tabs-list:focus-visible:border-transparent` `group-data-[variant=line]/tabs-list:focus-visible:after:opacity-100` `group-data-[variant=line]/tabs-list:focus-visible:after:bg-ring`: a line list draws no pills, so a focused trigger shows its underline in `Ring` instead of a pill-shaped ring, outline and border
 - ignored `relative`: flex/grid/position keyword; egui layout is done by the component
 - ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
 - ignored `flex-1`: flex/grid/position keyword; egui layout is done by the component

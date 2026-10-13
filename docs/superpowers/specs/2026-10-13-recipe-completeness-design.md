@@ -40,6 +40,14 @@ style does not set that property; the component then uses its base value."
 - Where upstream and today's code disagree, upstream wins. Each such case is
   listed below, shown to the maintainer as a before/after snapshot and
   re-baselined only with their approval.
+- Exception: a design correction. Where upstream's merged string loses
+  information the user needs (a state that no longer shows, a focus
+  indicator that does not fit the part), the crate corrects the class
+  string in one hand-maintained list, `CORRECTIONS` in stylegen (see
+  "Design corrections"). Each entry names the styles, the part, the class
+  edit and the reason; the style reports show it; an app can still
+  override the result with `Rule::important`. A correction needs the
+  maintainer's approval like any accepted disagreement.
 - Snapshots cover all components in all seven exported styles, light and
   dark, before any change.
 - The work lands as two pull requests: A (snapshot coverage) and B
@@ -55,7 +63,28 @@ Found so far; the plan adds every further snapshot difference here.
   (`!important`), which beats the base classes `focus-visible:border-ring`
   and `dark:data-active:border-input`. Today `tabs.rs:268-284` draws a
   `Ring` border on focus and an `Input` border on the dark active tab in
-  these styles. After the change they draw no border there.
+  these styles. Upstream draws no border there; in dark the active tab is
+  then marked only by `bg-input/30`, too weak. Rejected by the maintainer:
+  corrected by C1 below, so these styles keep today's borders.
+
+## Design corrections
+
+Applied by stylegen to the part's class string after step 3 of "Building
+the string" and before translation, listed in `CORRECTIONS`
+(`tools/stylegen/src/resolve.rs`, next to `EXCEPTIONS`), shown in
+`tools/stylegen/reports/<style>.md` under the part.
+
+- **C1, luma and rhea, `tabs_trigger`:** `border-transparent!` becomes
+  `border-transparent`. The base classes `focus-visible:border-ring` and
+  `dark:data-active:border-input` win again: a `Ring` border on focus, an
+  `Input` border on the dark active trigger, as in the PR A baseline.
+- **C2, all styles, line variant, `tabs_trigger` and its `after` part:**
+  the base classes put a rounded pill ring (`focus-visible:ring-[3px]
+  ring-ring/50 outline-1 outline-ring border-ring`) around a focused
+  trigger whose list draws no pills, next to the underline. In a line
+  list a focused trigger draws no ring, no outline and no focus border;
+  instead its underline shows (opacity 1) in `Ring`, for an active and an
+  inactive trigger alike. The default variant keeps upstream's ring.
 
 ## Values that are fixed in code today
 

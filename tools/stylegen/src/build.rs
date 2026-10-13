@@ -28,7 +28,7 @@ pub fn styles(tool: &Path, pin: &str) -> Result<Styles, String> {
     let mut per_style: Vec<(&str, Vec<Part>)> = Vec::new();
     for style in STYLES {
         let css = parse_style_css(&read(&format!("tests/fixtures/style-{style}.css"))?);
-        per_style.push((style, parts(&css, &components)));
+        per_style.push((style, parts(style, &css, &components)?));
     }
     let all: Vec<&[Part]> = per_style.iter().map(|(_, p)| p.as_slice()).collect();
     let fields = emit::fields(&all);

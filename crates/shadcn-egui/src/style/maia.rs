@@ -1345,6 +1345,7 @@ fn tabs_trigger() -> Recipe {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
                 Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: 1 << 20, value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20), value: Paint::Role(Role::Transparent, 1.0) },
                 Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 30) | (1 << 52), value: Paint::Role(Role::Input, 1.0) },
                 Rule { when: When::new(State::DARK.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30) | (1 << 52), value: Paint::Role(Role::Transparent, 1.0) },
             ],
@@ -1353,6 +1354,7 @@ fn tabs_trigger() -> Recipe {
             base: None,
             rules: vec![
                 Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: 1 << 20, value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20), value: 0.0 },
             ],
         },
         ring_color: Prop {
@@ -1365,6 +1367,7 @@ fn tabs_trigger() -> Recipe {
             base: None,
             rules: vec![
                 Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: 1 << 20, value: 1.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20), value: 0.0 },
             ],
         },
         outline_color: Prop {
@@ -1423,10 +1426,16 @@ fn tabs_trigger_after() -> Recipe {
                 Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 6, value: 0.0 },
             ],
         },
-        bg: Prop::fixed(Paint::Role(Role::Foreground, 1.0)),
+        bg: Prop {
+            base: Some(Paint::Role(Role::Foreground, 1.0)),
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20), value: Paint::Role(Role::Ring, 1.0) },
+            ],
+        },
         opacity: Prop {
             base: Some(0.0),
             rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20), value: 1.0 },
                 Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30), value: 1.0 },
             ],
         },
