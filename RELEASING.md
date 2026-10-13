@@ -133,6 +133,8 @@ machine: see "Publishing to crates.io".
 
 ## The Claude Code plugin
 
-`.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` stay at
-version `0.3.2` and are not part of the crate release. Do not bump them
-until the skill is rewritten for the crate.
+`.claude-plugin/plugin.json` and the plugin entry in
+`.claude-plugin/marketplace.json` carry the crate version, and the
+marketplace entry installs from the tag `v<version>`. Create release PR
+bumps all three through `version_files` in `.github/repo-infra.json`. Users
+get a new skill version only with a release.

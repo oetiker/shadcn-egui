@@ -102,9 +102,22 @@ bundled licence.
 
 ## The Claude Code plugin
 
-This repository also hosts the `egui-shadcn` Claude Code plugin, which
-copied the 0.3 component code into projects. It stays at 0.3.2 until its
-skill is rewritten for this crate.
+This repository also hosts the `shadcn-egui` Claude Code plugin. Its skill
+`build-ui` builds or restyles an egui UI with this crate, and
+`port-component` ports a shadcn component the crate does not have yet, into
+your app or into this repository.
+
+```text
+/plugin marketplace add oetiker/shadcn-egui
+/plugin install shadcn-egui@shadcn-egui
+```
+
+An install of the older `egui-shadcn` plugin is removed first:
+
+```text
+/plugin uninstall egui-shadcn@egui-shadcn-dev
+/plugin marketplace remove egui-shadcn-dev
+```
 
 ## Development
 
