@@ -1,0 +1,327 @@
+//! Class strings of the shadcn-svelte component sources
+//! (`docs/src/lib/registry/ui/<dir>/*.svelte`), and the string of each part.
+
+use crate::markers::{is_cli_marker, MarkerLine};
+use std::path::Path;
+
+/// A part a component file draws in several `{#if}` branches:
+/// `(file under ui/, marker, occurrence the crate draws (0-based), why)`.
+pub const BRANCHES: &[(&str, &str, usize, &str)] = &[(
+    "input/input.svelte",
+    "cn-input",
+    1,
+    "input.rs draws a text field (egui TextEdit), never type=\"file\": the {:else} branch",
+)];
+
+/// Every class string in a component source, in source order: the string
+/// arguments of each `cn(…)` joined with a space, the `base` string and each
+/// string in `variants` of a `tv({…})`, and each static `class="…"`, also
+/// on a nested component. HTML comments and `//` comments are skipped, and
+/// so are non-string arguments (`className`, `arrowClasses`).
+pub fn class_strings(src: &str) -> Vec<String> {
+    let src = strip_html_comments(src);
+    let mut found: Vec<(usize, String)> = Vec::new();
+    for (at, args) in calls(&src, "cn") {
+        found.push((at, top_level_strings(args).join(" ")));
+    }
+    for (at, args) in calls(&src, "tv") {
+        for s in tv_strings(args) {
+            found.push((at, s));
+        }
+    }
+    let mut from = 0;
+    while let Some(i) = src[from..].find("class=\"") {
+        let start = from + i + "class=\"".len();
+        let Some(len) = src[start..].find('"') else {
+            break;
+        };
+        found.push((start, src[start..start + len].to_owned()));
+        from = start + len + 1;
+    }
+    // Stable: the strings of one `tv` keep their order.
+    found.sort_by_key(|(at, _)| *at);
+    found
+        .into_iter()
+        .map(|(_, s)| normalise(&s))
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Whitespace collapsed to single spaces.
+pub fn normalise(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `s` without the markers only the shadcn CLI rewrites.
+pub fn strip_cli_markers(s: &str) -> String {
+    s.split_whitespace()
+        .filter(|t| !(t.starts_with("cn-") && is_cli_marker(t)))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The class string of every part in `lines`, read from
+/// `<ui>/<dir>/*.svelte`: `(part, classes)` in `markers.txt` order. A
+/// `cn-*` part's classes still hold its marker. Every problem is named in
+/// the error: a part no string carries, a string with two shipped markers,
+/// several differing strings for one part, several strings in one file
+/// without a [`BRANCHES`] entry.
+pub fn part_strings(ui: &Path, lines: &[MarkerLine]) -> Result<Vec<(String, Vec<String>)>, String> {
+    let shipped: Vec<&str> = lines
+        .iter()
+        .flat_map(|l| l.markers.iter().map(String::as_str))
+        .filter(|m| !m.starts_with("slot:"))
+        .collect();
+    let mut out = Vec::new();
+    let mut problems = Vec::new();
+    for line in lines {
+        if line.markers.is_empty() {
+            continue;
+        }
+        let files =
+            svelte_sources(&ui.join(&line.dir)).map_err(|e| format!("ui/{}: {e}", line.dir))?;
+        for part in &line.markers {
+            match part_string(&line.dir, &files, part, &shipped) {
+                Ok(s) => out.push((
+                    part.clone(),
+                    s.split_whitespace().map(str::to_owned).collect(),
+                )),
+                Err(e) => problems.push(e),
+            }
+        }
+    }
+    if problems.is_empty() {
+        Ok(out)
+    } else {
+        Err(problems.join("\n"))
+    }
+}
+
+/// `(file name, class strings without CLI markers)` of every `*.svelte`
+/// in `dir`, by name.
+fn svelte_sources(dir: &Path) -> std::io::Result<Vec<(String, Vec<String>)>> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".svelte"))
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .map(|n| {
+            let src = std::fs::read_to_string(dir.join(&n))?;
+            let strings = class_strings(&src)
+                .iter()
+                .map(|s| strip_cli_markers(s))
+                .collect();
+            Ok((n, strings))
+        })
+        .collect()
+}
+
+fn part_string(
+    dir: &str,
+    files: &[(String, Vec<String>)],
+    part: &str,
+    shipped: &[&str],
+) -> Result<String, String> {
+    if let Some(slot) = part.strip_prefix("slot:") {
+        let file = format!("{slot}.svelte");
+        let strings = files
+            .iter()
+            .find(|(n, _)| *n == file)
+            .map(|(_, s)| s)
+            .ok_or_else(|| format!("{part}: no ui/{dir}/{file}"))?;
+        let plain: Vec<&String> = strings
+            .iter()
+            .filter(|s| !s.split_whitespace().any(|t| t.starts_with("cn-")))
+            .collect();
+        return match plain.as_slice() {
+            [one] => Ok((*one).clone()),
+            _ => Err(format!(
+                "{part}: ui/{dir}/{file} has {} class strings without a marker, expected one",
+                plain.len()
+            )),
+        };
+    }
+    let mut chosen: Vec<String> = Vec::new();
+    for (name, strings) in files {
+        let hits: Vec<&String> = strings
+            .iter()
+            .filter(|s| s.split_whitespace().any(|t| t == part))
+            .collect();
+        let pick: &String = match hits.len() {
+            0 => continue,
+            1 => hits[0],
+            n => {
+                let path = format!("{dir}/{name}");
+                let Some((_, _, k, _)) = BRANCHES
+                    .iter()
+                    .find(|(f, m, _, _)| *f == path && *m == part)
+                else {
+                    return Err(format!(
+                        "{part}: ui/{path} has {n} class strings for it; name the one the crate draws in extract::BRANCHES"
+                    ));
+                };
+                hits.get(*k).copied().ok_or_else(|| {
+                    format!("{part}: BRANCHES names occurrence {k}, ui/{path} has {n}")
+                })?
+            }
+        };
+        let others: Vec<&str> = pick
+            .split_whitespace()
+            .filter(|t| *t != part && shipped.contains(t))
+            .collect();
+        if !others.is_empty() {
+            return Err(format!(
+                "{part}: its string in ui/{dir}/{name} also holds {others:?}"
+            ));
+        }
+        if !chosen.contains(pick) {
+            chosen.push(pick.clone());
+        }
+    }
+    match chosen.len() {
+        0 => Err(format!("{part}: no class string in ui/{dir}")),
+        1 => Ok(chosen.remove(0)),
+        _ => Err(format!(
+            "{part}: differing class strings in ui/{dir}: {chosen:?}"
+        )),
+    }
+}
+
+fn strip_html_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut rest = src;
+    while let Some(i) = rest.find("<!--") {
+        out.push_str(&rest[..i]);
+        rest = rest[i..].find("-->").map_or("", |j| &rest[i + j + 3..]);
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `(position, argument text)` of every call `name(…)` where `name` is not
+/// the tail of a longer identifier or a method.
+fn calls<'a>(src: &'a str, name: &str) -> Vec<(usize, &'a str)> {
+    let pat = format!("{name}(");
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(i) = src[from..].find(&pat) {
+        let at = from + i;
+        from = at + pat.len();
+        let joined = src[..at]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '$');
+        if joined {
+            continue;
+        }
+        if let Some(end) = closing(src, from - 1) {
+            out.push((at, &src[from..end]));
+            from = end + 1;
+        }
+    }
+    out
+}
+
+/// Index of the bracket closing the one at `open`, skipping strings and
+/// `//` comments.
+fn closing(src: &str, open: usize) -> Option<usize> {
+    let b = src.as_bytes();
+    let mut depth = 0usize;
+    let mut i = open;
+    while i < b.len() {
+        match b[i] {
+            b'"' | b'\'' | b'`' => i = skip_string(b, i)?,
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'(' | b'{' | b'[' => depth += 1,
+            b')' | b'}' | b']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Index of the quote closing the string that starts at `i`.
+fn skip_string(b: &[u8], i: usize) -> Option<usize> {
+    let q = b[i];
+    let mut j = i + 1;
+    while j < b.len() {
+        if b[j] == b'\\' {
+            j += 2;
+            continue;
+        }
+        if b[j] == q {
+            return Some(j);
+        }
+        j += 1;
+    }
+    None
+}
+
+/// String literals at bracket depth 0 of `args`.
+fn top_level_strings(args: &str) -> Vec<String> {
+    strings(args, false)
+}
+
+/// String literals of `args`, at depth 0 only or at any depth.
+fn strings(args: &str, any_depth: bool) -> Vec<String> {
+    let b = args.as_bytes();
+    let (mut out, mut depth, mut i) = (Vec::new(), 0i32, 0usize);
+    while i < b.len() {
+        match b[i] {
+            b'"' | b'\'' | b'`' => {
+                let Some(end) = skip_string(b, i) else {
+                    break;
+                };
+                if any_depth || depth == 0 {
+                    out.push(args[i + 1..end].to_owned());
+                }
+                i = end;
+            }
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                while i < b.len() && b[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'(' | b'{' | b'[' => depth += 1,
+            b')' | b'}' | b']' => depth -= 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The `base` string and every string in `variants` of a `tv({…})` call.
+/// Quoted variant keys (`"icon-xs":`) come along; they hold no marker, so
+/// no part takes them.
+fn tv_strings(args: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(i) = args.find("base:") {
+        out.extend(
+            top_level_strings(&args[i + "base:".len()..])
+                .into_iter()
+                .take(1),
+        );
+    }
+    if let Some(i) = args.find("variants:") {
+        if let Some(open) = args[i..].find('{').map(|o| i + o) {
+            if let Some(close) = closing(args, open) {
+                out.extend(strings(&args[open..=close], true));
+            }
+        }
+    }
+    out
+}

@@ -3,6 +3,7 @@ pub mod class;
 pub mod css;
 pub mod drift;
 pub mod emit;
+pub mod extract;
 pub mod markers;
 pub mod model;
 pub mod preset;
