@@ -11,6 +11,8 @@ are recorded here. The format is based on
 ### Changed
 
 ### Fixed
+- Building an app with Rust 1.99 no longer prints
+  `warning: the following packages contain code that will be rejected by a future version of Rust: shadcn-egui v0.4.0`.
 
 ## 0.4.0 - 2026-10-13
 ### New
