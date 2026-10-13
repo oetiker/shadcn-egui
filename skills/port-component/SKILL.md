@@ -40,11 +40,18 @@ that no recipe holds are base classes, and the code quotes them.
      `https://github.com/huntabyte/shadcn-svelte/tree/<PIN>/docs/src/lib/registry/ui/<name>/`
    - Style CSS:
      `https://raw.githubusercontent.com/huntabyte/shadcn-svelte/<PIN>/docs/src/lib/registry/styles/style-<style>.css`
-   - The primitive: `https://bits-ui.com/docs/components/<name>`, or its source
-     under `node_modules/bits-ui` in a shadcn-svelte checkout.
+   - The primitive, in the bits-ui version shadcn-svelte locks at `PIN`:
+     find `bits-ui@<x.y.z>:` in
+     `https://raw.githubusercontent.com/huntabyte/shadcn-svelte/<PIN>/pnpm-lock.yaml`
+     (`docs/package.json` holds only a range), then read
+     `https://github.com/huntabyte/bits-ui/tree/bits-ui@<x.y.z>/packages/bits-ui/src/lib/bits/<name>/`.
+     `https://bits-ui.com/docs/components/<name>` documents the latest
+     release, which may differ.
 2. **Inventory.** List every `cn-*` marker the source uses and every state it
    styles on (`data-checked`, `aria-invalid`, `data-[icon=…]`,
-   `data-orientation`, …).
+   `data-orientation`, …). The style CSS also defines `cn-*-aria` markers
+   (for example `cn-radio-group-item-aria`); they belong to the React Aria
+   variant, the svelte source never uses them, and the port ignores them.
 3. **Mapping.** Map each marker to a recipe: a field of `Style` upstream
    (`cn-button-size-sm` is `s.button_size_sm`), an app-local `Recipe` in the
    app. Map each state or context condition to a `State` flag
@@ -63,6 +70,13 @@ that no recipe holds are base classes, and the code quotes them.
    literals other than `0.0`, `1.0` and halving or doubling, `Shadow { .. }`
    and alpha multipliers are allowed only with a `// base: "…"` quote on the
    same line or the line above.
+   A value the component leaves to its caller and the docs demo sets (for
+   example the `gap-3` between a radio item and its label in
+   `docs/src/lib/registry/examples/radio-group-demo.svelte`) is quoted with
+   the demo file named: `// base: "gap-3" (radio-group-demo.svelte)`. In an
+   app that is enough. Upstream, `stylegen drift` accepts only quotes from
+   the component's own source, so there the caller passes such a value, or
+   the drift check is extended first.
 6. **egui sizing.** The widget sets its own size before placement (single
    pass). Use the `shadcn_egui::layout` helpers, no `available_width()`
    arithmetic. Resolve geometry without interaction states: the size does not
@@ -74,7 +88,10 @@ that no recipe holds are base classes, and the code quotes them.
 9. **Interaction states.** Follow the rules below.
 10. **Snapshots.** Render the component in dark and light for each style in
     use. Open every PNG the component appears in and compare it with the same
-    component on the shadcn-svelte docs page for that style.
+    component on the shadcn-svelte docs page for that style. Without a
+    browser, compare the PNG with the values in the style CSS (sizes, radii,
+    colours per state), ask the user to compare it with the docs page, and
+    say that you did not. Never claim a comparison you did not make.
 11. **Dependencies.** No new runtime dependency without a stated reason and
     the user's consent (below).
 
@@ -112,6 +129,12 @@ Example, the list for Slider:
 6. `widget_info` reports a slider with its value and label.
 7. `min == max`, `step <= 0`, a NaN value, a value outside the range: the
    widget draws, does not panic and never produces NaN.
+
+Group widgets (RadioGroup, ToggleGroup, Tabs) use roving focus: the group
+is one Tab stop (the selected item, else the first), and the arrow keys move
+the focus and, in RadioGroup, the selection to the next or previous item,
+wrapping at the ends. bits-ui RadioGroup takes both axes (Left and Up go
+back, Right and Down forward) whatever its orientation.
 
 ## Interaction states
 

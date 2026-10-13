@@ -18,12 +18,17 @@ The helpers live in `shadcn_egui::layout`.
 | responsive breakpoints | branch on `ui.available_width()` each frame |
 | CSS Grid tracks | `StripBuilder` rows × cells (no named lines) |
 
-`StripBuilder` comes from `egui_extras`; an app that uses it directly adds
+Every gap `N` here is a named constant from the design (Tailwind `gap-N` is
+N×4 px); see the hard rules in SKILL.md. `StripBuilder` comes from
+`egui_extras`; an app that uses it directly adds
 `egui_extras = { version = "0.34", default-features = false }`.
 
 ```rust
 use shadcn_egui::components::button::{Button, ButtonVariant};
 use shadcn_egui::layout;
+
+/// gap-2 between the footer buttons.
+const ACTION_GAP: f32 = 8.0;
 
 fn footer(ui: &mut egui::Ui) {
     layout::space_between(
@@ -32,7 +37,7 @@ fn footer(ui: &mut egui::Ui) {
             ui.label("3 items selected");
         },
         |ui| {
-            layout::row(ui, 8.0, |ui| {
+            layout::row(ui, ACTION_GAP, |ui| {
                 ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
                 ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
             });
@@ -40,6 +45,15 @@ fn footer(ui: &mut egui::Ui) {
     );
 }
 ```
+
+- `layout::row` is at least `ui.spacing().interact_size.y` tall (36 px in
+  luma), whatever its children need. For a tight list (radio rows,
+  checkbox rows), lower `interact_size.y` in a scope around the list:
+  `ui.scope(|ui| { ui.spacing_mut().interact_size.y = ROW_H; … })`, with
+  `ROW_H` the design's row height.
+- `card_content` spaces its children with the gap of the style's
+  `cn-card-content` recipe, and several styles (luma) set none. Put the
+  children in a `layout::vstack` with the design's gap.
 
 Gotcha: `StripBuilder.horizontal` fills all available vertical space. Wrap it
 in `ui.allocate_ui(vec2(w, row_h), ...)` to cap a row's height (`form_row`

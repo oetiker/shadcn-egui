@@ -116,10 +116,19 @@ fn radio_group_item(theme: &Theme) -> Recipe {
 }
 ```
 
-The border width is not in the recipe: `border` is a base class of
-`radio-group-item.svelte`, so the widget code quotes it
+Whether a class lands in the recipe depends on the style's CSS. Nova's
+class string has no `border`, so the border width comes from the base
+class `border` in `radio-group-item.svelte`, quoted in the widget code
 (`// base: "border"`) next to the `1.0` it draws, like `disabled:opacity-50`
-and the larger hit area `after:-inset-x-3 after:-inset-y-2`.
+and the larger hit area `after:-inset-x-3 after:-inset-y-2`. Luma's class
+string sets `border` itself, so luma's recipe gets
+`border_width: Prop::fixed(1.0)`. Resolve each property with `pick` over
+the recipe first and fall back to the quoted base value only where the
+style leaves it empty.
+
+`log` is not a dependency of the app by default. Add `log = "0.4"` (the
+crate already depends on it, so the build gains no new crate), or report
+the fallback through the app's own logging.
 
 ## Where the code goes
 

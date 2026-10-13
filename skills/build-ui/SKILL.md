@@ -40,6 +40,9 @@ cargo add shadcn-egui@0.4.0 --features font-geist,icons-hugeicons
 cargo add egui@0.34
 ```
 
+A path or git dependency takes the features in `Cargo.toml`:
+`shadcn-egui = { path = "…", features = ["font-geist", "icons-hugeicons"] }`.
+
 Do not add `eframe` on the crate's account. Add it only if the app already
 uses it as its backend.
 
@@ -60,7 +63,12 @@ gives:
   }
   ```
 
-  Enable the features the preset names; this one uses Geist and Hugeicons.
+  This code decodes to style Luma, base colour neutral, theme blue, chart
+  emerald, font Geist, Hugeicons, the default radius and the menu colour
+  `inverted-translucent`. Enable the features the preset names
+  (`font-geist`, `icons-hugeicons`). The translucent menu colour draws as
+  `inverted` and logs a warning. Luma has no snapshot tests in the crate, so
+  check its renders with extra care.
 
 - A `components.json`: start from `Preset::default()` and set `.style(..)`,
   `.base_color(..)` and `.icons(..)` from its `style`, `tailwind.baseColor`
@@ -148,21 +156,33 @@ egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
 use egui_kittest::Harness;
 
 #[test]
-fn settings_screen() {
+fn settings_screen_dark() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(800.0, 600.0))
-        .build_ui(|ui| {
-            shadcn_egui::Theme::vega_dark().apply(ui.ctx());
-            my_app::ui::settings(ui);
-        });
+        .build_ui(|ui| my_app::ui::settings(ui));
+    // Once, on the harness's context, like an app right after startup.
+    shadcn_egui::Theme::vega_dark().apply(&h.ctx);
     h.run();
-    h.snapshot("settings");
+    h.snapshot("settings_dark");
 }
 ```
 
+`Harness.ctx` is the harness's `egui::Context`; apply the theme (or
+`preset.apply(&h.ctx, mode)`) there once, before `h.run()`. Applying it
+inside `build_ui` would apply it every frame, which the hard rules forbid.
+
+Each test holds one harness that takes snapshots. A second harness in the
+same test (for example dark and light) fails with "Multiple SnapshotResults
+were dropped without being handled": write one test per mode, or merge the
+results with `h.take_snapshot_results()` and `SnapshotResults::extend`.
+
 Generate the PNG with `UPDATE_SNAPSHOTS=1 cargo test`; it lands in
 `tests/snapshots/`. Open it, compare it with the design, change the code, and
-render again. An app with its own render or screenshot path (for example a
+render again. An update run leaves `<name>.old.png` (the previous baseline)
+and a failing comparison leaves `<name>.diff.png` beside the baselines.
+Never commit them: delete them after looking, and add
+`tests/snapshots/*.old.png` and `tests/snapshots/*.diff.png` to
+`.gitignore`. An app with its own render or screenshot path (for example a
 softbuffer rasterizer) may capture the PNG there instead: the point is to look
 at a real render.
 
@@ -181,6 +201,11 @@ See `references/gotchas.md` for the reasons.
   `Theme::current(ctx)`.
 - No style values in UI code. Colours and sizes come from the theme
   (`Theme::current(ctx)`: palette, metrics, the style's recipes).
+- Component internals (paddings, heights, gaps inside a widget) come from
+  the recipes. Gaps between app-level blocks (`vstack`, `row`, card
+  contents) come from the design: Tailwind `gap-N` is N×4 px (`gap-3` is
+  12 px). Write each as a named constant (`const FIELD_GAP: f32 = 12.0;`
+  with the class in a comment), not as a bare number at the call.
 - Project-specific deviations go into the theme construction
   (`let mut s = Style::nova(); s.<part>.<field> = …;`), never into copies of
   crate code.
