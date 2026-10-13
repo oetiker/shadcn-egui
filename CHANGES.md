@@ -7,6 +7,13 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+
+### Changed
+
+### Fixed
+
+## 0.4.0 - 2026-10-13
+### New
 - A gallery example shows every component in each variant and size, under
   a preset you paste as a code or pick part by part (style, colours, fonts,
   icon library, radius, menu), in light or dark mode. Run it with
