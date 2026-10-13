@@ -72,6 +72,10 @@ mod skill_docs {
     struct TokenMap;
     #[doc = include_str!("../../../skills/port-component/SKILL.md")]
     struct PortComponent;
+    #[doc = include_str!("../../../skills/port-component/references/in-app.md")]
+    struct InApp;
     #[doc = include_str!("../../../skills/port-component/references/styles.md")]
     struct Styles;
+    #[doc = include_str!("../../../skills/port-component/references/upstream.md")]
+    struct Upstream;
 }
