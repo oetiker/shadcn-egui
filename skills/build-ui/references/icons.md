@@ -40,7 +40,7 @@ dependency.
 
 ## Use
 
-```rust
+```rust,ignore
 ui.add(IconView::new(&icons::MIC));                       // Metrics.icon, foreground
 ui.add(IconView::new(&icons::MIC).size(24.0).color(p.destructive));
 ui.add(Button::new("Mute").icon(&icons::MIC));            // icon + text

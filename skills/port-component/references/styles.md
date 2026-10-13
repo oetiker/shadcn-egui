@@ -39,7 +39,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
   the variable's definition, an approximation.
 - **Deviating in a project.** Adjust the style when you build the theme, never
   in vendored files:
-  ```rust
+  ```rust,ignore
   let mut s = Style::vega();
   s.button_size_default.height.base = Some(40.0);
   let theme = Theme::new(s, Palette::dark(), 10.0);
@@ -174,7 +174,7 @@ first (see `tools/stylegen/reports/sera.md`).
 Read `style` in the web project's `components.json`. Build the theme with it and
 with the web project's `--radius`:
 
-```rust
+```rust,ignore
 Theme::new(Style::nova(), Palette::dark(), 10.0).apply(&ctx);
 ```
 

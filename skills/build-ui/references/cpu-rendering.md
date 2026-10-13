@@ -86,7 +86,7 @@ screen with fallback fonts until the user moves the mouse.
   `CentralPanel`, and `wants_keyboard_input()` is true for *any* focused
   widget (a button reached by Tab). For "is the pointer over floating UI":
 
-  ```rust
+  ```rust,ignore
   ctx.pointer_interact_pos()
       .and_then(|p| ctx.layer_id_at(p))
       .is_some_and(|l| l.order != egui::Order::Background)

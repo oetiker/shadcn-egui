@@ -70,3 +70,59 @@ fn plugin_is_named_shadcn_egui() {
         assert!(!text.contains("egui-shadcn"), "old name left in a manifest");
     }
 }
+
+const LIB: &str = include_str!("../src/lib.rs");
+
+/// `<skill>/SKILL.md` and `<skill>/references/*.md` for every directory
+/// under skills/ that holds a SKILL.md.
+fn skill_files() -> Vec<String> {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills");
+    let mut out = Vec::new();
+    for skill in std::fs::read_dir(root).unwrap() {
+        let dir = skill.unwrap().path();
+        if !dir.join("SKILL.md").is_file() {
+            continue;
+        }
+        let name = dir.file_name().unwrap().to_str().unwrap().to_owned();
+        out.push(format!("{name}/SKILL.md"));
+        if let Ok(refs) = std::fs::read_dir(dir.join("references")) {
+            for r in refs {
+                let f = r.unwrap().file_name().into_string().unwrap();
+                if f.ends_with(".md") {
+                    out.push(format!("{name}/references/{f}"));
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn every_skill_file_is_a_doctest() {
+    for f in skill_files() {
+        let item = format!("include_str!(\"../../../skills/{f}\")");
+        assert!(LIB.contains(&item), "lib.rs skill_docs lacks {f}");
+    }
+}
+
+#[test]
+fn every_fence_has_a_language() {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");
+    for f in skill_files() {
+        let text = std::fs::read_to_string(format!("{root}{f}")).unwrap();
+        let mut open = false;
+        for (n, line) in text.lines().enumerate() {
+            if let Some(rest) = line.trim_start().strip_prefix("```") {
+                if !open {
+                    assert!(
+                        !rest.trim().is_empty(),
+                        "{f}:{}: fence without a language",
+                        n + 1
+                    );
+                }
+                open = !open;
+            }
+        }
+    }
+}
