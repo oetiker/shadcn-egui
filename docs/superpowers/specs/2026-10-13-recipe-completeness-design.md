@@ -1,22 +1,27 @@
-# Recipe completeness, app variants and app colours
+# Recipe completeness
 
 ## Goal
 
 GitHub issue #6: the tab trigger draws its colours, focus ring and line
 indicator from values fixed in `tabs.rs`, so an app cannot restyle them
-through `Style`. Nine other component files fix colours or sizes the same
-way. This spec makes every visual value of every component come from a
-recipe, and adds the two things an app needs to define its own look:
-colours of its own and variants of its own.
+through `Style`. Ten other component files fix colours or sizes the same
+way. This spec makes every visual value of every component come from the
+style data (a recipe or the theme metrics), so an app can change any of them
+through `theme.style`. That closes #6: its use case (a filled `primary`
+active tab, a solid 2 px focus ring) is two recipe edits.
+
+App colours and app variants, which let an app define its own kinds of
+components, are a follow-up with its own spec (see "Follow-up").
 
 ## Why the port has this problem
 
 Upstream, a component's class string holds the style hook (`cn-tabs-trigger`)
 followed by the base classes that all styles share. The published registry
-replaces the hook with the style's `@apply` classes in place, and at runtime
-`cn()` (tailwind-merge) keeps the later class of two that conflict, so a base
-class wins over a style class in the same state. An app owns the copied
-component file and may edit the base classes.
+replaces the hook with the style's `@apply` classes in place and does no
+merge at build time. At runtime `cn()` (tailwind-merge) keeps the later of
+two classes that conflict under the same modifiers, so a base class wins
+over a style class in the same state. An app owns the copied component file
+and may edit the base classes.
 
 The port translated only the style classes into recipes and wrote the base
 classes into the component code, marked with `// base: "…"`. Code in a crate
@@ -27,95 +32,176 @@ style does not set that property; the component then uses its base value."
 ## Decisions
 
 - Every visual value (colour, size, spacing, geometry, opacity) comes from a
-  recipe. Only structure stays in code: layout order, hit testing, keyboard
-  handling, popup placement.
-- Stylegen translates the full class string of each part, built the same way
-  the published registry builds it. There is no separate base layer.
-- Apps get colours of their own (`palette.add`, `Role::custom`) and variants
-  of their own for every component that has variants.
-- No per-instance or per-region style override (scope). A change for the
-  whole app goes through `theme.style`; a different kind of component is a
-  variant. Recipe completeness keeps a scope possible later.
+  recipe or from the theme metrics. Only structure stays in code: layout
+  order, hit testing, keyboard handling, popup placement.
+- Stylegen translates the full class string of each part, built the way the
+  published registry builds it. There is no separate base layer.
+- Where upstream and today's code disagree, upstream wins. Each such case is
+  listed below, shown to the maintainer as a before/after snapshot and
+  re-baselined only with their approval.
 - Snapshots cover all components in all seven exported styles, light and
-  dark, before any change, so the refactor is proven pixel-identical.
-- The next release is 0.5.0: `Recipe`, `Style`, `Role` and the variant enums
-  change in ways that break struct literals and exhaustive matches.
+  dark, before any change.
+- The work lands as two pull requests: A (snapshot coverage) and B
+  (stylegen, components, tests, skills; closes #6).
+- The next release is 0.5.0: `Recipe` and `Style` gain public fields, which
+  breaks struct literals.
+
+## Known upstream disagreements
+
+Found so far; the plan adds every further snapshot difference here.
+
+- Luma and rhea, tabs: `.cn-tabs-trigger` applies `border-transparent!`
+  (`!important`), which beats the base classes `focus-visible:border-ring`
+  and `dark:data-active:border-input`. Today `tabs.rs:268-284` draws a
+  `Ring` border on focus and an `Input` border on the dark active tab in
+  these styles. After the change they draw no border there.
 
 ## Values that are fixed in code today
 
 Kind 1 values block an app and move into recipes. Kind 2 values are
-fallbacks used only when the recipe has no value; they stay.
+fallbacks used only when the recipe has no value; they stay, each with a
+`// behaviour-ok: inherits …` reason.
 
 ### Kind 1
 
-| File | Fixed value | Recipe after the change |
+| File | Fixed value | Data after the change |
 |---|---|---|
 | `tabs.rs` | trigger text: `Foreground`, `MutedForeground` (dark), `Foreground/0.6` | `tabs_trigger.text`, rules for hover, dark, active |
 | `tabs.rs` | active fill: `Background`, `Input/0.3` (dark), none (line) | `tabs_trigger.bg` |
 | `tabs.rs` | active border `Input` (dark), `Ring` (focus) | `tabs_trigger.border_color` |
 | `tabs.rs` | focus ring `Ring/0.5`, 3 px | `tabs_trigger.ring_color`, `ring_width` |
 | `tabs.rs` | focus outline `Ring`, 1 px | `tabs_trigger.outline_color`, `outline_width` (new) |
+| `tabs.rs:100` | trigger height: list content height minus 1 px | `tabs_trigger.height_inset` (new) |
 | `tabs.rs` | line indicator `Foreground`, 2 px, 5 px below, shown when active | `tabs_trigger_after`: `bg`, `height`, `inset_bottom`, `opacity` |
-| `tabs.rs` | trigger height minus 1 px, disabled opacity 0.5 | `tabs_trigger.height`, `opacity` |
-| `tabs.rs` | list track `Muted`, line variant gap 4 | `tabs_list_variant_default.bg`, `tabs_list_variant_line.gap` |
-| `tooltip.rs:40` | fill `Foreground`, text `Background`; arrow fill | `tooltip_content.bg`, `text`; `tooltip_arrow.bg` |
+| `tabs.rs` | disabled opacity 0.5 | `tabs_trigger.opacity` with the `DISABLED` rule |
+| `tabs.rs:224` | list track `Muted` | `tabs_list_variant_default.bg` |
+| `tabs.rs` | line variant gap 4 | `tabs_list_variant_line.gap` |
+| `tooltip.rs:40` | fill `Foreground`, text `Background` | `tooltip_content.bg`, `text` |
+| `tooltip.rs` | arrow fill `Foreground` | `tooltip_arrow.bg` |
 | `tooltip.rs` | max width 320 | `tooltip_content.max_width` |
-| `separator.rs:16` | line `Border`, thickness 1 px | `separator.bg`, `height`/`width` (new recipe) |
-| `input.rs:104` | text `Foreground` | `input.text` |
-| `input.rs:119` | placeholder `MutedForeground` | `input.text` with the `PLACEHOLDER` rule |
-| `label.rs:51` | text `Foreground` | `label.text` |
+| `separator.rs:16` | line colour `Border` | `separator.bg` (new base-only recipe) |
 | `button.rs`, `input.rs`, `select.rs`, `switch.rs`, `slider.rs` | disabled opacity 0.5 | `opacity` with the `DISABLED` rule |
-| `checkbox.rs`, `switch.rs` | hit area 12 px by 8 px around the box | `checkbox_after`, `switch_after`: `inset_*` |
+| `button.rs:263`, `badge.rs:163` | link underline 1 px | `t.metrics.border` (upstream sets no thickness) |
+| `checkbox.rs:59`, `switch.rs:77` | hit area 12 px by 8 px around the control | `checkbox.hit_inset_x`/`_y`, `switch.hit_inset_x`/`_y` |
 | `popover.rs` | width 288 | `popover_content.width` |
 | `dialog.rs` | footer gap 8 | `dialog_footer.gap` |
 
-The list is complete for the code at `b7c769d`; the stricter token test
-(section "Tests") is the check that nothing was missed.
+The separator thickness and the link underline keep reading
+`t.metrics.border`: the metric is style data an app can already change,
+and upstream's `h-px` equals its default.
+
+`sideOffset = 4` in popover (`popover.rs:24`) and select (`select.rs:387`)
+is a component prop upstream, not a class. It becomes a builder method
+`side_offset(f32)` with default 4.
 
 ### Kind 2
 
-`button.rs:217`, `badge.rs:129`, `select.rs:310`, `select.rs:450`,
-`label.rs:81`: text falls back to `Foreground` or `PopoverForeground`.
-`card.rs:228`, `dialog.rs:283`: border falls back to `Border`. These copy
-CSS inheritance and Tailwind's preflight (`border-color: var(--border)`).
-Each gets a `// behaviour-ok: inherits …` reason.
+These have no upstream class, so the recipe stays empty and the component
+uses the inherited value:
+
+- `button.rs:217`, `badge.rs:129`, `select.rs:310`, `select.rs:450`,
+  `label.rs:51`, `input.rs:104`: text inherits `Foreground` or
+  `PopoverForeground`. `label.svelte` and `cn-label` set no text colour;
+  `cn-input` and the input base set only `file:text-foreground`.
+- `label.rs:81` (`description()`): reads `card_description`, falls back to
+  `MutedForeground`.
+- `card.rs:228`, `dialog.rs:283`: border falls back to `Border`, from
+  shadcn's base layer (`* { @apply border-border outline-ring/50 }`).
+
+The component still reads the recipe first in every Kind 2 case, so a value
+an app sets wins.
+
+`input.rs:119` (placeholder `MutedForeground`) is Kind 1: upstream sets
+`placeholder:text-muted-foreground`, which becomes `input.text` under the
+`PLACEHOLDER` rule.
 
 ## Stylegen
 
+### Sources
+
+The svelte component files of every part in `markers.txt`
+(`docs/src/lib/registry/ui/<dir>/*.svelte`) are copied into
+`tools/stylegen/tests/fixtures/ui/<dir>/` by `generate`, as the style CSS
+is today, and `drift` reports a copy that differs from the checkout.
+
+The extractor reads a part's class string from:
+
+- `cn("…", "…", …)` with one or more string arguments, joined in order;
+- `tv({ base, variants })`: the base string for the part, each variant
+  string for its variant marker;
+- a static `class="…"` attribute;
+- a `class=` passed to a nested component (dialog close `<Button>`).
+
+Where a file has the same part in several `{#if}` branches (input's
+`type === "file"` branch), the plan names the branch the crate draws; the
+extractor takes that one and the test asserts the choice.
+
+The extractor records the element of each part. `disabled:` on a part
+whose element is not a form control (the slider thumb `<span>`) never
+matches upstream and is ignored.
+
+### Building the string
+
 For each style and each part, stylegen:
 
-1. reads the part's class string from the pinned svelte source
-   (`docs/src/lib/registry/ui/<dir>/*.svelte`), including the variant
-   tables of `tv({ base, variants })`;
-2. replaces `cn-<marker>` with the style's `@apply` classes, in place;
-3. translates the result with the existing pipeline; tailwind-merge keeps
-   the later class per field and variant set.
+1. takes the part's extracted class string;
+2. removes the markers only the shadcn CLI rewrites, as the registry does:
+   `cn-font-heading`, `cn-menu-*`, `*-logical`, `cn-rtl-flip`,
+   `cn-logical-sides` (the list `drift::upstream_markers` already uses,
+   moved to one shared place);
+3. replaces each marker listed in `markers.txt` with the style's `@apply`
+   classes, in place;
+4. translates the result with the existing pipeline; tailwind-merge keeps
+   the later class per field and modifier set, and `!important` keeps its
+   rank bit.
 
 Each generated `<style>.rs` then holds complete recipes. A part without a
-`cn-*` marker (separator) gets a recipe named after its `data-slot`, filled
-from the base classes only; `markers.txt` lists these parts.
+`cn-*` marker gets a recipe named after its `data-slot`. In `markers.txt`
+such a part is written `slot:<data-slot>`, for example
+`separator.rs separator: slot:separator`.
 
-New translations:
+### New fields and translations
 
 - `outline-<n>` and `outline-<colour>` map to the new fields
   `outline_width` and `outline_color`. `outline-none` and `outline-hidden`
-  keep their current meaning.
-- `after:` classes go to a second recipe of the part, `<marker>_after`,
-  using the existing fields (`bg`, `width`, `height`, `inset_*`,
-  `opacity`). The tab line indicator and the checkbox and switch hit areas
-  use it.
+  set `outline_width` to 0.
+- `h-[calc(100%-Npx)]` maps to the new field `height_inset`: the part is
+  the parent's content height minus N.
+- `after:` classes keep their current mapping for hit areas
+  (`after:-inset-*` to `hit_inset_x`/`hit_inset_y`, used by the slider
+  thumb, now also checkbox and switch). Every other `after:` class goes to
+  a second recipe of the part, `<marker>_after`, using the existing fields
+  (`bg`, `width`, `height`, `inset_*`, `opacity`). The tab line indicator
+  is the only such part today.
+- `placeholder:` maps to the `PLACEHOLDER` state.
+- `fill-<colour>` maps to `bg` (the tooltip arrow is painted as a shape).
+- `ring-0` sets `ring_width` to 0. `text-current` leaves `text` empty
+  (inherit).
+- `w-fit`, `min-w-0`: `w-fit` is the components' default sizing and is
+  ignored with that reason; `min-w-0` maps to `min_width` 0.
 
-Classes that stay out are listed in `utility.rs` with a reason, by group:
+Opacity multiplies down the part tree, as in CSS: a component multiplies a
+part's `opacity` with its parent part's.
 
-- Structure: `flex`, `grid`, `inline-flex`, `items-*`, `justify-*`,
-  `relative`, `absolute`, `fixed`, `col-*`, `row-*`, `self-*`, `shrink-0`,
-  `flex-1`, `grow`, `place-content-center`.
+### Ignored classes
+
+Each is listed in `utility.rs` or `variant.rs` with a reason, by group:
+
+- Structure: `flex`, `grid`, `inline-flex`, `block`, `items-*`,
+  `justify-*`, `justify-self-*`, `self-*`, `place-content-*`, `relative`,
+  `absolute`, `fixed`, `col-*`, `row-*`, `grid-cols-*`, `grid-rows-*`,
+  `auto-rows-*`, `flex-col`, `flex-col-reverse`, `flex-row`, `flex-1`,
+  `grow`, `shrink-0`, `@container/*`.
 - Browser behaviour: `transition-*`, `pointer-events-none`, `select-none`,
   `touch-none`, `cursor-*`, `scroll-my-*`, `isolate`, `z-*`,
   `whitespace-nowrap`, `line-clamp-*`, `overflow-*`, `peer`, `group/*`.
+- Selectors the crate does not model: `[&_svg]:…`, `rtl:…`,
+  `has-data-[slot=card-action]:…`, `has-data-[slot=card-description]:…`.
+  The plan checks each against today's drawing; one that changes a pixel
+  gets a field or a state instead.
 - Placement computed by egui: the bits-ui anchor variables
-  (`h-(--bits-select-anchor-height)`, `origin-(--bits-…)`, …) and the dialog
-  centring (`top-1/2 left-1/2 -translate-*-1/2`).
+  (`h-(--bits-select-anchor-height)`, `origin-(--bits-…)`, …) and the
+  dialog centring (`top-1/2 left-1/2 -translate-*-1/2`).
 
 The tooltip arrow offsets (`translate-y-[calc(-50%+2px)]` and similar) are
 decided in the plan: a `translate_*` field if they are geometry, an ignore
@@ -124,103 +210,84 @@ with a reason if they are placement.
 `reports/<style>.md` lists the ignored classes per part. An exported style
 with an unsupported class still fails generation.
 
-`tests/published.rs` compares the whole merged class string of each part
-with the published vega and nova JSON, not only the style classes. The
-`base_quotes` check in `drift` is removed with the `// base:` quotes.
+### Tests
+
+- `tests/published.rs` compares the whole merged class string of each part,
+  after the CLI-marker removal, with the published vega and nova JSON.
+- Golden tests for `outline_*`, `height_inset`, a `<marker>_after` part, a
+  `slot:` part, CLI-marker removal and the extractor's string forms.
+- The `base_quotes` check in `drift` is removed with the `// base:` quotes.
 
 ## Components
 
-Each kind 1 value becomes a `pick(..)` from the part's recipe stack, for
-example `[tabs_trigger, tabs_trigger_<variant>]`. The `// base:` comments are
-removed. The doc comment in `recipe.rs` changes to: an empty `Prop` means
-upstream sets nothing; the component then uses CSS's inherited or initial
-value.
-
-## App colours
-
-- `Role::custom(name: &'static str)` names an app colour. `Role` stays
-  `Copy`.
-- `theme.palette.add(name, light, dark)` registers it with a value per mode.
-- A `Paint` with a custom role that the palette does not have draws as
-  `Foreground` and logs once, for example
-  `shadcn-egui: colour "brand" is not in the palette; using "foreground"`.
-
-## App variants
-
-- `ButtonVariant`, `BadgeVariant` and `TabsVariant` each get a custom case,
-  made with `ButtonVariant::custom("brand")`, usually kept as a `const`.
-- `Style` gets a map per such component from the custom variant to its
-  `Recipe`, for example `style.button_variants`.
-- A custom variant's recipe takes the place of the built-in variant's
-  recipe in the stack, `[button, <variant>, <size>]`, so size, radius and
-  focus ring still come from the style. An app can start from a built-in
-  variant: `style.button_variant_outline.clone()`.
-- A custom variant that the map does not have draws as the default variant
-  and logs once.
-
-```rust
-const BRAND: ButtonVariant = ButtonVariant::custom("brand");
-theme.palette.add("brand", light, dark);
-theme.palette.add("brand-foreground", light_fg, dark_fg);
-let mut r = Recipe::default();
-r.bg = Prop::fixed(Paint::Role(Role::custom("brand"), 1.0));
-r.text = Prop::fixed(Paint::Role(Role::custom("brand-foreground"), 1.0));
-theme.style.button_variants.insert(BRAND, r);
-// in the UI
-Button::new("Save").variant(BRAND).show(ui);
-```
-
-The names in this example are the intended API; the plan may adjust
-spelling, not shape.
+Each Kind 1 value becomes a `pick(..)` from the part's recipe stack, for
+example `[tabs_trigger]` with the variant state bits. The `// base:`
+comments are removed. The doc comment in `recipe.rs` changes to: an empty
+`Prop` means upstream sets nothing; the component then uses the inherited
+or initial value.
 
 ## Performance
 
-`Theme::current` clones the whole theme on every call, and complete recipes
-make that clone larger. `examples/bench_frame.rs` builds the gallery screen
-in a headless `egui::Context` for a few thousand frames in each of the seven
-styles and prints the median time and the allocations per frame, with a
-counting allocator in the example and no new dependency. It runs on one
-thread. Measurements are taken before any change, after the stylegen step
-and after the variant step. If the cost grows noticeably, `Theme` is stored
-as `Arc<Theme>` so `Theme::current` copies a pointer, and the measurement is
-repeated. The benchmark is a manual tool, not a CI gate.
+`Theme.style` is an `Arc<Style>`, so larger recipes do not make
+`Theme::current` copy more. The cost to watch is `pick(..)` over more rules.
+`examples/bench_frame.rs` builds the gallery screen in a headless
+`egui::Context` for a few thousand frames in each of the seven styles and
+prints the median time and the allocations per frame, with a counting
+allocator in the example and no new dependency. It runs on one thread and
+is measured before step 3 and after step 4. The benchmark is a manual tool,
+not a CI gate.
 
 ## Tests
 
 - Snapshots: `snapshot_all` covers vega, nova, maia, lyra, mira, luma and
-  rhea, light and dark, for every component.
-- Every existing snapshot stays identical through the stylegen and
-  component steps. A difference means the hand-written value and upstream
-  disagree; it is shown to the maintainer before any re-baseline.
-- Issue #6: a custom tabs-list variant plus a changed `tabs_trigger` recipe
-  change the active fill, the text colour, the ring and the outline.
-- A custom button variant with an app colour, light and dark.
-- A missing app colour and a missing app variant each fall back and warn
-  once.
+  rhea, light and dark, for every component. For tabs the state matrix is:
+  default and line variant; inactive, hovered, active; focused active; each
+  in light and dark.
+- Through the stylegen and component steps, every snapshot stays identical
+  except the listed upstream disagreements.
+- Issue #6: a test changes `tabs_trigger` through `theme.style` (active
+  fill `Primary`, text `PrimaryForeground`, solid 2 px ring, no outline)
+  and the snapshot shows all four.
 - `tests/tokens.rs`: a `Role::…` or a float literal in a component needs
-  `// behaviour-ok: <reason>`; `// base:` no longer exempts a value.
-- Stylegen: `published.rs` on the whole string; golden tests for the
-  outline fields, an `after:` part and a base-only part.
+  `// behaviour-ok: <reason>`; `// base:` no longer exempts a value, and
+  `1.0` is exempt only as a factor (`* 1.0`, `/ 1.0`), not as a length or a
+  width (`- 1.0`, `Stroke::new(1.0…`).
 
 ## Order of work
 
-1. Snapshot coverage of all seven styles from the current code, reviewed by
-   the maintainer. Its own pull request.
+1. Pull request A: snapshot coverage of all seven styles and the tabs state
+   matrix, from the current code, reviewed by the maintainer.
 2. Frame benchmark, first measurement.
-3. Stylegen: full class strings, outline fields, `after` parts, base-only
-   parts, ignore list, `published.rs`. Regenerate; snapshots unchanged.
-   Second measurement.
-4. Components, one at a time; snapshots unchanged after each. Stricter
-   `tokens.rs`; `base_quotes` removed from `drift`.
-5. App colours and app variants with their tests. Third measurement.
-6. Skills: build-ui shows `theme.style` changes, app colours and app
-   variants; port-component states that base classes are generated and that
-   a component holds no literal colour or size. CHANGES entry ending with
-   `(#6)`.
+3. Stylegen: svelte fixtures, extractor, CLI-marker removal, full class
+   strings, new fields, `after` parts, `slot:` parts, ignore list,
+   `published.rs`. Regenerate; snapshots unchanged, since no component
+   reads the new values yet.
+4. Components, one at a time; after each, snapshots unchanged except listed
+   disagreements. Stricter `tokens.rs`; `base_quotes` removed; `side_offset`
+   builder methods. Second measurement.
+5. Skills: build-ui shows restyling through `theme.style`; port-component
+   states that base classes are generated and that a component holds no
+   literal colour or size. CHANGES entries ending with `(#6)`, one of them
+   naming the luma and rhea tab border change.
+
+Steps 2 to 5 are pull request B.
+
+## Follow-up: app colours and app variants
+
+A separate spec after B. Settled so far:
+
+- App colours live in a `Theme`-level map of light/dark pairs behind an
+  `Arc`. `Palette` stays `Copy` and single-mode. `Role::custom(name)` names
+  one; a missing name draws as `Foreground` and warns once.
+- App variants for button and badge: a custom case of the variant enum and
+  a map in `Style` from it to a `Recipe` that takes the built-in variant's
+  place in the stack. Tabs are left out, because the trigger takes its
+  variant look from state bits, not from a variant recipe.
+- The benchmark measures the colour map.
 
 ## Out of scope
 
 - A per-instance or per-region style override.
 - Tabs keyboard focus (every trigger is a tab stop; upstream has one tab
-  stop and arrow keys). A separate pull request after this work.
+  stop and arrow keys). A separate pull request after B.
 - Snapshots of sera (not an exported style).
