@@ -52,7 +52,8 @@ fn footer(ui: &mut egui::Ui) {
   `ui.scope(|ui| { ui.spacing_mut().interact_size.y = ROW_H; … })`, with
   `ROW_H` the design's row height.
 - `card_content` spaces its children with the gap of the style's
-  `cn-card-content` recipe, and several styles (luma) set none. Put the
+  `cn-card-content` recipe, and only vega sets one (nova, maia, lyra, mira,
+  luma and rhea set none). Put the
   children in a `layout::vstack` with the design's gap.
 
 Gotcha: `StripBuilder.horizontal` fills all available vertical space. Wrap it

@@ -36,7 +36,7 @@ The crate does not re-export egui, so the app depends on the egui version the
 crate uses, `egui = "0.34"` for 0.4:
 
 ```bash
-cargo add shadcn-egui@0.4.0 --features font-geist,icons-hugeicons
+cargo add shadcn-egui@<version> --features font-geist,icons-hugeicons
 cargo add egui@0.34
 ```
 
@@ -179,9 +179,10 @@ results with `h.take_snapshot_results()` and `SnapshotResults::extend`.
 Generate the PNG with `UPDATE_SNAPSHOTS=1 cargo test`; it lands in
 `tests/snapshots/`. Open it, compare it with the design, change the code, and
 render again. An update run leaves `<name>.old.png` (the previous baseline)
-and a failing comparison leaves `<name>.diff.png` beside the baselines.
+and a failing comparison leaves `<name>.new.png` and `<name>.diff.png` beside
+the baselines.
 Never commit them: delete them after looking, and add
-`tests/snapshots/*.old.png` and `tests/snapshots/*.diff.png` to
+`tests/snapshots/*.old.png`, `*.new.png` and `*.diff.png` to
 `.gitignore`. An app with its own render or screenshot path (for example a
 softbuffer rasterizer) may capture the PNG there instead: the point is to look
 at a real render.

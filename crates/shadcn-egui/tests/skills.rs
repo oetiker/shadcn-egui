@@ -189,3 +189,21 @@ fn skills_name_only_existing_features() {
         }
     }
 }
+
+/// A version written into skill text is not bumped by Create release PR;
+/// the skills read it from plugin.json instead.
+#[test]
+fn skills_pin_no_crate_version() {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");
+    for f in skill_files() {
+        let text = std::fs::read_to_string(format!("{root}{f}")).unwrap();
+        for (i, _) in text.match_indices("shadcn-egui@") {
+            let next = text[i + "shadcn-egui@".len()..].chars().next();
+            assert!(
+                !next.is_some_and(|c| c.is_ascii_digit()),
+                "{f} pins a crate version: {}",
+                &text[i..text.len().min(i + 20)]
+            );
+        }
+    }
+}

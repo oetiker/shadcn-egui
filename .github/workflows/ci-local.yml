@@ -56,6 +56,14 @@ jobs:
       - name: Test with all features
         run: cargo test --locked --workspace --all-targets --all-features -- --test-threads 4
 
+      # --all-targets leaves doctests out; the skills' rust fences compile
+      # only here (skill_docs in crates/shadcn-egui/src/lib.rs).
+      - name: Doctests with default features
+        run: cargo test --locked -p shadcn-egui --doc -- --test-threads 4
+
+      - name: Doctests with all features
+        run: cargo test --locked -p shadcn-egui --doc --all-features -- --test-threads 4
+
       # egui_kittest writes <name>.new.png and <name>.diff.png next to a
       # snapshot that does not match. The gallery test keeps the README's
       # docs/gallery-screen.png that way too.
