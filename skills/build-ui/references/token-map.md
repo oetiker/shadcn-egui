@@ -16,7 +16,7 @@
 | `--ring` | `Palette.ring`; the ring colour and width come from the style's recipe props `ring_color` / `ring_width` |
 | `--radius` (10px) | `Theme.radius`; `radius_sm/md/lg/xl` |
 | 4px spacing grid | `Spacing.item_spacing`, margins |
-| 14px / medium | `text_styles[Body]` + `theme::family_for(ctx, Weight::Medium)` |
+| 14px / medium | `text_styles[Body]` + `shadcn_egui::theme::family_for(ctx, Weight::Medium)` |
 | `shadow-*` | `Theme::shadow(ShadowLevel)`; the style's recipes pick the level |
 | dialog overlay `bg-black/50` | the style's `dialog_overlay` recipe (`bg`) |
 | `text-xs` / `text-sm` / `text-base` / `text-lg` | `Metrics.text_xs` / `text_sm` / `text_base` / `text_lg` |
@@ -26,14 +26,30 @@
 | `border` width | `Metrics.border` |
 | `ring-[3px]` | the style's `ring_width` / `ring_color` props |
 
-Tokens are OKLCH literals converted by `color::oklch_to_srgb` into the `Palette`.
-Customize by editing `Palette::light()/dark()` in the vendored `theme.rs`, or
-add your own preset there (a brand palette is one more `Palette` constructor).
-Text and icon sizes: `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega_dark() }`. Control sizes belong to the `Style`.
+The palettes are OKLCH values from upstream, converted with
+`shadcn_egui::color::oklch_to_srgb`. A preset (`references/presets.md`) picks
+the palette. To deviate from it, change the theme in the app and apply the
+result; never edit copies of crate code:
 
-**Colors and text sizes live in `theme.rs` and nowhere else.** A widget that
+```rust
+use shadcn_egui::color::oklch_to_srgb;
+use shadcn_egui::Theme;
+
+/// A brand primary on top of whatever preset is active.
+fn brand(ctx: &egui::Context) {
+    let mut t = Theme::current(ctx);
+    t.palette.primary = oklch_to_srgb(0.55, 0.2, 260.0);
+    t.metrics.icon = 20.0;
+    t.apply(ctx);
+}
+```
+
+Text and icon sizes live in `Metrics`; control sizes belong to the `Style`
+(the `shadcn-egui:port-component` skill explains recipes in its
+`references/styles.md`).
+
+**Colours and text sizes come from the theme and nowhere else.** A widget that
 writes `Color32::from_rgb(..)` or `FontId::proportional(14.0)` drifts from the
-theme the first time the palette changes; that is how hand-built screens end up
-with a navy panel inside a green app. `tests/tokens.rs` enforces this for the
-registry; vendoring projects should run the same scan over their own UI files
-(see SKILL.md, Acceptance bar).
+theme the first time the palette changes; that is how hand-built screens end
+up with a navy panel inside a green app. Run the literal scan from SKILL.md
+(Acceptance bar) over the app's UI files.

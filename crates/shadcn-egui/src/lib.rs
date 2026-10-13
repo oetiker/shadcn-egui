@@ -66,6 +66,8 @@ mod skill_docs {
     struct Icons;
     #[doc = include_str!("../../../skills/build-ui/references/layout-map.md")]
     struct LayoutMap;
+    #[doc = include_str!("../../../skills/build-ui/references/presets.md")]
+    struct Presets;
     #[doc = include_str!("../../../skills/build-ui/references/token-map.md")]
     struct TokenMap;
     #[doc = include_str!("../../../skills/port-component/SKILL.md")]

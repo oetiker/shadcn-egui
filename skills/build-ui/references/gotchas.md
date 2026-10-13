@@ -8,12 +8,12 @@
 - **`StripBuilder.horizontal` eats all vertical space.** Wrap in `allocate_ui` with
   a fixed row height.
 - **First-frame jitter & deferred fonts.** `ctx.set_fonts` takes effect next frame,
-  so a named font family may be missing on frame 1 — use `theme::family(ctx, name)`
+  so a named font family may be missing on frame 1. Use `theme::family(ctx, name)`
   which falls back to Proportional until the atlas is ready. For snapshot tests,
   `harness.run()` steps frames before snapshotting.
 - **`override_text_color` is baked into galleys.** `WidgetText::into_galley` bakes
   the global text color, so `painter().galley(.., color)` can't override it. To
-  force a per-widget color (e.g. dark text on a light button), build the galley
+  force a per-widget color (for example dark text on a light button), build the galley
   with `painter().layout_no_wrap(text, font_id, explicit_color)` (see `button.rs`).
 - **`strong()` is not a bold font.** egui's `strong` brightens color. For weight use the
   named families via `theme::family(ctx, FAMILY_MEDIUM|FAMILY_SEMIBOLD)`.
@@ -56,7 +56,7 @@
 - **No multi-stop/radial gradients, no per-widget box-shadow stacks.** One `Shadow`
   per `Frame`; gradients need a hand-built `Mesh`.
 - **Apply the theme once, not every frame.** Call `Theme::apply` right after the
-  context is created, and again only when the theme changes (e.g. a light/dark
+  context is created, and again only when the theme changes (for example a light/dark
   toggle). It sets the dark and the light style alike, so a system theme switch
   keeps it, and eframe restores its saved state before the app creator runs
   (styles are not saved). Re-applying every frame buys nothing and hides bugs:
