@@ -28,11 +28,7 @@ pub fn upstream_markers(text: &str) -> BTreeSet<String> {
             .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
             .unwrap_or(tail.len());
         let m = &tail[..len];
-        let cli = m == "cn-font-heading"
-            || m.starts_with("cn-menu-")
-            || m.ends_with("-logical")
-            || m == "cn-rtl-flip"
-            || m == "cn-logical-sides";
+        let cli = crate::markers::is_cli_marker(m);
         if !cli && m.len() > 3 {
             out.insert(m.to_owned());
         }
@@ -119,6 +115,38 @@ pub fn check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String> {
                 "tests/fixtures/{fixture} differs from {upstream}; re-run stylegen generate"
             )),
         }
+    }
+    problems
+}
+
+/// Component source copies (`<tool>/tests/fixtures/ui/`) that differ from
+/// the checkout, are missing, or are no longer upstream.
+pub fn check_ui(up: &Path, tool: &Path, lines: &[MarkerLine]) -> Vec<String> {
+    use crate::sources::{svelte_files, UI};
+    let ours_root = tool.join("tests/fixtures/ui");
+    let theirs = match svelte_files(&up.join(UI), lines) {
+        Ok(t) => t,
+        Err(e) => return vec![format!("{UI}: cannot list the upstream sources ({e})")],
+    };
+    let ours = svelte_files(&ours_root, lines).unwrap_or_default();
+    let mut problems = Vec::new();
+    for (dir, file) in &theirs {
+        let a = std::fs::read(ours_root.join(dir).join(file));
+        let b = std::fs::read(up.join(UI).join(dir).join(file));
+        match (a, b) {
+            (Ok(a), Ok(b)) if a == b => {}
+            (Err(_), _) => problems.push(format!(
+                "tests/fixtures/ui/{dir}/{file} is missing; re-run stylegen generate"
+            )),
+            _ => problems.push(format!(
+                "tests/fixtures/ui/{dir}/{file} differs from {UI}/{dir}/{file}; re-run stylegen generate"
+            )),
+        }
+    }
+    for (dir, file) in ours.iter().filter(|f| !theirs.contains(f)) {
+        problems.push(format!(
+            "tests/fixtures/ui/{dir}/{file} is no longer upstream; remove it"
+        ));
     }
     problems
 }

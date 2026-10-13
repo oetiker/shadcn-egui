@@ -23,3 +23,14 @@ pub fn parse_markers(src: &str) -> Vec<MarkerLine> {
         })
         .collect()
 }
+
+/// Markers only the shadcn CLI rewrites (fonts, menu targets, RTL and
+/// logical-side helpers). The registry keeps some as text and drops the
+/// classes of `*-logical`; the crate models none of them.
+pub fn is_cli_marker(m: &str) -> bool {
+    m == "cn-font-heading"
+        || m.starts_with("cn-menu-")
+        || m.ends_with("-logical")
+        || m == "cn-rtl-flip"
+        || m == "cn-logical-sides"
+}

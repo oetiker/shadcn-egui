@@ -105,3 +105,56 @@ fn reports_fixture_copies_that_differ_from_upstream() {
         .iter()
         .any(|p| p.contains("style-vega.css") && p.ends_with("re-run stylegen generate")));
 }
+
+#[test]
+fn reports_ui_copies_that_differ_missing_or_stale() {
+    use stylegen::drift::check_ui;
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("stylegen-ui-{}", std::process::id()));
+    let up = dir.join("up");
+    let tool = dir.join("tool");
+    let ui_up = up.join("docs/src/lib/registry/ui/tabs");
+    let ui_ours = tool.join("tests/fixtures/ui/tabs");
+    std::fs::create_dir_all(&ui_up).unwrap();
+    std::fs::create_dir_all(&ui_ours).unwrap();
+    for f in ["tabs.svelte", "tabs-list.svelte"] {
+        std::fs::write(ui_up.join(f), f).unwrap();
+        std::fs::write(ui_ours.join(f), f).unwrap();
+    }
+    let lines = parse_markers("tabs.rs tabs: cn-tabs\n");
+    assert!(
+        check_ui(&up, &tool, &lines).is_empty(),
+        "identical copies are clean"
+    );
+
+    std::fs::write(ui_up.join("tabs-list.svelte"), "changed").unwrap();
+    std::fs::write(ui_up.join("tabs-trigger.svelte"), "new").unwrap();
+    std::fs::write(ui_ours.join("tabs-old.svelte"), "gone upstream").unwrap();
+    let problems = check_ui(&up, &tool, &lines);
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(problems.len(), 3, "{problems:#?}");
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("tabs-list.svelte differs")));
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("tabs-trigger.svelte is missing")));
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("tabs-old.svelte is no longer upstream")));
+}
+
+#[test]
+fn cli_markers_are_named_in_one_place() {
+    use stylegen::markers::is_cli_marker;
+    for m in [
+        "cn-font-heading",
+        "cn-menu-target",
+        "cn-select-content-logical",
+        "cn-rtl-flip",
+        "cn-logical-sides",
+    ] {
+        assert!(is_cli_marker(m), "{m}");
+    }
+    assert!(!is_cli_marker("cn-select-content"));
+}

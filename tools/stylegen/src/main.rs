@@ -68,7 +68,7 @@ fn generate(
     pin_react: &str,
     lines: &[markers::MarkerLine],
 ) -> ExitCode {
-    stylegen::sources::refresh(up, up_react, tool)
+    stylegen::sources::refresh(up, up_react, tool, lines)
         .expect("copy the upstream sources into tests/fixtures");
     let shipped: Vec<String> = lines.iter().flat_map(|l| l.markers.clone()).collect();
     let export: Vec<String> = std::fs::read_to_string(tool.join("EXPORT"))
@@ -163,6 +163,7 @@ fn drift(
 ) -> ExitCode {
     let mut problems = stylegen::drift::check(up, crate_root, lines);
     problems.extend(stylegen::drift::check_sources(up, up_react, tool));
+    problems.extend(stylegen::drift::check_ui(up, tool, lines));
     for p in &problems {
         println!("{p}");
     }
