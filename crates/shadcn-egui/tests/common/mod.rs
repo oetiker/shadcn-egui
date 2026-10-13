@@ -146,8 +146,11 @@ pub fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
     rects
 }
 
-/// The colour of the first text a frame painted, as its glyphs carry it
-/// (a painter's opacity fades the glyphs, not the layout job).
+/// The colour the first text a frame painted reaches the screen in,
+/// resolved as epaint's tessellator does: the shape's override colour, or
+/// its fallback colour for glyphs laid out in `Color32::PLACEHOLDER`, then
+/// faded by the shape's opacity (a painter's opacity fades the glyphs, not
+/// the layout job).
 pub fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
     fn walk(s: &egui::Shape) -> Option<egui::Color32> {
         match s {
@@ -156,7 +159,18 @@ pub fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
                 .rows
                 .iter()
                 .find_map(|r| r.visuals.mesh.vertices.first())
-                .map(|v| v.color),
+                .map(|v| {
+                    let colour = match t.override_text_color {
+                        Some(c) => c,
+                        None if v.color == egui::Color32::PLACEHOLDER => t.fallback_color,
+                        None => v.color,
+                    };
+                    if t.opacity_factor < 1.0 {
+                        colour.gamma_multiply(t.opacity_factor)
+                    } else {
+                        colour
+                    }
+                }),
             egui::Shape::Vec(v) => v.iter().find_map(walk),
             _ => None,
         }
