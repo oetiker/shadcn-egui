@@ -764,3 +764,76 @@ fn slider_fade_multiplies_down_the_parts() {
         );
     }
 }
+
+fn popover_probe(theme: Theme, offset: Option<f32>) -> (egui::Rect, f32) {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::popover::Popover;
+    use std::{cell::Cell, rc::Rc};
+    let width = Rc::new(Cell::new(0.0));
+    let w = width.clone();
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(520.0, 320.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            let resp = ui.add(Button::new("Open"));
+            let mut p = Popover::new(&resp);
+            if let Some(o) = offset {
+                p = p.side_offset(o);
+            }
+            p.show(|ui| {
+                w.set(ui.available_width());
+                ui.label("Inside");
+            });
+        });
+    h.run();
+    h.get_by_label("Open").click();
+    h.run();
+    (h.get_by_label("Inside").rect(), width.get())
+}
+
+#[test]
+fn popover_width_and_offset() {
+    let wide = common::restyled(Theme::vega_light(), |s| {
+        s.popover_content.width.base = Some(400.0);
+    });
+    let (near, w288) = popover_probe(Theme::vega_light(), None);
+    let (_, w400) = popover_probe(wide, None);
+    assert_eq!(w400 - w288, 112.0);
+    let (far, _) = popover_probe(Theme::vega_light(), Some(20.0));
+    assert_eq!(far.top() - near.top(), 16.0);
+}
+
+/// Space between the two buttons of a dialog footer under `theme`.
+fn footer_gap(theme: Theme) -> f32 {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::dialog::{self, Dialog};
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(640.0, 360.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            Dialog::new("gap", "Title").show(ui.ctx(), &mut true, |ui| {
+                dialog::footer(ui, |ui| {
+                    ui.add(Button::new("Right"));
+                    ui.add(Button::new("Left"));
+                });
+            });
+        });
+    h.run();
+    h.run();
+    h.get_by_label("Right").rect().left() - h.get_by_label("Left").rect().right()
+}
+
+#[test]
+fn dialog_footer_gap_comes_from_the_style() {
+    let wide = common::restyled(Theme::vega_light(), |s| {
+        s.dialog_footer.gap.base = Some(20.0);
+    });
+    assert_eq!(footer_gap(wide), 20.0);
+    // No code fallback: a cleared gap is no gap.
+    let none = common::restyled(Theme::vega_light(), |s| {
+        s.dialog_footer.gap = shadcn_egui::style::Prop::default();
+    });
+    assert_eq!(footer_gap(none), 0.0);
+}

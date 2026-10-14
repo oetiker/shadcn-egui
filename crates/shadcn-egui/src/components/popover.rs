@@ -1,8 +1,7 @@
 //! shadcn Popover, ported from shadcn-svelte `ui/popover/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; padding,
-//! gap, radius, ring, shadow and text come from the style's
-//! `cn-popover-content`, `cn-popover-header`, `cn-popover-title` and
-//! `cn-popover-description` recipes.
+//! `tools/stylegen/PIN`. Width, padding, gap, radius, ring, shadow and text
+//! come from the style's `cn-popover-content`, `cn-popover-header`,
+//! `cn-popover-title` and `cn-popover-description` recipes.
 //!
 //! Behaviour follows bits-ui Popover: a click on the trigger toggles it, Esc
 //! and a click outside close it. bits-ui also moves keyboard focus into the
@@ -12,20 +11,16 @@
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
-use crate::components::shared::ring;
+use crate::components::shared::{ring, DEFAULT_SIDE_OFFSET};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
 use egui::{Frame, Margin, PopupCloseBehavior, Response, RichText, Ui};
 
-// base: "w-72"
-const DEFAULT_WIDTH: f32 = 288.0;
-// base: "sideOffset = 4"
-const SIDE_OFFSET: f32 = 4.0;
-
 pub struct Popover<'a> {
     trigger: &'a Response,
     width: Option<f32>,
+    side_offset: f32,
 }
 
 impl<'a> Popover<'a> {
@@ -34,11 +29,18 @@ impl<'a> Popover<'a> {
         Self {
             trigger,
             width: None,
+            side_offset: DEFAULT_SIDE_OFFSET,
         }
     }
-    /// Width of the popover box, padding included; default `w-72`.
+    /// Width of the popover box, padding included; default the style's
+    /// `w-72`.
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
+        self
+    }
+    /// Gap between the trigger and the popover (shadcn `sideOffset`, default 4).
+    pub fn side_offset(mut self, px: f32) -> Self {
+        self.side_offset = px;
         self
     }
     /// Show the content while open. Returns its value while open.
@@ -76,10 +78,11 @@ impl<'a> Popover<'a> {
         if let Some(fill) = fill {
             frame = frame.fill(fill);
         }
-        let inner_width = (self.width.unwrap_or(DEFAULT_WIDTH) - pad_l - pad_r).max(0.0);
+        let width = self.width.unwrap_or_else(|| px(|r| &r.width));
+        let inner_width = (width - pad_l - pad_r).max(0.0);
         let shown = egui::Popup::from_toggle_button_response(self.trigger)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-            .gap(SIDE_OFFSET)
+            .gap(self.side_offset)
             .frame(frame)
             .show(|ui| {
                 ui.set_width(inner_width);

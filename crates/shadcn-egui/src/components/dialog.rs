@@ -1,7 +1,7 @@
 //! shadcn Dialog, ported from shadcn-svelte `ui/dialog/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; width,
-//! padding, gap, radius, ring, text, the footer strip and the close button's
-//! position come from the style's `cn-dialog-*` recipes.
+//! `tools/stylegen/PIN`. Width, padding, gap, radius, ring, text, the footer's
+//! strip and gap, and the close button's position come from the style's
+//! `cn-dialog-*` recipes.
 //!
 //! Built on `egui::Modal`, which keeps backdrop and panel in one area (so their
 //! z-order cannot flip) and blocks input to everything beneath. Closes on Esc,
@@ -19,9 +19,6 @@ use egui::{
     Align, Color32, CornerRadius, Frame, Id, Layout, Margin, Rect, RichText, Shape, Stroke, Ui,
     UiBuilder,
 };
-
-// base: "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
-const FOOTER_GAP: f32 = 8.0;
 
 pub struct Dialog<'a> {
     id: Id,
@@ -93,7 +90,6 @@ impl<'a> Dialog<'a> {
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
 
-        // base: "cn-dialog-content fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none"
         let max_width = self
             .width
             .or_else(|| pick(&l, |r| &r.max_width, g))
@@ -240,7 +236,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         px(|r| &r.margin_bottom),
         px(|r| &r.margin_left),
     );
-    let gap = pick(&l, |r| &r.gap, g).unwrap_or(FOOTER_GAP);
+    let gap = pick(&l, |r| &r.gap, g).unwrap_or(0.0);
 
     let at = ui.max_rect();
     let top = ui.cursor().top();
