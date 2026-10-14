@@ -25,6 +25,11 @@ are recorded here. The format is based on
   of a button, input, checkbox, switch, slider, label, select trigger or tab
   took its `opacity`. A custom component fades a container part's content
   with `components::shared::faded`. (#6)
+- Inside a disabled area (`ui.add_enabled(false, ..)`, `Ui::disable`), a
+  part whose style sets a `disabled:` opacity is drawn at the disabled fade
+  alone, as in the browser, even where `theme.style` also gives it a base
+  opacity. A part without a `disabled:` opacity keeps its own opacity on top
+  of the disabled fade. (#6)
 
 ### Changed
 - In a line tab list (`TabsVariant::Line`), a focused tab that is not active

@@ -1442,9 +1442,15 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
     assert!(fails.is_empty(), "{fails:#?}");
 }
 
+/// A part's opacity with its rules that need `DISABLED` removed, so a
+/// disabled `Ui` falls back to the part's other opacity.
+fn without_disabled(p: &mut shadcn_egui::style::Prop<f32>) {
+    p.rules.retain(|r| !r.when.all.contains(State::DISABLED));
+}
+
 /// Inside a disabled `Ui` egui fades every shape once, standing in for the
-/// style's `disabled:` fade; a part's other opacity (here an app's base
-/// 0.5) still applies on top of it.
+/// style's `disabled:` fade. Where no `disabled:` rule matches, a part's
+/// other opacity (here an app's base 0.5) still applies on top of it.
 #[test]
 fn disabled_ui_keeps_a_parts_own_opacity() {
     use shadcn_egui::components::badge::Badge;
@@ -1459,12 +1465,18 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
     let cases: [(&str, Restyle, Add); 7] = [
         (
             "button",
-            |s| s.button.opacity.base = Some(0.5),
+            |s| {
+                without_disabled(&mut s.button.opacity);
+                s.button.opacity.base = Some(0.5);
+            },
             |ui| ui.add(Button::new("Save")),
         ),
         (
             "label",
-            |s| s.label.opacity.base = Some(0.5),
+            |s| {
+                without_disabled(&mut s.label.opacity);
+                s.label.opacity.base = Some(0.5);
+            },
             |ui| ui.add(Label::new("Email")),
         ),
         (
@@ -1474,17 +1486,26 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
         ),
         (
             "checkbox",
-            |s| s.checkbox.opacity.base = Some(0.5),
+            |s| {
+                without_disabled(&mut s.checkbox.opacity);
+                s.checkbox.opacity.base = Some(0.5);
+            },
             |ui| ui.add(Checkbox::new(&mut true)),
         ),
         (
             "switch",
-            |s| s.switch.opacity.base = Some(0.5),
+            |s| {
+                without_disabled(&mut s.switch.opacity);
+                s.switch.opacity.base = Some(0.5);
+            },
             |ui| ui.add(Switch::new(&mut true)),
         ),
         (
             "input",
-            |s| s.input.opacity.base = Some(0.5),
+            |s| {
+                without_disabled(&mut s.input.opacity);
+                s.input.opacity.base = Some(0.5);
+            },
             |ui| ui.add(Input::new(&mut "typed".to_owned())),
         ),
         (
@@ -1504,6 +1525,74 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
         let plain = render(&Theme::vega_light());
         let faded = render(&common::restyled(Theme::vega_light(), restyle));
         fails.extend(assert_fades(name, &plain, &faded, &[0.5], &[]));
+    }
+    assert!(fails.is_empty(), "{fails:#?}");
+}
+
+/// In a disabled `Ui` a matching `disabled:opacity-*` rule replaces the
+/// part's base opacity, as in CSS, and egui's fade stands in for that rule:
+/// an app's base 0.8 does not fade the part any further.
+#[test]
+fn disabled_rule_replaces_a_parts_base_opacity_in_a_disabled_ui() {
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::select::Select;
+    use shadcn_egui::components::slider::Slider;
+    use shadcn_egui::components::switch::Switch;
+    type Add = fn(&mut egui::Ui) -> egui::Response;
+    type Restyle = fn(&mut shadcn_egui::style::Style);
+    let cases: [(&str, Restyle, Add); 8] = [
+        (
+            "button",
+            |s| s.button.opacity.base = Some(0.8),
+            |ui| ui.add(Button::new("Save")),
+        ),
+        (
+            "label",
+            |s| s.label.opacity.base = Some(0.8),
+            |ui| ui.add(Label::new("Email")),
+        ),
+        (
+            "checkbox",
+            |s| s.checkbox.opacity.base = Some(0.8),
+            |ui| ui.add(Checkbox::new(&mut true)),
+        ),
+        (
+            "switch",
+            |s| s.switch.opacity.base = Some(0.8),
+            |ui| ui.add(Switch::new(&mut true)),
+        ),
+        (
+            "input",
+            |s| s.input.opacity.base = Some(0.8),
+            |ui| ui.add(Input::new(&mut "typed".to_owned())),
+        ),
+        (
+            "select",
+            |s| s.select_trigger.opacity.base = Some(0.8),
+            |ui| ui.add(Select::new("s", &mut 0, &["One", "Two"])),
+        ),
+        (
+            "slider",
+            |s| s.slider.opacity.base = Some(0.8),
+            |ui| ui.add(Slider::new(&mut 30.0, 0.0..=100.0)),
+        ),
+        (
+            "tabs",
+            |s| s.tabs_trigger.opacity.base = Some(0.8),
+            |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])),
+        ),
+    ];
+    let mut fails = Vec::new();
+    for (name, restyle, add) in cases {
+        let render = |theme: &Theme| {
+            common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
+        };
+        let plain = render(&Theme::vega_light());
+        let based = render(&common::restyled(Theme::vega_light(), restyle));
+        fails.extend(assert_fades(name, &plain, &based, &[], &[]));
     }
     assert!(fails.is_empty(), "{fails:#?}");
 }

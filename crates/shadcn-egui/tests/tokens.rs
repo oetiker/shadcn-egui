@@ -212,11 +212,13 @@ fn numbers(code: &str) -> impl Iterator<Item = Number<'_>> {
             };
             if radix != 10 {
                 i += 2;
-                while i < b.len() && (b[i].is_ascii_hexdigit() || b[i] == b'_') {
+                while i < b.len() && ((b[i] as char).is_digit(radix) || b[i] == b'_') {
                     i += 1;
                 }
                 let text = code[start + 2..i].replace('_', "");
-                let value = u64::from_str_radix(&text, radix).map_or(f64::NAN, |v| v as f64);
+                let value = u64::from_str_radix(&text, radix)
+                    .unwrap_or_else(|e| panic!("unreadable literal {}: {e}", &code[start..i]))
+                    as f64;
                 return Some(Number {
                     float: false,
                     value,
@@ -240,7 +242,10 @@ fn numbers(code: &str) -> impl Iterator<Item = Number<'_>> {
                     i += suffix.len();
                 }
             }
-            let value = text.trim_end_matches('.').parse().unwrap_or(f64::NAN);
+            let value = text
+                .trim_end_matches('.')
+                .parse()
+                .unwrap_or_else(|e| panic!("unreadable literal {}: {e}", &code[start..i]));
             return Some(Number {
                 float,
                 value,
@@ -384,9 +389,21 @@ fn strict_scanner_catches_literals() {
     assert_eq!(n("let m = Margin::same(0b100);"), 1);
     assert_eq!(n("let r = CornerRadius::same(0x0);"), 0);
     assert_eq!(n("let c = 0xff;"), 0);
+    // A binary or octal literal holds only its radix's digits: the `f`
+    // after `0b0` is not one of them.
+    assert_eq!(n("let r = CornerRadius::same(0b0f);"), 0);
+    assert_eq!(n("let r = CornerRadius::same(0o0e);"), 0);
     // A `/* .. */` comment on one line holds no code.
     assert_eq!(n("let w = /* 4.0 wide */ width;"), 0);
     assert_eq!(n("let h = 32.0; /* ok */"), 1);
+}
+
+/// A literal the scanner cannot read stops the scan with the literal named,
+/// instead of reading as a number that matches nothing.
+#[test]
+#[should_panic(expected = "0x")]
+fn unreadable_literal_names_itself() {
+    strict_violations("let r = CornerRadius::same(0x);");
 }
 
 /// The code before a file's trailing `#[cfg(test)] mod tests` module. Unit

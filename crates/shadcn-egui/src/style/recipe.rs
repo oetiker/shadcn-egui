@@ -202,27 +202,44 @@ pub fn pick<T: Copy>(
     pick_props(layers.iter().map(|r| field(r)), s)
 }
 
+/// Like [`pick`], but also the condition of the winning candidate: the
+/// rule's [`When`], or [`When::ALWAYS`] for a base value.
+pub(crate) fn pick_when<T: Copy>(
+    layers: &[&Recipe],
+    field: impl Fn(&Recipe) -> &Prop<T>,
+    s: State,
+) -> Option<(When, T)> {
+    pick_props_when(layers.iter().map(|r| field(r)), s)
+}
+
 fn pick_props<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
 ) -> Option<T> {
-    let mut best: Option<((u128, usize, usize), T)> = None;
-    let mut consider = |key: (u128, usize, usize), v: T| {
-        if best.as_ref().is_none_or(|(k, _)| key >= *k) {
-            best = Some((key, v));
+    pick_props_when(props, s).map(|(_, v)| v)
+}
+
+fn pick_props_when<'a, T: Copy + 'a>(
+    props: impl IntoIterator<Item = &'a Prop<T>>,
+    s: State,
+) -> Option<(When, T)> {
+    let mut best: Option<((u128, usize, usize), When, T)> = None;
+    let mut consider = |key: (u128, usize, usize), when: When, v: T| {
+        if best.as_ref().is_none_or(|(k, _, _)| key >= *k) {
+            best = Some((key, when, v));
         }
     };
     for (li, p) in props.into_iter().enumerate() {
         if let Some(v) = p.base {
-            consider((0, li, 0), v);
+            consider((0, li, 0), When::ALWAYS, v);
         }
         for (ri, r) in p.rules.iter().enumerate() {
             if r.when.matches(s) {
-                consider((r.rank, li, ri + 1), r.value);
+                consider((r.rank, li, ri + 1), r.when, r.value);
             }
         }
     }
-    best.map(|(_, v)| v)
+    best.map(|(_, when, v)| (when, v))
 }
 
 /// A palette colour role (shadcn CSS variable), or a fixed colour.

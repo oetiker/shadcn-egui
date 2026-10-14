@@ -1,6 +1,6 @@
 //! Shared painting helpers for shadcn-style components.
 
-use crate::style::{pick, Recipe, Shift, State, TextSize};
+use crate::style::{pick, pick_when, Recipe, Shift, State, TextSize};
 use crate::Theme;
 use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 
@@ -22,16 +22,23 @@ pub fn opacity(chain: &[&[&Recipe]], s: State) -> f32 {
 
 /// A part's resolved [`opacity`] for painting in `ui`. In a disabled `Ui`
 /// (`ui.add_enabled(false, ..)`, `Ui::disable`) egui has faded every shape
-/// once already, standing in for the style's `disabled:` fade, so the rules
-/// that need `DISABLED` are left out there; the part's other opacity (a
-/// base value, another state's) still applies.
+/// once already, standing in for the style's `disabled:` fade. So where a
+/// rule that needs `DISABLED` wins a part's pick, that part's own opacity
+/// is 1.0: the `disabled:` rule replaces the part's base value, as in CSS,
+/// and egui's fade replaces the rule. Where none wins, the normal pick
+/// applies (a base 0.5 stays 0.5 on top of egui's fade).
 pub fn ui_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
-    let s = if ui.is_enabled() {
-        s
-    } else {
-        State(s.0 & !State::DISABLED.0)
-    };
-    opacity(chain, s)
+    if ui.is_enabled() {
+        return opacity(chain, s);
+    }
+    chain
+        .iter()
+        .map(|stack| match pick_when(stack, |r| &r.opacity, s) {
+            Some((when, _)) if when.all.contains(State::DISABLED) => INITIAL_OPACITY,
+            Some((_, v)) => v,
+            None => INITIAL_OPACITY,
+        })
+        .product()
 }
 
 /// The `Ui`'s painter, faded by the part's [`ui_opacity`] (`chain` as in
@@ -48,12 +55,18 @@ pub fn style_painter(ui: &Ui, chain: &[&[&Recipe]], s: State) -> Painter {
 /// Run `add` with everything it paints in `ui` faded by `opacity` (a
 /// container part's resolved [`opacity`]), then restore the `Ui`'s own
 /// opacity. Unlike a scope, this adds no layout of its own. Parts nested in
-/// `add` multiply their own opacity on top, as CSS does.
+/// `add` multiply their own opacity on top, as CSS does. A
+/// [`Ui::disable`] inside `add` (a disabled card action) keeps its fade:
+/// the `Ui` stays disabled, so what it paints afterwards stays faded too.
 pub fn faded<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let before = ui.opacity();
+    let (before, was_enabled) = (ui.opacity(), ui.is_enabled());
     ui.multiply_opacity(opacity);
     let inner = add(ui);
     ui.set_opacity(before);
+    // Restoring `before` undid the fade egui's `disable` multiplied in.
+    if was_enabled && !ui.is_enabled() {
+        ui.multiply_opacity(ui.visuals().disabled_alpha());
+    }
     inner
 }
 

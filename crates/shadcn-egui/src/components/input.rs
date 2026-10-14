@@ -100,7 +100,7 @@ impl<'a> Widget for Input<'a> {
                 + f32::from(margin.bottom)
         });
 
-        let fade = ui_opacity(ui, &[&l[..]], g.with(State::DISABLED, !self.enabled));
+        let fade = ui_opacity(ui, &[&l[..]], g.with(State::DISABLED, !enabled));
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));

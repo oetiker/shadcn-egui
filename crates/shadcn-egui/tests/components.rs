@@ -1836,3 +1836,27 @@ fn switch_paints_its_style_shadow() {
         "no shadow painted"
     );
 }
+
+/// A container's fade ends with its content, but a `Ui::disable` inside
+/// the content (for example a disabled card action) keeps egui's disabled
+/// fade for what the `Ui` paints afterwards, as the `Ui` stays disabled.
+#[test]
+fn faded_keeps_a_disable_inside_its_content() {
+    use shadcn_egui::components::shared::faded;
+    let ctx = egui::Context::default();
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let alpha = ui.visuals().disabled_alpha();
+        faded(ui, 0.5, |ui| ui.disable());
+        assert!(!ui.is_enabled());
+        assert!(
+            (ui.opacity() - alpha).abs() < 1e-6,
+            "opacity {} after a disable inside faded, egui's fade is {alpha}",
+            ui.opacity()
+        );
+        faded(ui, 0.5, |_| {});
+        assert!(
+            (ui.opacity() - alpha).abs() < 1e-6,
+            "an already disabled Ui"
+        );
+    });
+}
