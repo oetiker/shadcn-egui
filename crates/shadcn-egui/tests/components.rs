@@ -479,6 +479,130 @@ fn tabs_focus_inactive_line_snapshot() {
     );
 }
 
+/// One tab-trigger scenario of the review image: the labels, the selected
+/// trigger, the focused trigger, the hovered label, and whether the list is
+/// enabled.
+struct TabsRow {
+    labels: &'static [&'static str],
+    selected: usize,
+    focus: Option<usize>,
+    hover: Option<&'static str>,
+    enabled: bool,
+}
+
+/// Every trigger state of one tabs variant in one image per theme. A tab
+/// list takes keyboard focus and the pointer one at a time, so each row
+/// renders in its own harness (all the same page, the row at its own
+/// height) and the row bands are stacked into one picture.
+fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::tabs::Tabs;
+
+    const ROW_H: usize = 56;
+    // Rows start below the page margin; bands are cut a little above the row.
+    const BAND_TOP: usize = 10;
+    let row = |labels, selected, focus, hover, enabled| TabsRow {
+        labels,
+        selected,
+        focus,
+        hover,
+        enabled,
+    };
+    let rows = [
+        row(
+            &["Inactive", "Hover", "Active"],
+            2,
+            None,
+            Some("Hover"),
+            true,
+        ),
+        row(
+            &["Inactive", "Active + hover"],
+            1,
+            None,
+            Some("Active + hover"),
+            true,
+        ),
+        row(&["Inactive", "Focus", "Active"], 2, Some(1), None, true),
+        row(
+            &["Inactive", "Focus + hover", "Active"],
+            2,
+            Some(1),
+            Some("Focus + hover"),
+            true,
+        ),
+        row(&["Inactive", "Active + focus"], 1, Some(1), None, true),
+        row(
+            &["Inactive", "Active + focus + hover"],
+            1,
+            Some(1),
+            Some("Active + focus + hover"),
+            true,
+        ),
+        row(&["Disabled", "Disabled active"], 1, None, None, false),
+    ];
+    let page_h = BAND_TOP + rows.len() * ROW_H + 14;
+    let size = egui::vec2(520.0, page_h as f32);
+
+    let mut results = egui_kittest::SnapshotResults::new();
+    for (suffix, theme) in common::snapshot_themes() {
+        let mut stacked = None;
+        for (i, r) in rows.iter().enumerate() {
+            let mut h = common::page_harness(size, theme.clone(), |ui| {
+                ui.add_space((i * ROW_H) as f32);
+                let mut sel = r.selected;
+                let resp = ui.add(
+                    Tabs::new(&mut sel, r.labels)
+                        .variant(variant)
+                        .enabled(r.enabled),
+                );
+                if let Some(f) = r.focus {
+                    ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", f))));
+                }
+            });
+            if let Some(label) = r.hover {
+                h.get_by_label(label).hover();
+                h.run();
+            }
+            let img = h.render().expect("render the tabs row");
+            assert_eq!(img.height() as usize, page_h, "one pixel per point");
+            match stacked.as_mut() {
+                None => stacked = Some(img),
+                Some(out) => {
+                    let out: &mut [u8] = &mut *out;
+                    let stride = img.width() as usize * 4;
+                    let (from, to) = (
+                        (BAND_TOP + i * ROW_H) * stride,
+                        (BAND_TOP + (i + 1) * ROW_H) * stride,
+                    );
+                    out[from..to].copy_from_slice(&img.as_raw()[from..to]);
+                }
+            }
+        }
+        let img = stacked.expect("at least one row");
+        results.add(egui_kittest::try_image_snapshot(
+            &img,
+            format!("{name}_{suffix}"),
+        ));
+    }
+}
+
+#[test]
+fn tabs_states_default_snapshot() {
+    tabs_states(
+        shadcn_egui::components::tabs::TabsVariant::Default,
+        "tabs_states_default",
+    );
+}
+
+#[test]
+fn tabs_states_line_snapshot() {
+    tabs_states(
+        shadcn_egui::components::tabs::TabsVariant::Line,
+        "tabs_states_line",
+    );
+}
+
 #[test]
 fn badge_is_h5_in_both_styles() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
