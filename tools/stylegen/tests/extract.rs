@@ -221,8 +221,13 @@ fn apostrophe_in_markup_text_opens_no_string() {
 
 #[test]
 fn tv_keys_match_as_whole_keys() {
+    // `database` is not `base`: an unread key, named whole.
     let longer = "const v = tv({ database: \"cn-q wrong\", base: \"cn-q right\" });";
-    assert_eq!(class_strings(longer).unwrap(), ["cn-q right"]);
+    let err = class_strings(longer).unwrap_err();
+    assert!(
+        err.contains("key the extractor does not read: database "),
+        "{err}"
+    );
     let quoted =
         "const v = tv({ variants: { size: { sm: \"cn-q-sm base:x\" } }, base: \"cn-q right\" });";
     // One tv keeps base first, then the variants.
@@ -236,4 +241,26 @@ fn tv_keys_match_as_whole_keys() {
 fn member_call_in_cn_is_an_error() {
     let err = class_strings("<div class={cn(\"cn-a x\", state.classes(open))}></div>").unwrap_err();
     assert!(err.contains("state.classes"), "{err}");
+}
+
+#[test]
+fn unread_tv_keys_are_errors() {
+    let compound = "const v = tv({ base: \"cn-c a\", variants: { size: { sm: \"cn-c-sm b\" } }, compoundVariants: [{ size: \"sm\", class: \"cn-c-x c\" }] });";
+    let err = class_strings(compound).unwrap_err();
+    assert!(err.contains("compoundVariants"), "{err}");
+    // `defaultVariants` names variants and carries no classes: read as nothing.
+    let defaults = "const v = tv({ base: \"cn-d a\", variants: { size: { sm: \"cn-d-sm b\" } }, defaultVariants: { size: \"sm\" } });";
+    assert_eq!(class_strings(defaults).unwrap(), ["cn-d a", "cn-d-sm b"]);
+}
+
+#[test]
+fn conditional_tv_values_are_errors() {
+    for src in [
+        "const v = tv({ base: open ? \"cn-t a\" : \"cn-t b\" });",
+        "const v = tv({ base: open ? klass : \"cn-t b\" });",
+        "const v = tv({ base: \"cn-t a\", variants: { size: { sm: on ? \"cn-t-sm x\" : \"cn-t-sm y\" } } });",
+    ] {
+        let err = class_strings(src).unwrap_err();
+        assert!(err.contains("conditional"), "{src}: {err}");
+    }
 }
