@@ -1,13 +1,12 @@
 //! shadcn Tooltip, ported from shadcn-svelte `ui/tooltip/tooltip-content.svelte`
-//! at `tools/stylegen/PIN`. Base classes are quoted under `// base:`; the
-//! padding, text size and radius come from the style's `cn-tooltip-content`
-//! recipe, the arrow's size and radius from `cn-tooltip-arrow`. The arrow
+//! at `tools/stylegen/PIN`. Every value comes from the style's
+//! `cn-tooltip-content` and `cn-tooltip-arrow` recipes. The arrow
 //! classes `rotate-45` and `translate-y-[calc(-50%-2px)]` belong to the style
 //! and stylegen ignores them: the arrow is painted here as a diamond whose
 //! centre lies on the content edge, below or above the content, centred on the
 //! trigger.
 
-use crate::style::{pick, Role, State, TextSize};
+use crate::style::{pick, State, TextSize};
 use crate::Theme;
 use egui::{pos2, Color32, Frame, Margin, Pos2, RectAlign, Response, RichText, Shape};
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
@@ -36,35 +35,35 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     let line =
         pick(&content, |r| &r.line_height, g).map_or_else(|| t.line_px(text_size), |k| k * text_px);
     let radius = pick(&content, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
-    // base: "bg-foreground text-background"
-    let (fill, fg) = (t.role(Role::Foreground), t.role(Role::Background));
+    let fill = pick(&content, |r| &r.bg, g).map(|p| t.paint(p));
+    let fg = pick(&content, |r| &r.text, g).map(|p| t.paint(p));
+    let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p));
     let mut tip = egui::Tooltip::for_enabled(&resp);
-    // base: "z-50 w-fit max-w-xs"
-    let max_w = 320.0;
+    let max_w = pick(&content, |r| &r.max_width, g).unwrap_or(f32::INFINITY);
     // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
     let size = pick(&[&*t.style.tooltip_arrow], |r| &r.width, g).unwrap_or(0.0);
     let reach = size * FRAC_1_SQRT_2;
-    tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(
-        Frame::new()
-            .fill(fill)
-            .corner_radius(radius.round() as u8)
-            .inner_margin(Margin {
-                top: pad_t.round() as i8,
-                right: pad_r.round() as i8,
-                bottom: pad_b.round() as i8,
-                left: pad_l.round() as i8,
-            }),
-    );
+    let mut frame = Frame::new()
+        .corner_radius(radius.round() as u8)
+        .inner_margin(Margin {
+            top: pad_t.round() as i8,
+            right: pad_r.round() as i8,
+            bottom: pad_b.round() as i8,
+            left: pad_l.round() as i8,
+        });
+    if let Some(f) = fill {
+        frame = frame.fill(f);
+    }
+    tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(frame);
     let shown = tip.show(|ui| {
         ui.set_max_width(max_w - pad_l - pad_r);
-        ui.label(
-            RichText::new(text)
-                .size(text_px)
-                .line_height(Some(line))
-                .color(fg),
-        )
+        let mut label = RichText::new(text).size(text_px).line_height(Some(line));
+        if let Some(fg) = fg {
+            label = label.color(fg);
+        }
+        ui.label(label)
     });
-    if let Some(shown) = shown {
+    if let (Some(shown), Some(fill)) = (shown, arrow_fill) {
         let r = pick(&arrow, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, size / 2.0));
         let area = shown.response.rect;
         // The content lies above or below the trigger; the arrow sits on the edge facing it.
@@ -78,7 +77,6 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
             area.center().x
         };
         let painter = resp.ctx.layer_painter(shown.response.layer_id);
-        // base: "bg-foreground fill-foreground"
         painter.add(arrow_shape(pos2(x, y), size, r, fill));
     }
     resp

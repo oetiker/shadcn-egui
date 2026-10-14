@@ -353,3 +353,61 @@ fn focused_line_trigger_shows_its_underline() {
         }
     }
 }
+
+/// The tooltip's fill, text colour, arrow fill and max width all come from
+/// the style: an app restyles `tooltip_content` and `tooltip_arrow`.
+#[test]
+fn tooltip_colours_come_from_the_style() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::button::{Button, ButtonVariant};
+    use shadcn_egui::components::tooltip::tooltip;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.tooltip_content.bg.base = Some(Paint::Role(Role::Primary, 1.0));
+        s.tooltip_content.text.base = Some(Paint::Role(Role::Destructive, 1.0));
+        s.tooltip_content.max_width.base = Some(80.0);
+        s.tooltip_arrow.bg.base = Some(Paint::Role(Role::Primary, 1.0));
+    });
+    let (primary, destructive) = (theme.palette.primary, theme.palette.destructive);
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(240.0, 160.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            ui.style_mut().interaction.tooltip_delay = 0.0;
+            ui.add_space(72.0);
+            ui.horizontal(|ui| {
+                ui.add_space(32.0);
+                tooltip(
+                    ui.add(Button::new("Hover me").variant(ButtonVariant::Outline)),
+                    "Add to library",
+                );
+            });
+        });
+    h.run();
+    let trigger = h.get_by_label("Hover me").rect();
+    h.get_by_label("Hover me").hover();
+    h.run();
+    let text = h.get_by_label("Add to library").rect();
+    assert!(
+        text_colours(h.output()).contains(&destructive),
+        "text: {:?}",
+        text_colours(h.output())
+    );
+    // `max-w` 80 less 12 px padding on each side leaves 56 px: the label wraps.
+    assert!(text.width() <= 56.0, "max width: {text:?}");
+    assert!(text.height() > 24.0, "wraps: {text:?}");
+    let img = h.render().expect("render");
+    let px = |p: egui::Pos2| {
+        let c = img.get_pixel(p.x as u32, p.y as u32);
+        egui::Color32::from_rgb(c[0], c[1], c[2])
+    };
+    assert_eq!(
+        px(egui::pos2(text.left() - 4.0, text.center().y)),
+        primary,
+        "content"
+    );
+    assert_eq!(
+        px(egui::pos2(text.center().x, trigger.top() - 2.0)),
+        primary,
+        "arrow"
+    );
+}
