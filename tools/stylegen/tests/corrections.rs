@@ -148,12 +148,14 @@ fn c1_luma_and_rhea_trigger_border_is_not_important() {
 }
 
 /// C2: in a line list a focused trigger draws no ring, outline or focus
-/// border; its underline shows in `Ring`, active or not, light or dark.
-/// The default variant keeps upstream's focus ring.
+/// border. Its underline shows: in `Ring` on an inactive trigger, in
+/// `Foreground` and 3 px thick on the active one, light or dark. The
+/// default variant keeps upstream's focus ring.
 #[test]
-fn c2_focused_line_trigger_shows_its_underline_in_ring() {
-    let (h, line, def, sel, fv, dark) = (
+fn c2_focused_line_trigger_shows_its_underline() {
+    let (h, v, line, def, sel, fv, dark) = (
         flag("HORIZONTAL"),
+        flag("VERTICAL"),
         flag("VARIANT_LINE"),
         flag("VARIANT_DEFAULT"),
         flag("SELECTED"),
@@ -178,8 +180,31 @@ fn c2_focused_line_trigger_shows_its_underline_in_ring() {
                 Some(Value::Factor(1.0)),
                 "{style} {st:#x}"
             );
-            assert_eq!(resolve(a, Field::Bg, st), paint("Ring"), "{style} {st:#x}");
+            let active = extra & sel != 0;
+            let (colour, thick) = if active {
+                ("Foreground", 3.0)
+            } else {
+                ("Ring", 2.0)
+            };
+            assert_eq!(resolve(a, Field::Bg, st), paint(colour), "{style} {st:#x}");
+            assert_eq!(
+                resolve(a, Field::Height, st),
+                Some(Value::Px(thick)),
+                "{style} {st:#x}"
+            );
+            let vst = st & !h | v;
+            assert_eq!(
+                resolve(a, Field::Width, vst),
+                Some(Value::Px(thick)),
+                "{style} {vst:#x}"
+            );
         }
+        // An unfocused active line trigger keeps the 2 px underline.
+        assert_eq!(
+            resolve(a, Field::Height, h | line | sel),
+            Some(Value::Px(2.0)),
+            "{style}"
+        );
         // Unfocused line triggers and focused default triggers as upstream.
         assert_eq!(
             resolve(a, Field::Opacity, h | line),

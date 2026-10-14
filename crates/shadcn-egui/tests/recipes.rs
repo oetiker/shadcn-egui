@@ -213,9 +213,10 @@ fn luma_and_rhea_keep_the_dark_active_and_focus_border() {
 }
 
 /// C2: a focused trigger in a line list draws no ring, outline or focus
-/// border; its underline shows in `Ring`, whether it is active or not.
+/// border. A focused inactive trigger shows its underline in `Ring`; the
+/// focused active one keeps its `Foreground` underline, 3 px thick.
 #[test]
-fn focused_line_trigger_shows_its_underline_in_ring() {
+fn focused_line_trigger_shows_its_underline() {
     for (name, theme) in common::snapshot_themes() {
         for focused in [0, 1] {
             let (_, out) = common::measure_output(&theme, |ui| {
@@ -224,7 +225,7 @@ fn focused_line_trigger_shows_its_underline_in_ring() {
                 resp
             });
             let shapes = common::rect_shapes(&out);
-            let ring = theme.palette.ring;
+            let (ring, fg) = (theme.palette.ring, theme.palette.foreground);
             assert!(
                 !shapes
                     .iter()
@@ -239,16 +240,25 @@ fn focused_line_trigger_shows_its_underline_in_ring() {
                     .any(|r| r.stroke.width > 0.0 && r.stroke.color == ring),
                 "{name} tab {focused}: no Ring border: {shapes:?}"
             );
-            let bars: Vec<_> = shapes
-                .iter()
-                .filter(|r| r.stroke.width == 0.0 && r.fill == ring)
-                .collect();
-            assert_eq!(
-                bars.len(),
-                1,
-                "{name} tab {focused}: one Ring underline: {shapes:?}"
-            );
-            assert_eq!(bars[0].rect.height(), 2.0, "{name} tab {focused}");
+            let bars = |c: egui::Color32| -> Vec<f32> {
+                shapes
+                    .iter()
+                    .filter(|r| r.stroke.width == 0.0 && r.fill == c)
+                    .map(|r| r.rect.height())
+                    .collect()
+            };
+            if focused == 0 {
+                // Active and focused: Foreground, thicker.
+                assert_eq!(bars(ring), Vec::<f32>::new(), "{name}: no Ring underline");
+                assert_eq!(bars(fg), vec![3.0], "{name}: 3px Foreground underline");
+            } else {
+                assert_eq!(bars(ring), vec![2.0], "{name}: 2px Ring underline");
+                assert_eq!(
+                    bars(fg),
+                    vec![2.0],
+                    "{name}: active 2px Foreground underline"
+                );
+            }
         }
     }
 }

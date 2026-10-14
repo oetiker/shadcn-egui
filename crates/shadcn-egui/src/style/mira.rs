@@ -1428,12 +1428,14 @@ fn tabs_trigger_after() -> Recipe {
             base: None,
             rules: vec![
                 Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 6, value: 2.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::SELECTED).or(State::HORIZONTAL).or(State::VARIANT_LINE), State::NONE), rank: (1 << 6) | (1 << 13) | (1 << 20) | (1 << 30), value: 3.0 },
             ],
         },
         width: Prop {
             base: None,
             rules: vec![
                 Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 7, value: 2.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::SELECTED).or(State::VERTICAL).or(State::VARIANT_LINE), State::NONE), rank: (1 << 7) | (1 << 13) | (1 << 20) | (1 << 30), value: 3.0 },
             ],
         },
         inset_top: Prop {
@@ -1466,6 +1468,7 @@ fn tabs_trigger_after() -> Recipe {
             base: Some(Paint::Role(Role::Foreground, 1.0)),
             rules: vec![
                 Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (1 << 30), value: Paint::Role(Role::Foreground, 1.0) },
             ],
         },
         opacity: Prop {

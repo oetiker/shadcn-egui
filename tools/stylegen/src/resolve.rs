@@ -183,8 +183,11 @@ pub const CORRECTIONS: &[Correction] = &[
             "group-data-[variant=line]/tabs-list:focus-visible:border-transparent",
             "group-data-[variant=line]/tabs-list:focus-visible:after:opacity-100",
             "group-data-[variant=line]/tabs-list:focus-visible:after:bg-ring",
+            "group-data-[variant=line]/tabs-list:focus-visible:data-active:after:bg-foreground",
+            "group-data-[variant=line]/tabs-list:focus-visible:data-active:group-data-horizontal/tabs:after:h-[3px]",
+            "group-data-[variant=line]/tabs-list:focus-visible:data-active:group-data-vertical/tabs:after:w-[3px]",
         ]),
-        reason: "a line list draws no pills, so a focused trigger shows its underline in `Ring` instead of a pill-shaped ring, outline and border",
+        reason: "a line list draws no pills, so a focused trigger shows focus on its underline instead of a pill-shaped ring, outline and border: a focused inactive trigger's underline shows in `Ring`, the focused active trigger keeps its `Foreground` underline (its colour means active) and draws it 3px thick",
     },
 ];
 

@@ -82,9 +82,13 @@ the string" and before translation, listed in `CORRECTIONS`
   the base classes put a rounded pill ring (`focus-visible:ring-[3px]
   ring-ring/50 outline-1 outline-ring border-ring`) around a focused
   trigger whose list draws no pills, next to the underline. In a line
-  list a focused trigger draws no ring, no outline and no focus border;
-  instead its underline shows (opacity 1) in `Ring`, for an active and an
-  inactive trigger alike. The default variant keeps upstream's ring.
+  list a focused trigger draws no ring, no outline and no focus border.
+  Underline colour keeps meaning "active", thickness means "focus": a
+  focused inactive trigger shows its underline (opacity 1) in `Ring`; a
+  focused active trigger keeps its `Foreground` underline and draws it
+  3px thick instead of 2px (`h-[3px]` horizontal, `w-[3px]` vertical).
+  The default variant keeps upstream's ring. (A `Ring` underline on the
+  active trigger too was tried and rejected: it hid which tab is active.)
 
 ## Values that are fixed in code today
 
