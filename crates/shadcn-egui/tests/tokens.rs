@@ -83,8 +83,12 @@ fn components_use_theme_tokens() {
 /// line may carry one only with a `// behaviour-ok: <reason>` comment on
 /// the same line, for behaviour constants and inherited fallbacks. `0.0` is
 /// free; `1.0` and `2.0` only as factors (`* 2.0`, `/ 1.0`), not as a
-/// length (`- 1.0`, `Stroke::new(1.0, ..)`). A `// base:` quote exempts
-/// nothing and is reported itself: base classes live in the recipes.
+/// length (`- 1.0`, `Stroke::new(1.0, ..)`). The same holds for an integer
+/// inside an egui geometry constructor ([`GEOMETRY`]), which takes integers
+/// (`CornerRadius::same(4)`). A `// base:` quote exempts nothing and is
+/// reported itself: base classes live in the recipes. String literals and
+/// `/* .. */` comments hold no code; a block comment is stripped only on
+/// one line, so the lines inside a multi-line one are scanned as code.
 fn strict_violations(source: &str) -> Vec<String> {
     let mut out = violations(source);
     let mut in_icon_data = false;
@@ -97,12 +101,13 @@ fn strict_violations(source: &str) -> Vec<String> {
             in_icon_data = line.trim_end() != "};";
             continue;
         }
-        let code = line.split("//").next().unwrap_or("");
-        let reason = line
+        let (code, comment) = split_line(line);
+        let code = code.as_str();
+        let reason = comment
             .split("// behaviour-ok:")
             .nth(1)
             .is_some_and(|r| !r.trim().is_empty());
-        let stale_quote = line.contains("// base:");
+        let stale_quote = comment.contains("// base:");
         let role = code.contains("Role::");
         let shadow = code.contains("Shadow {");
         let alpha = [
@@ -117,51 +122,164 @@ fn strict_violations(source: &str) -> Vec<String> {
                 .skip(1)
                 .any(|r| r.starts_with(|c: char| c.is_ascii_digit()))
         });
-        let geometry = float_literals(code).any(|(lit, before)| {
-            let factor = before.trim_end().ends_with(['*', '/']);
-            match lit {
-                "0.0" => false,
-                "1.0" | "2.0" => !factor,
-                _ => true,
-            }
-        });
-        let flagged = (role || shadow || alpha || geometry) && !reason;
-        if stale_quote || (flagged && !line.trim_start().starts_with("//")) {
+        let free = |n: &Number| {
+            let factor = n.before.trim_end().ends_with(['*', '/']);
+            n.value == 0.0 || (factor && (n.value == 1.0 || n.value == 2.0))
+        };
+        let geometry = numbers(code).any(|n| n.float && !free(&n));
+        let integer_geometry =
+            constructor_args(code).any(|args| numbers(args).any(|n| !n.float && !free(&n)));
+        let flagged = (role || shadow || alpha || geometry || integer_geometry) && !reason;
+        if stale_quote || flagged {
             out.push(format!("{}: {}", n + 1, line.trim()));
         }
     }
     out
 }
 
-/// Float literals in a line, each with the text before it.
-fn float_literals(code: &str) -> impl Iterator<Item = (&str, &str)> {
+/// A line split into its code, with string and char literals blanked and
+/// one-line `/* .. */` comments removed, and its `//` comment (empty if none).
+fn split_line(line: &str) -> (String, &str) {
+    let b = line.as_bytes();
+    let mut code = String::with_capacity(line.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'/' if b.get(i + 1) == Some(&b'/') => return (code, &line[i..]),
+            b'/' if b.get(i + 1) == Some(&b'*') => {
+                // An unclosed block comment runs to the end of the line.
+                i = line[i + 2..].find("*/").map_or(b.len(), |j| i + 2 + j + 2);
+                code.push(' ');
+            }
+            b'"' => {
+                let mut j = i + 1;
+                while j < b.len() && b[j] != b'"' {
+                    j += if b[j] == b'\\' { 2 } else { 1 };
+                }
+                code.push_str("\"\"");
+                i = j + 1;
+            }
+            // A char literal (`'"'`, `'\\''`), not a lifetime (`'a`).
+            b'\'' if b.get(i + 2) == Some(&b'\'') || b.get(i + 1) == Some(&b'\\') => {
+                let close = line[i + 2..].find('\'').map_or(b.len(), |j| i + 2 + j);
+                code.push_str("' '");
+                i = close + 1;
+            }
+            _ => {
+                let c = line[i..].chars().next().expect("char boundary");
+                code.push(c);
+                i += c.len_utf8();
+            }
+        }
+    }
+    (code, "")
+}
+
+/// Every numeric literal outside an identifier (`u8`, `vec2`) and a tuple
+/// index (`pad.1`).
+struct Number<'a> {
+    /// Has a `.` or an `f32`/`f64` suffix (`4.`, `1.5`, `4f32`).
+    float: bool,
+    value: f64,
+    /// The code before the literal.
+    before: &'a str,
+}
+
+fn numbers(code: &str) -> impl Iterator<Item = Number<'_>> {
     let b = code.as_bytes();
+    let digits = |mut i: usize| {
+        while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'_') {
+            i += 1;
+        }
+        i
+    };
     let mut i = 0;
     std::iter::from_fn(move || {
         while i < b.len() {
             let start = i;
-            let ident_before =
-                start > 0 && (b[start - 1].is_ascii_alphanumeric() || b[start - 1] == b'_');
-            if b[i].is_ascii_digit() && !ident_before {
-                while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'.' || b[i] == b'_') {
-                    i += 1;
-                }
-                if code[i..].starts_with("f32") || code[i..].starts_with("f64") {
-                    i += 3;
-                }
-                // The value without its type suffix: `1.0_f32` is `1.0`.
-                let lit = code[start..i]
-                    .trim_end_matches("f32")
-                    .trim_end_matches("f64")
-                    .trim_end_matches('_');
-                if lit.contains('.') && !lit.ends_with('.') {
-                    return Some((lit, &code[..start]));
-                }
-            } else {
+            let ident_before = start > 0
+                && (b[start - 1].is_ascii_alphanumeric() || matches!(b[start - 1], b'_' | b'.'));
+            if !b[i].is_ascii_digit() || ident_before {
                 i += 1;
+                continue;
             }
+            i = digits(i);
+            let mut float = false;
+            // `4.` and `4.5`, but not a range (`0..n`) or a method (`1.max(x)`).
+            let after_dot = b.get(i + 1).copied();
+            if b.get(i) == Some(&b'.')
+                && !after_dot.is_some_and(|c| c == b'.' || c.is_ascii_alphabetic() || c == b'_')
+            {
+                float = true;
+                i = digits(i + 1);
+            }
+            let text = code[start..i].replace('_', "");
+            for suffix in ["f32", "f64"] {
+                if code[i..].starts_with(suffix) {
+                    float = true;
+                    i += suffix.len();
+                }
+            }
+            let value = text.trim_end_matches('.').parse().unwrap_or(f64::NAN);
+            return Some(Number {
+                float,
+                value,
+                before: &code[..start],
+            });
         }
         None
+    })
+}
+
+/// The egui geometry constructors whose arguments may be integers.
+const GEOMETRY: &[&str] = &[
+    "CornerRadius",
+    "Margin",
+    "Stroke",
+    "Shadow",
+    "vec2",
+    "pos2",
+    "Vec2::new",
+    "Pos2::new",
+];
+
+/// The argument text of each [`GEOMETRY`] call or struct literal in `code`
+/// (`CornerRadius::same(..)`, `Margin { .. }`, `vec2(..)`), to the bracket
+/// closing it or to the end of the line.
+fn constructor_args(code: &str) -> impl Iterator<Item = &str> {
+    GEOMETRY.iter().flat_map(move |name| {
+        code.match_indices(name).filter_map(move |(at, _)| {
+            let b = code.as_bytes();
+            if at > 0 && (b[at - 1].is_ascii_alphanumeric() || b[at - 1] == b'_') {
+                return None;
+            }
+            let mut rest = &code[at + name.len()..];
+            // `CornerRadius::same(` and the like: skip the associated fn.
+            if let Some(tail) = rest.strip_prefix("::") {
+                let len = tail
+                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                    .unwrap_or(tail.len());
+                rest = &tail[len..];
+            }
+            let rest = rest.trim_start();
+            if !rest.starts_with(['(', '{']) {
+                return None;
+            }
+            let mut depth = 0;
+            for (i, c) in rest.char_indices() {
+                match c {
+                    '(' | '{' | '[' => depth += 1,
+                    ')' | '}' | ']' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Some(&rest[1..i]);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Some(&rest[1..])
+        })
     })
 }
 
@@ -204,6 +322,28 @@ fn strict_scanner_catches_literals() {
         n("pub const X: Icon = Icon {\n    a: 3.5,\n};\nlet h = 32.0;"),
         1
     );
+    // A `//` inside a string literal starts no comment.
+    assert_eq!(n("ui.hyperlink(\"http://x\"); let h = 32.0;"), 1);
+    assert_eq!(n("let s = \"// behaviour-ok: quoted\"; let h = 32.0;"), 1);
+    // A float with a trailing dot, or an integer with a float suffix.
+    assert_eq!(n("let v = vec2(4., 2.);"), 1);
+    assert_eq!(n("let h = 4f32;"), 1);
+    assert_eq!(n("for i in 0..n {}"), 0);
+    // Integer geometry in the egui constructors that take integers.
+    assert_eq!(n("let r = CornerRadius::same(4);"), 1);
+    assert_eq!(n("let m = Margin::same(8);"), 1);
+    assert_eq!(n("let m = Margin::symmetric(0, 6);"), 1);
+    assert_eq!(n("let r = CornerRadius { nw: 2, ..r };"), 1);
+    assert_eq!(n("let r = CornerRadius::same(0);"), 0);
+    assert_eq!(n("let r = CornerRadius::same(r.round() as u8);"), 0);
+    assert_eq!(n("let p = pos2(x + pad.1, y);"), 0);
+    assert_eq!(
+        n("let m = Margin::same(8); // behaviour-ok: egui default"),
+        0
+    );
+    // A `/* .. */` comment on one line holds no code.
+    assert_eq!(n("let w = /* 4.0 wide */ width;"), 0);
+    assert_eq!(n("let h = 32.0; /* ok */"), 1);
 }
 
 /// The code before a file's trailing `#[cfg(test)] mod tests` module. Unit
