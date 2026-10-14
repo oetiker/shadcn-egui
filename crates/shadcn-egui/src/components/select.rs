@@ -1,6 +1,6 @@
 //! shadcn Select, ported from shadcn-svelte `ui/select/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; size,
-//! padding, radius, colours, ring and shadow come from the style's
+//! `tools/stylegen/PIN`. Size, padding, radius, colours, ring, shadow and
+//! the disabled fade come from the style's
 //! `cn-select-trigger`, `cn-select-trigger-icon`, `cn-select-content`,
 //! `cn-select-group`, `cn-select-item` and `cn-select-item-indicator`
 //! recipes. The chevron and the tick are the theme's `chevron_down` and
@@ -28,7 +28,7 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    box_shapes, disabled_painter, interaction_state, ring, ring_shape,
+    box_shapes, interaction_state, opacity, ring, ring_shape, style_painter, DEFAULT_SIDE_OFFSET,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -55,6 +55,7 @@ pub struct Select<'a> {
     enabled: bool,
     invalid: bool,
     width: Option<f32>,
+    side_offset: f32,
 }
 
 impl<'a> Select<'a> {
@@ -69,6 +70,7 @@ impl<'a> Select<'a> {
             enabled: true,
             invalid: false,
             width: None,
+            side_offset: DEFAULT_SIDE_OFFSET,
         }
     }
     pub fn size(mut self, size: SelectSize) -> Self {
@@ -93,6 +95,11 @@ impl<'a> Select<'a> {
     /// Trigger width in points; default is the widest option.
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
+        self
+    }
+    /// Gap between the trigger and the list (shadcn `sideOffset`, default 4).
+    pub fn side_offset(mut self, px: f32) -> Self {
+        self.side_offset = px;
         self
     }
 }
@@ -148,7 +155,6 @@ impl Widget for Select<'_> {
                     .x
             })
             .fold(0.0, f32::max);
-        // base: "flex w-fit items-center justify-between"
         let width = self.width.unwrap_or(fit + gap + icon_side + pad_l + pad_r);
 
         let (_, rect) = ui.allocate_space(vec2(width, height));
@@ -264,8 +270,7 @@ impl Widget for Select<'_> {
         // The trigger.
         let st = interaction_state(&t, &resp, enabled, context.with(State::EXPANDED, open));
         if ui.is_rect_visible(rect) {
-            // base: "disabled:opacity-50"
-            let painter = disabled_painter(ui, self.enabled, 0.5);
+            let painter = style_painter(ui, opacity(&[&trig[..]], st));
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
             let radius =
                 pick(&trig, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
@@ -313,7 +318,6 @@ impl Widget for Select<'_> {
                 egui::pos2(icon_rect.left() - gap, rect.bottom()),
             );
             let at = egui::pos2(text_area.left(), rect.center().y - galley.size().y / 2.0);
-            // base: "*:data-[slot=select-value]:line-clamp-1"
             painter
                 .with_clip_rect(text_area)
                 .galley(at, galley, text_color);
@@ -383,8 +387,7 @@ impl Widget for Select<'_> {
             let (ipt, ipb) = (px(&item, |r| &r.pad_top), px(&item, |r| &r.pad_bottom));
             let min_row = px(&item, |r| &r.min_height);
             let needed = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max) + ipl + ipr;
-            // base: "sideOffset = 4"
-            let side_offset = 4.0;
+            let side_offset = self.side_offset;
             let min_w = px(&l, |r| &r.min_width).max(rect.width());
             let inner_w = (min_w - gpl - gpr).max(needed);
             let screen = ctx.content_rect();

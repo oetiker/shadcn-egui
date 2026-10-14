@@ -551,3 +551,52 @@ fn input_placeholder_and_fade_come_from_the_style() {
     };
     assert_eq!(border(&off), border(&on).gamma_multiply(0.25));
 }
+
+#[test]
+fn select_fade_and_offset() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::select::Select;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.select_trigger
+            .opacity
+            .rules
+            .push(Rule::important(When::all(State::DISABLED), 0.25));
+    });
+    let (_, on) = common::measure_output(&theme, |ui| ui.add(Select::new("s", &mut 0, &["Apple"])));
+    let (_, off) = common::measure_output(&theme, |ui| {
+        ui.add(Select::new("s", &mut 0, &["Apple"]).enabled(false))
+    });
+    assert_eq!(
+        common::text_colour(&off),
+        common::text_colour(&on).gamma_multiply(0.25)
+    );
+    // The box fades with the text: vega's border has no disabled rule.
+    let border = |out: &egui::FullOutput| {
+        common::rect_shapes(out)
+            .into_iter()
+            .find(|r| r.stroke.width > 0.0)
+            .expect("select trigger")
+            .stroke
+            .color
+    };
+    assert_eq!(border(&off), border(&on).gamma_multiply(0.25));
+
+    let item_top = |offset: f32| {
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(320.0, 260.0))
+            .build_ui(move |ui| {
+                Theme::vega_light().apply(ui.ctx());
+                let mut none = usize::MAX;
+                ui.add(
+                    Select::new("fruit", &mut none, &["Apple", "Banana"])
+                        .placeholder("Pick")
+                        .side_offset(offset),
+                );
+            });
+        h.run();
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run();
+        h.get_by_label("Banana").rect().top()
+    };
+    assert_eq!(item_top(20.0) - item_top(4.0), 16.0);
+}
