@@ -365,9 +365,10 @@ fn tooltip_colours_come_from_the_style() {
         s.tooltip_content.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.tooltip_content.text.base = Some(Paint::Role(Role::Destructive, 1.0));
         s.tooltip_content.max_width.base = Some(80.0);
-        s.tooltip_arrow.bg.base = Some(Paint::Role(Role::Primary, 1.0));
+        s.tooltip_arrow.bg.base = Some(Paint::Role(Role::Ring, 1.0));
     });
-    let (primary, destructive) = (theme.palette.primary, theme.palette.destructive);
+    let p = &theme.palette;
+    let (primary, destructive, ring) = (p.primary, p.destructive, p.ring);
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(240.0, 160.0))
         .build_ui(move |ui| {
@@ -407,7 +408,7 @@ fn tooltip_colours_come_from_the_style() {
     );
     assert_eq!(
         px(egui::pos2(text.center().x, trigger.top() - 2.0)),
-        primary,
+        ring,
         "arrow"
     );
 }

@@ -41,7 +41,7 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     let mut tip = egui::Tooltip::for_enabled(&resp);
     let max_w = pick(&content, |r| &r.max_width, g).unwrap_or(f32::INFINITY);
     // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
-    let size = pick(&[&*t.style.tooltip_arrow], |r| &r.width, g).unwrap_or(0.0);
+    let size = pick(&arrow, |r| &r.width, g).unwrap_or(0.0);
     let reach = size * FRAC_1_SQRT_2;
     let mut frame = Frame::new()
         .corner_radius(radius.round() as u8)
