@@ -1,6 +1,7 @@
 # <crate file> <upstream ui dir>: <cn markers the style CSS defines for it>
-# `slot:<data-slot>` names a part without a `cn-*` marker: the one class
-# string without a marker in `ui/<dir>/<data-slot>.svelte`.
+# `slot:<name>` names a part without a `cn-*` marker: the one class string
+# without a marker in `ui/<dir>/<name>.svelte` (upstream names that file
+# after the part's `data-slot`).
 button.rs button: cn-button cn-button-variant-default cn-button-variant-outline cn-button-variant-secondary cn-button-variant-ghost cn-button-variant-destructive cn-button-variant-link cn-button-size-xs cn-button-size-sm cn-button-size-default cn-button-size-lg cn-button-size-icon-xs cn-button-size-icon-sm cn-button-size-icon cn-button-size-icon-lg
 badge.rs badge: cn-badge cn-badge-variant-default cn-badge-variant-secondary cn-badge-variant-destructive cn-badge-variant-outline cn-badge-variant-ghost cn-badge-variant-link
 card.rs card: cn-card cn-card-header cn-card-title cn-card-description cn-card-action cn-card-content cn-card-footer

@@ -201,10 +201,13 @@ For each style and each part, stylegen:
    rank bit.
 
 Each generated `<style>.rs` then holds complete recipes. A part without a
-`cn-*` marker gets a recipe named after its `data-slot`. In `markers.txt`
-such a part is written `slot:<data-slot>`, for example
-`separator.rs separator: slot:separator`. `drift` skips `slot:` entries
-when it compares markers with upstream.
+`cn-*` marker is written `slot:<name>` in `markers.txt`, for example
+`separator.rs separator: slot:separator`; its recipe, named `<name>`, takes
+the one class string without a marker in `ui/<dir>/<name>.svelte`.
+Upstream names that file after the part's `data-slot`, so the recipe
+carries the `data-slot` name; the extractor looks the file up by name and
+never reads the `data-slot` attribute. `drift` skips `slot:` entries when
+it compares markers with upstream.
 
 ### New fields and translations
 

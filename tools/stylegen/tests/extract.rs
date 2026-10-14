@@ -176,3 +176,64 @@ fn comments_hide_keys_and_calls() {
     let call = "// see cn(\"cn-f ghost\")\n<div class={cn(\"cn-f real\", className)}></div>";
     assert_eq!(class_strings(call).unwrap(), vec!["cn-f real".to_string()]);
 }
+
+/// Kept as an error rather than stripped: no upstream `cn(` holds a block
+/// comment, and the message names what the extractor stopped at.
+#[test]
+fn block_comment_in_cn_is_an_error() {
+    let err =
+        class_strings("<div class={cn(\"cn-a x\", /* note */ className)}></div>").unwrap_err();
+    assert_eq!(
+        err,
+        "cn() argument the extractor cannot evaluate: /* note */ className"
+    );
+}
+
+#[test]
+fn unread_tv_and_class_forms_are_errors() {
+    let slots = "const v = tv({ slots: { base: \"cn-s a\", icon: \"cn-s-icon b\" } });";
+    let err = class_strings(slots).unwrap_err();
+    assert!(err.contains("slots"), "{err}");
+    for c in [
+        r#"<div class={"cn-a x"}></div>"#,
+        "<div class={ 'cn-a x' }></div>",
+        "<div class='cn-a x'></div>",
+    ] {
+        let err = class_strings(c).unwrap_err();
+        assert!(err.contains("class"), "{c}: {err}");
+    }
+}
+
+#[test]
+fn quoted_variant_keys_are_keys() {
+    let src = "const v = tv({ base: \"cn-x a\", variants: { size: { sm: \"cn-x-sm c\", \"icon-xs\": \"cn-x-icon d\" } } });";
+    assert_eq!(
+        class_strings(src).unwrap(),
+        ["cn-x a", "cn-x-sm c", "cn-x-icon d"]
+    );
+}
+
+#[test]
+fn apostrophe_in_markup_text_opens_no_string() {
+    let src = "<p>it's</p> // cn(\"cn-z ghost\")\n<div class={cn(\"cn-z real\")}></div>";
+    assert_eq!(class_strings(src).unwrap(), ["cn-z real"]);
+}
+
+#[test]
+fn tv_keys_match_as_whole_keys() {
+    let longer = "const v = tv({ database: \"cn-q wrong\", base: \"cn-q right\" });";
+    assert_eq!(class_strings(longer).unwrap(), ["cn-q right"]);
+    let quoted =
+        "const v = tv({ variants: { size: { sm: \"cn-q-sm base:x\" } }, base: \"cn-q right\" });";
+    // One tv keeps base first, then the variants.
+    assert_eq!(
+        class_strings(quoted).unwrap(),
+        ["cn-q right", "cn-q-sm base:x"]
+    );
+}
+
+#[test]
+fn member_call_in_cn_is_an_error() {
+    let err = class_strings("<div class={cn(\"cn-a x\", state.classes(open))}></div>").unwrap_err();
+    assert!(err.contains("state.classes"), "{err}");
+}

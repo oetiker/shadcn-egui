@@ -107,8 +107,13 @@ pub fn check_ui(up: &Path, tool: &Path, lines: &[MarkerLine]) -> Vec<String> {
         Ok(t) => t,
         Err(e) => return vec![format!("{UI}: cannot list the upstream sources ({e})")],
     };
-    let ours = svelte_files(&ours_root, lines).unwrap_or_default();
     let mut problems = Vec::new();
+    let ours = svelte_files(&ours_root, lines).unwrap_or_else(|e| {
+        problems.push(format!(
+            "cannot list tests/fixtures/ui ({e}); re-run stylegen generate"
+        ));
+        Vec::new()
+    });
     for (dir, file) in &theirs {
         let a = std::fs::read(ours_root.join(dir).join(file));
         let b = std::fs::read(up.join(UI).join(dir).join(file));

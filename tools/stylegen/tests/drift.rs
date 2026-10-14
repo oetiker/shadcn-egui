@@ -137,3 +137,38 @@ fn cli_markers_are_named_in_one_place() {
     }
     assert!(!is_cli_marker("cn-select-content"));
 }
+
+#[test]
+fn ui_dirs_that_cannot_be_listed_are_problems() {
+    use stylegen::drift::check_ui;
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("stylegen-ui-list-{}", std::process::id()));
+    let (up, tool) = (dir.join("up"), dir.join("tool"));
+    let lines = parse_markers("tabs.rs tabs: cn-tabs\nbutton.rs button: cn-button\n");
+    for d in ["tabs", "button"] {
+        let ui_up = up.join("docs/src/lib/registry/ui").join(d);
+        std::fs::create_dir_all(&ui_up).unwrap();
+        std::fs::write(ui_up.join(format!("{d}.svelte")), d).unwrap();
+    }
+    // The fixtures lack the button dir and keep a stale tabs file.
+    let ui_ours = tool.join("tests/fixtures/ui/tabs");
+    std::fs::create_dir_all(&ui_ours).unwrap();
+    std::fs::write(ui_ours.join("tabs.svelte"), "tabs").unwrap();
+    std::fs::write(ui_ours.join("tabs-old.svelte"), "gone upstream").unwrap();
+    let fixtures = check_ui(&up, &tool, &lines);
+    // A whole component dir missing upstream.
+    std::fs::remove_dir_all(up.join("docs/src/lib/registry/ui/button")).unwrap();
+    let upstream = check_ui(&up, &tool, &lines);
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(
+        fixtures
+            .iter()
+            .any(|p| p.contains("cannot list tests/fixtures/ui")),
+        "{fixtures:#?}"
+    );
+    assert_eq!(upstream.len(), 1, "{upstream:#?}");
+    assert!(
+        upstream[0].contains("cannot list the upstream sources"),
+        "{upstream:#?}"
+    );
+}
