@@ -1,6 +1,6 @@
 //! Shared painting helpers for shadcn-style components.
 
-use crate::style::{pick, Recipe, Shift, State};
+use crate::style::{pick, Recipe, Shift, State, TextSize};
 use crate::Theme;
 use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 
@@ -33,6 +33,26 @@ pub fn style_painter(ui: &Ui, opacity: f32) -> Painter {
         painter.multiply_opacity(opacity);
     }
     painter
+}
+
+/// Run `add` with everything it paints in `ui` faded by `opacity` (a
+/// container part's resolved [`opacity`]), then restore the `Ui`'s own
+/// opacity. Unlike a scope, this adds no layout of its own. Parts nested in
+/// `add` multiply their own opacity on top, as CSS does.
+pub fn faded<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let before = ui.opacity();
+    ui.multiply_opacity(opacity);
+    let inner = add(ui);
+    ui.set_opacity(before);
+    inner
+}
+
+/// The height of one line of a part's text: its `leading-*` times the font
+/// size or, without one, Tailwind's line height of the text size (`text-*`
+/// sets both). This is the content height an `auto` height starts from.
+pub fn line_box(theme: &Theme, layers: &[&Recipe], s: State, size: TextSize) -> f32 {
+    pick(layers, |r| &r.line_height, s)
+        .map_or_else(|| theme.line_px(size), |k| k * theme.text_px(size))
 }
 
 /// Build a CornerRadius from an f32 radius, rounding to the nearest pixel.

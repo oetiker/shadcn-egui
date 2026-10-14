@@ -6,6 +6,7 @@
 //! centre lies on the content edge, below or above the content, centred on the
 //! trigger.
 
+use crate::components::shared::opacity;
 use crate::style::{pick, State, TextSize};
 use crate::Theme;
 use egui::{pos2, Color32, Frame, Margin, Pos2, RectAlign, Response, RichText, Shape};
@@ -35,9 +36,13 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     let line =
         pick(&content, |r| &r.line_height, g).map_or_else(|| t.line_px(text_size), |k| k * text_px);
     let radius = pick(&content, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
-    let fill = pick(&content, |r| &r.bg, g).map(|p| t.paint(p));
+    // The frame and the arrow paint outside the content's `Ui`: fade their
+    // colours here. The arrow sits in the content.
+    let alpha = opacity(&[&content[..]], g);
+    let arrow_alpha = opacity(&[&arrow[..], &content[..]], g);
+    let fill = pick(&content, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(alpha));
     let fg = pick(&content, |r| &r.text, g).map(|p| t.paint(p));
-    let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p));
+    let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(arrow_alpha));
     let mut tip = egui::Tooltip::for_enabled(&resp);
     let max_w = pick(&content, |r| &r.max_width, g).unwrap_or(f32::INFINITY);
     // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
@@ -56,6 +61,7 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     }
     tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(frame);
     let shown = tip.show(|ui| {
+        ui.multiply_opacity(alpha);
         ui.set_max_width(max_w - pad_l - pad_r);
         let mut label = RichText::new(text).size(text_px).line_height(Some(line));
         if let Some(fg) = fg {

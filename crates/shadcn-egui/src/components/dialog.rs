@@ -11,7 +11,7 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::shared::ring;
+use crate::components::shared::{faded, opacity, ring};
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
@@ -89,6 +89,8 @@ impl<'a> Dialog<'a> {
         let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        // The frame paints outside the panel's `Ui`: fade its colours here.
+        let alpha = opacity(&[&l[..]], g);
 
         let max_width = self
             .width
@@ -106,18 +108,26 @@ impl<'a> Dialog<'a> {
                 left: pad_l.round() as i8,
             });
         if let Some(fill) = pick(&l, |r| &r.bg, g).map(|p| t.paint(p)) {
-            frame = frame.fill(fill);
+            frame = frame.fill(fill.gamma_multiply(alpha));
         }
         if let Some(s) = pick(&l, |r| &r.shadow, g) {
-            frame = frame.shadow(t.shadow(s));
+            let mut shadow = t.shadow(s);
+            shadow.color = shadow.color.gamma_multiply(alpha);
+            frame = frame.shadow(shadow);
         }
-        let overlay = pick(&[&*t.style.dialog_overlay], |r| &r.bg, g)
-            .map_or(Color32::TRANSPARENT, |p| t.paint(p));
+        let overlay_l = [&*t.style.dialog_overlay];
+        let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
+        // The overlay's opacity fades the backdrop, the app's colour too.
+        let backdrop = self
+            .backdrop
+            .unwrap_or(overlay)
+            .gamma_multiply(opacity(&[&overlay_l[..]], g));
 
         let resp = egui::Modal::new(self.id)
-            .backdrop_color(self.backdrop.unwrap_or(overlay))
+            .backdrop_color(backdrop)
             .frame(frame)
             .show(ctx, |ui| {
+                ui.multiply_opacity(alpha);
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
                 if let Some(fg) = fg {
@@ -135,7 +145,9 @@ impl<'a> Dialog<'a> {
             });
         // `ring-1` lies outside the box.
         let ring_width = pick(&l, |r| &r.ring_width, g).unwrap_or(0.0);
-        if let Some(color) = pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p)) {
+        if let Some(color) =
+            pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p).gamma_multiply(alpha))
+        {
             let painter = ctx.layer_painter(resp.response.layer_id);
             ring(&painter, resp.response.rect, radius, ring_width, color);
         }
@@ -165,15 +177,25 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let desc_size = pick(&desc, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
     let desc_line = pick(&desc, |r| &r.line_height, g)
         .map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
+    // The title and the description sit in the header.
+    let fade = |l: &[&Recipe]| opacity(&[l], g);
+    let (header_fade, title_fade, desc_fade) = (
+        fade(&[&*t.style.dialog_header]),
+        fade(&heading),
+        fade(&desc),
+    );
     ui.scope(|ui| {
+        ui.multiply_opacity(header_fade);
         ui.spacing_mut().item_spacing.y = gap;
         // upstream: dialog-title carries `cn-font-heading`
-        ui.label(
-            RichText::new(title)
-                .family(heading_family_for(ui.ctx(), weight))
-                .size(px)
-                .line_height(Some(line)),
-        );
+        faded(ui, title_fade, |ui| {
+            ui.label(
+                RichText::new(title)
+                    .family(heading_family_for(ui.ctx(), weight))
+                    .size(px)
+                    .line_height(Some(line)),
+            )
+        });
         if let Some(d) = description {
             let mut text = RichText::new(d)
                 .size(t.text_px(desc_size))
@@ -181,7 +203,7 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
             if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
                 text = text.color(c);
             }
-            ui.label(text);
+            faded(ui, desc_fade, |ui| ui.label(text));
         }
     });
 }
@@ -239,6 +261,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         px(|r| &r.margin_left),
     );
     let gap = pick(&l, |r| &r.gap, g).unwrap_or(0.0);
+    let alpha = opacity(&[&l[..]], g);
 
     let at = ui.max_rect();
     let top = ui.cursor().top();
@@ -254,6 +277,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             .layout(Layout::right_to_left(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = gap;
+    row.multiply_opacity(alpha);
     add(&mut row);
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
@@ -284,7 +308,9 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             Stroke::new(line, color),
         ));
     }
-    ui.painter().set(strip_bg, Shape::Vec(shapes));
+    let mut painter = ui.painter().clone();
+    painter.multiply_opacity(alpha);
+    painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.
     ui.allocate_rect(
         Rect::from_min_max(

@@ -56,8 +56,16 @@ impl Widget for Checkbox<'_> {
         let g = t.state(State::NONE.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
 
-        let (rect, base) =
-            ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
+        // No size: CSS's initial `auto`, the indicator's tick inside the
+        // border. The box keeps that size unticked too, so it does not jump.
+        let ind = [&*t.style.checkbox_indicator];
+        let side = pick(&ind, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
+        let auto = side + get(|r| &r.border_width) * 2.0;
+        let size = vec2(
+            pick(&l, |r| &r.width, g).unwrap_or(auto),
+            pick(&l, |r| &r.height, g).unwrap_or(auto),
+        );
+        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
         let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
@@ -107,14 +115,14 @@ impl Widget for Checkbox<'_> {
             }
             painter.extend(shapes);
             if checked {
-                let ind = [&*t.style.checkbox_indicator];
-                let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(0.0);
+                let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
                 // `text-current`: the tick inherits the box's text colour.
                 let tick = pick(&ind, |r| &r.text, st).or_else(|| pick(&l, |r| &r.text, st));
                 if let Some(color) = tick.map(|p| t.paint(p)) {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
+                    // The indicator sits in the box: both opacities apply.
                     paint_icon(
-                        &painter,
+                        &style_painter(ui, opacity(&[&ind[..], &l[..]], st)),
                         icon_rect,
                         &t.icons.check,
                         color,

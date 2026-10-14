@@ -17,6 +17,13 @@ are recorded here. The format is based on
 - `Popover::side_offset` and `Select::side_offset` set the gap between the
   trigger and the popup; the default stays 4
   (`components::shared::DEFAULT_SIDE_OFFSET`). (#6)
+- An `opacity` set in `theme.style` on any part now fades that part and
+  everything inside it, multiplied as in the browser: a badge, card, dialog
+  (its backdrop too), popover, tooltip, separator, tab list, select list,
+  checkbox tick, select chevron or select tick. Before, only the outer part
+  of a button, input, checkbox, switch, slider, label, select trigger or tab
+  took its `opacity`. A custom component fades a container part's content
+  with `components::shared::faded`. (#6)
 
 ### Changed
 - In a line tab list (`TabsVariant::Line`), a focused tab that is not active
@@ -41,6 +48,11 @@ are recorded here. The format is based on
   takes the fade from the part's recipe (`disabled:opacity-50`). (#6)
 
 ### Fixed
+- A popover whose style recipe an app replaced whole
+  (`*style.popover_content = Recipe { .. }`) showed each word on its own
+  line; it is now as wide as its content. Buttons, badges, inputs, select
+  triggers, tab lists, checkboxes and switches in the same case are no longer
+  0 px high, and checkbox ticks and select chevrons no longer shrink to a dot. (#6)
 - An app that held or copied several styles in one function could crash
   with `thread '<unknown>' has overflowed its stack`, mostly on worker
   threads and in WebAssembly, where the stack is 1 to 2 MiB. Each `Style`

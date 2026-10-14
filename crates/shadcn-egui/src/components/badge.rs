@@ -3,7 +3,9 @@
 //! recipes: `cn-badge` and `cn-badge-variant-*`, stacked in that order.
 
 use crate::components::icon::{paint_icon, Icon};
-use crate::components::shared::{interaction_state, paint_box, ring};
+use crate::components::shared::{
+    interaction_state, line_box, opacity, paint_box, ring, style_painter,
+};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -82,7 +84,6 @@ impl Widget for Badge {
         // Geometry never depends on hover: resolve it before allocating.
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
-        let height = get(|r| &r.height);
         let (pad_l, pad_r, gap, border_w) = (
             get(|r| &r.pad_left),
             get(|r| &r.pad_right),
@@ -90,12 +91,13 @@ impl Widget for Badge {
             get(|r| &r.border_width),
         );
         let icon_px = pick(&l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Xs));
+        let text_size = pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Xs);
+        let text_px = t.text_px(text_size);
         let weight = pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
-        let painter = ui.painter().clone();
+        let fonts = ui.painter().clone();
         let layout = |underline: Stroke| {
             let mut job = egui::text::LayoutJob::simple_singleline(
                 self.text.clone(),
@@ -103,10 +105,16 @@ impl Widget for Badge {
                 egui::Color32::PLACEHOLDER,
             );
             job.sections[0].format.underline = underline;
-            painter.layout_job(job)
+            fonts.layout_job(job)
         };
         let galley = layout(Stroke::NONE);
         let icons = u8::from(self.icon.is_some()) + u8::from(self.icon_end.is_some());
+        // No height: CSS's initial `auto`, the content's height.
+        let line = line_box(&t, &l, g, text_size).max(galley.size().y);
+        let content_h = if icons > 0 { line.max(icon_px) } else { line };
+        let height = pick(&l, |r| &r.height, g).unwrap_or_else(|| {
+            content_h + get(|r| &r.pad_top) + get(|r| &r.pad_bottom) + border_w * 2.0
+        });
         let content_w = galley.size().x + f32::from(icons) * (icon_px + gap);
         let width = content_w + pad_l + pad_r + border_w * 2.0;
         let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
@@ -123,6 +131,7 @@ impl Widget for Badge {
         } else {
             State(st.0 & !State::HOVER.0)
         };
+        let painter = style_painter(ui, opacity(&[&l[..]], st));
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let bg = paint(|r| &r.bg);
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour

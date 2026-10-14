@@ -28,7 +28,8 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    box_shapes, interaction_state, opacity, ring, ring_shape, style_painter, DEFAULT_SIDE_OFFSET,
+    box_shapes, interaction_state, line_box, opacity, ring, ring_shape, style_painter,
+    DEFAULT_SIDE_OFFSET,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -123,19 +124,22 @@ impl Widget for Select<'_> {
         // Geometry depends on neither interaction nor the open state.
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&trig, f, g).unwrap_or(0.0);
-        let height = get(|r| &r.height);
         let border_w = get(|r| &r.border_width);
         let (pad_l, pad_r) = (
             get(|r| &r.pad_left) + border_w,
             get(|r| &r.pad_right) + border_w,
         );
         let gap = get(|r| &r.gap);
-        let icon_side = get(|r| &r.icon_size);
+        // The chevron's own `size-*`, else the trigger's `[&_svg]:size-*`,
+        // else the theme's icon size, as a button's.
+        let icon = [&*t.style.select_trigger_icon];
+        let icon_side = pick(&icon, |r| &r.width, g)
+            .or_else(|| pick(&trig, |r| &r.icon_size, g))
+            .unwrap_or(t.metrics.icon);
+        let icon_h = pick(&icon, |r| &r.height, g).unwrap_or(icon_side);
         let weight = pick(&trig, |r| &r.weight, g).unwrap_or(Weight::Normal);
-        let font = egui::FontId::new(
-            t.text_px(pick(&trig, |r| &r.text_size, g).unwrap_or(TextSize::Sm)),
-            family_for(&ctx, weight),
-        );
+        let text_size = pick(&trig, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+        let font = egui::FontId::new(t.text_px(text_size), family_for(&ctx, weight));
         let painter = ui.painter().clone();
         let shown = if has_value {
             self.options[*self.selected]
@@ -156,6 +160,15 @@ impl Widget for Select<'_> {
             })
             .fold(0.0, f32::max);
         let width = self.width.unwrap_or(fit + gap + icon_side + pad_l + pad_r);
+        // No height: CSS's initial `auto`, one line of text in the padding box.
+        let height = pick(&trig, |r| &r.height, g).unwrap_or_else(|| {
+            line_box(&t, &trig, g, text_size)
+                .max(galley.size().y)
+                .max(icon_h)
+                + get(|r| &r.pad_top)
+                + get(|r| &r.pad_bottom)
+                + border_w * 2.0
+        });
 
         let (_, rect) = ui.allocate_space(vec2(width, height));
         let sense = if enabled {
@@ -299,13 +312,13 @@ impl Widget for Select<'_> {
 
             let icon_rect = Rect::from_center_size(
                 egui::pos2(rect.right() - pad_r - icon_side / 2.0, rect.center().y),
-                vec2(icon_side, icon_side),
+                vec2(icon_side, icon_h),
             );
-            let icon_color =
-                pick(&[&*t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
+            let icon_color = pick(&icon, |r| &r.text, st).map(|p| t.paint(p));
             if let Some(c) = icon_color {
+                // The chevron sits in the trigger: both opacities apply.
                 paint_icon(
-                    &painter,
+                    &style_painter(ui, opacity(&[&icon[..], &trig[..]], st)),
                     icon_rect,
                     &t.icons.chevron_down,
                     c,
@@ -352,9 +365,22 @@ impl Widget for Select<'_> {
             );
             let radius = pick(&l, |r| &r.radius, gs).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
             let ring_w = px(&l, |r| &r.ring_width);
-            let ring_color = pick(&l, |r| &r.ring_color, gs).map(|p| t.paint(p));
-            let shadow =
+            // The frame paints outside the list's `Ui`: fade its colours here.
+            // Inside, the viewport sits in the content and the group in the
+            // viewport; neither paints anything of its own.
+            let alpha = opacity(&[&l[..]], gs);
+            let inner_alpha = opacity(
+                &[
+                    &[&*t.style.select_group][..],
+                    &[&*t.style.select_viewport][..],
+                ],
+                gs,
+            );
+            let ring_color =
+                pick(&l, |r| &r.ring_color, gs).map(|p| t.paint(p).gamma_multiply(alpha));
+            let mut shadow =
                 pick(&l, |r| &r.shadow, gs).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
+            shadow.color = shadow.color.gamma_multiply(alpha);
             let mut frame = Frame::new()
                 .corner_radius(radius.round() as u8)
                 .shadow(shadow)
@@ -365,7 +391,7 @@ impl Widget for Select<'_> {
                     left: gpl.round() as i8,
                 });
             if let Some(fill) = pick(&l, |r| &r.bg, gs).map(|p| t.paint(p)) {
-                frame = frame.fill(fill);
+                frame = frame.fill(fill.gamma_multiply(alpha));
             }
             let item_font = egui::FontId::new(
                 t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)),
@@ -410,6 +436,7 @@ impl Widget for Select<'_> {
                 .gap(side_offset)
                 .frame(frame)
                 .show(|ui| {
+                    ui.multiply_opacity(alpha * inner_alpha);
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     egui::ScrollArea::vertical()
@@ -440,19 +467,23 @@ impl Widget for Select<'_> {
                                     let item_radius = pick(&item, |r| &r.radius, s)
                                         .map_or(0.0, |r| t.radius_px(r, row.height() / 2.0));
                                     let fill = pick(&item, |r| &r.bg, s).map(|p| t.paint(p));
-                                    ui.painter().extend(box_shapes(
-                                        row,
-                                        item_radius,
-                                        fill,
-                                        None,
-                                        false,
-                                    ));
+                                    // The row's text and indicator sit in the row.
+                                    let painter = style_painter(ui, opacity(&[&item[..]], s));
+                                    painter.extend(box_shapes(row, item_radius, fill, None, false));
                                     // The row's own text colour serves tick and text alike.
                                     let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
                                     let color = pick(&item, |r| &r.text, s)
                                         .or(pick(&l, |r| &r.text, s))
                                         .map_or(inherited, |p| t.paint(p));
-                                    ui.painter().galley(
+                                    let text_painter = {
+                                        let mut p = painter.clone();
+                                        p.multiply_opacity(opacity(
+                                            &[&[&*t.style.select_item_text][..]],
+                                            s,
+                                        ));
+                                        p
+                                    };
+                                    text_painter.galley(
                                         egui::pos2(
                                             row.left() + ipl,
                                             row.center().y - galley.size().y / 2.0,
@@ -475,8 +506,17 @@ impl Widget for Select<'_> {
                                             ),
                                             vec2(w, h),
                                         );
+                                        // The icon sits in the indicator.
+                                        let mut tick_painter = painter.clone();
+                                        tick_painter.multiply_opacity(opacity(
+                                            &[
+                                                &ind[..],
+                                                &[&*t.style.select_item_indicator_icon][..],
+                                            ],
+                                            s,
+                                        ));
                                         paint_icon(
-                                            ui.painter(),
+                                            &tick_painter,
                                             tick,
                                             &t.icons.check,
                                             color,

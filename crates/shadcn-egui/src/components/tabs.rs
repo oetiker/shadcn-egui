@@ -6,7 +6,7 @@
 //! tab (automatic activation).
 
 use crate::components::shared::{
-    box_shapes, interaction_state, opacity, ring_shape, style_painter,
+    box_shapes, interaction_state, line_box, opacity, ring_shape, style_painter,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -85,6 +85,7 @@ impl Widget for Tabs<'_> {
             TabsVariant::Line => (State::VARIANT_LINE, &*s.tabs_list_variant_line),
         };
         let TabsOrientation::Horizontal = self.orientation;
+        let root = [&*s.tabs];
         let list = [&*s.tabs_list, variant_layer];
         let trigger = [&*s.tabs_trigger];
         let after = [&*s.tabs_trigger_after];
@@ -98,15 +99,14 @@ impl Widget for Tabs<'_> {
             geo(&list, |r| &r.pad_bottom),
             geo(&list, |r| &r.pad_left),
         );
-        let list_h = geo(&list, |r| &r.height);
-        let trigger_h = list_h - pad_t - pad_b - geo(&trigger, |r| &r.height_inset);
         let (tpad_l, tpad_r, border_w) = (
             geo(&trigger, |r| &r.pad_left),
             geo(&trigger, |r| &r.pad_right),
             geo(&trigger, |r| &r.border_width),
         );
         let gap = geo(&list, |r| &r.gap);
-        let text_px = t.text_px(pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let text_size = pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+        let text_px = t.text_px(text_size);
         let weight = pick(&trigger, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
         let painter = ui.painter().clone();
@@ -117,6 +117,19 @@ impl Widget for Tabs<'_> {
             .iter()
             .map(|l| painter.layout_no_wrap(l.clone(), font.clone(), Color32::PLACEHOLDER))
             .collect();
+        // No list height: CSS's initial `auto`, the triggers' own height,
+        // which `h-[calc(100%-1px)]` of an `auto` parent leaves at `auto` too.
+        let trigger_auto = galleys
+            .iter()
+            .map(|g| g.size().y)
+            .fold(line_box(&t, &trigger, g, text_size), f32::max)
+            + geo(&trigger, |r| &r.pad_top)
+            + geo(&trigger, |r| &r.pad_bottom)
+            + border_w * 2.0;
+        let (list_h, trigger_h) = match pick(&list, |r| &r.height, g) {
+            Some(h) => (h, h - pad_t - pad_b - geo(&trigger, |r| &r.height_inset)),
+            None => (trigger_auto + pad_t + pad_b, trigger_auto),
+        };
         let widths: Vec<f32> = galleys
             .iter()
             .map(|g| g.size().x + tpad_l + tpad_r + border_w * 2.0)
@@ -216,9 +229,14 @@ impl Widget for Tabs<'_> {
             let list_radius = pick(&list, |r| &r.radius, g)
                 .map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
             let track = pick(&list, |r| &r.bg, g).map(|p| t.paint(p));
-            // The fade is the triggers' (`disabled:opacity-50`), not the list's.
-            ui.painter()
-                .extend(box_shapes(list_rect, list_radius, track, None, false));
+            // The list sits in the tabs root; a trigger in the list.
+            style_painter(ui, opacity(&[&list[..], &root[..]], g)).extend(box_shapes(
+                list_rect,
+                list_radius,
+                track,
+                None,
+                false,
+            ));
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
 
@@ -227,7 +245,7 @@ impl Widget for Tabs<'_> {
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, enabled, context);
-                let painter = style_painter(ui, opacity(&[&trigger[..], &list[..]], st));
+                let painter = style_painter(ui, opacity(&[&trigger[..], &list[..], &root[..]], st));
                 let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.paint(p))
                 };

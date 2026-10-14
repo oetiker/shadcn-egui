@@ -4,7 +4,7 @@
 //! paints.
 
 use crate::components::shared::{
-    box_shapes, interaction_state, opacity, ring_shape, style_painter,
+    box_shapes, interaction_state, line_box, opacity, ring_shape, style_painter,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -76,7 +76,6 @@ impl<'a> Widget for Input<'a> {
         // Geometry never depends on focus: resolve it before allocating.
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
-        let height = get(|r| &r.height);
         let border_w = get(|r| &r.border_width);
         let inset = |pad: f32| (pad + border_w).round() as i8;
         let margin = Margin {
@@ -85,7 +84,8 @@ impl<'a> Widget for Input<'a> {
             top: inset(get(|r| &r.pad_top)),
             bottom: inset(get(|r| &r.pad_bottom)),
         };
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let text_size = pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+        let text_px = t.text_px(text_size);
         let font = egui::FontId::new(
             text_px,
             family_for(
@@ -93,6 +93,12 @@ impl<'a> Widget for Input<'a> {
                 pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal),
             ),
         );
+        // No height: CSS's initial `auto`, one line of text in the padding box.
+        let height = pick(&l, |r| &r.height, g).unwrap_or_else(|| {
+            line_box(&t, &l, g, text_size).max(ui.ctx().fonts_mut(|f| f.row_height(&font)))
+                + f32::from(margin.top)
+                + f32::from(margin.bottom)
+        });
 
         let fade = opacity(&[&l[..]], g.with(State::DISABLED, !self.enabled));
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));

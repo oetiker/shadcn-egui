@@ -155,7 +155,14 @@ back, Right and Down forward) whatever its orientation.
   values down the part tree as CSS does, and
   `shared::style_painter(ui, opacity)` returns the painter faded by it. In a
   disabled `Ui` egui has faded the painter already, and `style_painter`
-  leaves it as it is.
+  leaves it as it is. Every part reads its `opacity`, not only a disabled
+  one: a child part's painter multiplies the parent's chain, a container
+  part fades the `Ui` it hands to its content with
+  `shared::faded(ui, opacity, |ui| ..)`, and colours an egui `Frame` paints
+  outside that `Ui` (fill, shadow, ring) are faded with `gamma_multiply`.
+- An empty size `Prop` is CSS's initial value: `width` and `height` fall
+  back to the content size (`shared::line_box` for a line of text), never
+  to 0, so an app that replaces a recipe whole keeps a usable widget.
 - Geometry is resolved without interaction states.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`.
 

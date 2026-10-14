@@ -203,6 +203,26 @@ fn numbers(code: &str) -> impl Iterator<Item = Number<'_>> {
                 i += 1;
                 continue;
             }
+            // `0x10`, `0o17`, `0b100`: an integer in another radix.
+            let radix = match (b[i], b.get(i + 1)) {
+                (b'0', Some(b'x')) => 16,
+                (b'0', Some(b'o')) => 8,
+                (b'0', Some(b'b')) => 2,
+                _ => 10,
+            };
+            if radix != 10 {
+                i += 2;
+                while i < b.len() && (b[i].is_ascii_hexdigit() || b[i] == b'_') {
+                    i += 1;
+                }
+                let text = code[start + 2..i].replace('_', "");
+                let value = u64::from_str_radix(&text, radix).map_or(f64::NAN, |v| v as f64);
+                return Some(Number {
+                    float: false,
+                    value,
+                    before: &code[..start],
+                });
+            }
             i = digits(i);
             let mut float = false;
             // `4.` and `4.5`, but not a range (`0..n`) or a method (`1.max(x)`).
@@ -251,6 +271,17 @@ fn constructor_args(code: &str) -> impl Iterator<Item = &str> {
         code.match_indices(name).filter_map(move |(at, _)| {
             let b = code.as_bytes();
             if at > 0 && (b[at - 1].is_ascii_alphanumeric() || b[at - 1] == b'_') {
+                return None;
+            }
+            // A type position (`-> Margin {`, `impl Margin {`, `for Margin {`)
+            // opens a body, not a struct literal.
+            let before = code[..at].trim_end();
+            let keyword = |k: &str| {
+                before.strip_suffix(k).is_some_and(|head| {
+                    !head.ends_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+                })
+            };
+            if before.ends_with("->") || keyword("impl") || keyword("for") {
                 return None;
             }
             let mut rest = &code[at + name.len()..];
@@ -341,6 +372,18 @@ fn strict_scanner_catches_literals() {
         n("let m = Margin::same(8); // behaviour-ok: egui default"),
         0
     );
+    // A type position is no struct literal: the body after it is not
+    // constructor arguments.
+    assert_eq!(n("fn m(x: u8) -> Margin { Margin::same(x) }"), 0);
+    assert_eq!(n("fn m() -> Margin { let n = 3; Margin::same(n) }"), 0);
+    assert_eq!(n("impl Margin { fn f() { g(3) } }"), 0);
+    assert_eq!(n("impl From<u8> for Margin { fn from(n: u8) { g(3) } }"), 0);
+    assert_eq!(n("fn m() -> Margin { Margin::same(8) }"), 1);
+    // Hex, octal and binary integers are numbers too.
+    assert_eq!(n("let r = CornerRadius::same(0x10);"), 1);
+    assert_eq!(n("let m = Margin::same(0b100);"), 1);
+    assert_eq!(n("let r = CornerRadius::same(0x0);"), 0);
+    assert_eq!(n("let c = 0xff;"), 0);
     // A `/* .. */` comment on one line holds no code.
     assert_eq!(n("let w = /* 4.0 wide */ width;"), 0);
     assert_eq!(n("let h = 32.0; /* ok */"), 1);

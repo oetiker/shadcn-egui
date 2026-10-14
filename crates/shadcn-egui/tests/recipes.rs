@@ -917,3 +917,522 @@ fn checkbox_tick_colour_comes_from_the_indicator() {
         .expect("a tick");
     assert_eq!(tick, theme.palette.destructive);
 }
+
+/// Issue #6, M1: an empty size `Prop` is CSS's initial `auto`, the content
+/// size, never 0. An app that replaces a recipe whole keeps a usable widget.
+#[test]
+fn replaced_recipe_sizes_fall_back_to_the_content() {
+    use shadcn_egui::components::badge::{Badge, BadgeVariant};
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::select::Select;
+    use shadcn_egui::components::switch::Switch;
+    use shadcn_egui::style::Recipe;
+    let base = Theme::vega_light();
+    let cleared = common::restyled(Theme::vega_light(), |s| {
+        for r in [
+            &mut s.button,
+            &mut s.button_variant_default,
+            &mut s.button_size_default,
+            &mut s.badge,
+            &mut s.badge_variant_default,
+            &mut s.input,
+            &mut s.checkbox,
+            &mut s.switch,
+            &mut s.select_trigger,
+            &mut s.tabs_list,
+            &mut s.tabs_list_variant_default,
+        ] {
+            **r = Recipe::default();
+        }
+    });
+    let text_h = base.line_px(shadcn_egui::style::TextSize::Sm);
+    let mut fails = Vec::new();
+    let mut check = |ok: bool, what: String| {
+        if !ok {
+            fails.push(what)
+        }
+    };
+    let h = |add: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
+        common::measure(&cleared, |ui| add(ui)).height()
+    };
+    check(
+        h(&mut |ui| ui.add(Button::new("Save"))) >= text_h,
+        "button".into(),
+    );
+    check(
+        h(&mut |ui| ui.add(Badge::new("New").variant(BadgeVariant::Default))) > 10.0,
+        "badge".into(),
+    );
+    check(
+        h(&mut |ui| ui.add(Input::new(&mut String::new()))) >= text_h,
+        "input".into(),
+    );
+    check(
+        h(&mut |ui| ui.add(Select::new("s", &mut 0, &["Apple"]))) >= text_h,
+        "select trigger".into(),
+    );
+    check(
+        h(&mut |ui| ui.add(Tabs::new(&mut 0, &["One", "Two"]))) >= text_h,
+        "tabs list".into(),
+    );
+    // A box holds its tick; a track holds its thumb.
+    let tick = base
+        .style
+        .checkbox_indicator
+        .icon_size
+        .base
+        .expect("size-3.5");
+    let b = common::measure(&cleared, |ui| ui.add(Checkbox::new(&mut false)));
+    check(
+        b.size() == vec2(tick, tick),
+        format!("checkbox {:?}", b.size()),
+    );
+    let thumb = [&*base.style.switch_thumb];
+    let side = |f: fn(&Recipe) -> &shadcn_egui::style::Prop<f32>| {
+        shadcn_egui::style::pick(&thumb, f, State::SIZE_DEFAULT).expect("thumb size")
+    };
+    let track = common::measure(&cleared, |ui| ui.add(Switch::new(&mut false)));
+    let thumb_size = vec2(side(|r| &r.width), side(|r| &r.height));
+    check(
+        track.size() == thumb_size,
+        format!("switch {:?}", track.size()),
+    );
+    assert!(fails.is_empty(), "collapsed: {fails:?}");
+}
+
+/// M1: a popover whose recipe is replaced whole is as wide as its content,
+/// not 0 wide (which wraps every word onto its own line).
+#[test]
+fn replaced_popover_recipe_keeps_its_content_width() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::popover::Popover;
+    use shadcn_egui::style::Recipe;
+    let probe = |theme: Theme| {
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(520.0, 320.0))
+            .build_ui(move |ui| {
+                theme.apply(ui.ctx());
+                let resp = ui.add(Button::new("Open"));
+                Popover::new(&resp).show(|ui| ui.label("Two words"));
+            });
+        h.run();
+        h.get_by_label("Open").click();
+        h.run();
+        h.get_by_label("Two words").rect()
+    };
+    let one_line = probe(Theme::vega_light()).height();
+    let cleared = common::restyled(Theme::vega_light(), |s| {
+        *s.popover_content = Recipe::default();
+    });
+    let r = probe(cleared);
+    assert!(r.height() <= one_line, "one line: {r:?}");
+    assert!(r.width() > 20.0, "content width: {r:?}");
+}
+
+/// The bounds of every icon (a textured mesh) a frame painted.
+fn icon_rects(out: &egui::FullOutput) -> Vec<egui::Rect> {
+    fn walk(s: &egui::Shape, acc: &mut Vec<egui::Rect>) {
+        match s {
+            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
+                acc.push(egui::Rect::from_points(
+                    &m.vertices.iter().map(|v| v.pos).collect::<Vec<_>>(),
+                ));
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, acc)),
+            _ => {}
+        }
+    }
+    let mut acc = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    acc
+}
+
+/// M1: an icon whose recipe sets no size is the theme's icon size, as a
+/// button's is, not 0.
+#[test]
+fn replaced_recipes_keep_their_icons() {
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::select::Select;
+    use shadcn_egui::style::Recipe;
+    let cleared = common::restyled(Theme::vega_light(), |s| {
+        *s.checkbox_indicator = Recipe::default();
+        *s.select_trigger = Recipe::default();
+    });
+    let icon = cleared.metrics.icon;
+    let (_, out) = common::measure_output(&cleared, |ui| ui.add(Checkbox::new(&mut true)));
+    let ticks = icon_rects(&out);
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(320.0, 260.0))
+        .build_ui(move |ui| {
+            cleared.apply(ui.ctx());
+            ui.add(Select::new("fruit", &mut 0, &["Apple", "Banana"]));
+        });
+    h.run();
+    let chevrons = icon_rects(h.output());
+    let big = |v: &[egui::Rect]| v.iter().filter(|r| r.width() >= icon * 0.5).count();
+    assert_eq!(
+        (big(&ticks), big(&chevrons)),
+        (1, 1),
+        "checkbox tick {ticks:?}, chevron {chevrons:?}"
+    );
+}
+
+/// The alpha of every leaf shape a frame painted, in paint order: a rect's
+/// or path's fill (or its stroke where it has no fill), a text's glyphs with
+/// the shape's opacity, a mesh's first vertex.
+fn painted_alphas(out: &egui::FullOutput) -> Vec<Option<f32>> {
+    use egui::epaint::ColorMode;
+    fn a(c: egui::Color32) -> f32 {
+        f32::from(c.a())
+    }
+    fn walk(s: &egui::Shape, acc: &mut Vec<Option<f32>>) {
+        let solid = |m: &ColorMode| match m {
+            ColorMode::Solid(c) => Some(a(*c)),
+            _ => None,
+        };
+        let alpha = match s {
+            egui::Shape::Vec(v) => return v.iter().for_each(|s| walk(s, acc)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 => Some(a(r.fill)),
+            egui::Shape::Rect(r) => Some(a(r.stroke.color)),
+            egui::Shape::Path(p) if p.fill.a() > 0 => Some(a(p.fill)),
+            egui::Shape::Path(p) => solid(&p.stroke.color),
+            egui::Shape::Circle(c) if c.fill.a() > 0 => Some(a(c.fill)),
+            egui::Shape::LineSegment { stroke, .. } => Some(a(stroke.color)),
+            egui::Shape::Mesh(m) => m.vertices.first().map(|v| a(v.color)),
+            egui::Shape::Text(t) => t
+                .galley
+                .rows
+                .iter()
+                .find_map(|r| r.visuals.mesh.vertices.first())
+                .map(|v| {
+                    let c = match t.override_text_color {
+                        Some(c) => c,
+                        None if v.color == egui::Color32::PLACEHOLDER => t.fallback_color,
+                        None => v.color,
+                    };
+                    a(c) * t.opacity_factor
+                }),
+            _ => None,
+        };
+        acc.push(alpha);
+    }
+    let mut acc = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    acc
+}
+
+/// Compare a frame painted plain with the same frame painted with part
+/// opacities set: every clearly visible shape is faded by one of
+/// `required` (or `allowed`, or not at all), and each `required` factor
+/// fades some shape.
+fn assert_fades(
+    name: &str,
+    plain: &egui::FullOutput,
+    faded: &egui::FullOutput,
+    required: &[f32],
+    allowed: &[f32],
+) -> Vec<String> {
+    let (p, f) = (painted_alphas(plain), painted_alphas(faded));
+    if p.len() != f.len() {
+        return vec![format!(
+            "{name}: {} shapes plain, {} faded",
+            p.len(),
+            f.len()
+        )];
+    }
+    let near = |x: f32, y: f32| (x - y).abs() < 0.02;
+    let factors: Vec<f32> = p
+        .iter()
+        .zip(&f)
+        .filter_map(|(p, f)| match (p, f) {
+            (Some(p), Some(f)) if *p >= 128.0 => Some(f / p),
+            _ => None,
+        })
+        .collect();
+    let mut fails = Vec::new();
+    for x in &factors {
+        let known = std::iter::once(&1.0)
+            .chain(required)
+            .chain(allowed)
+            .any(|e| near(*x, *e));
+        if !known {
+            fails.push(format!("{name}: a shape faded by {x:.3}"));
+        }
+    }
+    for e in required {
+        if !factors.iter().any(|x| near(*x, *e)) {
+            fails.push(format!(
+                "{name}: no shape faded by {e:.3} (seen {factors:.3?})"
+            ));
+        }
+    }
+    fails
+}
+
+/// The output of the last frame of a harness that ran `ui_fn` under
+/// `theme`, after `act` (a click or a hover that opens an overlay).
+fn overlay_output(
+    theme: Theme,
+    ui_fn: fn(&mut egui::Ui),
+    act: fn(&mut egui_kittest::Harness<'static>),
+) -> egui::FullOutput {
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(vec2(520.0, 420.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            ui.style_mut().interaction.tooltip_delay = 0.0;
+            ui_fn(ui);
+        });
+    h.run();
+    act(&mut h);
+    h.run();
+    h.run();
+    h.output().clone()
+}
+
+/// Issue #6, M2: every part's `opacity` takes effect, multiplied down the
+/// part tree as CSS does. Each part gets its own factor, so a part that
+/// skips its own opacity or a parent's lands on a product no part has.
+#[test]
+fn every_part_opacity_multiplies_down_the_part_tree() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::card::{self, Card};
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::dialog::{self, Dialog};
+    use shadcn_egui::components::popover::{popover_header, Popover};
+    use shadcn_egui::components::select::Select;
+    use shadcn_egui::components::separator::separator;
+    use shadcn_egui::components::tooltip::tooltip;
+    use shadcn_egui::style::Style;
+
+    type Case = (
+        &'static str,
+        fn(&mut Style),
+        fn(&Theme) -> egui::FullOutput,
+        &'static [f32],
+        &'static [f32],
+    );
+    fn set(r: &mut shadcn_egui::style::Recipe, v: f32) {
+        r.opacity.base = Some(v);
+    }
+    fn leaf(theme: &Theme, f: fn(&mut egui::Ui) -> egui::Response) -> egui::FullOutput {
+        common::measure_output(theme, f).1
+    }
+    fn click_open(h: &mut egui_kittest::Harness<'static>) {
+        h.get_by_label("Open").click();
+    }
+    let cases: [Case; 11] = [
+        (
+            "checkbox",
+            |s| {
+                set(&mut s.checkbox, 0.5);
+                set(&mut s.checkbox_indicator, 0.6);
+            },
+            |t| leaf(t, |ui| ui.add(Checkbox::new(&mut true))),
+            &[0.5, 0.3],
+            &[],
+        ),
+        (
+            "select trigger",
+            |s| {
+                set(&mut s.select_trigger, 0.5);
+                set(&mut s.select_trigger_icon, 0.6);
+            },
+            |t| leaf(t, |ui| ui.add(Select::new("s", &mut 0, &["Apple"]))),
+            &[0.5, 0.3],
+            &[],
+        ),
+        (
+            "badge",
+            |s| set(&mut s.badge, 0.5),
+            |t| leaf(t, |ui| ui.add(Badge::new("New"))),
+            &[0.5],
+            &[],
+        ),
+        (
+            "separator",
+            |s| set(&mut s.separator, 0.5),
+            |t| {
+                leaf(t, |ui| {
+                    separator(ui);
+                    ui.label("")
+                })
+            },
+            &[0.5],
+            &[],
+        ),
+        (
+            "tabs",
+            |s| {
+                set(&mut s.tabs, 0.9);
+                set(&mut s.tabs_list, 0.8);
+                set(&mut s.tabs_trigger, 0.7);
+            },
+            |t| leaf(t, |ui| ui.add(Tabs::new(&mut 0, &["One", "Two"]))),
+            &[0.72, 0.504],
+            &[],
+        ),
+        (
+            "tabs line",
+            |s| {
+                set(&mut s.tabs, 0.9);
+                set(&mut s.tabs_list, 0.8);
+                set(&mut s.tabs_trigger, 0.7);
+                // The bar's own `opacity-0` base hides it on inactive
+                // triggers: fade the active one only.
+                s.tabs_trigger_after
+                    .opacity
+                    .rules
+                    .push(Rule::important(When::all(State::SELECTED), 0.6));
+            },
+            |t| {
+                leaf(t, |ui| {
+                    ui.add(Tabs::new(&mut 0, &["One", "Two"]).variant(TabsVariant::Line))
+                })
+            },
+            &[0.504, 0.3024],
+            &[0.72],
+        ),
+        (
+            "popover",
+            |s| {
+                set(&mut s.popover_content, 0.9);
+                set(&mut s.popover_header, 0.8);
+                set(&mut s.popover_title, 0.7);
+                set(&mut s.popover_description, 0.6);
+            },
+            |t| {
+                overlay_output(
+                    t.clone(),
+                    |ui| {
+                        let resp = ui.add(Button::new("Open"));
+                        Popover::new(&resp).show(|ui| {
+                            popover_header(ui, "Title", "Description");
+                            ui.label("Body");
+                        });
+                    },
+                    click_open,
+                )
+            },
+            &[0.9, 0.504, 0.432],
+            &[],
+        ),
+        (
+            "tooltip",
+            |s| {
+                set(&mut s.tooltip_content, 0.9);
+                set(&mut s.tooltip_arrow, 0.6);
+            },
+            |t| {
+                overlay_output(
+                    t.clone(),
+                    |ui| {
+                        ui.add_space(60.0);
+                        tooltip(ui.add(Button::new("Open")), "Tip");
+                    },
+                    |h| h.get_by_label("Open").hover(),
+                )
+            },
+            &[0.9, 0.54],
+            &[],
+        ),
+        (
+            "select list",
+            |s| {
+                set(&mut s.select_content, 0.9);
+                set(&mut s.select_viewport, 0.95);
+                set(&mut s.select_group, 0.85);
+                set(&mut s.select_item, 0.8);
+                set(&mut s.select_item_text, 0.7);
+                set(&mut s.select_item_indicator, 0.6);
+                set(&mut s.select_item_indicator_icon, 0.5);
+            },
+            |t| {
+                overlay_output(
+                    t.clone(),
+                    |ui| {
+                        ui.add(Select::new("s", &mut 0, &["Apple", "Banana"]));
+                    },
+                    |h| h.get_by_role(egui::accesskit::Role::ComboBox).click(),
+                )
+            },
+            // Frame; highlighted row; its text; its tick.
+            &[0.9, 0.5814, 0.407, 0.1744],
+            &[],
+        ),
+        (
+            "dialog",
+            |s| {
+                set(&mut s.dialog_overlay, 0.5);
+                set(&mut s.dialog_content, 0.9);
+                set(&mut s.dialog_header, 0.8);
+                set(&mut s.dialog_title, 0.7);
+                set(&mut s.dialog_description, 0.6);
+                set(&mut s.dialog_footer, 0.4);
+                set(&mut s.dialog_close, 0.95);
+            },
+            |t| {
+                overlay_output(
+                    t.clone(),
+                    |ui| {
+                        Dialog::new("d", "Title")
+                            .description("Description")
+                            .backdrop(egui::Color32::from_black_alpha(200))
+                            .show(ui.ctx(), &mut true, |ui| {
+                                ui.label("Body");
+                                dialog::footer(ui, |ui| {
+                                    ui.add(Button::new("Save"));
+                                });
+                            });
+                    },
+                    |_| {},
+                )
+            },
+            // Backdrop; panel and body; title; description; close; footer.
+            &[0.5, 0.9, 0.504, 0.432, 0.855, 0.36],
+            &[],
+        ),
+        (
+            "card",
+            |s| {
+                set(&mut s.card, 0.9);
+                set(&mut s.card_header, 0.8);
+                set(&mut s.card_title, 0.7);
+                set(&mut s.card_description, 0.6);
+                set(&mut s.card_action, 0.95);
+                set(&mut s.card_content, 0.3);
+                set(&mut s.card_footer, 0.4);
+            },
+            |t| {
+                leaf(t, |ui| {
+                    Card::new()
+                        .footer(|ui| {
+                            ui.add(Button::new("Save"));
+                        })
+                        .show(ui, |ui| {
+                            card::card_header_with_action(ui, "Title", "Description", |ui| {
+                                ui.add(Button::new("Act"));
+                            });
+                            card::card_content(ui, |ui| ui.label("Body"));
+                        });
+                    ui.label("")
+                })
+            },
+            // Card; title; description; action; content; footer.
+            &[0.9, 0.504, 0.432, 0.684, 0.27, 0.36],
+            &[],
+        ),
+    ];
+    let mut fails = Vec::new();
+    for (name, restyle, render, required, allowed) in cases {
+        let plain = render(&Theme::vega_light());
+        let faded = render(&common::restyled(Theme::vega_light(), restyle));
+        fails.extend(assert_fades(name, &plain, &faded, required, allowed));
+    }
+    assert!(fails.is_empty(), "{fails:#?}");
+}

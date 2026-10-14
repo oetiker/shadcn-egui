@@ -5,7 +5,7 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{
-    interaction_state, opacity, paint_box, ring, shift, style_painter,
+    interaction_state, line_box, opacity, paint_box, ring, shift, style_painter,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
@@ -178,7 +178,6 @@ impl Widget for Button {
         // Geometry never depends on hover or press: resolve it before allocating.
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
-        let height = get(|r| &r.height);
         let (pad_l, pad_r, gap, border_w) = (
             get(|r| &r.pad_left),
             get(|r| &r.pad_right),
@@ -186,7 +185,8 @@ impl Widget for Button {
             get(|r| &r.border_width),
         );
         let icon_px = pick(l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
-        let text_px = t.text_px(pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let text_size = pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+        let text_px = t.text_px(text_size);
         let weight = pick(l, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
         let fonts = ui.painter().clone();
@@ -203,6 +203,21 @@ impl Widget for Button {
         };
         let galley = layout(Stroke::NONE);
         let icon_only = self.icon_only();
+        let has_icon = icon_only.is_some() || self.icon.is_some() || self.icon_end.is_some();
+        // No height: CSS's initial `auto`, the content's height.
+        let content_h = if icon_only.is_some() {
+            icon_px
+        } else {
+            let line = line_box(&t, l, g, text_size).max(galley.size().y);
+            if has_icon {
+                line.max(icon_px)
+            } else {
+                line
+            }
+        };
+        let height = pick(l, |r| &r.height, g).unwrap_or_else(|| {
+            content_h + get(|r| &r.pad_top) + get(|r| &r.pad_bottom) + border_w * 2.0
+        });
         let content_w = if icon_only.is_some() {
             icon_px
         } else {

@@ -72,8 +72,14 @@ impl Widget for Switch<'_> {
         let g = t.state(size_bit.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&track, f, g).unwrap_or(0.0);
 
-        let (rect, base) =
-            ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
+        // No size: CSS's initial `auto`, the thumb inside the border.
+        let border = get(|r| &r.border_width) * 2.0;
+        let thumb_side = |f: fn(&Recipe) -> &Prop<f32>| pick(&thumb, f, g).unwrap_or(0.0);
+        let size = vec2(
+            pick(&track, |r| &r.width, g).unwrap_or_else(|| thumb_side(|r| &r.width) + border),
+            pick(&track, |r| &r.height, g).unwrap_or_else(|| thumb_side(|r| &r.height) + border),
+        );
+        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
         let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
