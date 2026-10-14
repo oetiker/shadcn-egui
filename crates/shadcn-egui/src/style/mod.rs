@@ -147,8 +147,10 @@ mod tests {
     /// thread stacks as soon as a function holds a few of them.
     #[test]
     fn style_is_small() {
+        // One unboxed Recipe is about 1.5 KB; allow the name and a few
+        // non-recipe fields, never a recipe.
         let size = std::mem::size_of::<Style>();
-        assert!(size < 4096, "size_of::<Style>() = {size}");
+        assert!(size < 1024, "size_of::<Style>() = {size}");
     }
 
     /// Base classes come after the style's classes in each part's string,

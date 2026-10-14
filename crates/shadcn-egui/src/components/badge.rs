@@ -60,7 +60,7 @@ impl Badge {
             BadgeVariant::Ghost => &s.badge_variant_ghost,
             BadgeVariant::Link => &s.badge_variant_link,
         };
-        [&s.badge, v]
+        [&*s.badge, v]
     }
 }
 

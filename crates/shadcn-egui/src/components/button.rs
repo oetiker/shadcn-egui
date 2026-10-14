@@ -121,7 +121,7 @@ impl Button {
             ButtonSize::IconSm => &s.button_size_icon_sm,
             ButtonSize::IconLg => &s.button_size_icon_lg,
         };
-        [&s.button, v, z]
+        [&*s.button, v, z]
     }
 
     /// The icon of an icon size (`ButtonSize::Icon`, …): drawn alone, the
