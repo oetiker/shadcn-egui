@@ -79,10 +79,11 @@ fn issue6_tab_trigger_restyled_through_theme_style() {
     );
 }
 
-/// An app's important border rule wins on the trigger. (Upstream luma's
-/// `border-transparent!` was important too; correction C1 removes it.)
+/// An app's important border rule wins on the active trigger. (Upstream
+/// luma's `border-transparent!` was important too; correction C1 removes
+/// it, so `important_app_rule_beats_generated_important` covers that case.)
 #[test]
-fn important_app_rule_beats_upstream_important() {
+fn important_app_border_wins_on_active_trigger() {
     let luma = Theme::new(
         shadcn_egui::Style::luma(),
         shadcn_egui::Palette::light(),
@@ -130,6 +131,59 @@ fn important_app_border_wins_on_focused_and_dark_active_trigger() {
         );
         assert_eq!(borders.len(), 2, "{borders:?}");
     }
+}
+
+/// Luma's `[&>svg]:size-3!` is generated as an important rule; an app's
+/// important rule comes later and wins.
+#[test]
+fn important_app_rule_beats_generated_important() {
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::icons::lucide::X;
+    let luma = Theme::new(
+        shadcn_egui::Style::luma(),
+        shadcn_egui::Palette::light(),
+        10.0,
+    );
+    let badge = |ui: &mut egui::Ui| ui.add(Badge::new("Badge").icon(&X));
+    let before = common::measure(&luma, badge);
+    let theme = common::restyled(luma, |s| {
+        s.badge
+            .icon_size
+            .rules
+            .push(Rule::important(When::ALWAYS, 20.0));
+    });
+    let after = common::measure(&theme, badge);
+    assert_eq!(after.width() - before.width(), 20.0 - 12.0);
+}
+
+/// C2 is a plain correction, not an important rule: an app's important
+/// ring on a focused line trigger still wins.
+#[test]
+fn important_app_ring_beats_line_focus_correction() {
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        let tr = &mut s.tabs_trigger;
+        tr.ring_width
+            .rules
+            .push(Rule::important(When::all(State::FOCUS_VISIBLE), 2.0));
+        tr.ring_color.rules.push(Rule::important(
+            When::all(State::FOCUS_VISIBLE),
+            Paint::Role(Role::Primary, 1.0),
+        ));
+    });
+    let (_, out) = common::measure_output(&theme, |ui| {
+        let resp = ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 1))));
+        resp
+    });
+    let shapes = common::rect_shapes(&out);
+    assert!(
+        shapes
+            .iter()
+            .any(|r| r.stroke_kind == egui::StrokeKind::Outside
+                && r.stroke.width == 2.0
+                && r.stroke.color == theme.palette.primary),
+        "app ring: {shapes:?}"
+    );
 }
 
 #[test]
