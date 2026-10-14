@@ -57,7 +57,10 @@ style does not set that property; the component then uses its base value."
 
 ## Known upstream disagreements
 
-Found so far; the plan adds every further snapshot difference here.
+Found so far; the plan adds every further snapshot difference here. A
+snapshot change that makes the crate match upstream and that the maintainer
+approved is not a disagreement and is not listed: the luma and rhea dialog
+close button on its round `secondary` disc is one.
 
 - Luma and rhea, tabs: `.cn-tabs-trigger` applies `border-transparent!`
   (`!important`), which beats the base classes `focus-visible:border-ring`
@@ -244,7 +247,10 @@ Each is listed in `utility.rs` or `variant.rs` with a reason, by group:
   `absolute`, `fixed`, `col-*`, `row-*`, `grid-cols-*`, `grid-rows-*`,
   `auto-rows-*`, `flex-col`, `flex-col-reverse`, `flex-row`, `flex-1`,
   `grow`, `shrink-0`, `@container/*`.
-- Browser behaviour: `transition-*`, `pointer-events-none`, `select-none`,
+- Animation, out of scope: `transition-*`, `duration-*`,
+  `animate-in`, `animate-out`, `fade-*`, `zoom-*`, `slide-in-from-*`, and
+  the `data-open`, `data-closed` and similar state variants.
+- Browser behaviour: `pointer-events-none`, `select-none`,
   `touch-none`, `cursor-*`, `scroll-my-*`, `isolate`, `z-*`,
   `whitespace-nowrap`, `line-clamp-*`, `overflow-*`, `peer`, `group/*`.
 - Sizing that is the component's default: `h-fit`.
@@ -360,8 +366,8 @@ not a CI gate.
    `Rule::important`; port-component
    states that base classes are generated and that a component holds no
    literal colour or size. CHANGES entries ending with `(#6)`, one of them
-   naming the luma and rhea tab border change and one the separator
-   thickness.
+   naming the separator thickness. The luma and rhea tab borders do not
+   change (C1), so no entry names them.
 
 Steps 2 to 5 are pull request B.
 

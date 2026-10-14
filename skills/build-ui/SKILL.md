@@ -114,8 +114,12 @@ only when the mode or the preset changes; widgets read the tokens with
 Every colour, size and spacing a component draws comes from its recipe in
 `theme.style` (one `Recipe` per part, named after the shadcn part:
 `tabs_trigger`, `button_variant_outline`, `separator`). To change one,
-push an important rule: it beats every rule the style generated, in light
-and dark, the way a Tailwind `!` class does.
+push an important rule, the way a Tailwind `!` class does. It beats every
+rule of the style that is not important, in light and dark, whatever states
+that rule names. A rule the style itself marks important (a `!` class
+upstream) still wins over yours when it also names a state, such as
+`hover:bg-muted!`; one without a state loses to yours, because yours comes
+later.
 
 ```rust
 use std::sync::Arc;

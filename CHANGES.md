@@ -8,11 +8,15 @@ are recorded here. The format is based on
 
 ### New
 - Every colour, size and spacing of every component can be changed through
-  `theme.style`. `Rule::important(When::all(State::SELECTED), value)` adds a
-  rule that beats the style's own, as a Tailwind `!` class does: for example a
-  filled `primary` active tab with a solid 2 px focus ring. (#6)
+  `theme.style`, for example a filled `primary` active tab with a solid 2 px
+  focus ring. `Rule::important(When::all(State::SELECTED), value)` adds a
+  rule ranked `Rule::IMPORTANT`, as a Tailwind `!` class is: it beats every
+  rule of the style that is not important. A rule the style itself marks
+  important still wins over it where that rule also names a state, such as
+  hover. (#6)
 - `Popover::side_offset` and `Select::side_offset` set the gap between the
-  trigger and the popup; the default stays 4. (#6)
+  trigger and the popup; the default stays 4
+  (`components::shared::DEFAULT_SIDE_OFFSET`). (#6)
 
 ### Changed
 - In a line tab list (`TabsVariant::Line`), a focused tab that is not active
