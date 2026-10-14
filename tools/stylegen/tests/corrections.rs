@@ -148,11 +148,13 @@ fn c1_luma_and_rhea_trigger_border_is_not_important() {
 }
 
 /// C2: in a line list a focused trigger draws no ring, outline or focus
-/// border. Its underline shows: in `Ring` on an inactive trigger, in
-/// `Foreground` and 3 px thick on the active one, light or dark. The
-/// default variant keeps upstream's focus ring.
+/// border. Like hover, focus only shows on an inactive trigger: its label
+/// turns `Foreground` and its underline shows in `Ring`, 2 px. C2 adds no
+/// focus marker to the active trigger: it keeps upstream's 2 px
+/// `Foreground` underline, light or dark. The default variant keeps
+/// upstream's focus ring.
 #[test]
-fn c2_focused_line_trigger_shows_its_underline() {
+fn c2_adds_focus_to_inactive_line_triggers_only() {
     let (h, v, line, def, sel, fv, dark) = (
         flag("HORIZONTAL"),
         flag("VERTICAL"),
@@ -181,24 +183,39 @@ fn c2_focused_line_trigger_shows_its_underline() {
                 "{style} {st:#x}"
             );
             let active = extra & sel != 0;
-            let (colour, thick) = if active {
-                ("Foreground", 3.0)
-            } else {
-                ("Ring", 2.0)
-            };
+            let colour = if active { "Foreground" } else { "Ring" };
             assert_eq!(resolve(a, Field::Bg, st), paint(colour), "{style} {st:#x}");
             assert_eq!(
                 resolve(a, Field::Height, st),
-                Some(Value::Px(thick)),
+                Some(Value::Px(2.0)),
                 "{style} {st:#x}"
             );
             let vst = st & !h | v;
             assert_eq!(
                 resolve(a, Field::Width, vst),
-                Some(Value::Px(thick)),
+                Some(Value::Px(2.0)),
                 "{style} {vst:#x}"
             );
+            assert_eq!(
+                resolve(d, Field::Text, st),
+                paint("Foreground"),
+                "{style} {st:#x}: label"
+            );
         }
+        // An unfocused inactive label stays dimmed, in dark mode too.
+        assert_eq!(
+            resolve(d, Field::Text, h | line),
+            Some(Value::Paint {
+                role: "Foreground",
+                alpha: 0.6
+            }),
+            "{style}"
+        );
+        assert_eq!(
+            resolve(d, Field::Text, h | line | dark),
+            paint("MutedForeground"),
+            "{style}"
+        );
         // An unfocused active line trigger keeps the 2 px underline.
         assert_eq!(
             resolve(a, Field::Height, h | line | sel),

@@ -83,12 +83,17 @@ the string" and before translation, listed in `CORRECTIONS`
   ring-ring/50 outline-1 outline-ring border-ring`) around a focused
   trigger whose list draws no pills, next to the underline. In a line
   list a focused trigger draws no ring, no outline and no focus border.
-  Underline colour keeps meaning "active", thickness means "focus": a
-  focused inactive trigger shows its underline (opacity 1) in `Ring`; a
-  focused active trigger keeps its `Foreground` underline and draws it
-  3px thick instead of 2px (`h-[3px]` horizontal, `w-[3px]` vertical).
-  The default variant keeps upstream's ring. (A `Ring` underline on the
-  active trigger too was tried and rejected: it hid which tab is active.)
+  Like hover, focus only shows on a trigger that is not active: a focused
+  inactive trigger draws its label in `Foreground` (as on hover) and its
+  underline (opacity 1, 2px) in `Ring`. An active trigger is assumed to
+  hold the focus, so it need not show focus or hover; a style whose
+  visual logic has a natural way to mark them may, but C2 adds nothing
+  there: in a line list the active trigger keeps upstream's look. The
+  default variant keeps upstream's ring. (Tried and rejected by the
+  maintainer: a `Ring` underline on the active trigger hid which tab is
+  active; a thicker active underline on focus has no place in vega's
+  visual logic; a grey label with a `Ring` underline read as "disabled
+  active".)
 
 ## Values that are fixed in code today
 

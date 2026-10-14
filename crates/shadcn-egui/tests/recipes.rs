@@ -212,9 +212,42 @@ fn luma_and_rhea_keep_the_dark_active_and_focus_border() {
     }
 }
 
+/// The colour of every text a frame painted, in paint order.
+fn text_colours(out: &egui::FullOutput) -> Vec<egui::Color32> {
+    fn walk(s: &egui::Shape, acc: &mut Vec<egui::Color32>) {
+        match s {
+            egui::Shape::Text(t) => {
+                if let Some(v) = t
+                    .galley
+                    .rows
+                    .iter()
+                    .find_map(|r| r.visuals.mesh.vertices.first())
+                {
+                    let c = match t.override_text_color {
+                        Some(c) => c,
+                        None if v.color == egui::Color32::PLACEHOLDER => t.fallback_color,
+                        None => v.color,
+                    };
+                    acc.push(if t.opacity_factor < 1.0 {
+                        c.gamma_multiply(t.opacity_factor)
+                    } else {
+                        c
+                    });
+                }
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, acc)),
+            _ => {}
+        }
+    }
+    let mut acc = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    acc
+}
+
 /// C2: a focused trigger in a line list draws no ring, outline or focus
-/// border. A focused inactive trigger shows its underline in `Ring`; the
-/// focused active one keeps its `Foreground` underline, 3 px thick.
+/// border. A focused inactive trigger shows its label in `Foreground` and
+/// its underline in `Ring`, 2 px; C2 adds no focus marker to the active
+/// trigger: it keeps upstream's 2 px `Foreground` underline and no `Ring`.
 #[test]
 fn focused_line_trigger_shows_its_underline() {
     for (name, theme) in common::snapshot_themes() {
@@ -248,15 +281,19 @@ fn focused_line_trigger_shows_its_underline() {
                     .collect()
             };
             if focused == 0 {
-                // Active and focused: Foreground, thicker.
                 assert_eq!(bars(ring), Vec::<f32>::new(), "{name}: no Ring underline");
-                assert_eq!(bars(fg), vec![3.0], "{name}: 3px Foreground underline");
+                assert_eq!(bars(fg), vec![2.0], "{name}: 2px Foreground underline");
             } else {
                 assert_eq!(bars(ring), vec![2.0], "{name}: 2px Ring underline");
                 assert_eq!(
                     bars(fg),
                     vec![2.0],
                     "{name}: active 2px Foreground underline"
+                );
+                assert_eq!(
+                    text_colours(&out)[1],
+                    fg,
+                    "{name}: focused inactive label in Foreground"
                 );
             }
         }
