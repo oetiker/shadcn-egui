@@ -155,12 +155,17 @@ back, Right and Down forward) whatever its orientation.
   values down the part tree as CSS does, and
   `shared::style_painter(ui, &[part_stack, parent_stack], state)` returns the
   painter faded by it. In a disabled `Ui` egui has faded every shape once
-  already, so there `style_painter` (and `shared::ui_opacity`, the bare
-  value) leaves out the rules that need `DISABLED` and keeps the rest. Every part reads its `opacity`, not only a disabled
-  one: a child part's painter multiplies the parent's chain, a container
-  part fades the `Ui` it hands to its content with
-  `shared::faded(ui, opacity, |ui| ..)`, and colours an egui `Frame` paints
-  outside that `Ui` (fill, shadow, ring) are faded with `gamma_multiply`.
+  already. There
+  `style_painter` (and `shared::ui_opacity`, the bare value) takes 1.0 for a
+  part whose pick a rule that needs `DISABLED` wins: as in CSS, the
+  `disabled:` rule replaces the part's base opacity, and egui's fade stands
+  in for the rule. Where no such rule wins, the part's other opacity applies
+  on top of egui's fade. Pass `DISABLED` in the state whenever the `Ui` is
+  disabled. Every part reads its `opacity`, not only a disabled one: a child
+  part's painter multiplies the parent's chain, a container part fades the
+  `Ui` it hands to its content with `shared::faded(ui, opacity, |ui| ..)`,
+  and colours an egui `Frame` paints outside that `Ui` (fill, shadow, ring)
+  are faded with `gamma_multiply`.
 - An empty size `Prop` is CSS's initial value: `width` and `height` fall
   back to the content size (`shared::line_box` for a line of text), never
   to 0, so an app that replaces a recipe whole keeps a usable widget.
