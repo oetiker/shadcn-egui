@@ -9,51 +9,48 @@ use crate::variant::Pseudo;
 #[derive(Debug, PartialEq)]
 pub enum U {
     Set(Vec<(Field, Value)>),
+    /// Fields of the part's `after:` pseudo-element (its `_after` recipe).
+    After(Vec<(Field, Value)>),
     UseVar(Vec<Field>, String),
     VarDef(String, f32),
+    /// `text-current`: the fields inherit. tailwind-merge drops an earlier
+    /// class of the same fields and modifiers, so this clears them; the
+    /// class itself is reported as ignored with the reason.
+    Inherit(Vec<Field>, &'static str),
     Ignore(&'static str),
     Unsupported(&'static str),
 }
 
-const LAYOUT: &str = "flex/grid/position keyword; egui layout is done by the component";
+const LAYOUT: &str =
+    "size or alignment relative to the parent; egui layout is done by the component";
 const ANIM: &str = "animation or transition; out of scope (spec §4.4)";
+const STRUCTURE: &str = "structure: egui layout is done by the component";
+const BROWSER: &str = "browser behaviour the component handles itself";
+/// Also the reason of the `[&_svg]` variant in `variant.rs`.
+pub const SVG_CHILD: &str =
+    "svg child behaviour (pointer events, shrink); the crate paints icons itself";
+const DEFAULT_SIZE: &str = "the component's default sizing";
+const ANCHOR: &str = "bits-ui anchor variable: placement computed by egui";
+const CENTRE: &str = "dialog centring: egui centres the dialog window";
 
 const IGNORE_EXACT: &[(&str, &str)] = &[
-    ("flex", LAYOUT),
-    ("inline-flex", LAYOUT),
-    ("grid", LAYOUT),
-    ("flex-col", LAYOUT),
-    ("flex-1", LAYOUT),
-    ("items-center", LAYOUT),
-    ("justify-center", LAYOUT),
-    ("shrink-0", LAYOUT),
-    ("relative", LAYOUT),
-    ("absolute", LAYOUT),
-    ("isolate", LAYOUT),
+    ("flex", STRUCTURE),
+    ("inline-flex", STRUCTURE),
+    ("grid", STRUCTURE),
+    ("flex-col", STRUCTURE),
+    ("flex-1", STRUCTURE),
+    ("shrink-0", STRUCTURE),
+    ("relative", STRUCTURE),
+    ("absolute", STRUCTURE),
+    ("isolate", BROWSER),
     ("w-full", LAYOUT),
     ("h-full", LAYOUT),
     ("w-auto", LAYOUT),
-    ("block", LAYOUT),
+    ("block", STRUCTURE),
     ("text-left", LAYOUT),
     ("text-center", LAYOUT),
-    (
-        "overflow-hidden",
-        "egui clips children to the frame already",
-    ),
-    ("select-none", "text selection is off for egui widgets"),
-    (
-        "pointer-events-none",
-        "the component decides what senses input",
-    ),
-    ("cursor-default", "cursor icon is chosen by the component"),
-    (
-        "outline-hidden",
-        "focus is drawn with the ring, never a browser outline",
-    ),
-    (
-        "outline-none",
-        "focus is drawn with the ring, never a browser outline",
-    ),
+    ("select-none", BROWSER),
+    ("pointer-events-none", BROWSER),
     ("animate-in", ANIM),
     ("animate-out", ANIM),
     (
@@ -65,19 +62,49 @@ const IGNORE_EXACT: &[(&str, &str)] = &[
         "tooltip arrow placement is component geometry",
     ),
     ("text-balance", "egui has no balanced wrapping"),
+    ("fixed", STRUCTURE),
+    ("flex-col-reverse", STRUCTURE),
+    ("flex-row", STRUCTURE),
+    ("grow", STRUCTURE),
+    ("peer", BROWSER),
+    ("touch-none", BROWSER),
+    ("whitespace-nowrap", BROWSER),
+    ("w-fit", DEFAULT_SIZE),
+    ("h-fit", DEFAULT_SIZE),
+    ("top-1/2", CENTRE),
+    ("left-1/2", CENTRE),
+    ("-translate-x-1/2", CENTRE),
+    ("-translate-y-1/2", CENTRE),
 ];
+/// Why `text-current` sets nothing: the reason [`U::Inherit`] reports.
+const INHERIT_TEXT: &str = "inherits the parent's text colour: the recipe leaves `text` empty";
 const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("transition", ANIM),
     ("duration-", ANIM),
     ("fade-", ANIM),
     ("zoom-", ANIM),
     ("slide-in-from-", ANIM),
-    ("z-", LAYOUT),
-    ("scroll-my-", "scroll snapping"),
+    ("z-", BROWSER),
+    ("scroll-my-", BROWSER),
     (
         "underline-offset-",
         "egui draws text underlines at a fixed offset",
     ),
+    ("items-", STRUCTURE),
+    ("justify-", STRUCTURE),
+    ("self-", STRUCTURE),
+    ("place-content-", STRUCTURE),
+    ("col-", STRUCTURE),
+    ("row-", STRUCTURE),
+    ("grid-cols-", STRUCTURE),
+    ("grid-rows-", STRUCTURE),
+    ("auto-rows-", STRUCTURE),
+    ("@container/", STRUCTURE),
+    ("group/", BROWSER),
+    ("cursor-", BROWSER),
+    ("overflow-", BROWSER),
+    ("line-clamp-", BROWSER),
+    ("origin-", ANCHOR),
 ];
 
 /// Tailwind spacing: `N` → N×4px, `px` → 1, `[Npx]`, `[Nrem]` (16px rem),
@@ -175,33 +202,60 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     use Field::*;
     match pseudo {
         Some(Pseudo::Svg) => {
-            return match u.strip_prefix("size-").and_then(spacing) {
-                Some(v) => px(&[IconSize], v),
-                None => U::Unsupported("svg child utility other than size-*"),
+            if let Some(v) = u.strip_prefix("size-").and_then(spacing) {
+                return px(&[IconSize], v);
             }
+            let ignored = IGNORE_EXACT.iter().any(|(k, _)| *k == u)
+                || u == "text-current"
+                || IGNORE_PREFIX.iter().any(|(k, _)| u.starts_with(k));
+            return if ignored {
+                U::Ignore(SVG_CHILD)
+            } else {
+                U::Unsupported("svg child utility other than size-*")
+            };
         }
         Some(Pseudo::After) => {
-            return match u {
-                "absolute" => U::Ignore(LAYOUT),
-                _ if u.starts_with("-inset-x-") => {
-                    spaced(&[HitInsetX], &u["-inset-x-".len()..], 1.0)
+            // `after:-inset-*` grows the hit area (checkbox, switch, slider thumb).
+            for (prefix, fields) in [
+                ("-inset-x-", &[HitInsetX][..]),
+                ("-inset-y-", &[HitInsetY][..]),
+                ("-inset-", &[HitInsetX, HitInsetY][..]),
+            ] {
+                if let Some(v) = u.strip_prefix(prefix) {
+                    return spaced(fields, v, 1.0);
                 }
-                _ if u.starts_with("-inset-y-") => {
-                    spaced(&[HitInsetY], &u["-inset-y-".len()..], 1.0)
-                }
-                _ if u.starts_with("-inset-") => {
-                    spaced(&[HitInsetX, HitInsetY], &u["-inset-".len()..], 1.0)
-                }
-                _ => U::Unsupported("after: utility other than -inset-*"),
             }
+            // Anything else draws the pseudo-element: the part's `_after` recipe.
+            // A CSS variable has no place there: `_after` takes fields only.
+            return match utility(u, None) {
+                U::Set(list) => U::After(list),
+                U::UseVar(..) | U::VarDef(..) => {
+                    U::Unsupported("CSS variable under after:; the _after recipe takes fields only")
+                }
+                U::Inherit(..) => U::Unsupported("inherited value under after:"),
+                other @ (U::After(_) | U::Ignore(_) | U::Unsupported(_)) => other,
+            };
         }
         None => {}
     }
     if let Some((_, why)) = IGNORE_EXACT.iter().find(|(k, _)| *k == u) {
         return U::Ignore(why);
     }
+    if u == "text-current" {
+        return U::Inherit(vec![Text], INHERIT_TEXT);
+    }
     if let Some((_, why)) = IGNORE_PREFIX.iter().find(|(k, _)| u.starts_with(k)) {
         return U::Ignore(why);
+    }
+    if u.contains("(--bits-") {
+        return U::Ignore(ANCHOR);
+    }
+    if let Some(n) = u
+        .strip_prefix("h-[calc(100%-")
+        .and_then(|r| r.strip_suffix(")]"))
+        .and_then(length)
+    {
+        return px(&[HeightInset], n);
     }
     if let Some(def) = u.strip_prefix("[--").and_then(|r| r.strip_suffix(']')) {
         let (name, value) = def.split_once(':').unwrap_or((def, ""));
@@ -236,6 +290,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         ("ml-", &[MarginLeft]),
         ("m-", &[MarginTop, MarginRight, MarginBottom, MarginLeft]),
         ("gap-", &[Gap]),
+        ("inset-x-", &[InsetLeft, InsetRight]),
+        ("inset-y-", &[InsetTop, InsetBottom]),
+        ("inset-", &[InsetTop, InsetRight, InsetBottom, InsetLeft]),
         ("top-", &[InsetTop]),
         ("right-", &[InsetRight]),
         ("bottom-", &[InsetBottom]),
@@ -330,6 +387,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         "border-none" => return px(&[BorderWidth], 0.0),
         "border-t" => return px(&[BorderTopWidth], 1.0),
         "ring" => return px(&[RingWidth], 1.0),
+        "outline" => return px(&[OutlineWidth], 1.0),
         _ => {}
     }
     for (prefix, field) in [
@@ -377,6 +435,23 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         }
         return role(v).map_or(U::Unsupported("border-* value"), |(r, a)| {
             U::Set(vec![(BorderColor, Value::Paint { role: r, alpha: a })])
+        });
+    }
+    if let Some(v) = u.strip_prefix("outline-") {
+        if v == "none" || v == "hidden" {
+            return px(&[OutlineWidth], 0.0);
+        }
+        if let Ok(n) = v.parse::<f32>() {
+            return px(&[OutlineWidth], n);
+        }
+        return role(v).map_or(U::Unsupported("outline-* value"), |(r, a)| {
+            U::Set(vec![(OutlineColor, Value::Paint { role: r, alpha: a })])
+        });
+    }
+    if let Some(v) = u.strip_prefix("fill-") {
+        // The tooltip arrow is painted as a shape: its fill is its background.
+        return role(v).map_or(U::Unsupported("fill-* value"), |(r, a)| {
+            U::Set(vec![(Bg, Value::Paint { role: r, alpha: a })])
         });
     }
     if let Some(v) = u.strip_prefix("ring-") {

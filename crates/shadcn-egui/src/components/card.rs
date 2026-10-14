@@ -1,5 +1,5 @@
 //! shadcn Card, ported from shadcn-svelte `ui/card/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; padding,
+//! `tools/stylegen/PIN`. Padding,
 //! gap, radius, ring, shadow, the footer strip and the text of the title and
 //! description come from the style's `cn-card*` recipes.
 //!
@@ -16,7 +16,7 @@
 //! is not read: the header paints no fill or border in any style, so its
 //! corners have nothing to shape.
 
-use crate::components::shared::ring;
+use crate::components::shared::{faded, opacity, ring};
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
@@ -98,9 +98,9 @@ impl<'a> Card<'a> {
         let t = Theme::current(ui.ctx());
         let has_footer = self.footer.is_some();
         let st = t.state(self.size.state().with(State::HAS_FOOTER, has_footer));
-        let card = [&t.style.card];
-        let content = [&t.style.card_content];
-        let foot = [&t.style.card_footer];
+        let card = [&*t.style.card];
+        let content = [&*t.style.card_content];
+        let foot = [&*t.style.card_footer];
 
         let (pad_top, pad_bottom, gap) = (
             len(&card, |r| &r.pad_top, st),
@@ -118,13 +118,16 @@ impl<'a> Card<'a> {
         let ring_width = len(&card, |r| &r.ring_width, st);
         let ring_color = pick(&card, |r| &r.ring_color, st).map(|p| t.paint(p));
         let shadow = pick(&card, |r| &r.shadow, st).map(|s| t.shadow(s));
+        // Header, content and footer sit in the card.
+        let alpha = opacity(&[&card[..]], st);
+        let mut painter = ui.painter().clone();
+        painter.multiply_opacity(alpha);
 
         let outer_w = ui.available_width();
         let origin = ui.cursor().min;
         let back = ui.painter().add(Shape::Noop);
 
         // Header and content.
-        // base: "flex flex-col"
         let body_rect = Rect::from_min_max(
             egui::pos2(origin.x + side_l, origin.y + pad_top),
             egui::pos2(
@@ -138,6 +141,7 @@ impl<'a> Card<'a> {
                 .layout(Layout::top_down(Align::Min)),
         );
         body.spacing_mut().item_spacing.y = gap;
+        body.multiply_opacity(alpha);
         if let Some(fg) = fg {
             body.visuals_mut().override_text_color = Some(fg);
         }
@@ -176,13 +180,14 @@ impl<'a> Card<'a> {
                     strip_top + f_top + ui.spacing().interact_size.y,
                 ),
             );
-            // base: "flex items-center" (a row as high as a control, like `ui.horizontal`)
+            // A row as high as a control, like `ui.horizontal`.
             let mut row = ui.new_child(
                 UiBuilder::new()
                     .max_rect(inner)
                     .layout(Layout::left_to_right(Align::Center)),
             );
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
+            row.multiply_opacity(opacity(&[&foot[..], &card[..]], st));
             if let Some(fg) = fg {
                 row.visuals_mut().override_text_color = Some(fg);
             }
@@ -203,7 +208,7 @@ impl<'a> Card<'a> {
         if let Some(fill) = fill {
             shapes.push(Shape::rect_filled(outer, corner, fill));
         }
-        ui.painter().set(back, Shape::Vec(shapes));
+        painter.set(back, Shape::Vec(shapes));
         if let Some((idx, top, bottom)) = footer_shapes {
             let strip = Rect::from_min_max(
                 egui::pos2(outer.left(), top),
@@ -224,18 +229,21 @@ impl<'a> Card<'a> {
             let line = len(&foot, |r| &r.border_top_width, st);
             if line > 0.0 {
                 // `border-t` takes the default border colour.
-                let color = pick(&foot, |r| &r.border_color, st)
-                    .map_or_else(|| t.role(Role::Border), |p| t.paint(p));
+                let base_border = t.role(Role::Border); // behaviour-ok: shadcn base layer `* { @apply border-border }`
+                let color =
+                    pick(&foot, |r| &r.border_color, st).map_or(base_border, |p| t.paint(p));
                 strip_shapes.push(Shape::line_segment(
                     [strip.left_top(), strip.right_top()],
                     Stroke::new(line, color),
                 ));
             }
-            ui.painter().set(idx, Shape::Vec(strip_shapes));
+            let mut strip_painter = painter.clone();
+            strip_painter.multiply_opacity(opacity(&[&foot[..]], st));
+            strip_painter.set(idx, Shape::Vec(strip_shapes));
         }
         // `ring-1` lies outside the box.
         if let Some(color) = ring_color {
-            ring(ui.painter(), outer, radius, ring_width, color);
+            ring(&painter, outer, radius, ring_width, color);
         }
 
         let response = ui.allocate_rect(outer, Sense::hover());
@@ -248,8 +256,10 @@ impl<'a> Card<'a> {
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());
-    let gap = len(&[&t.style.card_content], |r| &r.gap, st);
+    let l = [&*t.style.card_content];
+    let gap = len(&l, |r| &r.gap, st);
     ui.scope(|ui| {
+        ui.multiply_opacity(opacity(&[&l[..]], st));
         ui.spacing_mut().item_spacing.y = gap;
         add(ui)
     })
@@ -258,7 +268,15 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// `card-header` with its title and description.
 pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
-    header_column(ui, title, description);
+    faded(ui, part_opacity(ui, |s| &s.card_header), |ui| {
+        header_column(ui, title, description)
+    });
+}
+
+/// The resolved `opacity` of one card part, at the current card's size.
+fn part_opacity(ui: &Ui, part: fn(&crate::style::Style) -> &Recipe) -> f32 {
+    let t = Theme::current(ui.ctx());
+    opacity(&[&[part(&t.style)][..]], t.state(current_size(ui).state()))
 }
 
 /// `card-header` with a `card-action` to the right of the title and
@@ -269,20 +287,26 @@ pub fn card_header_with_action(
     description: &str,
     action: impl FnOnce(&mut Ui),
 ) {
-    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-        // base: "col-start-2 row-span-2 row-start-1 self-start justify-self-end"
-        action(ui);
-        let width = ui.available_width();
-        ui.allocate_ui_with_layout(egui::vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-            header_column(ui, title, description)
-        });
+    // The action sits in the header, beside the title and description.
+    let header = part_opacity(ui, |s| &s.card_header);
+    let action_fade = part_opacity(ui, |s| &s.card_action);
+    faded(ui, header, |ui| {
+        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+            faded(ui, action_fade, action);
+            let width = ui.available_width();
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                Layout::top_down(Align::Min),
+                |ui| header_column(ui, title, description),
+            );
+        })
     });
 }
 
 fn header_column(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let gap = len(
-        &[&t.style.card_header],
+        &[&*t.style.card_header],
         |r| &r.gap,
         t.state(current_size(ui).state()),
     );
@@ -297,25 +321,27 @@ fn header_column(ui: &mut Ui, title: &str, description: &str) {
 pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());
-    let l = [&t.style.card_title];
+    let l = [&*t.style.card_title];
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Base);
     let px = t.text_px(size);
     let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
     let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
     // upstream: card-title carries `cn-font-heading`
-    ui.label(
-        RichText::new(text)
-            .family(heading_family_for(ui.ctx(), weight))
-            .size(px)
-            .line_height(Some(line)),
-    )
+    faded(ui, opacity(&[&l[..]], st), |ui| {
+        ui.label(
+            RichText::new(text)
+                .family(heading_family_for(ui.ctx(), weight))
+                .size(px)
+                .line_height(Some(line)),
+        )
+    })
 }
 
 /// `card-description`: muted text at the style's size.
 pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());
-    let l = [&t.style.card_description];
+    let l = [&*t.style.card_description];
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
     let line =
         pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * t.text_px(size));
@@ -325,5 +351,5 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     if let Some(c) = pick(&l, |r| &r.text, st).map(|p| t.paint(p)) {
         text = text.color(c);
     }
-    ui.label(text)
+    faded(ui, opacity(&[&l[..]], st), |ui| ui.label(text))
 }

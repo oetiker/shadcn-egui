@@ -1,9 +1,11 @@
 //! shadcn Input, ported from shadcn-svelte `ui/input/input.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
-//! other values come from the style's `cn-input` recipe. A frameless egui
-//! `TextEdit` sits inside a box this widget paints.
+//! `tools/stylegen/PIN`. Every value comes from the style's `cn-input`
+//! recipe. A frameless egui `TextEdit` sits inside a box this widget
+//! paints.
 
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
+use crate::components::shared::{
+    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
+};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -68,13 +70,12 @@ impl<'a> Input<'a> {
 impl<'a> Widget for Input<'a> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let l = [&t.style.input];
+        let l = [&*t.style.input];
         let enabled = self.enabled && ui.is_enabled();
         let context = State::NONE.with(State::INVALID, self.invalid);
         // Geometry never depends on focus: resolve it before allocating.
         let g = t.state(context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
-        let height = get(|r| &r.height);
         let border_w = get(|r| &r.border_width);
         let inset = |pad: f32| (pad + border_w).round() as i8;
         let margin = Margin {
@@ -83,7 +84,8 @@ impl<'a> Widget for Input<'a> {
             top: inset(get(|r| &r.pad_top)),
             bottom: inset(get(|r| &r.pad_bottom)),
         };
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let text_size = pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+        let text_px = t.text_px(text_size);
         let font = egui::FontId::new(
             text_px,
             family_for(
@@ -91,9 +93,17 @@ impl<'a> Widget for Input<'a> {
                 pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal),
             ),
         );
+        // No height: CSS's initial `auto`, one line of text in the padding box.
+        let height = pick(&l, |r| &r.height, g).unwrap_or_else(|| {
+            line_box(&t, &l, g, text_size).max(ui.ctx().fonts_mut(|f| f.row_height(&font)))
+                + f32::from(margin.top)
+                + f32::from(margin.bottom)
+        });
 
-        // base: "disabled:opacity-50"
-        let disabled_opacity = 0.5;
+        let fade = ui_opacity(ui, &[&l[..]], g.with(State::DISABLED, !enabled));
+        let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
+        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
+        let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
         let mut edit = TextEdit::singleline(self.text)
             .hint_text(self.hint)
             .password(self.password)
@@ -101,7 +111,7 @@ impl<'a> Widget for Input<'a> {
             .frame(Frame::NONE.inner_margin(margin))
             .font(font)
             .vertical_align(egui::Align::Center)
-            .text_color(t.role(Role::Foreground));
+            .text_color(typed);
         if let Some(id_source) = self.id_source {
             edit = edit.id_salt(id_source);
         }
@@ -115,12 +125,11 @@ impl<'a> Widget for Input<'a> {
         let slot = ui.painter().add(Shape::Noop);
         let resp = ui
             .scope(|ui| {
-                // base: "placeholder:text-muted-foreground"
-                ui.visuals_mut().weak_text_color = Some(t.role(Role::MutedForeground));
-                // A disabled `Ui` has faded already; see `disabled_painter`.
-                if !self.enabled && ui.is_enabled() {
-                    ui.multiply_opacity(disabled_opacity);
+                if let Some(c) = placeholder {
+                    ui.visuals_mut().weak_text_color = Some(c);
                 }
+                // In a disabled `Ui`, `fade` leaves out the `disabled:` rule.
+                ui.multiply_opacity(fade);
                 ui.add_sized(Vec2::new(ui.available_width().min(max_width), height), edit)
             })
             .inner;
@@ -150,7 +159,7 @@ impl<'a> Widget for Input<'a> {
                 c,
             ));
         }
-        disabled_painter(ui, self.enabled, disabled_opacity).set(slot, Shape::Vec(shapes));
+        style_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
     }
 }

@@ -65,6 +65,21 @@ impl Default for Style {
 mod tests {
     use super::*;
 
+    /// stylegen ranks an `!important` class with bit 127; `Rule::IMPORTANT`
+    /// must be that bit, or an app's important rule would lose to upstream's.
+    #[test]
+    fn generated_important_rank_is_rule_important() {
+        let luma = Style::luma();
+        let r = luma
+            .badge
+            .icon_size
+            .rules
+            .iter()
+            .find(|r| r.when == When::ALWAYS && r.value == 12.0)
+            .expect("luma cn-badge [&>svg]:size-3!");
+        assert_eq!(r.rank, Rule::<f32>::IMPORTANT);
+    }
+
     #[test]
     fn generated_styles_carry_known_values() {
         let (v, n) = (Style::vega(), Style::nova());
@@ -125,5 +140,58 @@ mod tests {
             .expect("spawn")
             .join();
         assert_eq!(theme.ok(), Some("vega"));
+    }
+
+    /// Every recipe lives on the heap: a debug build gives each `Style`
+    /// temporary its own stack slot, so a large `Style` overflows small
+    /// thread stacks as soon as a function holds a few of them.
+    #[test]
+    fn style_is_small() {
+        // One unboxed Recipe is about 1.5 KB; allow the name and a few
+        // non-recipe fields, never a recipe.
+        let size = std::mem::size_of::<Style>();
+        assert!(size < 1024, "size_of::<Style>() = {size}");
+    }
+
+    /// Base classes come after the style's classes in each part's string,
+    /// so they win under the same condition, as in the published component.
+    #[test]
+    fn base_classes_reach_every_style() {
+        let line_active = State::HORIZONTAL | State::VARIANT_LINE | State::SELECTED;
+        for (name, make, _) in MAKERS {
+            let s = make();
+            assert_eq!(s.dialog_footer.gap.get(State::NONE), Some(8.0), "{name}");
+            assert_eq!(
+                s.tooltip_content.max_width.get(State::NONE),
+                Some(320.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.popover_content.width.get(State::NONE),
+                Some(288.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.tabs_trigger.height_inset.get(State::NONE),
+                Some(1.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.separator.bg.get(State::NONE),
+                Some(Paint::Role(Role::Border, 1.0)),
+                "{name}"
+            );
+            assert_eq!(
+                s.tabs_trigger_after.opacity.get(line_active),
+                Some(1.0),
+                "{name}"
+            );
+            assert_eq!(
+                s.tabs_trigger_after.opacity.get(State::HORIZONTAL),
+                Some(0.0),
+                "{name}"
+            );
+            assert_eq!(s.button.opacity.get(State::DISABLED), Some(0.5), "{name}");
+        }
     }
 }

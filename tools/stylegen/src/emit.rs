@@ -3,12 +3,49 @@
 //! by the input: fields in `Recipe` order, rules by rank then class order.
 
 use crate::model::{state_expr, Field};
-use crate::resolve::{Decl, Marker};
+use crate::resolve::{Decl, Part};
 use std::collections::BTreeMap;
 
-/// `cn-button-size-icon-xs` → `button_size_icon_xs`.
-pub fn field_name(marker: &str) -> String {
-    marker.trim_start_matches("cn-").replace('-', "_")
+/// `cn-button-size-icon-xs` → `button_size_icon_xs`; `slot:separator` → `separator`.
+pub fn field_name(part: &str) -> String {
+    part.strip_prefix("slot:")
+        .unwrap_or_else(|| part.trim_start_matches("cn-"))
+        .replace('-', "_")
+}
+
+/// The `Style` fields as `(field, doc)`: each part in `markers.txt` order,
+/// followed by its `_after` part where any style gives it `after:` classes.
+pub fn fields(styles: &[&[Part]]) -> Vec<(String, String)> {
+    let first = styles.first().copied().unwrap_or_default();
+    // `s[i]` below is part `i` of every style.
+    for s in styles {
+        assert!(
+            s.iter().map(|p| &p.name).eq(first.iter().map(|p| &p.name)),
+            "styles differ in part order"
+        );
+    }
+    let mut out = Vec::new();
+    for (i, p) in first.iter().enumerate() {
+        let doc = match p.name.strip_prefix("slot:") {
+            Some(s) => format!("`data-slot=\"{s}\"` (no style marker)"),
+            None => format!("`{}`", p.name),
+        };
+        out.push((field_name(&p.name), doc));
+        if styles.iter().any(|s| !s[i].marker.after.is_empty()) {
+            out.push((
+                format!("{}_after", field_name(&p.name)),
+                format!("`{}` `after:` pseudo-element", p.name),
+            ));
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for (f, _) in &out {
+        assert!(
+            seen.insert(f.clone()),
+            "two parts give the Style field `{f}`"
+        );
+    }
+    out
 }
 
 pub(crate) fn header(pin: &str, source: &str) -> String {
@@ -23,15 +60,17 @@ pub(crate) fn header_react(pin: &str, source: &str) -> String {
     header(pin, source).replacen("shadcn-svelte", "shadcn/ui", 1)
 }
 
-pub fn emit_struct(pin: &str, markers: &[String]) -> String {
-    let mut s = header(pin, "the markers in tools/stylegen/markers.txt");
+pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
+    let mut s = header(pin, "the parts in tools/stylegen/markers.txt");
     s += "use super::recipe::Recipe;\n\n";
-    s += "/// One recipe per shadcn `cn-*` part the crate draws. Adjust a value in\n";
+    s += "/// One recipe per part the crate draws: a `cn-*` marker, a `data-slot`\n/// without one, or an `after:` pseudo-element. Adjust a value in\n";
     s += "/// your theme setup: `let mut s = Style::nova(); s.button_size_default.height.base = Some(36.0);`\n";
+    s += "///\n/// Each recipe is boxed so a `Style` stays small on the stack; replace a\n";
+    s += "/// whole recipe with `*s.button = Recipe { .. }`.\n";
     s += "#[derive(Clone, Debug, PartialEq)]\npub struct Style {\n";
     s += "    /// The upstream style name (`vega`, `nova`, …).\n    pub name: &'static str,\n";
-    for m in markers {
-        s += &format!("    /// `{m}`\n    pub {}: Recipe,\n", field_name(m));
+    for (field, doc) in fields {
+        s += &format!("    /// {doc}\n    pub {field}: Box<Recipe>,\n");
     }
     s += "}\n";
     s
@@ -42,17 +81,24 @@ pub fn emit_struct(pin: &str, markers: &[String]) -> String {
 /// Each recipe gets its own function: one struct literal with every recipe
 /// keeps all their temporaries in one stack frame, about 0.5 MB in a debug
 /// build, which overflows small thread stacks.
-pub fn emit_style(style: &str, pin: &str, markers: &[(String, Marker)]) -> String {
-    let mut s = header(pin, &format!("`style-{style}.css`"));
+pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[Part]) -> String {
+    let mut s = header(
+        pin,
+        &format!("`style-{style}.css` and the ui/ component sources"),
+    );
     s += "use super::recipe::*;\nuse super::Style;\n\n";
     s += &format!("pub(super) fn style() -> Style {{\n    Style {{\n        name: \"{style}\",\n");
+    let mut decls: BTreeMap<String, &[Decl]> = BTreeMap::new();
+    for p in parts {
+        decls.insert(field_name(&p.name), &p.marker.decls);
+        decls.insert(format!("{}_after", field_name(&p.name)), &p.marker.after);
+    }
     let mut fns = String::new();
-    for (name, m) in markers {
-        let field = field_name(name);
-        match recipe(m) {
-            None => s += &format!("        {field}: Recipe::default(),\n"),
+    for (field, _) in fields {
+        match decls.get(field).and_then(|d| recipe(d)) {
+            None => s += &format!("        {field}: Box::default(),\n"),
             Some(body) => {
-                s += &format!("        {field}: {field}(),\n");
+                s += &format!("        {field}: Box::new({field}()),\n");
                 fns += &format!("\nfn {field}() -> Recipe {{\n    {body}\n}}\n");
             }
         }
@@ -61,10 +107,10 @@ pub fn emit_style(style: &str, pin: &str, markers: &[(String, Marker)]) -> Strin
     s + &fns
 }
 
-/// The `Recipe { .. }` literal, or `None` when the marker sets nothing.
-fn recipe(m: &Marker) -> Option<String> {
+/// The `Recipe { .. }` literal, or `None` when nothing is set.
+fn recipe(decls: &[Decl]) -> Option<String> {
     let mut by_field: BTreeMap<Field, Vec<&Decl>> = BTreeMap::new();
-    for d in &m.decls {
+    for d in decls {
         by_field.entry(d.field).or_default().push(d);
     }
     if by_field.is_empty() {
@@ -123,5 +169,39 @@ fn rank(r: u128) -> String {
             .map(|b| format!("({b})"))
             .collect::<Vec<_>>()
             .join(" | "),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Field, Value};
+    use crate::resolve::Marker;
+
+    fn part(name: &str, after: bool) -> Part {
+        let decl = Decl {
+            field: Field::Height,
+            value: Value::Px(1.0),
+            all: 0,
+            none: 0,
+            rank: 0,
+            idx: 0,
+        };
+        Part {
+            name: name.to_owned(),
+            marker: Marker {
+                after: if after { vec![decl] } else { Vec::new() },
+                ..Marker::default()
+            },
+            corrections: Vec::new(),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "part order")]
+    fn fields_require_one_part_order() {
+        let a = [part("cn-x", false), part("cn-y", false)];
+        let b = [part("cn-y", false), part("cn-x", true)];
+        fields(&[&a, &b]);
     }
 }

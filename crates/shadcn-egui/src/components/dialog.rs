@@ -1,7 +1,7 @@
 //! shadcn Dialog, ported from shadcn-svelte `ui/dialog/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; width,
-//! padding, gap, radius, ring, text, the footer strip and the close button's
-//! position come from the style's `cn-dialog-*` recipes.
+//! `tools/stylegen/PIN`. Width, padding, gap, radius, ring, text, the footer's
+//! strip and gap, and the close button's position come from the style's
+//! `cn-dialog-*` recipes.
 //!
 //! Built on `egui::Modal`, which keeps backdrop and panel in one area (so their
 //! z-order cannot flip) and blocks input to everything beneath. Closes on Esc,
@@ -11,7 +11,7 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::shared::ring;
+use crate::components::shared::{faded, opacity, ring};
 use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
@@ -19,9 +19,6 @@ use egui::{
     Align, Color32, CornerRadius, Frame, Id, Layout, Margin, Rect, RichText, Shape, Stroke, Ui,
     UiBuilder,
 };
-
-// base: "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
-const FOOTER_GAP: f32 = 8.0;
 
 pub struct Dialog<'a> {
     id: Id,
@@ -80,7 +77,7 @@ impl<'a> Dialog<'a> {
         }
         let t = Theme::current(ctx);
         let g = t.state(State::NONE);
-        let l = [&t.style.dialog_content];
+        let l = [&*t.style.dialog_content];
         let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let (pad_t, pad_r, pad_b, pad_l) = (
             px(|r| &r.pad_top),
@@ -92,8 +89,9 @@ impl<'a> Dialog<'a> {
         let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        // The frame paints outside the panel's `Ui`: fade its colours here.
+        let alpha = opacity(&[&l[..]], g);
 
-        // base: "cn-dialog-content fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none"
         let max_width = self
             .width
             .or_else(|| pick(&l, |r| &r.max_width, g))
@@ -110,18 +108,26 @@ impl<'a> Dialog<'a> {
                 left: pad_l.round() as i8,
             });
         if let Some(fill) = pick(&l, |r| &r.bg, g).map(|p| t.paint(p)) {
-            frame = frame.fill(fill);
+            frame = frame.fill(fill.gamma_multiply(alpha));
         }
         if let Some(s) = pick(&l, |r| &r.shadow, g) {
-            frame = frame.shadow(t.shadow(s));
+            let mut shadow = t.shadow(s);
+            shadow.color = shadow.color.gamma_multiply(alpha);
+            frame = frame.shadow(shadow);
         }
-        let overlay = pick(&[&t.style.dialog_overlay], |r| &r.bg, g)
-            .map_or(Color32::TRANSPARENT, |p| t.paint(p));
+        let overlay_l = [&*t.style.dialog_overlay];
+        let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
+        // The overlay's opacity fades the backdrop, the app's colour too.
+        let backdrop = self
+            .backdrop
+            .unwrap_or(overlay)
+            .gamma_multiply(opacity(&[&overlay_l[..]], g));
 
         let resp = egui::Modal::new(self.id)
-            .backdrop_color(self.backdrop.unwrap_or(overlay))
+            .backdrop_color(backdrop)
             .frame(frame)
             .show(ctx, |ui| {
+                ui.multiply_opacity(alpha);
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
                 if let Some(fg) = fg {
@@ -139,7 +145,9 @@ impl<'a> Dialog<'a> {
             });
         // `ring-1` lies outside the box.
         let ring_width = pick(&l, |r| &r.ring_width, g).unwrap_or(0.0);
-        if let Some(color) = pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p)) {
+        if let Some(color) =
+            pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p).gamma_multiply(alpha))
+        {
             let painter = ctx.layer_painter(resp.response.layer_id);
             ring(&painter, resp.response.rect, radius, ring_width, color);
         }
@@ -156,28 +164,38 @@ impl<'a> Dialog<'a> {
 fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let t = Theme::current(ui.ctx());
     let g = t.state(State::NONE);
-    let gap = pick(&[&t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
-    let content = [&t.style.dialog_content];
-    let heading = [&t.style.dialog_title];
+    let gap = pick(&[&*t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
+    let content = [&*t.style.dialog_content];
+    let heading = [&*t.style.dialog_title];
     let size = pick(&heading, |r| &r.text_size, g)
         .or_else(|| pick(&content, |r| &r.text_size, g))
         .unwrap_or(TextSize::Sm);
     let px = t.text_px(size);
     let line = pick(&heading, |r| &r.line_height, g).map_or_else(|| t.line_px(size), |k| k * px);
     let weight = pick(&heading, |r| &r.weight, g).unwrap_or(Weight::Normal);
-    let desc = [&t.style.dialog_description];
+    let desc = [&*t.style.dialog_description];
     let desc_size = pick(&desc, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
     let desc_line = pick(&desc, |r| &r.line_height, g)
         .map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
+    // The title and the description sit in the header.
+    let fade = |l: &[&Recipe]| opacity(&[l], g);
+    let (header_fade, title_fade, desc_fade) = (
+        fade(&[&*t.style.dialog_header]),
+        fade(&heading),
+        fade(&desc),
+    );
     ui.scope(|ui| {
+        ui.multiply_opacity(header_fade);
         ui.spacing_mut().item_spacing.y = gap;
         // upstream: dialog-title carries `cn-font-heading`
-        ui.label(
-            RichText::new(title)
-                .family(heading_family_for(ui.ctx(), weight))
-                .size(px)
-                .line_height(Some(line)),
-        );
+        faded(ui, title_fade, |ui| {
+            ui.label(
+                RichText::new(title)
+                    .family(heading_family_for(ui.ctx(), weight))
+                    .size(px)
+                    .line_height(Some(line)),
+            )
+        });
         if let Some(d) = description {
             let mut text = RichText::new(d)
                 .size(t.text_px(desc_size))
@@ -185,17 +203,18 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
             if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
                 text = text.color(c);
             }
-            ui.label(text);
+            faded(ui, desc_fade, |ui| ui.label(text));
         }
     });
 }
 
 /// The close button in the panel's top-right corner, `inset_*` from its
-/// edges. Returns true when clicked. It is placed without moving the cursor,
+/// edges, painted with `cn-dialog-close` over its button recipes. Returns
+/// true when clicked. It is placed without moving the cursor,
 /// so it does not grow the panel.
 fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
     let g = t.state(State::NONE);
-    let at = [&t.style.dialog_close];
+    let at = [&*t.style.dialog_close];
     let (top, right) = (
         pick(&at, |r| &r.inset_top, g).unwrap_or(0.0),
         pick(&at, |r| &r.inset_right, g).unwrap_or(0.0),
@@ -216,7 +235,8 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
             Button::new("Close")
                 .icon(&t.icons.close)
                 .variant(ButtonVariant::Ghost)
-                .size(ButtonSize::IconSm),
+                .size(ButtonSize::IconSm)
+                .extra_layer(|s| &s.dialog_close),
         )
         .clicked()
 }
@@ -227,7 +247,7 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let t = Theme::current(ui.ctx());
     let g = t.state(State::NONE);
-    let l = [&t.style.dialog_footer];
+    let l = [&*t.style.dialog_footer];
     let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
     let (pad_t, pad_r, pad_b, pad_l) = (
         px(|r| &r.pad_top),
@@ -240,7 +260,8 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         px(|r| &r.margin_bottom),
         px(|r| &r.margin_left),
     );
-    let gap = pick(&l, |r| &r.gap, g).unwrap_or(FOOTER_GAP);
+    let gap = pick(&l, |r| &r.gap, g).unwrap_or(0.0);
+    let alpha = opacity(&[&l[..]], g);
 
     let at = ui.max_rect();
     let top = ui.cursor().top();
@@ -256,6 +277,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             .layout(Layout::right_to_left(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = gap;
+    row.multiply_opacity(alpha);
     add(&mut row);
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
@@ -279,14 +301,16 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let line = px(|r| &r.border_top_width);
     if line > 0.0 {
         // `border-t` takes the default border colour.
-        let color =
-            pick(&l, |r| &r.border_color, g).map_or_else(|| t.role(Role::Border), |p| t.paint(p));
+        let base_border = t.role(Role::Border); // behaviour-ok: shadcn base layer `* { @apply border-border }`
+        let color = pick(&l, |r| &r.border_color, g).map_or(base_border, |p| t.paint(p));
         shapes.push(Shape::line_segment(
             [strip.left_top(), strip.right_top()],
             Stroke::new(line, color),
         ));
     }
-    ui.painter().set(strip_bg, Shape::Vec(shapes));
+    let mut painter = ui.painter().clone();
+    painter.multiply_opacity(alpha);
+    painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.
     ui.allocate_rect(
         Rect::from_min_max(

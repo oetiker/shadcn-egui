@@ -10,20 +10,33 @@ draws itself from the active style's recipes; it does not hard-code a look.
   `Clone` (the style sits behind an `Arc`), not `Copy`.
 - **A style is a class map.** upstream `style-<name>.css` binds Tailwind classes
   to marker classes (`cn-button`, `cn-button-size-sm`, …). `Style` has one
-  `Recipe` field per marker (`s.button`, `s.button_size_sm`). A recipe holds one
-  `Prop` per property (`height`, `pad_left`, `bg`, `ring_width`, …).
+  `Recipe` field per part (`s.button`, `s.button_size_sm`): a `cn-*` marker,
+  a `data-slot` without a marker (`s.separator`), or a part's `after:`
+  pseudo-element (`s.tabs_trigger_after`, the line tab underline). A recipe holds one
+  `Prop` per property (`height`, `pad_left`, `bg`, `ring_width`, …). The
+  fields are `Box<Recipe>`, which keeps `Style` small on the stack: field
+  access reaches through the box, a slice of recipes in a `let` takes
+  `[&*s.button, &*s.button_size_sm]`, and a whole replacement writes
+  `*s.button = Recipe { .. }`.
 - **A `Prop` is a base value plus rules.** `base: Option<T>` is the
   unconditional value; each `Rule { when, rank, value }` applies when its
   `When` matches the `State` and carries the Tailwind variant order as `rank`.
-  An empty `Prop` means the style does not set the property.
+  An empty `Prop` means upstream sets nothing: neither the component's own
+  classes nor the style's. The component then uses the inherited or
+  initial value. `Rule::important(when, value)` builds an app's override
+  with the `!important` rank; `When::all(flags)` matches whenever every
+  flag is set.
 - **Markers.** At runtime shadcn injects the marker's classes into the element's
-  class list. Five markers have no CSS in any style, so their recipes are empty
-  by design: `cn-card-action`, `cn-select-viewport`,
-  `cn-select-item-indicator-icon`, `cn-tabs-list-variant-default`,
-  `cn-tabs-list-variant-line`.
-- **Base vs style classes.** A component's own classes (those written in its
-  `.svelte` file, not behind a `cn-*` marker) are *base classes*. The port
-  quotes them in `// base: "…"` comments. Style classes live in the recipes.
+  class list. Some markers have no class the crate translates, so their
+  recipes are empty by design: `cn-card-action`, `cn-select-viewport` and
+  `cn-select-item-indicator-icon` in every style, and `cn-select-group` in
+  lyra.
+- **Base and style classes.** A component's own classes (those written in its
+  `.svelte` file, not behind a `cn-*` marker) are *base classes*. The
+  generated recipe holds both: the part's whole class string is the
+  component's string with the style's `@apply` classes in place of the
+  marker, so a base class that comes later in the string wins under the
+  same condition, as in the published component.
 - **tailwind-merge order.** Upstream joins the classes of stacked markers
   (`cn-button`, then `cn-button-variant-*`, then `cn-button-size-*`) and a later
   class replaces an earlier one that sets the same property. `pick` reproduces it.
@@ -34,7 +47,8 @@ draws itself from the active style's recipes; it does not hard-code a look.
   early layer beats a later base, and between equal ranks the later layer wins.
   A rule's rank is the OR of one bit per Tailwind variant it uses, in the order
   of Tailwind v4.3.3 `Variants.compare` (arbitrary variants after named ones);
-  an `!important` class has bit 127. This matches the CSS order shadcn gets.
+  an `!important` class has bit 127 (`Rule::IMPORTANT`), and so has an
+  app's `Rule::important`, which wins a tie by coming later. This matches the CSS order shadcn gets.
   A rule derived from a CSS variable (for example `--card-spacing`) takes the rank of
   the variable's definition, an approximation.
 - **Deviating in a project.** Adjust the style when you build the theme, never
@@ -58,6 +72,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `height`, `width` | `h-*`, `size-*`, `w-*` |
 | `min_height`, `min_width`, `max_width` | `min-h-*`, `min-w-*`, `max-w-*` |
 | `max_width_inset` | `max-w-[calc(100%-Npx)]` |
+| `height_inset` | `h-[calc(100%-Npx)]` |
 | `pad_top/right/bottom/left` | `p-*`, `px-*`, `py-*`, `pt-*`, `pr-*`, `pb-*`, `pl-*` |
 | `margin_*` | `m-*`, `mx-*`, `my-*`, `-mt-*`, … |
 | `gap` | `gap-*`, `gap-x-*`, `gap-y-*` |
@@ -74,6 +89,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `border_width`, `border_top_width` | `border`, `border-t`, `border-N` |
 | `border_color` | `border-*` colour |
 | `ring_width`, `ring_color` | `ring-N`, `ring-*` |
+| `outline_width`, `outline_color` | `outline-N`, `outline-*`; `outline-none` and `outline-hidden` are 0 |
 | `shadow` | `shadow-*` |
 | `opacity` | `opacity-*`, `disabled:opacity-50` |
 | `shift_x`, `shift_y` | `translate-x-*`, `translate-y-*` (`active:translate-y-px` is the press nudge) |
@@ -85,8 +101,12 @@ ring, shadow) to half alpha, the way egui fades a disabled `Ui`, because egui
 cannot composite a group of shapes at one opacity. Text on a solid fill
 therefore shows a little less contrast than in the browser, and where one
 part lies on another (a switch or slider thumb on its track) the lower part
-shows through. The fade comes from `shared::disabled_painter` and applies
-once: a widget inside a disabled `Ui` is not faded again by its own flag.
+shows through. The value comes from the recipe's `opacity` prop
+(`shared::opacity` multiplies it down the part tree, so the line underline
+of a disabled tab fades with the tab), and `shared::style_painter` applies
+it once: inside a disabled `Ui`, which egui fades already, a part whose
+`disabled:` rule wins paints at egui's fade alone, and a part without one
+keeps its other opacity on top of that fade.
 
 `State` flags (`crates/shadcn-egui/src/style/recipe.rs`) and the variants they stand for.
 `Theme::state(s)` adds `DARK`.
@@ -95,7 +115,7 @@ once: a widget inside a disabled `Ui` is not faded again by its own flag.
 |---|---|
 | `DARK` | `dark:` |
 | `HOVER` | `hover:` |
-| `FOCUS` | `focus:` (the highlighted item of a list) |
+| `FOCUS` | `focus:`, `data-highlighted:` (the highlighted item of a list) |
 | `FOCUS_VISIBLE` | `focus-visible:` (keyboard focus) |
 | `ACTIVE` | `active:` (pressed) |
 | `DISABLED` | `disabled:`, `data-disabled:`, `group-data-[disabled=true]:`, `peer-disabled:` |
@@ -105,7 +125,7 @@ once: a widget inside a disabled `Ui` is not faded again by its own flag.
 | `EXPANDED` | `aria-expanded:` |
 | `HAS_POPUP` | `aria-[haspopup]:` (used negated: `not-aria-[haspopup]:`) |
 | `SELECTED` | `data-active:`, `data-[active=true]:`, `data-selected:` |
-| `PLACEHOLDER` | `data-placeholder:` |
+| `PLACEHOLDER` | `data-placeholder:`, `placeholder:` (placeholder text shows) |
 | `ICON_START` / `ICON_END` | `has-data-[icon=inline-start]:` / `has-data-[icon=inline-end]:` |
 | `IN_BUTTON_GROUP` | `in-data-[slot=button-group]:` |
 | `SIZE_SM` / `SIZE_DEFAULT` | `data-[size=sm]:` / `data-[size=default]:`, `group-data-[size=…]/…:` |
@@ -130,7 +150,8 @@ cannot be exported.
 
 ## The generator
 
-`tools/stylegen` reads the upstream style CSS and writes Rust. It is its own
+`tools/stylegen` reads the upstream component sources and style CSS and
+writes Rust. It is its own
 workspace; run it from the repository root with a shadcn-svelte checkout at
 the commit in `tools/stylegen/PIN` and a shadcn-ui checkout at the commit in
 `tools/stylegen/PIN_REACT`:
@@ -144,12 +165,13 @@ cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift    <shadcn
   marker in `tools/stylegen/markers.txt`), a
   `crates/shadcn-egui/src/style/<name>.rs` for each style
   in `tools/stylegen/EXPORT`, and `tools/stylegen/reports/<style>.md` for **all**
-  eight upstream styles. Generated files carry a "do not edit" header. Commit
-  them with the reports.
-- `drift` checks the crate against upstream: every `// base: "…"` quote must
-  still be a substring of the component source, and the `cn-*` markers in a
-  component's upstream source must equal the markers in `markers.txt`. It prints
-  `drift: clean` when nothing differs.
+  eight upstream styles. It also copies the component sources and the style
+  CSS it read to `tools/stylegen/tests/fixtures/`. Generated files carry a
+  "do not edit" header. Commit them with the reports.
+- `drift` checks the crate against upstream: the `cn-*` markers in a
+  component's upstream source must equal the markers in `markers.txt`, and
+  the copies in `tools/stylegen/tests/fixtures/` must equal the checkout. It
+  prints `drift: clean` when nothing differs.
 - **Reports** list, per marker, every class the generator did not turn into a
   rule. *Ignored* classes carry a reason (animation, link-styled anchors,
   `bg-clip-padding`, …) and are fine. *Unsupported* classes are ones the generator
@@ -197,9 +219,12 @@ it changes.
 
 1. Put the new shadcn-svelte commit in `tools/stylegen/PIN`.
 2. Check out upstream at that commit.
-3. Run `stylegen generate`, then `stylegen drift`.
-4. Re-port every component that `drift` lists (a quote no longer upstream, a
-   marker that appeared or disappeared), following the standard in
+3. Run `stylegen generate`, then `stylegen drift`. `generate` stops when an
+   `extract::BRANCHES` entry or a `resolve::CORRECTIONS` edit no longer
+   matches the new source; update the table first (`references/upstream.md`,
+   Markers).
+4. Re-port every component that `drift` lists (a marker that appeared or
+   disappeared), following the standard in
    `SKILL.md` and `references/upstream.md`.
 5. Re-baseline the snapshots (`UPDATE_SNAPSHOTS=1 cargo test`) and look at the
    PNGs that changed.

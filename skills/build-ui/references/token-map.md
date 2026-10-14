@@ -23,7 +23,8 @@
 | control heights, paddings, gaps, card padding, dialog and popover widths | the style's recipes (`button_size_*`, `card`, `dialog_content`, ...), not `Metrics` |
 | `text-*` line heights (Tailwind's implicit `leading`) | `Metrics.line_xs` / `line_sm` / `line_base` / `line_lg`; `Theme::line_px(TextSize)` |
 | `size-4` (icons, checkbox) | `Metrics.icon` |
-| `border` width | `Metrics.border` |
+| `border` width | the style's `border_width` props; `Metrics.border` where a recipe sets none (link underlines, the separator fallback) |
+| `h-px` / `w-px` separator | `separator.height` / `separator.width` |
 | `ring-[3px]` | the style's `ring_width` / `ring_color` props |
 
 The palettes are OKLCH values from upstream, converted with

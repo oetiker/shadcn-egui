@@ -1,12 +1,10 @@
 //! shadcn Switch, ported from shadcn-svelte `ui/switch/switch.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all other
-//! values come from the style's `cn-switch` (track) and `cn-switch-thumb`
-//! recipes. The thumb sits inside the track's 1px transparent border and
+//! `tools/stylegen/PIN`. Every value, the hit area and the disabled fade
+//! included, comes from the style's `cn-switch` (track) and
+//! `cn-switch-thumb` recipes. The thumb sits inside the track's 1px transparent border and
 //! slides between its two positions with `animate_bool`.
 
-use crate::components::shared::{
-    box_shapes, disabled_painter, interaction_state, ring_shape, shift,
-};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape, shift, style_painter};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{lerp, vec2, Rect, Sense, Shape, Stroke, Ui, Widget};
@@ -23,9 +21,9 @@ pub enum SwitchSize {
 /// `ui.add(Switch::new(&mut on))`.
 ///
 /// The returned response's rect is the visible track. Its click target is
-/// larger (see the `base:` quote in [`Widget::ui`]), and the accessibility
-/// node (`widget_info`) carries that larger rect. egui has no switch role,
-/// so the node reports as a checkbox.
+/// larger (the track recipe's `hit_inset_x` and `hit_inset_y`), and the
+/// accessibility node (`widget_info`) carries that larger rect. egui has no
+/// switch role, so the node reports as a checkbox.
 pub struct Switch<'a> {
     on: &'a mut bool,
     size: SwitchSize,
@@ -61,8 +59,8 @@ impl<'a> Switch<'a> {
 impl Widget for Switch<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let track = [&t.style.switch];
-        let thumb = [&t.style.switch_thumb];
+        let track = [&*t.style.switch];
+        let thumb = [&*t.style.switch_thumb];
         let enabled = self.enabled && ui.is_enabled();
         let size_bit = match self.size {
             SwitchSize::Default => State::SIZE_DEFAULT,
@@ -72,10 +70,15 @@ impl Widget for Switch<'_> {
         let g = t.state(size_bit.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&track, f, g).unwrap_or(0.0);
 
-        let (rect, base) =
-            ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
-        // base: "after:absolute after:-inset-x-3 after:-inset-y-2"
-        let hit = rect.expand2(vec2(12.0, 8.0));
+        // No size: CSS's initial `auto`, the thumb inside the border.
+        let border = get(|r| &r.border_width) * 2.0;
+        let thumb_side = |f: fn(&Recipe) -> &Prop<f32>| pick(&thumb, f, g).unwrap_or(0.0);
+        let size = vec2(
+            pick(&track, |r| &r.width, g).unwrap_or_else(|| thumb_side(|r| &r.width) + border),
+            pick(&track, |r| &r.height, g).unwrap_or_else(|| thumb_side(|r| &r.height) + border),
+        );
+        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
+        let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
         } else {
@@ -100,8 +103,6 @@ impl Widget for Switch<'_> {
         let how_on = ui.ctx().animate_bool(base.id, on);
 
         if ui.is_rect_visible(rect) {
-            // base: "data-disabled:opacity-50"
-            let painter = disabled_painter(ui, self.enabled, 0.5);
             let paint =
                 |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
             let radius = pick(&track, |r| &r.radius, st)
@@ -128,6 +129,7 @@ impl Widget for Switch<'_> {
                     c,
                 ));
             }
+            style_painter(ui, &[&track[..]], st).extend(shapes);
 
             // The thumb lies inside the border, vertically centred; its
             // translate differs per value, so the animation blends both.
@@ -151,6 +153,7 @@ impl Widget for Switch<'_> {
                 ),
                 size,
             );
+            let mut shapes = Vec::new();
             let thumb_radius =
                 pick(&thumb, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, size.y / 2.0));
             if let Some(s) = pick(&thumb, |r| &r.shadow, st) {
@@ -161,7 +164,7 @@ impl Widget for Switch<'_> {
                 thumb_radius,
                 paint(&thumb, |r| &r.bg).unwrap_or_default(),
             ));
-            painter.extend(shapes);
+            style_painter(ui, &[&thumb[..], &track[..]], st).extend(shapes);
         }
         // No label of its own: name it with `labelled_by(label.id)`, which
         // an own label, even an empty one, would override.

@@ -7,10 +7,65 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- Every colour, size and spacing of every component can be changed through
+  `theme.style`, for example a filled `primary` active tab with a solid 2 px
+  focus ring. `Rule::important(When::all(State::SELECTED), value)` adds a
+  rule ranked `Rule::IMPORTANT`, as a Tailwind `!` class is: it beats every
+  rule of the style that is not important. A rule the style itself marks
+  important still wins over it where that rule also names a state, such as
+  hover. (#6)
+- `Popover::side_offset` and `Select::side_offset` set the gap between the
+  trigger and the popup; the default stays 4
+  (`components::shared::DEFAULT_SIDE_OFFSET`). (#6)
+- An `opacity` set in `theme.style` on any part now fades that part and
+  everything inside it, multiplied as in the browser and also inside a
+  disabled `Ui`: a badge, card, dialog
+  (its backdrop too), popover, tooltip, separator, tab list, select list,
+  checkbox tick, select chevron or select tick. Before, only the outer part
+  of a button, input, checkbox, switch, slider, label, select trigger or tab
+  took its `opacity`. A custom component fades a container part's content
+  with `components::shared::faded`. (#6)
+- Inside a disabled area (`ui.add_enabled(false, ..)`, `Ui::disable`), a
+  part whose style sets a `disabled:` opacity is drawn at the disabled fade
+  alone, as in the browser, even where `theme.style` also gives it a base
+  opacity. A part without a `disabled:` opacity keeps its own opacity on top
+  of the disabled fade. (#6)
 
 ### Changed
+- In a line tab list (`TabsVariant::Line`), a focused tab that is not active
+  shows its label in the foreground colour and a 2 px underline in the ring
+  colour, in every style, and no longer draws a rounded ring around itself.
+  The active tab looks the same focused or not. (#6)
+- In the luma and rhea styles, the dialog's close button sits on a round
+  disc in the secondary colour, as on the shadcn site. (#6)
+- The separator's thickness comes from the style's `separator` recipe. An app
+  that changed `metrics.border` to make separators thicker now changes
+  `separator.height` (horizontal) or `separator.width` (vertical) instead. (#6)
+- Replacing a whole recipe on a `Style` now needs a `*`:
+  `*style.button = Recipe { .. }`. A `let` array of recipes for `pick`
+  needs it too: `[&*style.button, &*style.button_size_sm]`. Setting one
+  value, as in `style.button.height.base = Some(36.0)`, is unchanged.
+- `Recipe` has the new fields `height_inset`, `outline_width` and
+  `outline_color`, and `Style` the new recipes `separator` and
+  `tabs_trigger_after` (the line tab underline). Code that builds either
+  with a struct literal needs `..Default::default()`. (#6)
+- `components::shared::disabled_painter` is gone. A custom widget fades a
+  disabled part with `style_painter(ui, &[stack], state)`, which takes the
+  fade from the part's recipe (`disabled:opacity-50`). (#6)
 
 ### Fixed
+- A popover whose style recipe an app replaced whole
+  (`*style.popover_content = Recipe { .. }`) showed each word on its own
+  line; it is now as wide as its content. Buttons, badges, inputs, select
+  triggers, tab lists, checkboxes and switches in the same case are no longer
+  0 px high, and checkbox ticks, select chevrons and the check mark of the
+  selected option no longer shrink to a dot. (#6)
+- In the mira style, the open select list showed a tiny dot next to the
+  selected option; it now shows a check mark. (#6)
+- An app that held or copied several styles in one function could crash
+  with `thread '<unknown>' has overflowed its stack`, mostly on worker
+  threads and in WebAssembly, where the stack is 1 to 2 MiB. Each `Style`
+  now takes a few hundred bytes of stack instead of about 110 KB.
 - Building an app with Rust 1.99 no longer prints
   `warning: the following packages contain code that will be rejected by a future version of Rust: shadcn-egui v0.4.0`.
 

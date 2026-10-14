@@ -26,8 +26,10 @@ Tell the user which target you chose and why before writing code.
 ## The standard
 
 Style values (sizes, colours, radii, shadows, ring widths, alphas) come from
-the active style's recipes; `references/styles.md` explains the model. Values
-that no recipe holds are base classes, and the code quotes them.
+the active style's recipes; `references/styles.md` explains the model. A
+recipe holds the part's whole class string: the component's own classes
+(base classes) and the style's classes behind its `cn-*` marker. The
+drawing code holds no style value of its own.
 
 1. **Source.** Read the component's base `.svelte` files of shadcn-svelte at
    the commit in `tools/stylegen/PIN`, and the bits-ui primitive it wraps.
@@ -60,23 +62,26 @@ that no recipe holds are base classes, and the code quotes them.
    Build the state with `theme.state(..)`, which adds `DARK`, or with
    `interaction_state` (below) for a widget that reacts to the pointer and
    the keyboard.
-4. **Quote the base classes.** A class the component source sets itself (not
-   through a `cn-*` marker) is quoted verbatim on the line above the code that
-   uses it: `// base: "<substring of the upstream class string>"`. When a base
-   class overrides a style property, say so in that comment and do not read
-   the recipe field.
-5. **No style values in code.** Colour literals and literal font sizes are allowed
-   only with a `// token-ok: <reason>` comment on the line above. Float
-   literals other than `0.0`, `1.0` and halving or doubling, `Shadow { .. }`
-   and alpha multipliers are allowed only with a `// base: "…"` quote on the
-   same line or the line above.
-   A value the component leaves to its caller and the docs demo sets (for
-   example the `gap-3` between a radio item and its label in
-   `docs/src/lib/registry/examples/radio-group-demo.svelte`) is quoted with
-   the demo file named: `// base: "gap-3" (radio-group-demo.svelte)`. In an
-   app that is enough. Upstream, `stylegen drift` accepts only quotes from
-   the component's own source, so there the caller passes such a value, or
-   the drift check is extended first.
+4. **Base classes go into the recipes.** A class the component source sets
+   itself (not through a `cn-*` marker) belongs to the part's recipe, next
+   to the style's classes. Upstream, `stylegen` generates both from the
+   svelte source: add the part to `tools/stylegen/markers.txt`, as
+   `slot:<data-slot>` for a part without a marker
+   (`references/upstream.md`). In an app, the hand-written recipe holds the
+   base classes too (`references/in-app.md`).
+5. **No style values in code.** The component picks every colour, size,
+   radius, shadow, alpha and palette role from its recipe stack, or from
+   `Metrics` where upstream sets nothing (the thickness of a link
+   underline). The only literals left carry
+   `// behaviour-ok: <reason>` on the same line: behaviour constants of the
+   primitive (a prop default such as `sideOffset`, a keyboard step) and
+   inherited fallbacks (CSS's initial `opacity: 1` where no recipe sets
+   one). A colour literal or a literal font size needs a
+   `// token-ok: <reason>` comment on the line above. A value the
+   component leaves to its caller and only a docs demo sets (for example
+   the `gap-3` between a radio item and its label in
+   `docs/src/lib/registry/examples/radio-group-demo.svelte`) is a parameter
+   the caller passes, not a literal in the component.
 6. **egui sizing.** The widget sets its own size before placement (single
    pass). Use the `shadcn_egui::layout` helpers, no `available_width()`
    arithmetic. Resolve geometry without interaction states: the size does not
@@ -105,7 +110,7 @@ fn button_height(ui: &egui::Ui, resp: &egui::Response) -> f32 {
     let theme = Theme::current(ui.ctx());
     let s = &theme.style;
     let st = interaction_state(&theme, resp, true, State::default());
-    pick(&[&s.button, &s.button_size_sm], |r| &r.height, st).unwrap_or(0.0)
+    pick(&[&*s.button, &*s.button_size_sm], |r| &r.height, st).unwrap_or(0.0)
 }
 ```
 
@@ -145,6 +150,24 @@ back, Right and Down forward) whatever its orientation.
   component, or components will disagree.
 - A disabled widget never gets `HOVER`, `ACTIVE` or `FOCUS_VISIBLE`. It gets
   `DISABLED` only.
+- A disabled part fades by its recipe's `opacity` (`disabled:opacity-50`):
+  `shared::opacity(&[part_stack, parent_stack], state)` multiplies the
+  values down the part tree as CSS does, and
+  `shared::style_painter(ui, &[part_stack, parent_stack], state)` returns the
+  painter faded by it. In a disabled `Ui` egui has faded every shape once
+  already. There `style_painter` (and `shared::ui_opacity`, the bare value)
+  takes 1.0 where the winning rule of a part's pick needs `DISABLED`: as in
+  CSS, the `disabled:` rule replaces the part's base opacity, and egui's fade
+  stands in for the rule. Where no such rule wins, the part's other opacity applies
+  on top of egui's fade. Pass `DISABLED` in the state whenever the `Ui` is
+  disabled. Every part reads its `opacity`, not only a disabled one: a child
+  part's painter multiplies the parent's chain, a container part fades the
+  `Ui` it hands to its content with `shared::faded(ui, opacity, |ui| ..)`,
+  and colours an egui `Frame` paints outside that `Ui` (fill, shadow, ring)
+  are faded with `gamma_multiply`.
+- An empty size `Prop` is CSS's initial value: `width` and `height` fall
+  back to the content size (`shared::line_box` for a line of text), never
+  to 0, so an app that replaces a recipe whole keeps a usable widget.
 - Geometry is resolved without interaction states.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`.
 

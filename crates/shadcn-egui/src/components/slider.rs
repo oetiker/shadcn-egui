@@ -1,13 +1,14 @@
 //! shadcn Slider, ported from shadcn-svelte `ui/slider/slider.svelte` at
-//! `tools/stylegen/PIN`, which wraps the bits-ui slider. Base classes are
-//! quoted under `// base:`; all other values come from the style's
-//! `cn-slider` (root), `cn-slider-track`, `cn-slider-range` and
-//! `cn-slider-thumb` recipes.
+//! `tools/stylegen/PIN`, which wraps the bits-ui slider. Every value comes
+//! from the style's `cn-slider` (root), `cn-slider-track`,
+//! `cn-slider-range` and `cn-slider-thumb` recipes. Opacity multiplies down
+//! the parts as in the DOM: the range sits in the track, the track and the
+//! thumb in the root.
 //!
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
@@ -84,10 +85,10 @@ fn snap(v: f32, lo: f32, hi: f32, step: f32) -> f32 {
 impl Widget for Slider<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let root = [&t.style.slider];
-        let track = [&t.style.slider_track];
-        let range = [&t.style.slider_range];
-        let thumb = [&t.style.slider_thumb];
+        let root = [&*t.style.slider];
+        let track = [&*t.style.slider_track];
+        let range = [&*t.style.slider_range];
+        let thumb = [&*t.style.slider_thumb];
         let enabled = self.enabled && ui.is_enabled();
         let vertical = self.orientation == SliderOrientation::Vertical;
         let orient = if vertical {
@@ -135,7 +136,6 @@ impl Widget for Slider<'_> {
                 pick(&root, |r| &r.min_height, g).unwrap_or(0.0).max(along),
             )
         } else {
-            // base: "relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:w-auto data-vertical:flex-col"
             let width = ui.available_width();
             vec2(
                 if width.is_finite() {
@@ -154,12 +154,12 @@ impl Widget for Slider<'_> {
         } else {
             (rect.left(), rect.width())
         };
-        let dir = if vertical { -1.0 } else { 1.0 };
+        let dir = if vertical { -1.0 } else { 1.0 }; // behaviour-ok: direction of travel
         let travel = (len - along).max(0.0);
         let centre_of = |frac: f32| start + dir * (along / 2.0 + frac * travel);
         let frac_of = |v: f32| {
             if hi > lo {
-                ((v - lo) / (hi - lo)).clamp(0.0, 1.0)
+                ((v - lo) / (hi - lo)).clamp(0.0, 1.0) // behaviour-ok: fraction of the range
             } else {
                 0.0
             }
@@ -194,7 +194,7 @@ impl Widget for Slider<'_> {
                 if let Some(p) = ui.input(|i| i.pointer.interact_pos()) {
                     let a = if vertical { p.y } else { p.x };
                     let frac = if travel > 0.0 {
-                        ((a - centre_of(0.0)) / (dir * travel)).clamp(0.0, 1.0)
+                        ((a - centre_of(0.0)) / (dir * travel)).clamp(0.0, 1.0) // behaviour-ok: fraction of the range
                     } else {
                         0.0
                     };
@@ -262,8 +262,9 @@ impl Widget for Slider<'_> {
         );
 
         if ui.is_rect_visible(hit) {
-            // base: "data-disabled:opacity-50"
-            let painter = disabled_painter(ui, self.enabled, 0.5);
+            let track_painter = style_painter(ui, &[&track[..], &root[..]], st);
+            let range_painter = style_painter(ui, &[&range[..], &track[..], &root[..]], st);
+            let thumb_painter = style_painter(ui, &[&thumb[..], &root[..]], st);
             let paint =
                 |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
 
@@ -274,13 +275,13 @@ impl Widget for Slider<'_> {
             };
             let track_radius =
                 pick(&track, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, thickness / 2.0));
-            let mut shapes = box_shapes(
+            track_painter.extend(box_shapes(
                 track_rect,
                 track_radius,
                 paint(&track, |r| &r.bg),
                 None,
                 false,
-            );
+            ));
 
             let c = centre_of(frac_of(value));
             let range_rect = if vertical {
@@ -288,7 +289,7 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
-            shapes.extend(box_shapes(
+            range_painter.extend(box_shapes(
                 range_rect,
                 track_radius,
                 paint(&range, |r| &r.bg),
@@ -296,6 +297,7 @@ impl Widget for Slider<'_> {
                 false,
             ));
 
+            let mut shapes = Vec::new();
             if let Some(s) = pick(&thumb, |r| &r.shadow, st) {
                 shapes.push(Shape::from(
                     t.shadow(s)
@@ -322,7 +324,7 @@ impl Widget for Slider<'_> {
                     c,
                 ));
             }
-            painter.extend(shapes);
+            thumb_painter.extend(shapes);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));

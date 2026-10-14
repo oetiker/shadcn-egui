@@ -127,20 +127,6 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     assert_eq!(disabled, State::INVALID | State::DISABLED | State::DARK);
 }
 
-/// Every rect shape a frame painted, in paint order.
-fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
-    fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
-        match s {
-            egui::Shape::Rect(r) => out.push(r.clone()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
-            _ => {}
-        }
-    }
-    let mut rects = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut rects));
-    rects
-}
-
 /// shadcn `bg-clip-padding` with `border border-transparent`: a solid
 /// button's fill stops inside its 1px transparent border.
 #[test]
@@ -150,7 +136,7 @@ fn button_fill_stops_inside_transparent_border() {
     let theme = Theme::vega_light();
     let (rect, out) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
     let fill = theme.palette.primary;
-    let fills: Vec<_> = rect_shapes(&out)
+    let fills: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == fill)
         .collect();
@@ -171,7 +157,7 @@ fn focused_button_shows_ring_and_ring_border() {
         resp
     });
     let ring = theme.palette.ring;
-    let shapes = rect_shapes(&out);
+    let shapes = common::rect_shapes(&out);
     let ring_shape = shapes.iter().find(|r| r.stroke.width == 3.0);
     let ring_shape = ring_shape.unwrap_or_else(|| panic!("no 3px ring in {shapes:?}"));
     assert_eq!(ring_shape.stroke.color, ring.gamma_multiply(0.5));
@@ -460,6 +446,163 @@ fn tabs_matrix_line_snapshot() {
     );
 }
 
+/// A focused inactive trigger, next to the active one. egui focuses one
+/// widget per frame, so this cannot share a frame with the matrix's
+/// focused active trigger.
+fn tabs_focus_inactive(
+    variant: shadcn_egui::components::tabs::TabsVariant,
+) -> impl FnMut(&mut egui::Ui) {
+    use shadcn_egui::components::tabs::Tabs;
+    move |ui| {
+        let resp = ui.add(Tabs::new(&mut 0, &["Selected", "Focused"]).variant(variant));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 1))));
+    }
+}
+
+#[test]
+fn tabs_focus_inactive_default_snapshot() {
+    use shadcn_egui::components::tabs::TabsVariant;
+    common::snapshot_all(
+        "tabs_focus_inactive_default",
+        egui::vec2(360.0, 90.0),
+        tabs_focus_inactive(TabsVariant::Default),
+    );
+}
+
+#[test]
+fn tabs_focus_inactive_line_snapshot() {
+    use shadcn_egui::components::tabs::TabsVariant;
+    common::snapshot_all(
+        "tabs_focus_inactive_line",
+        egui::vec2(360.0, 90.0),
+        tabs_focus_inactive(TabsVariant::Line),
+    );
+}
+
+/// One tab-trigger scenario of the review image: the labels, the selected
+/// trigger, the focused trigger, the hovered label, and whether the list is
+/// enabled.
+struct TabsRow {
+    labels: &'static [&'static str],
+    selected: usize,
+    focus: Option<usize>,
+    hover: Option<&'static str>,
+    enabled: bool,
+}
+
+/// Every trigger state of one tabs variant in one image per theme. A tab
+/// list takes keyboard focus and the pointer one at a time, so each row
+/// renders in its own harness (all the same page, the row at its own
+/// height) and the row bands are stacked into one picture.
+fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::tabs::Tabs;
+
+    const ROW_H: usize = 56;
+    // Rows start below the page margin; bands are cut a little above the row.
+    const BAND_TOP: usize = 10;
+    let row = |labels, selected, focus, hover, enabled| TabsRow {
+        labels,
+        selected,
+        focus,
+        hover,
+        enabled,
+    };
+    let rows = [
+        row(
+            &["Inactive", "Hover", "Active"],
+            2,
+            None,
+            Some("Hover"),
+            true,
+        ),
+        row(
+            &["Inactive", "Active + hover"],
+            1,
+            None,
+            Some("Active + hover"),
+            true,
+        ),
+        row(&["Inactive", "Focus", "Active"], 2, Some(1), None, true),
+        row(
+            &["Inactive", "Focus + hover", "Active"],
+            2,
+            Some(1),
+            Some("Focus + hover"),
+            true,
+        ),
+        row(&["Inactive", "Active + focus"], 1, Some(1), None, true),
+        row(
+            &["Inactive", "Active + focus + hover"],
+            1,
+            Some(1),
+            Some("Active + focus + hover"),
+            true,
+        ),
+        row(&["Disabled", "Disabled active"], 1, None, None, false),
+    ];
+    let page_h = BAND_TOP + rows.len() * ROW_H + 14;
+    let size = egui::vec2(520.0, page_h as f32);
+
+    let mut results = egui_kittest::SnapshotResults::new();
+    for (suffix, theme) in common::snapshot_themes() {
+        let mut stacked = None;
+        for (i, r) in rows.iter().enumerate() {
+            let mut h = common::page_harness(size, theme.clone(), |ui| {
+                ui.add_space((i * ROW_H) as f32);
+                let mut sel = r.selected;
+                let resp = ui.add(
+                    Tabs::new(&mut sel, r.labels)
+                        .variant(variant)
+                        .enabled(r.enabled),
+                );
+                if let Some(f) = r.focus {
+                    ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", f))));
+                }
+            });
+            if let Some(label) = r.hover {
+                h.get_by_label(label).hover();
+                h.run();
+            }
+            let img = h.render().expect("render the tabs row");
+            assert_eq!(img.height() as usize, page_h, "one pixel per point");
+            match stacked.as_mut() {
+                None => stacked = Some(img),
+                Some(out) => {
+                    let out: &mut [u8] = &mut *out;
+                    let stride = img.width() as usize * 4;
+                    let (from, to) = (
+                        (BAND_TOP + i * ROW_H) * stride,
+                        (BAND_TOP + (i + 1) * ROW_H) * stride,
+                    );
+                    out[from..to].copy_from_slice(&img.as_raw()[from..to]);
+                }
+            }
+        }
+        let img = stacked.expect("at least one row");
+        results.add(egui_kittest::try_image_snapshot(
+            &img,
+            format!("{name}_{suffix}"),
+        ));
+    }
+}
+
+#[test]
+fn tabs_states_default_snapshot() {
+    tabs_states(
+        shadcn_egui::components::tabs::TabsVariant::Default,
+        "tabs_states_default",
+    );
+}
+
+#[test]
+fn tabs_states_line_snapshot() {
+    tabs_states(
+        shadcn_egui::components::tabs::TabsVariant::Line,
+        "tabs_states_line",
+    );
+}
+
 #[test]
 fn badge_is_h5_in_both_styles() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
@@ -488,27 +631,6 @@ fn badge_snapshot() {
     });
 }
 
-/// The colour of the first text a frame painted, as its glyphs carry it
-/// (a painter's opacity fades the glyphs, not the layout job).
-fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
-    fn walk(s: &egui::Shape) -> Option<egui::Color32> {
-        match s {
-            egui::Shape::Text(t) => t
-                .galley
-                .rows
-                .iter()
-                .find_map(|r| r.visuals.mesh.vertices.first())
-                .map(|v| v.color),
-            egui::Shape::Vec(v) => v.iter().find_map(walk),
-            _ => None,
-        }
-    }
-    out.shapes
-        .iter()
-        .find_map(|c| walk(&c.shape))
-        .expect("a text shape")
-}
-
 /// shadcn `peer-disabled:opacity-50`: a label of a disabled control paints
 /// its text at half alpha, and `text-sm leading-none` makes it 14px high.
 #[test]
@@ -520,11 +642,11 @@ fn disabled_label_paints_half_alpha_text() {
         let (_, off) =
             common::measure_output(&theme, |ui| ui.add(Label::new("Email").enabled(false)));
         let fg = theme.palette.foreground;
-        assert_eq!(text_colour(&on), fg, "{name}");
-        assert_eq!(text_colour(&off), fg.gamma_multiply(0.5), "{name}");
+        assert_eq!(common::text_colour(&on), fg, "{name}");
+        assert_eq!(common::text_colour(&off), fg.gamma_multiply(0.5), "{name}");
         assert_eq!(rect.height(), 14.0, "{name}");
         assert_eq!(
-            pick(&[&theme.style.label], |r| &r.opacity, State::DISABLED),
+            pick(&[&*theme.style.label], |r| &r.opacity, State::DISABLED),
             Some(0.5),
             "{name}"
         );
@@ -542,7 +664,7 @@ fn separators_are_one_pixel_border_lines() {
         separator(ui);
         ui.allocate_response(egui::vec2(0.0, 0.0), egui::Sense::hover())
     });
-    let lines: Vec<_> = rect_shapes(&out)
+    let lines: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == theme.palette.border)
         .collect();
@@ -556,7 +678,7 @@ fn separators_are_one_pixel_border_lines() {
         })
         .response
     });
-    let v: Vec<_> = rect_shapes(&out)
+    let v: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == theme.palette.border)
         .collect();
@@ -678,7 +800,7 @@ fn nova_footer_strip_reaches_card_bottom() {
         shadcn_egui::style::Role::Muted,
         0.5,
     ));
-    let strips: Vec<_> = rect_shapes(&out)
+    let strips: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == strip)
         .collect();
@@ -855,7 +977,7 @@ fn disabled_button_ignores_clicks() {
                     rect = ui.add(Button::new("Save").enabled(enabled)).rect;
                 },
             );
-            (rect, rect_shapes(&out))
+            (rect, common::rect_shapes(&out))
         }
         let ctx = egui::Context::default();
         frame(&ctx, enabled, vec![]);
@@ -891,7 +1013,7 @@ fn focused_input_border_turns_ring_colored() {
                 }
                 resp
             });
-            (rect, rect_shapes(&out))
+            (rect, common::rect_shapes(&out))
         };
         let (rect, idle) = shapes(false);
         let border = |s: &[egui::epaint::RectShape]| {
@@ -929,7 +1051,7 @@ fn invalid_input_border_is_destructive() {
         let mut text = String::new();
         let (_, out) =
             common::measure_output(&theme, |ui| ui.add(Input::new(&mut text).invalid(true)));
-        let shapes = rect_shapes(&out);
+        let shapes = common::rect_shapes(&out);
         let d = theme.palette.destructive;
         let (border, ring) = if name.ends_with("dark") {
             (d.gamma_multiply(0.5), d.gamma_multiply(0.4))
@@ -1540,10 +1662,32 @@ fn slider_snapshot() {
 
 /// Every rect shape of a frame with its fill and stroke, in paint order.
 fn rect_paint(out: &egui::FullOutput) -> Vec<(egui::Rect, egui::Color32, egui::Stroke)> {
-    rect_shapes(out)
+    common::rect_shapes(out)
         .into_iter()
         .map(|r| (r.rect, r.fill, r.stroke))
         .collect()
+}
+
+/// The colour and opacity of every text a frame painted, in paint order.
+fn text_paint(out: &egui::FullOutput) -> Vec<(egui::Color32, egui::Color32, f32)> {
+    fn walk(s: &egui::Shape, acc: &mut Vec<(egui::Color32, egui::Color32, f32)>) {
+        match s {
+            egui::Shape::Text(t) => {
+                let first = t
+                    .galley
+                    .rows
+                    .iter()
+                    .find_map(|r| r.visuals.mesh.vertices.first())
+                    .map_or(egui::Color32::TRANSPARENT, |v| v.color);
+                acc.push((first, t.fallback_color, t.opacity_factor));
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, acc)),
+            _ => {}
+        }
+    }
+    let mut acc = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    acc
 }
 
 /// shadcn `disabled:opacity-50` applies once: a widget disabled by its own
@@ -1552,13 +1696,15 @@ fn rect_paint(out: &egui::FullOutput) -> Vec<(egui::Rect, egui::Color32, egui::S
 fn disabled_widgets_fade_once() {
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::label::Label;
     use shadcn_egui::components::select::Select;
     use shadcn_egui::components::slider::Slider;
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
     type Add = fn(&mut egui::Ui, bool) -> egui::Response;
-    let widgets: [(&str, Add); 7] = [
+    let widgets: [(&str, Add); 8] = [
         ("button", |ui, on| ui.add(Button::new("Save").enabled(on))),
+        ("label", |ui, on| ui.add(Label::new("Email").enabled(on))),
         ("input", |ui, on| {
             ui.add(Input::new(&mut "text".to_owned()).enabled(on))
         }),
@@ -1603,11 +1749,21 @@ fn disabled_widgets_fade_once() {
             rect_paint(&by_ui),
             "{name}: both vs disabled Ui"
         );
+        assert_eq!(
+            text_paint(&own),
+            text_paint(&by_ui),
+            "{name}: text, own flag vs disabled Ui"
+        );
+        assert_eq!(
+            text_paint(&both),
+            text_paint(&by_ui),
+            "{name}: text, both vs disabled Ui"
+        );
     }
     // And the fade is a half: a solid button's fill.
     let (rect, out) =
         common::measure_output(&theme, |ui| ui.add_enabled(false, Button::new("Save")));
-    let fill = rect_shapes(&out)
+    let fill = common::rect_shapes(&out)
         .into_iter()
         .find(|r| r.rect == rect.shrink(1.0))
         .expect("button fill")
@@ -1672,11 +1828,35 @@ fn switch_paints_its_style_shadow() {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::{pick, State};
     let theme = Theme::vega_light();
-    assert!(pick(&[&theme.style.switch], |r| &r.shadow, State::NONE).is_some());
+    assert!(pick(&[&*theme.style.switch], |r| &r.shadow, State::NONE).is_some());
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
     // egui paints a shadow as a blurred rect.
     assert!(
-        rect_shapes(&out).iter().any(|r| r.blur_width > 0.0),
+        common::rect_shapes(&out).iter().any(|r| r.blur_width > 0.0),
         "no shadow painted"
     );
+}
+
+/// A container's fade ends with its content, but a `Ui::disable` inside
+/// the content (for example a disabled card action) keeps egui's disabled
+/// fade for what the `Ui` paints afterwards, as the `Ui` stays disabled.
+#[test]
+fn faded_keeps_a_disable_inside_its_content() {
+    use shadcn_egui::components::shared::faded;
+    let ctx = egui::Context::default();
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let alpha = ui.visuals().disabled_alpha();
+        faded(ui, 0.5, |ui| ui.disable());
+        assert!(!ui.is_enabled());
+        assert!(
+            (ui.opacity() - alpha).abs() < 1e-6,
+            "opacity {} after a disable inside faded, egui's fade is {alpha}",
+            ui.opacity()
+        );
+        faded(ui, 0.5, |_| {});
+        assert!(
+            (ui.opacity() - alpha).abs() < 1e-6,
+            "an already disabled Ui"
+        );
+    });
 }

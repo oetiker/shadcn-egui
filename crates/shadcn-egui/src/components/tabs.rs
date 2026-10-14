@@ -1,11 +1,13 @@
 //! shadcn Tabs, ported from shadcn-svelte `ui/tabs/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all other
-//! values come from the style's `cn-tabs-list`, `cn-tabs-list-variant-*` and
-//! `cn-tabs-trigger` recipes. Behaviour follows bits-ui Tabs: a click selects,
+//! `tools/stylegen/PIN`. Every value comes from the style's `cn-tabs-list`,
+//! `cn-tabs-list-variant-*`, `cn-tabs-trigger` recipes and the trigger's
+//! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a click selects,
 //! Left/Right move the selection (and wrap), Home/End jump to the first/last
 //! tab (automatic activation).
 
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
+use crate::components::shared::{
+    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
+};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -69,7 +71,7 @@ impl<'a> Tabs<'a> {
     /// The gap between the list and the content below it (shadcn `Tabs` root `gap`).
     pub fn content_gap(ui: &Ui) -> f32 {
         let t = Theme::current(ui.ctx());
-        pick(&[&t.style.tabs], |r| &r.gap, t.state(State::NONE)).unwrap_or(0.0)
+        pick(&[&*t.style.tabs], |r| &r.gap, t.state(State::NONE)).unwrap_or(0.0)
     }
 }
 
@@ -79,12 +81,14 @@ impl Widget for Tabs<'_> {
         let s = &t.style;
         let enabled = self.enabled && ui.is_enabled();
         let (variant_bit, variant_layer) = match self.variant {
-            TabsVariant::Default => (State::VARIANT_DEFAULT, &s.tabs_list_variant_default),
-            TabsVariant::Line => (State::VARIANT_LINE, &s.tabs_list_variant_line),
+            TabsVariant::Default => (State::VARIANT_DEFAULT, &*s.tabs_list_variant_default),
+            TabsVariant::Line => (State::VARIANT_LINE, &*s.tabs_list_variant_line),
         };
         let TabsOrientation::Horizontal = self.orientation;
-        let list = [&s.tabs_list, variant_layer];
-        let trigger = [&s.tabs_trigger];
+        let root = [&*s.tabs];
+        let list = [&*s.tabs_list, variant_layer];
+        let trigger = [&*s.tabs_trigger];
+        let after = [&*s.tabs_trigger_after];
 
         // Geometry depends neither on the selection nor on interaction.
         let g = t.state(State::HORIZONTAL.or(variant_bit));
@@ -95,22 +99,14 @@ impl Widget for Tabs<'_> {
             geo(&list, |r| &r.pad_bottom),
             geo(&list, |r| &r.pad_left),
         );
-        let list_h = geo(&list, |r| &r.height);
-        // base: "h-[calc(100%-1px)]"
-        let trigger_h = list_h - pad_t - pad_b - 1.0;
         let (tpad_l, tpad_r, border_w) = (
             geo(&trigger, |r| &r.pad_left),
             geo(&trigger, |r| &r.pad_right),
             geo(&trigger, |r| &r.border_width),
         );
-        // base: "gap-1 bg-transparent"
-        let line_gap = 4.0;
-        let gap = if self.variant == TabsVariant::Line {
-            line_gap
-        } else {
-            0.0
-        };
-        let text_px = t.text_px(pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let gap = geo(&list, |r| &r.gap);
+        let text_size = pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
+        let text_px = t.text_px(text_size);
         let weight = pick(&trigger, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
         let painter = ui.painter().clone();
@@ -121,12 +117,24 @@ impl Widget for Tabs<'_> {
             .iter()
             .map(|l| painter.layout_no_wrap(l.clone(), font.clone(), Color32::PLACEHOLDER))
             .collect();
+        // No list height: CSS's initial `auto`, the triggers' own height,
+        // which `h-[calc(100%-1px)]` of an `auto` parent leaves at `auto` too.
+        let trigger_auto = galleys
+            .iter()
+            .map(|g| g.size().y)
+            .fold(line_box(&t, &trigger, g, text_size), f32::max)
+            + geo(&trigger, |r| &r.pad_top)
+            + geo(&trigger, |r| &r.pad_bottom)
+            + border_w * 2.0;
+        let (list_h, trigger_h) = match pick(&list, |r| &r.height, g) {
+            Some(h) => (h, h - pad_t - pad_b - geo(&trigger, |r| &r.height_inset)),
+            None => (trigger_auto + pad_t + pad_b, trigger_auto),
+        };
         let widths: Vec<f32> = galleys
             .iter()
             .map(|g| g.size().x + tpad_l + tpad_r + border_w * 2.0)
             .collect();
         let n = widths.len();
-        // base: "inline-flex w-fit items-center justify-center"
         let list_w = widths.iter().sum::<f32>() + gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
 
         let (list_rect, mut resp) = ui.allocate_exact_size(vec2(list_w, list_h), Sense::hover());
@@ -205,10 +213,8 @@ impl Widget for Tabs<'_> {
         }
         let active = *self.active;
 
-        // base: "group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px]"
-        let below = 5.0;
-        // base: "group-data-horizontal/tabs:after:h-0.5"
-        let thickness = 2.0;
+        // The line indicator may reach below the list (`after:bottom-[-5px]`).
+        let reach = (-geo(&after, |r| &r.inset_bottom)).max(0.0);
         for (i, r) in resps.iter().enumerate() {
             r.widget_info(|| {
                 egui::WidgetInfo::selected(
@@ -219,92 +225,73 @@ impl Widget for Tabs<'_> {
                 )
             });
         }
-        if ui.is_rect_visible(list_rect.expand(below)) {
-            // base: "disabled:pointer-events-none disabled:opacity-50"
-            let painter = disabled_painter(ui, self.enabled, 0.5);
-
-            // The list: a muted track in the default variant, nothing in line.
+        if ui.is_rect_visible(list_rect.expand(reach)) {
             let list_radius = pick(&list, |r| &r.radius, g)
                 .map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
-            let track = (self.variant == TabsVariant::Default).then(|| t.role(Role::Muted));
-            // The fade is the triggers' (`disabled:opacity-50`), not the list's.
-            ui.painter()
-                .extend(box_shapes(list_rect, list_radius, track, None, false));
+            let track = pick(&list, |r| &r.bg, g).map(|p| t.paint(p));
+            // The list sits in the tabs root; a trigger in the list.
+            style_painter(ui, &[&list[..], &root[..]], g).extend(box_shapes(
+                list_rect,
+                list_radius,
+                track,
+                None,
+                false,
+            ));
+            let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
+            let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
-                let is_active = i == active;
                 let context = State::HORIZONTAL
                     .or(variant_bit)
-                    .with(State::SELECTED, is_active);
+                    .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, enabled, context);
-                let dark = st.contains(State::DARK);
-                let hover = st.contains(State::HOVER);
-                let focus = st.contains(State::FOCUS_VISIBLE);
-                let line = self.variant == TabsVariant::Line;
-                let role = |role, alpha| t.paint(Paint::Role(role, alpha));
+                let painter = style_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
+                let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
+                    pick(l, f, st).map(|p| t.paint(p))
+                };
+                let px =
+                    |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, st).unwrap_or(0.0);
 
-                // base: "text-foreground/60 transition-all"
-                // base: "hover:text-foreground focus-visible:border-ring"
-                // base: "dark:text-muted-foreground dark:hover:text-foreground"
-                // base: "data-active:text-foreground"
-                let fg = if is_active || hover {
-                    role(Role::Foreground, 1.0)
-                } else if dark {
-                    role(Role::MutedForeground, 1.0)
-                } else {
-                    // base: "text-foreground/60"
-                    role(Role::Foreground, 0.6)
-                };
-                // base: "group-data-[variant=line]/tabs-list:bg-transparent"
-                // base: "data-active:bg-background data-active:text-foreground"
-                let bg = match (line, is_active, dark) {
-                    (true, _, _) | (false, false, _) => None,
-                    (false, true, false) => Some(role(Role::Background, 1.0)),
-                    // base: "dark:data-active:bg-input/30"
-                    (false, true, true) => Some(role(Role::Input, 0.3)),
-                };
-                // base: "dark:group-data-[variant=line]/tabs-list:data-active:border-transparent"
-                // base: "dark:data-active:border-input"
-                let border_role = if is_active && dark {
-                    if line {
-                        Role::Transparent
-                    } else {
-                        Role::Input
-                    }
-                } else if focus {
-                    Role::Ring
-                } else {
-                    Role::Transparent
-                };
-                let border = pick(&trigger, |r| &r.border_color, st).map(|p| t.paint(p));
-                let border = if border_role == Role::Transparent {
-                    border
-                } else {
-                    Some(role(border_role, 1.0))
-                };
-
+                let fg = paint(&trigger, |r| &r.text)
+                    .or(list_text)
+                    .unwrap_or(inherited);
                 let radius = pick(&trigger, |r| &r.radius, st)
                     .map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
                 if let Some(level) = pick(&trigger, |r| &r.shadow, st) {
                     painter.add(t.shadow(level).as_shape(*rect, radius));
                 }
-                let stroke = border.map(|b| Stroke::new(border_w, b));
-                let mut shapes = box_shapes(*rect, radius, bg, stroke, false);
-                if focus {
-                    // base: "focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring"
-                    let (ring_w, outline_w) = (3.0, 1.0);
-                    // base: "focus-visible:ring-ring/50"
-                    let ring_color = t.paint(Paint::Role(Role::Ring, 0.5));
-                    shapes.extend(ring_shape(*rect, radius, ring_w, ring_color));
-                    shapes.extend(ring_shape(*rect, radius, outline_w, t.role(Role::Ring)));
+                let stroke = paint(&trigger, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
+                let mut shapes =
+                    box_shapes(*rect, radius, paint(&trigger, |r| &r.bg), stroke, false);
+                if let Some(c) = paint(&trigger, |r| &r.ring_color) {
+                    shapes.extend(ring_shape(
+                        *rect,
+                        radius,
+                        px(&trigger, |r| &r.ring_width),
+                        c,
+                    ));
                 }
-                if line && is_active {
+                if let Some(c) = paint(&trigger, |r| &r.outline_color) {
+                    shapes.extend(ring_shape(
+                        *rect,
+                        radius,
+                        px(&trigger, |r| &r.outline_width),
+                        c,
+                    ));
+                }
+                // The `after:` line indicator, placed against the padding box.
+                let bar_alpha = ui_opacity(ui, &[&after[..]], st);
+                if let (Some(c), true) = (paint(&after, |r| &r.bg), bar_alpha > 0.0) {
                     let inner = rect.shrink(border_w);
+                    let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);
                     let bar = Rect::from_min_max(
-                        pos2(inner.left(), inner.bottom() + below - thickness),
-                        pos2(inner.right(), inner.bottom() + below),
+                        pos2(
+                            inner.left() + px(&after, |r| &r.inset_left),
+                            bottom - px(&after, |r| &r.height),
+                        ),
+                        pos2(inner.right() - px(&after, |r| &r.inset_right), bottom),
                     );
-                    shapes.push(Shape::rect_filled(bar, 0.0, role(Role::Foreground, 1.0)));
+                    shapes.push(Shape::rect_filled(bar, 0.0, c.gamma_multiply(bar_alpha)));
                 }
                 painter.extend(shapes);
                 let galley = galleys[i].clone();

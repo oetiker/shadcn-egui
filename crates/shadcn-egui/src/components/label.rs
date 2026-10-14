@@ -8,7 +8,7 @@
 //! paragraph that `cn-card-description` and `cn-dialog-description` share, so
 //! it reads the `card_description` recipe.
 
-use crate::components::shared::disabled_painter;
+use crate::components::shared::style_painter;
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -40,7 +40,7 @@ pub fn label(ui: &mut Ui, text: &str) -> Response {
 impl Widget for Label {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
-        let l = [&t.style.label];
+        let l = [&*t.style.label];
         let enabled = self.enabled && ui.is_enabled();
         let st = t.state(State::NONE.with(State::DISABLED, !enabled));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, st);
@@ -48,8 +48,9 @@ impl Widget for Label {
         let text_px = t.text_px(size);
         let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        let fg = t.role(Role::Foreground);
-        let painter = disabled_painter(ui, self.enabled, get(|r| &r.opacity).unwrap_or(1.0));
+        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
+        let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
+        let painter = style_painter(ui, &[&l[..]], st);
 
         let galley = painter.layout_no_wrap(self.text.clone(), font, fg);
         // `leading-none`: the line box is `line_height` times the font size;
@@ -71,14 +72,14 @@ impl Widget for Label {
 /// Muted `text-sm` helper text, wrapping like a paragraph.
 pub fn description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
-    let l = [&t.style.card_description];
+    let l = [&*t.style.card_description];
     let st = t.state(State::NONE);
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
     let px = t.text_px(size);
     // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
     let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
-    let color =
-        pick(&l, |r| &r.text, st).map_or_else(|| t.role(Role::MutedForeground), |p| t.paint(p));
+    let muted = t.role(Role::MutedForeground); // behaviour-ok: inherits; reads card_description first
+    let color = pick(&l, |r| &r.text, st).map_or(muted, |p| t.paint(p));
     ui.label(
         RichText::new(text)
             .size(px)
@@ -94,8 +95,9 @@ mod tests {
 
     #[test]
     fn disabled_label_recipe_is_half_opacity() {
-        for s in [Style::vega(), Style::nova()] {
-            let l = [&s.label];
+        for make in [Style::vega as fn() -> Style, Style::nova] {
+            let s = make();
+            let l = [&*s.label];
             assert_eq!(pick(&l, |r| &r.opacity, State::DISABLED), Some(0.5));
             assert_eq!(pick(&l, |r| &r.opacity, State::NONE), None);
         }

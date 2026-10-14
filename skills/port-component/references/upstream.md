@@ -23,9 +23,26 @@ git -C <scratch>/shadcn-ui checkout "$(cat tools/stylegen/PIN_REACT)"
 
 ## Markers
 
-1. Put the component's markers on its line in `tools/stylegen/markers.txt`:
-   `<file>.rs <upstream ui dir>: <cn markers>`. A file without markers has
-   only its `// base:` quotes checked.
+1. Put the component's parts on its line in `tools/stylegen/markers.txt`:
+   `<file>.rs <upstream ui dir>: <parts>`. A part is a `cn-*` marker, or
+   `slot:<data-slot>` for a part without one: the one class string without
+   a marker in `ui/<dir>/<data-slot>.svelte` (`separator.rs separator:
+   slot:separator`). The generator reads each part's whole class string
+   from the svelte source, base classes included, and puts the style's
+   `@apply` classes in place of the marker. Three tables in the generator
+   cover the cases the source alone does not decide:
+   - `extract::BRANCHES` (`tools/stylegen/src/extract.rs`): a part whose
+     marker appears in several `{#if}` branches names the occurrence the
+     crate draws, with the reason (`cn-input`: the `{:else}` branch, as
+     `input.rs` draws a text field, never `type="file"`). Without an entry
+     the generator stops with an error.
+   - `resolve::EXCEPTIONS` (`tools/stylegen/src/resolve.rs`): a variant
+     that never matches on the element bits-ui renders is dropped, with the
+     reason (`disabled:` on the slider thumb, a `<span>`).
+   - `resolve::CORRECTIONS`, next to it: a design correction the
+     maintainer approved edits a part's class string before translation.
+     The spec of the change names it and `tools/stylegen/reports/<style>.md`
+     shows it under the part.
 2. Run the generator from the repository root:
 
    ```bash
@@ -46,15 +63,37 @@ git -C <scratch>/shadcn-ui checkout "$(cat tools/stylegen/PIN_REACT)"
 `crates/shadcn-egui/tests/tokens.rs` scans every file in
 `crates/shadcn-egui/src/components/` and `crates/shadcn-egui/src/layout.rs`,
 so a new component file is checked without registration. The scan stops at
-the file's trailing `#[cfg(test)]` module.
+the file's trailing `#[cfg(test)] mod tests` module. Every visual value
+comes from the style (a recipe or `Metrics`), so a line is reported when it
+holds:
 
-- A colour literal or a literal font size needs a `// token-ok: <reason>` comment on
-  the line above.
-- Any other style value (a float other than `0.0`, `1.0`, halving or
-  doubling; a `Shadow { .. }`; an alpha multiplier) needs a
-  `// base: "<upstream classes>"` quote on the same line or the line above,
-  or a `// behaviour-ok: <reason>` comment for constants that come from the
-  primitive's behaviour, not its look.
+- a colour literal (`Color32::from_*`, `Color32::WHITE`, …) or a literal
+  font size (`FontId::proportional(14.0)`, `.size(14.0)`) without a
+  `// token-ok: <reason>` comment on the line above;
+- a palette role (`Role::Primary`), a `Shadow { .. }`, or an alpha
+  multiplier with a literal (`gamma_multiply(0.5)`, `from_black_alpha(..)`);
+- a float literal other than `0.0`, or `1.0` and `2.0` as anything but a
+  factor: `* 2.0` and `/ 1.0` pass, `- 1.0` and `Stroke::new(1.0, ..)` do
+  not;
+- an integer literal other than `0` inside an egui geometry constructor
+  (`CornerRadius`, `Margin`, `Stroke`, `Shadow`, `vec2`, `pos2`,
+  `Vec2::new`, `Pos2::new`), with the same factor rule
+  (`CornerRadius::same(4)` is reported);
+- a `// base:` comment. Base classes live in the generated recipes, so a
+  quote in drawing code is stale and is reported itself.
+
+A role, shadow, alpha or number passes only with a
+`// behaviour-ok: <reason>` comment on the same line, for a behaviour
+constant of the primitive or an inherited fallback:
+
+```rust
+pub const DEFAULT_SIDE_OFFSET: f32 = 4.0; // behaviour-ok: upstream prop default, not a class
+```
+
+String literals and one-line `/* .. */` comments are not scanned; the lines
+inside a multi-line block comment are. Neither are Lucide icon data blocks
+(`pub const NAME: Icon = Icon {` to `};`) nor the icon rasterizer
+`icon_raster.rs`, whose numbers are path data and rasterizer geometry.
 
 ## Snapshots
 
@@ -76,9 +115,12 @@ changes, and delete PNGs that no test writes any more.
   cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift <scratch>/shadcn-svelte <scratch>/shadcn-ui .
   ```
 
-  It checks that every `// base:` quote is still a substring of the upstream
-  component source and that the markers in `markers.txt` equal the markers of
-  the upstream source.
+  It checks that the markers in `markers.txt` equal the markers of the
+  upstream source, and that the copies of the component sources in
+  `tools/stylegen/tests/fixtures/ui/` and of the style CSS match the
+  checkout (`generate` writes them).
+- No `// base:` comment in the component; every value comes from its
+  recipes (`tokens.rs` passes).
 - No unsupported class for the component's markers in
   `tools/stylegen/reports/<style>.md`.
 - Snapshots reviewed, the behaviour list checked.

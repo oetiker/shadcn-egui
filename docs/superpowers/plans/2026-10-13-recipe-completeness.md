@@ -69,13 +69,13 @@ Frame benchmark (`examples/bench_frame.rs`, release build, 3000 frames after 20 
 
 | style | median µs before | allocs/frame before | median µs after | allocs/frame after |
 |---|---|---|---|---|
-| vega | | | | |
-| nova | | | | |
-| maia | | | | |
-| lyra | | | | |
-| mira | | | | |
-| luma | | | | |
-| rhea | | | | |
+| vega | 283.6 | 1190 | 275.5 | 1191 |
+| nova | 278.3 | 1186 | 274.0 | 1188 |
+| maia | 282.9 | 1190 | 271.7 | 1191 |
+| lyra | 279.5 | 1163 | 271.4 | 1165 |
+| mira | 277.3 | 1186 | 271.5 | 1188 |
+| luma | 279.2 | 1190 | 271.2 | 1191 |
+| rhea | 279.4 | 1187 | 274.5 | 1188 |
 
 Accepted upstream disagreements found during PR B (each with the maintainer's approval and the spec commit that lists it):
 

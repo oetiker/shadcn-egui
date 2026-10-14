@@ -1,21 +1,9 @@
-//! Drift between the crate and the pinned upstream: `// base: "…"` quotes
-//! that upstream no longer contains, and `cn-*` markers that appeared or
-//! disappeared in the upstream component sources.
+//! Drift between the crate and the pinned upstream: `cn-*` markers that
+//! appeared or disappeared in the upstream component sources.
 
 use crate::markers::MarkerLine;
 use std::collections::BTreeSet;
 use std::path::Path;
-
-/// `// base: "<upstream classes>"` quotes, with 1-based line numbers.
-pub fn base_quotes(src: &str) -> Vec<(usize, String)> {
-    src.lines()
-        .enumerate()
-        .filter_map(|(i, l)| {
-            let rest = &l[l.find("// base: \"")? + "// base: \"".len()..];
-            Some((i + 1, rest[..rest.find('"')?].to_owned()))
-        })
-        .collect()
-}
 
 /// `cn-*` markers in upstream component text, minus the ones only the shadcn
 /// CLI rewrites (fonts, menu targets, RTL/logical-side helpers).
@@ -28,11 +16,7 @@ pub fn upstream_markers(text: &str) -> BTreeSet<String> {
             .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
             .unwrap_or(tail.len());
         let m = &tail[..len];
-        let cli = m == "cn-font-heading"
-            || m.starts_with("cn-menu-")
-            || m.ends_with("-logical")
-            || m == "cn-rtl-flip"
-            || m == "cn-logical-sides";
+        let cli = crate::markers::is_cli_marker(m);
         if !cli && m.len() > 3 {
             out.insert(m.to_owned());
         }
@@ -55,30 +39,21 @@ fn read_dir_text(dir: &Path) -> String {
 }
 
 /// One human-readable line per problem; empty means clean.
-pub fn check(up: &Path, crate_root: &Path, lines: &[MarkerLine]) -> Vec<String> {
+pub fn check(up: &Path, lines: &[MarkerLine]) -> Vec<String> {
     let mut problems = Vec::new();
     for line in lines {
         let upstream = read_dir_text(&up.join("docs/src/lib/registry/ui").join(&line.dir));
-        let file = if line.file == "layout.rs" {
-            crate_root.join("src/layout.rs")
-        } else {
-            crate_root.join("src/components").join(&line.file)
-        };
-        if let Ok(src) = std::fs::read_to_string(&file) {
-            for (n, q) in base_quotes(&src) {
-                if !upstream.contains(&q) {
-                    problems.push(format!(
-                        "{}:{n}: base quote no longer upstream in ui/{}: \"{q}\"",
-                        line.file, line.dir
-                    ));
-                }
-            }
-        }
-        if line.markers.is_empty() {
+        // `slot:` parts have no marker to compare.
+        let ours: BTreeSet<String> = line
+            .markers
+            .iter()
+            .filter(|m| !m.starts_with("slot:"))
+            .cloned()
+            .collect();
+        if ours.is_empty() {
             continue;
         }
         let up_set = upstream_markers(&upstream);
-        let ours: BTreeSet<String> = line.markers.iter().cloned().collect();
         for m in up_set.difference(&ours) {
             problems.push(format!(
                 "{}: marker {m} appeared upstream; re-port",
@@ -119,6 +94,43 @@ pub fn check_sources(up: &Path, up_react: &Path, tool: &Path) -> Vec<String> {
                 "tests/fixtures/{fixture} differs from {upstream}; re-run stylegen generate"
             )),
         }
+    }
+    problems
+}
+
+/// Component source copies (`<tool>/tests/fixtures/ui/`) that differ from
+/// the checkout, are missing, or are no longer upstream.
+pub fn check_ui(up: &Path, tool: &Path, lines: &[MarkerLine]) -> Vec<String> {
+    use crate::sources::{svelte_files, UI};
+    let ours_root = tool.join("tests/fixtures/ui");
+    let theirs = match svelte_files(&up.join(UI), lines) {
+        Ok(t) => t,
+        Err(e) => return vec![format!("{UI}: cannot list the upstream sources ({e})")],
+    };
+    let mut problems = Vec::new();
+    let ours = svelte_files(&ours_root, lines).unwrap_or_else(|e| {
+        problems.push(format!(
+            "cannot list tests/fixtures/ui ({e}); re-run stylegen generate"
+        ));
+        Vec::new()
+    });
+    for (dir, file) in &theirs {
+        let a = std::fs::read(ours_root.join(dir).join(file));
+        let b = std::fs::read(up.join(UI).join(dir).join(file));
+        match (a, b) {
+            (Ok(a), Ok(b)) if a == b => {}
+            (Err(_), _) => problems.push(format!(
+                "tests/fixtures/ui/{dir}/{file} is missing; re-run stylegen generate"
+            )),
+            _ => problems.push(format!(
+                "tests/fixtures/ui/{dir}/{file} differs from {UI}/{dir}/{file}; re-run stylegen generate"
+            )),
+        }
+    }
+    for (dir, file) in ours.iter().filter(|f| !theirs.contains(f)) {
+        problems.push(format!(
+            "tests/fixtures/ui/{dir}/{file} is no longer upstream; remove it"
+        ));
     }
     problems
 }

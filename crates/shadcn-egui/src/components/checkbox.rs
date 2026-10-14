@@ -1,6 +1,6 @@
 //! shadcn Checkbox, ported from shadcn-svelte `ui/checkbox/checkbox.svelte`
-//! at `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
-//! other values come from the style's `cn-checkbox` and
+//! at `tools/stylegen/PIN`. Every value, the hit area and the disabled
+//! fade included, comes from the style's `cn-checkbox` and
 //! `cn-checkbox-indicator` recipes. The tick is the theme's `check` icon
 //! ([`crate::Theme::icons`]).
 //!
@@ -8,7 +8,7 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::paint_icon;
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
@@ -17,8 +17,8 @@ use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
 /// `ui.add(Checkbox::new(&mut on))`.
 ///
 /// The returned response's rect is the visible box. Its click target is
-/// larger (see the `base:` quote in [`Widget::ui`]), and the accessibility
-/// node carries that larger rect.
+/// larger (the recipe's `hit_inset_x` and `hit_inset_y`), and the
+/// accessibility node carries that larger rect.
 pub struct Checkbox<'a> {
     checked: &'a mut bool,
     enabled: bool,
@@ -48,16 +48,23 @@ impl<'a> Checkbox<'a> {
 impl Widget for Checkbox<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let l = [&t.style.checkbox];
+        let l = [&*t.style.checkbox];
         let enabled = self.enabled && ui.is_enabled();
         // Geometry depends on neither the value nor interaction.
         let g = t.state(State::NONE.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
 
-        let (rect, base) =
-            ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
-        // base: "after:absolute after:-inset-x-3 after:-inset-y-2"
-        let hit = rect.expand2(vec2(12.0, 8.0));
+        // No size: CSS's initial `auto`, the indicator's tick inside the
+        // border. The box keeps that size unticked too, so it does not jump.
+        let ind = [&*t.style.checkbox_indicator];
+        let side = pick(&ind, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
+        let auto = side + get(|r| &r.border_width) * 2.0;
+        let size = vec2(
+            pick(&l, |r| &r.width, g).unwrap_or(auto),
+            pick(&l, |r| &r.height, g).unwrap_or(auto),
+        );
+        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
+        let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
         } else {
@@ -78,12 +85,7 @@ impl Widget for Checkbox<'_> {
         let st = interaction_state(&t, &resp, enabled, context);
 
         if ui.is_rect_visible(rect) {
-            // The style's `disabled:opacity-50` arrives as the DISABLED state.
-            let painter = disabled_painter(
-                ui,
-                self.enabled,
-                pick(&l, |r| &r.opacity, st).unwrap_or(1.0),
-            );
+            let painter = style_painter(ui, &[&l[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
             let radius =
                 pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
@@ -111,12 +113,14 @@ impl Widget for Checkbox<'_> {
             }
             painter.extend(shapes);
             if checked {
-                let ind = [&t.style.checkbox_indicator];
-                let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(0.0);
-                if let Some(color) = paint(|r| &r.text) {
+                let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
+                // `text-current`: the tick inherits the box's text colour.
+                let tick = pick(&ind, |r| &r.text, st).or_else(|| pick(&l, |r| &r.text, st));
+                if let Some(color) = tick.map(|p| t.paint(p)) {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
+                    // The indicator sits in the box: both opacities apply.
                     paint_icon(
-                        &painter,
+                        &style_painter(ui, &[&ind[..], &l[..]], st),
                         icon_rect,
                         &t.icons.check,
                         color,

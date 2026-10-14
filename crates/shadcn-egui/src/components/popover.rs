@@ -1,8 +1,7 @@
 //! shadcn Popover, ported from shadcn-svelte `ui/popover/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; padding,
-//! gap, radius, ring, shadow and text come from the style's
-//! `cn-popover-content`, `cn-popover-header`, `cn-popover-title` and
-//! `cn-popover-description` recipes.
+//! `tools/stylegen/PIN`. Width, padding, gap, radius, ring, shadow and text
+//! come from the style's `cn-popover-content`, `cn-popover-header`,
+//! `cn-popover-title` and `cn-popover-description` recipes.
 //!
 //! Behaviour follows bits-ui Popover: a click on the trigger toggles it, Esc
 //! and a click outside close it. bits-ui also moves keyboard focus into the
@@ -12,20 +11,16 @@
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
-use crate::components::shared::ring;
+use crate::components::shared::{faded, opacity, ring, DEFAULT_SIDE_OFFSET};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
 use egui::{Frame, Margin, PopupCloseBehavior, Response, RichText, Ui};
 
-// base: "w-72"
-const DEFAULT_WIDTH: f32 = 288.0;
-// base: "sideOffset = 4"
-const SIDE_OFFSET: f32 = 4.0;
-
 pub struct Popover<'a> {
     trigger: &'a Response,
     width: Option<f32>,
+    side_offset: f32,
 }
 
 impl<'a> Popover<'a> {
@@ -34,18 +29,25 @@ impl<'a> Popover<'a> {
         Self {
             trigger,
             width: None,
+            side_offset: DEFAULT_SIDE_OFFSET,
         }
     }
-    /// Width of the popover box, padding included; default `w-72`.
+    /// Width of the popover box, padding included; default the style's
+    /// `w-72`.
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
+        self
+    }
+    /// Gap between the trigger and the popover (shadcn `sideOffset`, default 4).
+    pub fn side_offset(mut self, px: f32) -> Self {
+        self.side_offset = px;
         self
     }
     /// Show the content while open. Returns its value while open.
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<R> {
         let t = Theme::current(&self.trigger.ctx);
         let g = t.state(State::NONE);
-        let l = [&t.style.popover_content];
+        let l = [&*t.style.popover_content];
         let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
             pick(&l, f, g).unwrap_or(0.0)
         };
@@ -57,11 +59,15 @@ impl<'a> Popover<'a> {
         );
         let gap = px(|r| &r.gap);
         let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
-        let fill = pick(&l, |r| &r.bg, g).map(|p| t.paint(p));
+        // The frame paints outside the content's `Ui`: fade its colours here.
+        let alpha = opacity(&[&l[..]], g);
+        let fill = pick(&l, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(alpha));
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
         let ring_width = px(|r| &r.ring_width);
-        let ring_color = pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p));
-        let shadow = pick(&l, |r| &r.shadow, g).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
+        let ring_color = pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p).gamma_multiply(alpha));
+        let mut shadow =
+            pick(&l, |r| &r.shadow, g).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
+        shadow.color = shadow.color.gamma_multiply(alpha);
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
 
         let mut frame = Frame::new()
@@ -76,13 +82,21 @@ impl<'a> Popover<'a> {
         if let Some(fill) = fill {
             frame = frame.fill(fill);
         }
-        let inner_width = (self.width.unwrap_or(DEFAULT_WIDTH) - pad_l - pad_r).max(0.0);
+        // No width from the builder or the recipe: CSS's initial `auto`,
+        // the content's width.
+        let inner_width = self
+            .width
+            .or_else(|| pick(&l, |r| &r.width, g))
+            .map(|w| (w - pad_l - pad_r).max(0.0));
         let shown = egui::Popup::from_toggle_button_response(self.trigger)
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-            .gap(SIDE_OFFSET)
+            .gap(self.side_offset)
             .frame(frame)
             .show(|ui| {
-                ui.set_width(inner_width);
+                ui.multiply_opacity(alpha);
+                if let Some(w) = inner_width {
+                    ui.set_width(w);
+                }
                 ui.spacing_mut().item_spacing.y = gap;
                 if let Some(fg) = fg {
                     ui.visuals_mut().override_text_color = Some(fg);
@@ -109,9 +123,9 @@ impl<'a> Popover<'a> {
 pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let g = t.state(State::NONE);
-    let header = &t.style.popover_header;
-    let title_l = [header, &t.style.popover_title];
-    let desc_l = [header, &t.style.popover_description];
+    let header = &*t.style.popover_header;
+    let title_l = [header, &*t.style.popover_title];
+    let desc_l = [header, &*t.style.popover_description];
     let gap = pick(&[header], |r| &r.gap, g).unwrap_or(0.0);
     let text = |l: &[&Recipe]| {
         let size = pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
@@ -124,10 +138,18 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let (desc_px, desc_line) = text(&desc_l);
     let weight = pick(&title_l, |r| &r.weight, g).unwrap_or(Weight::Normal);
     let title_color = pick(&title_l, |r| &r.text, g)
-        .or(pick(&[&t.style.popover_content], |r| &r.text, g))
+        .or(pick(&[&*t.style.popover_content], |r| &r.text, g))
         .map(|p| t.paint(p));
     let muted = pick(&desc_l, |r| &r.text, g).map(|p| t.paint(p));
+    // The title and the description sit in the header.
+    let fade = |part: &Recipe| opacity(&[&[part][..]], g);
+    let (title_fade, desc_fade) = (
+        fade(&t.style.popover_title),
+        fade(&t.style.popover_description),
+    );
+    let header_fade = fade(header);
     ui.scope(|ui| {
+        ui.multiply_opacity(header_fade);
         ui.spacing_mut().item_spacing.y = gap;
         let mut title = RichText::new(title)
             .size(title_px)
@@ -136,14 +158,14 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
         if let Some(c) = title_color {
             title = title.color(c);
         }
-        ui.label(title);
+        faded(ui, title_fade, |ui| ui.label(title));
         let mut description = RichText::new(description)
             .size(desc_px)
             .line_height(Some(desc_line));
         if let Some(c) = muted {
             description = description.color(c);
         }
-        ui.label(description);
+        faded(ui, desc_fade, |ui| ui.label(description));
     });
 }
 

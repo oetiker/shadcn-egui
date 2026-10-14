@@ -208,3 +208,6 @@ name = "settings"
 [[example]]
 name = "gallery"
 required-features = ["fonts-all", "icons-all"]
+
+[[example]]
+name = "bench_frame"
