@@ -446,6 +446,39 @@ fn tabs_matrix_line_snapshot() {
     );
 }
 
+/// A focused inactive trigger, next to the active one. egui focuses one
+/// widget per frame, so this cannot share a frame with the matrix's
+/// focused active trigger.
+fn tabs_focus_inactive(
+    variant: shadcn_egui::components::tabs::TabsVariant,
+) -> impl FnMut(&mut egui::Ui) {
+    use shadcn_egui::components::tabs::Tabs;
+    move |ui| {
+        let resp = ui.add(Tabs::new(&mut 0, &["Selected", "Focused"]).variant(variant));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 1))));
+    }
+}
+
+#[test]
+fn tabs_focus_inactive_default_snapshot() {
+    use shadcn_egui::components::tabs::TabsVariant;
+    common::snapshot_all(
+        "tabs_focus_inactive_default",
+        egui::vec2(360.0, 90.0),
+        tabs_focus_inactive(TabsVariant::Default),
+    );
+}
+
+#[test]
+fn tabs_focus_inactive_line_snapshot() {
+    use shadcn_egui::components::tabs::TabsVariant;
+    common::snapshot_all(
+        "tabs_focus_inactive_line",
+        egui::vec2(360.0, 90.0),
+        tabs_focus_inactive(TabsVariant::Line),
+    );
+}
+
 #[test]
 fn badge_is_h5_in_both_styles() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
