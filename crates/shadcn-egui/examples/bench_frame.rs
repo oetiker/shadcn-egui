@@ -45,6 +45,7 @@ const STYLES: [(&str, StyleName); 7] = [
 /// Frames run before measuring: fonts reach the atlas, layouts settle.
 const WARMUP: usize = 20;
 
+// No time and no events: every frame measured is the same static frame.
 fn input() -> egui::RawInput {
     egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(

@@ -136,13 +136,21 @@ impl<T> Rule<T> {
     ///
     /// ```
     /// use std::sync::Arc;
-    /// use shadcn_egui::style::{Paint, Role, Rule, State, When};
+    /// use shadcn_egui::style::{pick, Paint, Role, Rule, State, When};
     /// let mut theme = shadcn_egui::Theme::vega_light();
     /// let style = Arc::make_mut(&mut theme.style);
+    /// let primary = Paint::Role(Role::Primary, 1.0);
+    /// let selected_hover = State::SELECTED | State::HOVER;
+    /// let bg = |s: &shadcn_egui::style::Style, st| pick(&[&*s.tabs_trigger], |r| &r.bg, st);
+    /// assert_ne!(bg(style, selected_hover), Some(primary));
     /// style.tabs_trigger.bg.rules.push(Rule::important(
     ///     When::all(State::SELECTED),
-    ///     Paint::Role(Role::Primary, 1.0),
+    ///     primary,
     /// ));
+    /// // The override wins over every generated rule that matches.
+    /// assert_eq!(bg(style, selected_hover), Some(primary));
+    /// // Where its condition does not match, the generated value stays.
+    /// assert_ne!(bg(style, State::HOVER), Some(primary));
     /// ```
     pub fn important(when: When, value: T) -> Rule<T> {
         Rule {

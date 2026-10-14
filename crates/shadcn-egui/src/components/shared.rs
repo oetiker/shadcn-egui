@@ -141,3 +141,18 @@ pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context:
             .with(State::DISABLED, !live),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opacity_multiplies_down_the_part_tree() {
+        let mut half = Recipe::default();
+        half.opacity.base = Some(0.5);
+        let part: &[&Recipe] = &[&half];
+        let parent: &[&Recipe] = &[&half];
+        assert_eq!(opacity(&[part, parent], State::default()), 0.25);
+        assert_eq!(opacity(&[], State::default()), 1.0);
+    }
+}
