@@ -96,7 +96,8 @@ impl<'a> Widget for Input<'a> {
 
         let fade = opacity(&[&l[..]], g.with(State::DISABLED, !self.enabled));
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
-        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets only file:text-foreground
+        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
+        let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
         let mut edit = TextEdit::singleline(self.text)
             .hint_text(self.hint)
             .password(self.password)
@@ -104,7 +105,7 @@ impl<'a> Widget for Input<'a> {
             .frame(Frame::NONE.inner_margin(margin))
             .font(font)
             .vertical_align(egui::Align::Center)
-            .text_color(inherited);
+            .text_color(typed);
         if let Some(id_source) = self.id_source {
             edit = edit.id_salt(id_source);
         }

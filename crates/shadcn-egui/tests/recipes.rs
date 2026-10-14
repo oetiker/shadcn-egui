@@ -873,3 +873,47 @@ fn dialog_close_recipe_paints_the_close_button() {
         "the close button, not the panel"
     );
 }
+
+/// Kind 2: the label inherits `Foreground`, but reads `label.text` first.
+#[test]
+fn label_text_colour_comes_from_the_style() {
+    use shadcn_egui::components::label::Label;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.label.text.base = Some(Paint::Role(Role::Primary, 1.0));
+    });
+    let (_, out) = common::measure_output(&theme, |ui| ui.add(Label::new("Email")));
+    assert_eq!(common::text_colour(&out), theme.palette.primary);
+}
+
+/// Kind 2: typed text inherits `Foreground`, but reads `input.text` first.
+#[test]
+fn input_text_colour_comes_from_the_style() {
+    use shadcn_egui::components::input::Input;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.input.text.base = Some(Paint::Role(Role::Primary, 1.0));
+    });
+    let (_, out) = common::measure_output(&theme, |ui| ui.add(Input::new(&mut "typed".to_owned())));
+    assert_eq!(common::text_colour(&out), theme.palette.primary);
+}
+
+/// The tick inherits the box's text colour, but reads
+/// `checkbox_indicator.text` first.
+#[test]
+fn checkbox_tick_colour_comes_from_the_indicator() {
+    use shadcn_egui::components::checkbox::Checkbox;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.checkbox_indicator.text.base = Some(Paint::Role(Role::Destructive, 1.0));
+    });
+    let (_, out) = common::measure_output(&theme, |ui| ui.add(Checkbox::new(&mut true)));
+    let tick = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
+                m.vertices.first().map(|v| v.color)
+            }
+            _ => None,
+        })
+        .expect("a tick");
+    assert_eq!(tick, theme.palette.destructive);
+}

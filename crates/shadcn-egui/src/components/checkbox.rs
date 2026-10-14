@@ -109,7 +109,9 @@ impl Widget for Checkbox<'_> {
             if checked {
                 let ind = [&*t.style.checkbox_indicator];
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(0.0);
-                if let Some(color) = paint(|r| &r.text) {
+                // `text-current`: the tick inherits the box's text colour.
+                let tick = pick(&ind, |r| &r.text, st).or_else(|| pick(&l, |r| &r.text, st));
+                if let Some(color) = tick.map(|p| t.paint(p)) {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
                     paint_icon(
                         &painter,

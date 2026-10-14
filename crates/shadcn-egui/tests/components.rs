@@ -1668,19 +1668,43 @@ fn rect_paint(out: &egui::FullOutput) -> Vec<(egui::Rect, egui::Color32, egui::S
         .collect()
 }
 
+/// The colour and opacity of every text a frame painted, in paint order.
+fn text_paint(out: &egui::FullOutput) -> Vec<(egui::Color32, egui::Color32, f32)> {
+    fn walk(s: &egui::Shape, acc: &mut Vec<(egui::Color32, egui::Color32, f32)>) {
+        match s {
+            egui::Shape::Text(t) => {
+                let first = t
+                    .galley
+                    .rows
+                    .iter()
+                    .find_map(|r| r.visuals.mesh.vertices.first())
+                    .map_or(egui::Color32::TRANSPARENT, |v| v.color);
+                acc.push((first, t.fallback_color, t.opacity_factor));
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, acc)),
+            _ => {}
+        }
+    }
+    let mut acc = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    acc
+}
+
 /// shadcn `disabled:opacity-50` applies once: a widget disabled by its own
 /// flag, by a disabled `Ui`, or by both paints exactly the same shapes.
 #[test]
 fn disabled_widgets_fade_once() {
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::label::Label;
     use shadcn_egui::components::select::Select;
     use shadcn_egui::components::slider::Slider;
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
     type Add = fn(&mut egui::Ui, bool) -> egui::Response;
-    let widgets: [(&str, Add); 7] = [
+    let widgets: [(&str, Add); 8] = [
         ("button", |ui, on| ui.add(Button::new("Save").enabled(on))),
+        ("label", |ui, on| ui.add(Label::new("Email").enabled(on))),
         ("input", |ui, on| {
             ui.add(Input::new(&mut "text".to_owned()).enabled(on))
         }),
@@ -1724,6 +1748,16 @@ fn disabled_widgets_fade_once() {
             rect_paint(&both),
             rect_paint(&by_ui),
             "{name}: both vs disabled Ui"
+        );
+        assert_eq!(
+            text_paint(&own),
+            text_paint(&by_ui),
+            "{name}: text, own flag vs disabled Ui"
+        );
+        assert_eq!(
+            text_paint(&both),
+            text_paint(&by_ui),
+            "{name}: text, both vs disabled Ui"
         );
     }
     // And the fade is a half: a solid button's fill.

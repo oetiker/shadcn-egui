@@ -48,7 +48,8 @@ impl Widget for Label {
         let text_px = t.text_px(size);
         let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        let fg = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
+        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
+        let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
         let painter = style_painter(ui, opacity(&[&l[..]], st));
 
         let galley = painter.layout_no_wrap(self.text.clone(), font, fg);
