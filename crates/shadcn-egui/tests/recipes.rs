@@ -463,3 +463,55 @@ fn separator_line_comes_from_the_style() {
         .expect("vertical line");
     assert_eq!(bar.rect.width(), 4.0);
 }
+
+#[test]
+fn button_disabled_opacity_comes_from_the_style() {
+    use shadcn_egui::components::button::Button;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.button
+            .opacity
+            .rules
+            .push(Rule::important(When::all(State::DISABLED), 0.25));
+    });
+    let (_, on) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
+    let (_, off) = common::measure_output(&theme, |ui| ui.add(Button::new("Save").enabled(false)));
+    assert_eq!(
+        common::text_colour(&off),
+        common::text_colour(&on).gamma_multiply(0.25)
+    );
+}
+
+/// The underline width of the first text a frame painted.
+fn underline_width(out: &egui::FullOutput) -> f32 {
+    fn walk(s: &egui::Shape) -> Option<f32> {
+        match s {
+            egui::Shape::Text(t) => Some(t.galley.job.sections[0].format.underline.width),
+            egui::Shape::Vec(v) => v.iter().find_map(walk),
+            _ => None,
+        }
+    }
+    out.shapes
+        .iter()
+        .find_map(|c| walk(&c.shape))
+        .expect("a text shape")
+}
+
+#[test]
+fn link_underline_is_metrics_border_wide() {
+    use shadcn_egui::components::badge::{Badge, BadgeVariant};
+    use shadcn_egui::components::button::{Button, ButtonVariant};
+    // Upstream underlines on hover; an always-on underline needs no pointer.
+    let mut theme = common::restyled(Theme::vega_light(), |s| {
+        s.button_variant_link.underline.base = Some(true);
+        s.badge_variant_link.underline.base = Some(true);
+    });
+    theme.metrics.border = 3.0;
+    let (_, out) = common::measure_output(&theme, |ui| {
+        ui.add(Button::new("Save").variant(ButtonVariant::Link))
+    });
+    assert_eq!(underline_width(&out), 3.0, "button");
+    let (_, out) = common::measure_output(&theme, |ui| {
+        ui.add(Badge::new("New").variant(BadgeVariant::Link))
+    });
+    assert_eq!(underline_width(&out), 3.0, "badge");
+}

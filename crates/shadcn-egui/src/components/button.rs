@@ -1,10 +1,12 @@
 //! shadcn Button, ported from shadcn-svelte `ui/button/button.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
-//! other values come from the style's `cn-button`, `cn-button-variant-*`
-//! and `cn-button-size-*` recipes, stacked in that order.
+//! `tools/stylegen/PIN`. Every value comes from the style's button
+//! recipes: `cn-button`, `cn-button-variant-*` and `cn-button-size-*`,
+//! stacked in that order.
 
 use crate::components::icon::{paint_icon, Icon};
-use crate::components::shared::{disabled_painter, interaction_state, paint_box, ring, shift};
+use crate::components::shared::{
+    interaction_state, opacity, paint_box, ring, shift, style_painter,
+};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -68,7 +70,7 @@ impl Button {
         self
     }
     /// Disabled buttons do not sense clicks, cannot take focus, show no
-    /// hover or press styling, and paint at half opacity.
+    /// hover or press styling, and paint at the style's disabled opacity.
     pub fn enabled(mut self, yes: bool) -> Self {
         self.enabled = yes;
         self
@@ -172,8 +174,7 @@ impl Widget for Button {
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         let weight = pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        // base: "disabled:pointer-events-none disabled:opacity-50"
-        let painter = disabled_painter(ui, self.enabled, 0.5);
+        let fonts = ui.painter().clone();
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
         let layout = |underline: Stroke| {
@@ -183,7 +184,7 @@ impl Widget for Button {
                 Color32::PLACEHOLDER,
             );
             job.sections[0].format.underline = underline;
-            painter.layout_job(job)
+            fonts.layout_job(job)
         };
         let galley = layout(Stroke::NONE);
         let icon_only = self.icon_only();
@@ -212,6 +213,7 @@ impl Widget for Button {
         }
 
         let st = interaction_state(&t, &resp, enabled, context);
+        let painter = style_painter(ui, opacity(&[&l[..]], st));
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let bg = paint(|r| &r.bg);
         let fg = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
@@ -260,7 +262,7 @@ impl Widget for Button {
             x += icon_px + gap;
         }
         let galley = if pick(&l, |r| &r.underline, st) == Some(true) {
-            layout(Stroke::new(1.0_f32, fg))
+            layout(Stroke::new(t.metrics.border, fg))
         } else {
             galley
         };

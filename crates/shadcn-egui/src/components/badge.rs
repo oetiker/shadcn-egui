@@ -1,7 +1,6 @@
 //! shadcn Badge, ported from shadcn-svelte `ui/badge/badge.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
-//! other values come from the style's `cn-badge` and
-//! `cn-badge-variant-*` recipes, stacked in that order.
+//! `tools/stylegen/PIN`. Every value comes from the style's badge
+//! recipes: `cn-badge` and `cn-badge-variant-*`, stacked in that order.
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{interaction_state, paint_box, ring};
@@ -160,7 +159,7 @@ impl Widget for Badge {
             x += icon_px + gap;
         }
         let galley = if pick(&l, |r| &r.underline, st) == Some(true) {
-            layout(Stroke::new(1.0_f32, fg))
+            layout(Stroke::new(t.metrics.border, fg))
         } else {
             galley
         };
