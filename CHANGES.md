@@ -7,12 +7,34 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- Every colour, size and spacing of every component can be changed through
+  `theme.style`. `Rule::important(When::all(State::SELECTED), value)` adds a
+  rule that beats the style's own, as a Tailwind `!` class does: for example a
+  filled `primary` active tab with a solid 2 px focus ring. (#6)
+- `Popover::side_offset` and `Select::side_offset` set the gap between the
+  trigger and the popup; the default stays 4. (#6)
 
 ### Changed
+- In a line tab list (`TabsVariant::Line`), a focused tab that is not active
+  shows its label in the foreground colour and a 2 px underline in the ring
+  colour, in every style, and no longer draws a rounded ring around itself.
+  The active tab looks the same focused or not. (#6)
+- In the luma and rhea styles, the dialog's close button sits on a round
+  disc in the secondary colour, as on the shadcn site. (#6)
+- The separator's thickness comes from the style's `separator` recipe. An app
+  that changed `metrics.border` to make separators thicker now changes
+  `separator.height` (horizontal) or `separator.width` (vertical) instead. (#6)
 - Replacing a whole recipe on a `Style` now needs a `*`:
   `*style.button = Recipe { .. }`. A `let` array of recipes for `pick`
   needs it too: `[&*style.button, &*style.button_size_sm]`. Setting one
   value, as in `style.button.height.base = Some(36.0)`, is unchanged.
+- `Recipe` has the new fields `height_inset`, `outline_width` and
+  `outline_color`, and `Style` the new recipes `separator` and
+  `tabs_trigger_after` (the line tab underline). Code that builds either
+  with a struct literal needs `..Default::default()`. (#6)
+- `components::shared::disabled_painter` is gone. A custom widget fades a
+  disabled part with `style_painter(ui, opacity(&[stack], state))`, which
+  takes the fade from the part's recipe (`disabled:opacity-50`). (#6)
 
 ### Fixed
 - An app that held or copied several styles in one function could crash

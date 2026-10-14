@@ -109,6 +109,43 @@ own uses `Theme::apply_with_fonts` (see `references/presets.md`). Apply again
 only when the mode or the preset changes; widgets read the tokens with
 `Theme::current(ctx)`.
 
+## Restyle a component part
+
+Every colour, size and spacing a component draws comes from its recipe in
+`theme.style` (one `Recipe` per part, named after the shadcn part:
+`tabs_trigger`, `button_variant_outline`, `separator`). To change one,
+push an important rule: it beats every rule the style generated, in light
+and dark, the way a Tailwind `!` class does.
+
+```rust
+use std::sync::Arc;
+use shadcn_egui::style::{Paint, Role, Rule, State, When};
+use shadcn_egui::{Mode, Preset};
+
+fn setup(ctx: &egui::Context) {
+    let mut theme = Preset::default().theme(Mode::Light);
+    let style = Arc::make_mut(&mut theme.style);
+    style.tabs_trigger.bg.rules.push(Rule::important(
+        When::all(State::SELECTED),
+        Paint::Role(Role::Primary, 1.0),
+    ));
+    style.tabs_trigger.text.rules.push(Rule::important(
+        When::all(State::SELECTED),
+        Paint::Role(Role::PrimaryForeground, 1.0),
+    ));
+    theme.apply(ctx);
+}
+```
+
+Set `prop.base` only to replace an unconditional value; a state the style
+styles (hover, dark, active) keeps its own rule unless an important rule
+covers it. `When::all(flags)` matches whenever every flag is set, whatever
+else is; `When::new(all, none)` also excludes flags. The `State` flags and
+the Tailwind variants they stand for are listed in the
+`shadcn-egui:port-component` skill (`references/styles.md`). The recipes sit
+in `Box`es: a field reaches through (`style.separator.height`), and a whole
+replacement writes `*style.separator = Recipe { .. }`.
+
 ## Decompose and map
 
 1. Decompose the design top-down: app shell, panels
@@ -208,8 +245,8 @@ See `references/gotchas.md` for the reasons.
   12 px). Write each as a named constant (`const FIELD_GAP: f32 = 12.0;`
   with the class in a comment), not as a bare number at the call.
 - Project-specific deviations go into the theme construction
-  (`let mut s = Style::nova(); s.<part>.<field> = …;`), never into copies of
-  crate code.
+  (`let mut s = Style::nova(); s.<part>.<field> = …;`, or an important rule
+  as in "Restyle a component part"), never into copies of crate code.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`
   (role, label, enabled, selected), or screen readers see nothing.
 
