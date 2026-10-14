@@ -9,8 +9,16 @@ are recorded here. The format is based on
 ### New
 
 ### Changed
+- Replacing a whole recipe on a `Style` now needs a `*`:
+  `*style.button = Recipe { .. }`. A `let` array of recipes for `pick`
+  needs it too: `[&*style.button, &*style.button_size_sm]`. Setting one
+  value, as in `style.button.height.base = Some(36.0)`, is unchanged.
 
 ### Fixed
+- An app that held or copied several styles in one function could crash
+  with `thread '<unknown>' has overflowed its stack`, mostly on worker
+  threads and in WebAssembly, where the stack is 1 to 2 MiB. Each `Style`
+  now takes a few hundred bytes of stack instead of about 110 KB.
 - Building an app with Rust 1.99 no longer prints
   `warning: the following packages contain code that will be rejected by a future version of Rust: shadcn-egui v0.4.0`.
 

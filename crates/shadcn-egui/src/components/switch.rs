@@ -61,8 +61,8 @@ impl<'a> Switch<'a> {
 impl Widget for Switch<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let track = [&t.style.switch];
-        let thumb = [&t.style.switch_thumb];
+        let track = [&*t.style.switch];
+        let thumb = [&*t.style.switch_thumb];
         let enabled = self.enabled && ui.is_enabled();
         let size_bit = match self.size {
             SwitchSize::Default => State::SIZE_DEFAULT,

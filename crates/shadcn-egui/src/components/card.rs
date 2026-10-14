@@ -98,9 +98,9 @@ impl<'a> Card<'a> {
         let t = Theme::current(ui.ctx());
         let has_footer = self.footer.is_some();
         let st = t.state(self.size.state().with(State::HAS_FOOTER, has_footer));
-        let card = [&t.style.card];
-        let content = [&t.style.card_content];
-        let foot = [&t.style.card_footer];
+        let card = [&*t.style.card];
+        let content = [&*t.style.card_content];
+        let foot = [&*t.style.card_footer];
 
         let (pad_top, pad_bottom, gap) = (
             len(&card, |r| &r.pad_top, st),
@@ -248,7 +248,7 @@ impl<'a> Card<'a> {
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());
-    let gap = len(&[&t.style.card_content], |r| &r.gap, st);
+    let gap = len(&[&*t.style.card_content], |r| &r.gap, st);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
         add(ui)
@@ -282,7 +282,7 @@ pub fn card_header_with_action(
 fn header_column(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let gap = len(
-        &[&t.style.card_header],
+        &[&*t.style.card_header],
         |r| &r.gap,
         t.state(current_size(ui).state()),
     );
@@ -297,7 +297,7 @@ fn header_column(ui: &mut Ui, title: &str, description: &str) {
 pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());
-    let l = [&t.style.card_title];
+    let l = [&*t.style.card_title];
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Base);
     let px = t.text_px(size);
     let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
@@ -315,7 +315,7 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
 pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());
-    let l = [&t.style.card_description];
+    let l = [&*t.style.card_description];
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
     let line =
         pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * t.text_px(size));

@@ -142,6 +142,15 @@ mod tests {
         assert_eq!(theme.ok(), Some("vega"));
     }
 
+    /// Every recipe lives on the heap: a debug build gives each `Style`
+    /// temporary its own stack slot, so a large `Style` overflows small
+    /// thread stacks as soon as a function holds a few of them.
+    #[test]
+    fn style_is_small() {
+        let size = std::mem::size_of::<Style>();
+        assert!(size < 4096, "size_of::<Style>() = {size}");
+    }
+
     /// Base classes come after the style's classes in each part's string,
     /// so they win under the same condition, as in the published component.
     #[test]

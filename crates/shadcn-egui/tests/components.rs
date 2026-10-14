@@ -646,7 +646,7 @@ fn disabled_label_paints_half_alpha_text() {
         assert_eq!(common::text_colour(&off), fg.gamma_multiply(0.5), "{name}");
         assert_eq!(rect.height(), 14.0, "{name}");
         assert_eq!(
-            pick(&[&theme.style.label], |r| &r.opacity, State::DISABLED),
+            pick(&[&*theme.style.label], |r| &r.opacity, State::DISABLED),
             Some(0.5),
             "{name}"
         );
@@ -1794,7 +1794,7 @@ fn switch_paints_its_style_shadow() {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::{pick, State};
     let theme = Theme::vega_light();
-    assert!(pick(&[&theme.style.switch], |r| &r.shadow, State::NONE).is_some());
+    assert!(pick(&[&*theme.style.switch], |r| &r.shadow, State::NONE).is_some());
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
     // egui paints a shadow as a blurred rect.
     assert!(

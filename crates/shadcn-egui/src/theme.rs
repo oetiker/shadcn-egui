@@ -799,9 +799,9 @@ impl Theme {
             // A style without a value gets egui's default, also when an
             // earlier theme had set one.
             let egui_default = egui::style::Spacing::default();
-            let button = [&self.style.button_size_default];
+            let button = [&*self.style.button_size_default];
             let none = self.state(State::NONE);
-            let gap = pick(&[&self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
+            let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
             let pad_x =
                 pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
             let height = pick(&button, |r| &r.height, none);

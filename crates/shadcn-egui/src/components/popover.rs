@@ -45,7 +45,7 @@ impl<'a> Popover<'a> {
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<R> {
         let t = Theme::current(&self.trigger.ctx);
         let g = t.state(State::NONE);
-        let l = [&t.style.popover_content];
+        let l = [&*t.style.popover_content];
         let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
             pick(&l, f, g).unwrap_or(0.0)
         };
@@ -109,9 +109,9 @@ impl<'a> Popover<'a> {
 pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let g = t.state(State::NONE);
-    let header = &t.style.popover_header;
-    let title_l = [header, &t.style.popover_title];
-    let desc_l = [header, &t.style.popover_description];
+    let header = &*t.style.popover_header;
+    let title_l = [header, &*t.style.popover_title];
+    let desc_l = [header, &*t.style.popover_description];
     let gap = pick(&[header], |r| &r.gap, g).unwrap_or(0.0);
     let text = |l: &[&Recipe]| {
         let size = pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
@@ -124,7 +124,7 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let (desc_px, desc_line) = text(&desc_l);
     let weight = pick(&title_l, |r| &r.weight, g).unwrap_or(Weight::Normal);
     let title_color = pick(&title_l, |r| &r.text, g)
-        .or(pick(&[&t.style.popover_content], |r| &r.text, g))
+        .or(pick(&[&*t.style.popover_content], |r| &r.text, g))
         .map(|p| t.paint(p));
     let muted = pick(&desc_l, |r| &r.text, g).map(|p| t.paint(p));
     ui.scope(|ui| {

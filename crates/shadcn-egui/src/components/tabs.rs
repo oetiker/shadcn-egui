@@ -71,7 +71,7 @@ impl<'a> Tabs<'a> {
     /// The gap between the list and the content below it (shadcn `Tabs` root `gap`).
     pub fn content_gap(ui: &Ui) -> f32 {
         let t = Theme::current(ui.ctx());
-        pick(&[&t.style.tabs], |r| &r.gap, t.state(State::NONE)).unwrap_or(0.0)
+        pick(&[&*t.style.tabs], |r| &r.gap, t.state(State::NONE)).unwrap_or(0.0)
     }
 }
 
@@ -81,13 +81,13 @@ impl Widget for Tabs<'_> {
         let s = &t.style;
         let enabled = self.enabled && ui.is_enabled();
         let (variant_bit, variant_layer) = match self.variant {
-            TabsVariant::Default => (State::VARIANT_DEFAULT, &s.tabs_list_variant_default),
-            TabsVariant::Line => (State::VARIANT_LINE, &s.tabs_list_variant_line),
+            TabsVariant::Default => (State::VARIANT_DEFAULT, &*s.tabs_list_variant_default),
+            TabsVariant::Line => (State::VARIANT_LINE, &*s.tabs_list_variant_line),
         };
         let TabsOrientation::Horizontal = self.orientation;
-        let list = [&s.tabs_list, variant_layer];
-        let trigger = [&s.tabs_trigger];
-        let after = [&s.tabs_trigger_after];
+        let list = [&*s.tabs_list, variant_layer];
+        let trigger = [&*s.tabs_trigger];
+        let after = [&*s.tabs_trigger_after];
 
         // Geometry depends neither on the selection nor on interaction.
         let g = t.state(State::HORIZONTAL.or(variant_bit));

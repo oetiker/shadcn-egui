@@ -6,154 +6,157 @@ use super::recipe::Recipe;
 /// One recipe per part the crate draws: a `cn-*` marker, a `data-slot`
 /// without one, or an `after:` pseudo-element. Adjust a value in
 /// your theme setup: `let mut s = Style::nova(); s.button_size_default.height.base = Some(36.0);`
+///
+/// Each recipe is boxed so a `Style` stays small on the stack; replace a
+/// whole recipe with `*s.button = Recipe { .. }`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Style {
     /// The upstream style name (`vega`, `nova`, …).
     pub name: &'static str,
     /// `cn-button`
-    pub button: Recipe,
+    pub button: Box<Recipe>,
     /// `cn-button-variant-default`
-    pub button_variant_default: Recipe,
+    pub button_variant_default: Box<Recipe>,
     /// `cn-button-variant-outline`
-    pub button_variant_outline: Recipe,
+    pub button_variant_outline: Box<Recipe>,
     /// `cn-button-variant-secondary`
-    pub button_variant_secondary: Recipe,
+    pub button_variant_secondary: Box<Recipe>,
     /// `cn-button-variant-ghost`
-    pub button_variant_ghost: Recipe,
+    pub button_variant_ghost: Box<Recipe>,
     /// `cn-button-variant-destructive`
-    pub button_variant_destructive: Recipe,
+    pub button_variant_destructive: Box<Recipe>,
     /// `cn-button-variant-link`
-    pub button_variant_link: Recipe,
+    pub button_variant_link: Box<Recipe>,
     /// `cn-button-size-xs`
-    pub button_size_xs: Recipe,
+    pub button_size_xs: Box<Recipe>,
     /// `cn-button-size-sm`
-    pub button_size_sm: Recipe,
+    pub button_size_sm: Box<Recipe>,
     /// `cn-button-size-default`
-    pub button_size_default: Recipe,
+    pub button_size_default: Box<Recipe>,
     /// `cn-button-size-lg`
-    pub button_size_lg: Recipe,
+    pub button_size_lg: Box<Recipe>,
     /// `cn-button-size-icon-xs`
-    pub button_size_icon_xs: Recipe,
+    pub button_size_icon_xs: Box<Recipe>,
     /// `cn-button-size-icon-sm`
-    pub button_size_icon_sm: Recipe,
+    pub button_size_icon_sm: Box<Recipe>,
     /// `cn-button-size-icon`
-    pub button_size_icon: Recipe,
+    pub button_size_icon: Box<Recipe>,
     /// `cn-button-size-icon-lg`
-    pub button_size_icon_lg: Recipe,
+    pub button_size_icon_lg: Box<Recipe>,
     /// `cn-badge`
-    pub badge: Recipe,
+    pub badge: Box<Recipe>,
     /// `cn-badge-variant-default`
-    pub badge_variant_default: Recipe,
+    pub badge_variant_default: Box<Recipe>,
     /// `cn-badge-variant-secondary`
-    pub badge_variant_secondary: Recipe,
+    pub badge_variant_secondary: Box<Recipe>,
     /// `cn-badge-variant-destructive`
-    pub badge_variant_destructive: Recipe,
+    pub badge_variant_destructive: Box<Recipe>,
     /// `cn-badge-variant-outline`
-    pub badge_variant_outline: Recipe,
+    pub badge_variant_outline: Box<Recipe>,
     /// `cn-badge-variant-ghost`
-    pub badge_variant_ghost: Recipe,
+    pub badge_variant_ghost: Box<Recipe>,
     /// `cn-badge-variant-link`
-    pub badge_variant_link: Recipe,
+    pub badge_variant_link: Box<Recipe>,
     /// `cn-card`
-    pub card: Recipe,
+    pub card: Box<Recipe>,
     /// `cn-card-header`
-    pub card_header: Recipe,
+    pub card_header: Box<Recipe>,
     /// `cn-card-title`
-    pub card_title: Recipe,
+    pub card_title: Box<Recipe>,
     /// `cn-card-description`
-    pub card_description: Recipe,
+    pub card_description: Box<Recipe>,
     /// `cn-card-action`
-    pub card_action: Recipe,
+    pub card_action: Box<Recipe>,
     /// `cn-card-content`
-    pub card_content: Recipe,
+    pub card_content: Box<Recipe>,
     /// `cn-card-footer`
-    pub card_footer: Recipe,
+    pub card_footer: Box<Recipe>,
     /// `cn-checkbox`
-    pub checkbox: Recipe,
+    pub checkbox: Box<Recipe>,
     /// `cn-checkbox-indicator`
-    pub checkbox_indicator: Recipe,
+    pub checkbox_indicator: Box<Recipe>,
     /// `cn-dialog-overlay`
-    pub dialog_overlay: Recipe,
+    pub dialog_overlay: Box<Recipe>,
     /// `cn-dialog-content`
-    pub dialog_content: Recipe,
+    pub dialog_content: Box<Recipe>,
     /// `cn-dialog-close`
-    pub dialog_close: Recipe,
+    pub dialog_close: Box<Recipe>,
     /// `cn-dialog-header`
-    pub dialog_header: Recipe,
+    pub dialog_header: Box<Recipe>,
     /// `cn-dialog-footer`
-    pub dialog_footer: Recipe,
+    pub dialog_footer: Box<Recipe>,
     /// `cn-dialog-title`
-    pub dialog_title: Recipe,
+    pub dialog_title: Box<Recipe>,
     /// `cn-dialog-description`
-    pub dialog_description: Recipe,
+    pub dialog_description: Box<Recipe>,
     /// `cn-input`
-    pub input: Recipe,
+    pub input: Box<Recipe>,
     /// `cn-label`
-    pub label: Recipe,
+    pub label: Box<Recipe>,
     /// `cn-popover-content`
-    pub popover_content: Recipe,
+    pub popover_content: Box<Recipe>,
     /// `cn-popover-header`
-    pub popover_header: Recipe,
+    pub popover_header: Box<Recipe>,
     /// `cn-popover-title`
-    pub popover_title: Recipe,
+    pub popover_title: Box<Recipe>,
     /// `cn-popover-description`
-    pub popover_description: Recipe,
+    pub popover_description: Box<Recipe>,
     /// `cn-select-trigger`
-    pub select_trigger: Recipe,
+    pub select_trigger: Box<Recipe>,
     /// `cn-select-trigger-icon`
-    pub select_trigger_icon: Recipe,
+    pub select_trigger_icon: Box<Recipe>,
     /// `cn-select-content`
-    pub select_content: Recipe,
+    pub select_content: Box<Recipe>,
     /// `cn-select-viewport`
-    pub select_viewport: Recipe,
+    pub select_viewport: Box<Recipe>,
     /// `cn-select-group`
-    pub select_group: Recipe,
+    pub select_group: Box<Recipe>,
     /// `cn-select-label`
-    pub select_label: Recipe,
+    pub select_label: Box<Recipe>,
     /// `cn-select-item`
-    pub select_item: Recipe,
+    pub select_item: Box<Recipe>,
     /// `cn-select-item-indicator`
-    pub select_item_indicator: Recipe,
+    pub select_item_indicator: Box<Recipe>,
     /// `cn-select-item-indicator-icon`
-    pub select_item_indicator_icon: Recipe,
+    pub select_item_indicator_icon: Box<Recipe>,
     /// `cn-select-item-text`
-    pub select_item_text: Recipe,
+    pub select_item_text: Box<Recipe>,
     /// `cn-select-separator`
-    pub select_separator: Recipe,
+    pub select_separator: Box<Recipe>,
     /// `cn-select-scroll-up-button`
-    pub select_scroll_up_button: Recipe,
+    pub select_scroll_up_button: Box<Recipe>,
     /// `cn-select-scroll-down-button`
-    pub select_scroll_down_button: Recipe,
+    pub select_scroll_down_button: Box<Recipe>,
     /// `data-slot="separator"` (no style marker)
-    pub separator: Recipe,
+    pub separator: Box<Recipe>,
     /// `cn-slider`
-    pub slider: Recipe,
+    pub slider: Box<Recipe>,
     /// `cn-slider-track`
-    pub slider_track: Recipe,
+    pub slider_track: Box<Recipe>,
     /// `cn-slider-range`
-    pub slider_range: Recipe,
+    pub slider_range: Box<Recipe>,
     /// `cn-slider-thumb`
-    pub slider_thumb: Recipe,
+    pub slider_thumb: Box<Recipe>,
     /// `cn-switch`
-    pub switch: Recipe,
+    pub switch: Box<Recipe>,
     /// `cn-switch-thumb`
-    pub switch_thumb: Recipe,
+    pub switch_thumb: Box<Recipe>,
     /// `cn-tabs`
-    pub tabs: Recipe,
+    pub tabs: Box<Recipe>,
     /// `cn-tabs-list`
-    pub tabs_list: Recipe,
+    pub tabs_list: Box<Recipe>,
     /// `cn-tabs-list-variant-default`
-    pub tabs_list_variant_default: Recipe,
+    pub tabs_list_variant_default: Box<Recipe>,
     /// `cn-tabs-list-variant-line`
-    pub tabs_list_variant_line: Recipe,
+    pub tabs_list_variant_line: Box<Recipe>,
     /// `cn-tabs-trigger`
-    pub tabs_trigger: Recipe,
+    pub tabs_trigger: Box<Recipe>,
     /// `cn-tabs-trigger` `after:` pseudo-element
-    pub tabs_trigger_after: Recipe,
+    pub tabs_trigger_after: Box<Recipe>,
     /// `cn-tabs-content`
-    pub tabs_content: Recipe,
+    pub tabs_content: Box<Recipe>,
     /// `cn-tooltip-content`
-    pub tooltip_content: Recipe,
+    pub tooltip_content: Box<Recipe>,
     /// `cn-tooltip-arrow`
-    pub tooltip_arrow: Recipe,
+    pub tooltip_arrow: Box<Recipe>,
 }

@@ -19,8 +19,8 @@ const ARC_STEPS: usize = 4;
 pub fn tooltip(resp: Response, text: &str) -> Response {
     let t = Theme::current(&resp.ctx);
     let g = t.state(State::NONE);
-    let content = [&t.style.tooltip_content];
-    let arrow = [&t.style.tooltip_arrow];
+    let content = [&*t.style.tooltip_content];
+    let arrow = [&*t.style.tooltip_arrow];
     let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
         pick(&content, f, g).unwrap_or(0.0)
     };
@@ -42,7 +42,7 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     // base: "z-50 w-fit max-w-xs"
     let max_w = 320.0;
     // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
-    let size = pick(&[&t.style.tooltip_arrow], |r| &r.width, g).unwrap_or(0.0);
+    let size = pick(&[&*t.style.tooltip_arrow], |r| &r.width, g).unwrap_or(0.0);
     let reach = size * FRAC_1_SQRT_2;
     tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(
         Frame::new()

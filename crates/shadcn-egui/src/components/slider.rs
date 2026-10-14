@@ -84,10 +84,10 @@ fn snap(v: f32, lo: f32, hi: f32, step: f32) -> f32 {
 impl Widget for Slider<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let root = [&t.style.slider];
-        let track = [&t.style.slider_track];
-        let range = [&t.style.slider_range];
-        let thumb = [&t.style.slider_thumb];
+        let root = [&*t.style.slider];
+        let track = [&*t.style.slider_track];
+        let range = [&*t.style.slider_range];
+        let thumb = [&*t.style.slider_thumb];
         let enabled = self.enabled && ui.is_enabled();
         let vertical = self.orientation == SliderOrientation::Vertical;
         let orient = if vertical {

@@ -58,10 +58,12 @@ pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
     s += "use super::recipe::Recipe;\n\n";
     s += "/// One recipe per part the crate draws: a `cn-*` marker, a `data-slot`\n/// without one, or an `after:` pseudo-element. Adjust a value in\n";
     s += "/// your theme setup: `let mut s = Style::nova(); s.button_size_default.height.base = Some(36.0);`\n";
+    s += "///\n/// Each recipe is boxed so a `Style` stays small on the stack; replace a\n";
+    s += "/// whole recipe with `*s.button = Recipe { .. }`.\n";
     s += "#[derive(Clone, Debug, PartialEq)]\npub struct Style {\n";
     s += "    /// The upstream style name (`vega`, `nova`, …).\n    pub name: &'static str,\n";
     for (field, doc) in fields {
-        s += &format!("    /// {doc}\n    pub {field}: Recipe,\n");
+        s += &format!("    /// {doc}\n    pub {field}: Box<Recipe>,\n");
     }
     s += "}\n";
     s
@@ -87,9 +89,9 @@ pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[
     let mut fns = String::new();
     for (field, _) in fields {
         match decls.get(field).and_then(|d| recipe(d)) {
-            None => s += &format!("        {field}: Recipe::default(),\n"),
+            None => s += &format!("        {field}: Box::default(),\n"),
             Some(body) => {
-                s += &format!("        {field}: {field}(),\n");
+                s += &format!("        {field}: Box::new({field}()),\n");
                 fns += &format!("\nfn {field}() -> Recipe {{\n    {body}\n}}\n");
             }
         }

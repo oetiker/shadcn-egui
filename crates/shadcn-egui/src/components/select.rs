@@ -101,7 +101,7 @@ impl Widget for Select<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
         let ctx = ui.ctx().clone();
-        let trig = [&t.style.select_trigger];
+        let trig = [&*t.style.select_trigger];
         let enabled = self.enabled && ui.is_enabled();
         let n = self.options.len();
         let has_value = *self.selected < n;
@@ -297,7 +297,7 @@ impl Widget for Select<'_> {
                 vec2(icon_side, icon_side),
             );
             let icon_color =
-                pick(&[&t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
+                pick(&[&*t.style.select_trigger_icon], |r| &r.text, st).map(|p| t.paint(p));
             if let Some(c) = icon_color {
                 paint_icon(
                     &painter,
@@ -333,9 +333,9 @@ impl Widget for Select<'_> {
             // also in light mode. The trigger above keeps the page theme.
             let menu = t.menu_theme();
             let t = &menu;
-            let l = [&t.style.select_content];
-            let item = [&t.style.select_item];
-            let group = [&t.style.select_group];
+            let l = [&*t.style.select_content];
+            let item = [&*t.style.select_item];
+            let group = [&*t.style.select_group];
             let gs = t.state(State::NONE);
             let ist = t.state(State::FOCUS.with(State::SELECTED, false));
             let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, gs).unwrap_or(0.0);
@@ -457,7 +457,7 @@ impl Widget for Select<'_> {
                                         color,
                                     );
                                     if i == current {
-                                        let ind = [&t.style.select_item_indicator];
+                                        let ind = [&*t.style.select_item_indicator];
                                         let (w, h) = (
                                             pick(&ind, |r| &r.width, s).unwrap_or(0.0),
                                             pick(&ind, |r| &r.height, s).unwrap_or(0.0),

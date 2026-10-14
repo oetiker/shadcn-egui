@@ -68,7 +68,7 @@ impl<'a> Input<'a> {
 impl<'a> Widget for Input<'a> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let l = [&t.style.input];
+        let l = [&*t.style.input];
         let enabled = self.enabled && ui.is_enabled();
         let context = State::NONE.with(State::INVALID, self.invalid);
         // Geometry never depends on focus: resolve it before allocating.

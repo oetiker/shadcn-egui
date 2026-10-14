@@ -11,7 +11,11 @@ draws itself from the active style's recipes; it does not hard-code a look.
 - **A style is a class map.** upstream `style-<name>.css` binds Tailwind classes
   to marker classes (`cn-button`, `cn-button-size-sm`, …). `Style` has one
   `Recipe` field per marker (`s.button`, `s.button_size_sm`). A recipe holds one
-  `Prop` per property (`height`, `pad_left`, `bg`, `ring_width`, …).
+  `Prop` per property (`height`, `pad_left`, `bg`, `ring_width`, …). The
+  fields are `Box<Recipe>`, which keeps `Style` small on the stack: field
+  access reaches through the box, a slice of recipes in a `let` takes
+  `[&*s.button, &*s.button_size_sm]`, and a whole replacement writes
+  `*s.button = Recipe { .. }`.
 - **A `Prop` is a base value plus rules.** `base: Option<T>` is the
   unconditional value; each `Rule { when, rank, value }` applies when its
   `When` matches the `State` and carries the Tailwind variant order as `rank`.

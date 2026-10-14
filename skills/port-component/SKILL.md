@@ -105,7 +105,7 @@ fn button_height(ui: &egui::Ui, resp: &egui::Response) -> f32 {
     let theme = Theme::current(ui.ctx());
     let s = &theme.style;
     let st = interaction_state(&theme, resp, true, State::default());
-    pick(&[&s.button, &s.button_size_sm], |r| &r.height, st).unwrap_or(0.0)
+    pick(&[&*s.button, &*s.button_size_sm], |r| &r.height, st).unwrap_or(0.0)
 }
 ```
 

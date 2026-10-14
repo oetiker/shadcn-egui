@@ -48,7 +48,7 @@ impl<'a> Checkbox<'a> {
 impl Widget for Checkbox<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let l = [&t.style.checkbox];
+        let l = [&*t.style.checkbox];
         let enabled = self.enabled && ui.is_enabled();
         // Geometry depends on neither the value nor interaction.
         let g = t.state(State::NONE.with(State::INVALID, self.invalid));
@@ -111,7 +111,7 @@ impl Widget for Checkbox<'_> {
             }
             painter.extend(shapes);
             if checked {
-                let ind = [&t.style.checkbox_indicator];
+                let ind = [&*t.style.checkbox_indicator];
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(0.0);
                 if let Some(color) = paint(|r| &r.text) {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));

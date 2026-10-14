@@ -80,7 +80,7 @@ impl<'a> Dialog<'a> {
         }
         let t = Theme::current(ctx);
         let g = t.state(State::NONE);
-        let l = [&t.style.dialog_content];
+        let l = [&*t.style.dialog_content];
         let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let (pad_t, pad_r, pad_b, pad_l) = (
             px(|r| &r.pad_top),
@@ -115,7 +115,7 @@ impl<'a> Dialog<'a> {
         if let Some(s) = pick(&l, |r| &r.shadow, g) {
             frame = frame.shadow(t.shadow(s));
         }
-        let overlay = pick(&[&t.style.dialog_overlay], |r| &r.bg, g)
+        let overlay = pick(&[&*t.style.dialog_overlay], |r| &r.bg, g)
             .map_or(Color32::TRANSPARENT, |p| t.paint(p));
 
         let resp = egui::Modal::new(self.id)
@@ -156,16 +156,16 @@ impl<'a> Dialog<'a> {
 fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let t = Theme::current(ui.ctx());
     let g = t.state(State::NONE);
-    let gap = pick(&[&t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
-    let content = [&t.style.dialog_content];
-    let heading = [&t.style.dialog_title];
+    let gap = pick(&[&*t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
+    let content = [&*t.style.dialog_content];
+    let heading = [&*t.style.dialog_title];
     let size = pick(&heading, |r| &r.text_size, g)
         .or_else(|| pick(&content, |r| &r.text_size, g))
         .unwrap_or(TextSize::Sm);
     let px = t.text_px(size);
     let line = pick(&heading, |r| &r.line_height, g).map_or_else(|| t.line_px(size), |k| k * px);
     let weight = pick(&heading, |r| &r.weight, g).unwrap_or(Weight::Normal);
-    let desc = [&t.style.dialog_description];
+    let desc = [&*t.style.dialog_description];
     let desc_size = pick(&desc, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
     let desc_line = pick(&desc, |r| &r.line_height, g)
         .map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
@@ -195,7 +195,7 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
 /// so it does not grow the panel.
 fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
     let g = t.state(State::NONE);
-    let at = [&t.style.dialog_close];
+    let at = [&*t.style.dialog_close];
     let (top, right) = (
         pick(&at, |r| &r.inset_top, g).unwrap_or(0.0),
         pick(&at, |r| &r.inset_right, g).unwrap_or(0.0),
@@ -227,7 +227,7 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let t = Theme::current(ui.ctx());
     let g = t.state(State::NONE);
-    let l = [&t.style.dialog_footer];
+    let l = [&*t.style.dialog_footer];
     let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
     let (pad_t, pad_r, pad_b, pad_l) = (
         px(|r| &r.pad_top),
