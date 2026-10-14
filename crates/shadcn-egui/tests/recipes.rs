@@ -415,7 +415,7 @@ fn tooltip_colours_come_from_the_style() {
 
 #[test]
 fn separator_line_comes_from_the_style() {
-    use shadcn_egui::components::separator::separator;
+    use shadcn_egui::components::separator::{separator, separator_vertical};
     use shadcn_egui::style::Prop;
     let line = |theme: &Theme| {
         let (_, out) = common::measure_output(theme, |ui| {
@@ -443,4 +443,23 @@ fn separator_line_comes_from_the_style() {
     });
     fallback.metrics.border = 2.0;
     assert_eq!(line(&fallback), Some(2.0));
+    // The vertical line reads `width` under `data-vertical`, not `height`.
+    let vertical = common::restyled(thick, |s| {
+        s.separator
+            .width
+            .rules
+            .push(Rule::important(When::all(State::VERTICAL), 4.0));
+    });
+    let (_, out) = common::measure_output(&vertical, |ui| {
+        ui.horizontal(|ui| {
+            ui.allocate_response(vec2(0.0, 40.0), egui::Sense::hover());
+            separator_vertical(ui);
+        })
+        .response
+    });
+    let bar = common::rect_shapes(&out)
+        .into_iter()
+        .find(|r| r.fill == vertical.palette.primary)
+        .expect("vertical line");
+    assert_eq!(bar.rect.width(), 4.0);
 }
