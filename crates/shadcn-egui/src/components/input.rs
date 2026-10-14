@@ -1,9 +1,11 @@
 //! shadcn Input, ported from shadcn-svelte `ui/input/input.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
-//! other values come from the style's `cn-input` recipe. A frameless egui
-//! `TextEdit` sits inside a box this widget paints.
+//! `tools/stylegen/PIN`. Every value comes from the style's `cn-input`
+//! recipe. A frameless egui `TextEdit` sits inside a box this widget
+//! paints.
 
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
+use crate::components::shared::{
+    box_shapes, interaction_state, opacity, ring_shape, style_painter,
+};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -92,8 +94,9 @@ impl<'a> Widget for Input<'a> {
             ),
         );
 
-        // base: "disabled:opacity-50"
-        let disabled_opacity = 0.5;
+        let fade = opacity(&[&l[..]], g.with(State::DISABLED, !self.enabled));
+        let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
+        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets only file:text-foreground
         let mut edit = TextEdit::singleline(self.text)
             .hint_text(self.hint)
             .password(self.password)
@@ -101,7 +104,7 @@ impl<'a> Widget for Input<'a> {
             .frame(Frame::NONE.inner_margin(margin))
             .font(font)
             .vertical_align(egui::Align::Center)
-            .text_color(t.role(Role::Foreground));
+            .text_color(inherited);
         if let Some(id_source) = self.id_source {
             edit = edit.id_salt(id_source);
         }
@@ -115,11 +118,12 @@ impl<'a> Widget for Input<'a> {
         let slot = ui.painter().add(Shape::Noop);
         let resp = ui
             .scope(|ui| {
-                // base: "placeholder:text-muted-foreground"
-                ui.visuals_mut().weak_text_color = Some(t.role(Role::MutedForeground));
-                // A disabled `Ui` has faded already; see `disabled_painter`.
-                if !self.enabled && ui.is_enabled() {
-                    ui.multiply_opacity(disabled_opacity);
+                if let Some(c) = placeholder {
+                    ui.visuals_mut().weak_text_color = Some(c);
+                }
+                // A disabled `Ui` has faded already; see `style_painter`.
+                if ui.is_enabled() {
+                    ui.multiply_opacity(fade);
                 }
                 ui.add_sized(Vec2::new(ui.available_width().min(max_width), height), edit)
             })
@@ -150,7 +154,7 @@ impl<'a> Widget for Input<'a> {
                 c,
             ));
         }
-        disabled_painter(ui, self.enabled, disabled_opacity).set(slot, Shape::Vec(shapes));
+        style_painter(ui, opacity(&[&l[..]], st)).set(slot, Shape::Vec(shapes));
         resp
     }
 }

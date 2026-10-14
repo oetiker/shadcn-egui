@@ -515,3 +515,39 @@ fn link_underline_is_metrics_border_wide() {
     });
     assert_eq!(underline_width(&out), 3.0, "badge");
 }
+
+#[test]
+fn input_placeholder_and_fade_come_from_the_style() {
+    use shadcn_egui::components::input::Input;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.input.text.rules.push(Rule::important(
+            When::all(State::PLACEHOLDER),
+            Paint::Role(Role::Primary, 1.0),
+        ));
+        s.input
+            .opacity
+            .rules
+            .push(Rule::important(When::all(State::DISABLED), 0.25));
+    });
+    let (_, on) = common::measure_output(&theme, |ui| {
+        ui.add(Input::new(&mut String::new()).hint("Email"))
+    });
+    assert_eq!(common::text_colour(&on), theme.palette.primary);
+    let (_, off) = common::measure_output(&theme, |ui| {
+        ui.add(Input::new(&mut String::new()).hint("Email").enabled(false))
+    });
+    assert_eq!(
+        common::text_colour(&off),
+        theme.palette.primary.gamma_multiply(0.25)
+    );
+    // The box fades with the text: vega's border has no disabled rule.
+    let border = |out: &egui::FullOutput| {
+        common::rect_shapes(out)
+            .into_iter()
+            .find(|r| r.stroke.width > 0.0)
+            .expect("input box")
+            .stroke
+            .color
+    };
+    assert_eq!(border(&off), border(&on).gamma_multiply(0.25));
+}
