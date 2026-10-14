@@ -24,8 +24,8 @@ pub use shadcn_egui_core::{Icon, IconShape, IconSlots, Seg};
 pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, stroke_width: f32) {
     let ppp = painter.pixels_per_point();
     let (x0, y0) = ((rect.min.x * ppp).round(), (rect.min.y * ppp).round());
-    let w = (rect.width() * ppp).round().max(1.0);
-    let h = (rect.height() * ppp).round().max(1.0);
+    let w = (rect.width() * ppp).round().max(1.0); // behaviour-ok: at least one device pixel
+    let h = (rect.height() * ppp).round().max(1.0); // behaviour-ok: at least one device pixel
     let finite = [x0, y0, w, h].iter().all(|v| v.is_finite());
     if !finite || icon.size.is_nan() || icon.size <= 0.0 {
         return;
@@ -33,10 +33,10 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
     let drawn = Rect::from_min_size(pos2(x0 / ppp, y0 / ppp), Vec2::new(w / ppp, h / ppp));
     let ctx = painter.ctx();
     let side = icon_raster::MAX_SIDE.min(ctx.input(|i| i.max_texture_side)) as f32;
-    let k = (side / w.max(h)).min(1.0);
-    let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0));
+    let k = (side / w.max(h)).min(1.0); // behaviour-ok: never rasterise larger than drawn
+    let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0)); // behaviour-ok: at least one device pixel
     let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width);
-    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
+    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
     painter.image(tex.id(), drawn, uv, color);
 }
 

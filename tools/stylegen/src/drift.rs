@@ -1,21 +1,9 @@
-//! Drift between the crate and the pinned upstream: `// base: "…"` quotes
-//! that upstream no longer contains, and `cn-*` markers that appeared or
-//! disappeared in the upstream component sources.
+//! Drift between the crate and the pinned upstream: `cn-*` markers that
+//! appeared or disappeared in the upstream component sources.
 
 use crate::markers::MarkerLine;
 use std::collections::BTreeSet;
 use std::path::Path;
-
-/// `// base: "<upstream classes>"` quotes, with 1-based line numbers.
-pub fn base_quotes(src: &str) -> Vec<(usize, String)> {
-    src.lines()
-        .enumerate()
-        .filter_map(|(i, l)| {
-            let rest = &l[l.find("// base: \"")? + "// base: \"".len()..];
-            Some((i + 1, rest[..rest.find('"')?].to_owned()))
-        })
-        .collect()
-}
 
 /// `cn-*` markers in upstream component text, minus the ones only the shadcn
 /// CLI rewrites (fonts, menu targets, RTL/logical-side helpers).
@@ -51,25 +39,10 @@ fn read_dir_text(dir: &Path) -> String {
 }
 
 /// One human-readable line per problem; empty means clean.
-pub fn check(up: &Path, crate_root: &Path, lines: &[MarkerLine]) -> Vec<String> {
+pub fn check(up: &Path, lines: &[MarkerLine]) -> Vec<String> {
     let mut problems = Vec::new();
     for line in lines {
         let upstream = read_dir_text(&up.join("docs/src/lib/registry/ui").join(&line.dir));
-        let file = if line.file == "layout.rs" {
-            crate_root.join("src/layout.rs")
-        } else {
-            crate_root.join("src/components").join(&line.file)
-        };
-        if let Ok(src) = std::fs::read_to_string(&file) {
-            for (n, q) in base_quotes(&src) {
-                if !upstream.contains(&q) {
-                    problems.push(format!(
-                        "{}:{n}: base quote no longer upstream in ui/{}: \"{q}\"",
-                        line.file, line.dir
-                    ));
-                }
-            }
-        }
         // `slot:` parts have no marker to compare.
         let ours: BTreeSet<String> = line
             .markers

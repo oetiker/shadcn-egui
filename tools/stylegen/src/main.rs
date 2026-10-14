@@ -36,7 +36,7 @@ fn main() -> ExitCode {
     );
     match cmd.as_str() {
         "generate" => generate(&up, &up_react, &root, &tool, &pin, &pin_react, &lines),
-        "drift" => drift(&up, &up_react, &root.join(CRATE), &tool, &lines),
+        "drift" => drift(&up, &up_react, &tool, &lines),
         _ => {
             eprintln!("unknown command `{cmd}`");
             ExitCode::from(2)
@@ -139,14 +139,8 @@ fn write(path: &Path, src: &str) {
     std::fs::write(path, src).unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
 }
 
-fn drift(
-    up: &Path,
-    up_react: &Path,
-    crate_root: &Path,
-    tool: &Path,
-    lines: &[markers::MarkerLine],
-) -> ExitCode {
-    let mut problems = stylegen::drift::check(up, crate_root, lines);
+fn drift(up: &Path, up_react: &Path, tool: &Path, lines: &[markers::MarkerLine]) -> ExitCode {
+    let mut problems = stylegen::drift::check(up, lines);
     problems.extend(stylegen::drift::check_sources(up, up_react, tool));
     problems.extend(stylegen::drift::check_ui(up, tool, lines));
     for p in &problems {

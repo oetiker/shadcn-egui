@@ -87,7 +87,7 @@ fn arrow_shape(centre: Pos2, size: f32, radius: f32, fill: Color32) -> Shape {
     let inner = size / 2.0 - radius;
     let mut points = Vec::with_capacity(4 * (ARC_STEPS + 1));
     // The corner arcs' centres, one per quadrant in turning order.
-    for (k, (sx, sy)) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)]
+    for (k, (sx, sy)) in [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)] // behaviour-ok: quadrant signs, not lengths
         .into_iter()
         .enumerate()
     {

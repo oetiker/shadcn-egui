@@ -1,5 +1,5 @@
 //! shadcn Card, ported from shadcn-svelte `ui/card/*.svelte` at
-//! `tools/stylegen/PIN`. Base classes are quoted under `// base:`; padding,
+//! `tools/stylegen/PIN`. Padding,
 //! gap, radius, ring, shadow, the footer strip and the text of the title and
 //! description come from the style's `cn-card*` recipes.
 //!
@@ -124,7 +124,6 @@ impl<'a> Card<'a> {
         let back = ui.painter().add(Shape::Noop);
 
         // Header and content.
-        // base: "flex flex-col"
         let body_rect = Rect::from_min_max(
             egui::pos2(origin.x + side_l, origin.y + pad_top),
             egui::pos2(
@@ -176,7 +175,7 @@ impl<'a> Card<'a> {
                     strip_top + f_top + ui.spacing().interact_size.y,
                 ),
             );
-            // base: "flex items-center" (a row as high as a control, like `ui.horizontal`)
+            // A row as high as a control, like `ui.horizontal`.
             let mut row = ui.new_child(
                 UiBuilder::new()
                     .max_rect(inner)
@@ -224,8 +223,9 @@ impl<'a> Card<'a> {
             let line = len(&foot, |r| &r.border_top_width, st);
             if line > 0.0 {
                 // `border-t` takes the default border colour.
-                let color = pick(&foot, |r| &r.border_color, st)
-                    .map_or_else(|| t.role(Role::Border), |p| t.paint(p));
+                let base_border = t.role(Role::Border); // behaviour-ok: shadcn base layer `* { @apply border-border }`
+                let color =
+                    pick(&foot, |r| &r.border_color, st).map_or(base_border, |p| t.paint(p));
                 strip_shapes.push(Shape::line_segment(
                     [strip.left_top(), strip.right_top()],
                     Stroke::new(line, color),
@@ -270,7 +270,6 @@ pub fn card_header_with_action(
     action: impl FnOnce(&mut Ui),
 ) {
     ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-        // base: "col-start-2 row-span-2 row-start-1 self-start justify-self-end"
         action(ui);
         let width = ui.available_width();
         ui.allocate_ui_with_layout(egui::vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {

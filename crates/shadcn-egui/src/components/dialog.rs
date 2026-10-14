@@ -277,8 +277,8 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let line = px(|r| &r.border_top_width);
     if line > 0.0 {
         // `border-t` takes the default border colour.
-        let color =
-            pick(&l, |r| &r.border_color, g).map_or_else(|| t.role(Role::Border), |p| t.paint(p));
+        let base_border = t.role(Role::Border); // behaviour-ok: shadcn base layer `* { @apply border-border }`
+        let color = pick(&l, |r| &r.border_color, g).map_or(base_border, |p| t.paint(p));
         shapes.push(Shape::line_segment(
             [strip.left_top(), strip.right_top()],
             Stroke::new(line, color),

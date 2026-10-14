@@ -231,7 +231,8 @@ impl Widget for Button {
         let painter = style_painter(ui, opacity(&[l], st));
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
         let bg = paint(|r| &r.bg);
-        let fg = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
+        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
+        let fg = paint(|r| &r.text).unwrap_or(inherited);
         let border = paint(|r| &r.border_color);
         let ring_color = paint(|r| &r.ring_color);
         let ring_w = pick(l, |r| &r.ring_width, st).unwrap_or(0.0);

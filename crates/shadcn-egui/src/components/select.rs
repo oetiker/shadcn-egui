@@ -312,7 +312,8 @@ impl Widget for Select<'_> {
                     t.metrics.icon_stroke,
                 );
             }
-            let text_color = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
+            let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
+            let text_color = paint(|r| &r.text).unwrap_or(inherited);
             let text_area = Rect::from_min_max(
                 egui::pos2(rect.left() + pad_l, rect.top()),
                 egui::pos2(icon_rect.left() - gap, rect.bottom()),
@@ -447,10 +448,10 @@ impl Widget for Select<'_> {
                                         false,
                                     ));
                                     // The row's own text colour serves tick and text alike.
+                                    let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
                                     let color = pick(&item, |r| &r.text, s)
                                         .or(pick(&l, |r| &r.text, s))
-                                        .map(|p| t.paint(p))
-                                        .unwrap_or_else(|| t.role(Role::PopoverForeground));
+                                        .map_or(inherited, |p| t.paint(p));
                                     ui.painter().galley(
                                         egui::pos2(
                                             row.left() + ipl,

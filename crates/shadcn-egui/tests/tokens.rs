@@ -77,16 +77,16 @@ fn components_use_theme_tokens() {
     );
 }
 
-/// Strict scan for components (spec section 7): besides colours and
-/// font sizes, literal geometry, shadow definitions and alpha multipliers. A
-/// line may carry them only with a `// base: "<upstream classes>"` quote on
-/// the same line or the line above (stylegen's drift check verifies the
-/// quote), or a `// behaviour-ok: <reason>` comment on the line for constants
-/// that are behaviour, not design. Halving/doubling (`/ 2.0`, `* 2.0`) and 0.0/1.0 are arithmetic,
-/// not values.
+/// Strict scan for components: besides colours and font sizes, literal
+/// geometry, shadow definitions, alpha multipliers and palette roles. Every
+/// visual value comes from the style (a recipe or the theme metrics); a
+/// line may carry one only with a `// behaviour-ok: <reason>` comment on
+/// the same line, for behaviour constants and inherited fallbacks. `0.0` is
+/// free; `1.0` and `2.0` only as factors (`* 2.0`, `/ 1.0`), not as a
+/// length (`- 1.0`, `Stroke::new(1.0, ..)`). A `// base:` quote exempts
+/// nothing and is reported itself: base classes live in the recipes.
 fn strict_violations(source: &str) -> Vec<String> {
     let mut out = violations(source);
-    let mut prev = "";
     let mut in_icon_data = false;
     for (n, line) in source.lines().enumerate() {
         // Lucide path data: `pub const NAME: Icon = Icon {` ... `};`.
@@ -95,7 +95,6 @@ fn strict_violations(source: &str) -> Vec<String> {
         }
         if in_icon_data {
             in_icon_data = line.trim_end() != "};";
-            prev = line;
             continue;
         }
         let code = line.split("//").next().unwrap_or("");
@@ -103,7 +102,8 @@ fn strict_violations(source: &str) -> Vec<String> {
             .split("// behaviour-ok:")
             .nth(1)
             .is_some_and(|r| !r.trim().is_empty());
-        let quoted = line.contains("// base: \"") || prev.contains("// base: \"") || reason;
+        let stale_quote = line.contains("// base:");
+        let role = code.contains("Role::");
         let shadow = code.contains("Shadow {");
         let alpha = [
             "gamma_multiply(",
@@ -118,13 +118,17 @@ fn strict_violations(source: &str) -> Vec<String> {
                 .any(|r| r.starts_with(|c: char| c.is_ascii_digit()))
         });
         let geometry = float_literals(code).any(|(lit, before)| {
-            !matches!(lit, "0.0" | "1.0")
-                && !((lit == "2.0") && (before.ends_with("/ ") || before.ends_with("* ")))
+            let factor = before.trim_end().ends_with(['*', '/']);
+            match lit {
+                "0.0" => false,
+                "1.0" | "2.0" => !factor,
+                _ => true,
+            }
         });
-        if (shadow || alpha || geometry) && !quoted && !line.trim_start().starts_with("//") {
+        let flagged = (role || shadow || alpha || geometry) && !reason;
+        if stale_quote || (flagged && !line.trim_start().starts_with("//")) {
             out.push(format!("{}: {}", n + 1, line.trim()));
         }
-        prev = line;
     }
     out
 }
@@ -163,36 +167,41 @@ fn float_literals(code: &str) -> impl Iterator<Item = (&str, &str)> {
 
 #[test]
 fn strict_scanner_catches_literals() {
-    assert_eq!(strict_violations("let h = 32.0;").len(), 1);
+    let n = |s: &str| strict_violations(s).len();
+    assert_eq!(n("let h = 32.0;"), 1);
+    assert_eq!(n("let c = fill.gamma_multiply(0.5);"), 1);
     assert_eq!(
-        strict_violations("let c = fill.gamma_multiply(0.5);").len(),
+        n("let s = Shadow { offset: [0, 1], blur: 3, spread: 0, color };"),
         1
     );
+    // A base quote exempts nothing and is reported itself.
     assert_eq!(
-        strict_violations("let s = Shadow { offset: [0, 1], blur: 3, spread: 0, color };").len(),
-        1
+        n("// base: \"disabled:opacity-50\"\nlet c = fill.gamma_multiply(0.5);"),
+        2
     );
+    assert_eq!(n("let c = rect.height() / 2.0;"), 0);
+    assert_eq!(n("let k = x * 1.0;"), 0);
+    assert_eq!(n("let w = 2.0 + x;"), 1);
+    assert_eq!(n("let s = Stroke::new(1.0, c);"), 1);
+    assert_eq!(n("let h = x - 1.0;"), 1);
+    assert_eq!(n("let z = 0.0;"), 0);
+    assert_eq!(n("let o = 1.0_f32; let p = 1.0f64;"), 1);
+    assert_eq!(n("let h = 32.0_f32;"), 1);
+    assert_eq!(n("let v = vec2(x, 0.0);"), 0);
+    assert_eq!(n("let o = v.clamp(0.0, 1.0);"), 1);
     assert_eq!(
-        strict_violations("// base: \"disabled:opacity-50\"\nlet c = fill.gamma_multiply(0.5);")
-            .len(),
+        n("let o = v.clamp(0.0, 1.0); // behaviour-ok: fraction of the range"),
         0
     );
-    assert_eq!(strict_violations("let c = rect.height() / 2.0;").len(), 0);
-    assert_eq!(strict_violations("let w = 2.0 + x;").len(), 1);
-    assert_eq!(strict_violations("let z = 0.0; let o = 1.0;").len(), 0);
+    assert_eq!(n("let fg = t.role(Role::Foreground);"), 1);
     assert_eq!(
-        strict_violations("let o = 1.0_f32; let p = 1.0f64;").len(),
+        n("let fg = t.role(Role::Foreground); // behaviour-ok: inherits Foreground"),
         0
     );
-    assert_eq!(strict_violations("let h = 32.0_f32;").len(), 1);
-    assert_eq!(strict_violations("let v = vec2(x, 0.0);").len(), 0);
+    assert_eq!(n("let t = 0.1; // behaviour-ok: flattening tolerance"), 0);
+    assert_eq!(n("let t = 0.1; // behaviour-ok:"), 1);
     assert_eq!(
-        strict_violations("let t = 0.1; // behaviour-ok: flattening tolerance").len(),
-        0
-    );
-    assert_eq!(strict_violations("let t = 0.1; // behaviour-ok:").len(), 1);
-    assert_eq!(
-        strict_violations("pub const X: Icon = Icon {\n    a: 3.5,\n};\nlet h = 32.0;").len(),
+        n("pub const X: Icon = Icon {\n    a: 3.5,\n};\nlet h = 32.0;"),
         1
     );
 }
@@ -248,6 +257,10 @@ fn ported_components_take_values_from_the_style() {
     assert!(files.len() > 5, "scanned too few files: {files:?}");
     let mut found = Vec::new();
     for path in files {
+        // A rasterizer, not a component: its numbers are pixel arithmetic.
+        if path.ends_with("icon_raster.rs") {
+            continue;
+        }
         let path = path.display().to_string();
         let src = std::fs::read_to_string(&path).expect("source file readable");
         for v in strict_violations(non_test_code(&src)) {

@@ -27,7 +27,6 @@ fn line(
 
 /// A horizontal rule across the available width.
 pub fn separator(ui: &mut Ui) {
-    // base: "data-horizontal:w-full"
     line(
         ui,
         State::HORIZONTAL,
@@ -38,7 +37,6 @@ pub fn separator(ui: &mut Ui) {
 
 /// A vertical rule as tall as the row it sits in.
 pub fn separator_vertical(ui: &mut Ui) {
-    // base: "data-vertical:self-stretch"
     line(
         ui,
         State::VERTICAL,
