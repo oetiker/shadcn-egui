@@ -18,7 +18,8 @@ are recorded here. The format is based on
   trigger and the popup; the default stays 4
   (`components::shared::DEFAULT_SIDE_OFFSET`). (#6)
 - An `opacity` set in `theme.style` on any part now fades that part and
-  everything inside it, multiplied as in the browser: a badge, card, dialog
+  everything inside it, multiplied as in the browser and also inside a
+  disabled `Ui`: a badge, card, dialog
   (its backdrop too), popover, tooltip, separator, tab list, select list,
   checkbox tick, select chevron or select tick. Before, only the outer part
   of a button, input, checkbox, switch, slider, label, select trigger or tab
@@ -44,8 +45,8 @@ are recorded here. The format is based on
   `tabs_trigger_after` (the line tab underline). Code that builds either
   with a struct literal needs `..Default::default()`. (#6)
 - `components::shared::disabled_painter` is gone. A custom widget fades a
-  disabled part with `style_painter(ui, opacity(&[stack], state))`, which
-  takes the fade from the part's recipe (`disabled:opacity-50`). (#6)
+  disabled part with `style_painter(ui, &[stack], state)`, which takes the
+  fade from the part's recipe (`disabled:opacity-50`). (#6)
 
 ### Fixed
 - A popover whose style recipe an app replaced whole

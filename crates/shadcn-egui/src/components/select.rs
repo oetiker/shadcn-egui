@@ -283,7 +283,7 @@ impl Widget for Select<'_> {
         // The trigger.
         let st = interaction_state(&t, &resp, enabled, context.with(State::EXPANDED, open));
         if ui.is_rect_visible(rect) {
-            let painter = style_painter(ui, opacity(&[&trig[..]], st));
+            let painter = style_painter(ui, &[&trig[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
             let radius =
                 pick(&trig, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
@@ -318,7 +318,7 @@ impl Widget for Select<'_> {
             if let Some(c) = icon_color {
                 // The chevron sits in the trigger: both opacities apply.
                 paint_icon(
-                    &style_painter(ui, opacity(&[&icon[..], &trig[..]], st)),
+                    &style_painter(ui, &[&icon[..], &trig[..]], st),
                     icon_rect,
                     &t.icons.chevron_down,
                     c,
@@ -468,7 +468,7 @@ impl Widget for Select<'_> {
                                         .map_or(0.0, |r| t.radius_px(r, row.height() / 2.0));
                                     let fill = pick(&item, |r| &r.bg, s).map(|p| t.paint(p));
                                     // The row's text and indicator sit in the row.
-                                    let painter = style_painter(ui, opacity(&[&item[..]], s));
+                                    let painter = style_painter(ui, &[&item[..]], s);
                                     painter.extend(box_shapes(row, item_radius, fill, None, false));
                                     // The row's own text colour serves tick and text alike.
                                     let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content

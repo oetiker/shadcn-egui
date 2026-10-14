@@ -16,7 +16,7 @@ the crate.
   recipe values into pixels and colours.
 - `shadcn_egui::components::shared::interaction_state` for hover, press and
   focus, and the other helpers in `components::shared` (`paint_box`, `ring`,
-  `opacity` and `style_painter` for a part's fade, `faded` for a container
+  `opacity`, `ui_opacity` and `style_painter` for a part's fade, `faded` for a container
   part's content, `line_box` for the height of a line of text).
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
 

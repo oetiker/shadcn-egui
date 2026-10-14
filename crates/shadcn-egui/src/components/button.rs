@@ -5,7 +5,7 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{
-    interaction_state, line_box, opacity, paint_box, ring, shift, style_painter,
+    interaction_state, line_box, paint_box, ring, shift, style_painter,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
@@ -243,7 +243,7 @@ impl Widget for Button {
         }
 
         let st = interaction_state(&t, &resp, enabled, context);
-        let painter = style_painter(ui, opacity(&[l], st));
+        let painter = style_painter(ui, &[l], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
         let bg = paint(|r| &r.bg);
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour

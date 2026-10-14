@@ -20,18 +20,28 @@ pub fn opacity(chain: &[&[&Recipe]], s: State) -> f32 {
         .product()
 }
 
-/// The `Ui`'s painter, faded by `opacity` (a part's resolved [`opacity`],
-/// for example the style's `disabled:opacity-50`). In a disabled `Ui`
-/// (`ui.add_enabled(false, ..)`, `Ui::disable`) egui has faded the painter
-/// already, and fading again would paint at a quarter, so there it is left
-/// as it is. egui fades shape by shape: where a part lies on another (a
-/// switch thumb on its track) the lower part shows through, which CSS
-/// opacity on the whole group would not show.
-pub fn style_painter(ui: &Ui, opacity: f32) -> Painter {
+/// A part's resolved [`opacity`] for painting in `ui`. In a disabled `Ui`
+/// (`ui.add_enabled(false, ..)`, `Ui::disable`) egui has faded every shape
+/// once already, standing in for the style's `disabled:` fade, so the rules
+/// that need `DISABLED` are left out there; the part's other opacity (a
+/// base value, another state's) still applies.
+pub fn ui_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
+    let s = if ui.is_enabled() {
+        s
+    } else {
+        State(s.0 & !State::DISABLED.0)
+    };
+    opacity(chain, s)
+}
+
+/// The `Ui`'s painter, faded by the part's [`ui_opacity`] (`chain` as in
+/// [`opacity`], for example the style's `disabled:opacity-50`). egui fades
+/// shape by shape: where a part lies on another (a switch thumb on its
+/// track) the lower part shows through, which CSS opacity on the whole
+/// group would not show.
+pub fn style_painter(ui: &Ui, chain: &[&[&Recipe]], s: State) -> Painter {
     let mut painter = ui.painter().clone();
-    if ui.is_enabled() {
-        painter.multiply_opacity(opacity);
-    }
+    painter.multiply_opacity(ui_opacity(ui, chain, s));
     painter
 }
 

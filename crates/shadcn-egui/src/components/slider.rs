@@ -8,9 +8,7 @@
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{
-    box_shapes, interaction_state, opacity, ring_shape, style_painter,
-};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
@@ -264,10 +262,9 @@ impl Widget for Slider<'_> {
         );
 
         if ui.is_rect_visible(hit) {
-            let track_painter = style_painter(ui, opacity(&[&track[..], &root[..]], st));
-            let range_painter =
-                style_painter(ui, opacity(&[&range[..], &track[..], &root[..]], st));
-            let thumb_painter = style_painter(ui, opacity(&[&thumb[..], &root[..]], st));
+            let track_painter = style_painter(ui, &[&track[..], &root[..]], st);
+            let range_painter = style_painter(ui, &[&range[..], &track[..], &root[..]], st);
+            let thumb_painter = style_painter(ui, &[&thumb[..], &root[..]], st);
             let paint =
                 |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
 

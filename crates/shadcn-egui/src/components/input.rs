@@ -4,7 +4,7 @@
 //! paints.
 
 use crate::components::shared::{
-    box_shapes, interaction_state, line_box, opacity, ring_shape, style_painter,
+    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -100,7 +100,7 @@ impl<'a> Widget for Input<'a> {
                 + f32::from(margin.bottom)
         });
 
-        let fade = opacity(&[&l[..]], g.with(State::DISABLED, !self.enabled));
+        let fade = ui_opacity(ui, &[&l[..]], g.with(State::DISABLED, !self.enabled));
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
@@ -128,10 +128,8 @@ impl<'a> Widget for Input<'a> {
                 if let Some(c) = placeholder {
                     ui.visuals_mut().weak_text_color = Some(c);
                 }
-                // A disabled `Ui` has faded already; see `style_painter`.
-                if ui.is_enabled() {
-                    ui.multiply_opacity(fade);
-                }
+                // In a disabled `Ui`, `fade` leaves out the `disabled:` rule.
+                ui.multiply_opacity(fade);
                 ui.add_sized(Vec2::new(ui.available_width().min(max_width), height), edit)
             })
             .inner;
@@ -161,7 +159,7 @@ impl<'a> Widget for Input<'a> {
                 c,
             ));
         }
-        style_painter(ui, opacity(&[&l[..]], st)).set(slot, Shape::Vec(shapes));
+        style_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
     }
 }

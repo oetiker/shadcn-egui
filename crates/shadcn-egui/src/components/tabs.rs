@@ -6,7 +6,7 @@
 //! tab (automatic activation).
 
 use crate::components::shared::{
-    box_shapes, interaction_state, line_box, opacity, ring_shape, style_painter,
+    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -230,7 +230,7 @@ impl Widget for Tabs<'_> {
                 .map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
             let track = pick(&list, |r| &r.bg, g).map(|p| t.paint(p));
             // The list sits in the tabs root; a trigger in the list.
-            style_painter(ui, opacity(&[&list[..], &root[..]], g)).extend(box_shapes(
+            style_painter(ui, &[&list[..], &root[..]], g).extend(box_shapes(
                 list_rect,
                 list_radius,
                 track,
@@ -245,7 +245,7 @@ impl Widget for Tabs<'_> {
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, enabled, context);
-                let painter = style_painter(ui, opacity(&[&trigger[..], &list[..], &root[..]], st));
+                let painter = style_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
                 let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.paint(p))
                 };
@@ -280,7 +280,7 @@ impl Widget for Tabs<'_> {
                     ));
                 }
                 // The `after:` line indicator, placed against the padding box.
-                let bar_alpha = opacity(&[&after[..]], st);
+                let bar_alpha = ui_opacity(ui, &[&after[..]], st);
                 if let (Some(c), true) = (paint(&after, |r| &r.bg), bar_alpha > 0.0) {
                     let inner = rect.shrink(border_w);
                     let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);

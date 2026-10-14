@@ -104,7 +104,8 @@ part lies on another (a switch or slider thumb on its track) the lower part
 shows through. The value comes from the recipe's `opacity` prop
 (`shared::opacity` multiplies it down the part tree, so the line underline
 of a disabled tab fades with the tab), and `shared::style_painter` applies
-it once: a widget inside a disabled `Ui` is not faded again.
+it once: inside a disabled `Ui`, which egui fades already, it leaves out the
+`disabled:` rules and keeps any other opacity of the part.
 
 `State` flags (`crates/shadcn-egui/src/style/recipe.rs`) and the variants they stand for.
 `Theme::state(s)` adds `DARK`.

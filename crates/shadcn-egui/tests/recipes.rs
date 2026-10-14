@@ -1441,3 +1441,69 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
     }
     assert!(fails.is_empty(), "{fails:#?}");
 }
+
+/// Inside a disabled `Ui` egui fades every shape once, standing in for the
+/// style's `disabled:` fade; a part's other opacity (here an app's base
+/// 0.5) still applies on top of it.
+#[test]
+fn disabled_ui_keeps_a_parts_own_opacity() {
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::separator::separator;
+    use shadcn_egui::components::switch::Switch;
+    type Add = fn(&mut egui::Ui) -> egui::Response;
+    type Restyle = fn(&mut shadcn_egui::style::Style);
+    let cases: [(&str, Restyle, Add); 7] = [
+        (
+            "button",
+            |s| s.button.opacity.base = Some(0.5),
+            |ui| ui.add(Button::new("Save")),
+        ),
+        (
+            "label",
+            |s| s.label.opacity.base = Some(0.5),
+            |ui| ui.add(Label::new("Email")),
+        ),
+        (
+            "badge",
+            |s| s.badge.opacity.base = Some(0.5),
+            |ui| ui.add(Badge::new("New")),
+        ),
+        (
+            "checkbox",
+            |s| s.checkbox.opacity.base = Some(0.5),
+            |ui| ui.add(Checkbox::new(&mut true)),
+        ),
+        (
+            "switch",
+            |s| s.switch.opacity.base = Some(0.5),
+            |ui| ui.add(Switch::new(&mut true)),
+        ),
+        (
+            "input",
+            |s| s.input.opacity.base = Some(0.5),
+            |ui| ui.add(Input::new(&mut "typed".to_owned())),
+        ),
+        (
+            "separator",
+            |s| s.separator.opacity.base = Some(0.5),
+            |ui| {
+                separator(ui);
+                ui.label("")
+            },
+        ),
+    ];
+    let mut fails = Vec::new();
+    for (name, restyle, add) in cases {
+        let render = |theme: &Theme| {
+            common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
+        };
+        let plain = render(&Theme::vega_light());
+        let faded = render(&common::restyled(Theme::vega_light(), restyle));
+        fails.extend(assert_fades(name, &plain, &faded, &[0.5], &[]));
+    }
+    assert!(fails.is_empty(), "{fails:#?}");
+}

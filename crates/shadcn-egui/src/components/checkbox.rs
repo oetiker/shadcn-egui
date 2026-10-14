@@ -8,9 +8,7 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::paint_icon;
-use crate::components::shared::{
-    box_shapes, interaction_state, opacity, ring_shape, style_painter,
-};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
@@ -87,7 +85,7 @@ impl Widget for Checkbox<'_> {
         let st = interaction_state(&t, &resp, enabled, context);
 
         if ui.is_rect_visible(rect) {
-            let painter = style_painter(ui, opacity(&[&l[..]], st));
+            let painter = style_painter(ui, &[&l[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
             let radius =
                 pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
@@ -122,7 +120,7 @@ impl Widget for Checkbox<'_> {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
                     // The indicator sits in the box: both opacities apply.
                     paint_icon(
-                        &style_painter(ui, opacity(&[&ind[..], &l[..]], st)),
+                        &style_painter(ui, &[&ind[..], &l[..]], st),
                         icon_rect,
                         &t.icons.check,
                         color,

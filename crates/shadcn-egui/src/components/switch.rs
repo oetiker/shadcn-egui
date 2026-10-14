@@ -4,9 +4,7 @@
 //! `cn-switch-thumb` recipes. The thumb sits inside the track's 1px transparent border and
 //! slides between its two positions with `animate_bool`.
 
-use crate::components::shared::{
-    box_shapes, interaction_state, opacity, ring_shape, shift, style_painter,
-};
+use crate::components::shared::{box_shapes, interaction_state, ring_shape, shift, style_painter};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{lerp, vec2, Rect, Sense, Shape, Stroke, Ui, Widget};
@@ -131,7 +129,7 @@ impl Widget for Switch<'_> {
                     c,
                 ));
             }
-            style_painter(ui, opacity(&[&track[..]], st)).extend(shapes);
+            style_painter(ui, &[&track[..]], st).extend(shapes);
 
             // The thumb lies inside the border, vertically centred; its
             // translate differs per value, so the animation blends both.
@@ -166,7 +164,7 @@ impl Widget for Switch<'_> {
                 thumb_radius,
                 paint(&thumb, |r| &r.bg).unwrap_or_default(),
             ));
-            style_painter(ui, opacity(&[&thumb[..], &track[..]], st)).extend(shapes);
+            style_painter(ui, &[&thumb[..], &track[..]], st).extend(shapes);
         }
         // No label of its own: name it with `labelled_by(label.id)`, which
         // an own label, even an empty one, would override.

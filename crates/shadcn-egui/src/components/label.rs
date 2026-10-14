@@ -8,7 +8,7 @@
 //! paragraph that `cn-card-description` and `cn-dialog-description` share, so
 //! it reads the `card_description` recipe.
 
-use crate::components::shared::{opacity, style_painter};
+use crate::components::shared::style_painter;
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -50,7 +50,7 @@ impl Widget for Label {
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
         let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
-        let painter = style_painter(ui, opacity(&[&l[..]], st));
+        let painter = style_painter(ui, &[&l[..]], st);
 
         let galley = painter.layout_no_wrap(self.text.clone(), font, fg);
         // `leading-none`: the line box is `line_height` times the font size;
