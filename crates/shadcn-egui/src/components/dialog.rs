@@ -187,7 +187,8 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
 }
 
 /// The close button in the panel's top-right corner, `inset_*` from its
-/// edges. Returns true when clicked. It is placed without moving the cursor,
+/// edges, painted with `cn-dialog-close` over its button recipes. Returns
+/// true when clicked. It is placed without moving the cursor,
 /// so it does not grow the panel.
 fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
     let g = t.state(State::NONE);
@@ -212,7 +213,8 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
             Button::new("Close")
                 .icon(&t.icons.close)
                 .variant(ButtonVariant::Ghost)
-                .size(ButtonSize::IconSm),
+                .size(ButtonSize::IconSm)
+                .extra_layer(|s| &s.dialog_close),
         )
         .clicked()
 }

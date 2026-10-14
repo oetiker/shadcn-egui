@@ -45,6 +45,7 @@ pub struct Button {
     expanded: bool,
     invalid: bool,
     has_popup: bool,
+    extra: Option<fn(&Style) -> &Recipe>,
 }
 
 impl Button {
@@ -59,6 +60,7 @@ impl Button {
             expanded: false,
             invalid: false,
             has_popup: false,
+            extra: None,
         }
     }
     pub fn variant(mut self, v: ButtonVariant) -> Self {
@@ -104,7 +106,15 @@ impl Button {
         self
     }
 
-    fn layers<'s>(&self, s: &'s Style) -> [&'s Recipe; 3] {
+    /// A recipe stacked over the button's own, for a part that puts its
+    /// class on a button (`cn-dialog-close`): the later layer wins.
+    pub(crate) fn extra_layer(mut self, layer: fn(&Style) -> &Recipe) -> Self {
+        self.extra = Some(layer);
+        self
+    }
+
+    /// The recipe stack and how many of its layers are in use.
+    fn layers<'s>(&self, s: &'s Style) -> ([&'s Recipe; 4], usize) {
         let v = match self.variant {
             ButtonVariant::Default => &s.button_variant_default,
             ButtonVariant::Outline => &s.button_variant_outline,
@@ -123,7 +133,10 @@ impl Button {
             ButtonSize::IconSm => &s.button_size_icon_sm,
             ButtonSize::IconLg => &s.button_size_icon_lg,
         };
-        [&*s.button, v, z]
+        match self.extra {
+            Some(extra) => ([&*s.button, v, z, extra(s)], 4),
+            None => ([&*s.button, v, z, z], 3),
+        }
     }
 
     /// The icon of an icon size (`ButtonSize::Icon`, …): drawn alone, the
@@ -152,7 +165,8 @@ impl Button {
 impl Widget for Button {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
-        let l = self.layers(&t.style);
+        let (layers, n) = self.layers(&t.style);
+        let l = &layers[..n];
         let enabled = self.enabled && ui.is_enabled();
         let context = State::NONE
             .with(State::ICON_START, self.icon.is_some())
@@ -162,7 +176,7 @@ impl Widget for Button {
             .with(State::HAS_POPUP, self.has_popup);
         // Geometry never depends on hover or press: resolve it before allocating.
         let g = t.state(context);
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
         let height = get(|r| &r.height);
         let (pad_l, pad_r, gap, border_w) = (
             get(|r| &r.pad_left),
@@ -170,9 +184,9 @@ impl Widget for Button {
             get(|r| &r.gap),
             get(|r| &r.border_width),
         );
-        let icon_px = pick(&l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
-        let weight = pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal);
+        let icon_px = pick(l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
+        let text_px = t.text_px(pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
+        let weight = pick(l, |r| &r.weight, g).unwrap_or(Weight::Normal);
         let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
         let fonts = ui.painter().clone();
         // The text colour depends on the state, known only after allocating:
@@ -195,7 +209,7 @@ impl Widget for Button {
             galley.size().x + f32::from(icons) * (icon_px + gap)
         };
         let width = if icon_only.is_some() {
-            pick(&l, |r| &r.width, g).unwrap_or(height)
+            pick(l, |r| &r.width, g).unwrap_or(height)
         } else {
             content_w + pad_l + pad_r + border_w * 2.0
         };
@@ -213,25 +227,24 @@ impl Widget for Button {
         }
 
         let st = interaction_state(&t, &resp, enabled, context);
-        let painter = style_painter(ui, opacity(&[&l[..]], st));
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
+        let painter = style_painter(ui, opacity(&[l], st));
+        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
         let bg = paint(|r| &r.bg);
         let fg = paint(|r| &r.text).unwrap_or_else(|| t.role(Role::Foreground));
         let border = paint(|r| &r.border_color);
         let ring_color = paint(|r| &r.ring_color);
-        let ring_w = pick(&l, |r| &r.ring_width, st).unwrap_or(0.0);
+        let ring_w = pick(l, |r| &r.ring_width, st).unwrap_or(0.0);
         let rect = shift(
             rect,
-            pick(&l, |r| &r.shift_x, st),
-            pick(&l, |r| &r.shift_y, st),
+            pick(l, |r| &r.shift_x, st),
+            pick(l, |r| &r.shift_y, st),
         );
-        let radius =
-            pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
+        let radius = pick(l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
 
-        if let Some(s) = pick(&l, |r| &r.shadow, st) {
+        if let Some(s) = pick(l, |r| &r.shadow, st) {
             painter.add(t.shadow(s).as_shape(rect, radius));
         }
-        let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
+        let clip_padding = pick(l, |r| &r.bg_clip_padding, st) == Some(true);
         paint_box(
             &painter,
             rect,
@@ -261,7 +274,7 @@ impl Widget for Button {
             draw_icon(&icon, x);
             x += icon_px + gap;
         }
-        let galley = if pick(&l, |r| &r.underline, st) == Some(true) {
+        let galley = if pick(l, |r| &r.underline, st) == Some(true) {
             layout(Stroke::new(t.metrics.border, fg))
         } else {
             galley
@@ -284,8 +297,9 @@ mod tests {
     use super::*;
     use crate::style::{Paint, Role, State, Style};
 
-    fn layers(s: &Style, v: ButtonVariant, z: ButtonSize) -> [&Recipe; 3] {
-        Button::new("x").variant(v).size(z).layers(s)
+    fn layers(s: &Style, v: ButtonVariant, z: ButtonSize) -> Vec<&Recipe> {
+        let (l, n) = Button::new("x").variant(v).size(z).layers(s);
+        l[..n].to_vec()
     }
 
     #[test]

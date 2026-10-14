@@ -837,3 +837,37 @@ fn dialog_footer_gap_comes_from_the_style() {
     });
     assert_eq!(footer_gap(none), 0.0);
 }
+
+/// `cn-dialog-close` sits on the close button's own class list, after the
+/// button's recipes: an app value set on it reaches the button's paint.
+#[test]
+fn dialog_close_recipe_paints_the_close_button() {
+    use shadcn_egui::components::dialog::Dialog;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.dialog_close.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
+    });
+    let red = theme.role(Role::Destructive);
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    let frame = |ui: &mut egui::Ui| {
+        Dialog::new("close", "Title").show(ui.ctx(), &mut true, |ui| ui.label("Body"));
+    };
+    // The modal fades in: paint until the fade is over.
+    let mut out = egui::FullOutput::default();
+    for time in [0.0, 1.0, 2.0] {
+        let input = egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        };
+        out = ctx.run_ui(input, frame);
+    }
+    let filled: Vec<_> = common::rect_shapes(&out)
+        .into_iter()
+        .filter(|r| r.fill == red)
+        .collect();
+    assert_eq!(filled.len(), 1, "one close button in the app's colour");
+    assert!(
+        filled[0].rect.width() < 40.0,
+        "the close button, not the panel"
+    );
+}
