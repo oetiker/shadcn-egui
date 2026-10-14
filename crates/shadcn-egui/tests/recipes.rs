@@ -843,7 +843,9 @@ fn dialog_footer_gap_comes_from_the_style() {
 #[test]
 fn dialog_close_recipe_paints_the_close_button() {
     use shadcn_egui::components::dialog::Dialog;
+    // Both layers set a base fill: the later `dialog_close` must win.
     let theme = common::restyled(Theme::vega_light(), |s| {
+        s.button_variant_ghost.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.dialog_close.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
     let red = theme.role(Role::Destructive);

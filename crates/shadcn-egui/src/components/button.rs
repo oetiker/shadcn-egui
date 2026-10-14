@@ -107,7 +107,8 @@ impl Button {
     }
 
     /// A recipe stacked over the button's own, for a part that puts its
-    /// class on a button (`cn-dialog-close`): the later layer wins.
+    /// class on a button (`cn-dialog-close`): it wins ties of equal rank,
+    /// so its base value still loses to a button rule for a matching state.
     pub(crate) fn extra_layer(mut self, layer: fn(&Style) -> &Recipe) -> Self {
         self.extra = Some(layer);
         self
