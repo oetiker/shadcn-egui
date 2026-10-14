@@ -91,7 +91,9 @@ pub const DEFAULT_SIDE_OFFSET: f32 = 4.0; // behaviour-ok: upstream prop default
 ```
 
 String literals and one-line `/* .. */` comments are not scanned; the lines
-inside a multi-line block comment are.
+inside a multi-line block comment are. Neither are Lucide icon data blocks
+(`pub const NAME: Icon = Icon {` to `};`) nor the icon rasterizer
+`icon_raster.rs`, whose numbers are path data and rasterizer geometry.
 
 ## Snapshots
 

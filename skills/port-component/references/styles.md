@@ -27,10 +27,10 @@ draws itself from the active style's recipes; it does not hard-code a look.
   with the `!important` rank; `When::all(flags)` matches whenever every
   flag is set.
 - **Markers.** At runtime shadcn injects the marker's classes into the element's
-  class list. Three markers have no class the crate translates in any style,
-  so their recipes are empty by design: `cn-card-action`,
-  `cn-select-viewport`, `cn-select-item-indicator-icon` (and
-  `cn-select-group` in lyra).
+  class list. Some markers have no class the crate translates, so their
+  recipes are empty by design: `cn-card-action`, `cn-select-viewport` and
+  `cn-select-item-indicator-icon` in every style, and `cn-select-group` in
+  lyra.
 - **Base and style classes.** A component's own classes (those written in its
   `.svelte` file, not behind a `cn-*` marker) are *base classes*. The
   generated recipe holds both: the part's whole class string is the
