@@ -1,6 +1,6 @@
 //! shadcn Checkbox, ported from shadcn-svelte `ui/checkbox/checkbox.svelte`
-//! at `tools/stylegen/PIN`. Base classes are quoted under `// base:`; all
-//! other values come from the style's `cn-checkbox` and
+//! at `tools/stylegen/PIN`. Every value, the hit area and the disabled
+//! fade included, comes from the style's `cn-checkbox` and
 //! `cn-checkbox-indicator` recipes. The tick is the theme's `check` icon
 //! ([`crate::Theme::icons`]).
 //!
@@ -8,7 +8,9 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::paint_icon;
-use crate::components::shared::{box_shapes, disabled_painter, interaction_state, ring_shape};
+use crate::components::shared::{
+    box_shapes, interaction_state, opacity, ring_shape, style_painter,
+};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
@@ -17,8 +19,8 @@ use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
 /// `ui.add(Checkbox::new(&mut on))`.
 ///
 /// The returned response's rect is the visible box. Its click target is
-/// larger (see the `base:` quote in [`Widget::ui`]), and the accessibility
-/// node carries that larger rect.
+/// larger (the recipe's `hit_inset_x` and `hit_inset_y`), and the
+/// accessibility node carries that larger rect.
 pub struct Checkbox<'a> {
     checked: &'a mut bool,
     enabled: bool,
@@ -56,8 +58,7 @@ impl Widget for Checkbox<'_> {
 
         let (rect, base) =
             ui.allocate_exact_size(vec2(get(|r| &r.width), get(|r| &r.height)), Sense::hover());
-        // base: "after:absolute after:-inset-x-3 after:-inset-y-2"
-        let hit = rect.expand2(vec2(12.0, 8.0));
+        let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
         } else {
@@ -78,12 +79,7 @@ impl Widget for Checkbox<'_> {
         let st = interaction_state(&t, &resp, enabled, context);
 
         if ui.is_rect_visible(rect) {
-            // The style's `disabled:opacity-50` arrives as the DISABLED state.
-            let painter = disabled_painter(
-                ui,
-                self.enabled,
-                pick(&l, |r| &r.opacity, st).unwrap_or(1.0),
-            );
+            let painter = style_painter(ui, opacity(&[&l[..]], st));
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
             let radius =
                 pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));

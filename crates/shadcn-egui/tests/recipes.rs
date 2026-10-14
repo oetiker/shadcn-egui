@@ -600,3 +600,122 @@ fn select_fade_and_offset() {
     };
     assert_eq!(item_top(20.0) - item_top(4.0), 16.0);
 }
+
+/// Press and release the primary button at `pos` over three frames; true
+/// if `add` flipped the value.
+fn click_flips(
+    theme: &Theme,
+    pos: egui::Pos2,
+    mut add: impl FnMut(&mut egui::Ui, &mut bool),
+) -> bool {
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    let mut value = false;
+    let press = |pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    for events in [
+        vec![],
+        vec![egui::Event::PointerMoved(pos), press(true)],
+        vec![press(false)],
+    ] {
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                events,
+                ..Default::default()
+            },
+            |ui| add(ui, &mut value),
+        );
+    }
+    value
+}
+
+#[test]
+fn hit_area_comes_from_the_style() {
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::switch::Switch;
+    type Add = fn(&mut egui::Ui, &mut bool) -> egui::Response;
+    // The space above keeps the probe above the control on the screen.
+    let widgets: [(&str, Add); 2] = [
+        ("checkbox", |ui, v| {
+            ui.add_space(40.0);
+            ui.add(Checkbox::new(v))
+        }),
+        ("switch", |ui, v| {
+            ui.add_space(40.0);
+            ui.add(Switch::new(v))
+        }),
+    ];
+    // Each inset gets its own value, so reading the other one fails.
+    let insets = |x: f32, y: f32| {
+        common::restyled(Theme::vega_light(), |s| {
+            for r in [&mut s.checkbox, &mut s.switch] {
+                r.hit_inset_x.rules.push(Rule::important(When::ALWAYS, x));
+                r.hit_inset_y.rules.push(Rule::important(When::ALWAYS, y));
+            }
+        })
+    };
+    for (name, add) in widgets {
+        let theme = Theme::vega_light();
+        let rect = common::measure(&theme, |ui| add(ui, &mut false));
+        // 7 px out: inside the default 12 by 8 px reach, outside egui's
+        // 5 px pointer tolerance.
+        let beside = egui::pos2(rect.right() + 7.0, rect.center().y);
+        let above = egui::pos2(rect.center().x, rect.top() - 7.0);
+        let flips = |theme: &Theme, pos| click_flips(theme, pos, |ui, v| _ = add(ui, v));
+        assert!(flips(&theme, beside), "{name}: default reach beside");
+        assert!(flips(&theme, above), "{name}: default reach above");
+        let narrow = insets(0.0, 20.0);
+        assert!(!flips(&narrow, beside), "{name}: no reach beside");
+        assert!(flips(&narrow, above), "{name}: reach above");
+        let flat = insets(20.0, 0.0);
+        assert!(flips(&flat, beside), "{name}: reach beside");
+        assert!(!flips(&flat, above), "{name}: no reach above");
+    }
+}
+
+#[test]
+fn switch_fade_comes_from_the_style() {
+    use shadcn_egui::components::switch::Switch;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.switch
+            .opacity
+            .rules
+            .push(Rule::important(When::all(State::DISABLED), 0.25));
+    });
+    let fills = |enabled: bool| {
+        let (_, out) =
+            common::measure_output(&theme, |ui| ui.add(Switch::new(&mut true).enabled(enabled)));
+        let rects = common::rect_shapes(&out);
+        (rects[0].fill, rects.last().expect("thumb").fill)
+    };
+    let ((track_on, thumb_on), (track_off, thumb_off)) = (fills(true), fills(false));
+    assert_eq!(track_off, track_on.gamma_multiply(0.25), "track");
+    // The thumb fades with its track: opacity multiplies down the parts.
+    assert_eq!(thumb_off, thumb_on.gamma_multiply(0.25), "thumb");
+}
+
+#[test]
+fn checkbox_fade_comes_from_the_style() {
+    use shadcn_egui::components::checkbox::Checkbox;
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.checkbox
+            .opacity
+            .rules
+            .push(Rule::important(When::all(State::DISABLED), 0.25));
+    });
+    let fill = |enabled: bool| {
+        let (_, out) = common::measure_output(&theme, |ui| {
+            ui.add(Checkbox::new(&mut true).enabled(enabled))
+        });
+        common::rect_shapes(&out)
+            .into_iter()
+            .find(|r| r.fill != egui::Color32::TRANSPARENT)
+            .expect("checked box")
+            .fill
+    };
+    assert_eq!(fill(false), fill(true).gamma_multiply(0.25));
+}
