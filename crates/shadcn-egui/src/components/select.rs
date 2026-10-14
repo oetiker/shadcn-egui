@@ -493,9 +493,13 @@ impl Widget for Select<'_> {
                                     );
                                     if i == current {
                                         let ind = [&*t.style.select_item_indicator];
+                                        // No size: CSS's initial `auto`, the
+                                        // tick at the row's `[&_svg]:size-*`.
+                                        let tick_side = pick(&item, |r| &r.icon_size, s)
+                                            .unwrap_or(t.metrics.icon);
                                         let (w, h) = (
-                                            pick(&ind, |r| &r.width, s).unwrap_or(0.0),
-                                            pick(&ind, |r| &r.height, s).unwrap_or(0.0),
+                                            pick(&ind, |r| &r.width, s).unwrap_or(tick_side),
+                                            pick(&ind, |r| &r.height, s).unwrap_or(tick_side),
                                         );
                                         let right =
                                             pick(&ind, |r| &r.inset_right, s).unwrap_or(0.0);

@@ -52,7 +52,10 @@ are recorded here. The format is based on
   (`*style.popover_content = Recipe { .. }`) showed each word on its own
   line; it is now as wide as its content. Buttons, badges, inputs, select
   triggers, tab lists, checkboxes and switches in the same case are no longer
-  0 px high, and checkbox ticks and select chevrons no longer shrink to a dot. (#6)
+  0 px high, and checkbox ticks, select chevrons and the check mark of the
+  selected option no longer shrink to a dot. (#6)
+- In the mira style, the open select list showed a tiny dot next to the
+  selected option; it now shows a check mark. (#6)
 - An app that held or copied several styles in one function could crash
   with `thread '<unknown>' has overflowed its stack`, mostly on worker
   threads and in WebAssembly, where the stack is 1 to 2 MiB. Each `Style`

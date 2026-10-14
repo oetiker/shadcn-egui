@@ -1054,12 +1054,14 @@ fn icon_rects(out: &egui::FullOutput) -> Vec<egui::Rect> {
 /// button's is, not 0.
 #[test]
 fn replaced_recipes_keep_their_icons() {
+    use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::components::select::Select;
     use shadcn_egui::style::Recipe;
     let cleared = common::restyled(Theme::vega_light(), |s| {
         *s.checkbox_indicator = Recipe::default();
         *s.select_trigger = Recipe::default();
+        *s.select_item_indicator = Recipe::default();
     });
     let icon = cleared.metrics.icon;
     let (_, out) = common::measure_output(&cleared, |ui| ui.add(Checkbox::new(&mut true)));
@@ -1072,11 +1074,14 @@ fn replaced_recipes_keep_their_icons() {
         });
     h.run();
     let chevrons = icon_rects(h.output());
+    h.get_by_role(egui::accesskit::Role::ComboBox).click();
+    h.run();
+    let open = icon_rects(h.output());
     let big = |v: &[egui::Rect]| v.iter().filter(|r| r.width() >= icon * 0.5).count();
     assert_eq!(
-        (big(&ticks), big(&chevrons)),
-        (1, 1),
-        "checkbox tick {ticks:?}, chevron {chevrons:?}"
+        (big(&ticks), big(&chevrons), big(&open)),
+        (1, 1, 2),
+        "checkbox tick {ticks:?}, chevron {chevrons:?}, chevron and item tick {open:?}"
     );
 }
 
