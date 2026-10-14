@@ -412,3 +412,35 @@ fn tooltip_colours_come_from_the_style() {
         "arrow"
     );
 }
+
+#[test]
+fn separator_line_comes_from_the_style() {
+    use shadcn_egui::components::separator::separator;
+    use shadcn_egui::style::Prop;
+    let line = |theme: &Theme| {
+        let (_, out) = common::measure_output(theme, |ui| {
+            ui.allocate_response(vec2(200.0, 0.0), egui::Sense::hover());
+            separator(ui);
+            ui.allocate_response(vec2(0.0, 0.0), egui::Sense::hover())
+        });
+        common::rect_shapes(&out)
+            .into_iter()
+            .find(|r| r.fill == theme.palette.primary)
+            .map(|r| r.rect.height())
+    };
+    let thick = common::restyled(Theme::vega_light(), |s| {
+        s.separator.bg.base = Some(Paint::Role(Role::Primary, 1.0));
+        s.separator
+            .height
+            .rules
+            .push(Rule::important(When::all(State::HORIZONTAL), 3.0));
+    });
+    assert_eq!(line(&thick), Some(3.0));
+    // Review Focus 4: without a thickness rule, `metrics.border`.
+    let mut fallback = common::restyled(Theme::vega_light(), |s| {
+        s.separator.bg.base = Some(Paint::Role(Role::Primary, 1.0));
+        s.separator.height = Prop::default();
+    });
+    fallback.metrics.border = 2.0;
+    assert_eq!(line(&fallback), Some(2.0));
+}
