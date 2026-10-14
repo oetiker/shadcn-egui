@@ -330,3 +330,29 @@ fn unevaluable_tv_keys_are_errors() {
         );
     }
 }
+
+/// A backtick in markup text opens no template literal, so a `//`
+/// comment on a later line is still a comment. In `<script>` and in a
+/// `{..}` expression a template literal runs on across lines.
+#[test]
+fn backtick_in_markup_text_opens_no_string() {
+    let src = "<p>a ` b</p>\n// cn(\"cn-z ghost\")\n<div class={cn(\"cn-z real\")}></div>";
+    assert_eq!(class_strings(src).unwrap(), ["cn-z real"]);
+    let script = "<script>\nconst v = tv({ base: `cn-w a\n// b` });\n</script>";
+    assert_eq!(class_strings(script).unwrap(), ["cn-w a // b"]);
+    let expr = "<div class={cn(`cn-y a\n// b`)}></div>";
+    assert_eq!(class_strings(expr).unwrap(), ["cn-y a // b"]);
+}
+
+/// A `?` outside strings in a braced class value is a conditional, also
+/// inside a call's arguments: the call's value depends on runtime state.
+#[test]
+fn question_mark_in_a_class_call_is_an_error() {
+    for c in [
+        "<div class={f(a?.b)}></div>",
+        r#"<div class={f(on ? "cn-a x" : "cn-a y")}></div>"#,
+    ] {
+        let err = class_strings(c).unwrap_err();
+        assert!(err.contains("class"), "{c}: {err}");
+    }
+}

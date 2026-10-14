@@ -372,10 +372,14 @@ fn check_literal(body: &str, quote: u8) -> Result<(), String> {
 /// positions stay valid. A `//` inside a quoted string, or right after `:`
 /// (a URL), is not a comment. A `"` or `'` string ends with its line; a
 /// template literal (`` ` ``) runs on across lines. An apostrophe right
-/// after a letter or digit (`it's` in markup text) opens no string.
+/// after a letter or digit (`it's` in markup text) opens no string. A
+/// template literal opens only in JavaScript: inside `<script>` or a
+/// `{..}` expression in the markup. A backtick in markup text is text.
 fn mask_js_comments(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     let mut quote = 0u8;
+    // Inside `<script>`, and the `{..}` nesting of the markup outside it.
+    let (mut script, mut depth) = (false, 0usize);
     for line in src.split_inclusive('\n') {
         let b = line.as_bytes();
         if quote != b'`' {
@@ -391,13 +395,22 @@ fn mask_js_comments(src: &str) -> String {
                 } else if c == quote {
                     quote = 0;
                 }
-            } else if matches!(c, b'"' | b'`')
+            } else if c == b'"'
+                || (c == b'`' && (script || depth > 0))
                 || (c == b'\'' && (i == 0 || !b[i - 1].is_ascii_alphanumeric()))
             {
                 quote = c;
             } else if c == b'/' && b.get(i + 1) == Some(&b'/') && (i == 0 || b[i - 1] != b':') {
                 cut = Some(i);
                 break;
+            } else if script {
+                script = !b[i..].starts_with(b"</script");
+            } else if c == b'{' {
+                depth += 1;
+            } else if c == b'}' {
+                depth = depth.saturating_sub(1);
+            } else if depth == 0 && b[i..].starts_with(b"<script") {
+                script = true;
             }
             i += 1;
         }
@@ -610,8 +623,10 @@ fn class_attributes(src: &str) -> impl Iterator<Item = usize> + '_ {
 /// An error for a `class` attribute the extractor does not read: a string
 /// in braces (`class={"…"}`), in single quotes (`class='…'`), a Svelte 5
 /// array or object (`class={[..]}`, `class={{..}}`) or a conditional
-/// (`class={c ? "a" : "b"}`). An identifier or a call (`class={cn(..)}`)
-/// is fine: the call is read where it stands.
+/// (`class={c ? "a" : "b"}`), and so is a `?` anywhere outside strings,
+/// also in a call's arguments (`class={f(a?.b)}`). An identifier or a call
+/// without one (`class={cn(..)}`) is fine: the call is read where it
+/// stands.
 fn unread_class_attribute(src: &str) -> Result<(), String> {
     for at in class_attributes(src) {
         let rest = &src[at..];
@@ -620,7 +635,7 @@ fn unread_class_attribute(src: &str) -> Result<(), String> {
             if r.starts_with(['"', '\'', '`', '[', '{']) {
                 return true;
             }
-            // A `?` outside strings and inner brackets: a conditional.
+            // A `?` outside strings, also inside a call: a conditional.
             closing(rest, 0).is_some_and(|end| strings_free(&rest[1..end]).contains('?'))
         });
         if braced || rest.starts_with('\'') {
