@@ -155,11 +155,10 @@ back, Right and Down forward) whatever its orientation.
   values down the part tree as CSS does, and
   `shared::style_painter(ui, &[part_stack, parent_stack], state)` returns the
   painter faded by it. In a disabled `Ui` egui has faded every shape once
-  already. There
-  `style_painter` (and `shared::ui_opacity`, the bare value) takes 1.0 for a
-  part whose pick a rule that needs `DISABLED` wins: as in CSS, the
-  `disabled:` rule replaces the part's base opacity, and egui's fade stands
-  in for the rule. Where no such rule wins, the part's other opacity applies
+  already. There `style_painter` (and `shared::ui_opacity`, the bare value)
+  takes 1.0 where the winning rule of a part's pick needs `DISABLED`: as in
+  CSS, the `disabled:` rule replaces the part's base opacity, and egui's fade
+  stands in for the rule. Where no such rule wins, the part's other opacity applies
   on top of egui's fade. Pass `DISABLED` in the state whenever the `Ui` is
   disabled. Every part reads its `opacity`, not only a disabled one: a child
   part's painter multiplies the parent's chain, a container part fades the
