@@ -17,35 +17,36 @@ pub enum U {
     Unsupported(&'static str),
 }
 
-const LAYOUT: &str = "flex/grid/position keyword; egui layout is done by the component";
+const LAYOUT: &str =
+    "size or alignment relative to the parent; egui layout is done by the component";
 const ANIM: &str = "animation or transition; out of scope (spec §4.4)";
 const STRUCTURE: &str = "structure: egui layout is done by the component";
 const BROWSER: &str = "browser behaviour the component handles itself";
+/// Also the reason of the `[&_svg]` variant in `variant.rs`.
+pub const SVG_CHILD: &str =
+    "svg child behaviour (pointer events, shrink); the crate paints icons itself";
 const DEFAULT_SIZE: &str = "the component's default sizing";
 const ANCHOR: &str = "bits-ui anchor variable: placement computed by egui";
 const CENTRE: &str = "dialog centring: egui centres the dialog window";
 
 const IGNORE_EXACT: &[(&str, &str)] = &[
-    ("flex", LAYOUT),
-    ("inline-flex", LAYOUT),
-    ("grid", LAYOUT),
-    ("flex-col", LAYOUT),
-    ("flex-1", LAYOUT),
-    ("shrink-0", LAYOUT),
-    ("relative", LAYOUT),
-    ("absolute", LAYOUT),
-    ("isolate", LAYOUT),
+    ("flex", STRUCTURE),
+    ("inline-flex", STRUCTURE),
+    ("grid", STRUCTURE),
+    ("flex-col", STRUCTURE),
+    ("flex-1", STRUCTURE),
+    ("shrink-0", STRUCTURE),
+    ("relative", STRUCTURE),
+    ("absolute", STRUCTURE),
+    ("isolate", BROWSER),
     ("w-full", LAYOUT),
     ("h-full", LAYOUT),
     ("w-auto", LAYOUT),
-    ("block", LAYOUT),
+    ("block", STRUCTURE),
     ("text-left", LAYOUT),
     ("text-center", LAYOUT),
-    ("select-none", "text selection is off for egui widgets"),
-    (
-        "pointer-events-none",
-        "the component decides what senses input",
-    ),
+    ("select-none", BROWSER),
+    ("pointer-events-none", BROWSER),
     ("animate-in", ANIM),
     ("animate-out", ANIM),
     (
@@ -81,8 +82,8 @@ const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("fade-", ANIM),
     ("zoom-", ANIM),
     ("slide-in-from-", ANIM),
-    ("z-", LAYOUT),
-    ("scroll-my-", "scroll snapping"),
+    ("z-", BROWSER),
+    ("scroll-my-", BROWSER),
     (
         "underline-offset-",
         "egui draws text underlines at a fixed offset",
@@ -202,9 +203,12 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             if let Some(v) = u.strip_prefix("size-").and_then(spacing) {
                 return px(&[IconSize], v);
             }
-            return match IGNORE_EXACT.iter().find(|(k, _)| *k == u) {
-                Some((_, why)) => U::Ignore(why),
-                None => U::Unsupported("svg child utility other than size-*"),
+            let ignored = IGNORE_EXACT.iter().any(|(k, _)| *k == u)
+                || IGNORE_PREFIX.iter().any(|(k, _)| u.starts_with(k));
+            return if ignored {
+                U::Ignore(SVG_CHILD)
+            } else {
+                U::Unsupported("svg child utility other than size-*")
             };
         }
         Some(Pseudo::After) => {
@@ -219,9 +223,13 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
                 }
             }
             // Anything else draws the pseudo-element: the part's `_after` recipe.
+            // A CSS variable has no place there: `_after` takes fields only.
             return match utility(u, None) {
                 U::Set(list) => U::After(list),
-                other => other,
+                U::UseVar(..) | U::VarDef(..) => {
+                    U::Unsupported("CSS variable under after:; the _after recipe takes fields only")
+                }
+                other @ (U::After(_) | U::Ignore(_) | U::Unsupported(_)) => other,
             };
         }
         None => {}

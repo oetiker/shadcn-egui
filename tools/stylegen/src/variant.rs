@@ -157,7 +157,7 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("data-[slot=kbd]", KBD),
     ("has-data-[slot=kbd]", KBD),
     ("rtl", "right-to-left layout; the crate lays out left to right"),
-    ("[&_svg]", "svg child behaviour (pointer events, shrink); the crate paints icons itself"),
+    ("[&_svg]", crate::utility::SVG_CHILD),
     ("has-data-[slot=card-action]", "card header grid template; the crate lays out the header itself"),
     ("has-data-[slot=card-description]", "card header grid template; the crate lays out the header itself"),
 ];

@@ -45,9 +45,7 @@ fn part_strings_match_the_published_components() {
         );
         for line in &lines {
             let path = format!("{ROOT}/tests/fixtures/published/{style}/{}.json", line.dir);
-            let Ok(json) = std::fs::read_to_string(&path) else {
-                continue;
-            };
+            let json = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
             let v: serde_json::Value = serde_json::from_str(&json).expect("json");
             let mut published: Vec<String> = Vec::new();
             for f in v["files"].as_array().expect("files") {
@@ -65,7 +63,8 @@ fn part_strings_match_the_published_components() {
             }
         }
     }
-    assert!(compared > 50, "compared only {compared} parts");
+    // 72 parts in markers.txt, each for vega and nova.
+    assert_eq!(compared, 144, "compared {compared} parts");
     assert!(
         missing.is_empty(),
         "not in published output:\n{}",

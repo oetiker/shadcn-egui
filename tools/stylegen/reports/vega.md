@@ -9,14 +9,14 @@ Unsupported classes in shipped markers: **0** (exportable)
 ## `cn-button`
 
 - ignored `group/button`: browser behaviour the component handles itself
-- ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
 - ignored `transition-all`: animation or transition; out of scope (spec §4.4)
-- ignored `select-none`: text selection is off for egui widgets
-- ignored `disabled:pointer-events-none`: the component decides what senses input
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 
@@ -28,14 +28,14 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 - ignored `transition-all`: animation or transition; out of scope (spec §4.4)
 - ignored `group/badge`: browser behaviour the component handles itself
-- ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `overflow-hidden`: browser behaviour the component handles itself
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
-- ignored `[&>svg]:pointer-events-none`: the component decides what senses input
+- ignored `[&>svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 
 ## `cn-badge-variant-default`
 
@@ -65,15 +65,15 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `*:[img:first-child]:rounded-t-xl`: `*:` styles direct child elements the crate does not draw as elements
 - ignored `*:[img:last-child]:rounded-b-xl`: `*:` styles direct child elements the crate does not draw as elements
 - ignored `group/card`: browser behaviour the component handles itself
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
 
 ## `cn-card-header`
 
 - ignored `[.border-b]:pb-(--card-spacing)`: card header with an explicit border class is not offered
 - ignored `group/card-header`: browser behaviour the component handles itself
 - ignored `@container/card-header`: structure: egui layout is done by the component
-- ignored `grid`: flex/grid/position keyword; egui layout is done by the component
+- ignored `grid`: structure: egui layout is done by the component
 - ignored `auto-rows-min`: structure: egui layout is done by the component
 - ignored `items-start`: structure: egui layout is done by the component
 - ignored `has-data-[slot=card-action]:grid-cols-[1fr_auto]`: card header grid template; the crate lays out the header itself
@@ -89,18 +89,18 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-card-content`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
 
 ## `cn-card-footer`
 
 - ignored `[.border-t]:pt-(--card-spacing)`: card footer with an explicit border class is not offered
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 
 ## `cn-checkbox`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `transition-shadow`: animation or transition; out of scope (spec §4.4)
@@ -108,14 +108,14 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `group-has-[:focus-visible]/field-label:not-data-checked:border-input`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `group-has-[:focus-visible]/field-label:data-checked:border-primary`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `peer`: browser behaviour the component handles itself
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
-- ignored `after:absolute`: flex/grid/position keyword; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `after:absolute`: structure: egui layout is done by the component
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
 
 ## `cn-checkbox-indicator`
 
-- ignored `grid`: flex/grid/position keyword; egui layout is done by the component
+- ignored `grid`: structure: egui layout is done by the component
 - ignored `place-content-center`: structure: egui layout is done by the component
 - ignored `text-current`: inherits the parent's text colour: the recipe leaves `text` empty
 - ignored `transition-none`: animation or transition; out of scope (spec §4.4)
@@ -128,8 +128,8 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
 - ignored `duration-100`: animation or transition; out of scope (spec §4.4)
 - ignored `fixed`: structure: egui layout is done by the component
-- ignored `isolate`: flex/grid/position keyword; egui layout is done by the component
-- ignored `z-50`: flex/grid/position keyword; egui layout is done by the component
+- ignored `isolate`: browser behaviour the component handles itself
+- ignored `z-50`: browser behaviour the component handles itself
 
 ## `cn-dialog-content`
 
@@ -139,28 +139,28 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
 - ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
 - ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
-- ignored `grid`: flex/grid/position keyword; egui layout is done by the component
+- ignored `grid`: structure: egui layout is done by the component
 - ignored `duration-100`: animation or transition; out of scope (spec §4.4)
 - ignored `fixed`: structure: egui layout is done by the component
 - ignored `top-1/2`: dialog centring: egui centres the dialog window
 - ignored `left-1/2`: dialog centring: egui centres the dialog window
-- ignored `z-50`: flex/grid/position keyword; egui layout is done by the component
-- ignored `w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `-translate-x-1/2`: dialog centring: egui centres the dialog window
 - ignored `-translate-y-1/2`: dialog centring: egui centres the dialog window
 
 ## `cn-dialog-close`
 
-- ignored `absolute`: flex/grid/position keyword; egui layout is done by the component
+- ignored `absolute`: structure: egui layout is done by the component
 
 ## `cn-dialog-header`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
 
 ## `cn-dialog-footer`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-col-reverse`: structure: egui layout is done by the component
 - ignored `sm:flex-row`: structure: egui layout is done by the component
 - ignored `sm:justify-end`: structure: egui layout is done by the component
@@ -177,20 +177,20 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `file:h-7`: file-input button; egui has no file input
 - ignored `file:text-sm`: file-input button; egui has no file input
 - ignored `file:font-medium`: file-input button; egui has no file input
-- ignored `w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `file:inline-flex`: file-input button; egui has no file input
 - ignored `file:border-0`: file-input button; egui has no file input
 - ignored `file:bg-transparent`: file-input button; egui has no file input
 - ignored `file:text-foreground`: file-input button; egui has no file input
-- ignored `disabled:pointer-events-none`: the component decides what senses input
+- ignored `disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
 
 ## `cn-label`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
-- ignored `select-none`: text selection is off for egui widgets
-- ignored `group-data-[disabled=true]:pointer-events-none`: the component decides what senses input
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `group-data-[disabled=true]:pointer-events-none`: browser behaviour the component handles itself
 - ignored `peer-disabled:cursor-not-allowed`: browser behaviour the component handles itself
 
 ## `cn-popover-content`
@@ -205,23 +205,23 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `data-[side=left]:slide-in-from-right-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
 - ignored `duration-100`: animation or transition; out of scope (spec §4.4)
-- ignored `z-50`: flex/grid/position keyword; egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
 - ignored `origin-(--bits-popover-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
 
 ## `cn-popover-header`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
 
 ## `cn-select-trigger`
 
 - ignored `transition-[color,box-shadow]`: animation or transition; out of scope (spec §4.4)
 - ignored `*:data-[slot=select-value]:flex`: `*:` styles direct child elements the crate does not draw as elements
 - ignored `*:data-[slot=select-value]:gap-1.5`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-between`: structure: egui layout is done by the component
@@ -235,7 +235,7 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-select-trigger-icon`
 
-- ignored `pointer-events-none`: the component decides what senses input
+- ignored `pointer-events-none`: browser behaviour the component handles itself
 
 ## `cn-select-content`
 
@@ -250,8 +250,8 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `duration-100`: animation or transition; out of scope (spec §4.4)
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
-- ignored `z-50`: flex/grid/position keyword; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
 - ignored `max-h-(--bits-select-content-available-height)`: bits-ui anchor variable: placement computed by egui
 - ignored `origin-(--bits-select-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
 - ignored `overflow-x-hidden`: browser behaviour the component handles itself
@@ -260,13 +260,13 @@ Unsupported classes in shipped markers: **0** (exportable)
 ## `cn-select-viewport`
 
 - ignored `h-(--bits-select-anchor-height)`: bits-ui anchor variable: placement computed by egui
-- ignored `w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `min-w-(--bits-select-anchor-width)`: bits-ui anchor variable: placement computed by egui
-- ignored `scroll-my-1`: scroll snapping
+- ignored `scroll-my-1`: browser behaviour the component handles itself
 
 ## `cn-select-group`
 
-- ignored `scroll-my-1`: scroll snapping
+- ignored `scroll-my-1`: browser behaviour the component handles itself
 
 ## `cn-select-item`
 
@@ -274,157 +274,157 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `*:[span]:last:flex`: `*:` styles direct child elements the crate does not draw as elements
 - ignored `*:[span]:last:items-center`: `*:` styles direct child elements the crate does not draw as elements
 - ignored `*:[span]:last:gap-2`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `cursor-default`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
-- ignored `select-none`: text selection is off for egui widgets
-- ignored `data-disabled:pointer-events-none`: the component decides what senses input
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `data-disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 
 ## `cn-select-item-indicator`
 
-- ignored `pointer-events-none`: the component decides what senses input
-- ignored `absolute`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `pointer-events-none`: browser behaviour the component handles itself
+- ignored `absolute`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 
 ## `cn-select-item-indicator-icon`
 
-- ignored `pointer-events-none`: the component decides what senses input
+- ignored `pointer-events-none`: browser behaviour the component handles itself
 
 ## `cn-select-item-text`
 
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-1`: flex/grid/position keyword; egui layout is done by the component
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-1`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
 
 ## `cn-select-separator`
 
-- ignored `pointer-events-none`: the component decides what senses input
+- ignored `pointer-events-none`: browser behaviour the component handles itself
 
 ## `cn-select-scroll-up-button`
 
-- ignored `z-10`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `z-10`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `cursor-default`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 
 ## `cn-select-scroll-down-button`
 
-- ignored `z-10`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `z-10`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
 - ignored `cursor-default`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 
 ## `slot:separator`
 
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-horizontal:w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `data-horizontal:w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `data-vertical:self-stretch`: structure: egui layout is done by the component
 
 ## `cn-slider`
 
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `touch-none`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
-- ignored `select-none`: text selection is off for egui widgets
-- ignored `data-vertical:h-full`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-vertical:w-auto`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-vertical:flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `data-vertical:h-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `data-vertical:w-auto`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `data-vertical:flex-col`: structure: egui layout is done by the component
 
 ## `cn-slider-track`
 
-- ignored `data-horizontal:w-full`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-vertical:h-full`: flex/grid/position keyword; egui layout is done by the component
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
+- ignored `data-horizontal:w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `data-vertical:h-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
 - ignored `grow`: structure: egui layout is done by the component
 - ignored `overflow-hidden`: browser behaviour the component handles itself
-- ignored `data-horizontal:w-full`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-vertical:h-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `data-horizontal:w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `data-vertical:h-full`: size or alignment relative to the parent; egui layout is done by the component
 
 ## `cn-slider-range`
 
-- ignored `absolute`: flex/grid/position keyword; egui layout is done by the component
-- ignored `select-none`: text selection is off for egui widgets
-- ignored `data-horizontal:h-full`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-vertical:w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `absolute`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `data-horizontal:h-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `data-vertical:w-full`: size or alignment relative to the parent; egui layout is done by the component
 
 ## `cn-slider-thumb`
 
 - ignored `transition-[color,box-shadow]`: animation or transition; out of scope (spec §4.4)
-- ignored `block`: flex/grid/position keyword; egui layout is done by the component
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
-- ignored `select-none`: text selection is off for egui widgets
+- ignored `block`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
 - ignored `disabled:pointer-events-none`: bits-ui renders the slider thumb as a <span>, where `disabled:` never matches
 - ignored `disabled:opacity-50`: bits-ui renders the slider thumb as a <span>, where `disabled:` never matches
 
 ## `cn-switch`
 
-- ignored `shrink-0`: flex/grid/position keyword; egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `group-has-[:focus-visible]/field-label:ring-0`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `group-has-[:focus-visible]/field-label:border-transparent`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `peer`: browser behaviour the component handles itself
 - ignored `group/switch`: browser behaviour the component handles itself
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
-- ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `transition-all`: animation or transition; out of scope (spec §4.4)
-- ignored `after:absolute`: flex/grid/position keyword; egui layout is done by the component
+- ignored `after:absolute`: structure: egui layout is done by the component
 - ignored `data-disabled:cursor-not-allowed`: browser behaviour the component handles itself
 
 ## `cn-switch-thumb`
 
-- ignored `pointer-events-none`: the component decides what senses input
-- ignored `block`: flex/grid/position keyword; egui layout is done by the component
+- ignored `pointer-events-none`: browser behaviour the component handles itself
+- ignored `block`: structure: egui layout is done by the component
 - ignored `transition-transform`: animation or transition; out of scope (spec §4.4)
 - ignored `rtl:data-[state=checked]:translate-x-[calc(-100%)]`: right-to-left layout; the crate lays out left to right
 
 ## `cn-tabs`
 
 - ignored `group/tabs`: browser behaviour the component handles itself
-- ignored `flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `data-horizontal:flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `data-horizontal:flex-col`: structure: egui layout is done by the component
 
 ## `cn-tabs-list`
 
 - ignored `group/tabs-list`: browser behaviour the component handles itself
-- ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `group-data-vertical/tabs:h-fit`: the component's default sizing
-- ignored `group-data-vertical/tabs:flex-col`: flex/grid/position keyword; egui layout is done by the component
+- ignored `group-data-vertical/tabs:flex-col`: structure: egui layout is done by the component
 
 ## `cn-tabs-trigger`
 
 - corrected (C2) added `group-data-[variant=line]/tabs-list:focus-visible:ring-0` `group-data-[variant=line]/tabs-list:focus-visible:outline-0` `group-data-[variant=line]/tabs-list:focus-visible:border-transparent` `group-data-[variant=line]/tabs-list:focus-visible:after:opacity-100` `group-data-[variant=line]/tabs-list:focus-visible:after:bg-ring` `group-data-[variant=line]/tabs-list:focus-visible:data-active:after:bg-foreground` `group-data-[variant=line]/tabs-list:focus-visible:text-foreground` `dark:group-data-[variant=line]/tabs-list:focus-visible:text-foreground`: a line list draws no pills, so focus shows on an inactive trigger as on hover, not as a pill-shaped ring, outline and border: its label turns `Foreground` and its underline shows in `Ring`; C2 adds no focus marker to the active trigger, its underline stays `Foreground` and 2px
-- ignored `relative`: flex/grid/position keyword; egui layout is done by the component
-- ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
-- ignored `flex-1`: flex/grid/position keyword; egui layout is done by the component
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
+- ignored `flex-1`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
 - ignored `transition-all`: animation or transition; out of scope (spec §4.4)
-- ignored `group-data-vertical/tabs:w-full`: flex/grid/position keyword; egui layout is done by the component
+- ignored `group-data-vertical/tabs:w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `group-data-vertical/tabs:justify-start`: structure: egui layout is done by the component
-- ignored `disabled:pointer-events-none`: the component decides what senses input
+- ignored `disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
-- ignored `after:absolute`: flex/grid/position keyword; egui layout is done by the component
+- ignored `after:absolute`: structure: egui layout is done by the component
 - ignored `after:transition-opacity`: animation or transition; out of scope (spec §4.4)
 
 ## `cn-tabs-content`
 
-- ignored `flex-1`: flex/grid/position keyword; egui layout is done by the component
+- ignored `flex-1`: structure: egui layout is done by the component
 
 ## `cn-tooltip-content`
 
@@ -441,14 +441,14 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `data-[side=left]:slide-in-from-right-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `inline-flex`: flex/grid/position keyword; egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `has-data-[slot=kbd]:pr-1.5`: keyboard-shortcut chip in a tooltip; the crate does not ship Kbd
 - ignored `**:data-[slot=kbd]:relative`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
 - ignored `**:data-[slot=kbd]:isolate`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
 - ignored `**:data-[slot=kbd]:z-50`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
 - ignored `**:data-[slot=kbd]:rounded-sm`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
-- ignored `z-50`: flex/grid/position keyword; egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
 - ignored `w-fit`: the component's default sizing
 - ignored `origin-(--bits-tooltip-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
 
@@ -456,7 +456,7 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 - ignored `translate-y-[calc(-50%-2px)]`: tooltip arrow placement is component geometry
 - ignored `rotate-45`: the tooltip arrow is painted as a rotated square by the component
-- ignored `z-50`: flex/grid/position keyword; egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
 - ignored `data-[side=bottom]:-translate-x-1/2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=bottom]:-translate-y-[calc(-50%+1px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=left]:-translate-y-[calc(50%-3px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)

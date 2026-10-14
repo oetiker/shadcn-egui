@@ -663,3 +663,80 @@ fn important_class_gets_the_top_rank_bit() {
     assert_eq!(both, (1 << R_IMPORTANT) | (1 << rank("dark")));
     assert!(variants_of("dark:h-8").unwrap().rank < 1 << R_IMPORTANT);
 }
+
+#[test]
+fn after_variables_are_unsupported() {
+    // A variable under `after:` would land in the part's own declarations.
+    assert!(matches!(
+        utility("w-(--x)", Some(Pseudo::After)),
+        U::Unsupported(_)
+    ));
+    assert!(matches!(
+        utility("[--x:4px]", Some(Pseudo::After)),
+        U::Unsupported(_)
+    ));
+}
+
+/// One reason per spec group ("Ignored classes" in the design spec), and an
+/// svg child class ignored for the reason its `[&_svg]` sibling has.
+#[test]
+fn ignore_reasons_follow_the_spec_groups() {
+    let why = |u: &str, p: Option<Pseudo>| match utility(u, p) {
+        U::Ignore(w) => w,
+        other => panic!("{u}: {other:?}"),
+    };
+    let structure = [
+        "flex",
+        "grid",
+        "inline-flex",
+        "block",
+        "items-center",
+        "justify-between",
+        "justify-self-end",
+        "self-start",
+        "place-content-center",
+        "relative",
+        "absolute",
+        "fixed",
+        "col-start-2",
+        "row-span-2",
+        "grid-cols-2",
+        "grid-rows-2",
+        "auto-rows-min",
+        "flex-col",
+        "flex-col-reverse",
+        "flex-row",
+        "flex-1",
+        "grow",
+        "shrink-0",
+        "@container/card-header",
+    ];
+    for u in structure {
+        assert_eq!(why(u, None), why("flex", None), "{u}");
+    }
+    let browser = [
+        "pointer-events-none",
+        "select-none",
+        "touch-none",
+        "cursor-default",
+        "scroll-my-1",
+        "isolate",
+        "z-50",
+        "whitespace-nowrap",
+        "line-clamp-2",
+        "overflow-hidden",
+        "peer",
+        "group/button",
+    ];
+    // The spec also lists `transition-*` here; it keeps the animation
+    // reason of `duration-*` and `fade-*`.
+    assert_eq!(why("transition-all", None), why("duration-100", None));
+    for u in browser {
+        assert_eq!(why(u, None), why("peer", None), "{u}");
+    }
+    let svg = IGNORED.iter().find(|(v, _)| *v == "[&_svg]").unwrap().1;
+    assert_eq!(why("pointer-events-none", Some(Pseudo::Svg)), svg);
+    assert_eq!(why("shrink-0", Some(Pseudo::Svg)), svg);
+    // The prefix list counts too.
+    assert_eq!(why("cursor-pointer", Some(Pseudo::Svg)), svg);
+}

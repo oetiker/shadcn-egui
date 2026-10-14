@@ -17,6 +17,13 @@ pub fn field_name(part: &str) -> String {
 /// followed by its `_after` part where any style gives it `after:` classes.
 pub fn fields(styles: &[&[Part]]) -> Vec<(String, String)> {
     let first = styles.first().copied().unwrap_or_default();
+    // `s[i]` below is part `i` of every style.
+    for s in styles {
+        assert!(
+            s.iter().map(|p| &p.name).eq(first.iter().map(|p| &p.name)),
+            "styles differ in part order"
+        );
+    }
     let mut out = Vec::new();
     for (i, p) in first.iter().enumerate() {
         let doc = match p.name.strip_prefix("slot:") {
@@ -162,5 +169,39 @@ fn rank(r: u128) -> String {
             .map(|b| format!("({b})"))
             .collect::<Vec<_>>()
             .join(" | "),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Field, Value};
+    use crate::resolve::Marker;
+
+    fn part(name: &str, after: bool) -> Part {
+        let decl = Decl {
+            field: Field::Height,
+            value: Value::Px(1.0),
+            all: 0,
+            none: 0,
+            rank: 0,
+            idx: 0,
+        };
+        Part {
+            name: name.to_owned(),
+            marker: Marker {
+                after: if after { vec![decl] } else { Vec::new() },
+                ..Marker::default()
+            },
+            corrections: Vec::new(),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "part order")]
+    fn fields_require_one_part_order() {
+        let a = [part("cn-x", false), part("cn-y", false)];
+        let b = [part("cn-y", false), part("cn-x", true)];
+        fields(&[&a, &b]);
     }
 }
