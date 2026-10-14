@@ -719,3 +719,48 @@ fn checkbox_fade_comes_from_the_style() {
     };
     assert_eq!(fill(false), fill(true).gamma_multiply(0.25));
 }
+
+#[test]
+fn slider_fade_multiplies_down_the_parts() {
+    use shadcn_egui::components::slider::Slider;
+    // Each part its own factor, so a part that reads another's opacity
+    // (or skips its parent's) lands on the wrong product.
+    let (root, track, range, thumb) = (0.25, 0.5, 0.75, 0.625);
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        for (recipe, v) in [
+            (&mut s.slider, root),
+            (&mut s.slider_track, track),
+            (&mut s.slider_range, range),
+            (&mut s.slider_thumb, thumb),
+        ] {
+            recipe
+                .opacity
+                .rules
+                .push(Rule::important(When::all(State::DISABLED), v));
+        }
+    });
+    let rects = |enabled: bool| {
+        let (_, out) = common::measure_output(&theme, |ui| {
+            ui.add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(enabled))
+        });
+        common::rect_shapes(&out)
+    };
+    let (on, off) = (rects(true), rects(false));
+    assert_eq!(on.len(), off.len());
+    assert!(on.len() >= 3, "track, range and thumb: {}", on.len());
+    // Root > track > range; root > thumb.
+    let factors = [track * root, range * track * root];
+    for (i, (a, b)) in on.iter().zip(&off).enumerate() {
+        let (part, f) = match i {
+            0 => ("track", factors[0]),
+            1 => ("range", factors[1]),
+            _ => ("thumb", thumb * root),
+        };
+        assert_eq!(b.fill, a.fill.gamma_multiply(f), "{part} fill");
+        assert_eq!(
+            b.stroke.color,
+            a.stroke.color.gamma_multiply(f),
+            "{part} stroke"
+        );
+    }
+}
