@@ -62,7 +62,8 @@ pub fn sources() -> Vec<(Upstream, String, String)> {
 }
 
 /// Copy every source from its checkout (`up`: svelte, `up_react`: React)
-/// into `<tool>/tests/fixtures/`.
+/// into `<tool>/tests/fixtures/`. A `.svelte` fixture that is no longer
+/// upstream is an error.
 pub fn refresh(
     up: &Path,
     up_react: &Path,
@@ -81,10 +82,25 @@ pub fn refresh(
         )?;
     }
     let ui = up.join(UI);
-    for (dir, file) in svelte_files(&ui, lines)? {
-        let to = tool.join("tests/fixtures/ui").join(&dir);
+    let theirs = svelte_files(&ui, lines)?;
+    for (dir, file) in &theirs {
+        let to = tool.join("tests/fixtures/ui").join(dir);
         std::fs::create_dir_all(&to)?;
-        std::fs::copy(ui.join(&dir).join(&file), to.join(&file))?;
+        std::fs::copy(ui.join(dir).join(file), to.join(file))?;
+    }
+    // A fixture that left upstream would be translated as if current. It
+    // is reported, not deleted: removing it is the maintainer's call.
+    let ours = svelte_files(&tool.join("tests/fixtures/ui"), lines)?;
+    let stale: Vec<String> = ours
+        .iter()
+        .filter(|f| !theirs.contains(f))
+        .map(|(dir, file)| format!("tests/fixtures/ui/{dir}/{file}"))
+        .collect();
+    if !stale.is_empty() {
+        return Err(std::io::Error::other(format!(
+            "no longer upstream, remove: {}",
+            stale.join(", ")
+        )));
     }
     Ok(())
 }

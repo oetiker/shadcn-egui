@@ -264,3 +264,69 @@ fn conditional_tv_values_are_errors() {
         assert!(err.contains("conditional"), "{src}: {err}");
     }
 }
+
+/// Item 6: Svelte 5 array and object class values and a conditional are not
+/// read, so they are errors; `class=` counts only as a whole attribute name.
+#[test]
+fn unread_dynamic_class_values_are_errors() {
+    for c in [
+        r#"<div class={["cn-a x", on && "y"]}></div>"#,
+        r#"<div class={{ "cn-a x": on }}></div>"#,
+        r#"<div class={on ? "cn-a x" : "cn-a y"}></div>"#,
+    ] {
+        let err = class_strings(c).unwrap_err();
+        assert!(err.contains("class"), "{c}: {err}");
+    }
+    // Neither a longer attribute name nor a plain value is a class attribute.
+    assert_eq!(
+        class_strings(r#"<div subclass='x' data-class="y" class={cn("cn-a z")}></div>"#).unwrap(),
+        ["cn-a z"]
+    );
+    assert_eq!(
+        class_strings(r#"<div class={className}></div>"#).unwrap(),
+        Vec::<String>::new()
+    );
+}
+
+/// Item 7: an unclosed string in a `tv` object hides every key after it,
+/// so it is an error, not the end of the object.
+#[test]
+fn unclosed_string_in_tv_is_an_error() {
+    let src = "const v = tv({ base: \"cn-u a, slots: { x: \"cn-u-x b\" } });";
+    let err = class_strings(src).unwrap_err();
+    assert!(err.contains("does not close"), "{err}");
+    let cn = "<div class={cn(\"cn-u a)}></div>";
+    let err = class_strings(cn).unwrap_err();
+    assert!(err.contains("does not close"), "{err}");
+}
+
+/// Item 8: a `//` left unmasked (after `:`, a URL) is no comment inside a
+/// call either, so the call still closes.
+#[test]
+fn unmasked_double_slash_keeps_the_call_closed() {
+    let src = "<div class={cn(\"cn-v a\", f(a:// b), \"c\")}></div>";
+    assert_eq!(class_strings(src).unwrap(), ["cn-v a c"]);
+}
+
+/// Item 10: a template literal spans lines; a `//` in it is text.
+#[test]
+fn double_slash_in_a_multi_line_template_is_text() {
+    let src = "<div class={cn(`cn-w a\n  http://x b // c`, \"d\")}></div>";
+    assert_eq!(class_strings(src).unwrap(), ["cn-w a http://x b // c d"]);
+}
+
+/// Item 13: shorthand, spread and computed `tv` keys hide what they hold.
+#[test]
+fn unevaluable_tv_keys_are_errors() {
+    for src in [
+        "const v = tv({ base, variants: { size: { sm: \"cn-k-sm a\" } } });",
+        "const v = tv({ ...shared, base: \"cn-k a\" });",
+        "const v = tv({ [key]: \"cn-k b\", base: \"cn-k a\" });",
+    ] {
+        assert!(
+            class_strings(src).is_err(),
+            "{src}: {:?}",
+            class_strings(src)
+        );
+    }
+}

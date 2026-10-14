@@ -122,6 +122,15 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                     .push((raw.clone(), format!("unknown CSS variable {name}"))),
             },
             U::VarDef(..) => {}
+            U::Inherit(fields, why) => {
+                m.decls.retain(|d| {
+                    !(fields.contains(&d.field)
+                        && d.all == v.all
+                        && d.none == v.none
+                        && d.rank == v.rank)
+                });
+                m.ignored.push((raw.clone(), why));
+            }
             U::Ignore(why) => m.ignored.push((raw.clone(), why)),
             U::Unsupported(why) => m.unsupported.push((raw.clone(), why.to_owned())),
         }
@@ -131,13 +140,66 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     m
 }
 
-/// Base classes dropped by name for one part: `(part, variant, why)`. The
-/// component source does not say which element a bits-ui primitive renders.
-pub const EXCEPTIONS: &[(&str, &str, &str)] = &[(
+/// A base class dropped by name for one part: `(part, variant, why)`.
+pub type Exception = (&'static str, &'static str, &'static str);
+
+/// Classes an exception dropped, each with its reason.
+pub type Dropped = Vec<(String, &'static str)>;
+
+/// Base classes dropped by name for one part. The component source does
+/// not say which element a bits-ui primitive renders.
+pub const EXCEPTIONS: &[Exception] = &[(
     "cn-slider-thumb",
     "disabled",
     "bits-ui renders the slider thumb as a <span>, where `disabled:` never matches",
 )];
+
+/// `classes` (one part, expanded) without the classes `exceptions` drop
+/// for `part`, and the dropped ones with their reasons. An exception for
+/// `part` that matches no class is an error: a pin bump must not leave a
+/// stale entry behind silently, as with [`correct`].
+pub fn except(
+    exceptions: &[Exception],
+    part: &str,
+    classes: Vec<String>,
+) -> Result<(Vec<String>, Dropped), String> {
+    let mut dropped = Vec::new();
+    let kept = classes
+        .into_iter()
+        .filter(|c| {
+            let hit = exceptions
+                .iter()
+                .find(|(p, v, _)| *p == part && split(c).variants.iter().any(|x| x == v));
+            match hit {
+                Some((_, _, why)) => {
+                    dropped.push((c.clone(), *why));
+                    false
+                }
+                None => true,
+            }
+        })
+        .collect();
+    for (p, v, _) in exceptions.iter().filter(|(p, _, _)| *p == part) {
+        if !dropped
+            .iter()
+            .any(|(c, _)| split(c).variants.iter().any(|x| x == v))
+        {
+            return Err(format!(
+                "exception ({p}): no `{v}:` class in the class string"
+            ));
+        }
+    }
+    Ok((kept, dropped))
+}
+
+/// An exception whose part is not in `parts` (the part left `markers.txt`)
+/// is an error too.
+pub fn exception_parts(exceptions: &[Exception], parts: &[&str]) -> Result<(), String> {
+    match exceptions.iter().find(|(p, _, _)| !parts.contains(p)) {
+        Some((p, _, _)) => Err(format!("exception ({p}): no such part")),
+        None => Ok(()),
+    }
+}
 
 /// A design correction's edit of a part's class string.
 #[derive(Clone, Copy, Debug)]
@@ -279,27 +341,15 @@ pub fn parts(
     components: &[(String, Vec<String>)],
 ) -> Result<Vec<Part>, String> {
     let vars = collect_vars(css);
+    let names: Vec<&str> = components.iter().map(|(n, _)| n.as_str()).collect();
+    exception_parts(EXCEPTIONS, &names)?;
     components
         .iter()
         .map(|(name, classes)| {
-            let mut dropped = Vec::new();
             let (full, corrections) =
                 correct(CORRECTIONS, style, name, expand(classes, name, css))?;
-            let kept: Vec<String> = full
-                .into_iter()
-                .filter(|c| {
-                    let hit = EXCEPTIONS.iter().find(|(p, v, _)| {
-                        *p == name.as_str() && split(c).variants.iter().any(|x| x == v)
-                    });
-                    match hit {
-                        Some((_, _, why)) => {
-                            dropped.push((c.clone(), *why));
-                            false
-                        }
-                        None => true,
-                    }
-                })
-                .collect();
+            let (kept, dropped) =
+                except(EXCEPTIONS, name, full).map_err(|e| format!("{style}: {e}"))?;
             let mut marker = translate(&kept, &vars);
             marker.ignored.extend(dropped);
             Ok(Part {

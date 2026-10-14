@@ -18,8 +18,10 @@ fn canonical(s: &str) -> String {
 /// differ is listed in published-allow.txt as `<style> <part>  # why`.
 #[test]
 fn part_strings_match_the_published_components() {
+    // A missing allow list is an error, not an empty list: the test must
+    // not pass on a checkout that lost the file.
     let allow = std::fs::read_to_string(format!("{ROOT}/tests/fixtures/published-allow.txt"))
-        .unwrap_or_default();
+        .expect("tests/fixtures/published-allow.txt");
     let allowed = |s: &str, p: &str| {
         allow.lines().any(|l| {
             l.split('#')

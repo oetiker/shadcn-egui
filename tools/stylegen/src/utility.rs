@@ -13,6 +13,10 @@ pub enum U {
     After(Vec<(Field, Value)>),
     UseVar(Vec<Field>, String),
     VarDef(String, f32),
+    /// `text-current`: the fields inherit. tailwind-merge drops an earlier
+    /// class of the same fields and modifiers, so this clears them; the
+    /// class itself is reported as ignored with the reason.
+    Inherit(Vec<Field>, &'static str),
     Ignore(&'static str),
     Unsupported(&'static str),
 }
@@ -71,11 +75,9 @@ const IGNORE_EXACT: &[(&str, &str)] = &[
     ("left-1/2", CENTRE),
     ("-translate-x-1/2", CENTRE),
     ("-translate-y-1/2", CENTRE),
-    (
-        "text-current",
-        "inherits the parent's text colour: the recipe leaves `text` empty",
-    ),
 ];
+/// Why `text-current` sets nothing: the reason [`U::Inherit`] reports.
+const INHERIT_TEXT: &str = "inherits the parent's text colour: the recipe leaves `text` empty";
 const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("transition", ANIM),
     ("duration-", ANIM),
@@ -204,6 +206,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
                 return px(&[IconSize], v);
             }
             let ignored = IGNORE_EXACT.iter().any(|(k, _)| *k == u)
+                || u == "text-current"
                 || IGNORE_PREFIX.iter().any(|(k, _)| u.starts_with(k));
             return if ignored {
                 U::Ignore(SVG_CHILD)
@@ -229,6 +232,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
                 U::UseVar(..) | U::VarDef(..) => {
                     U::Unsupported("CSS variable under after:; the _after recipe takes fields only")
                 }
+                U::Inherit(..) => U::Unsupported("inherited value under after:"),
                 other @ (U::After(_) | U::Ignore(_) | U::Unsupported(_)) => other,
             };
         }
@@ -236,6 +240,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     }
     if let Some((_, why)) = IGNORE_EXACT.iter().find(|(k, _)| *k == u) {
         return U::Ignore(why);
+    }
+    if u == "text-current" {
+        return U::Inherit(vec![Text], INHERIT_TEXT);
     }
     if let Some((_, why)) = IGNORE_PREFIX.iter().find(|(k, _)| u.starts_with(k)) {
         return U::Ignore(why);

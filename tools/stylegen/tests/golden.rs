@@ -334,3 +334,26 @@ fn every_exported_style_translates_every_part() {
         }
     }
 }
+
+/// M4: tailwind-merge drops an earlier `text-*` in favour of
+/// `text-current`, so the part inherits; a later `text-*` or one under other
+/// variants stays.
+#[test]
+fn text_current_clears_earlier_text_colours() {
+    let text = |v: &[&str]| -> Vec<(u32, Value)> {
+        translate(&classes(v), &Vars::new())
+            .decls
+            .iter()
+            .filter(|d| d.field == Field::Text)
+            .map(|d| (d.all, d.value))
+            .collect()
+    };
+    assert!(text(&["text-primary", "text-current"]).is_empty());
+    assert_eq!(text(&["text-current", "text-primary"]).len(), 1);
+    let kept = text(&["dark:text-primary", "text-primary", "text-current"]);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_ne!(kept[0].0, 0, "the dark: rule stays");
+    // text-current is still listed as ignored in the report.
+    let m = translate(&classes(&["text-primary", "text-current"]), &Vars::new());
+    assert!(m.ignored.iter().any(|(c, _)| c == "text-current"));
+}

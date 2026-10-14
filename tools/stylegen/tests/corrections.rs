@@ -271,3 +271,29 @@ fn the_report_lists_each_correction_under_its_part() {
     );
     assert!(section.contains("corrected (C2) added"), "{section}");
 }
+
+/// M5: an exception drops the classes it names, and one that matches no
+/// class (stale after a pin bump) is an error, as an unmatched correction is.
+#[test]
+fn exceptions_drop_their_classes_and_fail_when_stale() {
+    use stylegen::resolve::{except, Exception};
+    const THUMB: &[Exception] = &[("cn-thumb", "disabled", "a span")];
+    let classes = |v: &[&str]| v.iter().map(|c| (*c).to_owned()).collect::<Vec<_>>();
+    let (kept, dropped) = except(
+        THUMB,
+        "cn-thumb",
+        classes(&["size-4", "disabled:opacity-50"]),
+    )
+    .expect("matches");
+    assert_eq!(kept, classes(&["size-4"]));
+    assert_eq!(dropped, [("disabled:opacity-50".to_owned(), "a span")]);
+    let err = except(THUMB, "cn-thumb", classes(&["size-4"])).expect_err("stale");
+    assert!(
+        err.contains("cn-thumb") && err.contains("disabled"),
+        "{err}"
+    );
+    // Another part is left alone.
+    assert!(except(THUMB, "cn-track", classes(&["h-1"])).is_ok());
+    assert!(stylegen::resolve::exception_parts(THUMB, &["cn-thumb"]).is_ok());
+    assert!(stylegen::resolve::exception_parts(THUMB, &["cn-track"]).is_err());
+}

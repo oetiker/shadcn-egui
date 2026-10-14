@@ -28,17 +28,19 @@ pub fn class_strings(src: &str) -> Result<Vec<String>, String> {
     let src = mask_js_comments(&strip_html_comments(src));
     unread_class_attribute(&src)?;
     let mut found: Vec<(usize, String)> = Vec::new();
-    for (at, args) in calls(&src, "cn") {
+    for (at, args) in calls(&src, "cn")? {
         found.push((at, cn_strings(args)?.join(" ")));
     }
-    for (at, args) in calls(&src, "tv") {
+    for (at, args) in calls(&src, "tv")? {
         for s in tv_strings(args)? {
             found.push((at, s));
         }
     }
-    let mut from = 0;
-    while let Some(i) = src[from..].find("class=\"") {
-        let start = from + i + "class=\"".len();
+    for at in class_attributes(&src) {
+        if !src[at..].starts_with('"') {
+            continue;
+        }
+        let start = at + 1;
         let Some(len) = src[start..].find('"') else {
             break;
         };
@@ -47,7 +49,6 @@ pub fn class_strings(src: &str) -> Result<Vec<String>, String> {
             return Err(format!("dynamic class attribute: class=\"{value}\""));
         }
         found.push((start, value.to_owned()));
-        from = start + len + 1;
     }
     // Stable: the strings of one `tv` keep their order.
     found.sort_by_key(|(at, _)| *at);
@@ -214,8 +215,10 @@ fn strip_html_comments(src: &str) -> String {
 }
 
 /// `(position, argument text)` of every call `name(…)` where `name` is not
-/// the tail of a longer identifier or a method.
-fn calls<'a>(src: &'a str, name: &str) -> Vec<(usize, &'a str)> {
+/// the tail of a longer identifier or a method. A call that never closes
+/// (an unclosed string or bracket in it) is an error: skipping it would
+/// drop its classes silently.
+fn calls<'a>(src: &'a str, name: &str) -> Result<Vec<(usize, &'a str)>, String> {
     let pat = format!("{name}(");
     let mut out = Vec::new();
     let mut from = 0;
@@ -229,16 +232,21 @@ fn calls<'a>(src: &'a str, name: &str) -> Vec<(usize, &'a str)> {
         if joined {
             continue;
         }
-        if let Some(end) = closing(src, from - 1) {
-            out.push((at, &src[from..end]));
-            from = end + 1;
-        }
+        let end = closing(src, from - 1).ok_or_else(|| {
+            format!(
+                "{name}() call that does not close (an unclosed string or bracket): {}",
+                src[at..].lines().next().unwrap_or("").trim()
+            )
+        })?;
+        out.push((at, &src[from..end]));
+        from = end + 1;
     }
-    out
+    Ok(out)
 }
 
-/// Index of the bracket closing the one at `open`, skipping strings and
-/// `//` comments.
+/// Index of the bracket closing the one at `open`, skipping strings.
+/// Comments are masked already ([`mask_js_comments`]); a `//` it leaves
+/// (after `:`, a URL) is text.
 fn closing(src: &str, open: usize) -> Option<usize> {
     let b = src.as_bytes();
     let mut depth = 0usize;
@@ -246,11 +254,6 @@ fn closing(src: &str, open: usize) -> Option<usize> {
     while i < b.len() {
         match b[i] {
             b'"' | b'\'' | b'`' => i = skip_string(b, i)?,
-            b'/' if b.get(i + 1) == Some(&b'/') => {
-                while i < b.len() && b[i] != b'\n' {
-                    i += 1;
-                }
-            }
             b'(' | b'{' | b'[' => depth += 1,
             b')' | b'}' | b']' => {
                 depth = depth.checked_sub(1)?;
@@ -339,6 +342,25 @@ fn cn_strings(args: &str) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// `s` with every string literal's body removed (quotes kept), so a
+/// search finds only code.
+fn strings_free(s: &str) -> String {
+    let b = s.as_bytes();
+    let (mut out, mut i) = (String::with_capacity(s.len()), 0usize);
+    while i < b.len() {
+        if matches!(b[i], b'"' | b'\'' | b'`') {
+            let end = skip_string(b, i).unwrap_or(b.len() - 1);
+            out.push_str("\"\"");
+            i = end + 1;
+        } else {
+            let c = s[i..].chars().next().expect("char boundary");
+            out.push(c);
+            i += c.len_utf8();
+        }
+    }
+    out
+}
+
 fn check_literal(body: &str, quote: u8) -> Result<(), String> {
     if quote == b'`' && body.contains("${") {
         return Err(format!("template literal with interpolation: `{body}`"));
@@ -347,14 +369,18 @@ fn check_literal(body: &str, quote: u8) -> Result<(), String> {
 }
 
 /// `src` with `//` comments overwritten by spaces (same length), so
-/// positions stay valid. A `//` inside a quoted string on its line, or
-/// right after `:` (a URL), is not a comment. An apostrophe right after a
-/// letter or digit (`it's` in markup text) opens no string.
+/// positions stay valid. A `//` inside a quoted string, or right after `:`
+/// (a URL), is not a comment. A `"` or `'` string ends with its line; a
+/// template literal (`` ` ``) runs on across lines. An apostrophe right
+/// after a letter or digit (`it's` in markup text) opens no string.
 fn mask_js_comments(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
+    let mut quote = 0u8;
     for line in src.split_inclusive('\n') {
         let b = line.as_bytes();
-        let mut quote = 0u8;
+        if quote != b'`' {
+            quote = 0;
+        }
         let mut cut = None;
         let mut i = 0;
         while i < b.len() {
@@ -409,9 +435,7 @@ fn strings(args: &str, any_depth: bool) -> Result<Vec<String>, String> {
     while i < b.len() {
         match b[i] {
             b'"' | b'\'' | b'`' => {
-                let Some(end) = skip_string(b, i) else {
-                    break;
-                };
+                let end = skip_string(b, i).ok_or_else(|| unclosed(args, i))?;
                 let colon = args[end + 1..].trim_start().starts_with(':');
                 let key = colon && matches!(prev, b'{' | b',');
                 if colon && !key {
@@ -441,6 +465,15 @@ fn strings(args: &str, any_depth: bool) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// The error for a string that `args` opens at `at` and never closes: it
+/// would hide every key and value after it.
+fn unclosed(args: &str, at: usize) -> String {
+    format!(
+        "unclosed string the extractor cannot read: {}",
+        args[at..].lines().next().unwrap_or("").trim()
+    )
+}
+
 /// The keys `tv({…})` reads. `defaultVariants` names variants and holds no
 /// classes, so it contributes nothing.
 const TV_KEYS: &[&str] = &["base", "variants", "defaultVariants"];
@@ -449,7 +482,7 @@ const TV_KEYS: &[&str] = &["base", "variants", "defaultVariants"];
 /// call. Any other top-level key (`slots`, `compoundVariants`) is an error:
 /// the extractor does not read it, and dropping it would lose its classes.
 fn tv_strings(args: &str) -> Result<Vec<String>, String> {
-    if let Some(k) = object_keys(args)
+    if let Some(k) = object_keys(args)?
         .into_iter()
         .find(|k| !TV_KEYS.contains(&k.as_str()))
     {
@@ -459,10 +492,10 @@ fn tv_strings(args: &str) -> Result<Vec<String>, String> {
         ));
     }
     let mut out = Vec::new();
-    if let Some(i) = top_key(args, "base") {
+    if let Some(i) = top_key(args, "base")? {
         out.extend(strings(&args[i..], false)?.into_iter().take(1));
     }
-    if let Some(i) = top_key(args, "variants") {
+    if let Some(i) = top_key(args, "variants")? {
         if let Some(open) = args[i..].find('{').map(|o| i + o) {
             if let Some(close) = closing(args, open) {
                 out.extend(strings(&args[open..=close], true)?);
@@ -474,20 +507,29 @@ fn tv_strings(args: &str) -> Result<Vec<String>, String> {
 
 /// Every key of the object that `args` (a call's argument text) opens: a
 /// bare name or a string at bracket depth 1, right after `{` or `,` and
-/// followed by `:`.
-fn object_keys(args: &str) -> Vec<String> {
+/// followed by `:`. A key whose name or value the extractor cannot see is
+/// an error: a shorthand (`{ base }`), a spread (`...x`), a computed key
+/// (`[k]:`), a method or a string not followed by `:`.
+fn object_keys(args: &str) -> Result<Vec<String>, String> {
     let b = args.as_bytes();
     let (mut out, mut depth, mut i) = (Vec::new(), 0i32, 0usize);
     let mut prev = 0u8;
     let colon_after = |end: usize| args[end..].trim_start().starts_with(':');
+    let unreadable = |at: usize| {
+        Err(format!(
+            "tv() key the extractor cannot evaluate: {}",
+            args[at..].lines().next().unwrap_or("").trim()
+        ))
+    };
     while i < b.len() {
         let c = b[i];
         let at_key = depth == 1 && matches!(prev, b'{' | b',');
         if matches!(c, b'"' | b'\'' | b'`') {
-            let Some(end) = skip_string(b, i) else {
-                break;
-            };
-            if at_key && colon_after(end + 1) {
+            let end = skip_string(b, i).ok_or_else(|| unclosed(args, i))?;
+            if at_key {
+                if !colon_after(end + 1) {
+                    return unreadable(i);
+                }
                 out.push(args[i + 1..end].to_owned());
             }
             prev = c;
@@ -499,12 +541,16 @@ fn object_keys(args: &str) -> Vec<String> {
                 .bytes()
                 .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'$'))
                 .count();
-            if colon_after(i + len) {
-                out.push(args[i..i + len].to_owned());
+            if !colon_after(i + len) {
+                return unreadable(i);
             }
+            out.push(args[i..i + len].to_owned());
             prev = b'a';
             i += len;
             continue;
+        }
+        if at_key && matches!(c, b'.' | b'[') {
+            return unreadable(i);
         }
         match c {
             b'(' | b'{' | b'[' => depth += 1,
@@ -516,18 +562,19 @@ fn object_keys(args: &str) -> Vec<String> {
         }
         i += 1;
     }
-    out
+    Ok(out)
 }
 
 /// The index after `key:` where `key` is a whole bare key of the object
 /// that `args` (a call's argument text) opens: at bracket depth 1, outside
-/// strings, not the tail of a longer name (`database:`).
-fn top_key(args: &str, key: &str) -> Option<usize> {
+/// strings, not the tail of a longer name (`database:`). An unclosed
+/// string is an error: it would hide every later key.
+fn top_key(args: &str, key: &str) -> Result<Option<usize>, String> {
     let b = args.as_bytes();
     let (mut depth, mut i) = (0i32, 0usize);
     while i < b.len() {
         match b[i] {
-            b'"' | b'\'' | b'`' => i = skip_string(b, i)?,
+            b'"' | b'\'' | b'`' => i = skip_string(b, i).ok_or_else(|| unclosed(args, i))?,
             b'(' | b'{' | b'[' => depth += 1,
             b')' | b'}' | b']' => depth -= 1,
             _ if depth == 1
@@ -538,24 +585,44 @@ fn top_key(args: &str, key: &str) -> Option<usize> {
                 let rest = &args[i + key.len()..];
                 let after = rest.trim_start();
                 if let Some(value) = after.strip_prefix(':') {
-                    return Some(args.len() - value.len());
+                    return Ok(Some(args.len() - value.len()));
                 }
             }
             _ => {}
         }
         i += 1;
     }
-    None
+    Ok(None)
+}
+
+/// Where each `class=` attribute starts: `class` as a whole attribute name,
+/// not the tail of a longer one (`subclass=`, `data-class=`).
+fn class_attributes(src: &str) -> impl Iterator<Item = usize> + '_ {
+    src.match_indices("class=").filter_map(move |(i, _)| {
+        let joined = src[..i]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | ':' | '$'));
+        (!joined).then_some(i + "class=".len())
+    })
 }
 
 /// An error for a `class` attribute the extractor does not read: a string
-/// in braces (`class={"…"}`) or in single quotes (`class='…'`).
+/// in braces (`class={"…"}`), in single quotes (`class='…'`), a Svelte 5
+/// array or object (`class={[..]}`, `class={{..}}`) or a conditional
+/// (`class={c ? "a" : "b"}`). An identifier or a call (`class={cn(..)}`)
+/// is fine: the call is read where it stands.
 fn unread_class_attribute(src: &str) -> Result<(), String> {
-    for (i, _) in src.match_indices("class=") {
-        let rest = &src[i + "class=".len()..];
-        let braced = rest
-            .strip_prefix('{')
-            .is_some_and(|r| r.trim_start().starts_with(['"', '\'', '`']));
+    for at in class_attributes(src) {
+        let rest = &src[at..];
+        let braced = rest.strip_prefix('{').is_some_and(|r| {
+            let r = r.trim_start();
+            if r.starts_with(['"', '\'', '`', '[', '{']) {
+                return true;
+            }
+            // A `?` outside strings and inner brackets: a conditional.
+            closing(rest, 0).is_some_and(|end| strings_free(&rest[1..end]).contains('?'))
+        });
         if braced || rest.starts_with('\'') {
             return Err(format!(
                 "class attribute form the extractor cannot read: class={}",

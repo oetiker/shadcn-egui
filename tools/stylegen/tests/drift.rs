@@ -172,3 +172,38 @@ fn ui_dirs_that_cannot_be_listed_are_problems() {
         "{upstream:#?}"
     );
 }
+
+/// M5: `generate` (through `refresh`) fails on a fixture `.svelte` that left
+/// upstream instead of translating the stale copy. It does not delete it.
+#[test]
+fn refresh_fails_on_a_stale_fixture() {
+    use stylegen::sources::{refresh, sources, Upstream};
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("stylegen-refresh-stale-{}", std::process::id()));
+    let (up, up_react, tool) = (dir.join("up"), dir.join("react"), dir.join("tool"));
+    for (from, _, path) in sources() {
+        let root = if from == Upstream::React {
+            &up_react
+        } else {
+            &up
+        };
+        let p = root.join(path);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, "x").unwrap();
+    }
+    std::fs::create_dir_all(tool.join("tests/fixtures/ui/tabs")).unwrap();
+    let ui_up = up.join("docs/src/lib/registry/ui/tabs");
+    std::fs::create_dir_all(&ui_up).unwrap();
+    std::fs::write(ui_up.join("tabs.svelte"), "tabs").unwrap();
+    let lines = parse_markers("tabs.rs tabs: cn-tabs\n");
+    let fresh = refresh(&up, &up_react, &tool, &lines);
+    let stale_file = tool.join("tests/fixtures/ui/tabs/tabs-old.svelte");
+    std::fs::write(&stale_file, "gone upstream").unwrap();
+    let stale = refresh(&up, &up_react, &tool, &lines);
+    let kept = stale_file.exists();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(fresh.is_ok(), "{fresh:?}");
+    let err = stale.expect_err("stale fixture").to_string();
+    assert!(err.contains("tabs/tabs-old.svelte"), "{err}");
+    assert!(kept, "refresh leaves the file for the maintainer to remove");
+}
