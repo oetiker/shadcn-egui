@@ -104,6 +104,49 @@ jobs:
 
       - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
+  # The browser gallery (scripts/build-web-gallery.sh). The workspace
+  # clippy runs build for the host, where the wasm entry point of the
+  # gallery example is compiled out, so it is linted here. The site is
+  # uploaded so a reviewer can serve a pull request's gallery.
+  web-gallery:
+    name: Web gallery build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-
+
+      - name: Install the wasm-bindgen CLI
+        run: |
+          scripts/install-wasm-bindgen.sh "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - run: cargo clippy --locked -p shadcn-egui --target wasm32-unknown-unknown --example gallery --features fonts-all,icons-all -- -D warnings
+
+      - run: scripts/build-web-gallery.sh site
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-gallery
+          path: site
+          retention-days: 7
+
   # The generators are workspaces of their own and never dependencies of a
   # crate, so the workspace jobs do not see them.
   tools:
