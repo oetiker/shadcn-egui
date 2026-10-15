@@ -21,6 +21,11 @@ crates.
   features `icons-<lib>`.
 - `tools/stylegen`, `tools/icongen`, `tools/fontgen` — generators, each its
   own workspace; never dependencies of a crate.
+- `web/index.html` — the browser gallery's loading page;
+  `scripts/build-web-gallery.sh <out-dir>` builds the site,
+  `scripts/install-wasm-bindgen.sh <dir>` fetches the matching
+  `wasm-bindgen` CLI. `.github/workflows/pages.yml` deploys it after each
+  release.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
   `check-version-files.sh`, `publish-crates.sh`.
 - `.github/` — CI and release on the repo-infra standard. The project
@@ -74,6 +79,7 @@ crates.
   cargo test --workspace --all-features --jobs 4 -- --test-threads 4
   cargo clippy --workspace --all-targets --jobs 4 -- -D warnings
   cargo clippy --workspace --all-targets --all-features --jobs 4 -- -D warnings
+  cargo clippy -p shadcn-egui --target wasm32-unknown-unknown --example gallery --features fonts-all,icons-all --jobs 4 -- -D warnings
   cargo fmt --all --check
   for t in stylegen icongen fontgen; do
     cargo test --manifest-path tools/$t/Cargo.toml --jobs 4 -- --test-threads 4

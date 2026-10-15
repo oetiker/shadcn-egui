@@ -13,6 +13,10 @@ backend (eframe, egui-winit, glow, wgpu).
 
 ![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/gallery-screen.png)
 
+[Try the gallery in your browser](https://oetiker.github.io/shadcn-egui/):
+every component under the preset pickers, with all fonts and icon sets. The
+first load downloads about 18 MB.
+
 ## Install
 
 ```bash
