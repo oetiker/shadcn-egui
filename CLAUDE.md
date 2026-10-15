@@ -29,8 +29,9 @@ crates.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
   `check-version-files.sh`, `publish-crates.sh`.
 - `.github/` — CI and release on the repo-infra standard. The project
-  owns `workflows/ci-local.yml`, the callers `ci.yml`, `release-build.yml`
-  and `release-publish.yml`, and `repo-infra.json`; every other workflow,
+  owns `workflows/ci-local.yml`, `workflows/pages.yml`, the callers `ci.yml`,
+  `release-build.yml` and `release-publish.yml`, and `repo-infra.json`; every
+  other workflow,
   `workflows/lib/` and `dependabot.yml` are installed from repo-infra and
   never edited by hand.
 
