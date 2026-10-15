@@ -1,0 +1,125 @@
+name: Web gallery on GitHub Pages
+
+# Builds the browser gallery from the newest release and publishes it on
+# GitHub Pages. The release creates its tag and GitHub release with
+# GITHUB_TOKEN, and events made with that token start no workflow, so a
+# push-tags or release trigger would never fire; workflow_run does.
+on:
+  workflow_run:
+    workflows: ["Publish release (automatic)"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag or branch to build; empty takes the newest release.
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the web gallery
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      deploy: ${{ steps.ref.outputs.deploy }}
+    steps:
+      # Publish release runs on every push to main that touches CHANGES.md,
+      # most of which are ordinary merges. Its head_sha cannot identify a
+      # release: the tag points to the commit built on the release branch
+      # (v0.4.0 is 4ad8f37), not to the merge commit on main. A release this
+      # run published is newer than the run.
+      - name: Resolve the ref to build
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          INPUT_REF: ${{ inputs.ref }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_STARTED: ${{ github.event.workflow_run.run_started_at }}
+        run: |
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName,publishedAt \
+              --jq '.tagName + " " + .publishedAt')
+          tag=${latest% *}
+          published=${latest#* }
+          if [ "$EVENT" = workflow_dispatch ]; then
+            ref=${INPUT_REF:-$tag}
+          elif [ "$CONCLUSION" != success ]; then
+            echo "Publish release ended with $CONCLUSION; nothing to deploy." >> "$GITHUB_STEP_SUMMARY"
+            echo deploy=false >> "$GITHUB_OUTPUT"
+            exit 0
+          elif [[ "$published" < "$RUN_STARTED" ]]; then
+            echo "The newest release $tag ($published) predates this run ($RUN_STARTED): not a release, nothing to deploy." >> "$GITHUB_STEP_SUMMARY"
+            echo deploy=false >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            ref=$tag
+          fi
+          echo "Building the web gallery from $ref." >> "$GITHUB_STEP_SUMMARY"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo deploy=true >> "$GITHUB_OUTPUT"
+
+      - if: steps.ref.outputs.deploy == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+
+      - if: steps.ref.outputs.deploy == 'true'
+        name: Check the ref has the web gallery
+        env:
+          REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          if [ ! -x scripts/build-web-gallery.sh ]; then
+            echo "::error::$REF has no scripts/build-web-gallery.sh; the web gallery exists from 0.5.0 on."
+            exit 1
+          fi
+
+      - if: steps.ref.outputs.deploy == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - if: steps.ref.outputs.deploy == 'true'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-
+
+      - if: steps.ref.outputs.deploy == 'true'
+        name: Build
+        run: |
+          scripts/install-wasm-bindgen.sh "$RUNNER_TEMP/bin"
+          WASM_BINDGEN="$RUNNER_TEMP/bin/wasm-bindgen" scripts/build-web-gallery.sh site
+
+      - if: steps.ref.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
