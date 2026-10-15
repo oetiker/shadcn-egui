@@ -24,7 +24,7 @@ Entries go under `## [Unreleased]` in `CHANGES.md`, in the subsections
 `### New`, `### Changed`, `### Removed` and `### Fixed`. Every pull request
 adds an entry there or carries the label `no-changelog`.
 
-After Publish release finishes, the workflow "Web gallery on GitHub Pages"
+After the publish workflow finishes, the workflow "Web gallery on GitHub Pages"
 builds the gallery from the new release and deploys it. To deploy again, or
 to deploy a branch, run that workflow by hand; its `ref` input takes a tag
 or a branch and defaults to the newest release.

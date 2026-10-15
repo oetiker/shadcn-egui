@@ -82,7 +82,11 @@
     color: var(--muted-foreground);
     font-variant-numeric: tabular-nums;
   }
-  #status.error { color: var(--destructive); }
+  #error {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--destructive);
+  }
   #retry {
     margin-top: 1rem;
     padding: 0.5rem 1rem;
@@ -98,28 +102,33 @@
 </head>
 <body>
 <canvas id="gallery"></canvas>
-<div id="loader" role="status" aria-live="polite">
+<div id="loader">
   <div class="card">
     <h1>shadcn-egui __VERSION__ gallery</h1>
-    <div class="track" id="track"><div class="bar" id="bar"></div></div>
+    <div class="track" id="track" role="progressbar" aria-label="Loading the gallery" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="bar"></div></div>
     <p id="status">Loading…</p>
+    <p id="error" role="alert" hidden></p>
     <button id="retry" type="button" hidden>Try again</button>
   </div>
 </div>
 <script type="module">
-  // The build script replaces __WASM_SIZE__ with the size of the .wasm file.
+  // The build script replaces the size placeholder below with the size of the
+  // .wasm file.
   // Content-Length cannot serve: with gzip it is the compressed size, while
   // the stream below yields uncompressed bytes.
   const wasmSize = Number("__WASM_SIZE__");
   const bar = document.getElementById("bar");
   const status = document.getElementById("status");
+  const track = document.getElementById("track");
+  const errorText = document.getElementById("error");
   const retry = document.getElementById("retry");
   const mb = (bytes) => (bytes / 1e6).toFixed(1);
 
   function fail(message) {
-    document.getElementById("track").hidden = true;
-    status.textContent = message;
-    status.classList.add("error");
+    track.hidden = true;
+    status.hidden = true;
+    errorText.textContent = message;
+    errorText.hidden = false;
     retry.hidden = false;
   }
   retry.addEventListener("click", () => location.reload());
@@ -130,6 +139,7 @@
     if (wasmSize > 0) {
       const percent = Math.min(100, Math.floor((loaded * 100) / wasmSize));
       bar.style.width = `${percent}%`;
+      track.setAttribute("aria-valuenow", String(percent));
       status.textContent = `${percent} % · ${mb(loaded)} / ${mb(wasmSize)} MB`;
     } else {
       status.textContent = `${mb(loaded)} MB`;
@@ -159,12 +169,13 @@
     }
     let init, wasm;
     try {
-      ({ default: init } = await import("./gallery.js"));
-      wasm = await download("./gallery_bg.wasm");
+      ({ default: init } = await import("./gallery.js?v=__VERSION__"));
+      wasm = await download("./gallery_bg.wasm?v=__VERSION__");
     } catch (e) {
       return fail(`The download failed: ${e.message}`);
     }
     bar.style.width = "100%";
+    track.setAttribute("aria-valuenow", "100");
     status.textContent = "Starting…";
     try {
       await init({ module_or_path: new Response(wasm, { headers: { "Content-Type": "application/wasm" } }) });

@@ -6,6 +6,9 @@ set -euo pipefail
 
 out=${1:?usage: scripts/build-web-gallery.sh <out-dir>}
 root=$(cd "$(dirname "$0")/.." && pwd)
+# Resolve a relative <out-dir> against the caller's directory, before the cd.
+mkdir -p "$out"
+out=$(cd "$out" && pwd)
 cd "$root"
 
 bindgen=${WASM_BINDGEN:-wasm-bindgen}
@@ -24,7 +27,6 @@ cargo build --locked --release --jobs 4 --target wasm32-unknown-unknown \
 target=$(cargo metadata --locked --format-version 1 --no-deps \
     | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
 
-mkdir -p "$out"
 "$bindgen" --target web --no-typescript --out-dir "$out" \
     "$target/wasm32-unknown-unknown/release/examples/gallery.wasm"
 size=$(( $(wc -c < "$out/gallery_bg.wasm") ))

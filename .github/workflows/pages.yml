@@ -76,7 +76,7 @@ jobs:
         env:
           REF: ${{ steps.ref.outputs.ref }}
         run: |
-          if [ ! -x scripts/build-web-gallery.sh ]; then
+          if [ ! -f scripts/build-web-gallery.sh ]; then
             echo "::error::$REF has no scripts/build-web-gallery.sh; the web gallery exists from 0.5.0 on."
             exit 1
           fi

@@ -118,8 +118,17 @@ mod tests {
 
     #[test]
     fn a_valid_code_and_dark_apply() {
-        let (state, warning) = initial_state(Some("b0"), Some("dark"));
-        assert_eq!(state.preset, Preset::from_code("b0").expect("decodes"));
+        // The code of the default preset with only the style set to Vega.
+        let code = "bIkeymG";
+        let (state, warning) = initial_state(Some(code), Some("dark"));
+        let expected = Preset {
+            style: shadcn_egui::preset::StyleName::Vega,
+            ..Preset::default()
+        };
+        assert_eq!(Preset::from_code(code).expect("decodes"), expected);
+        assert_eq!(expected.to_code().as_deref(), Some(code));
+        assert_ne!(state.preset, Preset::default());
+        assert_eq!(state.preset, expected);
         assert_eq!(state.mode, Mode::Dark);
         assert_eq!(warning, None);
     }
