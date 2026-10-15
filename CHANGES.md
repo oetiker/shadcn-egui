@@ -7,6 +7,9 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- The component gallery runs in the browser at
+  https://oetiker.github.io/shadcn-egui/ and is updated with each release.
+  A link such as `?preset=bIkeymG&mode=dark` opens it with that preset and mode.
 - Every colour, size and spacing of every component can be changed through
   `theme.style`, for example a filled `primary` active tab with a solid 2 px
   focus ring. `Rule::important(When::all(State::SELECTED), value)` adds a

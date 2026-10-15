@@ -21,13 +21,17 @@ crates.
   features `icons-<lib>`.
 - `tools/stylegen`, `tools/icongen`, `tools/fontgen` — generators, each its
   own workspace; never dependencies of a crate.
+- `web/index.html` — the browser gallery's loading page; the scripts below
+  build it into the site and `.github/workflows/pages.yml` deploys it.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
-  `check-version-files.sh`, `publish-crates.sh`.
+  `check-version-files.sh`, `publish-crates.sh`, `build-web-gallery.sh`
+  (builds the browser gallery), `install-wasm-bindgen.sh` (fetches the
+  matching `wasm-bindgen` CLI).
 - `.github/` — CI and release on the repo-infra standard. The project
-  owns `workflows/ci-local.yml`, the callers `ci.yml`, `release-build.yml`
-  and `release-publish.yml`, and `repo-infra.json`; every other workflow,
-  `workflows/lib/` and `dependabot.yml` are installed from repo-infra and
-  never edited by hand.
+  owns `workflows/ci-local.yml`, `workflows/pages.yml`, the callers
+  `ci.yml`, `release-build.yml` and `release-publish.yml`, and
+  `repo-infra.json`; every other workflow, `workflows/lib/` and
+  `dependabot.yml` are installed from repo-infra and never edited by hand.
 
 ## Start here — read the source docs, don't restate them
 
@@ -74,6 +78,7 @@ crates.
   cargo test --workspace --all-features --jobs 4 -- --test-threads 4
   cargo clippy --workspace --all-targets --jobs 4 -- -D warnings
   cargo clippy --workspace --all-targets --all-features --jobs 4 -- -D warnings
+  cargo clippy -p shadcn-egui --target wasm32-unknown-unknown --example gallery --features fonts-all,icons-all --jobs 4 -- -D warnings
   cargo fmt --all --check
   for t in stylegen icongen fontgen; do
     cargo test --manifest-path tools/$t/Cargo.toml --jobs 4 -- --test-threads 4

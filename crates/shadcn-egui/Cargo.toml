@@ -202,12 +202,21 @@ egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
 # Tests compare against a heading font that differs from the body font.
 shadcn-egui-font-oxanium.workspace = true
 
+# The gallery example's browser entry point; scripts/build-web-gallery.sh
+# runs the wasm-bindgen CLI of the version Cargo.lock pins for this crate.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Document", "Element", "HtmlCanvasElement", "Location", "UrlSearchParams", "Window"] }
+
 [[example]]
 name = "settings"
 
 [[example]]
 name = "gallery"
 required-features = ["fonts-all", "icons-all"]
+# The tests of initial_state run with cargo test --all-features.
+test = true
 
 [[example]]
 name = "bench_frame"

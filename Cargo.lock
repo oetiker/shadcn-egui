@@ -2968,6 +2968,9 @@ dependencies = [
  "shadcn-egui-icons-phosphor",
  "shadcn-egui-icons-remixicon",
  "shadcn-egui-icons-tabler",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

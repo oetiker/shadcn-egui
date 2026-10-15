@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>shadcn-egui gallery</title>
+<script>
+  // ?mode=dark forces dark, any other ?mode= forces light (as in the
+  // gallery); without it the page follows the browser setting.
+  const mode = new URLSearchParams(location.search).get("mode");
+  if (mode !== null) document.documentElement.dataset.mode = mode === "dark" ? "dark" : "light";
+</script>
+<style>
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --border: oklch(0.922 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --radius: 0.625rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-mode="light"]) {
+      --background: oklch(0.145 0 0);
+      --foreground: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0);
+      --muted: oklch(0.269 0 0);
+      --muted-foreground: oklch(0.708 0 0);
+      --border: oklch(1 0 0 / 10%);
+      --primary: oklch(0.922 0 0);
+      --primary-foreground: oklch(0.205 0 0);
+      --destructive: oklch(0.704 0.191 22.216);
+    }
+  }
+  :root[data-mode="dark"] {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #gallery { display: block; width: 100%; height: 100%; }
+  #loader {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background);
+  }
+  .card {
+    box-sizing: border-box;
+    width: min(22rem, calc(100% - 2rem));
+    padding: 1.5rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  }
+  h1 { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; }
+  .track { height: 0.5rem; overflow: hidden; background: var(--muted); border-radius: 999px; }
+  .bar { width: 0; height: 100%; background: var(--primary); transition: width 120ms linear; }
+  #status {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  #error {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--destructive);
+  }
+  #retry {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--primary-foreground);
+    background: var(--primary);
+    border: 0;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="gallery"></canvas>
+<div id="loader">
+  <div class="card">
+    <h1>shadcn-egui __VERSION__ gallery</h1>
+    <div class="track" id="track" role="progressbar" aria-label="Loading the gallery" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="bar"></div></div>
+    <p id="status">Loading…</p>
+    <p id="error" role="alert" hidden></p>
+    <button id="retry" type="button" hidden>Try again</button>
+  </div>
+</div>
+<script type="module">
+  // The build script replaces the size placeholder below with the size of the
+  // .wasm file.
+  // Content-Length cannot serve: with gzip it is the compressed size, while
+  // the stream below yields uncompressed bytes.
+  const wasmSize = Number("__WASM_SIZE__");
+  const bar = document.getElementById("bar");
+  const status = document.getElementById("status");
+  const track = document.getElementById("track");
+  const errorText = document.getElementById("error");
+  const retry = document.getElementById("retry");
+  const mb = (bytes) => (bytes / 1e6).toFixed(1);
+
+  function fail(message) {
+    track.hidden = true;
+    status.hidden = true;
+    errorText.textContent = message;
+    errorText.hidden = false;
+    retry.hidden = false;
+  }
+  retry.addEventListener("click", () => location.reload());
+  window.galleryStarted = () => document.getElementById("loader").remove();
+  window.galleryFailed = (message) => fail(`The gallery could not start: ${message}`);
+
+  function progress(loaded) {
+    if (wasmSize > 0) {
+      const percent = Math.min(100, Math.floor((loaded * 100) / wasmSize));
+      bar.style.width = `${percent}%`;
+      track.setAttribute("aria-valuenow", String(percent));
+      status.textContent = `${percent} % · ${mb(loaded)} / ${mb(wasmSize)} MB`;
+    } else {
+      status.textContent = `${mb(loaded)} MB`;
+    }
+  }
+
+  async function download(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+      progress(loaded);
+    }
+    return new Blob(chunks, { type: "application/wasm" });
+  }
+
+  async function run() {
+    if (typeof WebAssembly !== "object") return fail("This browser does not support WebAssembly.");
+    if (!document.createElement("canvas").getContext("webgl2")) {
+      return fail("This browser does not support WebGL2.");
+    }
+    let init, wasm;
+    try {
+      ({ default: init } = await import("./gallery.js?v=__VERSION__"));
+      wasm = await download("./gallery_bg.wasm?v=__VERSION__");
+    } catch (e) {
+      return fail(`The download failed: ${e.message}`);
+    }
+    bar.style.width = "100%";
+    track.setAttribute("aria-valuenow", "100");
+    status.textContent = "Starting…";
+    try {
+      await init({ module_or_path: new Response(wasm, { headers: { "Content-Type": "application/wasm" } }) });
+    } catch (e) {
+      fail(`The gallery could not start: ${e}`);
+    }
+  }
+  run();
+</script>
+</body>
+</html>
