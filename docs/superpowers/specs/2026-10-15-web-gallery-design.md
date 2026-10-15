@@ -134,9 +134,13 @@ Triggers:
 Job `build` (`contents: read`):
 
 1. For `workflow_run`: stops early with a note in the job summary when the
-   run's conclusion is not `success`, or when its `head_sha` carries no `v*`
-   tag. "Publish release" runs on every push to main that touches
-   `CHANGES.md`, most of which are ordinary merges.
+   run's conclusion is not `success`, or when the newest release
+   (`gh release view --json tagName,publishedAt`) was published before the
+   run started (`workflow_run.run_started_at`). "Publish release" runs on
+   every push to main that touches `CHANGES.md`, most of which are ordinary
+   merges. The run's `head_sha` cannot identify a release: the tag points to
+   the commit built on the release branch (`v0.4.0` is `4ad8f37`), not to the
+   merge commit on main.
 2. Checks out the resolved ref.
 3. Fails with a clear message when `scripts/build-web-gallery.sh` is missing
    at that ref (releases before 0.5.0).
