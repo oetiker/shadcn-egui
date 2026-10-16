@@ -497,25 +497,56 @@ pub fn heading_family_for(ctx: &egui::Context, w: Weight) -> egui::FontFamily {
     family(ctx, HEADING_FAMILIES[weight_index(w)])
 }
 
+/// The font data key of one theme face: `shadcn-{body,heading}-{weight}`.
+fn face_key(role: &str, weight: u16) -> String {
+    format!("shadcn-{role}-{weight}")
+}
+
 /// `base` plus the theme's fonts: one registration per weight with the
 /// `wght` coordinate, each family followed by `base`'s Proportional list so
 /// glyphs the font lacks (emoji, CJK, symbols) still render. A theme's
-/// fonts already in `base` (the context's current definitions) are dropped
-/// first, so a reinstall neither stacks them nor keeps an earlier theme's.
-fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinitions {
-    let ours = |name: &str| name.starts_with("shadcn-");
-    base.font_data.retain(|key, _| !ours(key));
+/// faces and families already in `base` (the context's current
+/// definitions) are replaced, so a reinstall neither stacks them nor keeps
+/// an earlier theme's. Only the exact keys and families a theme installs
+/// count as the theme's: an app's own family that lists a theme face keeps
+/// it while the new install still defines it, and an app font named
+/// `shadcn-…` is left alone. A mono body puts its regular face first in
+/// Monospace, once; `mono_installed` says the last install on this context
+/// did so, which makes a leading body face in `base`'s Monospace the
+/// theme's, to be removed. Any other is the app's.
+fn font_definitions(
+    fonts: ThemeFonts,
+    mut base: FontDefinitions,
+    mono_installed: bool,
+) -> FontDefinitions {
+    let inherit = fonts.heading == fonts.body;
+    let theme_keys: Vec<String> = ["body", "heading"]
+        .into_iter()
+        .flat_map(|role| WEIGHTS.map(|w| face_key(role, w)))
+        .collect();
+    let is_theme_key = |key: &str| theme_keys.iter().any(|k| k == key);
+    // An inherited heading registers no faces of its own.
+    let defined = |key: &str| !inherit || key.starts_with("shadcn-body-");
+    base.font_data.retain(|key, _| !is_theme_key(key));
+    let is_theme_family =
+        |name: &str| BODY_FAMILIES.contains(&Some(name)) || HEADING_FAMILIES.contains(&name);
     base.families
-        .retain(|family, _| !matches!(family, FontFamily::Name(name) if ours(name)));
-    for list in base.families.values_mut() {
-        list.retain(|key| !ours(key));
+        .retain(|family, _| !matches!(family, FontFamily::Name(name) if is_theme_family(name)));
+    let mono_key = face_key("body", WEIGHTS[0]);
+    if let Some(mono) = base.families.get_mut(&FontFamily::Monospace) {
+        if mono_installed && mono.first() == Some(&mono_key) {
+            mono.remove(0);
+        }
     }
-    let fallback = base
+    for list in base.families.values_mut() {
+        list.retain(|key| !is_theme_key(key) || defined(key));
+    }
+    let mut fallback = base
         .families
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
-    let inherit = fonts.heading == fonts.body;
+    fallback.retain(|key| !is_theme_key(key));
     for (role, files) in [("body", fonts.body), ("heading", fonts.heading)] {
         let data_role = if role == "heading" && inherit {
             "body"
@@ -523,7 +554,7 @@ fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinit
             role
         };
         for (i, w) in WEIGHTS.into_iter().enumerate() {
-            let key = format!("shadcn-{data_role}-{w}");
+            let key = face_key(data_role, w);
             if data_role == role {
                 let face = files.face(w);
                 let mut tweak = egui::FontTweak {
@@ -551,10 +582,9 @@ fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinit
         }
     }
     if fonts.body.kind == FontKind::Mono {
-        base.families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .insert(0, "shadcn-body-400".into());
+        let mono = base.families.entry(FontFamily::Monospace).or_default();
+        mono.retain(|key| *key != mono_key);
+        mono.insert(0, mono_key);
     }
     base
 }
@@ -564,6 +594,8 @@ fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinit
 struct InstalledFonts {
     body: &'static str,
     heading: &'static str,
+    /// The body is mono: the install put its face first in Monospace.
+    mono_body: bool,
 }
 
 /// Whether the context's current fonts bind `family`. Only valid once the
@@ -584,12 +616,12 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
     let key = InstalledFonts {
         body: fonts.body.name,
         heading: fonts.heading.name,
+        mono_body: fonts.body.kind == FontKind::Mono,
     };
+    let last = ctx.data(|d| d.get_temp::<InstalledFonts>(id));
     let base = match base {
         Some(base) => base,
-        None if ctx.data(|d| d.get_temp::<InstalledFonts>(id)).as_ref() != Some(&key) => {
-            FontDefinitions::default()
-        }
+        None if last.as_ref() != Some(&key) => FontDefinitions::default(),
         // Before the first pass the fonts are still the ones installed last.
         None if ctx.cumulative_pass_nr() == 0 => return,
         None => {
@@ -600,16 +632,38 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
             ctx.fonts(|f| f.definitions().clone())
         }
     };
-    ctx.set_fonts(font_definitions(fonts, base));
+    let mono_installed = last.is_some_and(|f| f.mono_body);
+    ctx.set_fonts(font_definitions(fonts, base, mono_installed));
     ctx.data_mut(|d| d.insert_temp(id, key));
 }
 
 /// `TextStyle::Heading` waits in `Proportional` until the heading family is
 /// bound: `set_fonts` takes effect only at the start of the next pass, and
 /// egui panics on a family the current fonts lack. Holds the stand-in
-/// `FontId`, so an app's own later change to the heading is left alone.
+/// `FontId` of the dark and the light style, which an app may have given
+/// different headings, so an app's own later change to a heading is left
+/// alone.
 #[derive(Clone)]
-struct PendingHeading(FontId);
+struct PendingHeading {
+    dark: Option<FontId>,
+    light: Option<FontId>,
+}
+
+impl PendingHeading {
+    fn both(id: FontId) -> Self {
+        Self {
+            dark: Some(id.clone()),
+            light: Some(id),
+        }
+    }
+
+    fn of(&self, theme: egui::Theme) -> Option<&FontId> {
+        match theme {
+            egui::Theme::Dark => self.dark.as_ref(),
+            egui::Theme::Light => self.light.as_ref(),
+        }
+    }
+}
 
 fn pending_heading_id() -> egui::Id {
     egui::Id::new("shadcn_egui::pending_heading")
@@ -668,8 +722,9 @@ fn check_heading(ctx: &egui::Context) -> Option<FontId> {
 
 /// `TextStyle::Heading` back to `Proportional` when the context's fonts no
 /// longer bind the heading family: the app called `ctx.set_fonts` after
-/// [`Theme::apply`], and egui panics on a family its fonts lack. The heading
-/// waits as a [`PendingHeading`] until a later apply installs the family.
+/// [`Theme::apply`], and egui panics on a family its fonts lack. Each
+/// style's heading waits as a [`PendingHeading`] until the family is bound
+/// again. Returns the active style's stand-in.
 fn unbind_lost_heading(ctx: &egui::Context) -> Option<FontId> {
     if !heading_bound(ctx) || is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
         return None;
@@ -687,24 +742,35 @@ fn unbind_lost_heading(ctx: &egui::Context) -> Option<FontId> {
         }
     });
     let name = FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
-    let mut stand_in = None;
-    ctx.all_styles_mut(|s| {
-        if let Some(h) = s.text_styles.get_mut(&TextStyle::Heading) {
-            if h.family == name {
-                h.family = FontFamily::Proportional;
-                stand_in = Some(h.clone());
+    let fall_back = |theme| {
+        let mut stand_in = None;
+        ctx.style_mut_of(theme, |s| {
+            if let Some(h) = s.text_styles.get_mut(&TextStyle::Heading) {
+                if h.family == name {
+                    h.family = FontFamily::Proportional;
+                    stand_in = Some(h.clone());
+                }
             }
-        }
-    });
-    let stand_in = stand_in?;
-    ctx.data_mut(|d| d.insert_temp(pending_heading_id(), PendingHeading(stand_in.clone())));
-    Some(stand_in)
+        });
+        stand_in
+    };
+    let pending = PendingHeading {
+        dark: fall_back(egui::Theme::Dark),
+        light: fall_back(egui::Theme::Light),
+    };
+    if pending.dark.is_none() && pending.light.is_none() {
+        return None;
+    }
+    let active = pending.of(ctx.theme()).cloned();
+    ctx.data_mut(|d| d.insert_temp(pending_heading_id(), pending));
+    active
 }
 
-/// Give `TextStyle::Heading` the heading family once the fonts bind it.
-/// Returns the new heading `FontId` when it changed.
+/// Give `TextStyle::Heading` the heading family once the fonts bind it, in
+/// each style that still holds its stand-in. Returns the active style's new
+/// heading `FontId` when it changed.
 fn bind_heading(ctx: &egui::Context) -> Option<FontId> {
-    let PendingHeading(stand_in) = ctx.data(|d| d.get_temp(pending_heading_id()))?;
+    let pending: PendingHeading = ctx.data(|d| d.get_temp(pending_heading_id()))?;
     let name = FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
     if !ctx.fonts(|f| f.definitions().families.contains_key(&name)) {
         return None;
@@ -713,15 +779,24 @@ fn bind_heading(ctx: &egui::Context) -> Option<FontId> {
         d.remove::<PendingHeading>(pending_heading_id());
         d.insert_temp(heading_bound_id(), true);
     });
-    let id = FontId::new(stand_in.size, name);
-    let mut changed = false;
-    ctx.all_styles_mut(|s| {
-        if s.text_styles.get(&TextStyle::Heading) == Some(&stand_in) {
-            s.text_styles.insert(TextStyle::Heading, id.clone());
-            changed = true;
+    let mut active = None;
+    for theme in [egui::Theme::Dark, egui::Theme::Light] {
+        let Some(stand_in) = pending.of(theme) else {
+            continue;
+        };
+        let id = FontId::new(stand_in.size, name.clone());
+        let mut changed = false;
+        ctx.style_mut_of(theme, |s| {
+            if s.text_styles.get(&TextStyle::Heading) == Some(stand_in) {
+                s.text_styles.insert(TextStyle::Heading, id.clone());
+                changed = true;
+            }
+        });
+        if changed && theme == ctx.theme() {
+            active = Some(id);
         }
-    });
-    changed.then_some(id)
+    }
+    active
 }
 
 impl Theme {
@@ -777,7 +852,9 @@ impl Theme {
         let hairline = m.border;
         let heading = FontId::new(m.text_heading, heading_family_now(ctx));
         if heading.family == FontFamily::Proportional {
-            ctx.data_mut(|d| d.insert_temp(pending_heading_id(), PendingHeading(heading.clone())));
+            ctx.data_mut(|d| {
+                d.insert_temp(pending_heading_id(), PendingHeading::both(heading.clone()))
+            });
         }
 
         ctx.all_styles_mut(|s| {

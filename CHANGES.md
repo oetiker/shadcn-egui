@@ -58,8 +58,27 @@ are recorded here. The format is based on
 - `components::shared::disabled_painter` is gone. A custom widget fades a
   disabled part with `style_painter(ui, &[stack], state)`, which takes the
   fade from the part's recipe (`disabled:opacity-50`). (#6)
+- `Input::id_salt(..)` gives a text field a fixed id from any salt, such as
+  `format!("row{i}")` for a field per row. `Input::id_source(..)`, which
+  took only a string literal, still works but warns that it is deprecated.
+- `Badge::icon` and `Badge::icon_end` take any icon reference, such as
+  `&Theme::current(ctx).icons.check`, not only an icon that lives for the
+  whole program.
 
 ### Fixed
+- Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`
+  after the app's own `ctx.set_fonts`) removed `shadcn-body-400` and the
+  other theme faces from the app's own font families, and dropped every app
+  font whose name starts with `shadcn-`. Both now stay.
+- With headings of different sizes in dark and light mode, replacing the
+  fonts with `ctx.set_fonts` left one mode's headings in the body font even
+  after the theme's fonts were back, and gave a dark-mode screen the light
+  heading size for a frame. Each mode's headings now return to the heading
+  font at their own size.
+- A `FontSource::Variable` whose `wght` range runs backwards or has a NaN
+  bound crashed the app with `min > max, or either was NaN` when the theme
+  was applied. A backwards range now gives every weight its end, and a NaN
+  bound is ignored.
 - A popover whose style recipe an app replaced whole
   (`*style.popover_content = Recipe { .. }`) showed each word on its own
   line; it is now as wide as its content. Buttons, badges, inputs, select

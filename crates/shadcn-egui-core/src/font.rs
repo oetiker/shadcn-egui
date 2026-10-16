@@ -17,7 +17,8 @@ pub const WEIGHTS: [u16; 4] = [400, 500, 600, 700];
 /// The font files of one family.
 #[derive(Clone)]
 pub enum FontSource {
-    /// One variable font; `wght` is its weight axis range.
+    /// One variable font; `wght` is its weight axis range, `start <= end`
+    /// (see [`FontFiles::face`] for other ranges).
     Variable {
         data: &'static [u8],
         wght: RangeInclusive<f32>,
@@ -55,12 +56,14 @@ pub struct Face {
 }
 
 impl FontFiles {
-    /// The face for a CSS weight (see [`WEIGHTS`]).
+    /// The face for a CSS weight (see [`WEIGHTS`]). A variable font's
+    /// weight is raised to the axis start, then lowered to its end, so an
+    /// inverted range yields its end and a NaN bound is ignored.
     pub fn face(&self, weight: u16) -> Face {
         match &self.source {
             FontSource::Variable { data, wght } => Face {
                 data,
-                wght: Some(f32::from(weight).clamp(*wght.start(), *wght.end())),
+                wght: Some(f32::from(weight).max(*wght.start()).min(*wght.end())),
             },
             FontSource::Static {
                 regular,
@@ -158,6 +161,26 @@ mod tests {
             Some(200.0),
             "below the axis clamps to its min"
         );
+    }
+
+    #[test]
+    fn an_inverted_or_nan_axis_does_not_panic() {
+        let var = |wght| FontFiles {
+            source: FontSource::Variable { data: b"var", wght },
+            ..VAR.clone()
+        };
+        assert_eq!(
+            var(900.0..=100.0).face(400).wght,
+            Some(100.0),
+            "inverted: the end wins"
+        );
+        assert_eq!(
+            var(f32::NAN..=900.0).face(400).wght,
+            Some(400.0),
+            "a NaN bound is ignored"
+        );
+        assert_eq!(var(f32::NAN..=300.0).face(400).wght, Some(300.0));
+        assert_eq!(var(500.0..=f32::NAN).face(400).wght, Some(500.0));
     }
 
     #[test]

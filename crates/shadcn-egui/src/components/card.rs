@@ -3,10 +3,12 @@
 //! gap, radius, ring, shadow, the footer strip and the text of the title and
 //! description come from the style's `cn-card*` recipes.
 //!
-//! The card is a column of header, content and footer, `gap` apart. egui has
-//! no flex column, so [`Card::show`] lays the sections out by hand: the card
-//! paints no padding on the sides of its sections, each section insets
-//! itself, and the footer strip can therefore reach the card's edges.
+//! The card is a column of header, content and footer, the `cn-card` `gap`
+//! apart. egui has no flex column, so [`Card::show`] lays the sections out
+//! by hand: the card paints no padding on the sides of its sections, each
+//! section insets itself, and the footer strip can therefore reach the
+//! card's edges. Inside [`card_content`], only vega spaces the children
+//! (`cn-card-content` `gap`); see its docs.
 //!
 //! Header, content and footer all inset their children by the same side
 //! padding in every style (`px-(--card-spacing)`), so [`Card::show`] insets
@@ -252,7 +254,10 @@ impl<'a> Card<'a> {
     }
 }
 
-/// `card-content` section: its children `gap` apart.
+/// `card-content` section. Its children are the style's `cn-card-content`
+/// `gap` apart, which only vega sets (12 px); in nova, maia, lyra, mira,
+/// luma and rhea they touch. Wrap them in [`crate::layout::vstack`] for the
+/// design's spacing.
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
     let st = t.state(current_size(ui).state());

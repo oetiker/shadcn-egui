@@ -81,6 +81,15 @@ fn wght_range_rejects_non_truetype() {
 }
 
 #[test]
+fn wght_axis_rejects_min_above_max() {
+    assert_eq!(wght_axis(100.0, 900.0), Ok((100.0, 900.0)));
+    assert_eq!(wght_axis(400.0, 400.0), Ok((400.0, 400.0)));
+    let e = wght_axis(900.0, 100.0).unwrap_err();
+    assert!(e.contains("900") && e.contains("100"), "{e}");
+    assert!(wght_axis(f32::NAN, 900.0).is_err());
+}
+
+#[test]
 fn unlicensed_fonts_get_no_crate_and_no_arm() {
     let rows = sample();
     assert!(!rows[2].shipped());
