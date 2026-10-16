@@ -1,7 +1,9 @@
 //! The CPU rasteriser behind [`paint_icon`](super::icon::paint_icon): an
 //! icon becomes one coverage texture at its physical pixel size, cached in
 //! the context, so a translucent colour or a faded painter applies once to
-//! the whole icon and overlapping pieces never blend twice.
+//! the whole icon and overlapping pieces never blend twice. An icon's
+//! translucent layers (Hugeicons' faded parts) are composited into that one
+//! texture at their own alpha.
 //!
 //! Coverage is a distance field: strokes by the distance of each pixel
 //! centre to the flattened stroke segments, which is exact for SVG round
@@ -10,7 +12,7 @@
 
 use crate::FillMesh;
 use egui::{pos2, Color32, ColorImage, Context, Id, Pos2, TextureHandle, TextureOptions};
-use shadcn_egui_core::{Icon, IconShape, Seg};
+use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg};
 use std::collections::HashMap;
 
 /// Curve flattening tolerance in physical pixels.
@@ -133,25 +135,42 @@ pub(crate) fn texture(
 
 /// Coverage (0..=255) of `icon` on a `w`×`h` pixel grid, row by row.
 /// `scale` maps icon units to pixels, `stroke_px` is the stroke width in
-/// pixels. Any input gives an image, never a panic.
+/// pixels. Each layer is rasterised on its own, scaled by its alpha and
+/// composited over the layers before it. Any input gives an image, never a
+/// panic.
 pub(crate) fn coverage(icon: &Icon, w: usize, h: usize, scale: f32, stroke_px: f32) -> Vec<u8> {
+    let mut total: Vec<f32> = vec![0.0; w * h];
+    for layer in icon.layers() {
+        let cov = layer_coverage(&layer, w, h, scale, stroke_px);
+        let alpha = layer.alpha.clamp(0.0, 1.0);
+        for (t, c) in total.iter_mut().zip(cov) {
+            let src = c * alpha;
+            *t = src + *t * (1.0 - src);
+        }
+    }
+    total
+        .into_iter()
+        .map(|c| (c * f32::from(u8::MAX)).round() as u8)
+        .collect()
+}
+
+/// Coverage (0..=1) of one layer: its strokes and its fill, overlaps once.
+fn layer_coverage(layer: &IconLayer, w: usize, h: usize, scale: f32, stroke_px: f32) -> Vec<f32> {
     let mut cov: Vec<f32> = vec![0.0; w * h];
     if stroke_px > 0.0 && stroke_px.is_finite() {
         let half = stroke_px / 2.0;
         let mut dist = vec![f32::INFINITY; w * h];
-        for (a, b) in stroke_segments(icon, scale) {
+        for (a, b) in stroke_segments(layer.segs.clone(), scale) {
             min_distance(&mut dist, w, h, a, b, half + HALF_PX);
         }
         for (c, d) in cov.iter_mut().zip(&dist) {
             *c = (HALF_PX + half - d).clamp(0.0, 1.0);
         }
     }
-    if let Some(fill) = icon.fill_mesh() {
-        fill_coverage(&mut cov, w, h, &fill, scale);
+    if let Some(fill) = &layer.fill {
+        fill_coverage(&mut cov, w, h, fill, scale);
     }
-    cov.into_iter()
-        .map(|c| (c * f32::from(u8::MAX)).round() as u8)
-        .collect()
+    cov
 }
 
 /// Raises `cov` to the fill's coverage where that is higher.
@@ -242,11 +261,11 @@ fn pixel_centre(x: usize, y: usize) -> Pos2 {
     pos2(x as f32 + HALF_PX, y as f32 + HALF_PX)
 }
 
-/// The icon's strokes as line pieces in pixels. `M` starts a sub-path, `Z`
+/// A layer's strokes as line pieces in pixels. `M` starts a sub-path, `Z`
 /// closes it and returns to its start, a lone `M` is a dot (a round cap); a
 /// curve without a start point is skipped, a line without one starts a
 /// sub-path.
-fn stroke_segments(icon: &Icon, scale: f32) -> Vec<(Pos2, Pos2)> {
+fn stroke_segments(segs: impl Iterator<Item = Seg>, scale: f32) -> Vec<(Pos2, Pos2)> {
     let map = |x: f32, y: f32| pos2(x * scale, y * scale);
     let mut out = Vec::new();
     let (mut start, mut cur): (Option<Pos2>, Option<Pos2>) = (None, None);
@@ -256,7 +275,7 @@ fn stroke_segments(icon: &Icon, scale: f32) -> Vec<(Pos2, Pos2)> {
             out.push((s, s));
         }
     }
-    for seg in icon.segs() {
+    for seg in segs {
         match seg {
             Seg::M(x, y) => {
                 dot(&mut out, start, drawn);
@@ -374,7 +393,7 @@ mod tests {
             Seg::M(12.0, 2.0),
             Seg::C(12.0, 7.523, 7.523, 12.0, 2.0, 12.0),
         ];
-        let segs = stroke_segments(&icon(&ARC), 1.0);
+        let segs = stroke_segments(icon(&ARC).layers().flat_map(|l| l.segs), 1.0);
         assert!(segs.len() > 4, "flattened into {} pieces", segs.len());
         for (a, _) in segs {
             let r = (a - pos2(2.0, 2.0)).length();

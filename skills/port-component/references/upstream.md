@@ -159,7 +159,7 @@ cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   --crate-dir crates/shadcn-egui/tests/icons/fixture \
   --slots check=mixed,chevron_down=ring,close=x \
   --provenance "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)" \
-  tools/icongen/tests/fixtures/{big-box,mixed,ring,square-hole,star-evenodd,x}.svg
+  tools/icongen/tests/fixtures/{big-box,faded,mixed,ring,square-hole,star-evenodd,x}.svg
 ```
 
 `scripts/check-package-size.sh` fails when any crate packages above 8 MB.

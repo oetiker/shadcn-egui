@@ -1,6 +1,6 @@
 //! Vector icon data. Painting lives in `shadcn_egui::components::icon`.
 
-use crate::blob::{self, BlobRange, BlobSegs, FillMesh};
+use crate::blob::{BlobLayers, BlobRange, BlobSegs, FillMesh};
 
 /// One path command in icon units (the SVG's user space, origin top-left).
 /// A `M` starts a new subpath; `Z` closes the current one.
@@ -27,25 +27,58 @@ pub struct Icon {
 pub enum IconShape {
     /// Path commands in a Rust slice (icongen `--out`); strokes only.
     Segs(&'static [Seg]),
-    /// A record in an icon crate's blob (icongen `--crate-dir`): strokes and
-    /// an optional fill, in the 24-unit box.
+    /// A record in an icon crate's blob (icongen `--crate-dir`): layers of
+    /// strokes and an optional fill, in the 24-unit box.
     Blob(BlobRange),
 }
 
 impl Icon {
-    /// The stroke commands, in icon units. A non-empty sequence starts with `Seg::M`.
-    pub fn segs(&self) -> SegIter {
+    /// The icon's paint layers: the opaque one first, then one per
+    /// translucent part of the source SVG (an element with `opacity`,
+    /// `stroke-opacity` or `fill-opacity`). Draw each layer on its own at
+    /// its `alpha`; strokes that overlap within a layer count once.
+    pub fn layers(&self) -> IconLayers {
         match self.shape {
-            IconShape::Segs(s) => SegIter::Slice(s.iter()),
-            IconShape::Blob(r) => SegIter::Words(BlobSegs::new(r)),
+            IconShape::Segs(s) => IconLayers(Layers::Slice(Some(s))),
+            IconShape::Blob(r) => IconLayers(Layers::Blob(BlobLayers::new(r))),
         }
     }
+}
 
-    /// The pre-triangulated fill; `None` for stroke-only icons.
-    pub fn fill_mesh(&self) -> Option<FillMesh> {
-        match self.shape {
-            IconShape::Segs(_) => None,
-            IconShape::Blob(r) => blob::fill_mesh(r),
+/// Strokes and fill of an [`Icon`] painted together at one opacity.
+/// Non-exhaustive: more paint properties may follow.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct IconLayer {
+    /// Opacity in 0..=1, multiplied into the colour the icon is drawn in.
+    pub alpha: f32,
+    /// The stroke commands, in icon units. A non-empty sequence starts with `Seg::M`.
+    pub segs: SegIter,
+    /// The pre-triangulated fill; `None` for a stroke-only layer.
+    pub fill: Option<FillMesh>,
+}
+
+/// The layers of an [`Icon`], from [`Icon::layers`].
+#[derive(Clone, Debug)]
+pub struct IconLayers(Layers);
+
+#[derive(Clone, Debug)]
+enum Layers {
+    Slice(Option<&'static [Seg]>),
+    Blob(BlobLayers),
+}
+
+impl Iterator for IconLayers {
+    type Item = IconLayer;
+
+    fn next(&mut self) -> Option<IconLayer> {
+        match &mut self.0 {
+            Layers::Slice(s) => s.take().map(|s| IconLayer {
+                alpha: 1.0,
+                segs: SegIter::Slice(s.iter()),
+                fill: None,
+            }),
+            Layers::Blob(b) => b.next(),
         }
     }
 }

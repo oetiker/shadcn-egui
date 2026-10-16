@@ -64,6 +64,11 @@ are recorded here. The format is based on
 - `Badge::icon` and `Badge::icon_end` take any icon reference, such as
   `&Theme::current(ctx).icons.check`, not only an icon that lives for the
   whole program.
+- In `shadcn-egui-core` (re-exported by `shadcn-egui`), `Icon::segs()` and
+  `Icon::fill_mesh()` are replaced by `Icon::layers()`, an `IconLayers`
+  iterator that yields each layer of an icon (`IconLayer`) with its strokes,
+  its fill and its `alpha`. Code that draws icons itself paints each layer
+  at its `alpha`; `paint_icon` and `IconView` already do.
 - A rule pushed into `theme.style` with a rank made of variant bits only now
   loses to the style's own rule for the same state. Ranks now also count
   selector specificity, as the browser does, so a `data-[size=sm]:` rule
@@ -74,6 +79,11 @@ are recorded here. The format is based on
   triggers. Assign `icon_size = Prop::fixed(..)` instead.
 
 ### Fixed
+- The Hugeicons icons `ARROW_BIG_RIGHT_DASH`, `HAMBURGER_01` and
+  `RIGHT_TO_LEFT_LIST_BULLET`, and the Tabler icon `BRAND_PARSINTA`, drew
+  their faded parts (the arrow's dash, the burger's bun top and seeds, the
+  list's middle line and bullets, a quarter of the Tabler ring) at full
+  strength. They now draw them faded, as on the web.
 - Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`
   after the app's own `ctx.set_fonts`) removed `shadcn-body-400` and the
   other theme faces from the app's own font families, and dropped every app
