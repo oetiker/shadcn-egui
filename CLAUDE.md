@@ -24,9 +24,9 @@ crates.
 - `web/index.html` — the browser gallery's loading page; the scripts below
   build it into the site and `.github/workflows/pages.yml` deploys it.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
-  `check-version-files.sh`, `publish-crates.sh`, `build-web-gallery.sh`
-  (builds the browser gallery), `install-wasm-bindgen.sh` (fetches the
-  matching `wasm-bindgen` CLI).
+  `check-version-files.sh`, `build-web-gallery.sh` (builds the browser
+  gallery), `install-wasm-bindgen.sh` (fetches the matching
+  `wasm-bindgen` CLI).
 - `.github/` — CI and release on the repo-infra standard. The project
   owns `workflows/ci-local.yml`, `workflows/pages.yml`, the callers
   `ci.yml`, `release-build.yml` and `release-publish.yml`, and

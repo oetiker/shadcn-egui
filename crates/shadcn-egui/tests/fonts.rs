@@ -534,3 +534,181 @@ fn a_sans_body_after_a_mono_body_leaves_monospace_alone() {
         "Monospace still lists {monospace:?}"
     );
 }
+
+/// An app's own family that lists a theme face, and an app font whose key
+/// merely starts with `shadcn-`, both survive the theme's install.
+#[test]
+fn apply_with_fonts_keeps_app_entries_named_like_the_theme() {
+    let ctx = egui::Context::default();
+    let mut base = FontDefinitions::default();
+    base.font_data.insert(
+        "shadcn-logo".into(),
+        Arc::new(FontData::from_static(OXANIUM.face(400).data)),
+    );
+    base.families
+        .insert(FontFamily::Name("logo".into()), vec!["shadcn-logo".into()]);
+    base.families.insert(
+        FontFamily::Name("app".into()),
+        vec!["shadcn-body-400".into(), "Hack".into()],
+    );
+    for theme in [Theme::vega_light(), Theme::vega_dark()] {
+        let defs = if ctx.cumulative_pass_nr() == 0 {
+            theme.apply_with_fonts(&ctx, base.clone());
+            let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+            ctx.fonts(|f| f.definitions().clone())
+        } else {
+            reapply_over_current(&ctx, &theme)
+        };
+        assert!(defs.font_data.contains_key("shadcn-logo"), "app font data");
+        assert_eq!(
+            defs.families[&FontFamily::Name("logo".into())],
+            vec!["shadcn-logo".to_owned()]
+        );
+        assert_eq!(
+            defs.families[&FontFamily::Name("app".into())],
+            vec!["shadcn-body-400".to_owned(), "Hack".to_owned()]
+        );
+    }
+}
+
+/// A theme face the new install no longer defines (an inherited heading
+/// after a heading font of its own) leaves the app's lists, so egui never
+/// meets a key without data.
+#[test]
+fn a_dropped_theme_face_leaves_the_apps_families() {
+    let ctx = egui::Context::default();
+    let mut base = FontDefinitions::default();
+    base.families
+        .insert(FontFamily::Name("app".into()), vec!["Hack".into()]);
+    Theme::vega_light()
+        .fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM))
+        .apply_with_fonts(&ctx, base);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    let mut defs = ctx.fonts(|f| f.definitions().clone());
+    defs.families
+        .get_mut(&FontFamily::Name("app".into()))
+        .unwrap()
+        .insert(0, "shadcn-heading-600".into());
+    ctx.set_fonts(defs);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    let defs = reapply_over_current(&ctx, &Theme::vega_light());
+    assert!(!defs.font_data.contains_key("shadcn-heading-600"));
+    assert_eq!(
+        defs.families[&FontFamily::Name("app".into())],
+        vec!["Hack".to_owned()]
+    );
+}
+
+/// Dark and light headings of different sizes: when the app's own fonts
+/// drop the heading family, each falls back at its own size (the root ui
+/// of a dark pass gets the dark one), and when the family is back, each
+/// binds again at its own size.
+#[test]
+fn dark_and_light_headings_rebind_at_their_own_sizes() {
+    use egui::{FontId, TextStyle};
+    let heading = FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into());
+    let saved = std::cell::RefCell::new(None);
+    let light_heading = std::cell::RefCell::new(None);
+    let root_heading = std::cell::RefCell::new(Vec::new());
+    let frame = std::cell::Cell::new(0);
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 160.0))
+        .build_ui(|ui| {
+            let ctx = ui.ctx().clone();
+            let n = frame.get();
+            match n {
+                0 => {
+                    ctx.set_theme(egui::Theme::Dark);
+                    Theme::vega_dark().apply(&ctx);
+                }
+                2 => {
+                    let light = ctx.style_of(egui::Theme::Light);
+                    *light_heading.borrow_mut() =
+                        Some(light.text_styles[&TextStyle::Heading].clone());
+                    ctx.style_mut_of(egui::Theme::Dark, |s| {
+                        s.text_styles.insert(
+                            TextStyle::Heading,
+                            FontId::new(30.0, FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into())),
+                        );
+                    });
+                    *saved.borrow_mut() = Some(ctx.fonts(|f| f.definitions().clone()));
+                    ctx.set_fonts(FontDefinitions::default());
+                }
+                4 => ctx.set_fonts(saved.borrow_mut().take().unwrap()),
+                _ => {}
+            }
+            frame.set(n + 1);
+            root_heading
+                .borrow_mut()
+                .push(ui.style().text_styles[&TextStyle::Heading].clone());
+            ui.heading("egui heading");
+        });
+    for _ in 0..7 {
+        h.step();
+    }
+    let light = light_heading.take().expect("pass 2 ran");
+    assert_eq!(
+        light.family, heading,
+        "light was bound before the fonts went"
+    );
+    assert_ne!(light.size, 30.0, "light keeps a size of its own");
+    assert_eq!(
+        root_heading.borrow()[3],
+        FontId::new(30.0, FontFamily::Proportional),
+        "the dark pass falls back with the dark heading"
+    );
+    let of = |t| h.ctx.style_of(t).text_styles[&TextStyle::Heading].clone();
+    assert_eq!(of(egui::Theme::Dark), FontId::new(30.0, heading.clone()));
+    assert_eq!(of(egui::Theme::Light), light);
+}
+
+fn fake_mono() -> &'static shadcn_egui::FontFiles {
+    Box::leak(Box::new(shadcn_egui::FontFiles {
+        name: "fake-mono",
+        kind: FontKind::Mono,
+        ..shadcn_egui_font_inter::FONT.clone()
+    }))
+}
+
+/// An app that lists the body face first in its own Monospace keeps it
+/// through a sans-body install and a reinstall: only a face the theme put
+/// there itself is the theme's.
+#[test]
+fn an_apps_own_leading_body_face_in_monospace_survives() {
+    let ctx = egui::Context::default();
+    let mut base = FontDefinitions::default();
+    base.families
+        .get_mut(&FontFamily::Monospace)
+        .unwrap()
+        .insert(0, "shadcn-body-400".into());
+    let want = base.families[&FontFamily::Monospace].clone();
+    Theme::vega_light().apply_with_fonts(&ctx, base);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    let defs = ctx.fonts(|f| f.definitions().clone());
+    assert_eq!(defs.families[&FontFamily::Monospace], want, "first install");
+    let defs = reapply_over_current(&ctx, &Theme::vega_light());
+    assert_eq!(defs.families[&FontFamily::Monospace], want, "reinstall");
+}
+
+/// A mono body goes first in Monospace exactly once, also when the app's
+/// Monospace already lists it further down.
+#[test]
+fn a_mono_body_lists_its_face_once_in_monospace() {
+    let ctx = egui::Context::default();
+    let mut base = FontDefinitions::default();
+    base.families
+        .get_mut(&FontFamily::Monospace)
+        .unwrap()
+        .push("shadcn-body-400".into());
+    let mono = Theme::vega_light().fonts(fake_mono(), None);
+    mono.apply_with_fonts(&ctx, base);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+    for _ in 0..2 {
+        let defs = ctx.fonts(|f| f.definitions().clone());
+        let list = &defs.families[&FontFamily::Monospace];
+        assert_eq!(list[0], "shadcn-body-400");
+        let n = list.iter().filter(|k| *k == "shadcn-body-400").count();
+        assert_eq!(n, 1, "Monospace lists the body face {n} times: {list:?}");
+        reapply_over_current(&ctx, &mono);
+    }
+}

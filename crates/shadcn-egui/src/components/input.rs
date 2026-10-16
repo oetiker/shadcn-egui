@@ -16,7 +16,7 @@ pub struct Input<'a> {
     hint: String,
     password: bool,
     max_width: f32,
-    id_source: Option<&'static str>,
+    id_salt: Option<egui::Id>,
     enabled: bool,
     invalid: bool,
 }
@@ -28,7 +28,7 @@ impl<'a> Input<'a> {
             hint: String::new(),
             password: false,
             max_width: f32::NAN,
-            id_source: None,
+            id_salt: None,
             enabled: true,
             invalid: false,
         }
@@ -47,13 +47,19 @@ impl<'a> Input<'a> {
         self.max_width = w;
         self
     }
-    /// A stable id, independent of call order. Needed only where a caller (a
-    /// test, or `ctx.memory_mut(|m| m.request_focus(..))`) must address this
-    /// field from outside the widget tree that builds it; without one,
+    /// A stable id, independent of call order, from any hashable salt (a
+    /// `&str`, or a `format!("row{i}")` per row). Needed only where a caller
+    /// (a test, or `ctx.memory_mut(|m| m.request_focus(..))`) must address
+    /// this field from outside the widget tree that builds it; without one,
     /// `TextEdit` falls back to an id keyed on widget position.
-    pub fn id_source(mut self, s: &'static str) -> Self {
-        self.id_source = Some(s);
+    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
+        self.id_salt = Some(egui::Id::new(salt));
         self
+    }
+    /// The former name of [`Input::id_salt`], for `'static` strings only.
+    #[deprecated(since = "0.5.0", note = "use id_salt")]
+    pub fn id_source(self, s: &'static str) -> Self {
+        self.id_salt(s)
     }
     /// `false` draws the field disabled: no focus, no typing.
     pub fn enabled(mut self, yes: bool) -> Self {
@@ -104,7 +110,7 @@ impl<'a> Widget for Input<'a> {
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
-        let mut edit = TextEdit::singleline(self.text)
+        let edit = TextEdit::singleline(self.text)
             .hint_text(self.hint)
             .password(self.password)
             .interactive(enabled)
@@ -112,9 +118,6 @@ impl<'a> Widget for Input<'a> {
             .font(font)
             .vertical_align(egui::Align::Center)
             .text_color(typed);
-        if let Some(id_source) = self.id_source {
-            edit = edit.id_salt(id_source);
-        }
         let max_width = if self.max_width.is_nan() {
             t.metrics.field_max_width
         } else {
@@ -130,7 +133,15 @@ impl<'a> Widget for Input<'a> {
                 }
                 // In a disabled `Ui`, `fade` leaves out the `disabled:` rule.
                 ui.multiply_opacity(fade);
-                ui.add_sized(Vec2::new(ui.available_width().min(max_width), height), edit)
+                // `add_sized`, with the id made in the `Ui` that shows the
+                // field: `TextEdit::id_salt` would hash the stored `Id` again.
+                let size = Vec2::new(ui.available_width().min(max_width), height);
+                let layout = egui::Layout::centered_and_justified(ui.layout().main_dir());
+                ui.allocate_ui_with_layout(size, layout, |ui| match self.id_salt {
+                    Some(salt) => ui.add(edit.id(ui.make_persistent_id(salt))),
+                    None => ui.add(edit),
+                })
+                .inner
             })
             .inner;
 

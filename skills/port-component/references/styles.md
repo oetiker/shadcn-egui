@@ -187,9 +187,9 @@ cargo run --manifest-path tools/stylegen/Cargo.toml --jobs 4 -- drift    <shadcn
 ## Exported styles
 
 Exported (constructors on `Style`): vega, nova, maia, lyra, mira, luma, rhea.
-The snapshot tests render vega and nova only; the other five have a unit test
-that they construct (on a 256 KB stack) and resolve their button height, and
-have not been checked visually, so they may differ from the web in detail.
+Every exported style has snapshot tests in light and dark mode
+(`crates/shadcn-egui/tests/snapshots/*_<style>_{light,dark}.png`), and a unit
+test that it constructs on a 256 KB stack and resolves its button height.
 
 Not exported: sera. Its report lists unsupported classes in shipped markers:
 single-side bottom borders on inputs (`border-b-*`, underline-style fields),
