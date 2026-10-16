@@ -64,10 +64,9 @@ are recorded here. The format is based on
 - `Badge::icon` and `Badge::icon_end` take any icon reference, such as
   `&Theme::current(ctx).icons.check`, not only an icon that lives for the
   whole program.
-- Installing or updating the `shadcn-egui` Claude Code plugin now downloads
-  only the plugin, not the whole repository with its font and icon data.
-  Run `/plugin marketplace update shadcn-egui` once to pick up the new
-  source.
+- The installed `shadcn-egui` Claude Code plugin now takes about 100 KB on
+  disk instead of a full copy of the repository with its font and icon
+  data, about 40 MB per installed version.
 
 ### Fixed
 - Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`

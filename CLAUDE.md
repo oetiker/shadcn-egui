@@ -28,11 +28,16 @@ crates.
   `check-version-files.sh`, `build-web-gallery.sh` (builds the browser
   gallery), `install-wasm-bindgen.sh` (fetches the matching
   `wasm-bindgen` CLI).
-- `.github/` — CI and release on the repo-infra standard. The project
-  owns `workflows/ci-local.yml`, `workflows/pages.yml`, the callers
-  `ci.yml`, `release-build.yml` and `release-publish.yml`, and
-  `repo-infra.json`; every other workflow, `workflows/lib/` and
-  `dependabot.yml` are installed from repo-infra and never edited by hand.
+- `plugin/` — the Claude Code plugin: `skills/` and
+  `.claude-plugin/plugin.json`. The marketplace that installs it is
+  `.claude-plugin/marketplace.json` at the root.
+- `.github/` — CI and release on the repo-infra v2 standard: the callers
+  in `workflows/` call the pieces at `oposs/repo-infra/...@v2`. The
+  project owns `workflows/ci-local.yml`, `workflows/pages.yml`, the
+  callers `ci.yml`, `release-build.yml` and `release-publish.yml`, and
+  `repo-infra.json`; `changelog.yml` and `release-pr.yml` are repo-infra's
+  caller templates word for word, and `dependabot.yml` is installed from
+  repo-infra; never edit those by hand.
 
 ## Start here — read the source docs, don't restate them
 
