@@ -64,6 +64,10 @@ are recorded here. The format is based on
 - `Badge::icon` and `Badge::icon_end` take any icon reference, such as
   `&Theme::current(ctx).icons.check`, not only an icon that lives for the
   whole program.
+- Installing or updating the `shadcn-egui` Claude Code plugin now downloads
+  only the plugin, not the whole repository with its font and icon data.
+  Run `/plugin marketplace update shadcn-egui` once to pick up the new
+  source.
 
 ### Fixed
 - Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`
