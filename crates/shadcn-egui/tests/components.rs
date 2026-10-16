@@ -534,12 +534,60 @@ fn tabs_width_is_at_least_the_content_and_at_most_the_row() {
     }
 }
 
+/// A tab list with an optional `width`, as the one widget of `ui`.
+fn add_tabs(ui: &mut egui::Ui, labels: &[&str], w: Option<f32>) -> egui::Response {
+    use shadcn_egui::components::tabs::Tabs;
+    let mut active = 0;
+    let tabs = Tabs::new(&mut active, labels);
+    ui.add(match w {
+        Some(w) => tabs.width(w),
+        None => tabs,
+    })
+}
+
+#[test]
+fn tabs_width_infinity_in_a_scroll_area_fills_the_visible_width() {
+    let labels = ["Account", "Notifications"];
+    for (name, theme) in common::themes() {
+        let (list, avail, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            egui::ScrollArea::horizontal()
+                .show(ui, |ui| add_tabs(ui, &labels, Some(f32::INFINITY)))
+                .inner
+        });
+        assert_eq!(list.width(), avail, "{name}");
+    }
+}
+
+#[test]
+fn tabs_width_in_an_unbounded_ui_hugs_or_keeps_a_finite_width() {
+    let labels = ["Account", "Notifications"];
+    let unbounded = |w: Option<f32>| {
+        move |ui: &mut egui::Ui| {
+            let r = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(f32::INFINITY, 60.0));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(r), |ui| {
+                assert!(!ui.available_width().is_finite());
+                add_tabs(ui, &labels, w)
+            })
+            .inner
+        }
+    };
+    for (name, theme) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(None));
+        let (inf, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(f32::INFINITY)));
+        assert_eq!(inf.width(), hug.width(), "{name}");
+        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(400.0)));
+        assert_eq!(fixed.width(), 400.0, "{name}");
+    }
+}
+
 #[test]
 fn tabs_full_width_snapshot() {
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
     let labels = ["Display", "Audio", "Camera", "Folders"];
     common::snapshot_all("tabs_full_width", egui::vec2(420.0, 150.0), |ui| {
-        ui.add(Tabs::new(&mut 1, &labels).width(f32::INFINITY));
+        // Keyboard focus ring on a widened, inactive trigger.
+        let resp = ui.add(Tabs::new(&mut 1, &labels).width(f32::INFINITY));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 2))));
         ui.add_space(24.0);
         ui.add(
             Tabs::new(&mut 1, &labels)

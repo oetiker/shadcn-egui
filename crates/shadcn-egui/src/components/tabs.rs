@@ -76,7 +76,10 @@ impl<'a> Tabs<'a> {
     /// on `TabsList`). Pass `f32::INFINITY` for full-width. The width is
     /// capped to the available width and never smaller than the triggers'
     /// own; the triggers share it as their `flex-1` does: equal parts, and a
-    /// trigger whose label needs more keeps its own width.
+    /// trigger whose label needs more keeps its own width. A NaN, zero or
+    /// negative width is ignored, and so is `f32::INFINITY` in a `Ui` of
+    /// unbounded width: the list then stays as wide as its triggers. In a
+    /// `ScrollArea`, `f32::INFINITY` fills the visible width.
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
         self
