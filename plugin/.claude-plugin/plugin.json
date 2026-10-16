@@ -1,7 +1,7 @@
 {
   "name": "shadcn-egui",
   "description": "Build Rust egui GUIs from shadcn designs with the shadcn-egui crate, and port missing shadcn components to the crate's standard.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": {
     "name": "Tobias Oetiker <tobi@oetiker.ch>"
   },

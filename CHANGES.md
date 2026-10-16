@@ -7,6 +7,13 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+
+### Changed
+
+### Fixed
+
+## 0.5.0 - 2026-10-16
+### New
 - The component gallery runs in the browser at
   https://oetiker.github.io/shadcn-egui/ and is updated with each release.
   A link such as `?preset=bIkeymG&mode=dark` opens it with that preset and mode.
