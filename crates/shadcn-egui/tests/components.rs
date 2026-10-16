@@ -253,23 +253,19 @@ fn input_snapshot() {
         let mut disabled = String::from("read only");
         let mut focused = String::from("typing here");
         label(ui, "Empty, with hint");
-        ui.add(Input::new(&mut empty).hint("Email").id_source("empty"));
+        ui.add(Input::new(&mut empty).hint("Email").id_salt("empty"));
         ui.add_space(8.0);
         label(ui, "Filled");
-        ui.add(Input::new(&mut filled).id_source("filled"));
+        ui.add(Input::new(&mut filled).id_salt("filled"));
         ui.add_space(8.0);
         label(ui, "Invalid");
-        ui.add(Input::new(&mut invalid).invalid(true).id_source("invalid"));
+        ui.add(Input::new(&mut invalid).invalid(true).id_salt("invalid"));
         ui.add_space(8.0);
         label(ui, "Disabled");
-        ui.add(
-            Input::new(&mut disabled)
-                .enabled(false)
-                .id_source("disabled"),
-        );
+        ui.add(Input::new(&mut disabled).enabled(false).id_salt("disabled"));
         ui.add_space(8.0);
         label(ui, "Focused");
-        let resp = ui.add(Input::new(&mut focused).id_source("focused"));
+        let resp = ui.add(Input::new(&mut focused).id_salt("focused"));
         resp.request_focus();
     });
 }
@@ -1066,7 +1062,7 @@ fn focused_input_border_turns_ring_colored() {
         let shapes = |focus: bool| {
             let mut text = String::new();
             let (rect, out) = common::measure_output(&theme, |ui| {
-                let resp = ui.add(Input::new(&mut text).id_source("field"));
+                let resp = ui.add(Input::new(&mut text).id_salt("field"));
                 if focus {
                     resp.request_focus();
                 }
@@ -1132,10 +1128,10 @@ fn invalid_input_border_is_destructive() {
     }
 }
 
-/// `Input::id_source` gives the field an id that does not depend on how many
+/// `Input::id_salt` gives the field an id that does not depend on how many
 /// widgets precede it, so callers can address it from outside.
 #[test]
-fn input_id_source_is_stable() {
+fn input_id_salt_is_stable() {
     use shadcn_egui::components::input::Input;
     fn id_after(ctx: &egui::Context, preceding: usize, salt: Option<&'static str>) -> egui::Id {
         let mut text = String::new();
@@ -1146,7 +1142,7 @@ fn input_id_source_is_stable() {
             }
             let input = Input::new(&mut text);
             let input = match salt {
-                Some(s) => input.id_source(s),
+                Some(s) => input.id_salt(s),
                 None => input,
             };
             id = Some(ui.add(input).id);
@@ -1160,6 +1156,41 @@ fn input_id_source_is_stable() {
         id_after(&ctx, 1, Some("login-user")),
         id_after(&ctx, 3, Some("login-user"))
     );
+}
+
+/// Salts built at run time (one field per row): each row's field gets its
+/// own id, the same in every pass.
+#[test]
+fn input_id_salt_takes_runtime_salts() {
+    use shadcn_egui::components::input::Input;
+    let ctx = egui::Context::default();
+    let ids = |filler: usize| {
+        let mut texts = vec![String::new(); 2];
+        let mut ids = Vec::new();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            for i in 0..filler {
+                ui.label(format!("filler {i}"));
+            }
+            for (i, text) in texts.iter_mut().enumerate() {
+                ids.push(ui.add(Input::new(text).id_salt(format!("row{i}"))).id);
+            }
+        });
+        ids
+    };
+    let first = ids(0);
+    assert_ne!(first[0], first[1], "rows share an id");
+    assert_eq!(ids(2), first, "the ids follow the salt, not the position");
+}
+
+/// A badge takes any icon, also one borrowed from the theme for a moment.
+#[test]
+fn badge_takes_a_borrowed_icon() {
+    use shadcn_egui::components::badge::Badge;
+    let ctx = egui::Context::default();
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let icons = Theme::current(ui.ctx()).icons;
+        ui.add(Badge::new("Done").icon(&icons.check).icon_end(&icons.check));
+    });
 }
 
 /// Harness state for the checkbox tests: the value and the rect of the

@@ -424,7 +424,7 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
                             Input::new(&mut state.code)
                                 .hint("b0")
                                 .max_width(160.0)
-                                .id_source("gallery_preset_code")
+                                .id_salt("gallery_preset_code")
                                 .invalid(state.code_error.is_some()),
                         )
                         .labelled_by(name.id);

@@ -16,7 +16,7 @@ pub struct Input<'a> {
     hint: String,
     password: bool,
     max_width: f32,
-    id_source: Option<&'static str>,
+    id_salt: Option<egui::Id>,
     enabled: bool,
     invalid: bool,
 }
@@ -28,7 +28,7 @@ impl<'a> Input<'a> {
             hint: String::new(),
             password: false,
             max_width: f32::NAN,
-            id_source: None,
+            id_salt: None,
             enabled: true,
             invalid: false,
         }
@@ -47,13 +47,19 @@ impl<'a> Input<'a> {
         self.max_width = w;
         self
     }
-    /// A stable id, independent of call order. Needed only where a caller (a
-    /// test, or `ctx.memory_mut(|m| m.request_focus(..))`) must address this
-    /// field from outside the widget tree that builds it; without one,
+    /// A stable id, independent of call order, from any hashable salt (a
+    /// `&str`, or a `format!("row{i}")` per row). Needed only where a caller
+    /// (a test, or `ctx.memory_mut(|m| m.request_focus(..))`) must address
+    /// this field from outside the widget tree that builds it; without one,
     /// `TextEdit` falls back to an id keyed on widget position.
-    pub fn id_source(mut self, s: &'static str) -> Self {
-        self.id_source = Some(s);
+    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
+        self.id_salt = Some(egui::Id::new(salt));
         self
+    }
+    /// The former name of [`Input::id_salt`], for `'static` strings only.
+    #[deprecated(since = "0.5.0", note = "use id_salt")]
+    pub fn id_source(self, s: &'static str) -> Self {
+        self.id_salt(s)
     }
     /// `false` draws the field disabled: no focus, no typing.
     pub fn enabled(mut self, yes: bool) -> Self {
@@ -112,8 +118,8 @@ impl<'a> Widget for Input<'a> {
             .font(font)
             .vertical_align(egui::Align::Center)
             .text_color(typed);
-        if let Some(id_source) = self.id_source {
-            edit = edit.id_salt(id_source);
+        if let Some(id_salt) = self.id_salt {
+            edit = edit.id_salt(id_salt);
         }
         let max_width = if self.max_width.is_nan() {
             t.metrics.field_max_width

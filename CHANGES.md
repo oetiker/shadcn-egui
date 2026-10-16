@@ -58,6 +58,12 @@ are recorded here. The format is based on
 - `components::shared::disabled_painter` is gone. A custom widget fades a
   disabled part with `style_painter(ui, &[stack], state)`, which takes the
   fade from the part's recipe (`disabled:opacity-50`). (#6)
+- `Input::id_salt(..)` gives a text field a fixed id from any salt, such as
+  `format!("row{i}")` for a field per row. `Input::id_source(..)`, which
+  took only a string literal, still works but warns that it is deprecated.
+- `Badge::icon` and `Badge::icon_end` take any icon reference, such as
+  `&Theme::current(ctx).icons.check`, not only an icon that lives for the
+  whole program.
 
 ### Fixed
 - Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`
