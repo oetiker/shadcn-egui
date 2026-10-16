@@ -36,14 +36,27 @@ builds the recipes itself:
   quote above each recipe, copied verbatim, record where the values come
   from, so a later port into the crate can check the recipe against
   upstream.
-- A rule's `rank` orders it the way Tailwind orders the CSS. Take the bit of
-  each variant from a generated recipe in the crate that uses the same
-  variant (`crates/shadcn-egui/src/style/nova.rs` of the crate version the
-  app depends on: the bits move when the generator learns a new variant); a
-  rule with several variants ORs their bits. The bits used below:
-  `focus-visible:` `1 << 20`, `disabled:` `1 << 22`, `aria-checked:`
-  `1 << 27`, `aria-invalid:` `1 << 29`, `data-checked:` `1 << 31`, `dark:`
-  `1 << 52`.
+- A rule's `rank` orders it the way the browser orders the CSS: by
+  specificity, then by Tailwind's variant order. Take the bit of each
+  variant from a generated recipe in the crate that uses the same variant
+  (`crates/shadcn-egui/src/style/nova.rs` of the crate version the app
+  depends on: the bits move when the generator learns a new variant); a
+  rule with several variants ORs their bits; targets (`after:`, `[&>svg]:`,
+  `[&_svg:not([class*='size-'])]:`) have no bit. Then add the specificity
+  the variants add: `1 << 122` for each class, attribute or pseudo-class,
+  that is each state variant (`hover:`, `dark:`, `data-*:`, `aria-*:`,
+  `group-*:`, `peer-*:`, `has-*:`, `not-*:`); `1 << 121` for
+  `[&_svg:not([class*='size-'])]:`, one class more specific than
+  `[&>svg]:` but behind it at equal specificity; none for `sm:`, `md:`,
+  `supports-*:`, `in-*:`, `after:` and `[&>svg]:`. A `placeholder:` rule
+  adds `1 << 126`, which puts it above every rule without it, and
+  `!important` adds `1 << 127`. The bits used below: `focus-visible:`
+  `1 << 20`, `disabled:` `1 << 22`, `aria-checked:` `1 << 27`,
+  `aria-invalid:` `1 << 29`, `data-checked:` `1 << 31`, `dark:`
+  `1 << 52`; so `dark:aria-invalid:` is `(1 << 29) | (1 << 52) | (2 << 122)`.
+  A class whose rank is above 0 without a state
+  (`[&_svg:not([class*='size-'])]:size-4`) is a `When::ALWAYS` rule, not
+  the base, as in a generated recipe.
 - Classes the crate ignores stay out of the recipe: layout keywords (`flex`,
   `items-center`), transitions and animations, and variants for slots the
   crate does not ship (`group-has-[:focus-visible]/field-label:`).
@@ -71,15 +84,15 @@ fn radio_group_item_nova() -> Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(checked), rank: 1 << 31, value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(dark), rank: 1 << 52, value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: when(dark | checked), rank: (1 << 31) | (1 << 52), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(checked), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(dark), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: when(dark | checked), rank: (1 << 31) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(checked), rank: 1 << 31, value: Paint::Role(Role::PrimaryForeground, 1.0) },
+                Rule { when: when(checked), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::PrimaryForeground, 1.0) },
             ],
         },
         // base: "border"
@@ -87,26 +100,26 @@ fn radio_group_item_nova() -> Recipe {
         border_color: Prop {
             base: Some(Paint::Role(Role::Input, 1.0)),
             rules: vec![
-                Rule { when: when(focus), rank: 1 << 20, value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: when(invalid), rank: 1 << 29, value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: when(invalid | checked), rank: (1 << 27) | (1 << 29), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(checked), rank: 1 << 31, value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(dark | invalid), rank: (1 << 29) | (1 << 52), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: when(focus), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: when(invalid), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: when(invalid | checked), rank: (1 << 27) | (1 << 29) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(checked), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(dark | invalid), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(focus), rank: 1 << 20, value: 3.0 },
-                Rule { when: when(invalid), rank: 1 << 29, value: 3.0 },
+                Rule { when: when(focus), rank: (1 << 20) | (1 << 122), value: 3.0 },
+                Rule { when: when(invalid), rank: (1 << 29) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(focus), rank: 1 << 20, value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: when(invalid), rank: 1 << 29, value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: when(dark | invalid), rank: (1 << 29) | (1 << 52), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: when(focus), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: when(invalid), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: when(dark | invalid), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         // base: "outline-none"
@@ -114,7 +127,7 @@ fn radio_group_item_nova() -> Recipe {
         // base: "disabled:opacity-50"
         opacity: Prop {
             base: None,
-            rules: vec![Rule { when: when(State::DISABLED), rank: 1 << 22, value: 0.5 }],
+            rules: vec![Rule { when: when(State::DISABLED), rank: (1 << 22) | (1 << 122), value: 0.5 }],
         },
         // base: "after:-inset-x-3 after:-inset-y-2"
         hit_inset_x: Prop::fixed(12.0),

@@ -4,7 +4,7 @@
 use crate::class::split;
 use crate::model::{Field, Value};
 use crate::utility::{utility, U};
-use crate::variant::{class_variants, Skip};
+use crate::variant::{class_variants, rank, Skip};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -13,7 +13,8 @@ pub struct Decl {
     pub value: Value,
     pub all: u32,
     pub none: u32,
-    /// Tailwind variant-order bitmask (see `variant.rs`).
+    /// Cascade rank: important, specificity, Tailwind variant order (see
+    /// `variant.rs`).
     pub rank: u128,
     /// Position of the class in the marker's list.
     pub idx: usize,
@@ -28,11 +29,14 @@ pub struct Marker {
     pub unsupported: Vec<(String, String)>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct VarDef {
     pub all: u32,
     pub none: u32,
-    pub rank: u128,
+    /// The defining class's variants and `!important` flag, for the rank
+    /// of the rules that use the variable.
+    pub variants: Vec<String>,
+    pub important: bool,
     pub px: f32,
 }
 
@@ -50,7 +54,8 @@ pub fn collect_vars(css: &[(String, Vec<String>)]) -> Vars {
                 vars.entry(name).or_default().push(VarDef {
                     all: v.all,
                     none: v.none,
-                    rank: v.rank,
+                    variants: c.variants.clone(),
+                    important: c.important,
                     px,
                 });
             }
@@ -99,9 +104,10 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                     });
                 }
             }
-            // Approximation of CSS: a rule derived from a variable inherits
-            // the rank of the variable's definition (`rank: v.rank | d.rank`),
-            // not the specificity of the element the variable is set on.
+            // Approximation of CSS: a rule derived from a variable is ranked
+            // as one class with the variants of both the using and the
+            // defining class, not by the specificity of the element the
+            // variable is set on.
             U::UseVar(fields, name) => match vars.get(&name) {
                 Some(defs) => {
                     for d in defs {
@@ -111,7 +117,10 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                                 value: Value::Px(d.px),
                                 all: v.all | d.all,
                                 none: v.none | d.none,
-                                rank: v.rank | d.rank,
+                                rank: rank(
+                                    c.variants.iter().chain(&d.variants).map(String::as_str),
+                                    c.important || d.important,
+                                ),
                                 idx,
                             });
                         }
