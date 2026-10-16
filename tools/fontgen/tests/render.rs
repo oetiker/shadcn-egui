@@ -121,7 +121,7 @@ fn apache_and_static_crates_render() {
     assert!(crate_cargo_toml(&rows[1]).contains("license = \"MIT AND Apache-2.0\"\n"));
     assert!(
         crate_cargo_toml(&rows[1]).contains(
-            "repository.workspace = true\ninclude = [\"src/**\", \"fonts/**\", \"LICENSE*\", \"README*\"]\n"
+            "repository.workspace = true\ndocumentation = \"https://docs.rs/shadcn-egui-font-roboto\"\nreadme = \"README.md\"\nkeywords = [\"egui\", \"shadcn\", \"font\", \"roboto\"]\ncategories = [\"gui\"]\ninclude = [\"src/**\", \"fonts/**\", \"LICENSE*\", \"README*\"]\n"
         ),
         "{}",
         crate_cargo_toml(&rows[1])

@@ -79,6 +79,10 @@ are recorded here. The format is based on
   bound crashed the app with `min > max, or either was NaN` when the theme
   was applied. A backwards range now gives every weight its end, and a NaN
   bound is ignored.
+- The crates.io pages of the font, icon and core crates now show a README,
+  keywords, a category and a documentation link; before they were empty.
+  Each README names the `shadcn-egui` feature that enables the crate and
+  the licence of its font or icon set.
 - A popover whose style recipe an app replaced whole
   (`*style.popover_content = Recipe { .. }`) showed each word on its own
   line; it is now as wide as its content. Buttons, badges, inputs, select

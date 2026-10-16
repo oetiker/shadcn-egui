@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/shadcn-egui-core"
+readme = "README.md"
+keywords = ["egui", "shadcn", "icon-data", "font-data", "shared-types"]
+categories = ["gui"]
 include = ["src/**", "LICENSE*", "README*"]
 
 # A leaf crate: font and icon crates depend on it, shadcn-egui re-exports it.

@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND OFL-1.1"
 repository.workspace = true
+documentation = "https://docs.rs/shadcn-egui-font-noto-serif"
+readme = "README.md"
+keywords = ["egui", "shadcn", "font", "noto-serif"]
+categories = ["gui"]
 include = ["src/**", "fonts/**", "LICENSE*", "README*"]
 
 [dependencies]

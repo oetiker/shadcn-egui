@@ -353,15 +353,57 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND {license}"
 repository.workspace = true
+documentation = "https://docs.rs/{crate_name}"
+readme = "README.md"
+keywords = ["egui", "shadcn", "font", "{name}"]
+categories = ["gui"]
 include = ["src/**", "fonts/**", "LICENSE*", "README*"]
 
 [dependencies]
 shadcn-egui-core.workspace = true
 "#,
         crate_name = row.crate_name(),
+        name = row.name,
         title = row.title,
         license = row.license,
     )
+}
+
+/// `README.md` of a font crate: what it is, how it is used, its licences.
+pub fn crate_readme(row: &Row) -> Result<String, String> {
+    let licence = match row.license.as_str() {
+        "OFL-1.1" => "SIL Open Font License 1.1 (`OFL-1.1`)",
+        "Apache-2.0" => "Apache License 2.0 (`Apache-2.0`)",
+        other => return Err(format!("{}: licence {other} gets no crate", row.name)),
+    };
+    let usage = if row.name == "inter" {
+        "You do not depend on this crate directly. `shadcn-egui` always includes it:
+Inter is the default font."
+            .to_string()
+    } else {
+        format!(
+            "You do not depend on this crate directly. Enable the `font-{}` feature
+of `shadcn-egui` and select the font in your theme.",
+            row.name
+        )
+    };
+    Ok(format!(
+        "# {crate_name}
+
+The {title} font for [shadcn-egui](https://crates.io/crates/shadcn-egui),
+the shadcn/ui design system for egui.
+
+{usage}
+
+## Licence
+
+The font files are licensed under the {licence}; the licence text is in
+`LICENSE-FONT.txt`. The Rust code of this crate is licensed under the MIT
+licence (`LICENSE`).
+",
+        crate_name = row.crate_name(),
+        title = row.title,
+    ))
 }
 
 /// `src/lib.rs` of a font crate, in the form of the Phase 2 inter and
@@ -713,6 +755,7 @@ pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
         outputs.push((dir.join("LICENSE-FONT.txt"), licence));
         outputs.push((dir.join("LICENSE"), code_licence.clone()));
         outputs.push((dir.join("Cargo.toml"), crate_cargo_toml(row).into_bytes()));
+        outputs.push((dir.join("README.md"), crate_readme(row)?.into_bytes()));
         outputs.push((
             dir.join("src/lib.rs"),
             crate_lib_rs(row, wght)?.into_bytes(),
