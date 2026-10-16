@@ -67,7 +67,7 @@ mod tests {
 
     /// stylegen ranks an `!important` class with bit 127; `Rule::IMPORTANT`
     /// must be that bit, or an app's important rule would lose to upstream's.
-    /// `[&>svg]` adds no specificity, so the rank is that bit alone.
+    /// The rule is found by that bit, not by value.
     #[test]
     fn generated_important_rank_is_rule_important() {
         let luma = Style::luma();
@@ -76,8 +76,10 @@ mod tests {
             .icon_size
             .rules
             .iter()
-            .find(|r| r.when == When::ALWAYS && r.value == 12.0)
+            .find(|r| r.rank & Rule::<f32>::IMPORTANT != 0)
             .expect("luma cn-badge [&>svg]:size-3!");
+        assert_eq!((r.when, r.value), (When::ALWAYS, 12.0));
+        // `[&>svg]` adds no specificity and no variant bit.
         assert_eq!(r.rank, Rule::<f32>::IMPORTANT);
     }
 

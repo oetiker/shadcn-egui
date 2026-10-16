@@ -115,11 +115,22 @@ impl When {
 /// A value that applies when `when` matches. When several rules match, the
 /// highest `rank` wins, as in the browser's cascade of shadcn's CSS. The
 /// rank packs, from the top: bit 127 for an `!important` class, which beats
-/// every normal one; the specificity the class's variants add, its count of
-/// classes, attributes and pseudo-classes from bit 123 (4 bits) and of
-/// pseudo-elements from bit 121 (2 bits); and below that the Tailwind v4
-/// variant-order bitmask, one bit per distinct variant, which decides
-/// between equal specificities.
+/// every normal one; bit 126 for a `placeholder:` class, as the
+/// placeholder's own rule beats what it inherits from the part; the count of
+/// classes, attributes and pseudo-classes the variants add to the
+/// specificity, one `1 << 122` each (bits 122 to 125); bit 121, a half
+/// step, which `[&_svg:not([class*='size-'])]:` adds where `[&>svg]:` adds
+/// nothing (more specific, but it loses a tie of equal specificity to
+/// `[&>svg]:`); and below that the Tailwind v4 variant-order bitmask, one
+/// bit per distinct variant, which decides between equal ranks above.
+///
+/// To rank an app's rule like a generated one, OR the variant bits taken
+/// from a generated rule with the same variants, then add `1 << 122` per
+/// state variant (`hover:`, `dark:`, `data-*:`, `aria-*:`, `group-*:`,
+/// `peer-*:`, `has-*:`, `not-*:`), `1 << 121` for
+/// `[&_svg:not([class*='size-'])]:`, nothing for `sm:`, `md:`,
+/// `supports-*:`, `in-*:`, `after:` and `[&>svg]:` (which have no variant
+/// bit either), and `1 << 126` for `placeholder:`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,
@@ -135,7 +146,9 @@ impl<T> Rule<T> {
 
     /// An app's override, ranked like a Tailwind `!` class: it beats every
     /// generated rule that is not important. Against an upstream `!` class
-    /// of the same rank it wins because it comes later in the rule list.
+    /// of the same rank it wins because it comes later in the rule list; an
+    /// upstream `!` class that also names a state ranks higher and still
+    /// wins.
     ///
     /// ```
     /// use std::sync::Arc;
@@ -166,6 +179,23 @@ impl<T> Rule<T> {
 
 /// One property of a recipe. Set `base` to change the unconditional value;
 /// push a [`Rule`] to add a conditional one.
+///
+/// A value that applies always can also sit in a [`When::ALWAYS`] rule
+/// with a rank above 0: every generated `icon_size` does, as its svg target
+/// adds to the rank. Such a rule beats `base`, so setting `base` there
+/// changes nothing; assign `Prop::fixed(value)` to replace the property:
+///
+/// ```
+/// use shadcn_egui::style::{pick, Prop, State};
+/// let mut style = shadcn_egui::Style::vega();
+/// let icon = |s: &shadcn_egui::Style| {
+///     pick(&[&*s.button, &*s.button_variant_default], |r| &r.icon_size, State::NONE)
+/// };
+/// style.button.icon_size.base = Some(20.0);
+/// assert_eq!(icon(&style), Some(16.0));
+/// style.button.icon_size = Prop::fixed(20.0);
+/// assert_eq!(icon(&style), Some(20.0));
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct Prop<T> {
     pub base: Option<T>,
@@ -512,7 +542,7 @@ mod tests {
         let p = Prop {
             base: None,
             rules: vec![
-                rule(State::SIZE_SM, (1 << 34) | (1 << 123), 28.0),
+                rule(State::SIZE_SM, (1 << 34) | (1 << 122), 28.0),
                 rule(State::NONE, 1 << 50, 36.0),
             ],
         };
@@ -525,15 +555,26 @@ mod tests {
             rules: vec![
                 rule(
                     State::DARK.or(State::HOVER),
-                    (1 << 0) | (1 << 1) | (2 << 123),
+                    (1 << 0) | (1 << 1) | (2 << 122),
                     1.0,
                 ),
-                rule(State::DARK, (1 << 120) | (1 << 123), 2.0),
+                rule(State::DARK, (1 << 120) | (1 << 122), 2.0),
             ],
         };
         assert_eq!(q.get(State::DARK | State::HOVER), Some(1.0));
+        // A placeholder: rule (bit 126) beats the part's own rules
+        // whatever their classes.
+        q.rules
+            .push(rule(State::PLACEHOLDER, (1 << 16) | (1 << 126), 4.0));
+        assert_eq!(
+            q.get(State::DARK | State::HOVER | State::PLACEHOLDER),
+            Some(4.0)
+        );
         q.rules.push(Rule::important(When::ALWAYS, 3.0));
-        assert_eq!(q.get(State::DARK | State::HOVER), Some(3.0));
+        assert_eq!(
+            q.get(State::DARK | State::HOVER | State::PLACEHOLDER),
+            Some(3.0)
+        );
     }
 
     #[test]

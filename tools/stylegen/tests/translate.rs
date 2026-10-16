@@ -7,8 +7,8 @@ use stylegen::model::{flag, Field, Value, FLAGS};
 use stylegen::resolve::{translate, Vars};
 use stylegen::utility::{utility, U};
 use stylegen::variant::{
-    class_variants, rank_of, tw_cmp, variant, Pseudo, Skip, Spec, Variants, IGNORED, R_CLASSES,
-    R_ELEMENTS, R_IMPORTANT, TRANSLATED, V,
+    class_variants, rank_of, tw_cmp, variant, Pseudo, Skip, Variants, IGNORED, R_CLASSES,
+    R_IMPORTANT, R_PSEUDO_ELEMENT, TRANSLATED, V,
 };
 
 fn set(u: &str) -> Vec<(Field, Value)> {
@@ -333,7 +333,7 @@ fn tailwind_variant_order() {
 #[test]
 fn ranks_follow_tailwind_order() {
     for (a, _, _) in TRANSLATED {
-        assert!(rank(a) < R_ELEMENTS);
+        assert!(rank(a) < R_CLASSES);
         for (z, _, _) in TRANSLATED {
             assert_eq!(Some(rank(a).cmp(&rank(z))), tw_cmp(a, z), "`{a}` vs `{z}`");
         }
@@ -523,21 +523,23 @@ fn conditional_classes_have_nonzero_rank() {
 /// layer, then the later rule) must agree with the browser, where
 /// `!important` decides first, then selector specificity, then source order. In Tailwind's output
 /// most variants add one class, attribute or pseudo-class of specificity;
-/// `placeholder` adds a pseudo-element, `in-*` (`:where(…) &`) and the
-/// media/supports variants add none, and of the svg targets only
+/// `placeholder` styles a pseudo-element, which beats the part's own rules
+/// whatever their classes (it inherits from them), `in-*` (`:where(…) &`)
+/// and the media/supports variants add none, and of the svg targets only
 /// `[&_svg:not([class*='size-'])]` adds one class over `[&>svg]`. For every
 /// pair of rules on one field that can match together, within the marker
 /// stack of one shipped component, the rank order must equal the
 /// specificity-then-rank order.
 #[test]
 fn rank_order_agrees_with_specificity() {
+    /// (pseudo-elements, classes), compared in that order.
     fn specificity(v: &str) -> (u32, u32) {
         let none = v.starts_with("in-")
             || ["sm", "md", "supports-backdrop-filter", "after", "[&>svg]"].contains(&v);
         match v {
-            "placeholder" => (0, 1),
+            "placeholder" => (1, 0),
             _ if none => (0, 0),
-            _ => (1, 0),
+            _ => (0, 1),
         }
     }
     struct Rule {
@@ -643,7 +645,7 @@ fn checkbox_invalid_and_checked_keeps_primary_border() {
 }
 
 /// `!important` beats every normal declaration: the class gets the top rank
-/// bit above its variant bits (cn-badge `[&>svg]:size-3!`).
+/// bit above its specificity and variant bits (cn-badge `[&>svg]:size-3!`).
 #[test]
 fn important_class_gets_the_top_rank_bit() {
     let c = split("[&>svg]:size-3!");
@@ -672,7 +674,7 @@ fn important_class_gets_the_top_rank_bit() {
     let both = variants_of("dark:h-8!").unwrap().rank;
     assert_eq!(
         both,
-        (1 << R_IMPORTANT) | (1 << R_CLASSES) | (1 << rank("dark"))
+        (1 << R_IMPORTANT) | (2 << R_CLASSES) | (1 << rank("dark"))
     );
     assert!(variants_of("dark:h-8").unwrap().rank < 1 << R_IMPORTANT);
 }
@@ -824,32 +826,82 @@ fn important_beats_specificity() {
     assert!(variants_of("h-8!").unwrap().rank > high);
 }
 
-/// The rank packs important, specificity and variant order (module docs of
-/// `variant.rs`), each variant counted once.
+/// The rank packs important, pseudo-element, class steps and variant order
+/// (module docs of `variant.rs`), each variant counted once.
 #[test]
 fn rank_packs_specificity_above_the_variant_bits() {
     let r = |raw: &str| variants_of(raw).unwrap().rank;
+    // (pseudo-element, class steps): a class is two steps.
     let spec = |raw: &str| {
         let r = r(raw);
-        Spec {
-            classes: (r >> R_CLASSES & 0xf) as u32,
-            elements: (r >> R_ELEMENTS & 0x3) as u32,
-        }
+        (r >> R_PSEUDO_ELEMENT & 1, r >> R_CLASSES & 0x1f)
     };
-    let s = |classes, elements| Spec { classes, elements };
     assert_eq!(r("h-8"), 0);
     assert_eq!(r("md:h-8"), 1 << rank("md"));
     assert_eq!(
         r("data-[size=sm]:h-8"),
-        (1 << R_CLASSES) | (1 << rank("data-[size=sm]"))
+        (2 << R_CLASSES) | (1 << rank("data-[size=sm]"))
     );
-    assert_eq!(spec("dark:placeholder:text-muted-foreground"), s(1, 1));
-    assert_eq!(spec("in-data-[slot=button-group]:rounded-none"), s(0, 0));
-    assert_eq!(spec("[&>svg]:size-3"), s(0, 0));
-    assert_eq!(spec("hover:[&_svg:not([class*='size-'])]:size-4"), s(2, 0));
-    // A target adds no variant bit.
+    assert_eq!(spec("dark:placeholder:text-muted-foreground"), (1, 2));
+    assert_eq!(spec("in-data-[slot=button-group]:rounded-none"), (0, 0));
+    assert_eq!(spec("hover:[&_svg:not([class*='size-'])]:size-4"), (0, 3));
+    // A target adds no variant bit; `[&>svg]` and `after` add nothing.
     assert_eq!(r("[&_svg:not([class*='size-'])]:size-4"), 1 << R_CLASSES);
+    assert_eq!(r("[&>svg]:size-3"), 0);
     assert_eq!(r("after:-inset-2"), 0);
-    // Any class bit outranks every variant bit.
+    // A pseudo-element outranks every class, any class every variant bit.
+    assert!(r("placeholder:h-8") > r("dark:hover:focus:h-8"));
     assert!(r("hover:h-8") > r("in-data-[slot=button-group]:md:sm:supports-backdrop-filter:h-8"));
+}
+
+/// `::placeholder` is an element of its own: the input's `text-*` rules
+/// reach it only by inheritance, so any `placeholder:` rule beats them,
+/// whatever their specificity. Among placeholder rules the class count
+/// decides again.
+#[test]
+fn placeholder_rule_beats_the_inputs_own_text_rules() {
+    let muted = set("text-muted-foreground")[0].1;
+    let fg = set("text-foreground")[0].1;
+    let p = flag("PLACEHOLDER");
+    let dark = flag("DARK");
+    let classes = ["dark:text-foreground", "placeholder:text-muted-foreground"];
+    assert_eq!(winner(&classes, Field::Text, dark | p), Some(muted));
+    assert_eq!(winner(&classes, Field::Text, dark), Some(fg));
+    let hover = [
+        "placeholder:text-muted-foreground",
+        "hover:focus:text-foreground",
+    ];
+    let all = p | flag("HOVER") | flag("FOCUS");
+    assert_eq!(winner(&hover, Field::Text, all), Some(muted));
+    let both = [
+        "dark:placeholder:text-foreground",
+        "placeholder:text-muted-foreground",
+    ];
+    assert_eq!(winner(&both, Field::Text, dark | p), Some(fg));
+}
+
+/// At equal specificity Tailwind orders the svg targets by their own
+/// variant bits, which come after every named variant: `[&>svg]` sorts
+/// after `[&_svg:not(…)]`. `.x:hover:focus>svg` and
+/// `.x:is(.dark *) svg:not([class*='size-'])` are both (0,3,1).
+#[test]
+fn svg_targets_keep_their_variant_order() {
+    let classes = [
+        "hover:focus:[&>svg]:size-3",
+        "dark:[&_svg:not([class*='size-'])]:size-4",
+    ];
+    let state = flag("DARK") | flag("HOVER") | flag("FOCUS");
+    assert_eq!(
+        winner(&classes, Field::IconSize, state),
+        Some(Value::Px(12.0))
+    );
+    // One more class and `[&_svg:not(…)]` wins again.
+    let more = [
+        "hover:focus:[&>svg]:size-3",
+        "dark:focus:[&_svg:not([class*='size-'])]:size-4",
+    ];
+    assert_eq!(winner(&more, Field::IconSize, state), Some(Value::Px(16.0)));
+    // One target: the named variants decide (`dark` after `hover`).
+    let same = ["dark:[&>svg]:size-3", "hover:[&>svg]:size-4"];
+    assert_eq!(winner(&same, Field::IconSize, state), Some(Value::Px(12.0)));
 }

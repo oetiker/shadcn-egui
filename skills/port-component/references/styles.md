@@ -47,27 +47,45 @@ draws itself from the active style's recipes; it does not hard-code a look.
   early layer beats a later base, and between equal ranks the later layer wins.
   A rule's rank orders it as the browser's cascade does. An `!important` class
   has bit 127 (`Rule::IMPORTANT`), and so has an app's `Rule::important`, which
-  wins a tie by coming later. Below it sits the specificity the variants add to
-  the class: the count of classes, attributes and pseudo-classes from bit 123
-  (`dark:`, `hover:`, `data-[size=sm]:` add one each; `sm:`, `md:`,
-  `supports-*:` and `in-*:` add none), the count of pseudo-elements
-  (`placeholder:`) from bit 121. The lowest bits hold one bit per Tailwind
-  variant the class uses, in the order of Tailwind v4.3.3 `Variants.compare`
-  (arbitrary variants after named ones), which decides between rules of equal
-  specificity. So `data-[size=sm]:h-7` beats `md:h-9`, as in the browser.
+  wins a tie by coming later. Bit 126 marks a `placeholder:` class: the
+  placeholder is an element of its own, and its rules beat what it inherits
+  from the input. Then the specificity the variants add to the class: the
+  count of classes, attributes and pseudo-classes, `1 << 122` each (`dark:`,
+  `hover:`, `data-[size=sm]:`; `sm:`, `md:`, `supports-*:`, `in-*:`, `after:`
+  and `[&>svg]:` add none), and bit 121 for `[&_svg:not([class*='size-'])]:`,
+  a half step: one class more specific than `[&>svg]:`, but Tailwind sorts it
+  first, so at equal specificity the `[&>svg]:` rule wins. The lowest bits
+  hold one bit per Tailwind variant the class uses (targets have none), in
+  the order of Tailwind v4.3.3 `Variants.compare` (arbitrary variants after
+  named ones), which decides between rules of equal rank above. So
+  `data-[size=sm]:h-7` beats `md:h-9`, as in the browser. A value that always
+  applies but has a rank above 0, such as an `icon_size` from
+  `[&_svg:not([class*='size-'])]:size-4`, is a `When::ALWAYS` rule, not a
+  base.
   A rule derived from a CSS variable (for example `--card-spacing`) is ranked as
   one class with the variants of both the using and the defining class, an
   approximation.
 - **Deviating in a project.** Adjust the style when you build the theme, never
-  in copies of crate code:
+  in copies of crate code. Setting `base` changes the unconditional value only
+  where no `When::ALWAYS` rule outranks it; the `icon_size` of buttons, select
+  triggers, select items, select scroll buttons and tab triggers sits in such
+  a rule, so replace the whole property with `Prop::fixed(..)`:
   ```rust
+  use shadcn_egui::style::{pick, Prop, State};
   use shadcn_egui::{Palette, Style, Theme};
 
   fn tall_buttons() -> Theme {
       let mut s = Style::vega();
       s.button_size_default.height.base = Some(40.0);
+      s.button.icon_size = Prop::fixed(20.0);
       Theme::new(s, Palette::dark(), 10.0)
   }
+
+  let theme = tall_buttons();
+  let s = &theme.style;
+  let stack = [&*s.button, &*s.button_variant_default, &*s.button_size_default];
+  assert_eq!(pick(&stack, |r| &r.height, State::NONE), Some(40.0));
+  assert_eq!(pick(&stack, |r| &r.icon_size, State::NONE), Some(20.0));
   ```
 
 ## Recipe fields and conditions

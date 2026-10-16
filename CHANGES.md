@@ -64,12 +64,14 @@ are recorded here. The format is based on
 - `Badge::icon` and `Badge::icon_end` take any icon reference, such as
   `&Theme::current(ctx).icons.check`, not only an icon that lives for the
   whole program.
-- A `Rule` rank now also counts the selector specificity, as the browser
-  does, so a rule for `data-[size=sm]:` beats one for `md:` whatever their
-  order. A rule added to `theme.style` with a hand-written rank that holds
-  only the variant bits now loses to the style's rule for the same state:
-  add `1 << 123` per state variant (`hover:`, `dark:`, `data-*:`), or use
-  `Rule::important`.
+- A rule pushed into `theme.style` with a rank made of variant bits only now
+  loses to the style's own rule for the same state. Ranks now also count
+  selector specificity, as the browser does, so a `data-[size=sm]:` rule
+  beats an `md:` rule and a `placeholder:` text colour beats a `dark:` one;
+  the `Rule` documentation lists what to add, or use `Rule::important`.
+- Setting `icon_size.base` in `theme.style` no longer changes the icon size
+  of buttons, select triggers, select items, select scroll buttons and tab
+  triggers. Assign `icon_size = Prop::fixed(..)` instead.
 
 ### Fixed
 - Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`

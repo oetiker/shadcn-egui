@@ -23,12 +23,29 @@
 //! [`TRANSLATED`]). Every utility class adds the same (0,1,0) for itself, so
 //! that part is left out: a class without variants has specificity zero.
 //!
-//! A rule's rank packs the three into one `u128`, compared as an integer:
-//! [`R_IMPORTANT`] (bit 127) for an `!important` class, the class count of
-//! the specificity in bits [`R_CLASSES`]`..127`, its element count in bits
-//! [`R_ELEMENTS`]`..R_CLASSES`, and the OR of `1u128 << bit` over the
-//! variants below [`R_ELEMENTS`], so variants have at most [`R_ELEMENTS`]
-//! distinct bits.
+//! A pseudo-element (`placeholder:`, `&::placeholder`) is an element of its
+//! own. The part's other rules reach it only by inheritance, which loses to
+//! any rule on the pseudo-element itself, so its count ranks above the
+//! class count, not below it as in a selector's specificity. The crate folds
+//! the placeholder into a flag on the part's own field; this keeps the
+//! browser's result. One gap remains: an `!important` rule on the part still
+//! beats a normal `placeholder:` rule, which the browser would not do.
+//!
+//! The two svg targets compete on one field. At equal specificity Tailwind
+//! orders them by their own variant bits, which sit above every named
+//! variant, and `[&>svg]` sorts after `[&_svg:not([class*='size-'])]`: the
+//! `[&>svg]` rule wins whatever the other variants. The rank counts classes
+//! in half steps to say so without a bit for the targets: a class is two
+//! steps, and `[&_svg:not([class*='size-'])]`, one class more specific than
+//! `[&>svg]`, adds one step less ([`Spec::earlier`]). So a `[&>svg]` class
+//! without other variants keeps rank 0.
+//!
+//! A rule's rank packs these into one `u128`, compared as an integer:
+//! [`R_IMPORTANT`] (bit 127) for an `!important` class,
+//! [`R_PSEUDO_ELEMENT`] (bit 126) for a pseudo-element, the class steps
+//! (`2 * classes - earlier`) in bits [`R_CLASSES`]`..126`, and the OR of
+//! `1u128 << bit` over the variants below [`R_CLASSES`], so variants have at
+//! most [`R_CLASSES`] distinct bits. Targets add no variant bit.
 
 use std::cmp::Ordering;
 use std::sync::OnceLock;
@@ -74,8 +91,12 @@ use Meaning::*;
 pub struct Spec {
     /// Classes, attributes and pseudo-classes.
     pub classes: u32,
-    /// Type selectors and pseudo-elements.
-    pub elements: u32,
+    /// Pseudo-elements.
+    pub pseudo_elements: u32,
+    /// Classes of a target that Tailwind sorts before its rival target of
+    /// equal specificity: each loses that tie (half a class step in the
+    /// rank).
+    pub earlier: u32,
 }
 
 impl std::ops::Add for Spec {
@@ -83,7 +104,8 @@ impl std::ops::Add for Spec {
     fn add(self, o: Spec) -> Spec {
         Spec {
             classes: self.classes + o.classes,
-            elements: self.elements + o.elements,
+            pseudo_elements: self.pseudo_elements + o.pseudo_elements,
+            earlier: self.earlier + o.earlier,
         }
     }
 }
@@ -91,17 +113,27 @@ impl std::ops::Add for Spec {
 /// One class, attribute or pseudo-class: (0,1,0).
 pub const CLASS: Spec = Spec {
     classes: 1,
-    elements: 0,
+    pseudo_elements: 0,
+    earlier: 0,
 };
 /// One pseudo-element: (0,0,1).
-pub const ELEMENT: Spec = Spec {
+pub const PSEUDO_ELEMENT: Spec = Spec {
     classes: 0,
-    elements: 1,
+    pseudo_elements: 1,
+    earlier: 0,
 };
 /// No specificity: media and supports queries, `:where(…)`.
 pub const ZERO: Spec = Spec {
     classes: 0,
-    elements: 0,
+    pseudo_elements: 0,
+    earlier: 0,
+};
+/// `[&_svg:not([class*='size-'])]` over `[&>svg]`: one class, sorted
+/// before it.
+pub const SVG_NOT: Spec = Spec {
+    classes: 1,
+    pseudo_elements: 0,
+    earlier: 1,
 };
 
 /// Every variant stylegen translates, by exact text, with the specificity
@@ -137,7 +169,7 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     ("not-data-selected", IsNot("SELECTED"), CLASS),
     ("data-placeholder", Is("PLACEHOLDER"), CLASS),
     // `&::placeholder`: a pseudo-element.
-    ("placeholder", Is("PLACEHOLDER"), ELEMENT),
+    ("placeholder", Is("PLACEHOLDER"), PSEUDO_ELEMENT),
     ("has-data-[icon=inline-start]", Is("ICON_START"), CLASS),
     ("has-data-[icon=inline-end]", Is("ICON_END"), CLASS),
     // `:where(*[data-slot=button-group]) &`.
@@ -180,9 +212,13 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     // A target's rules compete only with rules of the same target, so its
     // specificity counts over the least specific selector of that target:
     // `&::after` (0,0,1), `& > svg` (0,0,1), `& svg:not([class*='size-'])`
-    // (0,1,1).
+    // (0,1,1). Their order at equal specificity is in `SVG_NOT`.
     ("after", Target(Pseudo::After), ZERO),
-    ("[&_svg:not([class*='size-'])]", Target(Pseudo::Svg), CLASS),
+    (
+        "[&_svg:not([class*='size-'])]",
+        Target(Pseudo::Svg),
+        SVG_NOT,
+    ),
     ("[&>svg]", Target(Pseudo::Svg), ZERO),
 ];
 
@@ -434,33 +470,35 @@ pub fn tw_cmp(a: &str, z: &str) -> Option<Ordering> {
 /// this bit sits above everything else.
 pub const R_IMPORTANT: u32 = 127;
 
-/// Lowest bit of the specificity's class count (4 bits, below
-/// [`R_IMPORTANT`]).
-pub const R_CLASSES: u32 = 123;
+/// The rank bit of a pseudo-element (`placeholder:`), below
+/// [`R_IMPORTANT`].
+pub const R_PSEUDO_ELEMENT: u32 = 126;
 
-/// Lowest bit of the specificity's element count (2 bits, below
-/// [`R_CLASSES`]). The variant bits sit below it.
-pub const R_ELEMENTS: u32 = 121;
+/// Lowest bit of the class steps (5 bits, below [`R_PSEUDO_ELEMENT`]): a
+/// class adds `1 << (R_CLASSES + 1)`. The variant bits sit below it.
+pub const R_CLASSES: u32 = 121;
 
 /// Pack a rule's rank: see the module docs.
 pub fn encode(mask: u128, spec: Spec, important: bool) -> u128 {
     // Fail loudly rather than carry into the next field.
     assert!(
-        mask >> R_ELEMENTS == 0,
+        mask >> R_CLASSES == 0,
         "variant bits overflow the rank mask"
     );
+    assert!(spec.earlier <= spec.classes, "{spec:?}");
+    let steps = 2 * spec.classes - spec.earlier;
     assert!(
-        spec.classes < 1 << (R_IMPORTANT - R_CLASSES),
+        steps < 1 << (R_PSEUDO_ELEMENT - R_CLASSES),
         "specificity class count {} overflows its rank bits",
         spec.classes
     );
     assert!(
-        spec.elements < 1 << (R_CLASSES - R_ELEMENTS),
-        "specificity element count {} overflows its rank bits",
-        spec.elements
+        spec.pseudo_elements <= 1,
+        "pseudo-element count {} overflows its rank bit",
+        spec.pseudo_elements
     );
-    mask | u128::from(spec.classes) << R_CLASSES
-        | u128::from(spec.elements) << R_ELEMENTS
+    mask | u128::from(steps) << R_CLASSES
+        | u128::from(spec.pseudo_elements) << R_PSEUDO_ELEMENT
         | u128::from(important) << R_IMPORTANT
 }
 
@@ -485,8 +523,8 @@ fn ranked() -> &'static [(&'static str, u32)] {
         }
         // Fail loudly rather than move a bit into the specificity.
         assert!(
-            out.last().is_none_or(|(_, r)| *r < R_ELEMENTS),
-            "more than {R_ELEMENTS} variant ranks"
+            out.last().is_none_or(|(_, r)| *r < R_CLASSES),
+            "more than {R_CLASSES} variant ranks"
         );
         out
     })
