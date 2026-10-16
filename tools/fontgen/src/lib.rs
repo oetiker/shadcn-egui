@@ -330,7 +330,17 @@ pub fn wght_range(ttf: &[u8]) -> Result<(f32, f32), String> {
         .iter()
         .find(|a| a.tag() == Tag::new(b"wght"))
         .ok_or("variable font without a wght axis")?;
-    Ok((axis.min_value(), axis.max_value()))
+    wght_axis(axis.min_value(), axis.max_value())
+}
+
+/// A `wght` axis range as the font crate's `FontSource::Variable` takes
+/// it: `min <= max`, neither NaN.
+pub fn wght_axis(min: f32, max: f32) -> Result<(f32, f32), String> {
+    if min <= max {
+        Ok((min, max))
+    } else {
+        Err(format!("wght axis min {min} is not at most max {max}"))
+    }
 }
 
 pub fn crate_cargo_toml(row: &Row) -> String {
