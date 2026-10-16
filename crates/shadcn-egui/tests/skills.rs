@@ -149,6 +149,86 @@ fn component_map_has_every_component() {
     }
 }
 
+/// `"RadioGroup"` → `"radio_group"`.
+fn snake_case(name: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() && i > 0 {
+            out.push('_');
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
+/// The component names of component-map.md's "Not yet ported:" sentence.
+fn not_yet_ported() -> Vec<String> {
+    let start = COMPONENT_MAP
+        .find("Not yet ported: ")
+        .expect("component-map.md has a \"Not yet ported\" list")
+        + "Not yet ported: ".len();
+    let rest = &COMPONENT_MAP[start..];
+    let list = &rest[..rest.find('.').expect("the list ends with a full stop")];
+    list.split([',', '\n'])
+        .flat_map(|item| item.split(" or "))
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn not_yet_ported_lists_no_ported_component() {
+    // Entries that are not components and have no module of their own.
+    const NOT_COMPONENTS: [&str; 1] = ["gradients"];
+    let names = not_yet_ported();
+    assert!(names.contains(&"RadioGroup".to_owned()), "parsed {names:?}");
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/components");
+    for name in names {
+        if NOT_COMPONENTS.contains(&name.as_str()) {
+            continue;
+        }
+        let module = snake_case(&name);
+        assert!(
+            !std::path::Path::new(&format!("{dir}/{module}.rs")).exists(),
+            "component-map.md lists {name} as not yet ported, but components/{module}.rs exists"
+        );
+        assert!(
+            !COMPONENT_MAP.contains(&format!("shadcn_egui::components::{module}::")),
+            "component-map.md lists {name} as not yet ported and maps it"
+        );
+    }
+}
+
+#[test]
+fn snake_case_follows_module_names() {
+    assert_eq!(snake_case("RadioGroup"), "radio_group");
+    assert_eq!(snake_case("DropdownMenu"), "dropdown_menu");
+    assert_eq!(snake_case("Tags"), "tags");
+}
+
+/// The skills say every exported style has snapshot tests; keep it so.
+#[test]
+fn every_exported_style_has_light_and_dark_snapshots() {
+    use shadcn_egui::StyleName;
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snapshots");
+    let files: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    // Sera is not exported: a preset naming it falls back to nova.
+    for style in StyleName::ALL.iter().filter(|s| **s != StyleName::Sera) {
+        let id = style.id();
+        for mode in ["light", "dark"] {
+            let suffix = format!("_{id}_{mode}.png");
+            assert!(
+                files.iter().any(|f| f.ends_with(&suffix)),
+                "no *{suffix} snapshot in tests/snapshots"
+            );
+        }
+    }
+}
+
 #[test]
 fn skills_name_only_existing_features() {
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");

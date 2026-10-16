@@ -67,8 +67,7 @@ gives:
   emerald, font Geist, Hugeicons, the default radius and the menu colour
   `inverted-translucent`. Enable the features the preset names
   (`font-geist`, `icons-hugeicons`). The translucent menu colour draws as
-  `inverted` and logs a warning. Luma has no snapshot tests in the crate, so
-  check its renders with extra care.
+  `inverted` and logs a warning.
 
 - A `components.json`: start from `Preset::default()` and set `.style(..)`,
   `.base_color(..)` and `.icons(..)` from its `style`, `tailwind.baseColor`

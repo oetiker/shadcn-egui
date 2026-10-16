@@ -992,6 +992,30 @@ fn card_header_and_content_share_side_padding() {
     }
 }
 
+/// `card_content` spaces its children by the style's `cn-card-content`
+/// gap, which only vega sets (12, see its docs); the others leave
+/// children touching.
+#[test]
+fn only_vega_sets_a_card_content_gap() {
+    use shadcn_egui::style::State;
+    for (name, style) in [
+        ("vega", Style::vega as fn() -> Style),
+        ("nova", Style::nova),
+        ("maia", Style::maia),
+        ("lyra", Style::lyra),
+        ("mira", Style::mira),
+        ("luma", Style::luma),
+        ("rhea", Style::rhea),
+    ] {
+        let style = style();
+        for st in [State::SIZE_DEFAULT, State::SIZE_SM] {
+            let gap = style.card_content.gap.get(st);
+            let want = (name == "vega").then_some(12.0);
+            assert_eq!(gap, want, "{name} card_content gap at {st:?}");
+        }
+    }
+}
+
 /// shadcn `disabled:pointer-events-none`: no click, and a pressed pointer
 /// over the button changes nothing it paints (no hover fill, no press nudge).
 #[test]
