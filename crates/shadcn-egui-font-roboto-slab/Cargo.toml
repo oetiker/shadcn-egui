@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND Apache-2.0"
 repository.workspace = true
+documentation = "https://docs.rs/shadcn-egui-font-roboto-slab"
+readme = "README.md"
+keywords = ["egui", "shadcn", "font", "roboto-slab"]
+categories = ["gui"]
 include = ["src/**", "fonts/**", "LICENSE*", "README*"]
 
 [dependencies]

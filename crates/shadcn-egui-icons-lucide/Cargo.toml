@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT AND ISC"
 repository.workspace = true
+documentation = "https://docs.rs/shadcn-egui-icons-lucide"
+readme = "README.md"
+keywords = ["egui", "shadcn", "icons", "lucide"]
+categories = ["gui"]
 include = ["src/**", "LICENSE*", "README*"]
 
 [dependencies]

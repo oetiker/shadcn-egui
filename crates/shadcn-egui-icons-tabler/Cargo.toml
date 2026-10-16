@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license = "MIT"
 repository.workspace = true
+documentation = "https://docs.rs/shadcn-egui-icons-tabler"
+readme = "README.md"
+keywords = ["egui", "shadcn", "icons", "tabler"]
+categories = ["gui"]
 include = ["src/**", "LICENSE*", "README*"]
 
 [dependencies]

@@ -47,6 +47,12 @@ fn committed_font_crates_are_current() {
             row.name
         );
         assert_eq!(
+            read(dir.join("README.md")),
+            crate_readme(row).unwrap(),
+            "{}: README.md",
+            row.name
+        );
+        assert_eq!(
             read(dir.join("src/lib.rs")),
             crate_lib_rs(row, wght(row, &dir)).unwrap(),
             "{}: src/lib.rs",
