@@ -295,7 +295,7 @@ fn strokes_and_fills_mix_in_one_icon() {
 fn records_round_trip_through_quantisation() {
     for name in ["mixed", "ring", "big-box", "square-hole"] {
         let icon = convert(name, &fixture(name)).expect("converts");
-        let (segs, fill) = decode(&encode(&icon).expect("encodes"));
+        let (segs, fill, _) = decode(&encode(&icon).expect("encodes"));
         let scale = 24.0 / icon.size;
         assert_eq!(segs.len(), icon.segs.len(), "{name}");
         for (got, want) in segs.iter().zip(&icon.segs) {

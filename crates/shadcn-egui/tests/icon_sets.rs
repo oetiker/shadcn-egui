@@ -6,20 +6,29 @@ use shadcn_egui::components::checkbox::Checkbox;
 use shadcn_egui::components::icon::IconView;
 use shadcn_egui::components::select::Select;
 use shadcn_egui::style::Style;
-use shadcn_egui::{icons, layout, Icon, IconLibrary, Mode, Palette, Preset, Seg, Theme};
+use shadcn_egui::{icons, layout, Icon, IconLayer, IconLibrary, Mode, Palette, Preset, Seg, Theme};
 
-/// Every icon of a set decodes to something drawable with in-range indices.
+/// Every icon of a set decodes to something drawable with in-range indices,
+/// an opaque layer first and translucent ones after it.
 fn every_icon_decodes(all: &[&Icon]) {
     assert!(!all.is_empty());
     for icon in all {
         assert_eq!(icon.size, 24.0, "{}", icon.name);
-        let fill = icon.fill_mesh();
+        let layers: Vec<IconLayer> = icon.layers().collect();
+        assert_eq!(layers.first().map(|l| l.alpha), Some(1.0), "{}", icon.name);
         assert!(
-            icon.segs().count() > 0 || fill.is_some(),
+            layers[1..].iter().all(|l| l.alpha > 0.0 && l.alpha < 1.0),
+            "{}: layer alpha",
+            icon.name
+        );
+        assert!(
+            layers
+                .iter()
+                .any(|l| l.segs.clone().count() > 0 || l.fill.is_some()),
             "{} draws nothing",
             icon.name
         );
-        if let Some(f) = fill {
+        for f in layers.iter().filter_map(|l| l.fill.as_ref()) {
             assert_eq!(f.indices.len() % 3, 0, "{}", icon.name);
             assert!(
                 f.indices.iter().all(|&i| usize::from(i) < f.vertices.len()),
@@ -28,6 +37,12 @@ fn every_icon_decodes(all: &[&Icon]) {
             );
         }
     }
+}
+
+/// The opaque layer's fill.
+#[cfg(any(feature = "icons-phosphor", feature = "icons-remixicon"))]
+fn fill(icon: &Icon) -> Option<shadcn_egui::FillMesh> {
+    icon.layers().next().and_then(|l| l.fill)
 }
 
 #[test]
@@ -49,7 +64,7 @@ fn lucide_is_the_default_icon_set() {
 
 #[test]
 fn lucide_slots_keep_the_built_in_paths() {
-    let segs = |i: &Icon| i.segs().collect::<Vec<_>>();
+    let segs = |i: &Icon| i.layers().flat_map(|l| l.segs).collect::<Vec<_>>();
     assert_eq!(
         segs(&icons::lucide::CHECK),
         vec![Seg::M(20.0, 6.0), Seg::L(9.0, 17.0), Seg::L(4.0, 12.0)]
@@ -148,7 +163,7 @@ fn phosphor_set() {
         ("check", "caret-down", "x")
     );
     assert!(
-        s.check.fill_mesh().is_some(),
+        fill(&s.check).is_some(),
         "Phosphor regular is a filled outline"
     );
     slot_snapshot(IconLibrary::Phosphor, "icon_slots_phosphor");
@@ -167,10 +182,7 @@ fn remixicon_set() {
         (s.check.name, s.chevron_down.name, s.close.name),
         ("check-line", "arrow-down-s-line", "close-line")
     );
-    assert!(
-        s.close.fill_mesh().is_some(),
-        "Remix Icon is a filled outline"
-    );
+    assert!(fill(&s.close).is_some(), "Remix Icon is a filled outline");
     slot_snapshot(IconLibrary::Remixicon, "icon_slots_remixicon");
 }
 
@@ -188,4 +200,46 @@ fn hugeicons_set() {
         ("tick-02", "unfold-more", "cancel-01")
     );
     slot_snapshot(IconLibrary::Hugeicons, "icon_slots_hugeicons");
+}
+
+/// The Hugeicons icons with an `opacity="0.4"` layer draw it faded, not at
+/// full strength and not left out.
+#[cfg(feature = "icons-hugeicons")]
+#[test]
+fn hugeicons_faded_layers() {
+    use icons::hugeicons::{ARROW_BIG_RIGHT_DASH, HAMBURGER_01, RIGHT_TO_LEFT_LIST_BULLET};
+    let faded = [
+        ARROW_BIG_RIGHT_DASH,
+        HAMBURGER_01,
+        RIGHT_TO_LEFT_LIST_BULLET,
+    ];
+    for icon in &faded {
+        let alphas: Vec<f32> = icon.layers().map(|l| l.alpha).collect();
+        assert!(alphas.len() > 1, "{}: {alphas:?}", icon.name);
+        assert!(
+            alphas[1..].iter().all(|a| (a - 0.4).abs() < 1e-4),
+            "{}: {alphas:?}",
+            icon.name
+        );
+    }
+    // hamburger-01: the bun top and two seeds at 0.4.
+    assert_eq!(HAMBURGER_01.layers().count(), 4);
+    let theme = Preset::default()
+        .style(shadcn_egui::StyleName::Vega)
+        .icons(IconLibrary::Hugeicons)
+        .theme(Mode::Light);
+    common::snapshot_with_themes(
+        "icon_hugeicons_faded",
+        vec2(240.0, 64.0),
+        vec![("vega_light", theme)],
+        move |ui| {
+            layout::row(ui, 16.0, |ui| {
+                ui.add(IconView::new(&HAMBURGER_01).size(48.0));
+                for icon in &faded {
+                    ui.add(IconView::new(icon).size(24.0));
+                }
+            });
+        },
+        |_| {},
+    );
 }
