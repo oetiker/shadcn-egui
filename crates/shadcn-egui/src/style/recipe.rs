@@ -112,11 +112,14 @@ impl When {
     }
 }
 
-/// A value that applies when `when` matches. `rank` is the Tailwind v4
-/// variant-order bitmask of the class's variants, one bit per distinct
-/// variant: when several rules match, the highest rank wins, as in
-/// Tailwind's CSS output order. Bit 127 marks an `!important` class, which
-/// beats every normal one.
+/// A value that applies when `when` matches. When several rules match, the
+/// highest `rank` wins, as in the browser's cascade of shadcn's CSS. The
+/// rank packs, from the top: bit 127 for an `!important` class, which beats
+/// every normal one; the specificity the class's variants add, its count of
+/// classes, attributes and pseudo-classes from bit 123 (4 bits) and of
+/// pseudo-elements from bit 121 (2 bits); and below that the Tailwind v4
+/// variant-order bitmask, one bit per distinct variant, which decides
+/// between equal specificities.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,
@@ -499,6 +502,38 @@ mod tests {
         };
         assert_eq!(p.get(State::INVALID | State::CHECKED), Some(1));
         assert_eq!(p.get(State::INVALID), Some(2));
+    }
+
+    #[test]
+    fn specificity_beats_variant_order() {
+        // data-[size=sm]:h-7 (one attribute) against md:h-9 (no
+        // specificity): Tailwind emits md: later (a higher variant bit), the
+        // browser picks the more specific h-7.
+        let p = Prop {
+            base: None,
+            rules: vec![
+                rule(State::SIZE_SM, (1 << 34) | (1 << 123), 28.0),
+                rule(State::NONE, 1 << 50, 36.0),
+            ],
+        };
+        assert_eq!(p.get(State::SIZE_SM), Some(28.0));
+        assert_eq!(p.get(State::NONE), Some(36.0));
+        // Two classes beat one whatever the variant bits; important beats
+        // both.
+        let mut q = Prop {
+            base: None,
+            rules: vec![
+                rule(
+                    State::DARK.or(State::HOVER),
+                    (1 << 0) | (1 << 1) | (2 << 123),
+                    1.0,
+                ),
+                rule(State::DARK, (1 << 120) | (1 << 123), 2.0),
+            ],
+        };
+        assert_eq!(q.get(State::DARK | State::HOVER), Some(1.0));
+        q.rules.push(Rule::important(When::ALWAYS, 3.0));
+        assert_eq!(q.get(State::DARK | State::HOVER), Some(3.0));
     }
 
     #[test]

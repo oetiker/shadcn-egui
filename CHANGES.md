@@ -64,6 +64,12 @@ are recorded here. The format is based on
 - `Badge::icon` and `Badge::icon_end` take any icon reference, such as
   `&Theme::current(ctx).icons.check`, not only an icon that lives for the
   whole program.
+- A `Rule` rank now also counts the selector specificity, as the browser
+  does, so a rule for `data-[size=sm]:` beats one for `md:` whatever their
+  order. A rule added to `theme.style` with a hand-written rank that holds
+  only the variant bits now loses to the style's rule for the same state:
+  add `1 << 123` per state variant (`hover:`, `dark:`, `data-*:`), or use
+  `Rule::important`.
 
 ### Fixed
 - Applying a theme over an app's own fonts (`apply_with_fonts`, or `apply`

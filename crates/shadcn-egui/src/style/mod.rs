@@ -67,6 +67,7 @@ mod tests {
 
     /// stylegen ranks an `!important` class with bit 127; `Rule::IMPORTANT`
     /// must be that bit, or an app's important rule would lose to upstream's.
+    /// `[&>svg]` adds no specificity, so the rank is that bit alone.
     #[test]
     fn generated_important_rank_is_rule_important() {
         let luma = Style::luma();

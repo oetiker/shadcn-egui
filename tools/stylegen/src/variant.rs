@@ -6,18 +6,29 @@
 //! translated or ignored variant is listed by its exact text; anything else
 //! is unsupported, never guessed.
 //!
-//! Rank follows tailwindcss 4.3.3. `compile.ts:64-67` gives each rule a
-//! bitmask with one bit per variant it uses, and sorts rules by that mask.
-//! The bit of a variant is its index in the list of all variants in use,
-//! sorted by `Variants.compare` (`design-system.ts:190-215`,
+//! The rank orders rules as the browser's cascade does: `!important` first,
+//! then selector specificity, then source order.
+//!
+//! Source order follows tailwindcss 4.3.3. `compile.ts:64-67` gives each
+//! rule a bitmask with one bit per variant it uses, and sorts rules by that
+//! mask. The bit of a variant is its index in the list of all variants in
+//! use, sorted by `Variants.compare` (`design-system.ts:190-215`,
 //! `variants.ts:212-271`); variants that compare unequal get distinct bits,
 //! so `data-checked` and `data-disabled` differ. [`tw_cmp`] ports that
-//! comparison, and a variant's rank is its index in [`TRANSLATED`] sorted by
+//! comparison, and a variant's bit is its index in [`TRANSLATED`] sorted by
 //! it. Only the relative order of the bits matters, so indices over this
-//! subset compare exactly like Tailwind's. A rule's rank is the OR of
-//! `1u128 << rank` over its variants, compared as an integer like Tailwind's
-//! bigint. The top bit, [`R_IMPORTANT`], is reserved for `!important`
-//! classes, so variants have at most `MAX_RANKS - 1` distinct ranks.
+//! subset compare exactly like Tailwind's.
+//!
+//! Specificity is the sum of what each variant adds ([`Spec`], listed in
+//! [`TRANSLATED`]). Every utility class adds the same (0,1,0) for itself, so
+//! that part is left out: a class without variants has specificity zero.
+//!
+//! A rule's rank packs the three into one `u128`, compared as an integer:
+//! [`R_IMPORTANT`] (bit 127) for an `!important` class, the class count of
+//! the specificity in bits [`R_CLASSES`]`..127`, its element count in bits
+//! [`R_ELEMENTS`]`..R_CLASSES`, and the OR of `1u128 << bit` over the
+//! variants below [`R_ELEMENTS`], so variants have at most [`R_ELEMENTS`]
+//! distinct bits.
 
 use std::cmp::Ordering;
 use std::sync::OnceLock;
@@ -55,69 +66,124 @@ pub enum Meaning {
 
 use Meaning::*;
 
-/// Every variant stylegen translates, by exact text.
-pub const TRANSLATED: &[(&str, Meaning)] = &[
-    ("dark", Is("DARK")),
-    ("not-dark", IsNot("DARK")),
-    ("hover", Is("HOVER")),
-    ("focus", Is("FOCUS")),
-    ("focus-visible", Is("FOCUS_VISIBLE")),
-    ("data-highlighted", Is("FOCUS")),
-    ("active", Is("ACTIVE")),
-    ("disabled", Is("DISABLED")),
-    ("data-disabled", Is("DISABLED")),
-    ("data-[disabled=true]", Is("DISABLED")),
-    ("group-data-[disabled=true]", Is("DISABLED")),
-    ("group-has-disabled/field", Is("DISABLED")),
-    ("peer-disabled", Is("DISABLED")),
-    ("peer-data-disabled", Is("DISABLED")),
-    ("aria-invalid", Is("INVALID")),
-    ("data-invalid", Is("INVALID")),
-    ("data-checked", Is("CHECKED")),
-    ("data-[state=checked]", Is("CHECKED")),
-    ("aria-checked", Is("CHECKED")),
-    ("data-unchecked", Is("UNCHECKED")),
-    ("data-[state=unchecked]", Is("UNCHECKED")),
-    ("not-data-checked", IsNot("CHECKED")),
-    ("aria-expanded", Is("EXPANDED")),
-    ("not-aria-[haspopup]", IsNot("HAS_POPUP")),
-    ("data-active", Is("SELECTED")),
-    ("data-[active=true]", Is("SELECTED")),
-    ("data-selected", Is("SELECTED")),
-    ("not-data-selected", IsNot("SELECTED")),
-    ("data-placeholder", Is("PLACEHOLDER")),
-    ("placeholder", Is("PLACEHOLDER")),
-    ("has-data-[icon=inline-start]", Is("ICON_START")),
-    ("has-data-[icon=inline-end]", Is("ICON_END")),
-    ("in-data-[slot=button-group]", Is("IN_BUTTON_GROUP")),
-    ("data-[size=sm]", Is("SIZE_SM")),
-    ("group-data-[size=sm]/switch", Is("SIZE_SM")),
-    ("group-data-[size=sm]/card", Is("SIZE_SM")),
-    ("data-[size=default]", Is("SIZE_DEFAULT")),
-    ("group-data-[size=default]/switch", Is("SIZE_DEFAULT")),
-    ("data-vertical", Is("VERTICAL")),
-    ("data-[orientation=vertical]", Is("VERTICAL")),
-    ("group-data-vertical/tabs", Is("VERTICAL")),
-    ("data-horizontal", Is("HORIZONTAL")),
-    ("data-[orientation=horizontal]", Is("HORIZONTAL")),
-    ("group-data-horizontal/tabs", Is("HORIZONTAL")),
-    ("data-[variant=line]", Is("VARIANT_LINE")),
-    ("group-data-[variant=line]/tabs-list", Is("VARIANT_LINE")),
+/// The specificity a variant adds to its class's selector, as Tailwind
+/// writes it: `dark` is `&:is(.dark *)`, `data-[size=sm]` is
+/// `&[data-size=sm]`, `group-hover` is `&:is(:where(.group):hover *)`, each
+/// one class, attribute or pseudo-class. The ID count is always zero.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Spec {
+    /// Classes, attributes and pseudo-classes.
+    pub classes: u32,
+    /// Type selectors and pseudo-elements.
+    pub elements: u32,
+}
+
+impl std::ops::Add for Spec {
+    type Output = Spec;
+    fn add(self, o: Spec) -> Spec {
+        Spec {
+            classes: self.classes + o.classes,
+            elements: self.elements + o.elements,
+        }
+    }
+}
+
+/// One class, attribute or pseudo-class: (0,1,0).
+pub const CLASS: Spec = Spec {
+    classes: 1,
+    elements: 0,
+};
+/// One pseudo-element: (0,0,1).
+pub const ELEMENT: Spec = Spec {
+    classes: 0,
+    elements: 1,
+};
+/// No specificity: media and supports queries, `:where(…)`.
+pub const ZERO: Spec = Spec {
+    classes: 0,
+    elements: 0,
+};
+
+/// Every variant stylegen translates, by exact text, with the specificity
+/// it adds.
+pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
+    ("dark", Is("DARK"), CLASS),
+    ("not-dark", IsNot("DARK"), CLASS),
+    ("hover", Is("HOVER"), CLASS),
+    ("focus", Is("FOCUS"), CLASS),
+    ("focus-visible", Is("FOCUS_VISIBLE"), CLASS),
+    ("data-highlighted", Is("FOCUS"), CLASS),
+    ("active", Is("ACTIVE"), CLASS),
+    ("disabled", Is("DISABLED"), CLASS),
+    ("data-disabled", Is("DISABLED"), CLASS),
+    ("data-[disabled=true]", Is("DISABLED"), CLASS),
+    ("group-data-[disabled=true]", Is("DISABLED"), CLASS),
+    ("group-has-disabled/field", Is("DISABLED"), CLASS),
+    ("peer-disabled", Is("DISABLED"), CLASS),
+    ("peer-data-disabled", Is("DISABLED"), CLASS),
+    ("aria-invalid", Is("INVALID"), CLASS),
+    ("data-invalid", Is("INVALID"), CLASS),
+    ("data-checked", Is("CHECKED"), CLASS),
+    ("data-[state=checked]", Is("CHECKED"), CLASS),
+    ("aria-checked", Is("CHECKED"), CLASS),
+    ("data-unchecked", Is("UNCHECKED"), CLASS),
+    ("data-[state=unchecked]", Is("UNCHECKED"), CLASS),
+    ("not-data-checked", IsNot("CHECKED"), CLASS),
+    ("aria-expanded", Is("EXPANDED"), CLASS),
+    ("not-aria-[haspopup]", IsNot("HAS_POPUP"), CLASS),
+    ("data-active", Is("SELECTED"), CLASS),
+    ("data-[active=true]", Is("SELECTED"), CLASS),
+    ("data-selected", Is("SELECTED"), CLASS),
+    ("not-data-selected", IsNot("SELECTED"), CLASS),
+    ("data-placeholder", Is("PLACEHOLDER"), CLASS),
+    // `&::placeholder`: a pseudo-element.
+    ("placeholder", Is("PLACEHOLDER"), ELEMENT),
+    ("has-data-[icon=inline-start]", Is("ICON_START"), CLASS),
+    ("has-data-[icon=inline-end]", Is("ICON_END"), CLASS),
+    // `:where(*[data-slot=button-group]) &`.
+    ("in-data-[slot=button-group]", Is("IN_BUTTON_GROUP"), ZERO),
+    ("data-[size=sm]", Is("SIZE_SM"), CLASS),
+    ("group-data-[size=sm]/switch", Is("SIZE_SM"), CLASS),
+    ("group-data-[size=sm]/card", Is("SIZE_SM"), CLASS),
+    ("data-[size=default]", Is("SIZE_DEFAULT"), CLASS),
+    (
+        "group-data-[size=default]/switch",
+        Is("SIZE_DEFAULT"),
+        CLASS,
+    ),
+    ("data-vertical", Is("VERTICAL"), CLASS),
+    ("data-[orientation=vertical]", Is("VERTICAL"), CLASS),
+    ("group-data-vertical/tabs", Is("VERTICAL"), CLASS),
+    ("data-horizontal", Is("HORIZONTAL"), CLASS),
+    ("data-[orientation=horizontal]", Is("HORIZONTAL"), CLASS),
+    ("group-data-horizontal/tabs", Is("HORIZONTAL"), CLASS),
+    ("data-[variant=line]", Is("VARIANT_LINE"), CLASS),
+    (
+        "group-data-[variant=line]/tabs-list",
+        Is("VARIANT_LINE"),
+        CLASS,
+    ),
     (
         "group-data-[variant=default]/tabs-list",
         Is("VARIANT_DEFAULT"),
+        CLASS,
     ),
-    ("has-data-[slot=card-footer]", Is("HAS_FOOTER")),
+    ("has-data-[slot=card-footer]", Is("HAS_FOOTER"), CLASS),
     // The crate has no destructive select item.
-    ("not-data-[variant=destructive]", Always),
+    ("not-data-[variant=destructive]", Always, CLASS),
     // An egui window counts as wider than the `sm` and `md` breakpoints.
-    ("sm", Always),
-    ("md", Always),
+    // Media and supports queries add no specificity.
+    ("sm", Always, ZERO),
+    ("md", Always, ZERO),
     // egui paints its own backdrop blur.
-    ("supports-backdrop-filter", Always),
-    ("after", Target(Pseudo::After)),
-    ("[&_svg:not([class*='size-'])]", Target(Pseudo::Svg)),
-    ("[&>svg]", Target(Pseudo::Svg)),
+    ("supports-backdrop-filter", Always, ZERO),
+    // A target's rules compete only with rules of the same target, so its
+    // specificity counts over the least specific selector of that target:
+    // `&::after` (0,0,1), `& > svg` (0,0,1), `& svg:not([class*='size-'])`
+    // (0,1,1).
+    ("after", Target(Pseudo::After), ZERO),
+    ("[&_svg:not([class*='size-'])]", Target(Pseudo::Svg), CLASS),
+    ("[&>svg]", Target(Pseudo::Svg), ZERO),
 ];
 
 const ANIM: &str = "open/close animation state; egui shows and hides at once";
@@ -363,13 +429,40 @@ pub fn tw_cmp(a: &str, z: &str) -> Option<Ordering> {
     Some(compare(&parse(a)?, &parse(z)?))
 }
 
-/// Bits in `Rule.rank` (`u128`, src/style/recipe.rs).
-pub const MAX_RANKS: u32 = 128;
-
 /// The rank bit of an `!important` class (`size-3!`). In CSS an important
 /// declaration beats every normal one whatever its selector or order, so
-/// this bit sits above every variant bit.
-pub const R_IMPORTANT: u32 = MAX_RANKS - 1;
+/// this bit sits above everything else.
+pub const R_IMPORTANT: u32 = 127;
+
+/// Lowest bit of the specificity's class count (4 bits, below
+/// [`R_IMPORTANT`]).
+pub const R_CLASSES: u32 = 123;
+
+/// Lowest bit of the specificity's element count (2 bits, below
+/// [`R_CLASSES`]). The variant bits sit below it.
+pub const R_ELEMENTS: u32 = 121;
+
+/// Pack a rule's rank: see the module docs.
+pub fn encode(mask: u128, spec: Spec, important: bool) -> u128 {
+    // Fail loudly rather than carry into the next field.
+    assert!(
+        mask >> R_ELEMENTS == 0,
+        "variant bits overflow the rank mask"
+    );
+    assert!(
+        spec.classes < 1 << (R_IMPORTANT - R_CLASSES),
+        "specificity class count {} overflows its rank bits",
+        spec.classes
+    );
+    assert!(
+        spec.elements < 1 << (R_CLASSES - R_ELEMENTS),
+        "specificity element count {} overflows its rank bits",
+        spec.elements
+    );
+    mask | u128::from(spec.classes) << R_CLASSES
+        | u128::from(spec.elements) << R_ELEMENTS
+        | u128::from(important) << R_IMPORTANT
+}
 
 /// [`TRANSLATED`] in Tailwind variant order, each with its bit index:
 /// variants that compare equal share one (`getVariantOrder`).
@@ -379,7 +472,7 @@ fn ranked() -> &'static [(&'static str, u32)] {
         let cmp = |a: &str, z: &str| {
             tw_cmp(a, z).unwrap_or_else(|| panic!("unparseable variant `{a}` or `{z}`"))
         };
-        let mut names: Vec<&'static str> = TRANSLATED.iter().map(|(n, _)| *n).collect();
+        let mut names: Vec<&'static str> = TRANSLATED.iter().map(|(n, _, _)| *n).collect();
         names.sort_by(|a, z| cmp(a, z));
         let mut out: Vec<(&'static str, u32)> = Vec::with_capacity(names.len());
         for n in names {
@@ -390,11 +483,10 @@ fn ranked() -> &'static [(&'static str, u32)] {
             };
             out.push((n, rank));
         }
-        // Fail loudly rather than wrap a bit out of the rank mask or onto
-        // the important bit.
+        // Fail loudly rather than move a bit into the specificity.
         assert!(
-            out.last().is_none_or(|(_, r)| *r < R_IMPORTANT),
-            "more than {R_IMPORTANT} variant ranks"
+            out.last().is_none_or(|(_, r)| *r < R_ELEMENTS),
+            "more than {R_ELEMENTS} variant ranks"
         );
         out
     })
@@ -406,7 +498,7 @@ pub fn rank_of(v: &str) -> Option<u32> {
 }
 
 pub fn variant(v: &str) -> V {
-    if let Some((_, m)) = TRANSLATED.iter().find(|(n, _)| *n == v) {
+    if let Some((_, m, _)) = TRANSLATED.iter().find(|(n, _, _)| *n == v) {
         let rank = rank_of(v).expect("translated variant has a rank");
         return match *m {
             Is(f) => V::Cond {
@@ -434,11 +526,10 @@ pub fn variant(v: &str) -> V {
 pub struct Variants {
     pub all: u32,
     pub none: u32,
-    /// OR of `1 << rank` of each condition and always-true variant, plus
-    /// [`R_IMPORTANT`] for an important class.
+    /// The class's [`rank`].
     pub rank: u128,
-    /// A pseudo target selects the field; it does not compete in the
-    /// cascade, so it adds no rank bit.
+    /// A pseudo target selects the field. It adds its specificity to the
+    /// rank, but no variant bit.
     pub pseudo: Option<Pseudo>,
 }
 
@@ -448,26 +539,44 @@ pub enum Skip {
     Unsupported(String),
 }
 
+/// The rank of a class with these translated variants (each counted once)
+/// and `!important` flag; see the module docs. Variants that are not
+/// translated add nothing.
+pub fn rank<'a>(variants: impl IntoIterator<Item = &'a str>, important: bool) -> u128 {
+    let mut seen: Vec<&str> = Vec::new();
+    let (mut mask, mut spec) = (0u128, ZERO);
+    for v in variants {
+        if seen.contains(&v) {
+            continue;
+        }
+        seen.push(v);
+        let Some((_, m, s)) = TRANSLATED.iter().find(|(n, _, _)| *n == v) else {
+            continue;
+        };
+        spec = spec + *s;
+        if !matches!(m, Target(_)) {
+            mask |= 1 << rank_of(v).expect("translated variant has a rank");
+        }
+    }
+    encode(mask, spec, important)
+}
+
 /// Combine a class's variants. The first variant that is ignored or
 /// unsupported decides for the whole class.
 pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
     let mut out = Variants {
         all: 0,
         none: 0,
-        rank: 0,
+        rank: rank(c.variants.iter().map(String::as_str), c.important),
         pseudo: None,
     };
-    if c.important {
-        out.rank |= 1 << R_IMPORTANT;
-    }
     for v in &c.variants {
         match variant(v) {
-            V::Cond { all, none, rank } => {
+            V::Cond { all, none, .. } => {
                 out.all |= all;
                 out.none |= none;
-                out.rank |= 1 << rank;
             }
-            V::Always { rank } => out.rank |= 1 << rank,
+            V::Always { .. } => {}
             V::Pseudo(p, _) => out.pseudo = Some(p),
             V::Ignore(why) => return Err(Skip::Ignore(why)),
             V::Unsupported => return Err(Skip::Unsupported(format!("variant `{v}`"))),

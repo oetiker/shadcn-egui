@@ -45,12 +45,19 @@ draws itself from the active style's recipes; it does not hard-code a look.
   the base value (rank 0) and every rule that matches `state`. The candidate
   with the highest `(rank, layer, rule index)` wins; so a conditional rule in an
   early layer beats a later base, and between equal ranks the later layer wins.
-  A rule's rank is the OR of one bit per Tailwind variant it uses, in the order
-  of Tailwind v4.3.3 `Variants.compare` (arbitrary variants after named ones);
-  an `!important` class has bit 127 (`Rule::IMPORTANT`), and so has an
-  app's `Rule::important`, which wins a tie by coming later. This matches the CSS order shadcn gets.
-  A rule derived from a CSS variable (for example `--card-spacing`) takes the rank of
-  the variable's definition, an approximation.
+  A rule's rank orders it as the browser's cascade does. An `!important` class
+  has bit 127 (`Rule::IMPORTANT`), and so has an app's `Rule::important`, which
+  wins a tie by coming later. Below it sits the specificity the variants add to
+  the class: the count of classes, attributes and pseudo-classes from bit 123
+  (`dark:`, `hover:`, `data-[size=sm]:` add one each; `sm:`, `md:`,
+  `supports-*:` and `in-*:` add none), the count of pseudo-elements
+  (`placeholder:`) from bit 121. The lowest bits hold one bit per Tailwind
+  variant the class uses, in the order of Tailwind v4.3.3 `Variants.compare`
+  (arbitrary variants after named ones), which decides between rules of equal
+  specificity. So `data-[size=sm]:h-7` beats `md:h-9`, as in the browser.
+  A rule derived from a CSS variable (for example `--card-spacing`) is ranked as
+  one class with the variants of both the using and the defining class, an
+  approximation.
 - **Deviating in a project.** Adjust the style when you build the theme, never
   in copies of crate code:
   ```rust
