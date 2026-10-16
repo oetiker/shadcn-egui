@@ -22,8 +22,8 @@ pub enum BadgeVariant {
 pub struct Badge {
     text: String,
     variant: BadgeVariant,
-    icon: Option<&'static Icon>,
-    icon_end: Option<&'static Icon>,
+    icon: Option<Icon>,
+    icon_end: Option<Icon>,
 }
 
 impl Badge {
@@ -40,13 +40,13 @@ impl Badge {
         self
     }
     /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
-    pub fn icon(mut self, icon: &'static Icon) -> Self {
-        self.icon = Some(icon);
+    pub fn icon(mut self, icon: &Icon) -> Self {
+        self.icon = Some(*icon);
         self
     }
     /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`).
-    pub fn icon_end(mut self, icon: &'static Icon) -> Self {
-        self.icon_end = Some(icon);
+    pub fn icon_end(mut self, icon: &Icon) -> Self {
+        self.icon_end = Some(*icon);
         self
     }
 
@@ -162,7 +162,7 @@ impl Widget for Badge {
             );
             paint_icon(&painter, r, icon, fg, t.metrics.icon_stroke);
         };
-        if let Some(icon) = self.icon {
+        if let Some(icon) = &self.icon {
             draw_icon(icon, x);
             x += icon_px + gap;
         }
@@ -177,7 +177,7 @@ impl Widget for Badge {
             galley,
             fg,
         );
-        if let Some(icon) = self.icon_end {
+        if let Some(icon) = &self.icon_end {
             draw_icon(icon, x + text_w + gap);
         }
         resp
