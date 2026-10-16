@@ -4,8 +4,9 @@
 
 use icongen::{convert, parse_slots, render_crate};
 
-const NAMES: [&str; 6] = [
+const NAMES: [&str; 7] = [
     "big-box",
+    "faded",
     "mixed",
     "ring",
     "square-hole",

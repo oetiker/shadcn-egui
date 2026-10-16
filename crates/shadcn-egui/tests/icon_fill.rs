@@ -6,7 +6,17 @@ mod fixture;
 #[rustfmt::skip]
 mod lucide;
 
-use shadcn_egui::{Icon, Seg};
+use shadcn_egui::{FillMesh, Icon, IconLayer, Seg};
+
+/// Every layer's strokes, in order.
+fn segs(icon: &Icon) -> Vec<Seg> {
+    icon.layers().flat_map(|l| l.segs).collect()
+}
+
+/// The opaque layer's fill.
+fn fill(icon: &Icon) -> Option<FillMesh> {
+    icon.layers().next().and_then(|l| l.fill)
+}
 
 fn coords(s: Seg) -> Vec<f32> {
     match s {
@@ -17,7 +27,7 @@ fn coords(s: Seg) -> Vec<f32> {
     }
 }
 
-fn area(f: &shadcn_egui::FillMesh) -> f32 {
+fn area(f: &FillMesh) -> f32 {
     f.indices
         .chunks(3)
         .map(|t| {
@@ -29,30 +39,29 @@ fn area(f: &shadcn_egui::FillMesh) -> f32 {
 
 #[test]
 fn blob_strokes_match_the_slice_form() {
-    let blob: Vec<Seg> = fixture::X.segs().collect();
-    let slice: Vec<Seg> = lucide::X.segs().collect();
+    let blob: Vec<Seg> = segs(&fixture::X);
+    let slice: Vec<Seg> = segs(&lucide::X);
     assert_eq!(blob.len(), slice.len());
     for (b, s) in blob.iter().zip(&slice) {
         for (x, y) in coords(*b).iter().zip(coords(*s)) {
             assert!((x - y).abs() <= 0.5 / 1024.0, "{b:?} vs {s:?}");
         }
     }
-    assert_eq!(fixture::X.fill_mesh(), None, "a stroke icon has no fill");
+    assert_eq!(fill(&fixture::X), None, "a stroke icon has no fill");
 }
 
 #[test]
 fn blob_fills_decode_with_their_area_and_contours() {
-    let f = fixture::SQUARE_HOLE.fill_mesh().expect("filled");
+    let f = fill(&fixture::SQUARE_HOLE).expect("filled");
     assert!((area(&f) - 220.0).abs() < 0.01, "area {}", area(&f));
     assert_eq!(f.contours.len(), 2);
     assert!(f.indices.iter().all(|&i| usize::from(i) < f.vertices.len()));
     let mixed = fixture::MIXED;
     assert!(
-        mixed.segs().count() > 0 && mixed.fill_mesh().is_some(),
+        !segs(&mixed).is_empty() && fill(&mixed).is_some(),
         "strokes and fill in one record"
     );
-    let xs: Vec<f32> = fixture::BIG_BOX
-        .fill_mesh()
+    let xs: Vec<f32> = fill(&fixture::BIG_BOX)
         .expect("filled")
         .vertices
         .iter()
@@ -66,7 +75,7 @@ fn blob_fills_decode_with_their_area_and_contours() {
 
 #[test]
 fn generated_consts_point_into_one_blob() {
-    assert_eq!(fixture::ALL.len(), 6);
+    assert_eq!(fixture::ALL.len(), 7);
     assert_eq!(fixture::SLOTS.check, fixture::MIXED);
     assert_eq!(fixture::SLOTS.close.name, "x");
     let icon: &Icon = fixture::ALL[0];
@@ -411,4 +420,56 @@ fn filled_icon_edges_zoomed_opaque() {
 #[test]
 fn filled_icon_edges_zoomed_half() {
     zoomed("icon_fill_edge_a50", 0.5);
+}
+
+#[test]
+fn translucent_parts_decode_as_layers_with_their_alpha() {
+    let layers: Vec<IconLayer> = fixture::FADED.layers().collect();
+    let alphas: Vec<f32> = layers.iter().map(|l| l.alpha).collect();
+    // The opaque line, two crossing <path opacity=0.4>, <g opacity=0.5>
+    // around a stroke-opacity=0.5 path, a rect with fill-opacity=0.25.
+    assert_eq!(alphas.len(), 5, "{alphas:?}");
+    for (got, want) in alphas.iter().zip([1.0, 0.4, 0.4, 0.25, 0.25]) {
+        assert!((got - want).abs() < 1e-4, "{alphas:?}");
+    }
+    let segs: Vec<Vec<Seg>> = layers.iter().map(|l| l.segs.clone().collect()).collect();
+    assert_eq!(segs[0], vec![Seg::M(4.0, 6.0), Seg::L(20.0, 6.0)]);
+    assert_eq!(segs[1], vec![Seg::M(4.0, 12.0), Seg::L(20.0, 12.0)]);
+    assert_eq!(segs[2], vec![Seg::M(8.0, 4.0), Seg::L(8.0, 14.0)]);
+    assert_eq!(segs[3], vec![Seg::M(4.0, 18.0), Seg::L(20.0, 18.0)]);
+    assert!(segs[4].is_empty() && layers[4].fill.is_some());
+    assert!(layers[..4].iter().all(|l| l.fill.is_none()));
+}
+
+#[test]
+fn opaque_icons_are_one_layer() {
+    for icon in fixture::ALL.iter().filter(|i| i.name != "faded") {
+        assert_eq!(icon.layers().count(), 1, "{}", icon.name);
+    }
+    assert_eq!(lucide::X.layers().count(), 1);
+}
+
+/// Each layer reaches the texture at its own alpha: the opaque line full,
+/// the 0.4 lines at 0.4, the 0.25 line and the 0.25 rect at a quarter, and
+/// where layers overlap they composite source-over.
+#[test]
+fn translucent_layers_are_faded_in_the_texture() {
+    let (_, img) = raster(
+        &fixture::FADED,
+        Rect::from_min_size(pos2(0.0, 0.0), vec2(24.0, 24.0)),
+        1.0,
+    );
+    let a = |x: usize, y: usize| i32::from(img.pixels[y * 24 + x].a());
+    // Row 5 lies inside the line at y = 6 (5..7), and so on.
+    assert_eq!(a(12, 5), 255, "opaque line");
+    assert!((a(12, 11) - 102).abs() <= 1, "0.4 line: {}", a(12, 11));
+    assert!((a(12, 17) - 64).abs() <= 1, "0.25 line: {}", a(12, 17));
+    assert!((a(3, 20) - 64).abs() <= 1, "0.25 rect: {}", a(3, 20));
+    assert_eq!(a(12, 8), 0, "between the lines");
+    // Overlapping layers composite source-over: 0.4 over 0.4 is 0.64
+    // (163), where max would give 102 and a sum 204; 0.4 over the opaque
+    // line stays 255. The vertical 0.4 line runs at x = 8 (7..9).
+    assert!((a(7, 9) - 102).abs() <= 1, "0.4 alone: {}", a(7, 9));
+    assert!((a(7, 11) - 163).abs() <= 1, "0.4 over 0.4: {}", a(7, 11));
+    assert_eq!(a(7, 5), 255, "0.4 over opaque");
 }

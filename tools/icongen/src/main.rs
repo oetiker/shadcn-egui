@@ -2,7 +2,7 @@
 //!
 //! icongen --out src/icons.rs [--module-path crate::components::icon]
 //!         [--provenance "Lucide v1.54.0 (ISC)"] path/to/mic.svg ...
-//!     Rust `Seg` slices, strokes only (filled shapes are an error).
+//!     Rust `Seg` slices, opaque strokes only (filled or translucent shapes are an error).
 //! icongen --crate-dir crates/shadcn-egui-icons-x --slots check=..,chevron_down=..,close=..
 //!         [--provenance TEXT] [--measure] path/to/*.svg
 //!     A whole icon crate: DIR/src/lib.rs and DIR/src/icons.bin.

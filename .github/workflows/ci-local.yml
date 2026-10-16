@@ -277,15 +277,21 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Not ~/.cargo/registry/src or target/package: the dry run unpacks the
+      # workspace's own crates there under their current version, and cargo
+      # reuses an unpacked copy left by an earlier run of the same version,
+      # so a changed crate would be verified against its old source.
       - uses: actions/cache@v6
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-packages-${{ hashFiles('**/Cargo.lock') }}
+            !target/package
+          key: ${{ runner.os }}-cargo-packages-v2-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-packages-
+            ${{ runner.os }}-cargo-packages-v2-
 
       - run: scripts/check-version-files.sh
       - run: scripts/check-packages.sh
