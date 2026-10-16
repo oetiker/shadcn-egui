@@ -124,7 +124,7 @@ changes, and delete PNGs that no test writes any more.
 - No unsupported class for the component's markers in
   `tools/stylegen/reports/<style>.md`.
 - Snapshots reviewed, the behaviour list checked.
-- A row in `skills/build-ui/references/component-map.md`, and the component
+- A row in `plugin/skills/build-ui/references/component-map.md`, and the component
   removed from its "Not yet ported" list.
 - A `CHANGES.md` entry under [Unreleased]: what the user can now use.
 - Every gate under "Build & verify" in `CLAUDE.md` passes.

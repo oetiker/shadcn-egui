@@ -3,8 +3,9 @@
 `shadcn-egui` is a Cargo workspace that ports the shadcn-v4 (OKLCH) design
 system, its styles, palettes, fonts, icon sets and presets to egui as
 crates published on crates.io. The repository also hosts the
-`shadcn-egui` Claude Code plugin (`skills/build-ui/`,
-`skills/port-component/`, `.claude-plugin/`), whose version follows the
+`shadcn-egui` Claude Code plugin (`plugin/skills/build-ui/`,
+`plugin/skills/port-component/`, `plugin/.claude-plugin/`; the marketplace in
+`.claude-plugin/`), whose version follows the
 crates.
 
 ## Layout
@@ -27,20 +28,25 @@ crates.
   `check-version-files.sh`, `build-web-gallery.sh` (builds the browser
   gallery), `install-wasm-bindgen.sh` (fetches the matching
   `wasm-bindgen` CLI).
-- `.github/` — CI and release on the repo-infra standard. The project
-  owns `workflows/ci-local.yml`, `workflows/pages.yml`, the callers
-  `ci.yml`, `release-build.yml` and `release-publish.yml`, and
-  `repo-infra.json`; every other workflow, `workflows/lib/` and
-  `dependabot.yml` are installed from repo-infra and never edited by hand.
+- `plugin/` — the Claude Code plugin: `skills/` and
+  `.claude-plugin/plugin.json`. The marketplace that installs it is
+  `.claude-plugin/marketplace.json` at the root.
+- `.github/` — CI and release on the repo-infra v2 standard: the callers
+  in `workflows/` call the pieces at `oposs/repo-infra/...@v2`. The
+  project owns `workflows/ci-local.yml`, `workflows/pages.yml`, the
+  callers `ci.yml`, `release-build.yml` and `release-publish.yml`, and
+  `repo-infra.json`; `changelog.yml` and `release-pr.yml` are repo-infra's
+  caller templates word for word, and `dependabot.yml` is installed from
+  repo-infra; never edit those by hand.
 
 ## Start here — read the source docs, don't restate them
 
 - **Porting standards, dependency discipline:**
-  [`skills/port-component/SKILL.md`](skills/port-component/SKILL.md) and
-  `skills/port-component/references/upstream.md`.
+  [`plugin/skills/port-component/SKILL.md`](plugin/skills/port-component/SKILL.md) and
+  `plugin/skills/port-component/references/upstream.md`.
 - **Building a UI with the crate, mapping tables:**
-  [`skills/build-ui/SKILL.md`](skills/build-ui/SKILL.md) and
-  `skills/build-ui/references/`.
+  [`plugin/skills/build-ui/SKILL.md`](plugin/skills/build-ui/SKILL.md) and
+  `plugin/skills/build-ui/references/`.
 - **Cutting a release:** [`RELEASING.md`](RELEASING.md).
 - **What changed per version:** [`CHANGES.md`](CHANGES.md).
 
@@ -59,7 +65,7 @@ crates.
 - All crates share one version; font and icon crates depend only on
   `shadcn-egui-core`.
 - Keep runtime `[dependencies]` minimal: read the dependency-discipline
-  section of `skills/port-component/SKILL.md` before adding any.
+  section of `plugin/skills/port-component/SKILL.md` before adding any.
 - Any component change needs its kittest snapshot PNG regenerated, reviewed
   and committed.
 - The skills name crate APIs and their rust fences compile as doctests
@@ -95,7 +101,7 @@ crates.
 - Generators run from the repository root: `stylegen generate|drift
   <shadcn-svelte checkout> <shadcn-ui checkout> .`; `tools/fontgen/fetch.sh <downloads-dir>`
   then `fontgen <downloads-dir> .`; icongen as described in
-  `skills/port-component/references/upstream.md`. Downloads go to a scratch
+  `plugin/skills/port-component/references/upstream.md`. Downloads go to a scratch
   directory, never into the repository.
 - Snapshot tests render headlessly (egui_kittest + wgpu, mesa software
   adapter). Regenerate baselines with `UPDATE_SNAPSHOTS=1 cargo test`, then

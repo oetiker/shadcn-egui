@@ -437,7 +437,7 @@
       "verify": "^name = \"shadcn-egui-icons-tabler\"\nversion = \"$VERSION\""
     },
     {
-      "path": ".claude-plugin/plugin.json",
+      "path": "plugin/.claude-plugin/plugin.json",
       "pattern": "^  \"version\": \"[^\"]*\"",
       "replacement": "  \"version\": \"$VERSION\"",
       "verify": "^  \"version\": \"$VERSION\""

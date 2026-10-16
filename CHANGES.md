@@ -77,6 +77,9 @@ are recorded here. The format is based on
 - Setting `icon_size.base` in `theme.style` no longer changes the icon size
   of buttons, select triggers, select items, select scroll buttons and tab
   triggers. Assign `icon_size = Prop::fixed(..)` instead.
+- The installed `shadcn-egui` Claude Code plugin now takes about 100 KB on
+  disk instead of a full copy of the repository with its font and icon
+  data, about 40 MB per installed version.
 
 ### Fixed
 - The Hugeicons icons `ARROW_BIG_RIGHT_DASH`, `HAMBURGER_01` and

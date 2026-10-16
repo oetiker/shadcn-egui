@@ -127,8 +127,10 @@ machine: see "Publishing to crates.io".
 
 ## The Claude Code plugin
 
-`.claude-plugin/plugin.json` and the plugin entry in
-`.claude-plugin/marketplace.json` carry the crate version, and the
-marketplace entry installs from the tag `v<version>`. Create release PR
+The plugin lives in `plugin/`: its skills in `plugin/skills/`, its
+manifest in `plugin/.claude-plugin/plugin.json`. The manifest and the
+plugin entry in `.claude-plugin/marketplace.json` at the root carry the
+crate version, and the marketplace entry installs the directory `plugin/`
+from the tag `v<version>`. Create release PR
 bumps all three through `version_files` in `.github/repo-infra.json`. Users
 get a new skill version only with a release.
