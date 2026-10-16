@@ -432,6 +432,171 @@ fn tabs_are_as_wide_as_their_labels() {
     );
 }
 
+/// The list rect, the width the `Ui` had available for it, and the rect of
+/// each trigger, of a tab list `add` places on a page `page_w` wide.
+fn tabs_layout(
+    theme: &shadcn_egui::Theme,
+    page_w: f32,
+    labels: &[&str],
+    add: impl Fn(&mut egui::Ui) -> egui::Response + 'static,
+) -> (egui::Rect, f32, Vec<egui::Rect>) {
+    use egui_kittest::kittest::Queryable;
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let out = Rc::new(Cell::new((egui::Rect::NOTHING, 0.0)));
+    let sink = out.clone();
+    let h = common::page_harness(egui::vec2(page_w, 120.0), theme.clone(), move |ui| {
+        let avail = ui.available_width();
+        sink.set((add(ui).rect, avail));
+    });
+    let (list, avail) = out.get();
+    let triggers = labels.iter().map(|l| h.get_by_label(l).rect()).collect();
+    (list, avail, triggers)
+}
+
+#[test]
+fn tabs_width_infinity_fills_the_row_and_shares_it_equally() {
+    use shadcn_egui::components::tabs::{Tabs, TabsVariant};
+    let labels = ["Display", "Audio", "Camera", "Folders"];
+    for (name, theme) in common::themes() {
+        for variant in [TabsVariant::Default, TabsVariant::Line] {
+            let (list, avail, triggers) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+                ui.add(
+                    Tabs::new(&mut 0, &labels)
+                        .variant(variant)
+                        .width(f32::INFINITY),
+                )
+            });
+            assert_eq!(list.width(), avail, "{name} {variant:?}");
+            // flex-1: every label fits its share, so all triggers are equal.
+            for t in &triggers {
+                assert!(
+                    (t.width() - triggers[0].width()).abs() < 0.01,
+                    "{name} {variant:?}: {triggers:?}"
+                );
+            }
+            // The triggers span the list between its padding.
+            let gaps = triggers[1].left() - triggers[0].right();
+            let used = triggers.iter().map(|t| t.width()).sum::<f32>() + gaps * 3.0;
+            let pad = (triggers[0].left() - list.left()) + (list.right() - triggers[3].right());
+            assert!(pad >= 0.0, "{name} {variant:?}");
+            assert!(
+                (used + pad - list.width()).abs() < 0.01,
+                "{name} {variant:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn tabs_width_keeps_a_long_label_at_its_own_width() {
+    use shadcn_egui::components::tabs::Tabs;
+    let labels = ["A", "B", "A rather long tab label"];
+    for (name, theme) in common::themes() {
+        let (_, _, hug) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            ui.add(Tabs::new(&mut 0, &labels))
+        });
+        let (list, avail, wide) = tabs_layout(&theme, 360.0, &labels, move |ui| {
+            ui.add(Tabs::new(&mut 0, &labels).width(f32::INFINITY))
+        });
+        assert_eq!(list.width(), avail, "{name}");
+        // The long label is wider than a third of the list: flex-1 never
+        // shrinks a trigger below its content, the short ones share the rest.
+        assert!(hug[2].width() > avail / 3.0, "{name}");
+        assert!((wide[2].width() - hug[2].width()).abs() < 0.01, "{name}");
+        assert!((wide[0].width() - wide[1].width()).abs() < 0.01, "{name}");
+        assert!(wide[0].width() > hug[0].width(), "{name}");
+    }
+}
+
+#[test]
+fn tabs_width_is_at_least_the_content_and_at_most_the_row() {
+    use shadcn_egui::components::tabs::Tabs;
+    let labels = ["Account", "Notifications"];
+    for (name, theme) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            ui.add(Tabs::new(&mut 0, &labels))
+        });
+        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            ui.add(Tabs::new(&mut 0, &labels).width(400.0))
+        });
+        assert_eq!(fixed.width(), 400.0, "{name}");
+        for w in [10.0, 0.0, -5.0, f32::NAN] {
+            let (small, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+                ui.add(Tabs::new(&mut 0, &labels).width(w))
+            });
+            assert_eq!(small.width(), hug.width(), "{name} {w}");
+        }
+        let (capped, avail, _) = tabs_layout(&theme, 300.0, &["A", "B"], move |ui| {
+            ui.add(Tabs::new(&mut 0, &["A", "B"]).width(5000.0))
+        });
+        assert_eq!(capped.width(), avail, "{name}");
+    }
+}
+
+/// A tab list with an optional `width`, as the one widget of `ui`.
+fn add_tabs(ui: &mut egui::Ui, labels: &[&str], w: Option<f32>) -> egui::Response {
+    use shadcn_egui::components::tabs::Tabs;
+    let mut active = 0;
+    let tabs = Tabs::new(&mut active, labels);
+    ui.add(match w {
+        Some(w) => tabs.width(w),
+        None => tabs,
+    })
+}
+
+#[test]
+fn tabs_width_infinity_in_a_scroll_area_fills_the_visible_width() {
+    let labels = ["Account", "Notifications"];
+    for (name, theme) in common::themes() {
+        let (list, avail, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            egui::ScrollArea::horizontal()
+                .show(ui, |ui| add_tabs(ui, &labels, Some(f32::INFINITY)))
+                .inner
+        });
+        assert_eq!(list.width(), avail, "{name}");
+    }
+}
+
+#[test]
+fn tabs_width_in_an_unbounded_ui_hugs_or_keeps_a_finite_width() {
+    let labels = ["Account", "Notifications"];
+    let unbounded = |w: Option<f32>| {
+        move |ui: &mut egui::Ui| {
+            let r = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(f32::INFINITY, 60.0));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(r), |ui| {
+                assert!(!ui.available_width().is_finite());
+                add_tabs(ui, &labels, w)
+            })
+            .inner
+        }
+    };
+    for (name, theme) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(None));
+        let (inf, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(f32::INFINITY)));
+        assert_eq!(inf.width(), hug.width(), "{name}");
+        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(400.0)));
+        assert_eq!(fixed.width(), 400.0, "{name}");
+    }
+}
+
+#[test]
+fn tabs_full_width_snapshot() {
+    use shadcn_egui::components::tabs::{Tabs, TabsVariant};
+    let labels = ["Display", "Audio", "Camera", "Folders"];
+    common::snapshot_all("tabs_full_width", egui::vec2(420.0, 150.0), |ui| {
+        // Keyboard focus ring on a widened, inactive trigger.
+        let resp = ui.add(Tabs::new(&mut 1, &labels).width(f32::INFINITY));
+        ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 2))));
+        ui.add_space(24.0);
+        ui.add(
+            Tabs::new(&mut 1, &labels)
+                .variant(TabsVariant::Line)
+                .width(f32::INFINITY),
+        );
+    });
+}
+
 #[test]
 fn tabs_snapshot() {
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
