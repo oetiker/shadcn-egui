@@ -3,7 +3,8 @@
 //! `cn-tabs-list-variant-*`, `cn-tabs-trigger` recipes and the trigger's
 //! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a click selects,
 //! Left/Right move the selection (and wrap), Home/End jump to the first/last
-//! tab (automatic activation).
+//! tab (automatic activation). The list is one Tab stop, on the selected
+//! trigger (roving focus).
 
 use crate::components::shared::{
     box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
@@ -151,15 +152,23 @@ impl Widget for Tabs<'_> {
                 r
             })
             .collect();
-        let sense = if enabled {
-            Sense::click()
-        } else {
-            Sense::hover()
-        };
+        // Roving focus: the list is one Tab stop, on the selected trigger.
+        // A trigger that holds the focus keeps it, so the focus survives
+        // the app moving the selection.
         let resps: Vec<Response> = trigger_rects
             .iter()
             .zip(&ids)
-            .map(|(r, id)| ui.interact(*r, *id, sense))
+            .enumerate()
+            .map(|(i, (r, id))| {
+                let sense = if !enabled {
+                    Sense::hover()
+                } else if i == *self.active || ui.memory(|m| m.has_focus(*id)) {
+                    Sense::click()
+                } else {
+                    Sense::CLICK
+                };
+                ui.interact(*r, *id, sense)
+            })
             .collect();
 
         // Selection: a click, or the arrow/Home/End keys on a focused trigger.

@@ -35,6 +35,9 @@ are recorded here. The format is based on
   of the disabled fade. (#6)
 
 ### Changed
+- The Tab key now stops once per tab list, on the selected tab, and the next
+  Tab leaves the list; before, it stopped on every tab. The arrow keys, Home
+  and End still move between the tabs.
 - In a line tab list (`TabsVariant::Line`), a focused tab that is not active
   shows its label in the foreground colour and a 2 px underline in the ring
   colour, in every style, and no longer draws a rounded ring around itself.
