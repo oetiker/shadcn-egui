@@ -155,16 +155,31 @@ fn when(d: &Decl) -> String {
     }
 }
 
-/// `(1 << 3) | (1 << 20)`: the variant bits, readable against `variant.rs`.
+/// `(1 << 3) | (1 << 20) | (2 << 122)`: the variant bits, then the class
+/// count (`<< 122`), the half step of `[&_svg:not(..)]` (`1 << 121`), the
+/// pseudo-element and important bits, readable against `variant.rs`.
 fn rank(r: u128) -> String {
-    let bits: Vec<String> = (0..128)
+    use crate::variant::R_CLASSES;
+    let mut terms: Vec<String> = (0..R_CLASSES)
         .filter(|b| r & (1 << b) != 0)
         .map(|b| format!("1 << {b}"))
         .collect();
-    match bits.len() {
+    let steps = (r >> R_CLASSES) & 0x1f;
+    if steps & 1 != 0 {
+        terms.push(format!("1 << {R_CLASSES}"));
+    }
+    if steps >> 1 != 0 {
+        terms.push(format!("{} << {}", steps >> 1, R_CLASSES + 1));
+    }
+    for b in 126..128 {
+        if r & (1 << b) != 0 {
+            terms.push(format!("1 << {b}"));
+        }
+    }
+    match terms.len() {
         0 => "0".into(),
-        1 => bits[0].clone(),
-        _ => bits
+        1 => terms[0].clone(),
+        _ => terms
             .iter()
             .map(|b| format!("({b})"))
             .collect::<Vec<_>>()

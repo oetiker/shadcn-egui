@@ -69,6 +69,14 @@ are recorded here. The format is based on
   iterator that yields each layer of an icon (`IconLayer`) with its strokes,
   its fill and its `alpha`. Code that draws icons itself paints each layer
   at its `alpha`; `paint_icon` and `IconView` already do.
+- A rule pushed into `theme.style` with a rank made of variant bits only now
+  loses to the style's own rule for the same state. Ranks now also count
+  selector specificity, as the browser does, so a `data-[size=sm]:` rule
+  beats an `md:` rule and a `placeholder:` text colour beats a `dark:` one;
+  the `Rule` documentation lists what to add, or use `Rule::important`.
+- Setting `icon_size.base` in `theme.style` no longer changes the icon size
+  of buttons, select triggers, select items, select scroll buttons and tab
+  triggers. Assign `icon_size = Prop::fixed(..)` instead.
 - The installed `shadcn-egui` Claude Code plugin now takes about 100 KB on
   disk instead of a full copy of the repository with its font and icon
   data, about 40 MB per installed version.
