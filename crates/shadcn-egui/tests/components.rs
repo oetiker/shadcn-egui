@@ -328,6 +328,65 @@ fn tabs_arrow_keys_move_selection() {
     assert_eq!(active.get(), 0, "Home selects the first tab");
 }
 
+/// The label of the one focused node, if any.
+fn focused_label(h: &egui_kittest::Harness<'_>) -> Option<String> {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    h.query_all(egui_kittest::kittest::by())
+        .find(|n| n.accesskit_node().is_focused())
+        .and_then(|n| n.accesskit_node().label())
+}
+
+#[test]
+fn tabs_are_one_tab_stop() {
+    use shadcn_egui::components::tabs::Tabs;
+    let mut h = egui_kittest::Harness::new_ui(|ui| {
+        shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+        ui.add(egui::Button::new("Before"));
+        let mut sel = 1;
+        ui.add(Tabs::new(
+            &mut sel,
+            &["Account", "Notifications", "Display"],
+        ));
+        ui.add(egui::Button::new("After"));
+    });
+    h.run();
+    let mut order = Vec::new();
+    for _ in 0..3 {
+        h.key_press(egui::Key::Tab);
+        h.run();
+        order.push(focused_label(&h));
+    }
+    let name = |s: &str| Some(s.to_owned());
+    assert_eq!(
+        order,
+        [name("Before"), name("Notifications"), name("After")],
+        "Tab stops on the selected trigger only"
+    );
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+    h.run();
+    assert_eq!(focused_label(&h), name("Notifications"), "Shift+Tab");
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+    h.run();
+    assert_eq!(
+        focused_label(&h),
+        name("Before"),
+        "Shift+Tab leaves the list"
+    );
+}
+
+#[test]
+fn tabs_keep_focus_when_the_app_moves_the_selection() {
+    use egui_kittest::kittest::Queryable;
+    let (mut h, active) = tabs_harness(&["Account", "Notifications"], 0);
+    h.run();
+    h.get_by_label("Account").focus();
+    h.run();
+    active.set(1);
+    h.run();
+    h.run();
+    assert_eq!(focused_label(&h), Some("Account".to_owned()));
+}
+
 #[test]
 fn tabs_report_the_selected_trigger() {
     use egui_kittest::kittest::{NodeT, Queryable};
