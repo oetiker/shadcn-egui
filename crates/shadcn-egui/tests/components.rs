@@ -998,16 +998,12 @@ fn card_header_and_content_share_side_padding() {
 #[test]
 fn only_vega_sets_a_card_content_gap() {
     use shadcn_egui::style::State;
-    for (name, style) in [
-        ("vega", Style::vega as fn() -> Style),
-        ("nova", Style::nova),
-        ("maia", Style::maia),
-        ("lyra", Style::lyra),
-        ("mira", Style::mira),
-        ("luma", Style::luma),
-        ("rhea", Style::rhea),
-    ] {
-        let style = style();
+    use shadcn_egui::{Mode, Preset, StyleName};
+    // Sera is not exported: a preset naming it falls back to nova.
+    for name in StyleName::ALL.iter().filter(|s| **s != StyleName::Sera) {
+        let theme = Preset::default().style(*name).theme(Mode::Light);
+        let (name, style) = (name.id(), &theme.style);
+        assert_eq!(style.name, name, "the preset builds its own style");
         for st in [State::SIZE_DEFAULT, State::SIZE_SM] {
             let gap = style.card_content.gap.get(st);
             let want = (name == "vega").then_some(12.0);
@@ -1204,6 +1200,36 @@ fn input_id_salt_takes_runtime_salts() {
     let first = ids(0);
     assert_ne!(first[0], first[1], "rows share an id");
     assert_eq!(ids(2), first, "the ids follow the salt, not the position");
+}
+
+/// A string salt gives the field the id it had in 0.4, where `Input` passed
+/// the salt to egui's own `TextEdit::id_salt` inside a scope and
+/// `add_sized`; the deprecated `id_source` gives the same id.
+#[test]
+fn input_id_salt_keeps_the_0_4_id() {
+    use shadcn_egui::components::input::Input;
+    let ctx = egui::Context::default();
+    let id_of = |add: &mut dyn FnMut(&mut egui::Ui) -> egui::Id| {
+        let mut id = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| id = Some(add(ui)));
+        id.expect("field was added")
+    };
+    let mut text = String::new();
+    let reference = id_of(&mut |ui| {
+        ui.scope(|ui| {
+            ui.add_sized(
+                egui::vec2(200.0, 32.0),
+                egui::TextEdit::singleline(&mut text).id_salt("login-user"),
+            )
+        })
+        .inner
+        .id
+    });
+    let salted = id_of(&mut |ui| ui.add(Input::new(&mut text).id_salt("login-user")).id);
+    #[allow(deprecated)]
+    let sourced = id_of(&mut |ui| ui.add(Input::new(&mut text).id_source("login-user")).id);
+    assert_eq!(salted, reference, "id_salt");
+    assert_eq!(sourced, reference, "id_source");
 }
 
 /// A badge takes any icon, also one borrowed from the theme for a moment.

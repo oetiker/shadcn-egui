@@ -510,9 +510,15 @@ fn face_key(role: &str, weight: u16) -> String {
 /// an earlier theme's. Only the exact keys and families a theme installs
 /// count as the theme's: an app's own family that lists a theme face keeps
 /// it while the new install still defines it, and an app font named
-/// `shadcn-…` is left alone. Monospace's leading body face is the theme's
-/// (a mono body puts it there) and is placed anew.
-fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinitions {
+/// `shadcn-…` is left alone. A mono body puts its regular face first in
+/// Monospace, once; `mono_installed` says the last install on this context
+/// did so, which makes a leading body face in `base`'s Monospace the
+/// theme's, to be removed. Any other is the app's.
+fn font_definitions(
+    fonts: ThemeFonts,
+    mut base: FontDefinitions,
+    mono_installed: bool,
+) -> FontDefinitions {
     let inherit = fonts.heading == fonts.body;
     let theme_keys: Vec<String> = ["body", "heading"]
         .into_iter()
@@ -528,7 +534,7 @@ fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinit
         .retain(|family, _| !matches!(family, FontFamily::Name(name) if is_theme_family(name)));
     let mono_key = face_key("body", WEIGHTS[0]);
     if let Some(mono) = base.families.get_mut(&FontFamily::Monospace) {
-        if mono.first() == Some(&mono_key) {
+        if mono_installed && mono.first() == Some(&mono_key) {
             mono.remove(0);
         }
     }
@@ -576,10 +582,9 @@ fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinit
         }
     }
     if fonts.body.kind == FontKind::Mono {
-        base.families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .insert(0, mono_key);
+        let mono = base.families.entry(FontFamily::Monospace).or_default();
+        mono.retain(|key| *key != mono_key);
+        mono.insert(0, mono_key);
     }
     base
 }
@@ -589,6 +594,8 @@ fn font_definitions(fonts: ThemeFonts, mut base: FontDefinitions) -> FontDefinit
 struct InstalledFonts {
     body: &'static str,
     heading: &'static str,
+    /// The body is mono: the install put its face first in Monospace.
+    mono_body: bool,
 }
 
 /// Whether the context's current fonts bind `family`. Only valid once the
@@ -609,12 +616,12 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
     let key = InstalledFonts {
         body: fonts.body.name,
         heading: fonts.heading.name,
+        mono_body: fonts.body.kind == FontKind::Mono,
     };
+    let last = ctx.data(|d| d.get_temp::<InstalledFonts>(id));
     let base = match base {
         Some(base) => base,
-        None if ctx.data(|d| d.get_temp::<InstalledFonts>(id)).as_ref() != Some(&key) => {
-            FontDefinitions::default()
-        }
+        None if last.as_ref() != Some(&key) => FontDefinitions::default(),
         // Before the first pass the fonts are still the ones installed last.
         None if ctx.cumulative_pass_nr() == 0 => return,
         None => {
@@ -625,7 +632,8 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
             ctx.fonts(|f| f.definitions().clone())
         }
     };
-    ctx.set_fonts(font_definitions(fonts, base));
+    let mono_installed = last.is_some_and(|f| f.mono_body);
+    ctx.set_fonts(font_definitions(fonts, base, mono_installed));
     ctx.data_mut(|d| d.insert_temp(id, key));
 }
 

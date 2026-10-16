@@ -161,15 +161,30 @@ fn snake_case(name: &str) -> String {
     out
 }
 
-/// The component names of component-map.md's "Not yet ported:" sentence.
+/// The component names of component-map.md's "Not yet ported:" sentence:
+/// its paragraph up to the first full stop that ends a sentence (followed
+/// by white space or the paragraph's end), so a dot inside a name does not
+/// cut the list short.
 fn not_yet_ported() -> Vec<String> {
     let start = COMPONENT_MAP
         .find("Not yet ported: ")
         .expect("component-map.md has a \"Not yet ported\" list")
         + "Not yet ported: ".len();
     let rest = &COMPONENT_MAP[start..];
-    let list = &rest[..rest.find('.').expect("the list ends with a full stop")];
-    list.split([',', '\n'])
+    let paragraph = &rest[..rest.find("\n\n").unwrap_or(rest.len())];
+    let paragraph = paragraph.trim_end();
+    let end = paragraph
+        .match_indices('.')
+        .map(|(i, _)| i)
+        .find(|&i| {
+            paragraph[i + 1..]
+                .chars()
+                .next()
+                .is_none_or(char::is_whitespace)
+        })
+        .expect("the list ends with a full stop");
+    paragraph[..end]
+        .split([',', '\n'])
         .flat_map(|item| item.split(" or "))
         .map(str::trim)
         .filter(|item| !item.is_empty())
@@ -183,6 +198,9 @@ fn not_yet_ported_lists_no_ported_component() {
     const NOT_COMPONENTS: [&str; 1] = ["gradients"];
     let names = not_yet_ported();
     assert!(names.contains(&"RadioGroup".to_owned()), "parsed {names:?}");
+    // Lower this when a listed component gets ported; a parse that loses
+    // entries fails here.
+    assert!(names.len() >= 8, "parsed only {names:?}");
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/components");
     for name in names {
         if NOT_COMPONENTS.contains(&name.as_str()) {
