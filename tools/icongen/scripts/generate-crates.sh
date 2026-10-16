@@ -81,7 +81,14 @@ tail -n +2 "$repo/tools/icongen/SETS.tsv" | while IFS=$'\t' read -r lib package 
   dir=$pkgdir
   if [ "$lib" = hugeicons ]; then
     svgdir="$scratch/hugeicons-svg-$version"
-    node "$repo/tools/icongen/scripts/hugeicons-svg.mjs" "$dir" "$svgdir"
+    # Render into a fresh directory and move it into place only on success,
+    # so files of an earlier run are never read as icons.
+    mkdir -p "$scratch"
+    svgtmp=$(mktemp -d "$scratch/.hugeicons-svg.XXXXXX") || die "hugeicons: cannot create a temporary dir"
+    node "$repo/tools/icongen/scripts/hugeicons-svg.mjs" "$dir" "$svgtmp" || { rm -rf "$svgtmp"; die "hugeicons: SVG rendering failed"; }
+    chmod 755 "$svgtmp" # mktemp -d makes it 0700
+    rm -rf "$svgdir"
+    mv "$svgtmp" "$svgdir"
     files=("$svgdir"/*.svg)
   else
     # shellcheck disable=SC2206  # the glob from SETS.tsv is meant to expand

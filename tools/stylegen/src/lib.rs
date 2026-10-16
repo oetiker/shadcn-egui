@@ -7,6 +7,7 @@ pub mod emit;
 pub mod extract;
 pub mod markers;
 pub mod model;
+pub mod pin;
 pub mod preset;
 pub mod report;
 pub mod resolve;

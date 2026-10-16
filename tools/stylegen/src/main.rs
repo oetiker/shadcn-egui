@@ -1,7 +1,8 @@
 //! stylegen generate|drift <shadcn-svelte checkout> <shadcn-ui checkout> <repository root>
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
+use stylegen::pin::{check_pin, parse_pin};
 use stylegen::{markers, preset, themes};
 
 /// The crate stylegen writes into, relative to the repository root.
@@ -21,16 +22,25 @@ fn main() -> ExitCode {
         PathBuf::from(root),
     );
     let tool = root.join("tools/stylegen");
-    let pin = std::fs::read_to_string(tool.join("PIN"))
-        .expect("PIN")
-        .trim()
-        .to_owned();
-    let pin_react = std::fs::read_to_string(tool.join("PIN_REACT"))
-        .expect("PIN_REACT")
-        .trim()
-        .to_owned();
-    check_pin(&up, &pin);
-    check_pin(&up_react, &pin_react);
+    let read_pin = |name: &str| {
+        let text = std::fs::read_to_string(tool.join(name)).map_err(|e| format!("{name}: {e}"))?;
+        parse_pin(&text).map_err(|e| format!("{name}: {e}"))
+    };
+    let (pin, pin_react) = match (read_pin("PIN"), read_pin("PIN_REACT")) {
+        (Ok(a), Ok(b)) => (a, b),
+        (a, b) => {
+            for e in [a.err(), b.err()].into_iter().flatten() {
+                eprintln!("{e}");
+            }
+            return ExitCode::FAILURE;
+        }
+    };
+    for (checkout, pin) in [(&up, &pin), (&up_react, &pin_react)] {
+        if let Err(e) = check_pin(checkout, pin) {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    }
     let lines = markers::parse_markers(
         &std::fs::read_to_string(tool.join("markers.txt")).expect("markers.txt"),
     );
@@ -42,20 +52,6 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
-}
-
-fn check_pin(up: &Path, pin: &str) {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(up)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .expect("git");
-    let head = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        head.starts_with(pin),
-        "upstream checkout is at {head}, PIN says {pin}"
-    );
 }
 
 fn generate(
