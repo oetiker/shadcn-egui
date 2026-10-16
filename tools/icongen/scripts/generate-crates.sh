@@ -86,6 +86,7 @@ tail -n +2 "$repo/tools/icongen/SETS.tsv" | while IFS=$'\t' read -r lib package 
     mkdir -p "$scratch"
     svgtmp=$(mktemp -d "$scratch/.hugeicons-svg.XXXXXX") || die "hugeicons: cannot create a temporary dir"
     node "$repo/tools/icongen/scripts/hugeicons-svg.mjs" "$dir" "$svgtmp" || { rm -rf "$svgtmp"; die "hugeicons: SVG rendering failed"; }
+    chmod 755 "$svgtmp" # mktemp -d makes it 0700
     rm -rf "$svgdir"
     mv "$svgtmp" "$svgdir"
     files=("$svgdir"/*.svg)

@@ -46,13 +46,14 @@ machine:
 1. Merge the release pull request. The publish workflow tags `vX.Y.Z` and
    its crates.io job fails on the new crates.
 2. Check out the tag and publish each new crate with a crates.io token that
-   has the scopes `publish-new` and `publish-update`. A crate must follow
-   the crates it depends on: `shadcn-egui-core` first, then the font and
-   icon crates, `shadcn-egui` last.
+   has the scopes `publish-new` and `publish-update`. Publish in
+   dependency order: `shadcn-egui-core`, then the font and icon crates,
+   `shadcn-egui` last. Before each crate, check that its version is not on
+   crates.io yet (`cargo search <crate>`), and publish only the new ones.
 
    ```bash
    git checkout vX.Y.Z
-   CARGO_REGISTRY_TOKEN=... cargo publish -p shadcn-egui-font-<id> --jobs 4
+   CARGO_REGISTRY_TOKEN=... cargo publish --locked -p <crate> --jobs 4
    ```
 
 3. Register the trusted publisher on each new crate.

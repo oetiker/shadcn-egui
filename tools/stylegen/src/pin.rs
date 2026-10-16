@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
+/// Twin of `parse_pin` in tools/fontgen/src/lib.rs (separate workspaces); keep both in step.
 /// A pin is an abbreviated or full git commit id: 7 to 40 lowercase hex
 /// characters, surrounding whitespace ignored.
 pub fn parse_pin(text: &str) -> Result<String, String> {
@@ -11,9 +12,7 @@ pub fn parse_pin(text: &str) -> Result<String, String> {
     {
         Ok(pin.to_owned())
     } else {
-        Err(format!(
-            "PIN {pin:?} is not 7 to 40 lowercase hex characters"
-        ))
+        Err(format!("{pin:?} is not 7 to 40 lowercase hex characters"))
     }
 }
 

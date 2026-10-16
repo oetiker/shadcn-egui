@@ -136,8 +136,9 @@ fn stale_crates_and_font_files_fail_and_are_listed_not_deleted() {
 
 #[test]
 fn bad_gf_pins_fail() {
+    // generate() fails before it writes, so one fixture serves every pin.
+    let (repo, downloads) = fixture("generate-bad-pin");
     for bad in ["", "  \n", "4", "xyz1234"] {
-        let (repo, downloads) = fixture("generate-bad-pin");
         put(&repo.join("tools/fontgen/GF_PIN"), bad);
         let e = generate(&downloads, &repo).unwrap_err();
         assert!(e.contains("GF_PIN"), "{bad:?}: {e}");

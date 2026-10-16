@@ -586,6 +586,7 @@ fn read_text(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Twin of `parse_pin` in tools/stylegen/src/pin.rs (separate workspaces); keep both in step.
 /// A pin is an abbreviated or full git commit id: 7 to 40 lowercase hex
 /// characters, surrounding whitespace ignored.
 pub fn parse_pin(text: &str) -> Result<String, String> {
