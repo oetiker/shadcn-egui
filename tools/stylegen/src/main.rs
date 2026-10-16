@@ -1,7 +1,7 @@
 //! stylegen generate|drift <shadcn-svelte checkout> <shadcn-ui checkout> <repository root>
 
-use std::path::PathBuf;
-use std::process::{Command, ExitCode};
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use stylegen::pin::{check_pin, parse_pin};
 use stylegen::{markers, preset, themes};
 
