@@ -295,6 +295,16 @@ mod tests {
         icon.layers().next().and_then(|l| l.fill)
     }
 
+    /// Layer 1: M(1, 1), no fill. Layer 2 at 26214 / 65535 = 0.4: L(2, 2)
+    /// and a one-triangle fill. Layer 3 at 0.5: Z, no fill.
+    fn layered_record() -> &'static [u8] {
+        leak(&[
+            3, 0, 1024, 1024, 0, 0, 0, // opaque
+            26214, 3, 1, 2048, 2048, 3, 3, 0, 0, 0, 1024, 0, 0, 1024, 0, 1, 2, // 0.4
+            32768, 1, 4, 0, 0, 0, // 0.5
+        ])
+    }
+
     fn blob_icon(blob: &'static [u8], start: u32, len: u32) -> Icon {
         Icon {
             name: "t",
@@ -321,13 +331,7 @@ mod tests {
 
     #[test]
     fn translucent_layers_follow_the_opaque_one_with_their_alpha() {
-        // Layer 1: M(1, 1), no fill. Layer 2 at 26214 / 65535 = 0.4: L(2, 2)
-        // and a one-triangle fill. Layer 3 at 0.5: Z, no fill.
-        let blob = leak(&[
-            3, 0, 1024, 1024, 0, 0, 0, // opaque
-            26214, 3, 1, 2048, 2048, 3, 3, 0, 0, 0, 1024, 0, 0, 1024, 0, 1, 2, // 0.4
-            32768, 1, 4, 0, 0, 0, // 0.5
-        ]);
+        let blob = layered_record();
         let icon = blob_icon(blob, 0, blob.len() as u32);
         let layers: Vec<IconLayer> = icon.layers().collect();
         assert_eq!(layers.len(), 3);
@@ -411,13 +415,20 @@ mod tests {
 
     #[test]
     fn truncated_and_garbage_records_never_panic() {
-        let whole = record();
-        // Every prefix of a valid record, including odd lengths.
-        for len in 0..=whole.len() as u32 {
-            let icon = blob_icon(whole, 0, len);
-            let _ = segs(&icon).len();
-            let _ = fill(&icon);
+        // Every prefix of a valid record, one layer or three, including odd
+        // lengths; every layer is read to its end.
+        for whole in [record(), layered_record()] {
+            for len in 0..=whole.len() as u32 {
+                let icon = blob_icon(whole, 0, len);
+                let layers: Vec<IconLayer> = icon.layers().collect();
+                assert!(layers.len() <= 3, "{len}: {} layers", layers.len());
+                for layer in layers {
+                    assert!((0.0..=1.0).contains(&layer.alpha));
+                    assert!(layer.segs.count() <= whole.len());
+                }
+            }
         }
+        let whole = record();
         // Ranges that point past the end of the blob.
         for (start, len) in [(0, 1000), (40, 20), (u32::MAX, 2), (2, u32::MAX)] {
             let icon = blob_icon(whole, start, len);

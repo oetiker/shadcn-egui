@@ -56,8 +56,11 @@ pub fn encode(icon: &Converted) -> Result<Vec<u8>, String> {
 
 fn alpha(name: &str, a: f32) -> Result<u16, String> {
     let q = (a * ALPHA_SCALE).round();
+    // icongen merges a full alpha into the opaque layer and drops a zero one.
     if !(1.0..ALPHA_SCALE).contains(&q) {
-        return Err(format!("{name}: layer alpha {a} not inside 0..1"));
+        return Err(format!(
+            "{name}: translucent layer alpha {a} must lie strictly between 0 and 1 (in steps of 1/65535)"
+        ));
     }
     Ok(q as u16)
 }

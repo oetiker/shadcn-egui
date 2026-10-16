@@ -426,18 +426,19 @@ fn filled_icon_edges_zoomed_half() {
 fn translucent_parts_decode_as_layers_with_their_alpha() {
     let layers: Vec<IconLayer> = fixture::FADED.layers().collect();
     let alphas: Vec<f32> = layers.iter().map(|l| l.alpha).collect();
-    // The opaque line, <path opacity=0.4>, <g opacity=0.5> around a
-    // stroke-opacity=0.5 path, a rect with fill-opacity=0.25.
-    assert_eq!(alphas.len(), 4, "{alphas:?}");
-    for (got, want) in alphas.iter().zip([1.0, 0.4, 0.25, 0.25]) {
+    // The opaque line, two crossing <path opacity=0.4>, <g opacity=0.5>
+    // around a stroke-opacity=0.5 path, a rect with fill-opacity=0.25.
+    assert_eq!(alphas.len(), 5, "{alphas:?}");
+    for (got, want) in alphas.iter().zip([1.0, 0.4, 0.4, 0.25, 0.25]) {
         assert!((got - want).abs() < 1e-4, "{alphas:?}");
     }
     let segs: Vec<Vec<Seg>> = layers.iter().map(|l| l.segs.clone().collect()).collect();
     assert_eq!(segs[0], vec![Seg::M(4.0, 6.0), Seg::L(20.0, 6.0)]);
     assert_eq!(segs[1], vec![Seg::M(4.0, 12.0), Seg::L(20.0, 12.0)]);
-    assert_eq!(segs[2], vec![Seg::M(4.0, 18.0), Seg::L(20.0, 18.0)]);
-    assert!(segs[3].is_empty() && layers[3].fill.is_some());
-    assert!(layers[..3].iter().all(|l| l.fill.is_none()));
+    assert_eq!(segs[2], vec![Seg::M(8.0, 4.0), Seg::L(8.0, 14.0)]);
+    assert_eq!(segs[3], vec![Seg::M(4.0, 18.0), Seg::L(20.0, 18.0)]);
+    assert!(segs[4].is_empty() && layers[4].fill.is_some());
+    assert!(layers[..4].iter().all(|l| l.fill.is_none()));
 }
 
 #[test]
@@ -449,7 +450,8 @@ fn opaque_icons_are_one_layer() {
 }
 
 /// Each layer reaches the texture at its own alpha: the opaque line full,
-/// the 0.4 line at 0.4, the 0.25 line and the 0.25 rect at a quarter.
+/// the 0.4 lines at 0.4, the 0.25 line and the 0.25 rect at a quarter, and
+/// where layers overlap they composite source-over.
 #[test]
 fn translucent_layers_are_faded_in_the_texture() {
     let (_, img) = raster(
@@ -464,4 +466,10 @@ fn translucent_layers_are_faded_in_the_texture() {
     assert!((a(12, 17) - 64).abs() <= 1, "0.25 line: {}", a(12, 17));
     assert!((a(3, 20) - 64).abs() <= 1, "0.25 rect: {}", a(3, 20));
     assert_eq!(a(12, 8), 0, "between the lines");
+    // Overlapping layers composite source-over: 0.4 over 0.4 is 0.64
+    // (163), where max would give 102 and a sum 204; 0.4 over the opaque
+    // line stays 255. The vertical 0.4 line runs at x = 8 (7..9).
+    assert!((a(7, 9) - 102).abs() <= 1, "0.4 alone: {}", a(7, 9));
+    assert!((a(7, 11) - 163).abs() <= 1, "0.4 over 0.4: {}", a(7, 11));
+    assert_eq!(a(7, 5), 255, "0.4 over opaque");
 }

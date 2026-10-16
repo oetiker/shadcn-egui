@@ -15,8 +15,8 @@ pub use shadcn_egui_core::{Icon, IconLayer, IconShape, IconSlots, Seg};
 
 /// Paint `icon` scaled into the square `rect`: the fill (if any) and the
 /// strokes of each layer at the layer's alpha, from one coverage texture
-/// tinted `color`. `stroke_width` is in
-/// icon units (Lucide's own is 2.0) and scales with the icon.
+/// tinted `color`. `stroke_width` is in icon units (Lucide's own is 2.0)
+/// and scales with the icon.
 ///
 /// The texture is rasterised once per icon, physical pixel size and stroke
 /// width, and cached in the context; `rect` snaps to whole physical pixels.

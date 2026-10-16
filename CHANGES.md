@@ -64,10 +64,11 @@ are recorded here. The format is based on
 - `Badge::icon` and `Badge::icon_end` take any icon reference, such as
   `&Theme::current(ctx).icons.check`, not only an icon that lives for the
   whole program.
-- `Icon::segs()` and `Icon::fill_mesh()` are replaced by `Icon::layers()`,
-  which yields each layer of an icon (`IconLayer`) with its strokes, its
-  fill and its `alpha`. Code that draws icons itself paints each layer at
-  its `alpha`; `paint_icon` and `IconView` already do.
+- In `shadcn-egui-core` (re-exported by `shadcn-egui`), `Icon::segs()` and
+  `Icon::fill_mesh()` are replaced by `Icon::layers()`, an `IconLayers`
+  iterator that yields each layer of an icon (`IconLayer`) with its strokes,
+  its fill and its `alpha`. Code that draws icons itself paints each layer
+  at its `alpha`; `paint_icon` and `IconView` already do.
 
 ### Fixed
 - The Hugeicons icons `ARROW_BIG_RIGHT_DASH`, `HAMBURGER_01` and

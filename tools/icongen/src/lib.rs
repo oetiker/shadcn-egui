@@ -116,14 +116,20 @@ pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
     })
 }
 
-/// The layer to paint into at `alpha` (the product of the opacities so far):
-/// `current` when `own` is 1, else a new one at `alpha * own`.
-fn layer_for(layers: &mut Vec<Gather>, current: usize, alpha: f32, own: f32) -> usize {
-    if own >= 1.0 {
-        return current;
+/// The layer to paint into at `alpha` (the opacity of `layers[current]`)
+/// times `own`: `current` when the product is full at the blob's alpha
+/// precision, `None` when it is zero there (invisible), else a new layer.
+fn layer_for(layers: &mut Vec<Gather>, current: usize, alpha: f32, own: f32) -> Option<usize> {
+    let product = alpha * own;
+    let q = (product * blob::ALPHA_SCALE).round();
+    if q < 1.0 {
+        return None;
     }
-    layers.push(Gather::new(alpha * own));
-    layers.len() - 1
+    if own >= 1.0 || q >= blob::ALPHA_SCALE {
+        return Some(current);
+    }
+    layers.push(Gather::new(product));
+    Some(layers.len() - 1)
 }
 
 /// Collect `group`'s paths into `layers[layer]`, or into new layers where
@@ -139,30 +145,30 @@ fn walk(
     for node in group.children() {
         match node {
             usvg::Node::Group(g) => {
-                let own = g.opacity().get();
-                if own > 0.0 {
-                    let l = layer_for(layers, layer, alpha, own);
-                    walk(name, g, scale, alpha * own, l, layers)?;
+                if let Some(l) = layer_for(layers, layer, alpha, g.opacity().get()) {
+                    let a = layers[l].alpha;
+                    walk(name, g, scale, a, l, layers)?;
                 }
             }
             usvg::Node::Path(p) => {
                 if !p.is_visible() {
                     continue;
                 }
-                if let Some(f) = p.fill().filter(|f| f.opacity().get() > 0.0) {
+                if let Some(f) = p.fill() {
                     let rule = match f.rule() {
                         usvg::FillRule::NonZero => FillRule::NonZero,
                         usvg::FillRule::EvenOdd => FillRule::EvenOdd,
                     };
                     let contours = fill::flatten(p.data(), p.abs_transform(), scale);
-                    if !contours.is_empty() {
-                        let l = layer_for(layers, layer, alpha, f.opacity().get());
+                    let l = layer_for(layers, layer, alpha, f.opacity().get());
+                    if let (Some(l), false) = (l, contours.is_empty()) {
                         layers[l].fills.push(FillPath { rule, contours });
                     }
                 }
-                if let Some(s) = p.stroke().filter(|s| s.opacity().get() > 0.0) {
-                    let l = layer_for(layers, layer, alpha, s.opacity().get());
-                    path_segs(p.data(), p.abs_transform(), &mut layers[l].segs);
+                if let Some(s) = p.stroke() {
+                    if let Some(l) = layer_for(layers, layer, alpha, s.opacity().get()) {
+                        path_segs(p.data(), p.abs_transform(), &mut layers[l].segs);
+                    }
                 }
             }
             usvg::Node::Image(_) => return Err(format!("{name}: embedded image not supported")),

@@ -46,7 +46,9 @@ impl Icon {
 }
 
 /// Strokes and fill of an [`Icon`] painted together at one opacity.
+/// Non-exhaustive: more paint properties may follow.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct IconLayer {
     /// Opacity in 0..=1, multiplied into the colour the icon is drawn in.
     pub alpha: f32,
