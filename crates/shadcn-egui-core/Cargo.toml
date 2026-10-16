@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/shadcn-egui-core"
 readme = "README.md"
-keywords = ["egui", "shadcn", "font", "icons"]
+keywords = ["egui", "shadcn", "icon-data", "font-data", "shared-types"]
 categories = ["gui"]
 include = ["src/**", "LICENSE*", "README*"]
 

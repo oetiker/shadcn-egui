@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # What each workspace crate would upload to crates.io: a description, a
 # README, keywords and categories, the SPDX licence its contents need, the
-# licence texts, and no tests or snapshots. Run from anywhere inside the repository.
+# licence texts, and no tests or snapshots. Run from anywhere inside the
+# repository.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 fail=0
