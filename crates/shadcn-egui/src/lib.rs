@@ -47,35 +47,35 @@ pub use shadcn_egui_core::*;
 pub use style::Style;
 pub use theme::{theme, MenuColors, Metrics, Palette, Theme, ThemeFonts};
 
-// The Claude Code skills under skills/ name this crate's API. Compiling
+// The Claude Code skills under plugin/skills/ name this crate's API. Compiling
 // their rust fences as doctests makes an API change fail `cargo test` until
 // the skill text follows. cfg(doctest) drops these items before include_str!
 // expands, so builds and `cargo package` never read the files, which lie
 // outside the package.
 #[cfg(doctest)]
 mod skill_docs {
-    #[doc = include_str!("../../../skills/build-ui/SKILL.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/SKILL.md")]
     struct BuildUi;
-    #[doc = include_str!("../../../skills/build-ui/references/component-map.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/component-map.md")]
     struct ComponentMap;
-    #[doc = include_str!("../../../skills/build-ui/references/cpu-rendering.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/cpu-rendering.md")]
     struct CpuRendering;
-    #[doc = include_str!("../../../skills/build-ui/references/gotchas.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/gotchas.md")]
     struct Gotchas;
-    #[doc = include_str!("../../../skills/build-ui/references/icons.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/icons.md")]
     struct Icons;
-    #[doc = include_str!("../../../skills/build-ui/references/layout-map.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/layout-map.md")]
     struct LayoutMap;
-    #[doc = include_str!("../../../skills/build-ui/references/presets.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/presets.md")]
     struct Presets;
-    #[doc = include_str!("../../../skills/build-ui/references/token-map.md")]
+    #[doc = include_str!("../../../plugin/skills/build-ui/references/token-map.md")]
     struct TokenMap;
-    #[doc = include_str!("../../../skills/port-component/SKILL.md")]
+    #[doc = include_str!("../../../plugin/skills/port-component/SKILL.md")]
     struct PortComponent;
-    #[doc = include_str!("../../../skills/port-component/references/in-app.md")]
+    #[doc = include_str!("../../../plugin/skills/port-component/references/in-app.md")]
     struct InApp;
-    #[doc = include_str!("../../../skills/port-component/references/styles.md")]
+    #[doc = include_str!("../../../plugin/skills/port-component/references/styles.md")]
     struct Styles;
-    #[doc = include_str!("../../../skills/port-component/references/upstream.md")]
+    #[doc = include_str!("../../../plugin/skills/port-component/references/upstream.md")]
     struct Upstream;
 }

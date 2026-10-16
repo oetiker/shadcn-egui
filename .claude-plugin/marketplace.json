@@ -11,8 +11,9 @@
     {
       "name": "shadcn-egui",
       "source": {
-        "source": "github",
-        "repo": "oetiker/shadcn-egui",
+        "source": "git-subdir",
+        "url": "https://github.com/oetiker/shadcn-egui.git",
+        "path": "plugin",
         "ref": "v0.4.0"
       },
       "description": "Build Rust egui GUIs from shadcn designs with the shadcn-egui crate, and port missing shadcn components to the crate's standard.",

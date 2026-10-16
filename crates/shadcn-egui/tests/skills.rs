@@ -1,7 +1,7 @@
-//! The Claude Code plugin under skills/ and .claude-plugin/ stays true to
+//! The Claude Code plugin under plugin/ and .claude-plugin/ stays true to
 //! the crate: versions, doctest wiring, component map, feature names.
 
-const PLUGIN: &str = include_str!("../../../.claude-plugin/plugin.json");
+const PLUGIN: &str = include_str!("../../../plugin/.claude-plugin/plugin.json");
 const MARKETPLACE: &str = include_str!("../../../.claude-plugin/marketplace.json");
 const REPO_INFRA: &str = include_str!("../../../.github/repo-infra.json");
 const WORKSPACE: &str = include_str!("../../../Cargo.toml");
@@ -40,7 +40,7 @@ fn plugin_versions_follow_the_workspace() {
 fn release_bumps_the_plugin() {
     for (path, pattern) in [
         (
-            ".claude-plugin/plugin.json",
+            "plugin/.claude-plugin/plugin.json",
             r#"^  \"version\": \"[^\"]*\""#,
         ),
         (
@@ -74,7 +74,7 @@ fn plugin_is_named_shadcn_egui() {
 const LIB: &str = include_str!("../src/lib.rs");
 
 /// `<skill>/SKILL.md` and `<skill>/references/*.md` for every directory
-/// under skills/ that holds a SKILL.md.
+/// under plugin/skills/ that holds a SKILL.md.
 fn skill_files() -> Vec<String> {
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills");
     let mut out = Vec::new();
@@ -101,14 +101,14 @@ fn skill_files() -> Vec<String> {
 #[test]
 fn every_skill_file_is_a_doctest() {
     for f in skill_files() {
-        let item = format!("include_str!(\"../../../skills/{f}\")");
+        let item = format!("include_str!(\"../../../plugin/skills/{f}\")");
         assert!(LIB.contains(&item), "lib.rs skill_docs lacks {f}");
     }
 }
 
 #[test]
 fn every_fence_has_a_language() {
-    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../plugin/skills/");
     for f in skill_files() {
         let text = std::fs::read_to_string(format!("{root}{f}")).unwrap();
         let mut open = false;
@@ -127,7 +127,7 @@ fn every_fence_has_a_language() {
     }
 }
 
-const COMPONENT_MAP: &str = include_str!("../../../skills/build-ui/references/component-map.md");
+const COMPONENT_MAP: &str = include_str!("../../../plugin/skills/build-ui/references/component-map.md");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 #[test]
@@ -249,7 +249,7 @@ fn every_exported_style_has_light_and_dark_snapshots() {
 
 #[test]
 fn skills_name_only_existing_features() {
-    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../plugin/skills/");
     let features: Vec<&str> = MANIFEST
         .lines()
         .filter_map(|l| l.split_once(" = [").map(|(k, _)| k.trim()))
@@ -292,7 +292,7 @@ fn skills_name_only_existing_features() {
 /// the skills read it from plugin.json instead.
 #[test]
 fn skills_pin_no_crate_version() {
-    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../skills/");
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../plugin/skills/");
     for f in skill_files() {
         let text = std::fs::read_to_string(format!("{root}{f}")).unwrap();
         for (i, _) in text.match_indices("shadcn-egui@") {
