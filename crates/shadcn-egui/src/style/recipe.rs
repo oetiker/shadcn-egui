@@ -129,8 +129,9 @@ impl When {
 /// state variant (`hover:`, `dark:`, `data-*:`, `aria-*:`, `group-*:`,
 /// `peer-*:`, `has-*:`, `not-*:`), `1 << 121` for
 /// `[&_svg:not([class*='size-'])]:`, nothing for `sm:`, `md:`,
-/// `supports-*:`, `in-*:`, `after:` and `[&>svg]:` (which have no variant
-/// bit either), and `1 << 126` for `placeholder:`.
+/// `supports-*:` and `in-*:` (their variant bits still count), and
+/// `1 << 126` for `placeholder:`. `after:` and `[&>svg]:` add nothing at
+/// all: no specificity and no variant bit.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,
