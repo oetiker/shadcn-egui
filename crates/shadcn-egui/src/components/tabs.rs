@@ -33,8 +33,9 @@ pub enum TabsOrientation {
     Horizontal,
 }
 
-/// A tab list (shadcn `TabsList` with its `TabsTrigger`s). The list is as wide
-/// as its triggers; each trigger is as wide as its label. The response is the
+/// A tab list (shadcn `TabsList` with its `TabsTrigger`s). By default the list
+/// is as wide as its triggers and each trigger as wide as its label;
+/// [`Tabs::width`] makes it wider. The response is the
 /// list's, marked changed when the selection moved. Content below the list
 /// sits [`Tabs::content_gap`] under it (shadcn `Tabs` root `gap`).
 pub struct Tabs<'a> {
@@ -43,6 +44,7 @@ pub struct Tabs<'a> {
     variant: TabsVariant,
     orientation: TabsOrientation,
     enabled: bool,
+    width: Option<f32>,
 }
 
 impl<'a> Tabs<'a> {
@@ -54,6 +56,7 @@ impl<'a> Tabs<'a> {
             variant: TabsVariant::Default,
             orientation: TabsOrientation::Horizontal,
             enabled: true,
+            width: None,
         }
     }
     pub fn variant(mut self, v: TabsVariant) -> Self {
@@ -67,6 +70,15 @@ impl<'a> Tabs<'a> {
     /// `false` draws every trigger disabled: no hover, no focus, no selecting.
     pub fn enabled(mut self, yes: bool) -> Self {
         self.enabled = yes;
+        self
+    }
+    /// List width in points, padding included (shadcn `class="w-full"`
+    /// on `TabsList`). Pass `f32::INFINITY` for full-width. The width is
+    /// capped to the available width and never smaller than the triggers'
+    /// own; the triggers share it as their `flex-1` does: equal parts, and a
+    /// trigger whose label needs more keeps its own width.
+    pub fn width(mut self, w: f32) -> Self {
+        self.width = Some(w);
         self
     }
     /// The gap between the list and the content below it (shadcn `Tabs` root `gap`).
@@ -136,7 +148,22 @@ impl Widget for Tabs<'_> {
             .map(|g| g.size().x + tpad_l + tpad_r + border_w * 2.0)
             .collect();
         let n = widths.len();
-        let list_w = widths.iter().sum::<f32>() + gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
+        let chrome = gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
+        let hug_w = widths.iter().sum::<f32>() + chrome;
+        // A NaN width, one below the triggers' own, or an unbounded `Ui`
+        // leaves the list as wide as its triggers. NaN is filtered before
+        // the cap: `f32::NAN.min(x)` is `x`.
+        let list_w = match self.width.filter(|w| *w > hug_w) {
+            Some(w) if w.min(ui.available_width()).is_finite() => {
+                w.min(ui.available_width()).max(hug_w)
+            }
+            _ => hug_w,
+        };
+        let widths = if list_w > hug_w {
+            flex_shares(&widths, list_w - chrome)
+        } else {
+            widths
+        };
 
         let (list_rect, mut resp) = ui.allocate_exact_size(vec2(list_w, list_h), Sense::hover());
         let ids: Vec<egui::Id> = (0..n).map(|i| resp.id.with(("tab", i))).collect();
@@ -308,6 +335,41 @@ impl Widget for Tabs<'_> {
             }
         }
         resp
+    }
+}
+
+/// The trigger widths of a list `inner` wide (padding and gaps taken off),
+/// as CSS lays out `flex-1` items: equal parts of `inner`, and an item whose
+/// content is wider than its part keeps its content width while the others
+/// share the rest.
+fn flex_shares(content: &[f32], inner: f32) -> Vec<f32> {
+    let mut frozen = vec![false; content.len()];
+    loop {
+        let open = frozen.iter().filter(|f| !**f).count();
+        if open == 0 {
+            return content.to_vec();
+        }
+        let taken: f32 = content
+            .iter()
+            .zip(&frozen)
+            .filter(|(_, f)| **f)
+            .map(|(c, _)| c)
+            .sum();
+        let share = (inner - taken) / open as f32;
+        let mut froze = false;
+        for (c, f) in content.iter().zip(frozen.iter_mut()) {
+            if !*f && *c > share {
+                *f = true;
+                froze = true;
+            }
+        }
+        if !froze {
+            return content
+                .iter()
+                .zip(&frozen)
+                .map(|(c, f)| if *f { *c } else { share })
+                .collect();
+        }
     }
 }
 
