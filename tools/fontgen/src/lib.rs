@@ -586,14 +586,77 @@ fn read_text(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// A pin is an abbreviated or full git commit id: 7 to 40 lowercase hex
+/// characters, surrounding whitespace ignored.
+pub fn parse_pin(text: &str) -> Result<String, String> {
+    let pin = text.trim();
+    if (7..=40).contains(&pin.len()) && pin.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        Ok(pin.to_owned())
+    } else {
+        Err(format!("{pin:?} is not 7 to 40 lowercase hex characters"))
+    }
+}
+
+/// Every `crates/shadcn-egui-font-*` directory and every
+/// `crates/shadcn-egui-font-*/fonts/*` file that `outputs` does not name,
+/// as repository-relative paths.
+fn stale_outputs(
+    repo: &Path,
+    outputs: &[(std::path::PathBuf, Vec<u8>)],
+) -> Result<Vec<String>, String> {
+    let crates = repo.join("crates");
+    let ls = |dir: &Path| -> Result<Vec<std::path::PathBuf>, String> {
+        let mut v = Vec::new();
+        for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+            v.push(entry.map_err(|e| format!("{}: {e}", dir.display()))?.path());
+        }
+        v.sort();
+        Ok(v)
+    };
+    let mut stale = Vec::new();
+    for dir in ls(&crates)? {
+        let is_font_crate = dir.is_dir()
+            && dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("shadcn-egui-font-"));
+        if !is_font_crate {
+            continue;
+        }
+        let produced = outputs.iter().any(|(p, _)| p.starts_with(&dir));
+        if !produced {
+            stale.push(format!(
+                "{}/",
+                dir.strip_prefix(repo).unwrap_or(&dir).display()
+            ));
+            continue;
+        }
+        let fonts = dir.join("fonts");
+        if !fonts.is_dir() {
+            continue;
+        }
+        for file in ls(&fonts)? {
+            if !outputs.iter().any(|(p, _)| *p == file) {
+                stale.push(
+                    file.strip_prefix(repo)
+                        .unwrap_or(&file)
+                        .display()
+                        .to_string(),
+                );
+            }
+        }
+    }
+    Ok(stale)
+}
+
 /// The whole run: every shipped font crate, the registry and both
 /// `Cargo.toml` blocks. `downloads` mirrors google/fonts paths
 /// (`tools/fontgen/fetch.sh` fills it).
 pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
     let rows = parse_fonts_tsv(&read_text(&repo.join("tools/fontgen/FONTS.tsv"))?)?;
-    let pin = read_text(&repo.join("tools/fontgen/GF_PIN"))?
-        .trim()
-        .to_string();
+    let pin = parse_pin(&read_text(&repo.join("tools/fontgen/GF_PIN"))?)
+        .map_err(|e| format!("tools/fontgen/GF_PIN: {e}"))?;
     check_definitions(
         &rows,
         &read_text(&repo.join("tools/stylegen/tests/fixtures/font-definitions.ts"))?,
@@ -655,6 +718,15 @@ pub fn generate(downloads: &Path, repo: &Path) -> Result<(), String> {
     let root_toml = replace_block(&root_toml, &workspace_deps_block(&rows, &version))
         .map_err(|e| format!("{}: {e}", root_toml_path.display()))?;
     outputs.push((root_toml_path, root_toml.into_bytes()));
+    let stale = stale_outputs(repo, &outputs)?;
+    if !stale.is_empty() {
+        return Err(format!(
+            "{} stale path(s) under crates/ are not produced by FONTS.tsv; \
+             nothing was written. Remove them (fontgen never deletes) and run again:\n{}",
+            stale.len(),
+            stale.join("\n")
+        ));
+    }
     for (path, bytes) in &outputs {
         write(path, bytes)?;
     }
