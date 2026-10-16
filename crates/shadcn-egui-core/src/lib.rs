@@ -8,4 +8,4 @@ mod icon;
 
 pub use blob::{BlobRange, BlobSegs, FillMesh};
 pub use font::{Face, FontFiles, FontKind, FontSource, WEIGHTS};
-pub use icon::{Icon, IconShape, IconSlots, Seg, SegIter};
+pub use icon::{Icon, IconLayer, IconLayers, IconShape, IconSlots, Seg, SegIter};

@@ -5,12 +5,13 @@
 //! Records start at any even offset of an `include_bytes!` blob, so words
 //! are read byte pair by byte pair, never through a `&[u16]` cast. A
 //! malformed record must not crash a frame: reads past its end stop the
-//! strokes and drop the fill.
+//! strokes, drop the fill and end the layers.
 
-use crate::icon::Seg;
+use crate::icon::{IconLayer, Seg, SegIter};
 
 const COORD_SCALE: f32 = 1024.0;
 const MITER_SCALE: f32 = 8192.0;
+const ALPHA_SCALE: f32 = 65535.0;
 
 /// One icon's record inside an icon crate's blob: `blob[start..start + len]`.
 #[derive(Clone, Copy)]
@@ -93,15 +94,10 @@ pub struct BlobSegs {
 }
 
 impl BlobSegs {
-    pub(crate) fn new(range: BlobRange) -> Self {
-        let bytes = range.bytes();
-        let mut r = Reader { bytes, pos: 0 };
-        let end = r.word().map_or(0, |len| 2 + 2 * usize::from(len));
+    /// Strokes from a stroke section's opcodes and coordinates.
+    fn new(bytes: &'static [u8]) -> Self {
         BlobSegs {
-            r: Reader {
-                bytes: &bytes[..end.min(bytes.len())],
-                pos: r.pos,
-            },
+            r: Reader { bytes, pos: 0 },
         }
     }
 
@@ -157,28 +153,95 @@ pub struct FillMesh {
     pub contours: Vec<Vec<([f32; 2], [f32; 2])>>,
 }
 
-/// The record's fill; `None` for an all-zero fill section and for a
-/// malformed one (truncated, or a triangle index past the vertices).
-pub(crate) fn fill_mesh(range: BlobRange) -> Option<FillMesh> {
-    let mut r = Reader {
-        bytes: range.bytes(),
-        pos: 0,
-    };
-    let stroke_len = usize::from(r.word()?);
-    r.pos += 2 * stroke_len;
+/// The layers of one blob record: the opaque one, then each translucent one.
+#[derive(Clone)]
+pub(crate) struct BlobLayers {
+    r: Reader,
+    first: bool,
+}
+
+impl BlobLayers {
+    pub(crate) fn new(range: BlobRange) -> Self {
+        BlobLayers {
+            r: Reader {
+                bytes: range.bytes(),
+                pos: 0,
+            },
+            first: true,
+        }
+    }
+
+    /// The next layer, and whether the record can be read past it.
+    fn layer(&mut self) -> Option<(IconLayer, bool)> {
+        let r = &mut self.r;
+        let alpha = if self.first {
+            1.0
+        } else {
+            f32::from(r.word()?) / ALPHA_SCALE
+        };
+        self.first = false;
+        let len = usize::from(r.word()?);
+        let start = r.pos;
+        let end = start.saturating_add(2 * len).min(r.bytes.len());
+        r.pos = start.saturating_add(2 * len);
+        let segs = SegIter::Words(BlobSegs::new(&r.bytes[start..end]));
+        let fill = read_fill(r);
+        let readable = fill.is_some();
+        let layer = IconLayer {
+            alpha,
+            segs,
+            fill: fill.flatten(),
+        };
+        Some((layer, readable))
+    }
+}
+
+impl core::fmt::Debug for BlobLayers {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("BlobLayers")
+            .field("pos", &self.r.pos)
+            .field("end", &self.r.bytes.len())
+            .finish()
+    }
+}
+
+impl Iterator for BlobLayers {
+    type Item = IconLayer;
+
+    fn next(&mut self) -> Option<IconLayer> {
+        if !self.first && self.r.pos >= self.r.bytes.len() {
+            return None;
+        }
+        match self.layer() {
+            Some((layer, readable)) => {
+                if !readable {
+                    self.r.pos = self.r.bytes.len();
+                }
+                Some(layer)
+            }
+            None => {
+                self.r.pos = self.r.bytes.len();
+                self.first = false;
+                None
+            }
+        }
+    }
+}
+
+/// A fill section at the reader; `None` when the record ends inside it,
+/// `Some(None)` for an all-zero section and for a triangle index past the
+/// vertices.
+fn read_fill(r: &mut Reader) -> Option<Option<FillMesh>> {
     let (nv, ni, nc) = (
         usize::from(r.word()?),
         usize::from(r.word()?),
         usize::from(r.word()?),
     );
-    if nv == 0 && nc == 0 {
-        return None;
+    if nv == 0 && ni == 0 && nc == 0 {
+        return Some(None);
     }
     let vertices: Vec<[f32; 2]> = (0..nv).map(|_| r.point()).collect::<Option<_>>()?;
     let indices: Vec<u16> = (0..ni).map(|_| r.word()).collect::<Option<_>>()?;
-    if ni % 3 != 0 || indices.iter().any(|&i| usize::from(i) >= nv) {
-        return None;
-    }
     let contours: Vec<Vec<([f32; 2], [f32; 2])>> = (0..nc)
         .map(|_| {
             let len = usize::from(r.word()?);
@@ -187,17 +250,20 @@ pub(crate) fn fill_mesh(range: BlobRange) -> Option<FillMesh> {
                 .collect::<Option<_>>()
         })
         .collect::<Option<_>>()?;
-    Some(FillMesh {
+    if nv == 0 && nc == 0 || ni % 3 != 0 || indices.iter().any(|&i| usize::from(i) >= nv) {
+        return Some(None);
+    }
+    Some(Some(FillMesh {
         vertices,
         indices,
         contours,
-    })
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::icon::{Icon, IconShape, Seg};
+    use crate::icon::{Icon, IconLayer, IconShape, Seg};
 
     /// Words (as i16 values, so miters can be negative) to leaked LE bytes.
     fn leak(words: &[i32]) -> &'static [u8] {
@@ -219,6 +285,16 @@ mod tests {
         ])
     }
 
+    /// Every layer's strokes, in order.
+    fn segs(icon: &Icon) -> Vec<Seg> {
+        icon.layers().flat_map(|l| l.segs).collect()
+    }
+
+    /// The first layer's fill.
+    fn fill(icon: &Icon) -> Option<FillMesh> {
+        icon.layers().next().and_then(|l| l.fill)
+    }
+
     fn blob_icon(blob: &'static [u8], start: u32, len: u32) -> Icon {
         Icon {
             name: "t",
@@ -232,10 +308,10 @@ mod tests {
         let blob = record();
         let icon = blob_icon(blob, 0, blob.len() as u32);
         assert_eq!(
-            icon.segs().collect::<Vec<_>>(),
+            segs(&icon),
             vec![Seg::M(1.0, 2.0), Seg::L(3.0, 4.0), Seg::Z]
         );
-        let fill = icon.fill_mesh().expect("has a fill");
+        let fill = fill(&icon).expect("has a fill");
         assert_eq!(fill.vertices, vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]);
         assert_eq!(fill.indices, vec![0, 1, 2]);
         assert_eq!(fill.contours.len(), 1);
@@ -244,20 +320,75 @@ mod tests {
     }
 
     #[test]
+    fn translucent_layers_follow_the_opaque_one_with_their_alpha() {
+        // Layer 1: M(1, 1), no fill. Layer 2 at 26214 / 65535 = 0.4: L(2, 2)
+        // and a one-triangle fill. Layer 3 at 0.5: Z, no fill.
+        let blob = leak(&[
+            3, 0, 1024, 1024, 0, 0, 0, // opaque
+            26214, 3, 1, 2048, 2048, 3, 3, 0, 0, 0, 1024, 0, 0, 1024, 0, 1, 2, // 0.4
+            32768, 1, 4, 0, 0, 0, // 0.5
+        ]);
+        let icon = blob_icon(blob, 0, blob.len() as u32);
+        let layers: Vec<IconLayer> = icon.layers().collect();
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0].alpha, 1.0);
+        assert_eq!(
+            layers[0].segs.clone().collect::<Vec<_>>(),
+            vec![Seg::M(1.0, 1.0)]
+        );
+        assert_eq!(layers[0].fill, None);
+        assert_eq!(layers[1].alpha, 26214.0 / 65535.0);
+        assert!((layers[1].alpha - 0.4).abs() < 1e-5);
+        assert_eq!(
+            layers[1].segs.clone().collect::<Vec<_>>(),
+            vec![Seg::L(2.0, 2.0)]
+        );
+        let f = layers[1].fill.as_ref().expect("the second layer's fill");
+        assert_eq!(f.indices, vec![0, 1, 2]);
+        assert!((layers[2].alpha - 0.5).abs() < 1e-4);
+        assert_eq!(layers[2].segs.clone().collect::<Vec<_>>(), vec![Seg::Z]);
+        assert_eq!(layers[2].fill, None);
+    }
+
+    #[test]
+    fn a_layer_cut_short_ends_the_layers() {
+        // A second layer whose fill section is missing: its strokes are
+        // drawn, nothing after it is read.
+        let blob = leak(&[3, 0, 1024, 1024, 0, 0, 0, 100, 3, 1, 2048, 2048, 0]);
+        let icon = blob_icon(blob, 0, blob.len() as u32);
+        let layers: Vec<IconLayer> = icon.layers().collect();
+        assert_eq!(layers.len(), 2);
+        assert_eq!(
+            layers[1].segs.clone().collect::<Vec<_>>(),
+            vec![Seg::L(2.0, 2.0)]
+        );
+        assert_eq!(layers[1].fill, None);
+        // An alpha word with nothing after it is no layer.
+        let blob = leak(&[3, 0, 1024, 1024, 0, 0, 0, 100]);
+        assert_eq!(blob_icon(blob, 0, blob.len() as u32).layers().count(), 1);
+    }
+
+    #[test]
+    fn segs_icons_are_one_opaque_layer() {
+        static SEGS: [Seg; 1] = [Seg::M(0.0, 0.0)];
+        let icon = Icon {
+            name: "s",
+            size: 24.0,
+            shape: IconShape::Segs(&SEGS),
+        };
+        let layers: Vec<IconLayer> = icon.layers().collect();
+        assert_eq!(layers.len(), 1);
+        assert_eq!(layers[0].alpha, 1.0);
+    }
+
+    #[test]
     fn records_are_read_at_their_offset() {
         // M(1, 1) with no fill (7 words = 14 bytes), then Z with no fill.
         let blob = leak(&[3, 0, 1024, 1024, 0, 0, 0, 1, 4, 0, 0, 0]);
         let second = blob_icon(blob, 14, 10);
-        assert_eq!(second.segs().collect::<Vec<_>>(), vec![Seg::Z]);
-        assert_eq!(
-            second.fill_mesh(),
-            None,
-            "an all-zero fill section is no fill"
-        );
-        assert_eq!(
-            blob_icon(blob, 0, 14).segs().collect::<Vec<_>>(),
-            vec![Seg::M(1.0, 1.0)]
-        );
+        assert_eq!(segs(&second), vec![Seg::Z]);
+        assert_eq!(fill(&second), None, "an all-zero fill section is no fill");
+        assert_eq!(segs(&blob_icon(blob, 0, 14)), vec![Seg::M(1.0, 1.0)]);
     }
 
     #[test]
@@ -268,14 +399,14 @@ mod tests {
             size: 24.0,
             shape: IconShape::Segs(&SEGS),
         };
-        assert_eq!(icon.segs().collect::<Vec<_>>(), SEGS.to_vec());
-        assert_eq!(icon.fill_mesh(), None);
+        assert_eq!(segs(&icon), SEGS.to_vec());
+        assert_eq!(fill(&icon), None);
     }
 
     #[test]
     fn unknown_opcode_ends_the_strokes_instead_of_panicking() {
         let blob = leak(&[3, 9, 0, 0, 0, 0, 0]);
-        assert_eq!(blob_icon(blob, 0, 14).segs().count(), 0);
+        assert_eq!(segs(&blob_icon(blob, 0, 14)).len(), 0);
     }
 
     #[test]
@@ -284,14 +415,14 @@ mod tests {
         // Every prefix of a valid record, including odd lengths.
         for len in 0..=whole.len() as u32 {
             let icon = blob_icon(whole, 0, len);
-            let _ = icon.segs().count();
-            let _ = icon.fill_mesh();
+            let _ = segs(&icon).len();
+            let _ = fill(&icon);
         }
         // Ranges that point past the end of the blob.
         for (start, len) in [(0, 1000), (40, 20), (u32::MAX, 2), (2, u32::MAX)] {
             let icon = blob_icon(whole, start, len);
-            let _ = icon.segs().count();
-            let _ = icon.fill_mesh();
+            let _ = segs(&icon).len();
+            let _ = fill(&icon);
         }
         // Fixed garbage: huge counts, odd lengths, opcodes cut short.
         let garbage: [&[i32]; 6] = [
@@ -306,8 +437,8 @@ mod tests {
             let blob = leak(words);
             for len in [blob.len() as u32, blob.len() as u32 - 1] {
                 let icon = blob_icon(blob, 0, len);
-                assert!(icon.segs().count() <= blob.len());
-                let _ = icon.fill_mesh();
+                assert!(segs(&icon).len() <= blob.len());
+                let _ = fill(&icon);
             }
         }
     }
@@ -316,7 +447,7 @@ mod tests {
     fn a_triangle_index_past_the_vertices_drops_the_fill() {
         // One vertex, one triangle 0 1 2, no contours.
         let blob = leak(&[0, 1, 3, 0, 0, 0, 0, 1, 2]);
-        assert_eq!(blob_icon(blob, 0, blob.len() as u32).fill_mesh(), None);
+        assert_eq!(fill(&blob_icon(blob, 0, blob.len() as u32)), None);
     }
 
     #[test]

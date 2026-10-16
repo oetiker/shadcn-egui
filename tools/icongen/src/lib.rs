@@ -3,9 +3,10 @@
 //! The input is an icon set such as Lucide (stroked outlines) or Phosphor
 //! (filled outlines). usvg resolves shapes, arcs and transforms into
 //! move/line/quad/cubic segments. Stroked paths become `Seg` values; filled
-//! paths are flattened and triangulated (see `fill`). `--out` writes Rust
-//! `Seg` slices (strokes only); `--crate-dir` writes a whole icon crate as a
-//! binary blob (see `blob`). Images, text and non-square view boxes are
+//! paths are flattened and triangulated (see `fill`). An element with an
+//! opacity below 1 goes into a translucent layer of its own. `--out` writes
+//! Rust `Seg` slices (opaque strokes only); `--crate-dir` writes a whole icon
+//! crate as a binary blob (see `blob`). Images, text and non-square view boxes are
 //! errors, not silent omissions.
 
 use usvg::tiny_skia_path::{PathSegment, Point};
@@ -35,6 +36,35 @@ pub struct Converted {
     pub segs: Vec<Seg>,
     /// Filled paths, tessellated, in the 24-unit box and quantised.
     pub fill: Option<Fill>,
+    /// Translucent layers, drawn over `segs` and `fill` in document order.
+    pub layers: Vec<Layer>,
+}
+
+/// Strokes and fill painted together at one opacity: an SVG element with
+/// `opacity`, `stroke-opacity` or `fill-opacity` below 1.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Layer {
+    /// The product of the element's and its ancestors' opacities, in 0..1.
+    pub alpha: f32,
+    pub segs: Vec<Seg>,
+    pub fill: Option<Fill>,
+}
+
+/// One layer's strokes and fill paths, before tessellation.
+struct Gather {
+    alpha: f32,
+    segs: Vec<Seg>,
+    fills: Vec<FillPath>,
+}
+
+impl Gather {
+    fn new(alpha: f32) -> Self {
+        Gather {
+            alpha,
+            segs: Vec::new(),
+            fills: Vec::new(),
+        }
+    }
 }
 
 /// Convert one SVG document. `name` becomes the icon's accessible name and,
@@ -50,52 +80,89 @@ pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
             size.height()
         ));
     }
-    let (mut segs, mut fills) = (Vec::new(), Vec::new());
+    // Layer 0 holds everything opaque; every translucent element opens its own.
+    let mut gathered = vec![Gather::new(1.0)];
     walk(
         name,
         tree.root(),
         24.0 / size.width(),
-        &mut segs,
-        &mut fills,
+        1.0,
+        0,
+        &mut gathered,
     )?;
-    let fill = fill::build(name, &fills)?;
-    if segs.is_empty() && fill.is_none() {
+    let mut gathered = gathered.into_iter();
+    let base = gathered.next().expect("layer 0");
+    let fill = fill::build(name, &base.fills)?;
+    let mut layers = Vec::new();
+    for g in gathered {
+        let fill = fill::build(name, &g.fills)?;
+        if !g.segs.is_empty() || fill.is_some() {
+            layers.push(Layer {
+                alpha: g.alpha,
+                segs: g.segs,
+                fill,
+            });
+        }
+    }
+    if base.segs.is_empty() && fill.is_none() && layers.is_empty() {
         return Err(format!("{name}: no stroked or filled paths"));
     }
     Ok(Converted {
         name: name.to_owned(),
         size: size.width(),
-        segs,
+        segs: base.segs,
         fill,
+        layers,
     })
 }
 
+/// The layer to paint into at `alpha` (the product of the opacities so far):
+/// `current` when `own` is 1, else a new one at `alpha * own`.
+fn layer_for(layers: &mut Vec<Gather>, current: usize, alpha: f32, own: f32) -> usize {
+    if own >= 1.0 {
+        return current;
+    }
+    layers.push(Gather::new(alpha * own));
+    layers.len() - 1
+}
+
+/// Collect `group`'s paths into `layers[layer]`, or into new layers where
+/// an opacity below 1 starts one. `alpha` is the opacity of `layers[layer]`.
 fn walk(
     name: &str,
     group: &usvg::Group,
     scale: f32,
-    segs: &mut Vec<Seg>,
-    fills: &mut Vec<FillPath>,
+    alpha: f32,
+    layer: usize,
+    layers: &mut Vec<Gather>,
 ) -> Result<(), String> {
     for node in group.children() {
         match node {
-            usvg::Node::Group(g) => walk(name, g, scale, segs, fills)?,
+            usvg::Node::Group(g) => {
+                let own = g.opacity().get();
+                if own > 0.0 {
+                    let l = layer_for(layers, layer, alpha, own);
+                    walk(name, g, scale, alpha * own, l, layers)?;
+                }
+            }
             usvg::Node::Path(p) => {
                 if !p.is_visible() {
                     continue;
                 }
-                if let Some(f) = p.fill() {
+                if let Some(f) = p.fill().filter(|f| f.opacity().get() > 0.0) {
                     let rule = match f.rule() {
                         usvg::FillRule::NonZero => FillRule::NonZero,
                         usvg::FillRule::EvenOdd => FillRule::EvenOdd,
                     };
                     let contours = fill::flatten(p.data(), p.abs_transform(), scale);
                     if !contours.is_empty() {
-                        fills.push(FillPath { rule, contours });
+                        let l = layer_for(layers, layer, alpha, f.opacity().get());
+                        layers[l].fills.push(FillPath { rule, contours });
                     }
                 }
-                if p.stroke().is_some() {
-                    path_segs(p.data(), p.abs_transform(), segs);
+                if let Some(s) = p.stroke().filter(|s| s.opacity().get() > 0.0) {
+                    let l = layer_for(layers, layer, alpha, s.opacity().get());
+                    path_segs(p.data(), p.abs_transform(), &mut layers[l].segs);
                 }
             }
             usvg::Node::Image(_) => return Err(format!("{name}: embedded image not supported")),
@@ -105,15 +172,21 @@ fn walk(
     Ok(())
 }
 
-/// `--out` writes `Seg` slices, which cannot hold a fill.
+/// `--out` writes `Seg` slices, which cannot hold a fill or an opacity.
 pub fn ensure_stroke_only(icon: &Converted) -> Result<(), String> {
-    match icon.fill {
-        Some(_) => Err(format!(
+    if icon.fill.is_some() {
+        return Err(format!(
             "{}: filled shape; --out writes strokes only, use --crate-dir",
             icon.name
-        )),
-        None => Ok(()),
+        ));
     }
+    if !icon.layers.is_empty() {
+        return Err(format!(
+            "{}: translucent layer; --out writes opaque strokes only, use --crate-dir",
+            icon.name
+        ));
+    }
+    Ok(())
 }
 
 fn path_segs(path: &usvg::tiny_skia_path::Path, ts: usvg::Transform, out: &mut Vec<Seg>) {

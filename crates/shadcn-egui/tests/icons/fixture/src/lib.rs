@@ -6,7 +6,7 @@
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
-static ICONS_BIN: [u8; 2000] = *include_bytes!("icons.bin");
+static ICONS_BIN: [u8; 2136] = *include_bytes!("icons.bin");
 
 const fn icon(name: &'static str, start: u32, len: u32) -> Icon {
     Icon {
@@ -21,14 +21,23 @@ const fn icon(name: &'static str, start: u32, len: u32) -> Icon {
 }
 
 pub const BIG_BOX: Icon = icon("big-box", 0, 70);
-pub const MIXED: Icon = icon("mixed", 70, 442);
-pub const RING: Icon = icon("ring", 512, 1092);
-pub const SQUARE_HOLE: Icon = icon("square-hole", 1604, 156);
-pub const STAR_EVENODD: Icon = icon("star-evenodd", 1760, 208);
-pub const X: Icon = icon("x", 1968, 32);
+pub const FADED: Icon = icon("faded", 70, 136);
+pub const MIXED: Icon = icon("mixed", 206, 442);
+pub const RING: Icon = icon("ring", 648, 1092);
+pub const SQUARE_HOLE: Icon = icon("square-hole", 1740, 156);
+pub const STAR_EVENODD: Icon = icon("star-evenodd", 1896, 208);
+pub const X: Icon = icon("x", 2104, 32);
 
 /// Every icon in this crate, sorted by name.
-pub const ALL: &[&Icon] = &[&BIG_BOX, &MIXED, &RING, &SQUARE_HOLE, &STAR_EVENODD, &X];
+pub const ALL: &[&Icon] = &[
+    &BIG_BOX,
+    &FADED,
+    &MIXED,
+    &RING,
+    &SQUARE_HOLE,
+    &STAR_EVENODD,
+    &X,
+];
 
 /// The icons shadcn-egui's components draw.
 pub const SLOTS: IconSlots = IconSlots {

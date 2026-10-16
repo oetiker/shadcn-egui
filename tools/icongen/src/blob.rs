@@ -1,17 +1,23 @@
 //! The icon blob record, read by `shadcn_egui_core`'s decoder. All values
-//! are little-endian 16-bit words.
+//! are little-endian 16-bit words. A record is one or more layers; the first
+//! is opaque, every further one starts with its alpha word.
 //!
+//! - Alpha (not in the first layer): `round(a * 65535)`, 0 < a < 1.
 //! - Stroke section: `len` (words that follow), then opcodes, each followed by
 //!   its coordinates: 0=M(2) 1=L(2) 2=Q(4) 3=C(6) 4=Z(0). Coordinates are in
 //!   the 24-unit box, stored as `round(v * 1024)` (i16, so −32..32 units).
 //! - Fill section (always present; all zero = no fill): `nv, ni, nc`;
 //!   `nv × (x, y)`; `ni × index` (u16); `nc ×` contours `{ len, len × (x, y, mx, my) }`,
 //!   miters stored as `round(m * 8192)`, |m| ≤ 2.
+//!
+//! An icon without translucent parts is one layer, so its record ends after
+//! the first fill section.
 
-use crate::{Converted, Fill, Seg};
+use crate::{Converted, Fill, Layer, Seg};
 
 pub const COORD_SCALE: f32 = 1024.0;
 pub const MITER_SCALE: f32 = 8192.0;
+pub const ALPHA_SCALE: f32 = 65535.0;
 
 /// `v` rounded to the stored precision; the decoder returns exactly this value.
 pub fn quantise(v: f32) -> f32 {
@@ -35,12 +41,36 @@ fn count(name: &str, what: &str, n: usize) -> Result<u16, String> {
 }
 
 /// Encode one icon. Stroke coordinates are scaled from the SVG's units into
-/// the 24-unit box; the fill is already there.
+/// the 24-unit box; the fills are already there.
 pub fn encode(icon: &Converted) -> Result<Vec<u8>, String> {
     let name = icon.name.as_str();
     let scale = 24.0 / icon.size;
+    let mut w = Vec::new();
+    encode_layer(name, scale, &icon.segs, icon.fill.as_ref(), &mut w)?;
+    for layer in &icon.layers {
+        w.push(alpha(name, layer.alpha)?);
+        encode_layer(name, scale, &layer.segs, layer.fill.as_ref(), &mut w)?;
+    }
+    Ok(w.iter().flat_map(|v| v.to_le_bytes()).collect())
+}
+
+fn alpha(name: &str, a: f32) -> Result<u16, String> {
+    let q = (a * ALPHA_SCALE).round();
+    if !(1.0..ALPHA_SCALE).contains(&q) {
+        return Err(format!("{name}: layer alpha {a} not inside 0..1"));
+    }
+    Ok(q as u16)
+}
+
+fn encode_layer(
+    name: &str,
+    scale: f32,
+    segs: &[Seg],
+    fill: Option<&Fill>,
+    w: &mut Vec<u16>,
+) -> Result<(), String> {
     let mut stroke: Vec<u16> = Vec::new();
-    for seg in &icon.segs {
+    for seg in segs {
         let (op, coords) = match *seg {
             Seg::M(x, y) => (0, vec![x, y]),
             Seg::L(x, y) => (1, vec![x, y]),
@@ -53,10 +83,9 @@ pub fn encode(icon: &Converted) -> Result<Vec<u8>, String> {
             stroke.push(coord(name, v * scale)?);
         }
     }
-    let mut w = Vec::with_capacity(stroke.len() + 4);
     w.push(count(name, "stroke words", stroke.len())?);
     w.extend(stroke);
-    match &icon.fill {
+    match fill {
         None => w.extend([0, 0, 0]),
         Some(f) => {
             w.push(count(name, "fill vertices", f.vertices.len())?);
@@ -78,21 +107,61 @@ pub fn encode(icon: &Converted) -> Result<Vec<u8>, String> {
             }
         }
     }
-    Ok(w.iter().flat_map(|v| v.to_le_bytes()).collect())
+    Ok(())
 }
 
-/// Bytes of a record's stroke section, including its length word.
-pub fn stroke_bytes(record: &[u8]) -> usize {
-    2 + 2 * usize::from(u16::from_le_bytes([record[0], record[1]]))
-}
-
-/// Reference decoder for tests: one record back into strokes and fill.
-pub fn decode(bytes: &[u8]) -> (Vec<Seg>, Option<Fill>) {
-    let mut words = bytes
+fn words(bytes: &[u8]) -> Vec<u16> {
+    bytes
         .as_chunks::<2>()
         .0
         .iter()
-        .map(|&c| u16::from_le_bytes(c));
+        .map(|&c| u16::from_le_bytes(c))
+        .collect()
+}
+
+/// Bytes of a record's stroke sections and alpha words, all layers.
+pub fn stroke_bytes(record: &[u8]) -> usize {
+    let w = words(record);
+    let (mut pos, mut stroke) = (0, 0);
+    while pos < w.len() {
+        let start = pos;
+        if pos > 0 {
+            pos += 1; // alpha
+        }
+        pos += 1 + usize::from(w[pos]);
+        stroke += pos - start;
+        let (nv, ni, nc) = (
+            usize::from(w[pos]),
+            usize::from(w[pos + 1]),
+            usize::from(w[pos + 2]),
+        );
+        pos += 3 + 2 * nv + ni;
+        for _ in 0..nc {
+            pos += 1 + 4 * usize::from(w[pos]);
+        }
+    }
+    2 * stroke
+}
+
+/// Reference decoder for tests: one record back into its opaque strokes and
+/// fill and its translucent layers.
+pub fn decode(bytes: &[u8]) -> (Vec<Seg>, Option<Fill>, Vec<Layer>) {
+    let words = words(bytes);
+    let mut words = words.into_iter();
+    let (segs, fill) = decode_layer(&mut words);
+    let mut layers = Vec::new();
+    while let Some(a) = words.next() {
+        let (segs, fill) = decode_layer(&mut words);
+        layers.push(Layer {
+            alpha: f32::from(a) / ALPHA_SCALE,
+            segs,
+            fill,
+        });
+    }
+    (segs, fill, layers)
+}
+
+fn decode_layer(words: &mut impl Iterator<Item = u16>) -> (Vec<Seg>, Option<Fill>) {
     let mut next = || words.next().expect("truncated record");
     let c = |w: u16| f32::from(w as i16) / COORD_SCALE;
     let m = |w: u16| f32::from(w as i16) / MITER_SCALE;
