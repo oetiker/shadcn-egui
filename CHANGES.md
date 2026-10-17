@@ -7,11 +7,14 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
-- `Tabs::width` makes a tab list wider than its labels: `.width(f32::INFINITY)` spans the available width, as `<TabsList class="w-full">` does, and a width in points sets the list to that width; the triggers share the width in equal parts. A trigger whose label needs more keeps its own width, and without the option the list stays as wide as its labels. (#18)
 
 ### Changed
 
 ### Fixed
+
+## 0.6.0 - 2026-10-17
+### New
+- `Tabs::width` makes a tab list wider than its labels: `.width(f32::INFINITY)` spans the available width, as `<TabsList class="w-full">` does, and a width in points sets the list to that width; the triggers share the width in equal parts. A trigger whose label needs more keeps its own width, and without the option the list stays as wide as its labels. (#18)
 
 ## 0.5.0 - 2026-10-16
 ### New
