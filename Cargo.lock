@@ -2929,7 +2929,7 @@ dependencies = [
 
 [[package]]
 name = "shadcn-egui"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "eframe",
  "egui",
@@ -2975,221 +2975,221 @@ dependencies = [
 
 [[package]]
 name = "shadcn-egui-core"
-version = "0.5.0"
+version = "0.6.0"
 
 [[package]]
 name = "shadcn-egui-font-dm-sans"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-eb-garamond"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-figtree"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-geist"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-geist-mono"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-ibm-plex-sans"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-instrument-sans"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-instrument-serif"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-inter"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-jetbrains-mono"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-lora"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-manrope"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-merriweather"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-montserrat"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-noto-sans"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-noto-serif"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-nunito-sans"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-outfit"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-oxanium"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-playfair-display"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-public-sans"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-raleway"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-roboto"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-roboto-slab"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-source-sans-3"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-font-space-grotesk"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-icons-hugeicons"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-icons-lucide"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-icons-phosphor"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-icons-remixicon"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
 
 [[package]]
 name = "shadcn-egui-icons-tabler"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "shadcn-egui-core",
 ]
