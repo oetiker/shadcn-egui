@@ -318,8 +318,10 @@ Decision:
 - **Affects:** card, alert, item, empty, attachment, field, button-group,
   radio-group, message, bubble, every `show` and every container part fn.
 - **Recommendation:** (c), which is (a) for every container listed here;
-  output structs are D-60. Reason: egui's container idiom (§Containers);
-  the dropped `Response` is what callers need for hover text and rects.
+  output structs are D-60. Reason: egui's container idiom (§Containers); the
+  dropped `Response` is what callers need for hover text and rects. Amended
+  by D-47 (d3) if that is taken: containers with a begin/end handle return
+  the handle until `.end()`, which returns `InnerResponse<R>`.
 - **Covers:** CP-T5-2, CP-03-1, CP-04-2, CP-18-10
 
 Decision:
@@ -1069,19 +1071,19 @@ Decision:
   body, footer)` like `Sides::show`: no new verb (fits D-61) and
   `InnerResponse<(R, F)>` (fits D-13), but a footer-less card passes an
   empty closure or uses a second constructor; (d2) a `show_with_footer(ui,
-  body, footer)` variant beside `show(ui, body)`: no empty closures, but
-  amends D-61 to "`show`, plus `show_with_<slot>` variants"; (d3) a second
-  step, `Card::new().begin(ui)` returning a prepared handle with
-  `.body(..)`/`.footer(..)`/`.end()` as egui's `Frame::begin`/`end`: most
-  flexible, but amends D-13 for these containers (the handle, not
-  `InnerResponse`, is returned until `.end()`). Recommendation (d2), with
-  D-61 amended: readable call sites, and the rule stays one verb family.
-  Footer direction fixed as upstream (caller nests a layout inside), sheet
-  footer pinned to the bottom, caller pads and scrolls the sheet body as
-  upstream demos do, tabs content text size applied by `show`. This changes
-  `Card::footer` and the input-group's stored addon closures (D-113
-  CP-06-24). Reason: one meaning of "the closure", and egui's sequential
-  form avoids the borrow trap of stored closures.
+  body, footer)` variant beside `show(ui, body)`: no empty closures, returns
+  `InnerResponse<(R, F)>` as (d1), but amends D-61 to "`show`, plus
+  `show_with_<slot>` variants"; (d3) a second step, `Card::new().begin(ui)`
+  returning a prepared handle with `.body(..)`/`.footer(..)`/`.end()` as
+  egui's `Frame::begin`/`end`: most flexible, but amends D-13 for these
+  containers (the handle, not `InnerResponse`, is returned until `.end()`).
+  Recommendation (d2), with D-61 amended: readable call sites, and the rule
+  stays one verb family. Footer direction fixed as upstream (caller nests a
+  layout inside), sheet footer pinned to the bottom, caller pads and scrolls
+  the sheet body as upstream demos do, tabs content text size applied by
+  `show`. This changes `Card::footer` and the input-group's stored addon
+  closures (D-113 CP-06-24). Reason: one meaning of "the closure", and
+  egui's sequential form avoids the borrow trap of stored closures.
 - **Covers:** CP-T4-2, CP-T7-7, CP-03-3, CP-03-15, CP-11-5, CP-11-10, CP-19-3, CP-11-23, CP-04-4, CP-03-16, CP-03-24, CP-18-17, CP-11-21, CP-11-22, CP-12-13
 
 Decision:
@@ -2896,3 +2898,8 @@ Decision:
 - **Covers:** none (review finding A27).
 
 Decision:
+
+## Rejected review findings
+
+No Task 7 review finding was rejected: A1–A43 and the re-review findings
+B1–B6 and C1–C2 were all applied.
