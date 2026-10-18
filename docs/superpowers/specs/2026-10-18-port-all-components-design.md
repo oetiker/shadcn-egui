@@ -182,8 +182,8 @@ last.
 
 - The survey covers all 61 components, the ported 14 included.
 - Besides "very large", the survey may give the verdict "not applicable in
-  egui" (candidates: `form`, a Svelte form library; `data-table`, TanStack
-  glue). These verdicts go into the maintainer's decision list.
+  egui" (a candidate: `form`, which wraps a Svelte form library). These
+  verdicts go into the maintainer's decision list.
 - Every new runtime dependency a component would need (for example a date
   type for `calendar`: `jiff`, `chrono` or a type inside the crate) is
   flagged by the survey and goes into the decision list.
