@@ -199,14 +199,15 @@ Decision:
 - **Affects:** popover, hover-card, tooltip, dropdown-menu, context-menu,
   menubar, select, native-select, navigation-menu.
 - **Recommendation:** (b) for popover, hover-card, dropdown-menu,
-  context-menu, select and native-select; memory only for tooltip (egui
-  decides per frame) and for the "which item is open" state of menubar and
-  navigation-menu (one value per bar, D-32 row "which item"). Reason: egui's
-  form 2 plus `Popup::open_bool` (§Open state); it keeps the one-liner and
-  lets an app open a popover from code, which upstream's `bind:open` allows.
-  Where the open flag is stored (egui's popup memory keeps one open popup
-  per viewport, so nesting breaks) is the separate entry D-128; this entry's
-  (b) holds under either answer.
+  context-menu, select and native-select; memory only for tooltip (its open
+  state is egui's per-frame decision under D-130 (a), or the crate's hover
+  timer under D-130 (b); no caller binding either way) and for the "which
+  item is open" state of menubar and navigation-menu (one value per bar,
+  D-32 row "which item"). Reason: egui's form 2 plus `Popup::open_bool`
+  (§Open state); it keeps the one-liner and lets an app open a popover from
+  code, which upstream's `bind:open` allows. Where the open flag is stored
+  (egui's popup memory keeps one open popup per viewport, so nesting breaks)
+  is the separate entry D-128; this entry's (b) holds under either answer.
 - **Covers:** CP-10-2, CP-09-4, CP-08-7, CP-13-2, CP-T2-1, CP-T2-6
 
 Decision:
@@ -706,9 +707,9 @@ Decision:
 - **Recommendation:** (a). Reason: it keeps today's one-call form and closes
   the flag for the caller, which (d) leaves to every call site; it is the
   crate's form and `Window::open`-like, not egui `Modal`'s. (d) is the egui
-  idiom and the honest alternative; it changes D-9's modal return to an
-  output with `should_close()`. A modal is opened by app logic, not by a
-  trigger the crate can watch, so (b) does not fit.
+  idiom and the real alternative; it changes D-9's modal return to an output
+  with `should_close()`. A modal is opened by app logic, not by a trigger
+  the crate can watch, so (b) does not fit.
 - **Covers:** CP-11-35, CP-11-1, CP-08-24
 
 Decision:
@@ -732,12 +733,16 @@ Decision:
 - **Recommendation:** (c). Rows: accordion `&mut Option<V>`/`&mut Vec<V>`;
   collapsible `&mut bool` (sidebar sub-menus use the Collapsible port);
   carousel `&mut usize`; questionnaire `&mut QuestionnaireState`; chart
-  legend `&mut Vec<key>` required; sidebar open, resizable layout,
-  calendar month memory plus binding; sidebar sub-menus (see the
-  trade-off below) memory plus binding; message-scroller, sonner queue,
-  command search memory only; "which item is open" of navigation-menu an
-  index in memory. Reason: egui's three forms (§Open state) each fit one
-  kind; one rule per kind is predictable.
+  legend `&mut Vec<key>` required; sidebar open, resizable layout, calendar
+  month memory plus binding; sidebar sub-menus (see the trade-off below)
+  memory plus binding; message-scroller, sonner queue, command search memory
+  only; "which item is open" of navigation-menu an index in memory. Reason:
+  caller-owned selection and disclosure match upstream's `bind:value` and
+  today's Tabs and Select (report 12); this departs from egui, whose
+  `CollapsingHeader` and `CollapsingState` keep disclosure in memory. Panel
+  and view state follow egui's memory form with a binding (D-8); transient
+  state has no caller use. One rule per kind is predictable; the sidebar
+  sub-menus are the stated exception (trade-off below).
 - **Trade-off (CP-14-11, CP-12-28):** with a caller-owned `&mut bool`
   per collapsible, sidebar sub-menus built from data
   (`demo-sidebar-menu-collapsible`, `items[].items`) force the caller to
@@ -993,17 +998,20 @@ Decision:
   closed trigger.
 - **Options:** (a) one shared list primitive (highlight in memory,
   focus-lock filter, typeahead, skip disabled, loop, Home/End,
-  PageUp/PageDown) used by select, native-select, menus and command, with
-  egui's menu machinery only for menu state and sub-menus; (b) egui's menu
-  machinery and focus movement for menus, select keeps its own; (c) own
-  code per component.
+  PageUp/PageDown) used by select, native-select, menus and command; menu
+  and sub-menu open state is the crate's own flag of D-128 (ii), egui's menu
+  machinery (`Popup::menu`, `MenuState`, `SubMenu`) is not used, because it
+  rests on the single-open popup memory; (b) egui's menu machinery and focus
+  movement for menus (then menus are exempt from D-128 (ii) and stay
+  single-open), select keeps its own; (c) own code per component.
 - **Affects:** select, native-select, dropdown-menu, context-menu,
   menubar, command.
-- **Recommendation:** (a); typeahead as bits (1 s buffer, selects on a
-  closed trigger); click to open and click to choose as egui `ComboBox`
-  (no press-drag-release); native-select opens on Up/Down like Select.
-  Reason: one keyboard model across pickers is the consistency goal; egui's
-  focus movement lacks typeahead and Home/End.
+- **Recommendation:** (a), consistent with D-128 (ii); if D-128 takes (i),
+  (a) may use egui's `MenuState`/`SubMenu` for sub-menus. Typeahead as bits
+  (1 s buffer, selects on a closed trigger); click to open and click to
+  choose as egui `ComboBox` (no press-drag-release); native-select opens on
+  Up/Down like Select. Reason: one keyboard model across pickers is the
+  consistency goal; egui's focus movement lacks typeahead and Home/End.
 - **Covers:** CP-09-19, CP-08-16, CP-08-17, CP-08-18, CP-07-28, CP-09-1
 
 Decision:
@@ -1056,15 +1064,24 @@ Decision:
   |ui| ..)` or `show(ui, body, footer)`).
 - **Affects:** card, item, empty, alert, alert-dialog, dialog, sheet,
   message, bubble, attachment, tabs.
-- **Recommendation:** (d), as a second `show` argument where the slot is
-  common (card and dialog footers: `show_with_footer(ui, body, footer)`) and
-  a second step otherwise; footer direction fixed as upstream (caller nests
-  a layout inside), sheet footer pinned to the bottom, caller pads and
-  scrolls the sheet body as upstream demos do, tabs content text size
-  applied by `show`. This changes `Card::footer` and the input-group's
-  stored addon closures (D-113 CP-06-24). Reason: one meaning of "the
-  closure", and egui's sequential form avoids the borrow trap of stored
-  closures.
+- **Recommendation:** (d). Its form is a real sub-choice, because (d) meets
+  two other entries: (d1) the footer as a second `show` argument, `show(ui,
+  body, footer)` like `Sides::show`: no new verb (fits D-61) and
+  `InnerResponse<(R, F)>` (fits D-13), but a footer-less card passes an
+  empty closure or uses a second constructor; (d2) a `show_with_footer(ui,
+  body, footer)` variant beside `show(ui, body)`: no empty closures, but
+  amends D-61 to "`show`, plus `show_with_<slot>` variants"; (d3) a second
+  step, `Card::new().begin(ui)` returning a prepared handle with
+  `.body(..)`/`.footer(..)`/`.end()` as egui's `Frame::begin`/`end`: most
+  flexible, but amends D-13 for these containers (the handle, not
+  `InnerResponse`, is returned until `.end()`). Recommendation (d2), with
+  D-61 amended: readable call sites, and the rule stays one verb family.
+  Footer direction fixed as upstream (caller nests a layout inside), sheet
+  footer pinned to the bottom, caller pads and scrolls the sheet body as
+  upstream demos do, tabs content text size applied by `show`. This changes
+  `Card::footer` and the input-group's stored addon closures (D-113
+  CP-06-24). Reason: one meaning of "the closure", and egui's sequential
+  form avoids the borrow trap of stored closures.
 - **Covers:** CP-T4-2, CP-T7-7, CP-03-3, CP-03-15, CP-11-5, CP-11-10, CP-19-3, CP-11-23, CP-04-4, CP-03-16, CP-03-24, CP-18-17, CP-11-21, CP-11-22, CP-12-13
 
 Decision:
@@ -1140,10 +1157,11 @@ Decision:
   items }`, `cmd.group(heading, ..)`); (b) a heading part followed by items
   (`menu_label`, `opt_group`); (c) per component.
 - **Affects:** select, command, menus, native-select, sidebar group.
-- **Recommendation:** (a) for data-driven lists (select), (b) for
-  immediate-mode closures (menus, native-select, command), as each form
-  allows; select separators by `.group_separators(bool)`. Reason: the item
-  supply form of D-26 decides which one is expressible.
+- **Recommendation:** (a) for data-driven lists (select and native-select,
+  whose `opt_group` becomes a group of item data, D-26), (b) for
+  immediate-mode closures (menus, command), as each form allows; select
+  separators by `.group_separators(bool)`. Reason: the item supply form of
+  D-26 decides which one is expressible.
 - **Covers:** CP-T4-7, CP-08-3, CP-09-16
 
 Decision:
@@ -1331,8 +1349,11 @@ Decision:
   model differs (`show_inside` sidebar, `show_ui` native-select, `ui`
   menubar).
 - **Affects:** sidebar, native-select, menubar.
-- **Recommendation:** (a). Reason: crate users learn one verb; the egui
-  type underneath is an implementation detail.
+- **Recommendation:** (a), amended by D-47 (d2) if that is taken: the verb
+  is `show`, and a container whose common secondary slot comes as a second
+  closure adds `show_with_<slot>` (`show_with_footer`). Reason: crate users
+  learn one verb family; the egui type underneath is an implementation
+  detail.
 - **Covers:** CP-T5-4, CP-09-28
 
 Decision:
@@ -1673,10 +1694,13 @@ Decision:
   some containers (`Area`, `Window`, `CollapsingHeader`), and Field,
   FieldSet, AccordionItem, MenubarMenu and HoverCard were sketched with it.
 - **Options:** (a) yes for containers whose upstream has a `disabled` prop
-  that disables their content: Field and FieldSet (`<fieldset disabled>`),
-  AccordionItem (bits `disabled`), MenubarMenu (bits menu `disabled`),
-  HoverCard (bits root `disabled`); (b) never, `add_enabled_ui` around; (c)
-  as leaves (D-1).
+  that disables the container or its trigger: Field and FieldSet (`<fieldset
+  disabled>`), AccordionItem (bits `disabled`), MenubarMenu (bits
+  `bits/menubar/types.ts:53-57`, "Whether the trigger for the menubar item
+  is disabled"), HoverCard (bits LinkPreview root
+  `bits/link-preview/types.ts:52-56`, "the preview will be disabled and will
+  not open", at bits-ui 2.19.2); (b) never, `add_enabled_ui` around; (c) as
+  leaves (D-1).
 - **Recommendation:** (a), with the upstream-prop test as the rule a later
   port applies. Reason: egui shows that containers may carry `.enabled`
   (`Area`, `Window`, `CollapsingHeader`); of the five, only AccordionItem
@@ -1695,10 +1719,10 @@ Decision:
   atoms)` (tabs), or as `add_enabled_ui` around a closure item (radio,
   navigation-menu).
 - **Options:** (a) a setter on the item builder for data items
-  (`ToggleItem::enabled`, `SelectItem::enabled`, `Tab`), `add_enabled_ui`
-  around closure items (radio, native-select option, navigation item);
-  (b) `*_enabled(bool, ..)` on the parent (tabs sketch); (c) one form for
-  all.
+  (`ToggleItem::enabled`, `SelectItem::enabled`, native-select items,
+  `Tab`), `add_enabled_ui` around closure items (radio, menu and command
+  items, navigation item); (b) `*_enabled(bool, ..)` on the parent (tabs
+  sketch); (c) one form for all.
 - **Recommendation:** (a); tabs and accordion items become item builders
   with `.enabled(bool)` (D-1 name, D-17 no positional bool); command items
   are closure items and take `add_enabled_ui`. Reason: data items have no
@@ -2792,17 +2816,19 @@ Decision:
   logical names for a later RTL. `.align(..)` would then take three
   types: `RectAlign` (overlays, D-7), `egui::Align` (bubble, message,
   carousel) and `AddonAlign` (input-group).
-- **Options:** names: (a) accept physical names (the crate is LTR only)
-  and drop the RTL promise; (b) a crate `{Start, End}` enum for chat and
+- **Options:** names: (a) accept physical names (the crate is LTR only) and
+  drop the RTL promise; (b) a crate `{Start, End}` enum for chat and
   carousel alignment, logical as upstream. Setter: (i) `.align(..)`
   everywhere, the type disambiguates; (ii) name the setter for what it
-  aligns (`.side(..)` for messages, `.snap_align(..)` for carousel,
-  `.addon(align, ..)` for input-group), `.align` only for overlays.
+  aligns (`.alignment(egui::Align)` for messages and bubbles,
+  `.snap_align(..)` for carousel, `.addon(align, ..)` for input-group),
+  `.align` only for overlays and `.side(Side)` only for edge panels (D-42).
 - **Affects:** message, bubble, carousel, input-group, message-scroller,
   sonner.
 - **Recommendation:** (a) and (ii). Reason: egui types where they fit
-  (D-43), and RTL is not planned; one setter name with three meanings
-  would repeat what D-71 avoids for widths.
+  (D-43), and RTL is not planned; one setter name with several types would
+  repeat what D-71 avoids for widths, so `side` stays with `Side` and chat
+  alignment takes `alignment`.
 - **Covers:** none (review findings A8, A29).
 
 Decision:
