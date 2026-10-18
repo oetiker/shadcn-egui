@@ -1964,8 +1964,8 @@ Decision:
   `data-active` (the current item, D-30 `selected`) maps to `SELECTED`
   as CP-14-48 sketches, because it has the same meaning; the scroller's
   `data-active` (an edge is reached) gets its own flag. Reason: with D-11
-  (a) bits are no longer short; one meaning per flag keeps the generator
-  honest.
+  (a) bits are no longer short; one meaning per flag keeps the generator's
+  mapping unambiguous.
 - **Affects:** stylegen, toggle, toggle-group, message-scroller.
 - **Covers:** CP-T11-15, CP-01-17, CP-19-18
 
