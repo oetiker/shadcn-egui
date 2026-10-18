@@ -1201,20 +1201,34 @@ Decision:
   group and menu button), text (toast), or nothing (item and attachment put
   actions in `show`); the sidebar sketch returns the action's `Response` in
   an output struct.
-- **Options:** `action`: (a) always a closure slot; (b) an `Icon` (sidebar
-  group and menu button) / text (toast) / closure (card, alert) per
-  component; (c) no `action` setter, actions live in the `show` closure or
-  helpers. Responses: (i) a field on an output struct
+- **Options:** `action`: (a) always a closure slot stored in the builder
+  (`Card::new().action(|ui| ..)`); it has the borrow trap of D-47 (a): an
+  action that touches state the body also edits does not compile (Compound
+  rule 2); (a') a prefixed part fn inside the `show` closure
+  (`card_action(ui, ..)`, `alert_action(ui, ..)`), D-47 (d6)'s form for the
+  header slot: the root draws the header from setter data before the
+  closure and keeps the action slot free; the part, called first, paints
+  into that slot through the `Ui` tag (D-57); the root learns that an
+  action exists (the card header's `has-data-[slot=card-action]` columns,
+  the alert's `has-data-[slot=alert-action]:pr-18`)
+  from the previous pass, with `request_discard` when it changes, as D-134;
+  (b) an `Icon` (sidebar group and menu button) / text (toast) / closure
+  (card, alert) per component; (c) no `action` setter, actions live in the
+  `show` closure or helpers. Responses: (i) a field on an output struct
   (`MenuButtonOutput { response, action }`); (ii) the caller's own widgets
   in a closure, read directly.
 - **Affects:** card, alert, alert-dialog, attachment, sidebar group and
   menu button, sonner.
-- **Recommendation:** (a) with (ii); where upstream's action is a fixed icon
+- **Recommendation:** (a') with (ii) for card and alert, a real choice
+  against (a): (a') keeps one closure and no borrow trap, as D-47 (d6), at
+  the cost of a one-pass-late layout when an action appears or goes; (a)
+  is simpler to lay out but brings back the stored closure that D-47
+  rejects. Where upstream's action is a fixed icon
   button (sidebar), `action_icon(Icon)` plus an output field (i) on
   `SidebarMenuButtonOutput` (prefixed, D-20; egui has its own `MenuButton`).
   Alert-dialog keeps `alert_dialog_cancel`/`alert_dialog_action` helpers in
-  the footer closure. Reason: one word, one meaning; closures return widget
-  responses the egui way.
+  its `alert_dialog_footer(ui, ..)` part. Reason: one word, one meaning, one
+  closure per container; closures return widget responses the egui way.
 - **Covers:** CP-T4-3, CP-T5-6, CP-18-2, CP-14-7, CP-14-9, CP-11-11
 
 Decision:
@@ -1695,7 +1709,8 @@ Decision:
 
 ### D-71 · Width setter: one name, one meaning
 
-- **Case:** `.width` means fixed (select, popover, slider), `.max_width` a
+- **Case:** `.width` means fixed (select, popover; slider sketched one, it has
+  none today), `.max_width` a
   cap over fill (input, card), button sketched `.min_width`, egui uses
   `desired_width`; skeleton sketched `f32::INFINITY` for full width. Two
   shipped setters fit none of these: `Tabs::width` (0.6.0, `tabs.rs:76-86`,
@@ -1708,8 +1723,9 @@ Decision:
   would then become `.min_width` plus fill (a rename with a deprecated
   alias), dialog keeps `.width` as exact with a documented window clamp; (b)
   as (a), but `.width(f32)` defined as "requested width, clamped to what
-  fits" (available width, window, content minimum), which covers the shipped
-  setters of select, popover, dialog and tabs; (c) as (a), with tabs as a
+  fits" (available width, window, content minimum), which keeps dialog and
+  tabs as shipped and makes select and popover clamp (see Facts); (c) as
+  (a), with tabs as a
   stated exception; (d) only `.width`; (e) egui's `desired_width`.
 - **Affects:** every sized widget.
 - **Facts (second pushback review, re-review r3):** of the shipped `.width`
@@ -2390,18 +2406,23 @@ Decision:
   `.today(Date)` is the only source, nothing is marked when unset; with the
   `jiff` feature, today comes from `jiff` (`jiff/js` on wasm); (t3)
   `SystemTime` gated off wasm; (t4) a `web-time` dependency.
-- **Recommendation:** (a) with (t2). The gallery gets today from `jiff` as
-  a dev-dependency (with `jiff/js` on `wasm32`) and converts it to the
-  crate's `Date` itself, so the wasm gate (`--features fonts-all,icons-all`,
-  no `jiff` feature) and the runtime dependencies stay as they are; the
-  alternatives are a fixed demo date (some shadcn docs demos use one) or JS
-  glue in the web loader page, which the example does not have today.
-  Reason: no required dependency,
+- **Gallery "today" under (t2), a sub-choice:** the wasm gate builds the
+  gallery with `--features fonts-all,icons-all`, without `jiff`, and `jiff`
+  is not in `Cargo.lock` today. (g1) `jiff` as a dev-dependency of the
+  gallery (with `jiff/js` on `wasm32`), converted to the crate's `Date` in
+  the example: a new crate in the build, which the dependency discipline
+  of the porting standard asks the maintainer to consent to; (g2) a fixed
+  demo date, marked as such (some shadcn docs demos use one); (g3) JS glue
+  in the web loader page that passes the local date, which the example
+  does not have today.
+- **Recommendation:** (a) with (t2), and (g1) if the maintainer consents
+  to the dev-dependency, else (g2). Reason: no required dependency,
   calendar arithmetic on civil dates is small, the optional feature serves
   apps that already use `jiff`, and no code path panics in the browser.
   Calendar stays very large by effort (F18).
-- **Scope:** decide now: (a)/(b)/(c), the dependency choice, and the today
-  source (t1)-(t4), which shapes the API; the calendar's other choices are
+- **Scope:** decide now: (a)/(b)/(c), the dependency choice, the today
+  source (t1)-(t4), which shapes the API, and the gallery's today source
+  (g1)-(g3), whose (g1) adds a dev-dependency; the calendar's other choices are
   D-126 and may be deferred to F18.
 - **Affects:** calendar, range-calendar.
 - **Covers:** CP-15-1, CP-15-26, CP-T7-10
@@ -2685,9 +2706,13 @@ Decision:
   header, close, footer) has no CP. Recommendation: extract it from
   `dialog.rs`. The shell joins the overlay stack of D-128 (ii+): `Modal`
   closes on Escape only while egui's popup memory is empty
-  (`containers/modal.rs:151-161`), which crate overlays do not fill, so the
-  crate's Escape hook consumes the key first and the shell closes itself
-  when it is the top entry. Footers are part fns inside the content
+  (`containers/modal.rs:151-161`), which crate overlays do not fill, and on
+  any backdrop click, whatever is open above it (`:157-159`). So the shell
+  does not use `ModalResponse::should_close()` as a whole (today
+  `dialog.rs:154` does): it closes on `ui.close()` from its content, on the
+  crate Escape hook's mark, and on a backdrop click only when it is the top
+  entry of the stack (D-128 (o1); under (o2), when no overlay above it
+  holds the click). Footers are part fns inside the content
   closure (D-47 (d6)), because `Modal::show` returns no handle. Drawer's verdict is "port" with two open provisos: it holds
   only if snap points (CP-11-29) and background scaling (CP-11-30) are
   left out as recommended; taking either raises drawer's effort beyond
@@ -2977,8 +3002,14 @@ Decision:
   check after its content. `key_pressed` counts the pass's key events, and
   `consume_key` removes them (`input_state/mod.rs:727-769`). So the stack
   lives in `ctx.data` from the previous pass, and a crate hook at the start
-  of each pass (in the first crate overlay shown, or in `Theme`'s per-pass
-  code) consumes Escape and marks the top overlay of that stack as closing.
+  of each pass consumes Escape and marks the top overlay of that stack as
+  closing. egui has such a hook: `Context::on_begin_pass` or
+  `Context::add_plugin` with `Plugin::on_begin_pass` (`context.rs:1947`,
+  `:1968`, `plugin.rs:27`); `Theme::apply` registers it once, as it already
+  registers an `on_begin_pass` hook for the heading font
+  (`theme.rs:693-704`). The hook consumes
+  Escape only when the previous pass's stack is not empty, so an app's own
+  Escape handling keeps working while no crate overlay is open.
   If the helper ran inside the top overlay, a sibling overlay drawn earlier
   in the pass would already have closed. Modals: `ModalResponse::should_close`
   closes on Escape when `!any_popup_open` (`containers/modal.rs:151-161`),
@@ -2987,7 +3018,15 @@ Decision:
   `open_bool` never fill; a select open in a dialog would let the dialog
   close on the same Escape. Under the hook, Escape is consumed before
   `Modal` sees it, so the modal shell (D-117) joins the stack and closes
-  itself when it is the top entry.
+  itself when it is the top entry. The same holds for clicks:
+  `ModalResponse::should_close` is true on `backdrop_response.clicked()`
+  whatever popups are open (`containers/modal.rs:157-159`), and today's
+  shell uses it as is (`dialog.rs:154`), so a backdrop click with a crate
+  select open in the dialog would close both. The shell therefore does not
+  call `should_close()` as a whole: it closes on `ui.close()` from its
+  content, on the hook's Escape mark, and on a backdrop click only when it
+  is the top entry of the stack (under (o1); under (o2), when no overlay
+  above it holds the click).
 - **Outside click under (ii+), a sub-question:** (o1) as bits' dismissible
   layer: only the top overlay reacts to a click outside it
   (`isResponsibleLayer`, bits `use-dismissable-layer.svelte.ts:280-293`),
