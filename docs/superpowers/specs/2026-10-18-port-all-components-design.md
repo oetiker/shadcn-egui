@@ -73,7 +73,7 @@ Known drifts, to be settled by the rules:
 
 ### Stage 1 — Survey (read-only, many agents in parallel)
 
-One agent per upstream component (all 61, the ported ones too, so the
+One report section per upstream component (all 61, the ported ones too, so the
 rules see the whole set). No agent builds or edits the repository. Each
 writes a report to a scratch directory with:
 
