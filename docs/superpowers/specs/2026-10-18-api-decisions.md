@@ -1081,7 +1081,8 @@ Decision:
 
 - **Case:** title, description, label, media and action reach the
   component as builder setters (dialog family, empty, attachment, message),
-  as free part fns in the body (card today, popover), or both.
+  as free part fns in the body (card today, popover), or both. The card
+  and alert header action follows D-48, not this entry.
 - **Options:** (a) builder setters only; (b) builder setters for the
   common case plus prefixed free part fns (`card_title`) for custom
   layouts; (c) free fns only.
@@ -1094,7 +1095,9 @@ Decision:
   label part (svelte has none); message's empty avatar slot is
   `.avatar_space(bool)` (D-3). Reason: egui builders carry required display
   data as setters (§Widget builders); one shape for every multi-part
-  component.
+  component. The card and alert action follows D-48: under its (a') it is
+  a part fn in the `show` closure, so the root learns of it (and of its
+  `has-*` recipes) one pass late, with `request_discard` when it changes.
 - **Covers:** CP-T4-1, CP-03-2, CP-03-10, CP-03-11, CP-03-23, CP-04-1, CP-07-5, CP-07-15, CP-07-19, CP-10-4, CP-18-1, CP-19-1, CP-14-5, CP-04-12, CP-19-4
 
 Decision:
