@@ -126,7 +126,9 @@ Decision:
   `.bind` hides the type. Module docs must say that the crate's `.open(&mut
   bool)` binds, while egui's `Popup::open(bool)` and
   `CollapsingHeader::open(Option<bool>)` force the state for one frame; the
-  types differ, so a mix-up does not compile.
+  types differ, so a mix-up does not compile. The setter is for optional
+  bindings; a required binding is a constructor argument, as in egui
+  (D-31 (c1)).
 - **Covers:** CP-14-43
 
 Decision:
@@ -284,14 +286,15 @@ Decision:
   break (the pushback review's proposal; (a) with the same private field is
   the smaller step). Reason: (b) makes one flag mean two things in the
   generator (see D-92); (c) moves style decisions into code, which the
-  porting standard forbids ("no style values in code"). With (a), each
-  per-component flag CP below becomes "new flag as sketched", except where
-  D-91 (`data-open`) and D-92 (`SELECTED`, `PRESSED`) say otherwise.
+  porting standard forbids ("no style values in code"). With (d) (or (a)),
+  each per-component flag CP below becomes "new flag as sketched", except
+  where D-91 (`data-open`) and D-92 (`SELECTED`, `PRESSED`) say otherwise.
   Headroom: 23 bits are used today (bits 0-12 and 16-25). The flags the
   recommended entries add are about 36 (sidebar 8, calendar 8, questionnaire
   and chat 5, `SIDE_*` 4 (D-93), group position 4 (D-134), navigation 2,
-  scroller 2, `HAS_MEDIA`, `PRESSED`, `LINK`), about 59 of 64. If the count
-  grows past 64, (d) follows without a break because the field is private.
+  scroller 2, `HAS_MEDIA`, `PRESSED`, `LINK`), about 59 of 128 under (d)
+  (59 of 64 under (a), where a count past 64 would move to (d) without a
+  break because the field is private).
 - **Covers:** CP-18-30, CP-11-38, CP-12-34, CP-13-36, CP-14-48, CP-15-38, CP-19-40, CP-19-41, CP-19-36
 
 Decision:
@@ -333,10 +336,12 @@ Decision:
 - **Affects:** card, alert, item, empty, attachment, field, button-group,
   radio-group, message, bubble, every `show` and every container part fn.
 - **Recommendation:** (c), which is (a) for every container listed here;
-  output structs are D-60. A container with a secondary-slot step (D-47
-  (d4)) returns an intermediate value from `show`, and its
-  `.footer(..)`/`.end()` returns the `InnerResponse`; under D-47 (d3) a
-  begin/end handle does the same at `.end()`. Reason: egui's container idiom
+  output structs are D-60. Under D-47 (d6), footers are part fns inside the
+  closure, so `show` returns the `InnerResponse` directly. Only if D-47
+  takes (d4) does a footer-capable container return an intermediate value
+  from `show`, and then every call ends with `.footer(ui, ..)` or
+  `.end(ui)`, which returns the `InnerResponse`; under D-47 (d3) a begin/end
+  handle does the same at `.end(ui)`. Reason: egui's container idiom
   (§Containers); the dropped `Response` is what callers need for hover text
   and rects.
 - **Covers:** CP-T5-2, CP-03-1, CP-04-2, CP-18-10
@@ -730,14 +735,29 @@ Decision:
   returns an output with `should_close()`, and the caller clears its flag.
 - **Affects:** dialog, alert-dialog, sheet, drawer, CommandDialog, the
   sidebar's mobile sheet.
-- **Recommendation:** (c), as the pushback review proposes: a required
-  binding named as D-4 (`Dialog::new(id, &mut open)`, or `.open(&mut open)`
-  required before `show`), so popovers and dialogs spell the binding one
-  way, `Window::open`-like. (a), today's crate form with `&mut bool` as a
-  `show` argument, keeps the one-call shape but is a second spelling of the
-  same binding; (d) is the egui idiom and the real alternative and changes
-  D-9's modal return to an output with `should_close()`. A modal is opened
-  by app logic, not by a trigger the crate can watch, so (b) does not fit.
+- **Spelling of (c):** (c1) a constructor argument, `Dialog::new(id, &mut
+  open)`; (c2) a `.open(&mut open)` setter that must be called before
+  `show`. Only (c1) makes the binding required at compile time: (c2) fails
+  at run time when the setter is missing, unless the builder uses
+  type-state, which egui never does. (c1) follows egui's own rule: a
+  required binding is a constructor argument (`Checkbox::new(&mut b)`,
+  `Slider::new(&mut v, ..)`, `TextEdit::singleline(&mut s)`), an optional
+  one is a setter (`Window::open`). A further variant (c3): an optional
+  `.open(&mut bool)` on modals as on `Window`; without it the caller shows
+  the modal only while open and reads `should_close()`, which merges (c)
+  with (d) (one spelling, two return shapes).
+- **Recommendation:** (c) with (c1), as both pushback reviews propose.
+  Reason: the binding is required, and egui puts a required binding into
+  the constructor and an optional one into a setter; under that rule,
+  popovers keep the optional `.open(&mut bool)` of D-4 and modals take
+  `&mut bool` in `new`. Both name the state the same way, but they are two
+  spellings by design, not one; the rules state the egui rule beside D-4.
+  (a), today's crate form with `&mut bool` as a `show` argument, keeps the
+  one-call shape but puts the binding into `show`, while egui's bindings sit
+  in the constructor or a setter; (d) is the egui idiom and the
+  real alternative and changes D-9's modal return to an output with
+  `should_close()`. A modal is opened by app logic, not by a trigger the
+  crate can watch, so (b) does not fit.
 - **Covers:** CP-11-35, CP-11-1, CP-08-24
 
 Decision:
@@ -888,7 +908,13 @@ Decision:
 ### D-38 · Escape with several open overlays
 
 - **Case:** an egui `Popup` does not consume Escape, so one press closes
-  every open popup; bits closes only the top layer.
+  every open popup; bits closes only the top layer. Every `Popup::show`
+  closes on `key_pressed(Escape)` for every close behaviour, `IgnoreClicks`
+  included (`containers/popup.rs:613-616`), and `ModalResponse::should_close`
+  closes a modal on Escape when no egui popup is open
+  (`containers/modal.rs:151-161`), which crate flags under D-128 (ii) do not
+  count. So the helper must consume Escape before the first crate overlay of
+  the pass is shown; D-128 (ii+) says where it runs.
 - **Options:** (a) egui default; (b) the top layer consumes Escape and
   closes alone (one shared helper).
 - **Affects:** menus with sub-menus, popover inside dialog, select inside
@@ -1096,29 +1122,75 @@ Decision:
   the same problem: a closure captures its variables when it is created, so
   both borrows overlap for the whole call. Only forms that create the second
   closure after the first is consumed avoid it: a chained step, a begin/end
-  handle, or closures that receive the shared state as an argument.
+  handle, or closures that receive the shared state as an argument. A
+  fourth form needs no second closure at all: the secondary slot is a part
+  fn called inside the one `show` closure, as `dialog::footer(ui, ..)` is
+  today (`dialog.rs:247`).
+- **Limits of a chained step (second pushback review):** a modal on
+  `egui::Modal` cannot take one. `Modal::show` takes the content as a
+  closure and returns no handle (`containers/modal.rs:77-121`), and
+  `Area::begin`, the only way to keep an area's `Ui` open after a call, is
+  `pub(crate)` (`containers/area.rs:418`), so after `show` returns no
+  `.footer(ui, ..)` can draw inside the panel. On an in-flow card the card's
+  ring and fill must enclose the footer, so the card cannot finish before it
+  knows whether a footer follows: every call, footer or not, must end with
+  `.footer(ui, ..)` or `.end(ui)` (the step has no `Ui` of its own, and
+  `.footer(ui, ..)` needs it again, so it cannot keep one). A forgotten
+  `.end(ui)` leaves the card unpainted and unallocated, and only
+  `#[must_use]` warns (`Frame::Prepared` has no `Drop`, and a `Drop` would
+  have no `Ui`). Every `Card::show` call site changes. The cited model differs:
+  `CollapsingState::show_header` allocates the header before it returns, and
+  its body step is optional (`collapsing_header.rs:290`). Side slots (item
+  and attachment actions) sit beside the main content, so a body drawn
+  first takes the width before they exist; their main content is setter
+  data (D-46), so their closure holds no state a second closure would share.
 - **Affects:** card, item, empty, alert, alert-dialog, dialog, sheet,
   message, bubble, attachment, tabs.
 - **Recommendation:** (d) in one of these forms, a real sub-choice: (d1) and
   (d2), both closures in one call (`show(ui, body, footer)` or
   `show_with_footer`), withdrawn: they keep the borrow trap (see Costs);
   (d3) a begin/end handle (`Card::new().begin(ui)` with `.body(..)`,
-  `.footer(..)`, `.end()`, as egui's `Frame::begin`/`end`): works, amends
-  D-13 for these containers, least fluent; (d4) a chained step: `show(ui,
-  body)` returns an intermediate value whose `.footer(ui, f)` (or `.end()`
-  without a footer) draws the rest and gives back `InnerResponse<(R, F)>`,
-  egui's `CollapsingState::show_header(..).body(..)` form; D-61 stays
-  "always `show`", D-13 needs one sentence for the intermediate; (d5) both
-  closures in one call, but each receives the shared state as an argument
-  (`show_with_footer(ui, &mut state, |ui, s| .., |ui, s| ..)`), run in turn:
-  no borrow overlap, a less familiar shape. Recommendation (d4), as the
-  pushback review proposes. Footer direction fixed as upstream (caller nests
-  a layout inside), sheet footer pinned to the bottom, caller pads and
-  scrolls the sheet body as upstream demos do, tabs content text size
-  applied by `show`. This changes `Card::footer` and the input-group's
-  stored addon closures (D-113 CP-06-24, which follows this entry). Reason:
-  one meaning of "the closure", and a sequential form avoids the borrow trap
-  of stored closures.
+  `.footer(..)`, `.end(ui)`, as egui's `Frame::begin`/`end`): works for
+  in-flow containers, not for modals (see Limits), amends D-13 for these
+  containers, least fluent; (d4) a chained step: `show(ui, body)` returns an
+  intermediate value whose `.footer(ui, f)` or `.end(ui)` draws the rest and
+  gives back `InnerResponse<(R, F)>`: not buildable for the dialog family,
+  and every footer-less call gains `.end(ui)` (see Limits); (d4') `show(ui,
+  body)` complete on its own (`InnerResponse<R>`), plus an optional
+  `.footer(ui, f)` that extends the already allocated card over its bottom
+  padding and re-sets its shape slots, modals keeping the part fn: works,
+  but fragile (the parent cursor and item spacing have already moved), and
+  "secondary slot" then has two forms; (d5) both closures in one call, but
+  each receives the shared state as an argument (`show_with_footer(ui, &mut
+  state, |ui, s| .., |ui, s| ..)`), run in turn: no borrow overlap, a less
+  familiar shape; (d6) a secondary slot below the body is a prefixed part fn
+  called last inside the one `show` closure (`card_footer(ui, ..)`,
+  `dialog_footer(ui, ..)`, `sheet_footer(ui, ..)`), upstream's structure
+  (`Card.Footer` is a child of `Card.Root`) and the dialog's form today.
+  Recommendation (d6), as the second pushback review proposes (it replaces
+  the earlier pick (d4)). The part fn finds its container through the `Ui`
+  tag (D-57) and records under the container's id in `ctx.data` that a
+  footer was drawn; the root reads that after the closure and sets
+  `HAS_FOOTER`, which today changes only the card's bottom padding
+  (`style/nova.rs:557-559`, `style/lyra.rs:536-538`, `card.rs:102`) and is
+  used after the body. The footer part paints its strip (nova) to the
+  container's edges, inside the container's allocation (D-44). The sheet's
+  footer part places itself at the bottom of the full-height panel. One
+  closure means no borrow trap, no intermediate value and no `.end(ui)`;
+  `show` returns `InnerResponse<R>` as D-13 says, and D-46 (b), D-20 and
+  D-61 stay simple. Cost: the footer part must be the closure's last call,
+  which the module docs say. Side slots (item and attachment actions) take
+  the closure as the free slot ((b)), because their main content is setter
+  data. Bubble reactions overhang the bubble's edge and the bubble reserves
+  that space in its allocation (D-44), so they are setter data
+  (`.reactions(..)`) the bubble lays out itself; how a click on a reaction
+  comes back is left to F16. `Card::footer` keeps a `#[deprecated]` forward
+  for one release. Footer direction fixed as upstream (caller nests a
+  layout inside), caller pads and scrolls the sheet body as upstream demos
+  do, tabs content text size applied by `show`. This changes `Card::footer`
+  and the input-group's stored addon closures (D-113 CP-06-24, which
+  follows this entry). Reason: one meaning of "the closure", no borrow trap,
+  and the one form that works for in-flow containers and modals alike.
 - **Covers:** CP-T4-2, CP-T7-7, CP-03-3, CP-03-15, CP-11-5, CP-11-10, CP-19-3, CP-11-23, CP-04-4, CP-03-16, CP-03-24, CP-18-17, CP-11-21, CP-11-22, CP-12-13
 
 Decision:
@@ -1200,8 +1272,14 @@ Decision:
   its items first, then draws the heading above them or drops the whole
   group when none matched the search, as upstream hides empty groups (bits
   `CommandGroup.shouldRender`, `command.svelte.ts:1194-1198`) and hides
-  separators while searching (`alwaysRender`); this uses a heading slot
-  reserved before the items or the item registry of D-134. (b) for menus, a
+  separators while searching (`alwaysRender`). egui cannot release an
+  allocation, so a heading slot allocated before the items would leave a
+  gap over an empty group; the group instead runs its items in a child `Ui`
+  offset by the heading height but not yet allocated in the parent
+  (`ui.new_child(UiBuilder::new().max_rect(..))`), and after the closure
+  allocates heading plus items when one item matched, nothing when none
+  did. The item registry of D-134 (one pass late, plus `request_discard`)
+  is the fallback. (b) for menus, a
   deviation from no sketch. Select separators by `.group_separators(bool)`.
   Reason: (b) on command would show headings over empty groups, a visible
   difference in the main demo.
@@ -1394,11 +1472,12 @@ Decision:
   model differs (`show_inside` sidebar, `show_ui` native-select, `ui`
   menubar).
 - **Affects:** sidebar, native-select, menubar.
-- **Recommendation:** (a): the verb is `show`; secondary-slot steps (D-47
-  (d4)) are methods on its result, not new verbs; a crate type that mirrors
-  an egui type keeps that type's `show_*` variants (`ScrollArea::show_rows`,
-  D-62). Reason: crate users learn one verb; the egui type underneath is an
-  implementation detail.
+- **Recommendation:** (a): the verb is `show`; secondary slots are part
+  fns inside its closure (D-47 (d6)), not new verbs (under D-47 (d4) they
+  would be methods on its result); a crate type that mirrors an egui type
+  keeps that type's `show_*` variants (only relevant if D-62 takes (a):
+  `ScrollArea::show_rows`). Reason: crate users learn one verb; the egui
+  type underneath is an implementation detail.
 - **Covers:** CP-T5-4, CP-09-28
 
 Decision:
@@ -1417,31 +1496,49 @@ Decision:
   only, or egui's `ScrollBarVisibility`.
 - **Affects:** scroll-area, select, command, message-scroller, sheet,
   attachment.
-- **Costs:** (b) has a real limit: egui paints the bar handle from
-  `widgets.inactive` and the track from `extreme_bg_color`, and the
-  content shares both (buttons, text edits), so a theme cannot give a
-  transparent track and a `bg-border` thumb without changing other
-  widgets. Under (b) the visibility modes of CP-14-28 cannot be offered
-  (egui's `ScrollBarVisibility` has no hover or scroll mode), and
-  CP-14-30 (move select's list) is moot: every egui `ScrollArea`,
-  select's included, changes at once. Under (a) the crate hides egui's
-  bars and paints its own from the output state, CP-14-28 can offer
-  bits' four types or hover only, and CP-14-30 is (i) move select's list
-  in the same PR or (ii) later. Option (b) still fixes the cleanup bug
-  (no `ScrollStyle` at all) for the parts egui lets a theme set (width,
-  margins, floating bars).
-- **Recommendation:** (a), the sketch pick, with hover-only visibility
-  (shadcn's default) first and bits' four types later, and select's list
-  moved in the same PR (CP-14-30 (i)); composites use the crate's type. The
-  cleanup still sets a `ScrollStyle` (b's part that does not touch shared
-  colours) so app `egui::ScrollArea`s get shadcn's thin floating bars.
-  Reason: (b) cannot reach the look without side effects on other widgets.
-  The type keeps egui's name and builder so that egui users only change the
-  path; D-18 (ii) allows a same-named type with the same meaning. Mirror
-  only the subset the composites and demos use: constructors per axis,
-  `max_height`, `max_width`, `auto_shrink`, `stick_to_bottom`, `id_salt`,
-  `show`, `show_rows`; the `show_*` variants are D-61's exception for
-  mirrored egui types. Mirroring all of egui's builder (about 30 setters)
+- **Costs (corrected after the second pushback review):** egui's
+  `ScrollStyle` has `floating`, `foreground_color` and dormant, active and
+  interact opacities for the track and the handle (`style.rs`, struct
+  `ScrollStyle`); the painter multiplies the track colour
+  (`extreme_bg_color`) and the handle colour by them
+  (`containers/scroll_area.rs:1434-1483`). So under (b) floating bars with
+  track opacities 0 give a transparent track, and a dormant handle opacity
+  of 0 gives bars that show only while the pointer is over the area,
+  shadcn's default `hover` type; the style can also be set for one area
+  through a scoped `ui.style_mut()`. What (b) cannot reach exactly is the
+  thumb colour: the handle takes `bg_fill` (the theme sets `p.secondary`,
+  `theme.rs:909-916`) or, with `foreground_color`, `fg_stroke.color`
+  (`p.foreground`) of the widget visuals, and buttons and text edits share
+  both. `bg-border` is approximated by the foreground at a low handle
+  opacity (in shadcn's dark palettes `border` is white at 10 % alpha,
+  `palette/generated.rs:48`, close to the near-white foreground) or by
+  `secondary`, its neighbour grey. bits' `scroll` type (shown
+  while scrolling) has no egui counterpart; `always` and `auto` map to
+  `ScrollBarVisibility`. CP-14-30 (move select's list) is moot under (b):
+  every egui `ScrollArea`, select's included, changes at once. Under (a)
+  the crate hides egui's bars and paints its own from the output state,
+  with the exact thumb colour and all four bits types, and CP-14-30 is (i)
+  move select's list in the same PR or (ii) later. (a)'s cost, not named
+  before: the crate then also implements thumb dragging, track clicks, the
+  hover widening and the offset writes through `scroll_area::State`, a
+  second scroll bar implementation that follows egui at every upgrade.
+- **Recommendation:** (b), as the second pushback review proposes (it
+  replaces the earlier pick (a)): the theme sets a full `ScrollStyle`
+  (floating, track opacities 0, dormant handle opacity 0, handle in the
+  foreground colour at a low opacity), which D-135 (a) allows as a look;
+  the thumb colour is the nearest shared colour, which the module docs
+  state. No new type, no D-61 exception, no own bar code; composites use
+  `egui::ScrollArea`; bits' other visibility types become a scoped-style
+  helper if a demo needs one. Reason: the exact `bg-border` thumb is the
+  only thing (a) adds, and it costs a second scroll bar implementation.
+  If the maintainer takes (a) instead: hover-only visibility first and
+  bits' four types later, select's list moved in the same PR (CP-14-30
+  (i)), the type keeps egui's name and builder (D-18 (ii) allows a
+  same-named type with the same meaning), and it mirrors only the subset
+  the composites and demos use (constructors per axis, `max_height`,
+  `max_width`, `auto_shrink`, `stick_to_bottom`, `id_salt`, `show`,
+  `show_rows`; the `show_*` variants are D-61's exception for mirrored
+  egui types), because mirroring all of egui's builder (about 30 setters)
   would mean following it at every egui upgrade.
 - **Covers:** CP-14-26, CP-14-27, CP-14-30, CP-T4-12, CP-T5-10, CP-T7-8, CP-08-9, CP-18-9, CP-14-28
 
@@ -1528,8 +1625,8 @@ Decision:
   (separator) or constructors per value (resizable, scroll-area).
 - **Options:** (a) `.orientation(Orientation)` + `.vertical()` on every
   widget with an orientation, with constructors per axis only where the
-  crate mirrors an egui type that uses them (the crate's `ScrollArea` of
-  D-62 keeps egui's `vertical()`/`horizontal()`/`both()`); (b) per widget as
+  crate mirrors an egui type that uses them (if D-62 takes (a), the crate's
+  `ScrollArea` keeps egui's `vertical()`/`horizontal()`/`both()`); (b) per widget as
   sketched.
 - **Affects:** button-group, toggle-group, separator, slider, tabs,
   field, resizable, carousel, attachment.
@@ -1615,14 +1712,38 @@ Decision:
   setters of select, popover, dialog and tabs; (c) as (a), with tabs as a
   stated exception; (d) only `.width`; (e) egui's `desired_width`.
 - **Affects:** every sized widget.
-- **Recommendation:** (b): input and textarea `max_width` stored as
-  `Option<f32>`; card, alert, aspect-ratio `max_width`; select both;
-  progress, slider, attachment, menus, popover, dialog and tabs `width`;
-  button `min_width`; field none (caller layout); menubar content width.
-  Reason: it is the meaning every shipped `.width` setter already has, costs
-  no rename one release after tabs shipped its width, and three words still
-  keep fixed meanings. The clamp itself goes through the helper of D-133
-  (today `tabs.rs` does `w.min(ui.available_width())` inline).
+- **Facts (second pushback review, re-review r3):** of the shipped `.width`
+  setters, only dialog and tabs clamp. `Select::width` is exact
+  (`allocate_space(vec2(width, ..))` with no cap, `select.rs:162,173`), and
+  `Popover::width` is exact (`ui.set_width(w)`, `popover.rs:87-98`). Slider
+  has no width setter; it fills (`slider.rs:139`). So (b) changes select and
+  popover, which start to clamp to the available width. Clamp order under
+  (b): the requested width, capped to the available width (or the window,
+  for floating overlays), then raised to the content minimum, which then
+  overflows, as tabs do today (`tabs.rs:156-163`); the opposite order would
+  truncate. Cost of (b): on a widget that fills by default (input,
+  textarea, card, select under D-72), `.width(x)` is `min(x, available)`
+  raised to the content minimum, and `.max_width(x)` is `min(available,
+  x)`; the two differ only by the content minimum, so offering both on one
+  widget gives two names for nearly one meaning, against this entry's
+  title. Sub-question for (b): (s1) a widget offers `.width` when it is
+  content-sized by default and `.max_width` when it fills by default,
+  never both; (s2) both setters where the sketch had them, the overlap
+  documented.
+- **Recommendation:** (b) with (s1) and the clamp order above: `.max_width`
+  (stored as `Option<f32>`) on the widgets that fill by default: input,
+  textarea, card, alert, aspect-ratio, progress, slider (new), select
+  (which fills to `Metrics::field_max_width` under D-72; today's
+  `Select::width` becomes a `#[deprecated]` forward to `.max_width` for one
+  release); `.width` on the content-sized ones: attachment, menus, popover,
+  dialog and tabs; button `min_width`; field none (caller layout); menubar
+  content width. Reason: dialog and tabs already clamp, select and popover
+  start to clamp (a small behaviour change, stated in CHANGES), no rename
+  one release after tabs shipped its width, and with (s1) each widget has
+  one width word whose meaning follows from its default. (a) with the tabs
+  rename stays the alternative that keeps `.width` exact. The clamp itself
+  goes through the helper of D-133 (today `tabs.rs` does
+  `w.min(ui.available_width())` inline).
 - **Covers:** CP-T8-1, CP-T8-3, CP-01-5, CP-03-4, CP-03-30, CP-04-5, CP-04-11, CP-05-36, CP-06-4, CP-07-11, CP-08-11, CP-10-18, CP-18-6, CP-09-31, CP-09-6, CP-02-24
 
 Decision:
@@ -2030,7 +2151,7 @@ Decision:
   `data-active` (the current item, D-30 `selected`) maps to `SELECTED`
   as CP-14-48 sketches, because it has the same meaning; the scroller's
   `data-active` (an edge is reached) gets its own flag. Reason: with D-11
-  (a) bits are no longer short; one meaning per flag keeps the generator's
+  (d) (or (a)) bits are no longer short; one meaning per flag keeps the generator's
   mapping unambiguous.
 - **Affects:** stylegen, toggle, toggle-group, message-scroller.
 - **Covers:** CP-T11-15, CP-01-17, CP-19-18
@@ -2269,8 +2390,13 @@ Decision:
   `.today(Date)` is the only source, nothing is marked when unset; with the
   `jiff` feature, today comes from `jiff` (`jiff/js` on wasm); (t3)
   `SystemTime` gated off wasm; (t4) a `web-time` dependency.
-- **Recommendation:** (a) with (t2); the gallery passes today through `jiff`
-  or a date its web loader page provides. Reason: no required dependency,
+- **Recommendation:** (a) with (t2). The gallery gets today from `jiff` as
+  a dev-dependency (with `jiff/js` on `wasm32`) and converts it to the
+  crate's `Date` itself, so the wasm gate (`--features fonts-all,icons-all`,
+  no `jiff` feature) and the runtime dependencies stay as they are; the
+  alternatives are a fixed demo date (some shadcn docs demos use one) or JS
+  glue in the web loader page, which the example does not have today.
+  Reason: no required dependency,
   calendar arithmetic on civil dates is small, the optional feature serves
   apps that already use `jiff`, and no code path panics in the browser.
   Calendar stays very large by effort (F18).
@@ -2463,7 +2589,8 @@ Decision:
     last cell (bits).
   - `CP-06-24` input-group structure: builder with stored addon closures /
     `show` with a handle / TextEdit prefix and suffix · follows D-47: the
-    addons come as a sequential step or through the handle in `show`, not as
+    `show` closure holds the addons and the control as calls in display
+    order (prefixed part fns, or a handle passed to the closure), not
     closures stored in the builder.
   - `CP-06-28` allowed controls: Input and Textarea / any widget · Input
     and Textarea.
@@ -2556,7 +2683,12 @@ Decision:
 
 - **Case:** the shared modal shell on `egui::Modal` (overlay, panel,
   header, close, footer) has no CP. Recommendation: extract it from
-  `dialog.rs`. Drawer's verdict is "port" with two open provisos: it holds
+  `dialog.rs`. The shell joins the overlay stack of D-128 (ii+): `Modal`
+  closes on Escape only while egui's popup memory is empty
+  (`containers/modal.rs:151-161`), which crate overlays do not fill, so the
+  crate's Escape hook consumes the key first and the shell closes itself
+  when it is the top entry. Footers are part fns inside the content
+  closure (D-47 (d6)), because `Modal::show` returns no handle. Drawer's verdict is "port" with two open provisos: it holds
   only if snap points (CP-11-29) and background scaling (CP-11-30) are
   left out as recommended; taking either raises drawer's effort beyond
   large.
@@ -2835,19 +2967,48 @@ Decision:
   `Context::set_sublayer` supports one level only (`context.rs:3121-3129`).
   So (ii) needs (ii+): every crate overlay uses
   `PopupCloseBehavior::IgnoreClicks` plus a crate-owned overlay stack
-  (parent id per open overlay, pushed through a `Ui` tag, D-57); an outside
-  click closes the top overlay and every overlay that does not contain the
-  click's layer; sub-menus and D-38's Escape helper use the same stack. An
-  egui `ComboBox` or `menu_button` inside a crate overlay remains a known
-  limit.
+  (parent id per open overlay, pushed through a `Ui` tag, D-57); closing an
+  overlay closes its descendants; sub-menus and D-38's Escape helper use the
+  same stack. An egui `ComboBox` or `menu_button` inside a crate overlay
+  remains a known limit.
+- **Escape under (ii+) (second pushback review):** `Popup::show` closes on
+  `key_pressed(Escape)` whatever the close behaviour
+  (`containers/popup.rs:613-616`), and a parent popup's `show` runs that
+  check after its content. `key_pressed` counts the pass's key events, and
+  `consume_key` removes them (`input_state/mod.rs:727-769`). So the stack
+  lives in `ctx.data` from the previous pass, and a crate hook at the start
+  of each pass (in the first crate overlay shown, or in `Theme`'s per-pass
+  code) consumes Escape and marks the top overlay of that stack as closing.
+  If the helper ran inside the top overlay, a sibling overlay drawn earlier
+  in the pass would already have closed. Modals: `ModalResponse::should_close`
+  closes on Escape when `!any_popup_open` (`containers/modal.rs:151-161`),
+  read from egui's popup memory (`Popup::is_any_open`,
+  `containers/popup.rs:664-666`), which crate flags shown through
+  `open_bool` never fill; a select open in a dialog would let the dialog
+  close on the same Escape. Under the hook, Escape is consumed before
+  `Modal` sees it, so the modal shell (D-117) joins the stack and closes
+  itself when it is the top entry.
+- **Outside click under (ii+), a sub-question:** (o1) as bits' dismissible
+  layer: only the top overlay reacts to a click outside it
+  (`isResponsibleLayer`, bits `use-dismissable-layer.svelte.ts:280-293`),
+  whatever the click hits, so one click closes one level; (o2) every
+  overlay that is neither the clicked overlay nor one of its ancestors
+  closes, so a click in a grandparent closes both levels above it and a
+  click outside every overlay closes the whole chain (the second pushback
+  review's proposal). The two agree whenever only one open level lies above
+  the clicked one.
 - **Affects:** popover, hover-card, dropdown-menu, context-menu, menubar,
-  select, native-select, command popover, navigation-menu; D-33, D-38.
-- **Recommendation:** (ii) with the overlay stack (ii+). Reason: nested
-  overlays are common in shadcn demos (combobox = popover + command, select
-  inside a popover, a menu in a dialog); under (i) opening the inner one
-  closes the outer one, and without the stack a click in the inner one
-  closes the outer one. Cost: the stack is new shared machinery for F7, F8
-  and F10, more effort than a flag store; it lands with F7.
+  select, native-select, command popover, navigation-menu, the modal shell;
+  D-33, D-38, D-117.
+- **Recommendation:** (ii) with the overlay stack (ii+), the Escape hook at
+  the start of the pass, and (o1). Reason: nested overlays are common in
+  shadcn demos (combobox = popover + command, select inside a popover, a
+  menu in a dialog); under (i) opening the inner one closes the outer one,
+  and without the stack a click in the inner one closes the outer one. (o1)
+  is the primitive's behaviour; (o2) saves a click when the user leaves a
+  nested chain, at the cost of a difference from upstream. Cost: the stack
+  is new shared machinery for F7, F8, F9 and F10, more effort than a flag
+  store; it lands with F7.
 - **Covers:** none (review finding A1).
 
 Decision:
@@ -2873,21 +3034,39 @@ Decision:
   `.icon` slots, painted with the recipe's state colour, on every crate
   widget and data item that shows icons (`ToggleItem`, `Tab`, select items,
   alert-dialog buttons, D-58), and (a') only for egui hosts and free atoms,
-  with a URI that encodes library and index (`shadcn-icon://lucide/1234`),
   tinted at creation with a colour the caller passes or the default text
   colour; crate widgets that take `IntoAtoms` re-tint image atoms of the
-  `shadcn-icon` scheme with their state colour; (b) `Atom::custom`
+  `shadcn-icon` scheme with their state colour. (a'1) needs a URI from
+  which the loader finds the path data again, and an `Icon` knows neither
+  its library nor an index: it has `name`, `size` and `shape` only
+  (`shadcn-egui-core/src/icon.rs:19-23`), a `Blob` shape holds the blob
+  slice, `start` and `len` (`blob.rs:18-22`) over an icon crate's private
+  `static ICONS_BIN`, and a `Segs` icon (icongen `--out`, the form the
+  port-component skill gives an app) belongs to no library. URI forms:
+  (u1) a process-wide registry: `From<IconAtom>` stores the `Icon` (it is
+  `Copy` with `'static` data) in a `std::sync::Mutex<HashMap<Key, Icon>>`,
+  keyed by blob address and range as the raster cache already keys
+  (`components/icon_raster.rs:40-53`), and writes `shadcn-icon://<n>`; the
+  loader looks `<n>` up and rasterises; std only, works for `Segs` icons,
+  core unchanged; (u2) `library` and `index` fields on `Icon`: a breaking
+  change of the core type (struct literals in every icon crate and in apps,
+  icongen regenerates all crates), with a sentinel library for `Segs`
+  icons; (u3) a URI that encodes the blob address and range directly,
+  which the loader would turn back into a slice with `unsafe` code; (b) `Atom::custom`
   placeholders painted by the component (right colour, works only inside
   crate widgets, D-58 (b)); (a'') `icon.atom()` through an extension trait
   (conflicts with D-53's "no extension trait"); (a''') egui as a dependency
   of `shadcn-egui-core` (breaks an invariant).
 - **Affects:** tabs, navigation links, alert-dialog buttons, native-select
   options, kbd, any egui host of crate icons; D-15, D-28.
-- **Recommendation:** (a'1), as the pushback review proposes. Reason: state
-  colours stay right wherever crate widgets draw icons, and egui hosts still
-  get crate icons; the URI scheme names the library and index, so the loader
-  can find the path data. The rasteriser draws the translucent icon layers
-  (0.6.0, icon opacity) at their alpha.
+- **Recommendation:** (a'1), as the pushback review proposes, with (u1), as
+  the second pushback review proposes. Reason: state colours stay right
+  wherever crate widgets draw icons, and egui hosts still get crate icons;
+  (u1) lets the loader find the path data without a core change or
+  `unsafe` code, and covers icons of every origin. The registry only grows
+  (one entry per distinct icon, a few hundred bytes each), which the module
+  docs say. The rasteriser draws the translucent icon layers (0.6.0, icon
+  opacity) at their alpha.
 - **Covers:** none (review finding A2).
 
 Decision:
@@ -3039,4 +3218,8 @@ Decision:
 ## Rejected review findings
 
 No Task 7 review finding was rejected: A1–A43 and the re-review findings
-B1–B6 and C1–C2 were all applied.
+B1–B6 and C1–C2 were all applied. The second pushback review's ten issues
+and re-review round 3's open items and new findings were all applied too;
+where the second pushback review proposed an answer to a real choice, the
+choice stays open as an option (D-128 outside click: its (o2) is kept
+beside the recommended (o1)).
