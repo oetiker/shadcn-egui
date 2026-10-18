@@ -28,29 +28,33 @@ keyboard; widget_info and accessibility.
 One family per port pull request, in this order. Existing components sit
 in the family that adds their missing features; their API shape changes
 in the stage 3 cleanup (0.7.0) first. "Needs" lists earlier families and
-the shared primitives (next sections) that must land first.
+the shared primitives (next sections) that must land first. Notes,
+needs and drivers that name a feature or primitive repeat a report's
+sketch pick: each is conditional on the CP cited beside it, and an item
+marked "no CP" goes to the decision list. The order does not settle any
+of them.
 
 | # | Family | Components | Needs | Notes |
 |---|---|---|---|---|
-| F1 | Display leaves | spinner, skeleton, kbd, progress, aspect-ratio, badge (exists), separator (exists), label (exists) | icon slot `spinner` and rotated icon painting; `Glyph` decision (CP-02-2) | badge spinner slot, separator struct; kbd host embedding rides on later hosts |
+| F1 | Display leaves | spinner, skeleton, kbd, progress, aspect-ratio, badge (exists), separator (exists), label (exists) | icon slot `spinner` (if CP-05-6 / CP-02-18 pick slots) and rotated icon painting; `Glyph` decision (CP-02-2) | badge spinner slot (CP-02-2); separator struct or free fns (CP-04-15, open); kbd host embedding rides on later hosts (CP-02-12) |
 | F2 | Content blocks | card (exists), item, empty, alert, avatar | F1 (separator, icon) | image media through egui loaders, no new dependency |
-| F3 | Buttons and groups | button (exists), toggle, button-group, toggle-group | F1; roving-focus helper; group-position protocol, per-corner radius | first users of the group protocol (CP-01-7) |
-| F4 | Choice controls | checkbox (exists), switch (exists), radio-group, slider (exists) | F3 (roving focus); `IconSlots::minus` | indeterminate, second thumb, radio group |
+| F3 | Buttons and groups | button (exists), toggle, button-group, toggle-group | F1; roving focus (shared helper or copy, CP-01-29); group-position protocol (CP-01-7, CP-01-14), per-corner radius (no CP; goes to the decision list if contested) | first users of the group protocol (CP-01-7) |
+| F4 | Choice controls | checkbox (exists), switch (exists), radio-group, slider (exists) | F3 (roving focus, CP-01-29); minus icon (`IconSlots::minus` or painted line, CP-05-6) | indeterminate (CP-05-1); radio group (CP-05-8); second slider thumb only if CP-05-25 brings it into this family (the sketch says "later") |
 | F5 | Text entry | input (exists), textarea, input-otp, input-group | F1 (kbd, spinner), F3 (button) | group recipe composition across Input, Textarea, Button |
-| F6 | Forms | field, native-select, form | F4, F5, label | form: `not applicable in egui`, ships only a build-ui map row pointing to Field |
+| F6 | Forms | field, native-select, form | F4, F5, label; list keyboard model if native-select shares Select's popup (CP-07-22, CP-07-24) | form: `not applicable in egui`, ships only a build-ui map row pointing to Field |
 | F7 | Anchored overlays | popover (exists), tooltip (exists), hover-card | overlay frame helper; hover timer | sets the overlay shape (CP-10-1/2/3) the menus follow or not (CP-10-25) |
-| F8 | Menus | dropdown-menu, context-menu, menubar | F7; menu primitive; list keyboard model; `chevron_right`, `minus` slots | one primitive, three wrappers |
-| F9 | Modals | dialog (exists), alert-dialog, sheet, drawer | shared modal shell; edge `Side` | drawer without snap points and background scaling |
-| F10 | Pickers | select (exists), command | F5 (input-group), F8 (list keyboard model), F9 (CommandDialog); fuzzy score; themed ScrollArea (F12) or raw egui | select rework: generic value, groups, labels, disabled items |
-| F11 | Tabs and disclosure | tabs (exists), accordion, collapsible | F3 (roving focus); `chevron_up` and plain down-chevron slots; `OPEN` flag | vertical tabs, per-trigger disabled |
-| F12 | Scroll and panes | scroll-area, resizable | ScrollStyle theming; pane splitter primitive | scroll-area may land earlier, with the cleanup, if select adopts it (CP-14-30) |
-| F13 | Paging | breadcrumb, pagination | F3 (button recipes, roving focus); `chevron_left/right`, `more_horizontal` slots | |
-| F14 | Data display | table, carousel | F13 (chevron slots); drag/fling/snap scroller | |
-| F15 | Toasts | sonner | F1 (spinner); five toast icon slots; global toast queue | look lives in svelte-sonner CSS, few recipes |
-| F16 | Chat parts | attachment, bubble, marker, message | F1, F2 (avatar), F3; shimmer painter; scroll-fade | bubble and message share one alignment context (CP-18-16, CP-19-6) |
+| F8 | Menus | dropdown-menu, context-menu, menubar | F7; menu primitive (on egui menu machinery or own code, CP-09-1); list keyboard model (no CP; goes to the decision list); `chevron_right`, `minus` slots (CP-05-6) | one primitive, three wrappers (CP-09-2) |
+| F9 | Modals | dialog (exists), alert-dialog, sheet, drawer | shared modal shell (no CP; goes to the decision list); edge `Side` (CP-11-18, CP-11-19) | drawer without snap points (CP-11-29) and background scaling (CP-11-30), both open |
+| F10 | Pickers | select (exists), command | F5 (input-group), F8 (list keyboard model), F9 (CommandDialog, CP-08-24, CP-08-25); fuzzy score (CP-08-20); themed ScrollArea (F12) or raw egui (CP-14-30, CP-T4-12) | select rework: value type (CP-08-1, CP-T1-1), groups and labels (CP-08-3), disabled items (CP-08-32, CP-01-1) |
+| F11 | Tabs and disclosure | tabs (exists), accordion, collapsible | F3 (roving focus, CP-01-29); accordion chevrons: new slots or rotation, per role or per shape (CP-12-21, CP-12-33, CP-T11-13); open state as `OPEN`, `EXPANDED` or code (CP-T11-14, CP-12-34) | vertical tabs (CP-12-5); per-trigger disabled (CP-12-6, CP-12-32) |
+| F12 | Scroll and panes | scroll-area, resizable | own `ScrollArea` type, theme only or helper (CP-14-26, CP-14-27); pane splitter primitive (CP-14-32..41) | scroll-area may land earlier, with the cleanup, if select adopts it (CP-14-30) |
+| F13 | Paging | breadcrumb, pagination | F3 (button recipes, CP-13-29; roving focus, CP-01-29); `chevron_left/right`, `more_horizontal` slots (CP-13-31) | |
+| F14 | Data display | table, carousel | F13 (chevron slots, CP-16-41); table layout engine (CP-16-2); drag/fling/snap scroller (no CP for the primitive itself; goes to the decision list) | |
+| F15 | Toasts | sonner | F1 (spinner); toast icons as slots, lucide only or painted (CP-16-44); global toast queue (CP-16-25) | look lives in svelte-sonner CSS, few recipes |
+| F16 | Chat parts | attachment, bubble, marker, message | F1, F2 (avatar), F3; shimmer painter (CP-18-27); scroll-fade (no CP; goes to the decision list) | bubble and message share one alignment context (CP-18-16, CP-19-6) |
 | F17 | Questionnaire | questionnaire | F1 (kbd chip), F4 (indicators), F5 (input), F3 | large form state machine |
 | F18 | Dates | calendar, range-calendar | date type (CP-15-1, CP-15-26); F10 (select for caption dropdowns); F3 | calendar effort is very large; verdict `port` only with a crate-owned date, else `needs dependency: jiff` |
-| F19 | Sidebar | sidebar | F1 (skeleton), F5 (input), F7 (tooltip side), F9 (sheet), F11 (collapsible), F8 (dropdown-menu in demos); eight `sidebar-*` palette roles | very large |
+| F19 | Sidebar | sidebar | F1 (skeleton), F5 (input), F7 (tooltip side, CP-14-23), F9 (sheet, only if CP-14-12 ports the mobile mode), F11 (collapsible, CP-14-11), F8 (dropdown-menu in demos); eight `sidebar-*` palette roles (no CP; goes to the decision list) | very large |
 | F20 | Very-large tail | navigation-menu, message-scroller, chart | navigation-menu: F7, F3, hover timer; message-scroller: F12 or raw `ScrollArea`, F16; chart: optional `egui_plot` (maintainer consent) | spec: very-large components come last or in a later project; message-scroller's follow-bottom subset is a `port` and could move into F16 |
 
 ## Dependency order
@@ -65,34 +69,45 @@ Prerequisites, earliest first. Each line names what it unblocks.
    (CP-10-1/2/3, CP-10-25, CP-11-35), binding setter name (CP-14-43),
    flag budget (CP-18-30), container return (CP-T5-2), root id (CP-T6-1),
    width setter (CP-T8-1), text type (T11 G7).
-2. `IconSlots` made `#[non_exhaustive]` and the combined slot list through
-   icongen (CP-05-6, CP-12-33, CP-T11-13): before F1 (spinner), F4
+2. If CP-05-6 picks new slots (its other option is a painted line):
+   `IconSlots` made `#[non_exhaustive]` and the combined slot list through
+   icongen, with names per CP-12-33 and CP-T11-13: before F1 (spinner), F4
    (minus), F8, F11, F13, F14, F15, F16, F18, F19.
 3. `State` widened or budgeted (CP-18-30) and the generator gap families
    below: before F3 onward (most families add flags or variants).
-4. Roving-focus helper in `shared.rs` (extracted from
-   `crates/shadcn-egui/src/components/tabs.rs:185-252`): F3, F4, F8
+4. If CP-01-29 picks a shared helper (the other option is a copy per
+   component): roving focus in `shared.rs`, extracted from
+   `crates/shadcn-egui/src/components/tabs.rs:185-252`: F3, F4, F8
    (menubar), F11, F13, F17, F20 (navigation-menu).
-5. Group-position protocol and per-corner radius / single-side border in
-   the shared painters: F3, then F5 (input-group), input-otp.
+5. Group-position protocol (form open, CP-01-7, CP-01-14) and per-corner
+   radius / single-side border in the shared painters (no CP; goes to the
+   decision list if contested): F3, then F5 (input-group), input-otp.
 6. Overlay frame helper (from
-   `crates/shadcn-egui/src/components/popover.rs:48-117`): F7, F8, F10.
-7. List keyboard model (from `crates/shadcn-egui/src/components/select.rs:186-282`):
-   F8, F10, F6 (native-select).
-8. Modal shell (from `crates/shadcn-egui/src/components/dialog.rs`) and edge `Side`: F9, then
-   F10 (CommandDialog), F19 (mobile sheet).
-9. Themed `ScrollArea` / `ScrollStyle`: F10 (select list), F12,
-   F20 (message-scroller), sheet bodies.
-10. Date primitive: F18 only.
+   `crates/shadcn-egui/src/components/popover.rs:48-117`; no CP, per the
+   report 10 sketch): F7, F8 (if CP-09-1 picks own painting), F10.
+7. List keyboard model (from `crates/shadcn-egui/src/components/select.rs:186-282`;
+   no CP, per the report 09 sketch; goes to the decision list): F8, F10,
+   F6 (native-select).
+8. Modal shell (from `crates/shadcn-egui/src/components/dialog.rs`; no CP)
+   and edge `Side` (CP-11-18, CP-11-19): F9, then F10 (CommandDialog),
+   F19 (mobile sheet, if CP-14-12 ports it).
+9. Scroll area form, open: own type, theme only or helper (CP-14-26),
+   and which composites use it (CP-14-30, CP-T4-12, CP-T5-10): F10
+   (select list), F12, F20 (message-scroller), sheet bodies.
+10. Date primitive (CP-15-1, CP-15-26): F18 only.
 11. Family edges: F1 → F2, F3 → F4 → F6; F1 + F3 → F5 → F6, F10;
     F7 → F8 → F10; F9 → F10, F19; F3 → F11, F13 → F14; F2 + F3 → F16 →
     F20 (message-scroller); F10 → F18; F5 + F7 + F9 + F11 → F19.
 
 ## Shared primitives
 
+Each row is a primitive the sketches assume. Whether it is built, and in
+what form, is decided by the CPs in the last column; rows marked "open
+question" are API choices, not code to write.
+
 | Primitive | Needed by | Today | CPs |
 |---|---|---|---|
-| Roving focus (one Tab stop, arrows, Home/End, wrap) | toggle-group, radio-group, tabs, accordion, menubar, navigation-menu, pagination, questionnaire | inline in `crates/shadcn-egui/src/components/tabs.rs:185-252` | CP-01-29, CP-05-21, CP-T7-3 |
+| Roving focus (one Tab stop, arrows, Home/End, wrap); shared helper or copy | toggle-group, radio-group, tabs, accordion, menubar, navigation-menu, pagination, questionnaire | inline in `crates/shadcn-egui/src/components/tabs.rs:185-252` | CP-01-29, CP-05-21, CP-T7-3 |
 | Group-position protocol (child knows first/middle/last, orientation) | button-group, toggle-group, input-group, input-otp | none; `State::IN_BUTTON_GROUP` exists but is never set | CP-01-7, CP-01-14, CP-T4-5, CP-T9-11 |
 | Per-corner radius and single-side borders in painters | button-group, toggle-group, input-group, input-otp, sheet, drawer | `shared::box_shapes`/`ring_shape` take one `f32` radius (`crates/shadcn-egui/src/components/shared.rs:88-150`) | drift list |
 | List keyboard model (highlight in memory, focus-lock filter, typeahead, skip disabled) | select, native-select, dropdown-menu, context-menu, menubar, command | inside `select.rs:186-282` | CP-09-1, CP-08-16, CP-08-17 |
@@ -100,21 +115,21 @@ Prerequisites, earliest first. Each line names what it unblocks.
 | Anchored overlay frame and shape (`RectAlign`, offset, open state, return) | popover, hover-card, tooltip, menus, select, command popover, navigation-menu | `popover.rs:48-117` | CP-10-1, CP-10-2, CP-10-3, CP-10-25, CP-T3-1..4 |
 | Hover-intent timer (open/close delay, grace, repaint) | hover-card, navigation-menu, tooltip (keyboard focus open) | none (egui `Tooltip` timing only) | CP-10-15, CP-T3-7 |
 | Modal shell on `egui::Modal` (overlay, panel, header, close, footer) | dialog, alert-dialog, sheet, drawer, CommandDialog, sidebar mobile | `dialog.rs` (header private, `dialog.rs:164`) | CP-11-35, CP-11-2, CP-11-8 |
-| Edge `Side` enum | sheet, drawer, sidebar | none | CP-11-18, CP-11-19, CP-14-13 |
-| Shared `Orientation` enum | button-group, toggle-group, separator, slider, tabs, field, resizable, carousel, attachment | `SliderOrientation`, `TabsOrientation` | CP-05-37, CP-T7-1 |
-| `IconSlots` additions (`minus`, `chevron_up`, `chevron_left`, `chevron_right`, `more_horizontal`, plain down chevron, `spinner`/loader, `sidebar`, `arrow_down`, four toast kinds) | checkbox, input-otp, menus, accordion, navigation-menu, breadcrumb, pagination, calendar, carousel, spinner, sonner, sidebar, message-scroller | `check`, `chevron_down`, `close` (`crates/shadcn-egui-core/src/icon.rs`) | CP-05-6, CP-12-33, CP-13-31, CP-15-36, CP-16-44, CP-T11-13 |
+| Edge `Side` enum (open question: shared, per component or `RectAlign`) | sheet, drawer, sidebar | none | CP-11-18, CP-11-19, CP-14-13 |
+| Orientation type (open question: shared enum or per-widget enums) | button-group, toggle-group, separator, slider, tabs, field, resizable, carousel, attachment | `SliderOrientation`, `TabsOrientation` | CP-05-37, CP-T7-1 |
+| `IconSlots` additions, if CP-05-6 picks slots (`minus`, `chevron_up`, `chevron_left`, `chevron_right`, `more_horizontal`, plain down chevron, `spinner`/loader, `sidebar`, `arrow_down`, four toast kinds) | checkbox, input-otp, menus, accordion, navigation-menu, breadcrumb, pagination, calendar, carousel, spinner, sonner, sidebar, message-scroller | `check`, `chevron_down`, `close` (`crates/shadcn-egui-core/src/icon.rs`) | CP-05-6, CP-12-33, CP-13-31, CP-15-36, CP-16-44, CP-T11-13 |
 | Rotated icon painting and a `Glyph` (icon or spinner) slot | spinner, badge, button, attachment, marker, sonner | `paint_icon` cannot rotate (`components/icon.rs:25-42`) | CP-02-2, CP-01-32, CP-18-35 |
 | Crate `Icon` inside `IntoAtoms` content | tabs, navigation items, alert-dialog buttons, native-select option, kbd | none | CP-T4-13, CP-02-12 |
-| `State` widening and `data-open` as a state | nearly every new family | `State(u32)`, 9 free bits | CP-18-30, CP-T11-14, CP-T11-15 |
-| Themed `ScrollArea` (transparent track, `bg-border` thumb) | scroll-area, select, command, message-scroller, sheet | theme sets no `ScrollStyle` | CP-14-26, CP-14-27, CP-T4-12 |
-| Drag / fling / snap scroller | carousel (drawer drag is related) | none | CP-16-17..21 |
+| `State` widening and `data-open` as a state (open question) | nearly every new family | `State(u32)`, 9 free bits | CP-18-30, CP-T11-14, CP-T11-15 |
+| Themed `ScrollArea` (transparent track, `bg-border` thumb); own type, theme only or helper | scroll-area, select, command, message-scroller, sheet | theme sets no `ScrollStyle` | CP-14-26, CP-14-27, CP-T4-12 |
+| Drag / fling / snap scroller | carousel (drawer drag is related) | none | CP-16-17..21 (no CP for the primitive itself) |
 | Pane splitter layout (paneforge algorithm) | resizable | none | CP-14-32..41 |
 | Date type, arithmetic, local "today", names | calendar, range-calendar | none | CP-15-1, CP-15-26, CP-T7-10 |
 | Fuzzy score (port of `compute-command-score.ts`, pure) | command | none | CP-08-20, CP-08-21 |
 | Global toast queue in `ctx` | sonner | none | CP-16-25 |
 | Shimmer text painter, scroll-fade mask | attachment, marker (demos) | none | CP-18-8, CP-18-27 |
 | Transcript scroll primitive (follow-bottom, anchoring, prepend) | message-scroller | none (`ScrollArea::stick_to_bottom` covers a subset) | CP-19-10, CP-19-13 |
-| Context passing through the `Ui` stack | kbd, grouped button, item in menu, bubble from message, field to control | `UiStackInfo` used nowhere in the crate yet | CP-T9-11, CP-T7-2 |
+| Context passing through the `Ui` stack (open question: tags, setters or `Ui` data) | kbd, grouped button, item in menu, bubble from message, field to control | `UiStackInfo` used nowhere in the crate yet | CP-T9-11, CP-T7-2 |
 
 ## Generator work
 
@@ -178,6 +193,15 @@ Generator decisions and defects found on the way:
 - `data-[side=*]` is ignored as a popup side, so sheet borders, `w-3/4`
   and `max-w` drop silently; a leading `*` drops the alert-dialog media
   icon size (report 11).
+- `**:` is in the IGNORED list of `tools/stylegen/src/variant.rs` (the
+  reason printed, "styles descendant elements: a Kbd chip …", does not fit),
+  so `**:data-[slot=accordion-trigger-icon]:*` drops the accordion trigger
+  icon's colour, size and `ml-auto` with no diagnostic; it needs a
+  trigger-icon target. The accordion count of 5 pairs does not include
+  it. The same ignore drops command group headings
+  (`**:[[cmdk-group-heading]]:*`), the menu item focus text colour
+  (`focus:**:text-accent-foreground`), input-group Kbd chips
+  (`**:data-[slot=kbd]:*`) and navigation-menu link focus rules.
 - Upstream writes `data-[active=true]` where bits-ui sets `data-active=""`
   (input-otp CP-06-17, navigation-menu in six styles); stylegen maps both
   to `SELECTED`, so egui would show rules the browser never applies.
@@ -263,7 +287,7 @@ range-calendar, only if the crate does not own a date type).
 | kbd | 02 | F1 | small | port | two recipes, context flags; host embedding rides on hosts |
 | spinner | 02 | F1 | small | port | icongen slot, rotated icon paint |
 | skeleton | 02 | F1 | small | port | one recipe, pulse fade |
-| card | 03 | F2 | small (exists) | port | API reshape (builder header, `InnerResponse`, width) |
+| card | 03 | F2 | small (exists) | port | API reshape: header form (CP-03-2), return type (CP-03-1, CP-T5-2), width (CP-03-4, CP-T8-1), all open |
 | item | 03 | F2 | medium | port | new layout, flags, rounded image clip, click sense |
 | empty | 03 | F2 | small | port | centred column, icon tile |
 | aspect-ratio | 03 | F1 | small | port | rect allocation and child `Ui`; could live in `layout` (CP-03-29) |
@@ -274,7 +298,7 @@ range-calendar, only if the crate does not own a date type).
 | checkbox | 05 | F4 | small (exists) | port | indeterminate, minus slot, Enter filter |
 | radio-group | 05 | F4 | medium | port | group container, roving focus |
 | switch | 05 | F4 | small (exists) | port | drift fixes |
-| slider | 05 | F4 | small; medium for several thumbs (exists) | port | per-thumb focus, nearest-thumb pick |
+| slider | 05 | F4 | small; medium for several thumbs (exists) | port | several thumbs and when (CP-05-25, sketch: later): per-thumb focus, nearest-thumb pick |
 | input | 06 | F5 | small (exists) | port | API cleanup, input-group control mode |
 | textarea | 06 | F5 | small | port | Input with `multiline` |
 | input-otp | 06 | F5 | medium | port | cell model, paste, filter, first/last gaps |
@@ -283,7 +307,7 @@ range-calendar, only if the crate does not own a date type).
 | field | 07 | F6 | large | port | eleven markers, flags, `has-*`, container query, choice card |
 | form | 07 | F6 | small (docs only) | not applicable in egui | formsnap and sveltekit-superforms bind SvelteKit stores, validation and submission; Field covers the visible parts |
 | native-select | 07 | F6 | medium | port | trigger box, shares Select popup code |
-| select | 08 | F10 | medium (exists) | port | generic value, groups, disabled items, keyboard parity |
+| select | 08 | F10 | medium (exists) | port | value type (CP-08-1, open), groups (CP-08-3), disabled items (CP-08-32), keyboard parity |
 | command | 08 | F10 | large | port | filtered list primitive, fuzzy score, needs input-group and dialog |
 | dropdown-menu | 09 | F8 | large | port | shared menu primitive, two icon slots |
 | context-menu | 09 | F8 | medium on the primitive | port | pointer anchor, long press |
@@ -294,8 +318,8 @@ range-calendar, only if the crate does not own a date type).
 | dialog | 11 | F9 | small (exists) | port | drift list, extract modal shell |
 | alert-dialog | 11 | F9 | medium | port | media grid, flags |
 | sheet | 11 | F9 | medium | port | edge placement, side flags |
-| drawer | 11 | F9 | large | port (no snap points, no background scaling) | drag gesture, non-modal mode |
-| tabs | 12 | F11 | medium (exists) | port | vertical, per-trigger disabled, atom content, generic value |
+| drawer | 11 | F9 | large | port (no snap points, CP-11-29; no background scaling, CP-11-30; both open) | drag gesture (CP-11-27), non-modal mode (CP-11-28) |
+| tabs | 12 | F11 | medium (exists) | port | vertical (CP-12-5), per-trigger disabled (CP-12-6), atom content (CP-12-3, CP-T4-13), value type (CP-12-1), all open |
 | accordion | 12 | F11 | large | port | closure items with roving focus, wrapped trigger, clip, `chevron_up` |
 | collapsible | 12 | F11 | small | port (thin helper) | no visual of its own |
 | navigation-menu | 13 | F20 | very large | very large | hover intent, shared viewport, focus proxy, ~15 gaps |
@@ -382,7 +406,9 @@ say otherwise.
   `bg-border` thumb.
 - **bug** (diagnostics) · `tools/stylegen/src/variant.rs` — `*:` sits in
   the IGNORED list, so classes such as bubble's variant colours drop with
-  no diagnostic; `tools/stylegen/src/utility.rs` labels bare
+  no diagnostic, and `**:` sits there too, so the accordion trigger
+  icon's colour, size and `ml-auto` drop with no diagnostic;
+  `tools/stylegen/src/utility.rs` labels bare
   `border-b/l/r` as "border-* value", and `-translate-x-1/2` is ignored
   with the dialog-centring reason.
 
