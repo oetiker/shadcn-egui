@@ -28,10 +28,11 @@ Existing-crate bugs are not listed: they all go into the stage 3 cleanup
 
 - **Case:** Button, Checkbox, Switch, Select, Slider, Input, Label and Tabs
   carry `.enabled(bool)`; egui leaf widgets have none and are disabled
-  through the `Ui` (`ui.add_enabled`, `add_enabled_ui`, `ui.disable()`).
-  The crate widgets already honour `ui.is_enabled()`. Second part (X2): the
-  name of the per-item flag on data items that have no `Ui` of their own
-  (`ToggleItem`, `SelectItem`, `CommandItem`, `Choice`).
+  through the `Ui` (`ui.add_enabled`, `add_enabled_ui`, `ui.disable()`). The
+  crate widgets already honour `ui.is_enabled()`. Second part (X2): the name
+  of the per-item flag on data items that have no `Ui` of their own
+  (`ToggleItem`, `SelectItem`, `Tab`, `Choice`); command items are closure
+  items (D-55) and take `add_enabled_ui` (D-80).
 - **Options:** leaves: (a) keep `.enabled(bool)` everywhere; (b) drop it,
   `ui.add_enabled` as in egui; (c) both. Per item: (i) `enabled(bool)`;
   (ii) `disabled(bool)` (upstream's word); (iii) none, `add_enabled_ui`
@@ -81,13 +82,16 @@ Decision:
   can only spell with two names such as `.vertical()` and
   `.set_vertical(bool)`), rejected below.
 - **Affects:** every builder.
-- **Recommendation:** (d). Reason: egui's no-argument setters
-  (`Slider::vertical`, `Separator::vertical`, `ScrollArea::vertical`) are
-  all shortcuts for a mode value; its flags take a `bool`
-  (`Button::selected`, `TextEdit::password`, `ScrollArea::animated`). A
-  caller who computes a flag passes it straight; the "mode or state" line
-  of (a) is a judgement each port would draw differently; (e) doubles
-  every setter name.
+- **Recommendation:** (d). Reason: one predictable rule. egui itself mixes
+  the forms: some no-argument setters are mode shortcuts
+  (`Slider::vertical`, `Separator::vertical`, `ScrollArea::vertical`,
+  `Label::wrap`), others are plain flags or presets (`Button::small`,
+  `Slider::integer`, `TextEdit::code_editor`, `UiBuilder::disabled`,
+  `sizing_pass`), and its flags with a value take a `bool`
+  (`Button::selected`, `TextEdit::password`). So (a) is as egui-like as (d);
+  (d) wins on consistency, not on egui fidelity. A caller who computes a
+  flag passes it straight; the "mode or state" line of (a) is a judgement
+  each port would draw differently; (e) doubles every setter name.
 - **Covers:** CP-01-31, CP-02-29, CP-03-35, CP-04-33, CP-06-38, CP-07-30, CP-09-36, CP-11-36, CP-12-31, CP-13-34, CP-13-35, CP-14-44, CP-15-37, CP-16-39, CP-16-42, CP-16-43, CP-17-15, CP-18-34, CP-19-37
 
 Decision:
@@ -104,9 +108,12 @@ Decision:
 - **Affects:** popover, hover-card, menus, select, sidebar, resizable,
   calendar.
 - **Recommendation:** (c). Reason: it reads as what it binds, matches
-  `Window::open`, and the crate has no forced `open(bool)` that would
-  clash (egui only says `open_bool` because `Popup::open(bool)` was
-  taken). `.bind` hides the type.
+  `Window::open`, and the crate has no forced `open(bool)` that would clash
+  (egui only says `open_bool` because `Popup::open(bool)` was taken).
+  `.bind` hides the type. Module docs must say that the crate's `.open(&mut
+  bool)` binds, while egui's `Popup::open(bool)` and
+  `CollapsingHeader::open(Option<bool>)` force the state for one frame; the
+  types differ, so a mix-up does not compile.
 - **Covers:** CP-14-43
 
 Decision:
@@ -194,10 +201,12 @@ Decision:
 - **Recommendation:** (b) for popover, hover-card, dropdown-menu,
   context-menu, select and native-select; memory only for tooltip (egui
   decides per frame) and for the "which item is open" state of menubar and
-  navigation-menu (one value per bar, D-32 row "which item"). Reason:
-  egui's form 2 plus `Popup::open_bool` (§Open state); it keeps the
-  one-liner and lets an app open a popover from code, which upstream's
-  `bind:open` allows.
+  navigation-menu (one value per bar, D-32 row "which item"). Reason: egui's
+  form 2 plus `Popup::open_bool` (§Open state); it keeps the one-liner and
+  lets an app open a popover from code, which upstream's `bind:open` allows.
+  Where the open flag is stored (egui's popup memory keeps one open popup
+  per viewport, so nesting breaks) is the separate entry D-128; this entry's
+  (b) holds under either answer.
 - **Covers:** CP-10-2, CP-09-4, CP-08-7, CP-13-2, CP-T2-1, CP-T2-6
 
 Decision:
@@ -215,10 +224,13 @@ Decision:
   `Response`.
 - **Affects:** popover, hover-card, tooltip builder, menus, menubar menus,
   navigation-menu items, dialog family, CommandDialog.
-- **Recommendation:** (c). Reason: it is egui's own split (`Popup::show`
-  vs `menu_button`), gives the panel `Response` the caller needs for
-  hover text and rects, and the trigger `Response` is needed exactly when
-  the call drew the trigger. Modals use `Option<InnerResponse<R>>`.
+- **Recommendation:** (c). Reason: it is egui's own split (`Popup::show` vs
+  `menu_button`), gives the panel `Response` the caller needs for hover text
+  and rects, and the trigger `Response` is needed exactly when the call drew
+  the trigger. Modals use `Option<InnerResponse<R>>`. The modal return
+  depends on D-31: under its (a) to (c) modals return
+  `Option<InnerResponse<R>>`; under its (d) they return an output with
+  `should_close()`.
 - **Covers:** CP-10-3, CP-09-3, CP-11-2, CP-13-32, CP-10-25, CP-T5-3
 
 Decision:
@@ -249,15 +261,21 @@ Decision:
   modes, chat flags). The tuple field is public, so widening breaks code
   that writes `State(..)`.
 - **Options:** (a) widen to `u64` (breaking, once, in 0.7.0); (b) reuse
-  flags across meanings; (c) resolve variants in code by stacking recipes.
+  flags across meanings; (c) resolve variants in code by stacking recipes;
+  (d) a wider bit set (`u128` or a small bit array) behind a private field,
+  so the width can grow again without a break.
 - **Affects:** the style module, stylegen, every family from F3 on.
-- **Recommendation:** (a), and make the field private with constructors
-  so a later widening is not a break. Reason: (b) makes one flag mean two
-  things in the generator (see D-92); (c) moves style decisions into code,
-  which the porting standard forbids ("no style values in code"). With
-  (a), each per-component flag CP below becomes "new flag as sketched",
-  except where D-91 (`data-open`) and D-92 (`SELECTED`, `PRESSED`) say
-  otherwise.
+- **Recommendation:** (a), and make the field private with constructors so a
+  later widening is not a break. Reason: (b) makes one flag mean two things
+  in the generator (see D-92); (c) moves style decisions into code, which
+  the porting standard forbids ("no style values in code"). With (a), each
+  per-component flag CP below becomes "new flag as sketched", except where
+  D-91 (`data-open`) and D-92 (`SELECTED`, `PRESSED`) say otherwise.
+  Headroom: 23 bits are used today (bits 0-12 and 16-25). The flags the
+  recommended entries add are about 36 (sidebar 8, calendar 8, questionnaire
+  and chat 5, `SIDE_*` 4 (D-93), group position 4 (D-134), navigation 2,
+  scroller 2, `HAS_MEDIA`, `PRESSED`, `LINK`), about 59 of 64. If the count
+  grows past 64, (d) follows without a break because the field is private.
 - **Covers:** CP-18-30, CP-11-38, CP-12-34, CP-13-36, CP-14-48, CP-15-38, CP-19-40, CP-19-41, CP-19-36
 
 Decision:
@@ -278,12 +296,14 @@ Decision:
   exactly when the builder requires one (CP-T10-7).
 - **Recommendation:** (c). Reason: egui 0.34's in-flow builders make the
   salt optional (`TextEdit`, `ScrollArea`, `CollapsingHeader`), floating
-  containers and `ComboBox` require it; following egui makes the rule
-  predictable for egui users. Radio-group, command, table, carousel,
-  resizable, message-scroller and navigation-menu move to the optional
-  form. Chart keeps a required id because `egui_plot::Plot::new(id)`
-  requires one (D-104). Popover, hover-card, tooltip and menus need no
-  root id: their popup id derives from the trigger (D-65).
+  containers require an `Id` (`Area::new`, `Modal::new`, `Panel::left`), and
+  `ComboBox` and `Window` require an id source (a salt, or the label or
+  title, which doubles as one); following egui makes the rule predictable
+  for egui users. Radio-group, command, table, carousel, resizable,
+  message-scroller and navigation-menu move to the optional form. Chart
+  keeps a required id because `egui_plot::Plot::new(id)` requires one
+  (D-104). Popover, hover-card, tooltip and menus need no root id: their
+  popup id derives from the trigger (D-65).
 - **Covers:** CP-T6-1, CP-05-12, CP-08-10, CP-07-32, CP-09-30, CP-12-11, CP-15-12, CP-18-11, CP-T10-7
 
 Decision:
@@ -318,7 +338,13 @@ Decision:
   `#[default]` that matches upstream's default; (y) only where a builder
   needs it.
 - **Affects:** every public type.
-- **Recommendation:** (a), (i), (x). Reason: egui does all three on its
+- **Recommendation:** (a), (i), and (x) narrowed: every variant and size
+  enum of one component derives `Clone, Copy, Debug, Default, PartialEq, Eq`
+  with upstream's default as `#[default]`; data-carrying enums (`Glyph`,
+  `ToastEvent`) derive what their fields allow; a shared enum
+  (`Orientation`, `Side`) derives no `Default`, because its default is per
+  component (sheet Right, drawer Bottom, sidebar Left). Whether public enums
+  are `#[non_exhaustive]` is D-131. Reason: egui does all three on its
   builders (§Widget builders); one crate rule is cheaper to review than a
   per-type judgement.
 - **Covers:** CP-T11-1, CP-T11-2
@@ -396,19 +422,23 @@ Decision:
 - **Options:** shortcuts: (a) switch keeps `toggle`, Toggle gets
   `toggle_button`; (b) switch becomes `switch` (deprecated `toggle` alias
   one release), Toggle gets `toggle_button`; (c) switch becomes `switch`,
-  Toggle takes over `toggle` after the alias release. egui names: (i) keep,
-  callers use paths; (ii) keep, but never for a helper type with another
-  meaning; (iii) prefix clashing types. Variant in a shortcut: (x) content
-  only, variants via the builder; (y) positional variant. Sidebar enum:
-  `SidebarCollapse { Offcanvas, Icon, Off }`. Module: `components::sonner`
-  with `Toaster`/`Toast`/`toast()`, or `components::toast`.
+  Toggle takes over `toggle` after the alias release; (d) switch becomes
+  `switch`, Toggle's shortcut is `toggle_value(ui, &mut on, text)`, the name
+  and signature of egui's `ui.toggle_value`, which has Toggle's meaning (a
+  selectable button). egui names: (i) keep, callers use paths; (ii) keep,
+  but never for a helper type with another meaning; (iii) prefix clashing
+  types. Variant in a shortcut: (x) content only, variants via the builder;
+  (y) positional variant. Sidebar enum: `SidebarCollapse { Offcanvas, Icon,
+  Off }`. Module: `components::sonner` with `Toaster`/`Toast`/`toast()`, or
+  `components::toast`.
 - **Affects:** switch, toggle, radio, spinner, badge, bubble, sidebar,
   sonner, every type named like egui's.
-- **Recommendation:** (b), (ii), (x), `SidebarCollapse` with `Off`,
-  `components::sonner`. Reason: `switch` is the upstream name and not a
-  Rust keyword; reusing `toggle` for another widget after one release would
-  change a name's meaning silently; egui users expect `ui.button(text)`
-  shapes; the module name matches upstream's folder.
+- **Recommendation:** (d), (ii), (x), `SidebarCollapse` with `Off`,
+  `components::sonner`. Reason: `switch` is the upstream name and not a Rust
+  keyword; reusing `toggle` for another widget after one release would
+  change a name's meaning silently, and `toggle_value` is egui's own name
+  for exactly this widget (the D-28 argument); egui users expect
+  `ui.button(text)` shapes; the module name matches upstream's folder.
 - **Covers:** CP-T11-7, CP-T11-12, CP-T10-4, CP-02-6, CP-01-15, CP-05-22, CP-02-22, CP-14-46, CP-16-38
 
 Decision:
@@ -484,11 +514,14 @@ Decision:
   placeholder shown; (ii) fall back to the first item; (iii) debug assert.
 - **Affects:** toggle-group, radio-group, select, native-select, tabs,
   accordion.
-- **Recommendation:** (a) and (i); toggle-group single mode, which can
-  clear by a second click upstream, takes `&mut Option<T>` because clearing
-  needs a value to write (D-23). Reason: egui's `selectable_value` works
-  on any `T`; (i) matches what upstream renders; tabs keep the first tab
-  as Tab stop (porting standard).
+- **Recommendation:** (a) and (i), with one exception stated as a rule: a
+  widget that can clear its value by itself takes `&mut Option<T>`, because
+  clearing needs a value to write (D-23): toggle-group single, accordion
+  single (both clear by a second click upstream) and calendar single (`&mut
+  Option<Date>`, deselect on by default, calendar is not generic). Every
+  other single-select widget leaves the choice of `T` to the caller. Reason:
+  egui's `selectable_value` works on any `T`; (i) matches what upstream
+  renders; tabs keep the first tab as Tab stop (porting standard).
 - **Covers:** CP-T1-3, CP-T1-12, CP-01-21, CP-05-10
 
 Decision:
@@ -534,15 +567,21 @@ Decision:
   constructor (`Kbd::icon`) or `new` + setter (CP-T11-6).
 - **Options:** (a) `new` for the common mode, a named constructor per other
   mode; (b) a named constructor for every mode, no `new`; (c) one `new` plus
-  a mode setter; (d) separate types. Alternative content: (i) named
-  constructor; (ii) `new` + setter.
+  a mode setter; (d) separate types (for calendar: `Calendar` and
+  `RangeCalendar`, which rejects range-only setters at compile time).
+  Alternative content: (i) named constructor; (ii) `new` + setter.
 - **Affects:** toggle-group, accordion, calendar, range-calendar, slider,
   select, progress, pagination, kbd, input-group button.
-- **Recommendation:** (a) and (i). Mode constructors fix the binding type
-  (`&mut T` vs `&mut Vec<T>`), which a setter cannot change; range-only
-  setters on the shared calendar type are ignored outside range mode
-  (CP-15-31). Reason: egui builders are `new` plus named alternatives
-  (`ComboBox::from_id_salt`, `ScrollArea::vertical`).
+- **Recommendation:** (a) and (i), a deviation from the CP-01-24 and
+  CP-12-16 sketches (`single`/`multiple`): `ToggleGroup::new` and
+  `Accordion::new` are single, `::multiple` the other. Mode constructors fix
+  the binding type (`&mut T` vs `&mut Vec<T>`), which a setter cannot
+  change; range-only setters on the shared calendar type are ignored outside
+  range mode (CP-15-31), the cost of not taking (d). Reason: egui builders
+  are `new` plus named alternatives (`ComboBox::from_id_salt`,
+  `ScrollArea::vertical`); `from_*` names an alternative input form
+  (`Progress::from_value`, `Pagination::from_count`), as egui's
+  `ComboBox::from_label`.
 - **Covers:** CP-T1-6, CP-T11-6, CP-01-24, CP-12-16, CP-15-2, CP-15-31
 
 Decision:
@@ -559,14 +598,21 @@ Decision:
   found through a `Ui` tag); (d) per component as sketched.
 - **Affects:** toggle-group, radio-group, select, native-select, tabs,
   accordion, menus, sidebar, table rows.
-- **Recommendation:** (c) where items can have arbitrary neighbours
-  (radio-group, native-select, menu radio, sidebar, accordion), (a) where
-  the widget must know every item before painting (select: width, typeahead;
-  toggle-group: roving focus, positions; tabs list), each with a
-  `&[(T, text)]` shortcut. Reason: egui's `radio_value` run is the idiom
-  for free layout; a list that measures or navigates its items needs them
-  as data in a single pass. Table row flags are setters on a row builder
-  (D-17).
+- **Recommendation:** The criterion is whether the widget needs its items
+  while it is closed or before it paints them: (a) item data for select and
+  native-select (the closed trigger shows the selected item's text and runs
+  typeahead while no list is drawn), toggle-group (roving focus, positions)
+  and the tabs list; (c) immediate-mode calls for radio-group, menu radio
+  items and sidebar, each passing the binding per item like `radio_value`,
+  so no value travels through `Ui` tags; accordion takes the handle form
+  (`Accordion::new(&mut open).show(ui, |acc| acc.item(..))`, report 12's
+  sketch), because its group holds the binding and items would otherwise
+  need `V: Clone + Send + Sync + 'static` to read it from a `UiStack` tag.
+  Each data form has a `&[(T, text)]` shortcut. Native-select's `opt_group`
+  heading then becomes group data (D-51). Reason: egui's `radio_value` run
+  is the idiom for free layout; egui's `ComboBox::show_ui` closure needs a
+  caller-kept `.selected_text(..)`, a second copy of the label, which item
+  data avoids. Table row flags are setters on a row builder (D-17).
 - **Covers:** CP-T1-7, CP-08-2, CP-07-24, CP-09-13, CP-14-8, CP-01-23, CP-05-8, CP-12-2, CP-12-17, CP-16-5
 
 Decision:
@@ -635,9 +681,10 @@ Decision:
   everywhere; (c) the upstream name per component.
 - **Affects:** navigation-menu, sidebar, table, field card, chart legend,
   command.
-- **Recommendation:** (a), except `checked(bool)` where a checkmark is
-  drawn (command item, menu checkbox item). Reason: egui's word for "shown
-  as chosen"; `checked` names a different visual.
+- **Recommendation:** (a), except `checked(bool)` on the command item, where
+  a checkmark is drawn and the caller owns the state; the menu checkbox item
+  binds `&mut bool` (D-116, CP-09-10). Reason: egui's word for "shown as
+  chosen"; `checked` names a different visual.
 - **Covers:** CP-T1-11, CP-T9-9
 
 Decision:
@@ -649,14 +696,19 @@ Decision:
 - **Case:** Dialog takes `&mut bool` in `show`; D-8 gives anchored
   overlays memory plus an optional binding. egui `Modal` leaves the open
   state to the caller.
-- **Options:** (a) keep the caller's `&mut bool` argument to `show`;
-  (b) follow D-8 (memory, optional binding, `Dialog::open(ctx, id)`);
-  (c) a required binding setter.
+- **Options:** (a) keep the caller's `&mut bool` argument to `show` (today's
+  crate form); (b) follow D-8 (memory, optional binding, `Dialog::open(ctx,
+  id)`); (c) a required binding setter, like `Window::open(&mut bool)`; (d)
+  egui's `Modal` form: the caller shows the modal only while open, `show`
+  returns an output with `should_close()`, and the caller clears its flag.
 - **Affects:** dialog, alert-dialog, sheet, drawer, CommandDialog, the
   sidebar's mobile sheet.
-- **Recommendation:** (a). Reason: egui's `Modal` idiom (caller shows it
-  only while open); a modal is opened by app logic, not by a trigger the
-  crate can watch.
+- **Recommendation:** (a). Reason: it keeps today's one-call form and closes
+  the flag for the caller, which (d) leaves to every call site; it is the
+  crate's form and `Window::open`-like, not egui `Modal`'s. (d) is the egui
+  idiom and the honest alternative; it changes D-9's modal return to an
+  output with `should_close()`. A modal is opened by app logic, not by a
+  trigger the crate can watch, so (b) does not fit.
 - **Covers:** CP-11-35, CP-11-1, CP-08-24
 
 Decision:
@@ -713,11 +765,16 @@ Decision:
   (ii) the caller sets it from a read accessor; (iii) both.
 - **Affects:** popover, sidebar, message-scroller, menus, select,
   collapsible, navigation-menu, table rows.
-- **Recommendation:** (a) with the id of D-65, and (iii): components that
-  draw or wrap their trigger set `expanded` themselves; for a caller-drawn
-  trigger, `Popover::is_open(ctx, id)` gives the value. Reason: mirrors
-  `Popup::is_id_open`; the sidebar trigger is `sidebar_trigger(ui, id)`
-  toggling memory.
+- **Recommendation:** (a), keyed by the component's own id, and (iii):
+  components that draw or wrap their trigger set `expanded` themselves. A
+  caller-drawn trigger gets the value from the binding (`.open(&mut bool)`,
+  D-8 (b)) read before the trigger is drawn: the default popup id derives
+  from the trigger's `Response` (`response.id.with("popup")`,
+  `Popup::default_response_id`), which exists only after the trigger is
+  painted, so `Popover::is_open(ctx, id)` cannot serve a trigger that is not
+  drawn yet. With `.id_salt`, a helper `Popover::id_for(ui, salt)` returns
+  the id, so the caller never rebuilds the crate's id rule. The sidebar
+  trigger is `sidebar_trigger(ui, id)` toggling memory.
 - **Covers:** CP-T9-12, CP-T2-3, CP-T6-4, CP-10-24, CP-14-18
 
 Decision:
@@ -797,7 +854,8 @@ Decision:
 - **Options:** (a) egui default; (b) the top layer consumes Escape and
   closes alone (one shared helper).
 - **Affects:** menus with sub-menus, popover inside dialog, select inside
-  popover; alert-dialog closes on Escape like bits.
+  popover (nesting itself needs D-128 (ii), or a caller binding under (i));
+  alert-dialog closes on Escape like bits.
 - **Recommendation:** (b). Reason: nested menus are unusable when Escape
   closes the whole stack; one helper keeps the components consistent.
 - **Covers:** CP-T3-4, CP-09-20, CP-11-13
@@ -843,8 +901,10 @@ Decision:
   theme's `tooltip_delay`, (x), keyboard opening ported for both, popover
   hover skipped, hover-card stays open while the pointer is down in it.
   Reason: one timing API across hover overlays; changing egui's global
-  tooltip timing would change every app tooltip, which the theme should
-  not do silently.
+  tooltip timing would change every app tooltip, which the theme should not
+  do silently. Whether tooltip keeps egui's tooltip machinery at all (and so
+  whether `.open_delay` and keyboard opening exist for it) is D-130; this
+  recommendation assumes D-130 (b).
 - **Covers:** CP-T3-7, CP-10-16, CP-10-11, CP-13-10, CP-10-15, CP-10-6, CP-10-19, CP-10-12, CP-10-22
 
 Decision:
@@ -861,9 +921,8 @@ Decision:
   (egui) or copy upstream (no close).
 - **Affects:** drawer, dialog family, popover, menus, navigation-menu.
 - **Recommendation:** (a), drawer `dismissible(false)` blocks Escape,
-  backdrop and drag; navigation-menu closes on any outside click. Reason:
-  no shadcn demo needs more; an egui type in the API would tie it to
-  egui's enum.
+  backdrop and drag; navigation-menu closes on any outside click. Reason: no
+  shadcn demo needs more.
 - **Covers:** CP-T3-8, CP-11-31, CP-13-11
 
 Decision:
@@ -903,7 +962,10 @@ Decision:
   `scroll_to_me`), `Align2` for sonner; input-group keeps its own
   `AddonAlign` (four values, two axes); Message pushes its alignment to
   Bubble through a `Ui` tag. Reason: reuses egui vocabulary where egui has
-  one; logical names keep RTL possible later.
+  one. Note: `egui::Align` (`Min`/`Center`/`Max`, constants `LEFT`/`RIGHT`)
+  and `Align2` are physical names; whether the crate accepts physical names
+  or keeps a logical `{Start, End}` for a later RTL, and what the `align`
+  setters are called, is D-132.
 - **Covers:** CP-T7-4, CP-T7-5, CP-T3-9, CP-18-18, CP-18-15, CP-19-8, CP-06-25, CP-19-15, CP-18-16, CP-19-6
 
 Decision:
@@ -958,13 +1020,14 @@ Decision:
   layouts; (c) free fns only.
 - **Affects:** card, item, empty, alert, field, popover, attachment,
   message, sidebar, progress label, dialog family.
-- **Recommendation:** (b): the root needs the header data before it lays
-  out (`has-*` recipes, gaps); the free fns let a caller build an unusual
+- **Recommendation:** (b): the root needs the header data before it lays out
+  (`has-*` recipes, gaps); the free fns let a caller build an unusual
   header. Description optional everywhere; Field gets `.title()` besides
-  `.label()`; FieldContent is implied in horizontal mode; progress keeps
-  no label part (svelte has none); message's empty avatar slot is
-  `.avatar_space()`. Reason: egui builders carry required display data as
-  setters (§Widget builders); one shape for every multi-part component.
+  `.label()`; FieldContent is implied in horizontal mode; progress keeps no
+  label part (svelte has none); message's empty avatar slot is
+  `.avatar_space(bool)` (D-3). Reason: egui builders carry required display
+  data as setters (§Widget builders); one shape for every multi-part
+  component.
 - **Covers:** CP-T4-1, CP-03-2, CP-03-10, CP-03-11, CP-03-23, CP-04-1, CP-07-5, CP-07-15, CP-07-19, CP-10-4, CP-18-1, CP-19-1, CP-14-5, CP-04-12, CP-19-4
 
 Decision:
@@ -976,19 +1039,32 @@ Decision:
   actions, alert-dialog footer, alert description). Footers are builder
   closures (card) or free fns (dialog). Body padding and scrolling of
   sheets, the card footer direction, the tabs content text size.
-- **Options:** (a) the closure is always the main content; secondary
-  slots (footer, actions, reactions) are builder closures; (b) the closure
-  is the free slot upstream leaves open; (c) per component. Footer
-  direction: fixed as upstream, caller nests a layout; or a
+- **Options:** (a) the closure is always the main content; secondary slots
+  (footer, actions, reactions) are builder closures stored in the builder
+  (today's `Card::footer`); (b) the closure is the free slot upstream leaves
+  open; (c) per component; (d) the main content closure, with secondary
+  slots as a second step or a second `show` argument, egui's form
+  (`CollapsingState::show_header(ui, ..).body(..)`, `Sides::show(ui, left,
+  right)`). Footer direction: fixed as upstream, caller nests a layout; or a
   `footer_layout(Layout)` setter.
+- **Costs:** (a) stores `Box<dyn FnOnce(&mut Ui) + 'a>` (`card.rs:63`) that
+  lives while the `show` closure runs, so a body that edits `self.name` and
+  a footer that reads it do not compile together (two borrows of `self`);
+  the footer closure also returns nothing. (d) runs the closures one after
+  the other (no overlapping borrows) and lets each return a value, at the
+  cost of a less fluent call (`Card::new().show(ui, |ui| body).footer(ui,
+  |ui| ..)` or `show(ui, body, footer)`).
 - **Affects:** card, item, empty, alert, alert-dialog, dialog, sheet,
   message, bubble, attachment, tabs.
-- **Recommendation:** (a) with builder closures for footer/actions/
-  reactions, footer direction fixed as upstream (caller nests a layout
-  inside), sheet footer pinned to the bottom, caller pads and scrolls the
-  sheet body as upstream demos do, tabs content text size applied by
-  `show`. Reason: one meaning of "the closure"; builder closures are how
-  `Card::footer` works today.
+- **Recommendation:** (d), as a second `show` argument where the slot is
+  common (card and dialog footers: `show_with_footer(ui, body, footer)`) and
+  a second step otherwise; footer direction fixed as upstream (caller nests
+  a layout inside), sheet footer pinned to the bottom, caller pads and
+  scrolls the sheet body as upstream demos do, tabs content text size
+  applied by `show`. This changes `Card::footer` and the input-group's
+  stored addon closures (D-113 CP-06-24). Reason: one meaning of "the
+  closure", and egui's sequential form avoids the borrow trap of stored
+  closures.
 - **Covers:** CP-T4-2, CP-T7-7, CP-03-3, CP-03-15, CP-11-5, CP-11-10, CP-19-3, CP-11-23, CP-04-4, CP-03-16, CP-03-24, CP-18-17, CP-11-21, CP-11-22, CP-12-13
 
 Decision:
@@ -1007,11 +1083,12 @@ Decision:
   in a closure, read directly.
 - **Affects:** card, alert, alert-dialog, attachment, sidebar group and
   menu button, sonner.
-- **Recommendation:** (a) with (ii); where upstream's action is a fixed
-  icon button (sidebar), `action_icon(Icon)` plus an output field (i).
-  Alert-dialog keeps `alert_dialog_cancel`/`alert_dialog_action` helpers
-  in the footer closure. Reason: one word, one meaning; closures return
-  widget responses the egui way.
+- **Recommendation:** (a) with (ii); where upstream's action is a fixed icon
+  button (sidebar), `action_icon(Icon)` plus an output field (i) on
+  `SidebarMenuButtonOutput` (prefixed, D-20; egui has its own `MenuButton`).
+  Alert-dialog keeps `alert_dialog_cancel`/`alert_dialog_action` helpers in
+  the footer closure. Reason: one word, one meaning; closures return widget
+  responses the egui way.
 - **Covers:** CP-T4-3, CP-T5-6, CP-18-2, CP-14-7, CP-14-9, CP-11-11
 
 Decision:
@@ -1190,15 +1267,18 @@ Decision:
 - **Case:** Tab triggers, navigation links, alert-dialog buttons and
   native-select options take `IntoAtoms` content, but a crate `Icon` is not
   an egui atom.
-- **Options:** (a) `impl From<Icon> for Atom` (a rasterised image atom);
-  (b) `Atom::custom` placeholders painted by each component; (c) icons only
-  through typed `.icon` slots.
+- **Options:** (a) crate icons become atoms, in the form D-129 picks (a
+  plain `impl From<Icon> for egui::Atom` cannot be written: the orphan rule
+  forbids it in `shadcn-egui`, which owns neither type, and
+  `shadcn-egui-core` must stay dependency-free); (b) `Atom::custom`
+  placeholders painted by each component; (c) icons only through typed
+  `.icon` slots.
 - **Affects:** tab triggers, navigation links, alert-dialog buttons,
   native-select options, kbd chips, buttons in egui hosts.
-- **Recommendation:** (a), backed by the existing `icon_raster` texture,
-  with typed slots kept where recipes read `ICON_START`. Kbd keeps
-  `Kbd::new(text)` and `Kbd::icon(Icon)`, plus `paint_at` for hosts.
-  Reason: lets crate icons go anywhere egui takes atoms.
+- **Recommendation:** (a) with the form of D-129, typed slots kept where
+  recipes read `ICON_START`. Kbd keeps `Kbd::new(text)` and
+  `Kbd::icon(Icon)`, plus `paint_at` for hosts. Reason: lets crate icons go
+  anywhere egui takes atoms.
 - **Covers:** CP-T4-13, CP-02-12, CP-02-14
 
 Decision:
@@ -1377,9 +1457,10 @@ Decision:
   in most sketches, a shortcut only (toggle-group), one method per value
   (separator) or constructors per value (resizable, scroll-area).
 - **Options:** (a) `.orientation(Orientation)` + `.vertical()` on every
-  widget with an orientation, constructors only where egui uses them
-  (`ScrollArea::vertical()`, which the crate does not wrap per D-62);
-  (b) per widget as sketched.
+  widget with an orientation, with constructors per axis only where the
+  crate mirrors an egui type that uses them (the crate's `ScrollArea` of
+  D-62 keeps egui's `vertical()`/`horizontal()`/`both()`); (b) per widget as
+  sketched.
 - **Affects:** button-group, toggle-group, separator, slider, tabs,
   field, resizable, carousel, attachment.
 - **Recommendation:** (a); resizable gets `ResizablePanes::new()` plus
@@ -1421,9 +1502,9 @@ Decision:
   (desktop); (c) a caller flag (`.responsive()`, `.mobile(bool)`).
 - **Affects:** field, calendar, sonner, sidebar, pagination.
 - **Recommendation:** (b) by default with (c) where a demo depends on the
-  narrow branch (field `.responsive()` evaluating the width as in (a),
-  sonner narrow layout from the window width). Reason: egui apps are
-  mostly desktop; an explicit opt-in keeps the single-pass sizing rule.
+  narrow branch (field `.responsive(bool)` evaluating the width as in (a),
+  sonner narrow layout from the window width). Reason: egui apps are mostly
+  desktop; an explicit opt-in keeps the single-pass sizing rule.
 - **Covers:** CP-T7-6, CP-07-14, CP-15-13, CP-14-12, CP-16-37, CP-13-27
 
 Decision:
@@ -1591,12 +1672,17 @@ Decision:
 - **Case:** D-1 removes `.enabled` from leaves; egui keeps `.enabled` on
   some containers (`Area`, `Window`, `CollapsingHeader`), and Field,
   FieldSet, AccordionItem, MenubarMenu and HoverCard were sketched with it.
-- **Options:** (a) yes where egui's counterpart has it (`Area`, `Window`,
-  `CollapsingHeader::enabled`): Field, FieldSet, AccordionItem,
-  MenubarMenu, HoverCard; (b) never, `add_enabled_ui` around; (c) as
-  leaves (D-1).
-- **Recommendation:** (a). Reason: egui itself splits leaves and
-  containers this way (§Enabled state).
+- **Options:** (a) yes for containers whose upstream has a `disabled` prop
+  that disables their content: Field and FieldSet (`<fieldset disabled>`),
+  AccordionItem (bits `disabled`), MenubarMenu (bits menu `disabled`),
+  HoverCard (bits root `disabled`); (b) never, `add_enabled_ui` around; (c)
+  as leaves (D-1).
+- **Recommendation:** (a), with the upstream-prop test as the rule a later
+  port applies. Reason: egui shows that containers may carry `.enabled`
+  (`Area`, `Window`, `CollapsingHeader`); of the five, only AccordionItem
+  has such an egui counterpart (`CollapsingHeader`), so the test is
+  upstream's prop, not an egui counterpart (MenubarMenu maps to
+  `menu_button`, HoverCard to `Popup`, neither has `.enabled`).
 - **Affects:** field, accordion, menubar, hover-card.
 - **Covers:** CP-T9-1
 
@@ -1614,8 +1700,9 @@ Decision:
   (b) `*_enabled(bool, ..)` on the parent (tabs sketch); (c) one form for
   all.
 - **Recommendation:** (a); tabs and accordion items become item builders
-  with `.enabled(bool)` (D-1 name, D-17 no positional bool). Reason: data
-  items have no `Ui` to disable; closure items do.
+  with `.enabled(bool)` (D-1 name, D-17 no positional bool); command items
+  are closure items and take `add_enabled_ui`. Reason: data items have no
+  `Ui` to disable; closure items do.
 - **Affects:** tabs, accordion, toggle-group, select, command, radio,
   native-select, navigation-menu, questionnaire choices.
 - **Covers:** CP-T9-2, CP-12-6, CP-12-22, CP-12-32, CP-13-8, CP-05-15, CP-07-27, CP-08-32, CP-19-38
@@ -1787,17 +1874,19 @@ Decision:
 - **Case:** Today checkbox, switch, label, select and tabs have shortcuts;
   sketches add some for new leaves and some for menus and tooltip, and leave
   others out.
-- **Options:** (a) every leaf whose common use is one call (button,
-  badge, kbd, spinner, skeleton, progress, separator, label, checkbox,
-  switch, slider, input, textarea, marker, alert, radio); none for
-  containers, popover-style overlays and data-heavy widgets (item, avatar,
-  field, attachment, popover, hover-card, command); named exceptions: the
-  menu shortcuts `dropdown_menu`, `menubar_menu`, `context_menu` (egui has
-  `menu_button` and `Response::context_menu`) and the trigger helper
-  `tooltip(resp, text)` (egui has `on_hover_text`); (b) only where egui
-  has a `Ui` or `Response` counterpart; (c) per component. Closure
-  shortcuts return what the egui counterpart returns (D-9: `menu_button`
-  form).
+- **Options:** (a) every leaf whose common use is one call (button, badge,
+  kbd, spinner, skeleton, progress, separator, label, checkbox, switch,
+  slider, input, textarea, marker, alert, radio), plus value shortcuts for
+  list choices (`select`, `native_select`, `tabs`, `toggle_group`, D-27) and
+  for `pagination` (page, total) and `calendar`/`range_calendar` (one
+  binding); none for containers, popover-style overlays and data-heavy
+  widgets (item, avatar, field, attachment, table, popover, hover-card,
+  command); named exceptions: the menu shortcuts `dropdown_menu`,
+  `menubar_menu`, `context_menu` (egui has `menu_button` and
+  `Response::context_menu`) and the trigger helper `tooltip(resp, text)`
+  (egui has `on_hover_text`); (b) only where egui has a `Ui` or `Response`
+  counterpart; (c) per component. Closure shortcuts return what the egui
+  counterpart returns (D-9: `menu_button` form).
 - **Recommendation:** (a) with the named exceptions (they are (b)'s
   counterparts); table gets none (the builder is short). Reason: one rule
   a port can apply without asking.
@@ -2191,20 +2280,13 @@ Decision:
 
 ### D-111 · F3 buttons and groups
 
-- **Case:** the group-position protocol and per-corner radius have no CP
-  of their own; listed here.
+- **Case:** the group-position protocol (now D-134) and per-corner radius
+  have no CP of their own; per-corner radius is listed here.
 - **Options / Recommendation per item:**
-  - `CP-01-7` how grouped children learn their position: `Ui` tag plus
-    previous-pass child count / typed `ButtonGroupUi` that counts / data
-    list / repaint corners after · `Ui` tag plus previous-pass count
-    (D-57).
   - `CP-01-8` groupable widgets: Button only / Button, Input, Select
     trigger, group text, nested group · all listed.
   - `CP-01-13` focus ring above siblings: reserved later shape slot /
     accept overlap · reserved slot.
-  - `CP-01-14` group corners and borders: generator child-target recipe
-    with `FIRST`/`LAST`/`NOT_FIRST`/`NOT_LAST` and single-side fields /
-    hand-coded · generator.
   - `CP-01-16` icon-only toggle: `.icon_only(bool)` / an `Icon` size
     variant / empty text · `.icon_only(bool)` (D-3).
   - `CP-01-18` `Toggle::icon` sets `ICON_START`: always / never / separate
@@ -2214,7 +2296,7 @@ Decision:
   - (no CP) per-corner radius and single-side borders in the shared
     painters (`CornerRadius` instead of one `f32`) · yes, in the cleanup.
 - **Affects:** button, button-group, toggle, toggle-group, input-group.
-- **Covers:** CP-01-7, CP-01-8, CP-01-13, CP-01-14, CP-01-16, CP-01-18, CP-01-26
+- **Covers:** CP-01-8, CP-01-13, CP-01-16, CP-01-18, CP-01-26
 
 Decision:
 
@@ -2456,10 +2538,11 @@ Decision:
   - `CP-13-24` composition: one widget / exposed parts / both via public
     `page_items` · one widget plus `page_items`.
   - `CP-13-26` centring: centre with `.centered(bool)` / never · never.
-  - `CP-13-28` degenerate input: clamp without marking changed / leave ·
-    clamp; caveat from the report: clamping silently writes the caller's
-    `page` without `changed()`, which a caller that persists the page
-    will not notice (alternative: clamp only for drawing, leave the value).
+  - `CP-13-28` degenerate input: clamp the caller's `page` into
+    `1..=max(total_pages, 1)` and mark changed / clamp only for drawing,
+    leave the value / leave it like upstream · clamp and mark changed, so
+    the write follows T1 (a widget that writes the caller's value marks
+    `changed()`); the report's caveat (a silent write) no longer applies.
   - `CP-13-29` implementation: compose crate `Button` / paint with button
     recipes · compose `Button`.
 - **Affects:** breadcrumb, pagination.
@@ -2604,9 +2687,186 @@ Decision:
   like `egui::Label` (Extend, Wrap, Truncate); (c) `.wrap(bool)`.
 - **Affects:** label, and every part that draws through Label (field
   label, card title if it reuses it).
-- **Recommendation:** (b). Reason: egui's own setter and type; it also
-  covers truncation (breadcrumb items, CP-13-17) without a second setter,
-  and a `bool` cannot express truncation.
+- **Recommendation:** (b). Reason: egui's own setter and type; it also gives
+  truncation for callers who want it, without a second setter (breadcrumb
+  leaves per-item truncation to the caller, D-121 CP-13-17, and the caller
+  can then use this setter), and a `bool` cannot express truncation.
 - **Covers:** CP-07-3
+
+Decision:
+
+
+## Added in the adversarial review (Task 7)
+
+### D-128 · Where the open flag of anchored overlays lives
+
+- **Case:** egui's popup memory holds at most one open popup per
+  viewport: `Popup::open_id` "opens the given popup and closes all
+  others" (`containers/popup.rs:669`), `Memory` keeps
+  `popups: ViewportIdMap<OpenPopup>` (`memory/mod.rs:118`). Today's
+  popover and select use it (`popover.rs:10-12` says nesting works only
+  through `open_bool`). D-8 (b) puts popover, menus, select and
+  native-select into memory, and D-38 assumes nested overlays (select in a
+  popover, sub-menus).
+- **Options:** (i) egui popup memory: one open popup at a time, nesting
+  only through a caller binding; `Popup::is_id_open` reads it;
+  (ii) a crate-owned open flag per popup id in `ctx.data`, shown through
+  `Popup::open_bool`: popups are independent and nest; egui's own menus
+  (`menu_button`) and `ComboBox` stay single-open beside them, and the
+  crate's query fns read its own flag.
+- **Affects:** popover, hover-card, dropdown-menu, context-menu, menubar,
+  select, native-select, command popover, navigation-menu; D-33, D-38.
+- **Recommendation:** (ii). Reason: nested overlays are common in shadcn
+  demos (combobox = popover + command, select inside a popover, a menu in
+  a dialog); under (i) opening the inner one closes the outer one. The
+  crate then closes sibling overlays itself on outside click, as bits
+  does.
+- **Covers:** none (review finding A1).
+
+Decision:
+
+### D-129 · How a crate `Icon` becomes an egui atom
+
+- **Case:** D-58 (a) wants crate icons inside `IntoAtoms` content. `Icon`
+  lives in `shadcn-egui-core`, `Atom` and `IntoAtoms` in egui, so the
+  orphan rule forbids `impl From<Icon> for Atom` in `shadcn-egui`; core
+  has no dependencies by invariant; and a rasterised image needs a texture,
+  which a plain `From` cannot make without a `Context`.
+- **Options:** (a') a local wrapper `IconAtom(Icon)` (or `icon_atom(icon)`)
+  with `impl From<IconAtom> for egui::Atom<'_>` (allowed: the local type
+  is the trait's parameter), backed by an `ImageSource::Uri`
+  (`shadcn-icon://<name>`) that a crate image loader, registered by
+  `Theme::install`, rasterises; (a'') `icon.atom()` through an extension
+  trait (conflicts with D-53's "no extension trait"); (a''') egui as a
+  dependency of `shadcn-egui-core` (breaks an invariant).
+- **Affects:** tabs, navigation links, alert-dialog buttons, native-select
+  options, kbd, any egui host of crate icons; D-15, D-28.
+- **Recommendation:** (a'). Reason: it keeps core dependency-free and uses
+  egui's loader mechanism, so the texture appears when egui needs it.
+- **Covers:** none (review finding A2).
+
+Decision:
+
+### D-130 · Tooltip mechanism: egui's tooltip or an own popup
+
+- **Case:** D-40 gives tooltip `.open_delay`/`.close_delay` and keyboard
+  opening, but egui's `Tooltip` (`Response::on_hover_ui`) has one global
+  `tooltip_delay` and shows on hover only. Today's crate tooltip uses
+  egui's machinery.
+- **Options:** (a) keep egui's `Tooltip`: global delay, no keyboard
+  opening, no per-tooltip delay; `tooltip(resp, text)` stays the mirror
+  of `on_hover_text`; (b) an own `Popup` plus the hover timer of D-40:
+  per-tooltip delays and keyboard opening, egui's `tooltip_delay` ignored
+  by crate tooltips, one more custom overlay to maintain.
+- **Affects:** tooltip, sidebar collapsed tooltips, D-40, D-90's
+  `tooltip` helper.
+- **Recommendation:** (b). Reason: keyboard users get the tooltip bits
+  shows on focus, and hover-card and tooltip share one timer. `tooltip`
+  keeps the `on_hover_text` shape (same arguments, returns the
+  `Response`), though not its machinery.
+- **Covers:** none (review finding A7).
+
+Decision:
+
+### D-131 · `#[non_exhaustive]` on public enums
+
+- **Case:** shadcn adds variants and sizes over time; adding a variant to
+  an exhaustive public enum breaks callers who `match` on it.
+  `TabsOrientation` is `#[non_exhaustive]` (`tabs.rs:30`), `ButtonVariant`
+  and `ButtonSize` are not.
+- **Options:** (a) every public enum `#[non_exhaustive]`; (b) variant and
+  size enums only (upstream grows them), not closed sets (`Orientation`,
+  `Side`); (c) none.
+- **Affects:** every public enum.
+- **Recommendation:** (b). Reason: variants and sizes follow upstream,
+  which adds them; a closed set gains nothing from the attribute and loses
+  exhaustive matching.
+- **Covers:** none (review finding A31).
+
+Decision:
+
+### D-132 · Logical or physical placement names; the `align` setter names
+
+- **Case:** D-43 picks `egui::Align`/`Align2`, whose names are physical
+  (`Min`/`Max`, `LEFT`/`RIGHT`, `LEFT_TOP`), and the rules promised
+  logical names for a later RTL. `.align(..)` would then take three
+  types: `RectAlign` (overlays, D-7), `egui::Align` (bubble, message,
+  carousel) and `AddonAlign` (input-group).
+- **Options:** names: (a) accept physical names (the crate is LTR only)
+  and drop the RTL promise; (b) a crate `{Start, End}` enum for chat and
+  carousel alignment, logical as upstream. Setter: (i) `.align(..)`
+  everywhere, the type disambiguates; (ii) name the setter for what it
+  aligns (`.side(..)` for messages, `.snap_align(..)` for carousel,
+  `.addon(align, ..)` for input-group), `.align` only for overlays.
+- **Affects:** message, bubble, carousel, input-group, message-scroller,
+  sonner.
+- **Recommendation:** (a) and (ii). Reason: egui types where they fit
+  (D-43), and RTL is not planned; one setter name with three meanings
+  would repeat what D-71 avoids for widths.
+- **Covers:** none (review findings A8, A29).
+
+Decision:
+
+### D-133 · How a filling widget is capped without `available_width()` arithmetic
+
+- **Case:** T8 has `.max_width` cap a filling widget and text entry
+  default to `Metrics::field_max_width`; that is
+  `available_width().min(cap)`, which rule 6 of the porting standard
+  forbids and the survey lists as a bug (`input.rs:138`). egui's own
+  `TextEdit::desired_width(f32::INFINITY)` reads the available width
+  inside.
+- **Options:** (a) rule 6 allows clamping the available width to a cap
+  (as egui does), and the survey item becomes a non-bug; (b) a `layout`
+  helper (`layout::capped_width(ui, cap)`) does it, rule 6 points to it,
+  and `input.rs:138` is fixed by calling it; (c) widgets never fill; the
+  caller sizes them.
+- **Affects:** input, textarea, input-group, select, native-select, card,
+  alert, slider, progress, `plugin/skills/port-component/SKILL.md` rule 6.
+- **Recommendation:** (b). Reason: one audited place for the arithmetic
+  keeps rule 6's intent (no ad-hoc width maths in widgets) and gives the
+  cleanup a replacement for `input.rs:138`.
+- **Covers:** none (review finding A10).
+
+Decision:
+
+### D-134 · Group-position protocol (first, last, stretch)
+
+- **Case:** button-group, toggle-group, input-group and input-otp need
+  each child to know its position (first, middle, last) and the group's
+  orientation, and a vertical button-group stretches its children to the
+  widest; `State::IN_BUTTON_GROUP` exists but nothing sets it. In
+  immediate mode the group does not know its children before they paint.
+- **Options / Recommendation per item:**
+  - `CP-01-7` how grouped children learn their position: `Ui` tag plus a
+    child count stored from the previous pass (by group id), with
+    `request_discard` when the count or the widest width changes /
+    typed `ButtonGroupUi` that counts / data-only item list / repaint
+    corners after the closure · `Ui` tag plus previous-pass count
+    (D-57); this is a stated exception to the single-pass sizing rule for
+    groups.
+  - `CP-01-14` group corners and borders: generator child-target recipe
+    with `FIRST`/`LAST`/`NOT_FIRST`/`NOT_LAST` and single-side radius and
+    border fields / hand-coded in the component · generator (four flags,
+    counted in D-11).
+- **Affects:** button-group, toggle-group, input-group, input-otp, button,
+  input, select trigger.
+- **Covers:** CP-01-7, CP-01-14
+
+Decision:
+
+### D-135 · What the theme may change in plain egui widgets
+
+- **Case:** D-40 keeps egui's global `tooltip_delay` because the theme
+  should not silently change every app tooltip; D-62 has the cleanup set a
+  `ScrollStyle`, which changes every app `egui::ScrollArea`. The two
+  reasons point opposite ways.
+- **Options:** (a) the theme changes looks of plain egui widgets (colours,
+  bar style, spacing) but never behaviour (timing, focus, keys); (b) the
+  theme changes nothing beyond what it sets today; (c) per setting.
+- **Affects:** `Theme::install`, tooltips, scroll areas, any egui style
+  field the theme sets.
+- **Recommendation:** (a): a scroll bar's look is a look, a tooltip delay
+  is behaviour. Reason: one principle that both D-40 and D-62 then follow.
+- **Covers:** none (review finding A27).
 
 Decision:
