@@ -31,6 +31,13 @@ Recommendation text stays as written (it records the proposal), and the
 Decision line says what changed; entries whose recommendation leaned on
 the old answer carry the knock-on in their own Decision line.
 
+A **Consequence** paragraph after a Decision line records what a rule of
+the rules document makes of the entry when that rule answers a question
+for every component: an application of the rule to a component the entry
+names, or a correction where the entry's text gave egui behaviour or a
+mechanism the place of upstream behaviour. Where the two differ, the rule
+wins.
+
 Order: the crate-wide anchors first (D-1 to D-13; most other entries
 follow from them), then the remaining crate-wide conventions by topic,
 then generator work, then verdicts and new dependencies, then one bundle
@@ -72,6 +79,12 @@ Decision: (b), per item (i) — as recommended, except that `.enabled` on leaf
 widgets is removed at once, not kept as a `#[deprecated]` forward for one
 release (maintainer, 2026-10-19: no deprecations before 1.0; CHANGES.md says
 to use `ui.add_enabled`).
+
+Consequence (rules, 2026-10-19): Tabs keeps `.enabled(bool)` under the
+rules' disabled clause (Builder shape): its bits root `disabled` disables
+the triggers only, which a disabled `Ui` does not reproduce (it also fades
+the list track). The Recommendation's "Tabs shows the split" no longer
+holds; the leaf widgets stay as decided.
 
 ### D-2 · Icon parameter form
 
@@ -353,6 +366,13 @@ budget has room, and F12 counts them.
 
 Decision: (c) — as recommended.
 
+Consequence (rules, 2026-10-19): The rules (T6) state when a component
+offers `.id_salt`: it keeps state across passes beyond egui's own focus and
+animation state, or wraps an egui widget that offers one. Card and alert
+offer it once they have an action part (D-48). On an overlay over a
+caller's trigger, `.id_salt` salts the trigger-derived id; it does not make
+the overlay reachable without the trigger.
+
 ### D-13 · What an in-flow container's `show` returns
 
 - **Case:** `Card::show`, `layout::row` and others return `R`; egui
@@ -428,6 +448,16 @@ Decision: (a), (i), (x) narrowed — as recommended.
 - **Covers:** CP-T10-3, CP-T11-4, CP-T11-5, CP-01-2, CP-02-1, CP-03-9, CP-04-3, CP-06-2, CP-07-4, CP-08-14, CP-08-28, CP-09-7, CP-11-4, CP-12-3, CP-12-18, CP-13-13, CP-13-20, CP-14-22, CP-16-6, CP-18-24, CP-19-2, CP-19-33, CP-07-16, CP-17-10
 
 Decision: (a), (i), (x) — as recommended.
+
+Consequence (rules, 2026-10-19): The rules decide the type by what the
+component does with the text: a component whose recipe lays its text out in
+one row with icon slots (button, badge, kbd, toggle) takes `impl
+IntoAtoms`, clickable or not; a parameter that mirrors an egui one takes
+egui's type (`hint_text` as `TextEdit::hint_text`). A crate widget honours
+every atom it accepts, and one it cannot honour (`Atom::custom`) fails a
+`debug_assert!`. Under (x), egui's `strong` and `weak` are no explicit
+colours: on a crate widget they resolve to the recipe colour (rules,
+Looks).
 
 ### D-16 · Flags whose default is `true`, and the close-button name
 
@@ -517,6 +547,11 @@ deprecated alias, so old `toggle` calls fail to compile (maintainer,
 
 Decision: (a), (i), (x) — as recommended.
 
+Consequence (rules, 2026-10-19): The enclosing `Ui`'s text colour of (i) is
+one source for crate text and crate icons alike, after the caller's
+explicit colour and the recipe's (rules, Looks); a container whose upstream
+sets a text colour sets it on its content `Ui`.
+
 ### D-20 · Names of part functions and part types
 
 - **Case:** `card_title`, `menu_label`, `button_group_separator` (prefixed)
@@ -532,6 +567,11 @@ Decision: (a), (i), (x) — as recommended.
 - **Covers:** CP-T4-9, CP-T10-9, CP-T11-8
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-19): Part types follow the same rule with
+upstream's part name (`TabsTrigger`, `SelectItem`); the sketched `Tab` item
+is `TabsTrigger`. Label's description part is upstream's FieldDescription
+and becomes `field_description` with the Field port.
 
 ## Selection
 
@@ -603,6 +643,11 @@ themselves — as recommended.
 - **Covers:** CP-T1-4, CP-08-5, CP-15-4
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-19): Data items carry plain values (rules, T1):
+a select that can be empty is the mode constructor `Select::optional(id,
+&mut Option<T>, items)` over items of `T`, and `.allow_deselect` sits on
+that mode; no item is written `Some(..)`.
 
 ### D-24 · Container type of multiple selection
 
@@ -729,6 +774,14 @@ Decision: (b) — as recommended.
 Decision: (b), label click (i) — as recommended; slider's `.label` is
 removed at once, not deprecated (maintainer, 2026-10-19: no deprecations
 before 1.0).
+
+Consequence (rules, 2026-10-19): The own label is `.label(impl
+Into<WidgetText>)`, D-15's label type, drawn as the crate `Label` and
+composed with the control as the upstream demo composes them (`flex
+items-center gap-3`; the gap comes through `Metrics`, since upstream's
+component sets none); it wraps in the width beside the control. Every
+choice shortcut takes the label as egui's does: `checkbox(ui, &mut b,
+text)`, `switch(ui, &mut b, text)`, `radio_value(ui, &mut v, x, text)`.
 
 ### D-29 · Index base
 
@@ -946,6 +999,10 @@ Decision: (b), (i) — as recommended.
 
 Decision: (b), chart tooltip on egui's default — as recommended.
 
+Consequence (rules, 2026-10-19): Under P4 the chart tooltip keeps
+upstream's behaviour and stays inside the chart (rules, T3); egui's default
+alternatives are at most how the chart PR builds that.
+
 ### D-38 · Escape with several open overlays
 
 - **Case:** an egui `Popup` does not consume Escape, so one press closes
@@ -988,6 +1045,13 @@ Decision: (b) — as recommended.
 
 Decision: (b), drawer without initial focus — as recommended.
 
+Consequence (rules, 2026-10-19): A modal has no trigger, so every overlay
+returns focus to the widget that held focus when it opened (rules, T3). A
+modal moves focus in on the first pass in which it is the top modal,
+because egui ignores a focus request below the previous pass's top modal.
+Hints never return focus. The ring after a focus move follows the browser's
+`:focus-visible` modality (rules, Looks).
+
 ### D-40 · Hover overlays: mechanism, delays, keyboard opening
 
 - **Case:** tooltip uses egui's global `tooltip_delay` (0.5 s, shadcn's
@@ -1019,6 +1083,9 @@ opens with upstream's delay, the shadcn provider's `delayDuration = 0`, on
 its own timer (D-130 (b)), not with egui's `tooltip_delay`; hover-card keeps
 bits' 0.7 s / 0.3 s. egui's global `tooltip_delay` stays untouched, so plain
 `on_hover_text` tooltips keep egui's timing.
+
+Consequence (rules, 2026-10-19): Delays are `f32` seconds, egui's unit
+(rules, Behaviour).
 
 ### D-41 · Dismissal configuration
 
@@ -1256,6 +1323,18 @@ deprecations before 1.0; CHANGES.md points to `card_footer`). The sheet body
 that the caller scrolls uses the crate `ScrollArea` in demos and docs (D-62
 (a)).
 
+Consequence (rules, 2026-10-19): Under the rules' bound-state rule
+(Compound 3) Tabs is no closure container: `Tabs` is the list widget, and
+`tabs_content(ui, ..)` is the content part fn the caller calls after it,
+which applies the content text size. Container part fns return
+`InnerResponse<R>`, are called in upstream's source order (content after a
+footer is a `debug_assert!`), and a footer reports itself only where a
+recipe styles `HAS_FOOTER`. Footers lay out in source order,
+`dialog_footer` included (`sm:flex-row sm:justify-end`). A content part's
+text size and colour reach caller widgets through the content `Ui`;
+`leading-*` reaches crate-drawn text only and is ignored for caller content
+with a D-100 reason.
+
 ### D-48 · Meaning of `action`, and how a secondary part's `Response` comes back
 
 - **Case:** `action` means a closure (card, alert), an icon button (sidebar
@@ -1294,6 +1373,11 @@ that the caller scrolls uses the crate `ScrollArea` in demos and docs (D-62
 
 Decision: (a') with (ii) for card and alert; sidebar `action_icon` with
 output field (i) — as recommended.
+
+Consequence (rules, 2026-10-19): The action part is placed from the
+previous pass's size, with `request_discard` when it changes (rules,
+Compound 6). It is called first because upstream places it before the
+content in source order, which is Tab and reading order.
 
 ### D-49 · Media and image slots
 
@@ -1476,6 +1560,11 @@ Decision: (a) — as recommended.
 - **Covers:** CP-T9-11, CP-T7-2, CP-02-13, CP-03-7, CP-03-18, CP-05-11, CP-09-27, CP-14-6, CP-15-20
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-19): Separator: its default orientation is
+upstream's horizontal (P4; rules, Behaviour), not the `Ui` layout's;
+`ui.add(Separator::new().vertical())` gives the vertical one. The tag is
+the implementation note of the rules' context rule (Compound 5).
 
 ### D-58 · A crate `Icon` inside `IntoAtoms` content
 
@@ -1866,6 +1955,11 @@ keeps its name with the clamp meaning, so the `#[deprecated]` forward to
 "no rename one release after tabs shipped" part of the reason carries no
 weight; the decision rests on (s1)'s one width word per widget.
 
+Consequence (rules, 2026-10-19): (s1) leaves one width word per widget: the
+button, content-sized, takes `.width`, not the `min_width` the
+Recommendation lists, and the rules have no separate `.min_width` floor
+(T8).
+
 ### D-72 · Default width of text-entry and choice controls
 
 - **Case:** Input and input-group cap at `Metrics::field_max_width`,
@@ -2022,6 +2116,12 @@ Decision: (a) — as recommended.
 - **Covers:** CP-T9-1
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-19): The rules state (a) as a clause (Builder
+shape): `.enabled(bool)` where upstream's `disabled` prop has an effect a
+disabled `Ui` does not reproduce, or where the component has no `Ui` to
+disable. The five components here are applications of the clause at the
+pin, not its definition; Tabs is another (D-1).
 
 ### D-80 · Shape of per-item disabled
 
@@ -2209,6 +2309,10 @@ scroller), with upstream's durations and easings, all honouring
 
 Decision: (a) with the per-component answers — as recommended.
 
+Consequence (rules, 2026-10-19): The AccessKit role is set after
+`widget_info`, which sets one from `WidgetType`. The decorative separator
+reports no `widget_info` (rules, T9).
+
 ## Shortcut functions
 
 ### D-90 · Which components get a shortcut, and what closure shortcuts return
@@ -2236,6 +2340,10 @@ Decision: (a) with the per-component answers — as recommended.
 - **Covers:** CP-T10-11, CP-T10-1, CP-01-4, CP-04-8, CP-04-14, CP-05-38, CP-06-5, CP-16-11, CP-18-32, CP-03-19, CP-04-30, CP-07-13, CP-08-35, CP-10-21, CP-18-12, CP-17-11
 
 Decision: (a) with the named exceptions — as recommended.
+
+Consequence (rules, 2026-10-19): The rules state (a) as clauses (T10); the
+lists here are examples at the pin. A variant is not content, so there is
+no `separator_vertical` shortcut (D-18 (x)).
 
 ## Generator and recipes
 
@@ -2667,6 +2775,9 @@ pinned primitive.
 Decision: deferred to the family PR (recommendation is the default
 proposal).
 
+Consequence (rules, 2026-10-19): `CP-04-17`: the default proposal "infer"
+conflicts with P4; the rules decide horizontal, upstream's default (D-57).
+
 ### D-110 · F2 content blocks (card, item, empty, avatar)
 
 - **Case / Options / Recommendation per item:**
@@ -2741,6 +2852,11 @@ proposal).
 Decision: deferred to the family PR (recommendation is the default
 proposal), except CP-05-27, decided now: default step 1, as bits
 (maintainer, P4).
+
+Consequence (rules, 2026-10-19): `CP-05-27`: the rules' upstream-defaults
+rule covers the step of 1. The slider docs say that a `0.0..=1.0` range
+then has two positions, and a `debug_assert!` catches a step not smaller
+than the range.
 
 ### D-113 · F5 text entry (input, textarea, input-otp, input-group)
 
@@ -2823,6 +2939,9 @@ proposal).
 
 Decision: deferred to the family PR (recommendation is the default
 proposal). Tooltip timing follows D-40 and D-130.
+
+Consequence (rules, 2026-10-19): An overlay with an arrow paints it for
+every side and alignment before it offers `.align` (rules, T3).
 
 ### D-116 · F8 menus (dropdown-menu, context-menu, menubar)
 
@@ -3148,6 +3267,10 @@ window width (D-69).
 
 Decision: (b) — as recommended.
 
+Consequence (rules, 2026-10-19): The rules (T8) now state this decision:
+text wraps where the browser would wrap it, in a row as in a column, and
+Label offers `.wrap_mode`.
+
 
 ## Added in the adversarial review (Task 7)
 
@@ -3235,6 +3358,18 @@ Decision: (b) — as recommended.
 
 Decision: (ii) with the overlay stack (ii+), the Escape hook at the start of
 the pass, and (o1) — as recommended.
+
+Consequence (rules, 2026-10-19): An overlay gets only its trigger's
+`Response` (D-53), which carries no `UiStack`, so its parent is the open
+overlay whose layer holds the trigger (`Response::layer_id`), not a `Ui`
+tag. The Escape work runs from a pass-start hook where egui runs one and
+otherwise from the first crate overlay call of the pass, so it holds in an
+app's own `begin_pass`/`end_pass` loop and without `Theme::apply` (egui
+runs `on_begin_pass` only from `run_ui`). Dismissal reacts to the press,
+never to the overlay's own trigger; "top" for a press is the stack as the
+pass began; hover overlays are on the stack for Escape only. The stack is
+public, so overlays built outside the crate nest with crate overlays
+(rules, T2).
 
 ### D-129 · How a crate `Icon` becomes an egui atom
 
