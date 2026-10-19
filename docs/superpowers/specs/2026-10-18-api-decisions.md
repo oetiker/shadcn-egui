@@ -24,6 +24,13 @@ verdicts and dependency choices of D-103 to D-108 (port, defer, which
 dependency) are decided now; each of D-104 to D-108 says which of its
 parts is which.
 
+Decided (maintainer, 2026-10-19): every `Decision:` line is filled. The
+guiding principles behind the decisions are at the top of the rules
+document. Where a decision differs from the recommendation, the
+Recommendation text stays as written (it records the proposal), and the
+Decision line says what changed; entries whose recommendation leaned on
+the old answer carry the knock-on in their own Decision line.
+
 Order: the crate-wide anchors first (D-1 to D-13; most other entries
 follow from them), then the remaining crate-wide conventions by topic,
 then generator work, then verdicts and new dependencies, then one bundle
@@ -61,7 +68,8 @@ Existing-crate bugs are not listed: they all go into the stage 3 cleanup
   its items keep it.
 - **Covers:** CP-01-1, CP-02-5, CP-05-3, CP-06-1, CP-07-1, CP-07-31, CP-08-12, CP-09-18, CP-12-7, CP-15-17, CP-18-37, CP-08-37
 
-Decision:
+Decision: (b) with the `#[deprecated]` `.enabled` for one release, per item
+(i) — as recommended.
 
 ### D-2 · Icon parameter form
 
@@ -78,7 +86,7 @@ Decision:
   (`Color32`, `Vec2`). `IconView::new` changes too.
 - **Covers:** CP-01-3, CP-02-8, CP-02-28, CP-03-34, CP-04-31, CP-04-32, CP-06-36, CP-08-36, CP-09-35, CP-10-26, CP-13-33, CP-14-45, CP-18-33
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-3 · Boolean setter form
 
@@ -107,7 +115,7 @@ Decision:
   each port would draw differently; (e) doubles every setter name.
 - **Covers:** CP-01-31, CP-02-29, CP-03-35, CP-04-33, CP-06-38, CP-07-30, CP-09-36, CP-11-36, CP-12-31, CP-13-34, CP-13-35, CP-14-44, CP-15-37, CP-16-39, CP-16-42, CP-16-43, CP-17-15, CP-18-34, CP-19-37
 
-Decision:
+Decision: (d) — as recommended.
 
 ### D-4 · Name of the binding setter
 
@@ -131,7 +139,7 @@ Decision:
   (D-31 (c1)).
 - **Covers:** CP-14-43
 
-Decision:
+Decision: (c) — as recommended.
 
 ### D-5 · Icon slots: new slots, and per shape or per role
 
@@ -167,7 +175,14 @@ Decision:
   The library-specific names are icongen's table, not API.
 - **Covers:** CP-05-6, CP-06-37, CP-12-21, CP-12-33, CP-13-31, CP-14-47, CP-15-36, CP-16-41, CP-16-44, CP-19-39, CP-19-42, CP-05-18
 
-Decision:
+Decision: (a) with (iii) — differs from the recommendation (maintainer, P4:
+upstream's icon in every library). The shape slots as listed, plus a
+role-named slot wherever an icon library uses another icon for a role than
+for the shared shape (`calendar_prev`/`calendar_next`, filled with
+hugeicons' `ArrowLeftIcon`/`ArrowRightIcon`, and each further case icongen's
+table finds), so every library shows upstream's icon in every component; the
+hugeicons calendar difference and its module-docs note fall away. The plain
+down chevron is D-94's new slot.
 
 ### D-6 · Orientation type
 
@@ -186,7 +201,7 @@ Decision:
   slider-named one would read wrong on a tab list.
 - **Covers:** CP-05-37, CP-01-9, CP-01-30, CP-04-20, CP-07-29, CP-12-5, CP-14-36, CP-16-40, CP-18-5
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-7 · Side and align of anchored overlays
 
@@ -201,7 +216,7 @@ Decision:
   vocabulary adds nothing.
 - **Covers:** CP-10-1, CP-09-5, CP-14-23
 
-Decision:
+Decision: (a) with `.gap(f32)` — as recommended.
 
 ### D-8 · Open state of anchored overlays
 
@@ -225,7 +240,8 @@ Decision:
   is the separate entry D-128; this entry's (b) holds under either answer.
 - **Covers:** CP-10-2, CP-09-4, CP-08-7, CP-13-2, CP-T2-1, CP-T2-6
 
-Decision:
+Decision: (b) — as recommended. Tooltip's open state is the crate's hover
+timer (D-130 (b)).
 
 ### D-9 · What an overlay's `show` returns
 
@@ -249,7 +265,8 @@ Decision:
   `should_close()`.
 - **Covers:** CP-10-3, CP-09-3, CP-11-2, CP-13-32, CP-10-25, CP-T5-3
 
-Decision:
+Decision: (c) — as recommended. Modals return `Option<InnerResponse<R>>`
+(D-31 (c1)).
 
 ### D-10 · Return type of value shortcuts
 
@@ -268,7 +285,7 @@ Decision:
   `changed()` carries the `bool`.
 - **Covers:** CP-08-13, CP-05-5, CP-12-10, CP-15-21, CP-15-33, CP-13-23, CP-13-18
 
-Decision:
+Decision: (a), breadcrumb (iii) — as recommended.
 
 ### D-11 · `State` flag budget
 
@@ -297,7 +314,9 @@ Decision:
   break because the field is private).
 - **Covers:** CP-18-30, CP-11-38, CP-12-34, CP-13-36, CP-14-48, CP-15-38, CP-19-40, CP-19-41, CP-19-36
 
-Decision:
+Decision: (d) — as recommended. The headcount leaves out the scroll-area
+recipe states (scrollbar orientation, hover) that D-62 (a) adds; the 128-bit
+budget has room, and F12 counts them.
 
 ### D-12 · Root id of a stateful component
 
@@ -325,7 +344,7 @@ Decision:
   popup id derives from the trigger (D-65).
 - **Covers:** CP-T6-1, CP-05-12, CP-08-10, CP-07-32, CP-09-30, CP-12-11, CP-15-12, CP-18-11, CP-T10-7
 
-Decision:
+Decision: (c) — as recommended.
 
 ### D-13 · What an in-flow container's `show` returns
 
@@ -346,7 +365,7 @@ Decision:
   and rects.
 - **Covers:** CP-T5-2, CP-03-1, CP-04-2, CP-18-10
 
-Decision:
+Decision: (c) — as recommended.
 
 ## Conventions
 
@@ -374,7 +393,7 @@ Decision:
   per-type judgement.
 - **Covers:** CP-T11-1, CP-T11-2
 
-Decision:
+Decision: (a), (i), (x) narrowed — as recommended.
 
 ### D-15 · Text and content parameter types
 
@@ -401,7 +420,7 @@ Decision:
   explicit `RichText` attribute is the caller's intent, as in egui labels.
 - **Covers:** CP-T10-3, CP-T11-4, CP-T11-5, CP-01-2, CP-02-1, CP-03-9, CP-04-3, CP-06-2, CP-07-4, CP-08-14, CP-08-28, CP-09-7, CP-11-4, CP-12-3, CP-12-18, CP-13-13, CP-13-20, CP-14-22, CP-16-6, CP-18-24, CP-19-2, CP-19-33, CP-07-16, CP-17-10
 
-Decision:
+Decision: (a), (i), (x) — as recommended.
 
 ### D-16 · Flags whose default is `true`, and the close-button name
 
@@ -418,7 +437,7 @@ Decision:
   avoid double negatives; `show_close_button` is upstream's prop name.
 - **Covers:** CP-T11-10
 
-Decision:
+Decision: (a), (i) — as recommended.
 
 ### D-17 · Positional `bool` parameters
 
@@ -435,7 +454,7 @@ Decision:
   call site.
 - **Covers:** CP-T11-9, CP-T9-8
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-18 · Names that clash
 
@@ -466,7 +485,8 @@ Decision:
   `ui.button(text)` shapes; the module name matches upstream's folder.
 - **Covers:** CP-T11-7, CP-T11-12, CP-T10-4, CP-02-6, CP-01-15, CP-05-22, CP-02-22, CP-14-46, CP-16-38
 
-Decision:
+Decision: (d), (ii), (x), `SidebarCollapse` with `Off`, `components::sonner`
+— as recommended.
 
 ### D-19 · Caller colour overrides and the colour parameter type
 
@@ -486,7 +506,7 @@ Decision:
   `impl Into<Color32>`.
 - **Covers:** CP-T11-11, CP-02-7, CP-04-6, CP-04-25, CP-02-20
 
-Decision:
+Decision: (a), (i), (x) — as recommended.
 
 ### D-20 · Names of part functions and part types
 
@@ -502,7 +522,7 @@ Decision:
   `separator`), and today's `card_title` already does it.
 - **Covers:** CP-T4-9, CP-T10-9, CP-T11-8
 
-Decision:
+Decision: (a) — as recommended.
 
 ## Selection
 
@@ -525,7 +545,8 @@ Decision:
   domain types.
 - **Covers:** CP-T1-1, CP-T1-2, CP-01-20, CP-05-9, CP-08-1, CP-12-1, CP-19-22
 
-Decision:
+Decision: (a) with (ii) for per-call items and (i) for held lists,
+questionnaire by index — as recommended.
 
 ### D-22 · "Nothing selected" and a value that matches no item
 
@@ -549,7 +570,8 @@ Decision:
   renders; tabs keep the first tab as Tab stop (porting standard).
 - **Covers:** CP-T1-3, CP-T1-12, CP-01-21, CP-05-10
 
-Decision:
+Decision: (a), (i), with the stated exception for widgets that clear by
+themselves — as recommended.
 
 ### D-23 · Deselect by a second click
 
@@ -571,7 +593,7 @@ Decision:
   rules out a deselect with nothing to write.
 - **Covers:** CP-T1-4, CP-08-5, CP-15-4
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-24 · Container type of multiple selection
 
@@ -587,7 +609,7 @@ Decision:
   upstream semantics, one type to learn.
 - **Covers:** CP-T1-5, CP-01-22, CP-12-15, CP-17-8, CP-09-11, CP-19-23
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-25 · Spelling of single, multiple and range modes; constructor names
 
@@ -614,7 +636,13 @@ Decision:
   `ComboBox::from_label`.
 - **Covers:** CP-T1-6, CP-T11-6, CP-01-24, CP-12-16, CP-15-2, CP-15-31
 
-Decision:
+Decision: (d) for calendar — differs from the recommendation (maintainer:
+own type): `Calendar` and a separate `RangeCalendar`, so a range-only setter
+on a single calendar does not compile, as upstream ships range-calendar as
+its own component; `Calendar::multiple` stays a mode constructor. (a) and
+(i) for every other component, as recommended
+(`ToggleGroup::new`/`::multiple`, `Accordion::new`/`::multiple`,
+`Kbd::icon`, `from_*` for alternative input forms).
 
 ### D-26 · How a selection group gets its items
 
@@ -645,7 +673,9 @@ Decision:
   data avoids. Table row flags are setters on a row builder (D-17).
 - **Covers:** CP-T1-7, CP-08-2, CP-07-24, CP-09-13, CP-14-8, CP-01-23, CP-05-8, CP-12-2, CP-12-17, CP-16-5
 
-Decision:
+Decision: the stated criterion: (a) for select, native-select, toggle-group
+and the tabs list; (c) for radio-group, menu radio items and sidebar; the
+handle form for accordion — as recommended.
 
 ### D-27 · Value form of list shortcuts
 
@@ -660,7 +690,7 @@ Decision:
   binds (D-22).
 - **Covers:** CP-T1-8, CP-T10-6
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-28 · Do choice controls carry their own label
 
@@ -687,7 +717,7 @@ Decision:
   mechanism.
 - **Covers:** CP-T1-9, CP-T10-5, CP-05-19, CP-05-2, CP-05-20, CP-07-2, CP-05-35
 
-Decision:
+Decision: (b), label click (i) — as recommended.
 
 ### D-29 · Index base
 
@@ -701,7 +731,7 @@ Decision:
   off-by-one errors.
 - **Covers:** CP-T1-10, CP-13-21
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-30 · Name of the "shown as current" flag
 
@@ -719,7 +749,7 @@ Decision:
   chosen"; `checked` names a different visual.
 - **Covers:** CP-T1-11, CP-T9-9
 
-Decision:
+Decision: (a), `checked(bool)` on the command item — as recommended.
 
 ## Open state
 
@@ -760,7 +790,7 @@ Decision:
   crate can watch, so (b) does not fit.
 - **Covers:** CP-11-35, CP-11-1, CP-08-24
 
-Decision:
+Decision: (c) with (c1) — as recommended.
 
 ### D-32 · Who owns non-overlay state
 
@@ -803,7 +833,7 @@ Decision:
   is panel state in this entry's terms.
 - **Covers:** CP-T2-2, CP-T1-13, CP-T2-8, CP-T2-7, CP-12-14, CP-12-28, CP-14-1, CP-14-11, CP-14-33, CP-15-6, CP-16-13, CP-19-10, CP-19-24, CP-16-25, CP-08-23
 
-Decision:
+Decision: (c), sidebar sub-menus (iii) — as recommended.
 
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
@@ -830,7 +860,7 @@ Decision:
   trigger is `sidebar_trigger(ui, id)` toggling memory.
 - **Covers:** CP-T9-12, CP-T2-3, CP-T6-4, CP-10-24, CP-14-18
 
-Decision:
+Decision: (a), (iii) — as recommended.
 
 ### D-34 · Initial value of memory-owned state
 
@@ -847,7 +877,7 @@ Decision:
   upstream; a default setter there adds API with no upstream use.
 - **Covers:** CP-T2-4
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-35 · Persisting memory-owned state across restarts
 
@@ -868,7 +898,7 @@ Decision:
   `egui/persistence`.
 - **Covers:** CP-T2-5, CP-14-2, CP-14-38
 
-Decision:
+Decision: (b) — as recommended.
 
 ## Overlay placement, dismissal and focus
 
@@ -888,7 +918,7 @@ Decision:
   constants of the shadcn wrappers.
 - **Covers:** CP-T3-1, CP-T3-2, CP-08-8
 
-Decision:
+Decision: (b), (i) — as recommended.
 
 ### D-37 · Collision fallback
 
@@ -903,7 +933,7 @@ Decision:
   primitive and keeps menus from jumping to a corner.
 - **Covers:** CP-T3-3, CP-10-20, CP-17-5
 
-Decision:
+Decision: (b), chart tooltip on egui's default — as recommended.
 
 ### D-38 · Escape with several open overlays
 
@@ -924,7 +954,7 @@ Decision:
   closes the whole stack; one helper keeps the components consistent.
 - **Covers:** CP-T3-4, CP-09-20, CP-11-13
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-39 · Focus on open, on close, and Tab leaving an overlay
 
@@ -945,7 +975,7 @@ Decision:
   focusable panel (deviation from bits, stated).
 - **Covers:** CP-T3-5, CP-T3-6, CP-08-15, CP-09-21, CP-10-7, CP-11-7, CP-11-16, CP-11-33
 
-Decision:
+Decision: (b), drawer without initial focus — as recommended.
 
 ### D-40 · Hover overlays: mechanism, delays, keyboard opening
 
@@ -971,7 +1001,13 @@ Decision:
   recommendation assumes D-130 (b).
 - **Covers:** CP-T3-7, CP-10-16, CP-10-11, CP-13-10, CP-10-15, CP-10-6, CP-10-19, CP-10-12, CP-10-22
 
-Decision:
+Decision: (a), (ii), (x), keyboard opening for both, popover hover skipped,
+hover-card open while the pointer is down in it — as recommended, except the
+tooltip's default delay, which differs (maintainer, P4): the crate tooltip
+opens with upstream's delay, the shadcn provider's `delayDuration = 0`, on
+its own timer (D-130 (b)), not with egui's `tooltip_delay`; hover-card keeps
+bits' 0.7 s / 0.3 s. egui's global `tooltip_delay` stays untouched, so plain
+`on_hover_text` tooltips keep egui's timing.
 
 ### D-41 · Dismissal configuration
 
@@ -989,7 +1025,9 @@ Decision:
   shadcn demo needs more.
 - **Covers:** CP-T3-8, CP-11-31, CP-13-11
 
-Decision:
+Decision: (a), drawer `dismissible(false)` blocks Escape, backdrop and drag
+— as recommended, except navigation-menu, which differs (maintainer, P4):
+its hover items stay open on an outside touch, as upstream.
 
 ### D-42 · Edge side of panels
 
@@ -1006,7 +1044,8 @@ Decision:
   overlays keep `RectAlign`, which describes a different thing.
 - **Covers:** CP-11-18, CP-11-19, CP-14-13, CP-11-34
 
-Decision:
+Decision: (a) with defaults Right (sheet), Bottom (drawer), Left (sidebar) —
+as recommended.
 
 ### D-43 · Start/End alignment and other placement types
 
@@ -1032,7 +1071,7 @@ Decision:
   setters are called, is D-132.
 - **Covers:** CP-T7-4, CP-T7-5, CP-T3-9, CP-18-18, CP-18-15, CP-19-8, CP-06-25, CP-19-15, CP-18-16, CP-19-6
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-44 · Painting outside the allocated rect
 
@@ -1046,7 +1085,7 @@ Decision:
   guard.
 - **Covers:** CP-16-16, CP-18-23
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-45 · List keyboard model and menu machinery
 
@@ -1073,7 +1112,11 @@ Decision:
   consistency goal; egui's focus movement lacks typeahead and Home/End.
 - **Covers:** CP-09-19, CP-08-16, CP-08-17, CP-08-18, CP-07-28, CP-09-1
 
-Decision:
+Decision: (a), consistent with D-128 (ii); typeahead as bits and
+native-select on Up/Down — as recommended, except pointer handling, which
+differs (maintainer, P4): select and menu triggers open on pointer down and
+support press-drag-release selection as bits, not click to open and click to
+choose as egui's `ComboBox` (D-116 CP-09-22 likewise).
 
 ## Sub-parts and compound components
 
@@ -1100,7 +1143,7 @@ Decision:
   `has-*` recipes) one pass late, with `request_discard` when it changes.
 - **Covers:** CP-T4-1, CP-03-2, CP-03-10, CP-03-11, CP-03-23, CP-04-1, CP-07-5, CP-07-15, CP-07-19, CP-10-4, CP-18-1, CP-19-1, CP-14-5, CP-04-12, CP-19-4
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-47 · What the `show` closure holds; footers and body framing
 
@@ -1196,7 +1239,8 @@ Decision:
   and the one form that works for in-flow containers and modals alike.
 - **Covers:** CP-T4-2, CP-T7-7, CP-03-3, CP-03-15, CP-11-5, CP-11-10, CP-19-3, CP-11-23, CP-04-4, CP-03-16, CP-03-24, CP-18-17, CP-11-21, CP-11-22, CP-12-13
 
-Decision:
+Decision: (d6) — as recommended. The sheet body that the caller scrolls uses
+the crate `ScrollArea` in demos and docs (D-62 (a)).
 
 ### D-48 · Meaning of `action`, and how a secondary part's `Response` comes back
 
@@ -1234,7 +1278,8 @@ Decision:
   closure per container; closures return widget responses the egui way.
 - **Covers:** CP-T4-3, CP-T5-6, CP-18-2, CP-14-7, CP-14-9, CP-11-11
 
-Decision:
+Decision: (a') with (ii) for card and alert; sidebar `action_icon` with
+output field (i) — as recommended.
 
 ### D-49 · Media and image slots
 
@@ -1255,7 +1300,7 @@ Decision:
   `ImageSource` is what `egui::Image::new` takes.
 - **Covers:** CP-T4-4, CP-03-14, CP-03-28, CP-04-22, CP-04-24, CP-18-3, CP-18-13, CP-11-14, CP-04-21
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-50 · Layout-only groups
 
@@ -1273,7 +1318,7 @@ Decision:
   (`ui.horizontal` beside `Frame::show`); options decide.
 - **Covers:** CP-T4-6, CP-T5-8, CP-19-7, CP-02-10, CP-18-21, CP-01-10, CP-01-11, CP-03-17
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-51 · Labelled groups of items
 
@@ -1302,7 +1347,7 @@ Decision:
   difference in the main demo.
 - **Covers:** CP-T4-7, CP-08-3, CP-09-16
 
-Decision:
+Decision: (a) for data lists and command, (b) for menus — as recommended.
 
 ### D-52 · What passive part functions return
 
@@ -1317,7 +1362,7 @@ Decision:
   Reason: egui's pattern; `()` drops what the caller may hover.
 - **Covers:** CP-T4-8, CP-T5-11, CP-T10-2, CP-04-16
 
-Decision:
+Decision: (a), (c) for `field_error` — as recommended.
 
 ### D-53 · How overlays and helpers take their trigger
 
@@ -1340,7 +1385,7 @@ Decision:
   `on_hover_*` form.
 - **Covers:** CP-T4-10, CP-T10-10, CP-T10-8, CP-T5-5, CP-09-23, CP-10-8, CP-10-14, CP-12-29
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-54 · Content form: text, closure, or both; leaf, container, or both
 
@@ -1358,7 +1403,7 @@ Decision:
   two shortcuts. Reason: egui's leaf/two-step pair (§Widget builders).
 - **Covers:** CP-T4-11, CP-T5-7, CP-10-9, CP-18-14, CP-03-12, CP-07-6, CP-04-15, CP-12-4
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-55 · How non-selection collections get their items
 
@@ -1379,7 +1424,7 @@ Decision:
   gap. Reason: each form is the one egui uses for that layout problem.
 - **Covers:** CP-08-19, CP-14-32, CP-16-14, CP-19-12, CP-13-1, CP-13-16, CP-04-26, CP-06-14, CP-14-35
 
-Decision:
+Decision: (b), (c), (a), (d) per layout problem as listed — as recommended.
 
 ### D-56 · A crate widget restyled by its parent
 
@@ -1397,7 +1442,7 @@ Decision:
   types, and egui's `UiStack` exists for exactly this.
 - **Covers:** CP-T4-5, CP-06-27, CP-14-21, CP-06-26
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-57 · How a part learns context from its parent
 
@@ -1416,7 +1461,7 @@ Decision:
   replaces today's global `ctx.data` key for the card size (drift).
 - **Covers:** CP-T9-11, CP-T7-2, CP-02-13, CP-03-7, CP-03-18, CP-05-11, CP-09-27, CP-14-6, CP-15-20
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-58 · A crate `Icon` inside `IntoAtoms` content
 
@@ -1439,7 +1484,7 @@ Decision:
   atoms.
 - **Covers:** CP-T4-13, CP-02-12, CP-02-14
 
-Decision:
+Decision: (a) in the form of D-129 — as recommended.
 
 ### D-59 · Icon slot content: `Icon`, `Glyph`, or a spinner setter
 
@@ -1455,7 +1500,7 @@ Decision:
   slot; upstream's loading demos put a spinner where the icon goes.
 - **Covers:** CP-01-32, CP-02-2, CP-18-26, CP-18-35, CP-02-18
 
-Decision:
+Decision: (b), spinner from the rotated `loader` slot — as recommended.
 
 ## Containers and outputs
 
@@ -1478,7 +1523,7 @@ Decision:
   message-scroller, carousel, accordion.
 - **Covers:** CP-T5-9, CP-T5-1, CP-14-40, CP-06-16, CP-19-28, CP-19-17, CP-06-3, CP-12-19
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-61 · Container method name
 
@@ -1492,12 +1537,13 @@ Decision:
 - **Recommendation:** (a): the verb is `show`; secondary slots are part
   fns inside its closure (D-47 (d6)), not new verbs (under D-47 (d4) they
   would be methods on its result); a crate type that mirrors an egui type
-  keeps that type's `show_*` variants (only relevant if D-62 takes (a):
+  keeps that type's `show_*` variants (the crate `ScrollArea` of D-62 (a):
   `ScrollArea::show_rows`). Reason: crate users learn one verb; the egui
   type underneath is an implementation detail.
 - **Covers:** CP-T5-4, CP-09-28
 
-Decision:
+Decision: (a) — as recommended. The mirrored-type exception is live: the
+crate `ScrollArea` (D-62 (a)) keeps egui's `show_rows`.
 
 ### D-62 · Scroll areas: own type, theme only, or helper
 
@@ -1559,7 +1605,24 @@ Decision:
   would mean following it at every egui upgrade.
 - **Covers:** CP-14-26, CP-14-27, CP-14-30, CP-T4-12, CP-T5-10, CP-T7-8, CP-08-9, CP-18-9, CP-14-28
 
-Decision:
+Decision: (a) — differs from the recommendation (maintainer, P9: colours
+match upstream exactly; a `ScrollStyle` thumb reaches only the nearest
+shared colour). A crate `ScrollArea` hides egui's bars and paints its own
+(transparent track, exact `bg-border` thumb), with the cost named above
+accepted: thumb drag, track click, hover widening and offset writes through
+`scroll_area::State`, followed at every egui upgrade. Under (a), as the
+recommendation describes: hover-only visibility first, bits' other types
+later; CP-14-30 (i), select's list moves to the crate type in the
+scroll-area PR; the type keeps egui's name (D-18 (ii)) and mirrors only the
+subset (constructors per axis, `max_height`, `max_width`, `auto_shrink`,
+`stick_to_bottom`, `id_salt`, `show`, `show_rows`). Composites use the crate
+type: select and command lists (D-118), message-scroller follow-bottom
+(D-108), the sheet body in demos and docs (D-47), attachment group (D-124),
+table horizontal overflow (D-122). Stage order: F12 ports the scroll area
+after F9 (sheet) and F10 (select, command), which use `egui::ScrollArea`
+until the F12 PR migrates them; the plan may instead move the scroll-area
+port before F9. The theme sets no `ScrollStyle` for plain egui scroll areas
+(D-135).
 
 ### D-63 · The `layout` module, `layout::card`, `form_row` and `egui_extras`
 
@@ -1580,7 +1643,7 @@ Decision:
 - **Affects:** `layout`, card, field, aspect-ratio.
 - **Covers:** CP-T6-8, CP-03-8, CP-03-29
 
-Decision:
+Decision: as recommended.
 
 ## Identity
 
@@ -1600,7 +1663,7 @@ Decision:
   (i) is what egui does (`Modal::new(Id)` global, `ScrollArea` scoped).
 - **Covers:** CP-T6-2, CP-T6-3, CP-T6-6, CP-11-8
 
-Decision:
+Decision: (a), (i), (x) — as recommended.
 
 ### D-65 · Popup id of a trigger-plus-list widget
 
@@ -1615,7 +1678,8 @@ Decision:
   D-12 requires a salt. Reason: follows D-12.
 - **Covers:** CP-T6-5, CP-10-17
 
-Decision:
+Decision: (a) on a caller's trigger, (b) where D-12 requires a salt — as
+recommended.
 
 ### D-66 · Item ids inside data-driven containers
 
@@ -1631,7 +1695,8 @@ Decision:
   sonner `ToastId`). Reason: an index id loses focus and state on reorder.
 - **Covers:** CP-T6-7, CP-19-11
 
-Decision:
+Decision: (a) where items do not reorder, (b) where they do — as
+recommended.
 
 ## Orientation and direction
 
@@ -1651,7 +1716,9 @@ Decision:
   `.vertical()`. Reason: D-6 type, D-3 shortcut form.
 - **Covers:** CP-T7-1
 
-Decision:
+Decision: (a), resizable `ResizablePanes::new()` plus `.vertical()` — as
+recommended. The per-axis constructor exception is live: the crate
+`ScrollArea` (D-62 (a)) keeps egui's `vertical()`/`horizontal()`/`both()`.
 
 ### D-68 · Roving focus: one helper, keys per orientation
 
@@ -1674,7 +1741,7 @@ Decision:
 - **Affects:** the components listed.
 - **Covers:** CP-T7-3, CP-01-29, CP-05-21, CP-05-29, CP-16-17, CP-01-27, CP-12-26, CP-13-30, CP-05-17, CP-12-9, CP-05-16, CP-12-8
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-69 · Responsive breakpoints
 
@@ -1692,7 +1759,14 @@ Decision:
   read goes through the breakpoint helper of D-133.
 - **Covers:** CP-T7-6, CP-07-14, CP-15-13, CP-14-12, CP-16-37, CP-13-27
 
-Decision:
+Decision: (a) — differs from the recommendation (maintainer, P4: responsive
+layout by default, as upstream). A breakpoint reads what upstream's query
+reads: the media queries (calendar `md:`, sonner below 600 px, sidebar below
+768 px, pagination text below `sm`) read the window width, the container
+query (field `@md/field-group`) the field group's width, both through
+D-133's helper; this is the written-down exception to the single-pass sizing
+rule. Field's responsive orientation stays the opt-in `.responsive(bool)`
+(D-6), because upstream's is opt-in too (`orientation="responsive"`).
 
 ### D-70 · Modes upstream has but shadcn neither styles nor demos
 
@@ -1706,7 +1780,7 @@ Decision:
 - **Affects:** radio-group, navigation-menu, pagination, command, marker.
 - **Covers:** CP-05-13, CP-13-6, CP-13-25, CP-08-30, CP-18-28
 
-Decision:
+Decision: (a) — as recommended.
 
 ## Sizing
 
@@ -1765,7 +1839,13 @@ Decision:
   `w.min(ui.available_width())` inline).
 - **Covers:** CP-T8-1, CP-T8-3, CP-01-5, CP-03-4, CP-03-30, CP-04-5, CP-04-11, CP-05-36, CP-06-4, CP-07-11, CP-08-11, CP-10-18, CP-18-6, CP-09-31, CP-09-6, CP-02-24
 
-Decision:
+Decision: (b) with (s1) and the stated clamp order — as recommended. Under
+D-72's decision select and native-select are content-sized, so under (s1)
+they take `.width` (requested, clamped), not `.max_width`, and
+`Select::width` keeps its name with the clamp meaning. Maintainer: renames
+are fine (no installed base yet), so the "no rename one release after tabs
+shipped" part of the reason carries no weight; the decision rests on (s1)'s
+one width word per widget.
 
 ### D-72 · Default width of text-entry and choice controls
 
@@ -1782,7 +1862,11 @@ Decision:
   control. Reason: consistent rows.
 - **Covers:** CP-T8-2, CP-06-33
 
-Decision:
+Decision: (a) for text entry (input, textarea, input-group), command fills,
+input-group owns its control's width — as recommended; differs for the
+selects (maintainer, P4): the select trigger and native-select are
+content-sized as upstream (`w-fit` on `select-trigger.svelte` and on the
+native-select wrapper at the pin), not capped at `Metrics::field_max_width`.
 
 ### D-73 · Size enums: per component or shared; names; `Default`
 
@@ -1799,7 +1883,8 @@ Decision:
 - **Affects:** every component with sizes.
 - **Covers:** CP-T8-4, CP-T11-3, CP-05-24, CP-11-15, CP-07-23, CP-06-35
 
-Decision:
+Decision: (a), native-select re-exports `SelectSize`, `Sm` offered — as
+recommended.
 
 ### D-74 · Meaning of `size`
 
@@ -1817,7 +1902,7 @@ Decision:
   precedent; no component has both variants and a pixel size.
 - **Covers:** CP-T8-5, CP-02-16, CP-02-23, CP-11-20, CP-06-22
 
-Decision:
+Decision: (b) and (c) — as recommended.
 
 ### D-75 · How a group shares size with its children
 
@@ -1834,7 +1919,7 @@ Decision:
 - **Affects:** item group, avatar group, button-group, toggle-group.
 - **Covers:** CP-T8-6, CP-04-27, CP-01-12
 
-Decision:
+Decision: (c) — as recommended.
 
 ### D-76 · Height model
 
@@ -1857,7 +1942,8 @@ Decision:
 - **Affects:** resizable, carousel, message-scroller, chart, empty, textarea.
 - **Covers:** CP-T8-7, CP-03-26, CP-14-41, CP-06-10, CP-06-11
 
-Decision:
+Decision: (a) with a floor, empty content height, textarea grows — as
+recommended. The module docs name the crate `ScrollArea` (D-62 (a)).
 
 ### D-77 · Fractions of the parent
 
@@ -1872,7 +1958,7 @@ Decision:
 - **Affects:** bubble, resizable, carousel `per_view`.
 - **Covers:** CP-T8-8, CP-18-20, CP-14-34
 
-Decision:
+Decision: as recommended.
 
 ### D-78 · When a recipe dimension gets a public setter
 
@@ -1890,7 +1976,7 @@ Decision:
   toggle-group.
 - **Covers:** CP-T8-9, CP-03-5, CP-15-15, CP-14-14, CP-14-31, CP-04-18, CP-01-25, CP-14-15
 
-Decision:
+Decision: (a) — as recommended.
 
 ## State flags and behaviour
 
@@ -1916,7 +2002,7 @@ Decision:
 - **Affects:** field, accordion, menubar, hover-card.
 - **Covers:** CP-T9-1
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-80 · Shape of per-item disabled
 
@@ -1937,7 +2023,7 @@ Decision:
   native-select, navigation-menu, questionnaire choices.
 - **Covers:** CP-T9-2, CP-12-6, CP-12-22, CP-12-32, CP-13-8, CP-05-15, CP-07-27, CP-08-32, CP-19-38
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-81 · Overriding built-in Previous/Next buttons
 
@@ -1952,7 +2038,7 @@ Decision:
 - **Affects:** pagination, carousel, questionnaire.
 - **Covers:** CP-T9-15, CP-19-31
 
-Decision:
+Decision: (b) for questionnaire, (a) elsewhere — as recommended.
 
 ### D-82 · Overlay on a disabled trigger
 
@@ -1967,7 +2053,7 @@ Decision:
 - **Affects:** tooltip, popover, menus, collapsible, hover-card.
 - **Covers:** CP-T9-3, CP-10-10
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-83 · `invalid`: presence and flow
 
@@ -1987,7 +2073,8 @@ Decision:
   input-group, toggle-group.
 - **Covers:** CP-T9-4, CP-05-14, CP-06-18, CP-07-8, CP-02-4, CP-15-19
 
-Decision:
+Decision: (a); input-otp whole widget, radio-group (i), Field (ii) — as
+recommended.
 
 ### D-84 · Validation API and `required`
 
@@ -2004,7 +2091,8 @@ Decision:
 - **Affects:** field, form, questionnaire.
 - **Covers:** CP-T9-5, CP-07-9, CP-19-27, CP-T9-6, CP-07-21
 
-Decision:
+Decision: (a); `required` behavioural in questionnaire, AccessKit-only on
+Field — as recommended.
 
 ### D-85 · `read_only`
 
@@ -2017,7 +2105,7 @@ Decision:
 - **Affects:** calendar, radio-group, checkbox.
 - **Covers:** CP-T9-7, CP-15-18
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-86 · Clickable display widgets and `link`
 
@@ -2036,7 +2124,7 @@ Decision:
 - **Affects:** badge, item, attachment, bubble, marker, avatar, button.
 - **Covers:** CP-T9-10, CP-02-3, CP-03-13, CP-18-19, CP-18-25, CP-18-4, CP-04-28, CP-02-9, CP-01-6
 
-Decision:
+Decision: (a) and (b), button `href` skipped — as recommended.
 
 ### D-87 · Mutually exclusive states: enum or bools
 
@@ -2051,7 +2139,7 @@ Decision:
 - **Affects:** checkbox, attachment, menus.
 - **Covers:** CP-T9-13, CP-05-1, CP-18-7, CP-09-9
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-88 · Animation scope
 
@@ -2074,7 +2162,12 @@ Decision:
   attachment, marker, message-scroller.
 - **Covers:** CP-T9-14, CP-T3-10, CP-02-21, CP-02-17, CP-02-27, CP-04-13, CP-06-20, CP-14-16, CP-12-20, CP-12-30, CP-11-24, CP-13-4, CP-16-21, CP-16-32, CP-16-35, CP-18-8, CP-19-16, CP-18-27
 
-Decision:
+Decision: (c) — differs from the recommendation (maintainer, P4: upstream
+motion). Animate where upstream does (spinner, skeleton pulse, progress
+value, accordion and collapsible height, sheet slide, sidebar width,
+navigation-menu viewport, carousel slides, sonner stack, shimmer text,
+scroller), with upstream's durations and easings, all honouring
+`style.animation_time == 0` as reduced motion; caret blink stays egui's.
 
 ### D-89 · Accessibility roles egui's `WidgetType` lacks
 
@@ -2095,7 +2188,7 @@ Decision:
 - **Affects:** the components listed.
 - **Covers:** CP-01-19, CP-01-28, CP-02-19, CP-02-26, CP-04-19, CP-05-23, CP-08-34, CP-12-12, CP-12-25, CP-19-20, CP-16-10, CP-16-23, CP-07-17, CP-03-22, CP-18-29
 
-Decision:
+Decision: (a) with the per-component answers — as recommended.
 
 ## Shortcut functions
 
@@ -2123,7 +2216,7 @@ Decision:
 - **Affects:** every component.
 - **Covers:** CP-T10-11, CP-T10-1, CP-01-4, CP-04-8, CP-04-14, CP-05-38, CP-06-5, CP-16-11, CP-18-32, CP-03-19, CP-04-30, CP-07-13, CP-08-35, CP-10-21, CP-18-12, CP-17-11
 
-Decision:
+Decision: (a) with the named exceptions — as recommended.
 
 ## Generator and recipes
 
@@ -2154,7 +2247,7 @@ Decision:
 - **Affects:** stylegen, accordion, menus, navigation-menu, sidebar.
 - **Covers:** CP-T11-14
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-92 · Meaning of `SELECTED`; `PRESSED`
 
@@ -2175,7 +2268,7 @@ Decision:
 - **Affects:** stylegen, toggle, toggle-group, message-scroller.
 - **Covers:** CP-T11-15, CP-01-17, CP-19-18
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-93 · `data-[side=*]`: side flags
 
@@ -2190,7 +2283,7 @@ Decision:
 - **Affects:** stylegen, sheet, drawer, sidebar.
 - **Covers:** CP-T11-16, CP-11-37
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-94 · The plain down chevron slot
 
@@ -2208,7 +2301,12 @@ Decision:
   navigation-menu, calendar.
 - **Covers:** CP-T11-13
 
-Decision:
+Decision: (b) with a new name for the true chevron too — differs from the
+recommendation (maintainer: old code must fail to compile; renames are fine
+before 1.0). The Select slot becomes `select_trigger`, the plain down
+chevron takes a new slot name (`chevron_down_plain`, option (a)'s name,
+unless the 0.7.0 cleanup picks a better one), and `chevron_down` is removed,
+so every old use is a compile error rather than another icon.
 
 ### D-95 · Child targets and pseudo elements (`*:`, `**:`, `before:`, `after:`)
 
@@ -2229,7 +2327,11 @@ Decision:
   drawer, avatar, marker, navigation-menu.
 - **Covers:** CP-18-31, CP-04-29, CP-11-32, CP-13-12
 
-Decision:
+Decision: (a), navigation content links without the ring — as recommended,
+except the avatar inner border, which differs (maintainer, P9): it shows
+upstream's blended colour (`mix-blend-darken`, `dark:mix-blend-lighten`),
+not a plain unblended border; how egui reaches that colour is the avatar
+port's work (F2, D-110).
 
 ### D-96 · Recipe source when svelte and the style CSS disagree
 
@@ -2249,7 +2351,12 @@ Decision:
 - **Affects:** command, chart, sonner.
 - **Covers:** CP-08-26, CP-17-7, CP-16-29, CP-16-30, CP-17-12
 
-Decision:
+Decision: (a) for command; sonner and plot values as documented constants —
+as recommended; differs on colour (maintainer, P9): the sonner description
+takes svelte-sonner's literal colour exactly, not `muted-foreground`; the
+chart tooltip takes the style CSS marker (b) only where it gives the colours
+the svelte docs page renders, otherwise the svelte source (a), checked in
+the chart PR (F20).
 
 ### D-97 · Upstream rules the browser never applies, or that look broken
 
@@ -2272,7 +2379,13 @@ Decision:
   calendar, range-calendar.
 - **Covers:** CP-13-9, CP-06-17, CP-06-30, CP-09-32, CP-09-33, CP-14-24, CP-15-27, CP-15-34, CP-15-35, CP-15-16
 
-Decision:
+Decision: (a) everywhere — differs from the recommendation (maintainer, P4
+and P9: render only the rings and backgrounds upstream renders). The
+input-otp active ring, navigation active background, input-group fade and
+rhea ring stay dead as in the browser; calendar and range-calendar each keep
+the spacing and unavailable-day look their pinned classes render (no
+unification); menubar fade and focus and the calendar hover text as
+recommended. Each dead or odd rule is flagged in the module docs.
 
 ### D-98 · Relative colours (`oklch(from …)`)
 
@@ -2285,7 +2398,7 @@ Decision:
 - **Affects:** stylegen, bubble.
 - **Covers:** CP-18-22
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-99 · Ternary class strings (carousel orientation)
 
@@ -2302,7 +2415,7 @@ Decision:
 - **Affects:** stylegen, carousel, pagination, sidebar, chart.
 - **Covers:** CP-16-22
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-100 · Generator scope for content-styling classes
 
@@ -2318,7 +2431,7 @@ Decision:
 - **Affects:** stylegen, kbd, alert, accordion, item, input-group, table.
 - **Covers:** CP-02-15, CP-04-7, CP-12-23, CP-03-21, CP-06-32, CP-16-9
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-101 · Sidebar palette roles
 
@@ -2332,7 +2445,7 @@ Decision:
 - **Affects:** `Palette`, stylegen, sidebar.
 - **Covers:** CP-14-25
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-102 · The `sera` style
 
@@ -2346,7 +2459,7 @@ Decision:
 - **Affects:** stylegen, badge (`uppercase`, `tracking`).
 - **Covers:** none (survey "Generator work").
 
-Decision:
+Decision: (a) — as recommended.
 
 ## Verdicts and dependencies
 
@@ -2363,7 +2476,7 @@ Decision:
 - **Affects:** form, field.
 - **Covers:** CP-07-20
 
-Decision:
+Decision: (a) — as recommended.
 
 ### D-104 · `chart`: new optional dependency `egui_plot`
 
@@ -2392,7 +2505,10 @@ Decision:
 - **Affects:** chart, `Cargo.toml` features.
 - **Covers:** CP-17-1, CP-17-2, CP-17-3, CP-17-4, CP-17-6, CP-17-9, CP-17-14, CP-T7-9, CP-17-13
 
-Decision:
+Decision: (a) — maintainer consents: `egui_plot` 0.35.0 as an optional
+`chart` feature; verdict F20, as recommended. Sub-choices (kinds, colour
+type, data model, `nestLabel`, legend, keyboard, hover dimming, orientation)
+deferred to the chart PR (recommendation is the default proposal).
 
 ### D-105 · Date type for calendar and range-calendar (`jiff` or own `Date`)
 
@@ -2430,7 +2546,10 @@ Decision:
 - **Affects:** calendar, range-calendar.
 - **Covers:** CP-15-1, CP-15-26, CP-T7-10
 
-Decision:
+Decision: (a) with (t2) — as recommended; the maintainer consents to the
+optional `jiff` feature and to (g1), `jiff` as a dev-dependency of the
+gallery (with `jiff/js` on `wasm32`). The calendar's other choices are
+D-126.
 
 ### D-106 · `navigation-menu`: very large
 
@@ -2448,7 +2567,9 @@ Decision:
 - **Affects:** navigation-menu.
 - **Covers:** CP-13-3, CP-13-5, CP-13-7, CP-13-14
 
-Decision:
+Decision: (a), port in F20 — as recommended; sub-choices (i) to (iv)
+deferred to the family PR (recommendation is the default proposal). Under
+D-41's decision, hover items stay open on an outside touch, as upstream.
 
 ### D-107 · `sidebar`: very large
 
@@ -2469,7 +2590,10 @@ Decision:
 - **Affects:** sidebar.
 - **Covers:** CP-14-3, CP-14-4, CP-14-10, CP-14-17, CP-14-19, CP-14-20
 
-Decision:
+Decision: (a), port in F19 — as recommended; sub-choices deferred to the
+family PR (recommendation is the default proposal). Under D-69's decision
+the mobile mode (a sheet below 768 px window width) is on by default, as
+upstream.
 
 ### D-108 · `message-scroller`: very large; the follow-bottom subset
 
@@ -2488,7 +2612,10 @@ Decision:
 - **Affects:** message-scroller.
 - **Covers:** CP-19-13, CP-19-9, CP-19-14, CP-19-19
 
-Decision:
+Decision: (a), the subset in F16 and the full primitive in F20 — as
+recommended; the shape deferred to the family PR (recommendation is the
+default proposal). The follow-bottom subset sits on the crate
+`ScrollArea::stick_to_bottom` (D-62 (a)).
 
 ## Family bundles
 
@@ -2518,7 +2645,8 @@ pinned primitive.
 - **Affects:** kbd, skeleton, progress, separator, aspect-ratio.
 - **Covers:** CP-02-11, CP-02-25, CP-04-9, CP-04-10, CP-04-17, CP-03-31, CP-03-32, CP-03-33
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal).
 
 ### D-110 · F2 content blocks (card, item, empty, avatar)
 
@@ -2537,7 +2665,9 @@ Decision:
 - **Affects:** card, item, empty, avatar.
 - **Covers:** CP-03-6, CP-03-20, CP-03-25, CP-03-27, CP-04-23
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). The avatar's inner border follows D-95's decision (upstream's
+blended colour).
 
 ### D-111 · F3 buttons and groups
 
@@ -2559,7 +2689,8 @@ Decision:
 - **Affects:** button, button-group, toggle, toggle-group, input-group.
 - **Covers:** CP-01-8, CP-01-13, CP-01-16, CP-01-18, CP-01-26
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal).
 
 ### D-112 · F4 choice controls (checkbox, slider)
 
@@ -2588,7 +2719,9 @@ Decision:
 - **Affects:** checkbox, slider.
 - **Covers:** CP-05-4, CP-05-7, CP-05-25, CP-05-26, CP-05-27, CP-05-28, CP-05-30, CP-05-31, CP-05-32, CP-05-33, CP-05-34
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal), except CP-05-27, decided now: default step 1, as bits
+(maintainer, P4).
 
 ### D-113 · F5 text entry (input, textarea, input-otp, input-group)
 
@@ -2626,7 +2759,8 @@ Decision:
 - **Affects:** input, textarea, input-otp, input-group.
 - **Covers:** CP-06-6, CP-06-7, CP-06-9, CP-06-12, CP-06-13, CP-06-15, CP-06-19, CP-06-21, CP-06-23, CP-06-24, CP-06-28, CP-06-29, CP-06-31, CP-06-34
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal).
 
 ### D-114 · F6 forms (field, native-select)
 
@@ -2651,7 +2785,8 @@ Decision:
 - **Affects:** field, native-select.
 - **Covers:** CP-07-7, CP-07-10, CP-07-12, CP-07-18, CP-07-22, CP-07-25, CP-07-26
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal).
 
 ### D-115 · F7 anchored overlays (popover, tooltip)
 
@@ -2667,7 +2802,8 @@ Decision:
 - **Affects:** popover, tooltip, hover-card, menus.
 - **Covers:** CP-10-5, CP-10-13, CP-10-23
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). Tooltip timing follows D-40 and D-130.
 
 ### D-116 · F8 menus (dropdown-menu, context-menu, menubar)
 
@@ -2701,7 +2837,9 @@ Decision:
 - **Affects:** dropdown-menu, context-menu, menubar.
 - **Covers:** CP-09-2, CP-09-8, CP-09-10, CP-09-12, CP-09-14, CP-09-15, CP-09-17, CP-09-22, CP-09-24, CP-09-25, CP-09-26, CP-09-29, CP-09-34
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal), except CP-09-22, decided now: the trigger fires on pointer down,
+as bits (maintainer, P4; D-45).
 
 ### D-117 · F9 modals (dialog, alert-dialog, sheet, drawer)
 
@@ -2738,7 +2876,9 @@ Decision:
 - **Affects:** dialog, alert-dialog, sheet, drawer, CommandDialog.
 - **Covers:** CP-11-6, CP-11-9, CP-11-12, CP-11-17, CP-11-25, CP-11-26, CP-11-27, CP-11-28, CP-11-29, CP-11-30
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). The sheet slide and the drawer's motion animate as upstream (D-88
+(c)); the sheet body scrolls in the crate `ScrollArea` (D-47, D-62 (a)).
 
 ### D-118 · F10 pickers (select, command)
 
@@ -2765,7 +2905,10 @@ Decision:
 - **Affects:** select, command.
 - **Covers:** CP-08-4, CP-08-6, CP-08-20, CP-08-21, CP-08-22, CP-08-25, CP-08-27, CP-08-29, CP-08-31, CP-08-33
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). Select and command lists run in the crate `ScrollArea` (D-62
+(a)); select's list moves there in the F12 PR (CP-14-30 (i)). Triggers open
+on pointer down with press-drag-release (D-45).
 
 ### D-119 · F11 tabs and disclosure (accordion, collapsible)
 
@@ -2780,7 +2923,9 @@ Decision:
 - **Affects:** accordion, collapsible.
 - **Covers:** CP-12-24, CP-12-27
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). Accordion and collapsible animate their height as upstream (D-88
+(c)).
 
 ### D-120 · F12 scroll and panes (scroll-area, resizable)
 
@@ -2795,7 +2940,11 @@ Decision:
 - **Affects:** scroll-area, resizable.
 - **Covers:** CP-14-29, CP-14-37, CP-14-39, CP-14-42
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). Under D-62 (a) F12 ports a real widget (the crate `ScrollArea`
+with its own bars, thumb drag, track click, hover widening) and moves
+select's list onto it; CP-14-29's skip still holds, and the PR checks that
+egui's keyboard scrolling keeps working under the hidden bars.
 
 ### D-121 · F13 paging (breadcrumb, pagination)
 
@@ -2821,7 +2970,9 @@ Decision:
 - **Affects:** breadcrumb, pagination.
 - **Covers:** CP-13-15, CP-13-17, CP-13-19, CP-13-22, CP-13-24, CP-13-26, CP-13-28, CP-13-29
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). Pagination's text below `sm` follows the window width by default
+(D-69).
 
 ### D-122 · F14 data display (table, carousel)
 
@@ -2852,7 +3003,9 @@ Decision:
 - **Affects:** table, carousel.
 - **Covers:** CP-16-1, CP-16-2, CP-16-3, CP-16-4, CP-16-7, CP-16-8, CP-16-12, CP-16-15, CP-16-18, CP-16-19, CP-16-20
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). CP-16-4's self-wrapping table scrolls in the crate `ScrollArea`
+(D-62 (a)).
 
 ### D-123 · F15 toasts (sonner)
 
@@ -2874,7 +3027,9 @@ Decision:
 - **Affects:** sonner.
 - **Covers:** CP-16-24, CP-16-26, CP-16-27, CP-16-28, CP-16-31, CP-16-33, CP-16-34, CP-16-36
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). The description colour is D-96's decision (svelte-sonner's
+literal); the narrow layout below 600 px is on by default (D-69).
 
 ### D-124 · F16 chat parts (bubble, message, attachment, marker)
 
@@ -2887,7 +3042,9 @@ Decision:
 - **Affects:** bubble, message.
 - **Covers:** CP-18-36, CP-19-5
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). The attachment group scrolls in the crate `ScrollArea` (D-62
+(a)).
 
 ### D-125 · F17 questionnaire
 
@@ -2910,7 +3067,8 @@ Decision:
 - **Affects:** questionnaire.
 - **Covers:** CP-19-21, CP-19-25, CP-19-26, CP-19-29, CP-19-30, CP-19-32, CP-19-34, CP-19-35
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal).
 
 ### D-126 · F18 calendar and range-calendar details
 
@@ -2946,7 +3104,10 @@ Decision:
 - **Affects:** calendar, range-calendar.
 - **Covers:** CP-15-3, CP-15-5, CP-15-7, CP-15-8, CP-15-9, CP-15-10, CP-15-11, CP-15-14, CP-15-22, CP-15-23, CP-15-24, CP-15-25, CP-15-28, CP-15-29, CP-15-30, CP-15-32
 
-Decision:
+Decision: deferred to the family PR (recommendation is the default
+proposal). Range-calendar is its own type (D-25 (d)); each calendar keeps
+the look its pinned classes render (D-97 (a)); the months layout follows the
+window width (D-69).
 
 ## Added in review round 1
 
@@ -2966,7 +3127,7 @@ Decision:
   can then use this setter), and a `bool` cannot express truncation.
 - **Covers:** CP-07-3
 
-Decision:
+Decision: (b) — as recommended.
 
 
 ## Added in the adversarial review (Task 7)
@@ -3053,7 +3214,8 @@ Decision:
   store; it lands with F7.
 - **Covers:** none (review finding A1).
 
-Decision:
+Decision: (ii) with the overlay stack (ii+), the Escape hook at the start of
+the pass, and (o1) — as recommended.
 
 ### D-129 · How a crate `Icon` becomes an egui atom
 
@@ -3111,7 +3273,7 @@ Decision:
   opacity) at their alpha.
 - **Covers:** none (review finding A2).
 
-Decision:
+Decision: (a'1) with (u1) — as recommended.
 
 ### D-130 · Tooltip mechanism: egui's tooltip or an own popup
 
@@ -3135,7 +3297,9 @@ Decision:
   every popup except the `Tooltip` kind (`popup.rs:558-566`).
 - **Covers:** none (review finding A7).
 
-Decision:
+Decision: (b) — as recommended. With D-40's decision the crate tooltip opens
+with upstream's delay (0, the shadcn provider's `delayDuration`); egui's
+`tooltip_delay` is neither read nor changed by crate tooltips.
 
 ### D-131 · `#[non_exhaustive]` on public enums
 
@@ -3152,7 +3316,7 @@ Decision:
   exhaustive matching.
 - **Covers:** none (review finding A31).
 
-Decision:
+Decision: (b) — as recommended.
 
 ### D-132 · Logical or physical placement names; the `align` setter names
 
@@ -3176,7 +3340,7 @@ Decision:
   alignment takes `alignment`.
 - **Covers:** none (review findings A8, A29).
 
-Decision:
+Decision: (a) and (ii) — as recommended.
 
 ### D-133 · How a filling widget is capped without `available_width()` arithmetic
 
@@ -3202,7 +3366,10 @@ Decision:
   `tabs.rs`'s inline cap.
 - **Covers:** none (review finding A10).
 
-Decision:
+Decision: (b), extended — as recommended. Under D-69's decision the
+breakpoint helper serves calendar, sonner, sidebar and pagination by
+default, so beside `layout::wider_than(ui, px)` (container width) it offers
+a window-width form for upstream's media queries.
 
 ### D-134 · Group-position protocol (first, last, stretch)
 
@@ -3238,7 +3405,7 @@ Decision:
   each family builds its own list.
 - **Covers:** CP-01-7, CP-01-14
 
-Decision:
+Decision: CP-01-7 and CP-01-14 as listed, (w1) — as recommended.
 
 ### D-135 · What the theme may change in plain egui widgets
 
@@ -3255,7 +3422,14 @@ Decision:
   is behaviour. Reason: one principle that both D-40 and D-62 then follow.
 - **Covers:** none (review finding A27).
 
-Decision:
+Decision: (a), narrowed by P9 — differs from the recommendation (maintainer:
+no nearest-colour styling of plain egui widgets). The theme changes a look
+of a plain egui widget only where it reaches upstream's exact colour, and
+never behaviour; it does not style plain `egui::ScrollArea`, whose thumb
+could take only the nearest shared colour, so plain egui scroll areas keep
+egui's bars and shadcn's bars come from the crate `ScrollArea` (D-62 (a)).
+The "theme sets no `ScrollStyle`" item in D-62's case is then no cleanup
+bug.
 
 ## Rejected review findings
 
