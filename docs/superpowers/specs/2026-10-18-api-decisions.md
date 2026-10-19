@@ -68,8 +68,10 @@ Existing-crate bugs are not listed: they all go into the stage 3 cleanup
   its items keep it.
 - **Covers:** CP-01-1, CP-02-5, CP-05-3, CP-06-1, CP-07-1, CP-07-31, CP-08-12, CP-09-18, CP-12-7, CP-15-17, CP-18-37, CP-08-37
 
-Decision: (b) with the `#[deprecated]` `.enabled` for one release, per item
-(i) — as recommended.
+Decision: (b), per item (i) — as recommended, except that `.enabled` on leaf
+widgets is removed at once, not kept as a `#[deprecated]` forward for one
+release (maintainer, 2026-10-19: no deprecations before 1.0; CHANGES.md says
+to use `ui.add_enabled`).
 
 ### D-2 · Icon parameter form
 
@@ -201,7 +203,10 @@ down chevron is D-94's new slot.
   slider-named one would read wrong on a tab list.
 - **Covers:** CP-05-37, CP-01-9, CP-01-30, CP-04-20, CP-07-29, CP-12-5, CP-14-36, CP-16-40, CP-18-5
 
-Decision: (b) — as recommended.
+Decision: (b) — as recommended, except that `SliderOrientation` and
+`TabsOrientation` are removed at once, not kept as deprecated type aliases
+(maintainer, 2026-10-19: no deprecations before 1.0; CHANGES.md gives the
+upgrade step).
 
 ### D-7 · Side and align of anchored overlays
 
@@ -285,7 +290,9 @@ Decision: (c) — as recommended. Modals return `Option<InnerResponse<R>>`
   `changed()` carries the `bool`.
 - **Covers:** CP-08-13, CP-05-5, CP-12-10, CP-15-21, CP-15-33, CP-13-23, CP-13-18
 
-Decision: (a), breadcrumb (iii) — as recommended.
+Decision: (a), breadcrumb (iii) — as recommended; `tab_bar` is renamed
+`tabs` with no deprecated alias (maintainer, 2026-10-19: no deprecations
+before 1.0; CHANGES.md gives the upgrade step).
 
 ### D-11 · `State` flag budget
 
@@ -486,7 +493,9 @@ Decision: (a) — as recommended.
 - **Covers:** CP-T11-7, CP-T11-12, CP-T10-4, CP-02-6, CP-01-15, CP-05-22, CP-02-22, CP-14-46, CP-16-38
 
 Decision: (d), (ii), (x), `SidebarCollapse` with `Off`, `components::sonner`
-— as recommended.
+— as recommended; the switch shortcut `toggle` is renamed `switch` with no
+deprecated alias, so old `toggle` calls fail to compile (maintainer,
+2026-10-19: no deprecations before 1.0; CHANGES.md gives the upgrade step).
 
 ### D-19 · Caller colour overrides and the colour parameter type
 
@@ -717,7 +726,9 @@ Decision: (b) — as recommended.
   mechanism.
 - **Covers:** CP-T1-9, CP-T10-5, CP-05-19, CP-05-2, CP-05-20, CP-07-2, CP-05-35
 
-Decision: (b), label click (i) — as recommended.
+Decision: (b), label click (i) — as recommended; slider's `.label` is
+removed at once, not deprecated (maintainer, 2026-10-19: no deprecations
+before 1.0).
 
 ### D-29 · Index base
 
@@ -1239,8 +1250,11 @@ Decision: (b) — as recommended.
   and the one form that works for in-flow containers and modals alike.
 - **Covers:** CP-T4-2, CP-T7-7, CP-03-3, CP-03-15, CP-11-5, CP-11-10, CP-19-3, CP-11-23, CP-04-4, CP-03-16, CP-03-24, CP-18-17, CP-11-21, CP-11-22, CP-12-13
 
-Decision: (d6) — as recommended. The sheet body that the caller scrolls uses
-the crate `ScrollArea` in demos and docs (D-62 (a)).
+Decision: (d6) — as recommended, except that `Card::footer` is removed at
+once, not kept as a `#[deprecated]` forward (maintainer, 2026-10-19: no
+deprecations before 1.0; CHANGES.md points to `card_footer`). The sheet body
+that the caller scrolls uses the crate `ScrollArea` in demos and docs (D-62
+(a)).
 
 ### D-48 · Meaning of `action`, and how a secondary part's `Response` comes back
 
@@ -1643,7 +1657,11 @@ port before F9. The theme sets no `ScrollStyle` for plain egui scroll areas
 - **Affects:** `layout`, card, field, aspect-ratio.
 - **Covers:** CP-T6-8, CP-03-8, CP-03-29
 
-Decision: as recommended.
+Decision: as recommended (row `.id_salt`, `form_row` rebuilt on Field,
+`AspectRatio` builder), except that nothing is deprecated (maintainer,
+2026-10-19: no deprecations before 1.0): `layout::card` is removed in the
+0.7.0 cleanup, and `form_row` is removed when Field lands, with
+`egui_extras`; CHANGES.md gives the upgrade step for each.
 
 ## Identity
 
@@ -1841,11 +1859,12 @@ Decision: (a) — as recommended.
 
 Decision: (b) with (s1) and the stated clamp order — as recommended. Under
 D-72's decision select and native-select are content-sized, so under (s1)
-they take `.width` (requested, clamped), not `.max_width`, and
-`Select::width` keeps its name with the clamp meaning. Maintainer: renames
-are fine (no installed base yet), so the "no rename one release after tabs
-shipped" part of the reason carries no weight; the decision rests on (s1)'s
-one width word per widget.
+they take `.width` (requested, clamped), not `.max_width`; `Select::width`
+keeps its name with the clamp meaning, so the `#[deprecated]` forward to
+`.max_width` is not needed (and before 1.0 there are none, maintainer
+2026-10-19). Maintainer: renames are fine (no installed base yet), so the
+"no rename one release after tabs shipped" part of the reason carries no
+weight; the decision rests on (s1)'s one width word per widget.
 
 ### D-72 · Default width of text-entry and choice controls
 

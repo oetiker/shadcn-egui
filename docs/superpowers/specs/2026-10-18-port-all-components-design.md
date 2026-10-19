@@ -127,9 +127,12 @@ these features later as additions; the features come with the ports. Where
 a correct shape cannot be found without the feature, correctness wins and
 the feature comes into the cleanup.
 
-A plain rename keeps a `#[deprecated]` alias for one release (for example
-`toggle`, `tab_bar`, `id_source`). A changed signature (for example
-`Select` from `&mut usize` to `&mut T`) breaks without an alias.
+Before 1.0 there are no `#[deprecated]` aliases or forwards: a rename
+(for example `toggle`, `tab_bar`), a removal (`id_source`) or a changed
+signature (for example `Select` from `&mut usize` to `&mut T`) breaks at
+once, and CHANGES.md gives the upgrade step for each. (Changed by the
+maintainer on 2026-10-19; it replaces "a plain rename keeps a
+`#[deprecated]` alias for one release".)
 
 Shared primitives that several families need (for example a menu, roving
 focus, an overlay / sheet, a scroll area) and generator support for the
@@ -196,8 +199,9 @@ last.
 - Only one pull request that changes stylegen output is open at a time.
   While the maintainer reviews it, agents prepare the next family
   read-only.
-- Renames keep a `#[deprecated]` alias for one release; changed signatures
-  break without one.
+- No `#[deprecated]` aliases or forwards before 1.0: renames, removals and
+  changed signatures break at once, each with a CHANGES.md upgrade note
+  (maintainer, 2026-10-19; replaces the one-release alias rule).
 - The cleanup shapes the APIs for the missing features of the existing 14
   but does not add the features, unless the correct shape needs them.
 

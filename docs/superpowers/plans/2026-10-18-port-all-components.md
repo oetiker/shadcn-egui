@@ -380,8 +380,10 @@ Expected: all 61 found. Every `CP-` ID of the reports appears in
 ## Stage 3 — Cleanup (outline; own plan after the stage 2 merge)
 
 - The 14 components, `layout`, `components::icon` and the public
-  `components::shared` helpers follow the rules. Renames keep a
-  `#[deprecated]` alias for one release; changed signatures break.
+  `components::shared` helpers follow the rules. No `#[deprecated]`
+  aliases or forwards before 1.0: renames, removals and changed signatures
+  break at once, each with a CHANGES.md upgrade note (maintainer,
+  2026-10-19; replaces the one-release alias rule).
 - Shapes leave room for the missing features of the 14; a feature joins
   the cleanup only where the correct shape needs it.
 - Shared primitives and generator support from the survey land before the
