@@ -926,6 +926,11 @@ Decision: (c), sidebar sub-menus (iii) — as recommended.
 
 Decision: (a), (iii) — as recommended.
 
+Consequence (rules, 2026-10-20): The binding setter `.open(&mut bool)`
+takes the state's name, so the associated functions are `is_open`,
+`set_open` and `toggle`; hover overlays (tooltip) have them too, keyed by
+the trigger (rules, T2).
+
 ### D-34 · Initial value of memory-owned state
 
 - **Case:** Memory-owned state (sidebar open, resizable layout, calendar
@@ -1003,6 +1008,13 @@ Consequence (rules, 2026-10-19): Under P4 the chart tooltip keeps
 upstream's behaviour and stays inside the chart (rules, T3); egui's default
 alternatives are at most how the chart PR builds that.
 
+Consequence (rules, 2026-10-20): "flips to the opposite side only" leaves
+out bits' `shift()`, which runs before `flip()`
+(`use-floating-layer.svelte.js`): the overlay shifts along its alignment
+axis, and the flip looks at the side axis only (rules, T3).
+`.align_alternatives` cannot build this, because egui's
+`find_best_align` takes an alternative only when the whole rect fits.
+
 ### D-38 · Escape with several open overlays
 
 - **Case:** an egui `Popup` does not consume Escape, so one press closes
@@ -1045,12 +1057,19 @@ Decision: (b) — as recommended.
 
 Decision: (b), drawer without initial focus — as recommended.
 
-Consequence (rules, 2026-10-19): A modal has no trigger, so every overlay
-returns focus to the widget that held focus when it opened (rules, T3). A
-modal moves focus in on the first pass in which it is the top modal,
-because egui ignores a focus request below the previous pass's top modal.
-Hints never return focus. The ring after a focus move follows the browser's
-`:focus-visible` modality (rules, Looks).
+Consequence (rules, 2026-10-20): The Case misstates bits-ui 2.19.2 for the
+popover: `popover-content.svelte` sets `trapFocus = true` with `loop`, and
+the focus scope (`focus-scope.svelte.js`) moves focus to the first tabbable
+element on open unless the popover opened by hover. Under P4 the rules
+(T3) follow bits: overlays whose bits content traps focus (dialog,
+alert-dialog, sheet, popover) move focus in and loop Tab; menus and list
+pickers (`trapFocus = false`) close on Tab; hints move no focus. Option
+(b)'s "anchored overlays return focus on close only; Tab out closes"
+holds for menus and pickers only. Focus returns after every way of
+closing, to the trigger the overlay opened from, else to the widget that
+held focus at open: in the browser the click on the trigger focuses it,
+and the crate gives a pressed widget focus too (rules, Behaviour). The ring
+follows the browser's `:focus-visible` modality (rules, Looks).
 
 ### D-40 · Hover overlays: mechanism, delays, keyboard opening
 
