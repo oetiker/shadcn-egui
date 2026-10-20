@@ -136,9 +136,10 @@ maintainer on 2026-10-19; it replaces "a plain rename keeps a
 
 Shared primitives that several families need (for example a menu, roving
 focus, an overlay / sheet, a scroll area) and generator support for the
-gaps found in stage 1 land before the ports that use them, one at a time.
-Whether they belong to stage 3 or to the first port of each family is the
-builder's call.
+gaps found in stage 1 land in a shared step of their own, before the
+first port that uses them, never inside a port (rules, Code and shared
+infrastructure). Whether a shared step is part of the cleanup or runs
+just before a family is the builder's call.
 
 **Planning rule for the shared step.** Before it starts, the step lists,
 against the component list of the ports that follow it, everything two
@@ -266,6 +267,6 @@ last.
 
 - Family boundaries and order, from the survey.
 - The survey report format beyond the items listed.
-- Whether a shared primitive lands with the cleanup or with the first
-  family that needs it.
+- Whether a shared step is part of the cleanup or runs just before the
+  first family that needs it.
 - How many read-only agents run at once.
