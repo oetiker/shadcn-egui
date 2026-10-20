@@ -140,6 +140,58 @@ gaps found in stage 1 land before the ports that use them, one at a time.
 Whether they belong to stage 3 or to the first port of each family is the
 builder's call.
 
+**Planning rule for the shared step.** Before it starts, the step lists,
+against the component list of the ports that follow it, everything two
+components will both need: helpers, generator flags and variants, icon
+slots, `Metrics` fields, test harness pieces. Each item gets one owner in
+the shared step; no port builds a shared item in parallel with another.
+
+The shared step owes, besides the helpers it already has:
+
+- Icon slots of D-94 (`select_trigger`, the plain down chevron, and the
+  up chevron for libraries whose up chevron is no mirrored down one),
+  through icongen, with every icon crate regenerated.
+- stylegen: the `LINK` flag for `[a]:` variants, `**:` child targets
+  (D-95 (a)), `SIDE_*` flags, and `State` as `u128` behind a private
+  field (the `u32` has one free bit left); `data-checked` must no longer
+  outrank `focus-visible` (wrong border on a focused checked checkbox and
+  switch); the retarget rank of `:is(.parent *)[data-slot=s]` is one class
+  too high.
+- The control-plus-label row (one type for checkbox, switch and radio
+  item: hit area, toggle, `widget_info`, label through the Label text
+  path, per-control gap in `Metrics`).
+- Part opacity through one helper (`Painter::set_opacity`, rules, Looks)
+  and `Theme::apply` setting `disabled_alpha` from the style.
+- One "press of this pass" helper for the overlay stack and the hover
+  timer, a group-id helper, the content-height row, the animated panel
+  height for accordion and collapsible.
+- The crate `ScrollArea` before the first list that scrolls (D-62).
+- Infrastructure defects:
+  1. The recipe box paints `shadow-*` under the box, so it shows through
+     transparent and translucent fills (vega light input 242 grey; dark
+     `bg-input/30`); paint it outside the border box only.
+  2. A press and release in the same pass is no outside press (overlay
+     stack and hover timer).
+  3. Anchored placement uses egui's `find_best_align`, so a panel at the
+     window edge is clamped onto its trigger; shift then flip as bits.
+  4. No focus return after a modal closes from inside or after a mouse
+     open; a pressed widget gets no focus.
+  5. `Theme::apply` never sets `disabled_alpha` from the style.
+  6. `OverlayStack::bind` read "no state" as a caller change.
+  7. The item registry in an `Area`'s first (disabled) pass registers
+     every item as disabled.
+  8. `widget_width` fills on NaN; the placeholder text style is cached
+     from the global style, so `Ui`-scoped text styles are ignored.
+  9. `State` (`u32`) has one free bit after `LINK`; `SIDE_*` needs the
+     `u128` change.
+  10. `tests/tokens.rs` flags every `accesskit::Role::` and scans test
+      modules, unlike its documentation.
+- The porting standard (`plugin/skills/port-component/SKILL.md`) follows
+  the rules: "Interaction states" still describes the old disabled path
+  (`ui_opacity` takes 1.0, `interaction_state(.., enabled, ..)`), and the
+  Slider behaviour example lists PageUp/PageDown and a roving group that
+  always wraps, where bits differs.
+
 ### Stage 4 — Ports
 
 One family per pull request, in dependency order. Each port follows
