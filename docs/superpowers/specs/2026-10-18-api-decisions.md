@@ -714,7 +714,7 @@ its own component; `Calendar::multiple` stays a mode constructor. (a) and
 Consequence (rules, 2026-10-20): Icon-only content has one constructor
 name on every component (rules, Builder shape; P1),
 `X::icon_only(.., icon, name)`, so Kbd's icon form is
-`Kbd::icon_only(icon, name)`.
+`Kbd::icon_only(icon, name)` (confirmed, maintainer, 2026-10-20).
 
 ### D-26 · How a selection group gets its items
 
@@ -1629,7 +1629,7 @@ the implementation note of the rules' context rule (Compound 5).
 - **Recommendation:** (a) with the form of D-129, typed slots kept on every
   crate widget and data item that shows icons (`ToggleItem`, `Tab`, select
   items, alert-dialog buttons), because only the typed slot gets the
-  recipe's state colour. Kbd keeps `Kbd::new(text)` and `Kbd::icon(Icon)`,
+  recipe's state colour. Kbd keeps `Kbd::new(text)` and `Kbd::icon_only(icon, name)`,
   plus `paint_at` for hosts. Reason: lets crate icons go anywhere egui takes
   atoms.
 - **Covers:** CP-T4-13, CP-02-12, CP-02-14
