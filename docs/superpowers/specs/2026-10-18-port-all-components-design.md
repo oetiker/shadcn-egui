@@ -224,8 +224,9 @@ last.
   Read-only agents (survey, review) run alongside.
 - **Memory.** All sessions share one 25 GiB cgroup; snapshot test runs in
   parallel worktrees risk an OOM kill in a sibling session.
-- **Disk.** Each worktree gets its own `cargo-target-<name>` on `/scratch`;
-  keep the number of live worktrees small and remove them after merge.
+- **Disk.** Each worktree gets its own cargo target directory on the
+  scratch disk; keep the number of live worktrees small and remove them
+  after merge.
 - **Generated files** (stylegen output, `markers.txt` effects) conflict
   between parallel branches and cannot be merged by hand: branches that
   touch stylegen land one after another and regenerate after each merge.

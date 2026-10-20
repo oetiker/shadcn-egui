@@ -321,7 +321,7 @@ before 1.0; CHANGES.md gives the upgrade step).
 - **Affects:** the style module, stylegen, every family from F3 on.
 - **Recommendation:** (d) now: a `u128` behind a private field with
   constructors, so no flag count needs tracking and a later change is not a
-  break (the pushback review's proposal; (a) with the same private field is
+  break ((a) with the same private field is
   the smaller step). Reason: (b) makes one flag mean two things in the
   generator (see D-92); (c) moves style decisions into code, which the
   porting standard forbids ("no style values in code"). With (d) (or (a)),
@@ -417,7 +417,7 @@ Decision: (c) — as recommended.
   (`Orientation`, `Side`) derives no `Default`, because its default is per
   component (sheet Right, drawer Bottom, sidebar Left). Whether public enums
   are `#[non_exhaustive]` is D-131. Reason: egui does all three on its
-  builders (§Widget builders); one crate rule is cheaper to review than a
+  builders (§Widget builders); one crate rule is cheaper to check than a
   per-type judgement.
 - **Covers:** CP-T11-1, CP-T11-2
 
@@ -860,7 +860,7 @@ Decision: (a), `checked(bool)` on the command item — as recommended.
   `.open(&mut bool)` on modals as on `Window`; without it the caller shows
   the modal only while open and reads `should_close()`, which merges (c)
   with (d) (one spelling, two return shapes).
-- **Recommendation:** (c) with (c1), as both pushback reviews propose.
+- **Recommendation:** (c) with (c1).
   Reason: the binding is required, and egui puts a required binding into
   the constructor and an optional one into a setter; under that rule,
   popovers keep the optional `.open(&mut bool)` of D-4 and modals take
@@ -1298,7 +1298,7 @@ Decision: (b) — as recommended.
   fourth form needs no second closure at all: the secondary slot is a part
   fn called inside the one `show` closure, as `dialog::footer(ui, ..)` is
   today (`dialog.rs:247`).
-- **Limits of a chained step (second pushback review):** a modal on
+- **Limits of a chained step:** a modal on
   `egui::Modal` cannot take one. `Modal::show` takes the content as a
   closure and returns no handle (`containers/modal.rs:77-121`), and
   `Area::begin`, the only way to keep an area's `Ui` open after a call, is
@@ -1339,9 +1339,8 @@ Decision: (b) — as recommended.
   called last inside the one `show` closure (`card_footer(ui, ..)`,
   `dialog_footer(ui, ..)`, `sheet_footer(ui, ..)`), upstream's structure
   (`Card.Footer` is a child of `Card.Root`) and the dialog's form today.
-  Recommendation (d6), as the second pushback review proposes (it replaces
-  the earlier pick (d4)). The part fn finds its container through the `Ui`
-  tag (D-57) and records under the container's id in `ctx.data` that a
+  Recommendation (d6) (it replaces the earlier pick (d4)). The part fn
+  finds its container through the `Ui` tag (D-57) and records under the container's id in `ctx.data` that a
   footer was drawn; the root reads that after the closure and sets
   `HAS_FOOTER`, which today changes only the card's bottom padding
   (`style/nova.rs:557-559`, `style/lyra.rs:536-538`, `card.rs:102`) and is
@@ -1716,7 +1715,7 @@ crate `ScrollArea` (D-62 (a)) keeps egui's `show_rows`.
   only, or egui's `ScrollBarVisibility`.
 - **Affects:** scroll-area, select, command, message-scroller, sheet,
   attachment.
-- **Costs (corrected after the second pushback review):** egui's
+- **Costs:** egui's
   `ScrollStyle` has `floating`, `foreground_color` and dormant, active and
   interact opacities for the track and the handle (`style.rs`, struct
   `ScrollStyle`); the painter multiplies the track colour
@@ -1742,9 +1741,8 @@ crate `ScrollArea` (D-62 (a)) keeps egui's `show_rows`.
   before: the crate then also implements thumb dragging, track clicks, the
   hover widening and the offset writes through `scroll_area::State`, a
   second scroll bar implementation that follows egui at every upgrade.
-- **Recommendation:** (b), as the second pushback review proposes (it
-  replaces the earlier pick (a)): the theme sets a full `ScrollStyle`
-  (floating, track opacities 0, dormant handle opacity 0, handle in the
+- **Recommendation:** (b) (it replaces the earlier pick (a)): the theme
+  sets a full `ScrollStyle` (floating, track opacities 0, dormant handle opacity 0, handle in the
   foreground colour at a low opacity), which D-135 (a) allows as a look;
   the thumb colour is the nearest shared colour, which the module docs
   state. No new type, no D-61 exception, no own bar code; composites use
@@ -1977,7 +1975,7 @@ Decision: (a) — as recommended.
   (a), with tabs as a
   stated exception; (d) only `.width`; (e) egui's `desired_width`.
 - **Affects:** every sized widget.
-- **Facts (second pushback review, re-review r3):** of the shipped `.width`
+- **Facts:** of the shipped `.width`
   setters, only dialog and tabs clamp. `Select::width` is exact
   (`allocate_space(vec2(width, ..))` with no cap, `select.rs:162,173`), and
   `Popover::width` is exact (`ui.set_width(w)`, `popover.rs:87-98`). Slider
@@ -3358,7 +3356,7 @@ proposal). Range-calendar is its own type (D-25 (d)); each calendar keeps
 the look its pinned classes render (D-97 (a)); the months layout follows the
 window width (D-69).
 
-## Added in review round 1
+## Added decisions
 
 ### D-127 · Label wrapping: a setter beside the new default
 
@@ -3382,8 +3380,6 @@ Consequence (rules, 2026-10-19): The rules (T8) now state this decision:
 text wraps where the browser would wrap it, in a row as in a column, and
 Label offers `.wrap_mode`.
 
-
-## Added in the adversarial review (Task 7)
 
 ### D-128 · Where the open flag of anchored overlays lives
 
@@ -3413,7 +3409,7 @@ Label offers `.wrap_mode`.
   overlay closes its descendants; sub-menus and D-38's Escape helper use the
   same stack. An egui `ComboBox` or `menu_button` inside a crate overlay
   remains a known limit.
-- **Escape under (ii+) (second pushback review):** `Popup::show` closes on
+- **Escape under (ii+):** `Popup::show` closes on
   `key_pressed(Escape)` whatever the close behaviour
   (`containers/popup.rs:613-616`), and a parent popup's `show` runs that
   check after its content. `key_pressed` counts the pass's key events, and
@@ -3450,9 +3446,8 @@ Label offers `.wrap_mode`.
   whatever the click hits, so one click closes one level; (o2) every
   overlay that is neither the clicked overlay nor one of its ancestors
   closes, so a click in a grandparent closes both levels above it and a
-  click outside every overlay closes the whole chain (the second pushback
-  review's proposal). The two agree whenever only one open level lies above
-  the clicked one.
+  click outside every overlay closes the whole chain. The two agree
+  whenever only one open level lies above the clicked one.
 - **Affects:** popover, hover-card, dropdown-menu, context-menu, menubar,
   select, native-select, command popover, navigation-menu, the modal shell;
   D-33, D-38, D-117.
@@ -3465,7 +3460,7 @@ Label offers `.wrap_mode`.
   nested chain, at the cost of a difference from upstream. Cost: the stack
   is new shared machinery for F7, F8, F9 and F10, more effort than a flag
   store; it lands with F7.
-- **Covers:** none (review finding A1).
+- **Covers:** none (no survey CP).
 
 Decision: (ii) with the overlay stack (ii+), the Escape hook at the start of
 the pass, and (o1) — as recommended.
@@ -3528,15 +3523,14 @@ public, so overlays built outside the crate nest with crate overlays
   of `shadcn-egui-core` (breaks an invariant).
 - **Affects:** tabs, navigation links, alert-dialog buttons, native-select
   options, kbd, any egui host of crate icons; D-15, D-28.
-- **Recommendation:** (a'1), as the pushback review proposes, with (u1), as
-  the second pushback review proposes. Reason: state colours stay right
+- **Recommendation:** (a'1) with (u1). Reason: state colours stay right
   wherever crate widgets draw icons, and egui hosts still get crate icons;
   (u1) lets the loader find the path data without a core change or
   `unsafe` code, and covers icons of every origin. The registry only grows
   (one entry per distinct icon, a few hundred bytes each), which the module
   docs say. The rasteriser draws the translucent icon layers (0.6.0, icon
   opacity) at their alpha.
-- **Covers:** none (review finding A2).
+- **Covers:** none (no survey CP).
 
 Decision: (a'1) with (u1) — as recommended.
 
@@ -3560,7 +3554,7 @@ Decision: (a'1) with (u1) — as recommended.
   `PopupKind::Tooltip`: egui hides its own tooltips while a layer has open
   popups (`containers/tooltip.rs:222-227`), and `Popup::show` registers
   every popup except the `Tooltip` kind (`popup.rs:558-566`).
-- **Covers:** none (review finding A7).
+- **Covers:** none (no survey CP).
 
 Decision: (b) — as recommended. With D-40's decision the crate tooltip opens
 with upstream's delay (0, the shadcn provider's `delayDuration`); egui's
@@ -3579,7 +3573,7 @@ with upstream's delay (0, the shadcn provider's `delayDuration`); egui's
 - **Recommendation:** (b). Reason: variants and sizes follow upstream,
   which adds them; a closed set gains nothing from the attribute and loses
   exhaustive matching.
-- **Covers:** none (review finding A31).
+- **Covers:** none (no survey CP).
 
 Decision: (b) — as recommended. Confirmed (maintainer, 2026-10-20): a
 public helper enum that grows with the crate (`OverlayKind`,
@@ -3605,7 +3599,7 @@ public helper enum that grows with the crate (`OverlayKind`,
   (D-43), and RTL is not planned; one setter name with several types would
   repeat what D-71 avoids for widths, so `side` stays with `Side` and chat
   alignment takes `alignment`.
-- **Covers:** none (review findings A8, A29).
+- **Covers:** none (no survey CP).
 
 Decision: (a) and (ii) — as recommended.
 
@@ -3631,7 +3625,7 @@ Decision: (a) and (ii) — as recommended.
   for the arithmetic keeps rule 6's intent (no ad-hoc width maths in
   widgets) and gives the cleanup a replacement for `input.rs:138` and
   `tabs.rs`'s inline cap.
-- **Covers:** none (review finding A10).
+- **Covers:** none (no survey CP).
 
 Decision: (b), extended — as recommended. Under D-69's decision the
 breakpoint helper serves calendar, sonner, sidebar and pagination by
@@ -3659,9 +3653,8 @@ a window-width form for upstream's media queries.
     counted in D-11).
 - **Affects:** button-group, toggle-group, input-group, input-otp, button,
   input, select trigger.
-- **Scope question:** widen this entry into one crate-wide mechanism, the
-  pushback review's proposal: a group collects its items' ids, labels and
-  enabled flags during the closure, stores them by group id, handles keys
+- **Scope question:** widen this entry into one crate-wide mechanism: a
+  group collects its items' ids, labels and enabled flags during the closure, stores them by group id, handles keys
   after the closure on this pass's list, and reads the previous pass's list
   where an item must decide before the rest are drawn (`request_discard` on
   change); it also sets the event filter that stops egui's arrow-key focus
@@ -3687,7 +3680,7 @@ Decision: CP-01-7 and CP-01-14 as listed, (w1) — as recommended.
   field the theme sets.
 - **Recommendation:** (a): a scroll bar's look is a look, a tooltip delay
   is behaviour. Reason: one principle that both D-40 and D-62 then follow.
-- **Covers:** none (review finding A27).
+- **Covers:** none (no survey CP).
 
 Decision: (a), narrowed by P9 — differs from the recommendation (maintainer:
 no nearest-colour styling of plain egui widgets). The theme changes a look
@@ -3698,11 +3691,3 @@ egui's bars and shadcn's bars come from the crate `ScrollArea` (D-62 (a)).
 The "theme sets no `ScrollStyle`" item in D-62's case is then no cleanup
 bug.
 
-## Rejected review findings
-
-No Task 7 review finding was rejected: A1–A43 and the re-review findings
-B1–B6 and C1–C2 were all applied. The second pushback review's ten issues
-and re-review round 3's open items and new findings were all applied too;
-where the second pushback review proposed an answer to a real choice, the
-choice stays open as an option (D-128 outside click: its (o2) is kept
-beside the recommended (o1)).
