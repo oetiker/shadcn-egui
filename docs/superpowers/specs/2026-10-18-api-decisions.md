@@ -649,6 +649,15 @@ a select that can be empty is the mode constructor `Select::optional(id,
 &mut Option<T>, items)` over items of `T`, and `.allow_deselect` sits on
 that mode; no item is written `Some(..)`.
 
+Consequence (rules, 2026-10-20): bits' toggle group has no deselect prop:
+a second press always clears (`toggle-group.svelte.js`, `toggleItem`).
+Option (a) gives a setter "where it is off by default and … where it is
+on", which assumed a prop; under P4 and the rule that setters exist only
+where upstream has a prop (rules, T1), toggle-group has no
+`.allow_deselect` and always clears. Select (`allowDeselect`, default
+off) and calendar (`preventDeselect`, default off, so deselect on) keep
+the setter.
+
 ### D-24 · Container type of multiple selection
 
 - **Case:** multiple mode needs a collection: `&mut Vec<T>`,
@@ -775,11 +784,13 @@ Decision: (b), label click (i) — as recommended; slider's `.label` is
 removed at once, not deprecated (maintainer, 2026-10-19: no deprecations
 before 1.0).
 
-Consequence (rules, 2026-10-19): The own label is `.label(impl
-Into<WidgetText>)`, D-15's label type, drawn as the crate `Label` and
-composed with the control as the upstream demo composes them (`flex
-items-center gap-3`; the gap comes through `Metrics`, since upstream's
-component sets none); it wraps in the width beside the control. Every
+Consequence (rules, 2026-10-20): The own label is `.label(impl
+Into<WidgetText>)`, D-15's label type, drawn through the Label text path
+and composed with the control as that control's upstream demo composes
+them, with that demo's gap from `Metrics`, since upstream's components set
+none: checkbox 12 px (`Field orientation="horizontal"`, `gap-3`), switch
+8 px (`switch-demo.svelte`, `space-x-2`); it wraps in the width beside the
+control. Every
 choice shortcut takes the label as egui's does: `checkbox(ui, &mut b,
 text)`, `switch(ui, &mut b, text)`, `radio_value(ui, &mut v, x, text)`.
 
@@ -2872,10 +2883,20 @@ Decision: deferred to the family PR (recommendation is the default
 proposal), except CP-05-27, decided now: default step 1, as bits
 (maintainer, P4).
 
-Consequence (rules, 2026-10-19): `CP-05-27`: the rules' upstream-defaults
-rule covers the step of 1. The slider docs say that a `0.0..=1.0` range
-then has two positions, and a `debug_assert!` catches a step not smaller
-than the range.
+Consequence (rules, 2026-10-20): `CP-05-27`: the rules' upstream-defaults
+rule covers the step of 1 (bits: `min` 0, `max` 100, `step` 1). A
+`0.0..=1.0` range then has two positions, which is usable, so the
+`debug_assert!` fires only for a step larger than the range;
+`.step(0.0)` opts into a continuous slider in egui's `step_by(0.0)`
+spelling, whose arrow keys move by 1 % of the range, the hundred steps of
+bits' default slider. The rules' key rule (Behaviour) replaces three
+default proposals by bits' behaviour (`slider.svelte.js`,
+`VALID_SLIDER_KEYS`): `CP-05-28` drop PageUp/PageDown; `CP-05-30` Meta+Arrow
+to the ends where egui reports Meta (`mac_cmd`, macOS only); `CP-05-31`
+the pointer maps over the whole root. Up and Down step a horizontal slider
+too; Left and Right do nothing on a vertical one. A pointer press focuses
+the thumb, and a bound value is never snapped without user input (rules,
+T1).
 
 ### D-113 · F5 text entry (input, textarea, input-otp, input-group)
 
