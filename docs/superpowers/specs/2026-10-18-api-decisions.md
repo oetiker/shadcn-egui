@@ -1022,8 +1022,13 @@ alternatives are at most how the chart PR builds that.
 
 Consequence (rules, 2026-10-20): "flips to the opposite side only" leaves
 out bits' `shift()`, which runs before `flip()`
-(`use-floating-layer.svelte.js`): the overlay shifts along its alignment
-axis, and the flip looks at the side axis only (rules, T3).
+(`use-floating-layer.svelte.js`), and floating-ui's `flip()` defaults
+(`crossAxis`, `flipAlignment`): the overlay shifts along its alignment
+axis; when it still overflows on any side, a start or end alignment tries
+the other alignment, the opposite side, then the opposite side with the
+other alignment (centred: the opposite side only); the first that fits
+wins, else the one that fits on the side axis with the least alignment
+overflow, else the least total overflow (rules, T3).
 `.align_alternatives` cannot build this, because egui's
 `find_best_align` takes an alternative only when the whole rect fits.
 
@@ -1067,7 +1072,8 @@ Decision: (b) — as recommended.
   focusable panel (deviation from bits, stated).
 - **Covers:** CP-T3-5, CP-T3-6, CP-08-15, CP-09-21, CP-10-7, CP-11-7, CP-11-16, CP-11-33
 
-Decision: (b), drawer without initial focus — as recommended.
+Decision: (b), drawer without initial focus — as recommended. Revised
+(maintainer, 2026-10-20): follow bits, as the Consequence below states.
 
 Consequence (rules, 2026-10-20): The Case misstates bits-ui 2.19.2 for the
 popover: `popover-content.svelte` sets `trapFocus = true` with `loop`, and
@@ -1077,8 +1083,11 @@ element on open unless the popover opened by hover. Under P4 the rules
 alert-dialog, sheet, popover) move focus in and loop Tab; menus and list
 pickers (`trapFocus = false`) close on Tab; hints move no focus. Option
 (b)'s "anchored overlays return focus on close only; Tab out closes"
-holds for menus and pickers only. Focus returns after every way of
-closing, to the trigger the overlay opened from, else to the widget that
+holds for menus and pickers only, and their focus on open follows bits
+too: a menu moves focus into its panel, select keeps it on its trigger
+(`select.svelte.js` prevents both auto-focus moves). Focus returns after
+every way of closing, to the trigger the overlay opened from (a modal's:
+the widget the opening press or key landed on), else to the widget that
 held focus at open: in the browser the click on the trigger focuses it,
 and the crate gives a pressed widget focus too (rules, Behaviour). The ring
 follows the browser's `:focus-visible` modality (rules, Looks).
@@ -1891,7 +1900,9 @@ Consequence (rules, 2026-10-20): bits' roving focus
 (`internal/roving-focus-group.js`) ignores an arrow key off the group's
 axes, so focus stays (rules, T7). Its Tab stop has a memory: the item
 last reached by an arrow key or turned on (`setCurrentTabStopId`), else
-the first. The Recommendation's "radio arrow moves focus only when no
+the first; a component's own Tab-stop rule comes first where its
+primitive has one (bits tabs: a value that matches no trigger leaves no
+Tab stop, `tabs.svelte.js`). The Recommendation's "radio arrow moves focus only when no
 item matches" misstates bits: an arrow moves focus, and checks the
 focused item whenever the group has any value, matching or not
 (`radio-group.svelte.js`, `hasValue`).
