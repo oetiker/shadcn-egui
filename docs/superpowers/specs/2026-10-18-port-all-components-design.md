@@ -191,6 +191,11 @@ The shared step owes, besides the helpers it already has:
   (`ui_opacity` takes 1.0, `interaction_state(.., enabled, ..)`), and the
   Slider behaviour example lists PageUp/PageDown and a roving group that
   always wraps, where bits differs.
+- The build-ui references follow the new API:
+  `plugin/skills/build-ui/references/icons.md` and `component-map.md`
+  show an icon-only button as `ButtonSize::Icon`; it becomes
+  `Button::icon_only(icon, name)`, and `ButtonSize` keeps the text sizes
+  only.
 
 ### Stage 4 — Ports
 

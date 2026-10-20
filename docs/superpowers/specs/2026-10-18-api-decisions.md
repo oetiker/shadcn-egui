@@ -711,6 +711,11 @@ its own component; `Calendar::multiple` stays a mode constructor. (a) and
 (`ToggleGroup::new`/`::multiple`, `Accordion::new`/`::multiple`,
 `Kbd::icon`, `from_*` for alternative input forms).
 
+Consequence (rules, 2026-10-20): Icon-only content has one constructor
+name on every component (rules, Builder shape; P1),
+`X::icon_only(.., icon, name)`, so Kbd's icon form is
+`Kbd::icon_only(icon, name)`.
+
 ### D-26 · How a selection group gets its items
 
 - **Case:** item data in the constructor (toggle-group, select), chained
@@ -2898,7 +2903,11 @@ blended colour).
 - **Covers:** CP-01-8, CP-01-13, CP-01-16, CP-01-18, CP-01-26
 
 Decision: deferred to the family PR (recommendation is the default
-proposal).
+proposal), except the icon-only button, decided now (maintainer,
+2026-10-20): `Button::icon_only(icon, name)` is a mode constructor that
+picks the `icon*` size variant of the chosen size, and `ButtonSize` keeps
+the text sizes only (`Xs`, `Sm`, `Default`, `Lg`; `Icon`, `IconXs`,
+`IconSm` and `IconLg` go).
 
 Consequence (rules, 2026-10-20): `CP-01-16`: the default proposal
 `.icon_only(bool)` compiles without an icon and then does nothing, which
@@ -3572,7 +3581,9 @@ with upstream's delay (0, the shadcn provider's `delayDuration`); egui's
   exhaustive matching.
 - **Covers:** none (review finding A31).
 
-Decision: (b) — as recommended.
+Decision: (b) — as recommended. Confirmed (maintainer, 2026-10-20): a
+public helper enum that grows with the crate (`OverlayKind`,
+`RovingKeys`) is not `#[non_exhaustive]` either.
 
 ### D-132 · Logical or physical placement names; the `align` setter names
 
