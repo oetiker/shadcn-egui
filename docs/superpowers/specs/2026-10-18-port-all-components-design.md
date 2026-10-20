@@ -163,6 +163,18 @@ The shared step owes, besides the helpers it already has:
   path, per-control gap in `Metrics`).
 - Part opacity through one helper (`Painter::set_opacity`, rules, Looks)
   and `Theme::apply` setting `disabled_alpha` from the style.
+- Text placement as Blink (maintainer, 2026-10-20; rules, Looks): baseline
+  = line top + floor((line height − (A + D)) / 2) + A, with ascent A and
+  descent D each rounded to whole device pixels and the line gap unused
+  when a line height is set; `<input>`-type fields round the half above
+  up. A and D come from the font's own tables (typo metrics if
+  `USE_TYPO_METRICS`, else `hhea`), generic, with no per-font table. The
+  per-font y correction stays available (a `FontFiles` field, from
+  `FONTS.tsv`), 0 for every font by default; only fonts whose capitals
+  still differ visibly from Chrome get a value (today oxanium, measured
+  again on the new path). The measurement test compares against a Chrome
+  reference render, not against centred capitals. Every text snapshot
+  changes once.
 - One "press of this pass" helper for the overlay stack and the hover
   timer, a group-id helper, the content-height row, the animated panel
   height for accordion and collapsible.
