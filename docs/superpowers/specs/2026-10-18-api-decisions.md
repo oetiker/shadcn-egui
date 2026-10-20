@@ -1887,6 +1887,15 @@ recommended. The per-axis constructor exception is live: the crate
 
 Decision: (a) — as recommended.
 
+Consequence (rules, 2026-10-20): bits' roving focus
+(`internal/roving-focus-group.js`) ignores an arrow key off the group's
+axes, so focus stays (rules, T7). Its Tab stop has a memory: the item
+last reached by an arrow key or turned on (`setCurrentTabStopId`), else
+the first. The Recommendation's "radio arrow moves focus only when no
+item matches" misstates bits: an arrow moves focus, and checks the
+focused item whenever the group has any value, matching or not
+(`radio-group.svelte.js`, `hasValue`).
+
 ### D-69 · Responsive breakpoints
 
 - **Case:** field `@md` responsive orientation, calendar months `md:`,
@@ -2094,6 +2103,14 @@ Decision: (c) — as recommended.
 
 Decision: (a) with a floor, empty content height, textarea grows — as
 recommended. The module docs name the crate `ScrollArea` (D-62 (a)).
+
+Consequence (rules, 2026-10-20): "The parent's available height" is not a
+parent height in CSS terms: in egui it is the rest of the panel, or a
+row's `interact_size` floor. The rules (T8) resolve heights as CSS does:
+`h-full` against a definite parent height only, else the recipe or
+`Metrics` minimum (a vertical slider's `min-h-40`); `self-stretch` in a
+row is the row's tallest other item from the previous pass (a vertical
+separator beside `text-sm` text is 20 px, not 36).
 
 ### D-77 · Fractions of the parent
 
