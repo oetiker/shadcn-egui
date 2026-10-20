@@ -80,11 +80,12 @@ widgets is removed at once, not kept as a `#[deprecated]` forward for one
 release (maintainer, 2026-10-19: no deprecations before 1.0; CHANGES.md says
 to use `ui.add_enabled`).
 
-Consequence (rules, 2026-10-19): Tabs keeps `.enabled(bool)` under the
-rules' disabled clause (Builder shape): its bits root `disabled` disables
-the triggers only, which a disabled `Ui` does not reproduce (it also fades
-the list track). The Recommendation's "Tabs shows the split" no longer
-holds; the leaf widgets stay as decided.
+Consequence (rules, 2026-10-20): Tabs loses `.enabled` as this decision
+says. Its bits root `disabled` disables every trigger, and a disabled `Ui`
+reproduces that: opacity comes from the style's `disabled:` rules, so the
+list track, which has none, keeps its look (rules, Looks and the Builder
+shape disabled clause). This replaces the 2026-10-19 consequence, which
+kept `.enabled` on the ground that a disabled `Ui` fades the track.
 
 ### D-2 · Icon parameter form
 
@@ -2157,7 +2158,8 @@ Consequence (rules, 2026-10-19): The rules state (a) as a clause (Builder
 shape): `.enabled(bool)` where upstream's `disabled` prop has an effect a
 disabled `Ui` does not reproduce, or where the component has no `Ui` to
 disable. The five components here are applications of the clause at the
-pin, not its definition; Tabs is another (D-1).
+pin, not its definition. Tabs is none: a disabled `Ui` reproduces its root
+`disabled` (D-1).
 
 ### D-80 · Shape of per-item disabled
 
