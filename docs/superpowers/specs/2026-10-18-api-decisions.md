@@ -1619,6 +1619,12 @@ the implementation note of the rules' context rule (Compound 5).
 
 Decision: (a) in the form of D-129 — as recommended.
 
+Consequence (rules, 2026-10-20): Data items whose recipe draws one row
+with icon slots (tab triggers, toggle-group items) take `impl IntoAtoms`
+as the matching builders do (rules, Builder shape), so an icon goes into
+the same row the same way on `Toggle` and on a toggle-group item; the
+typed `.icon` slot stays on both.
+
 ### D-59 · Icon slot content: `Icon`, `Glyph`, or a spinner setter
 
 - **Case:** Upstream's loading demos put a spinner where a button, badge,
@@ -2851,6 +2857,14 @@ blended colour).
 
 Decision: deferred to the family PR (recommendation is the default
 proposal).
+
+Consequence (rules, 2026-10-20): `CP-01-16`: the default proposal
+`.icon_only(bool)` compiles without an icon and then does nothing, which
+P5 rules out; the rules' mode-constructor clause gives
+`Toggle::icon_only(&mut on, icon, name)` (and the same on toggle-group
+items), and for the button the mode picks the `icon*` size variant of
+the chosen size. `CP-01-18` (never) is what the rules' `ICON_START`
+meaning gives: toggle demos put no `data-icon` on their icons.
 
 ### D-112 · F4 choice controls (checkbox, slider)
 
