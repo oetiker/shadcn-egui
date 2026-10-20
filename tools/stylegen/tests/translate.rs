@@ -905,3 +905,133 @@ fn svg_targets_keep_their_variant_order() {
     let same = ["dark:[&>svg]:size-3", "hover:[&>svg]:size-4"];
     assert_eq!(winner(&same, Field::IconSize, state), Some(Value::Px(12.0)));
 }
+
+/// `rank_of` over every translated variant, in the order Tailwind 4.3.3
+/// `Variants.compare` sorts them with the default theme (the breakpoints
+/// sit between `supports-*` and `dark`). No two of them tie. Unlike
+/// `ranks_follow_tailwind_order`, which checks the table against the port
+/// of `compare`, this pins the result itself: a change to the port that
+/// moves a variant fails here.
+#[test]
+fn ranks_pin_tailwind_order() {
+    const ORDER: [&str; 55] = [
+        "not-aria-[haspopup]",
+        "not-data-checked",
+        "not-data-selected",
+        "not-data-[variant=destructive]",
+        "not-dark",
+        "group-has-disabled/field",
+        "group-data-horizontal/tabs",
+        "group-data-vertical/tabs",
+        "group-data-[disabled=true]",
+        "group-data-[size=default]/switch",
+        "group-data-[size=sm]/card",
+        "group-data-[size=sm]/switch",
+        "group-data-[variant=default]/tabs-list",
+        "group-data-[variant=line]/tabs-list",
+        "peer-disabled",
+        "peer-data-disabled",
+        "placeholder",
+        "after",
+        "hover",
+        "focus",
+        "focus-visible",
+        "active",
+        "disabled",
+        "in-data-[slot=button-group]",
+        "has-data-[icon=inline-end]",
+        "has-data-[icon=inline-start]",
+        "has-data-[slot=card-footer]",
+        "aria-checked",
+        "aria-expanded",
+        "aria-invalid",
+        "data-active",
+        "data-checked",
+        "data-disabled",
+        "data-highlighted",
+        "data-horizontal",
+        "data-invalid",
+        "data-placeholder",
+        "data-selected",
+        "data-unchecked",
+        "data-vertical",
+        "data-[active=true]",
+        "data-[disabled=true]",
+        "data-[orientation=horizontal]",
+        "data-[orientation=vertical]",
+        "data-[size=default]",
+        "data-[size=sm]",
+        "data-[state=checked]",
+        "data-[state=unchecked]",
+        "data-[variant=line]",
+        "supports-backdrop-filter",
+        "sm",
+        "md",
+        "dark",
+        "[&_svg:not([class*='size-'])]",
+        "[&>svg]",
+    ];
+    let mut translated: Vec<&str> = TRANSLATED.iter().map(|(n, _, _)| *n).collect();
+    let mut listed = ORDER.to_vec();
+    translated.sort_unstable();
+    listed.sort_unstable();
+    assert_eq!(
+        translated, listed,
+        "ORDER must list every translated variant"
+    );
+    for w in ORDER.windows(2) {
+        assert!(
+            rank(w[0]) < rank(w[1]),
+            "`{}` (rank {}) must rank below `{}` (rank {})",
+            w[0],
+            rank(w[0]),
+            w[1],
+            rank(w[1])
+        );
+    }
+}
+
+/// The classes of `marker` in the fixture `style-<style>.css`.
+fn marker_classes(style: &str, marker: &str) -> Vec<String> {
+    parse_style_css(&read(&format!("tests/fixtures/style-{style}.css")))
+        .into_iter()
+        .find(|(m, _)| m == marker)
+        .unwrap_or_else(|| panic!("{style} has no {marker}"))
+        .1
+}
+
+/// A focused, checked checkbox shows the checked border, not the focus
+/// border. Tailwind emits `focus-visible:border-ring` before
+/// `data-checked:border-primary`; both are (0,2,0), so the later one wins in
+/// the browser. The luma switch has the same pair. The vega switch has no
+/// checked border, so the ring border shows there.
+#[test]
+fn checked_border_beats_focus_visible_border() {
+    let primary = Some(Value::Paint {
+        role: "Primary",
+        alpha: 1.0,
+    });
+    let ring = Some(Value::Paint {
+        role: "Ring",
+        alpha: 1.0,
+    });
+    let focus = flag("FOCUS_VISIBLE");
+    let both = focus | flag("CHECKED");
+    for (style, marker) in [("vega", "cn-checkbox"), ("luma", "cn-switch")] {
+        let owned = marker_classes(style, marker);
+        let classes: Vec<&str> = owned.iter().map(String::as_str).collect();
+        assert_eq!(
+            winner(&classes, Field::BorderColor, both),
+            primary,
+            "{style} {marker} focused and checked"
+        );
+        assert_eq!(
+            winner(&classes, Field::BorderColor, focus),
+            ring,
+            "{style} {marker} focused"
+        );
+    }
+    let owned = marker_classes("vega", "cn-switch");
+    let classes: Vec<&str> = owned.iter().map(String::as_str).collect();
+    assert_eq!(winner(&classes, Field::BorderColor, both), ring);
+}
