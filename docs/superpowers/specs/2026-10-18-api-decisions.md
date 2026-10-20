@@ -650,14 +650,17 @@ a select that can be empty is the mode constructor `Select::optional(id,
 &mut Option<T>, items)` over items of `T`, and `.allow_deselect` sits on
 that mode; no item is written `Some(..)`.
 
+Revised (maintainer, 2026-10-20): follow bits, as the Consequence below
+states.
+
 Consequence (rules, 2026-10-20): bits' toggle group has no deselect prop:
 a second press always clears (`toggle-group.svelte.js`, `toggleItem`).
 Option (a) gives a setter "where it is off by default and … where it is
-on", which assumed a prop; under P4 and the rule that setters exist only
-where upstream has a prop (rules, T1), toggle-group has no
-`.allow_deselect` and always clears. Select (`allowDeselect`, default
-off) and calendar (`preventDeselect`, default off, so deselect on) keep
-the setter.
+on", which assumed a prop; under P4 and the rule that an option setter
+exists only where upstream has the prop (rules, Builder shape),
+toggle-group has no `.allow_deselect` and always clears. Select
+(`allowDeselect`, default off) and calendar (`preventDeselect`, default
+off, so deselect on) keep the setter.
 
 ### D-24 · Container type of multiple selection
 
@@ -2189,6 +2192,15 @@ disable. The five components here are applications of the clause at the
 pin, not its definition. Tabs is none: a disabled `Ui` reproduces its root
 `disabled` (D-1).
 
+Consequence (rules, 2026-10-20): Under that clause Field and FieldSet get
+no `.enabled`. shadcn's Field is a `div` with no `disabled` prop; its
+faded label (`group-data-[disabled=true]/field:opacity-50`) is a look the
+Field reads from a disabled `Ui`. FieldSet's `<fieldset disabled>`
+disables all its content, which a disabled `Ui` reproduces, and parts
+with no `disabled:` rule stay opaque (rules, Looks). AccordionItem,
+MenubarMenu and HoverCard keep `.enabled`. This also answers D-114
+`CP-07-10`: the caller disables a field's control with `add_enabled_ui`.
+
 ### D-80 · Shape of per-item disabled
 
 - **Case:** Per-item disabled is sketched as an item setter (`ToggleItem`,
@@ -2925,7 +2937,8 @@ meaning gives: toggle demos put no `data-icon` on their icons.
 
 Decision: deferred to the family PR (recommendation is the default
 proposal), except CP-05-27, decided now: default step 1, as bits
-(maintainer, P4).
+(maintainer, P4), with `.step(0.0)` as a continuous mode the crate adds
+(maintainer, 2026-10-20).
 
 Consequence (rules, 2026-10-20): `CP-05-27`: the rules' upstream-defaults
 rule covers the step of 1 (bits: `min` 0, `max` 100, `step` 1). A
@@ -2936,7 +2949,8 @@ spelling, whose arrow keys move by 1 % of the range, the hundred steps of
 bits' default slider. The rules' key rule (Behaviour) replaces three
 default proposals by bits' behaviour (`slider.svelte.js`,
 `VALID_SLIDER_KEYS`): `CP-05-28` drop PageUp/PageDown; `CP-05-30` Meta+Arrow
-to the ends where egui reports Meta (`mac_cmd`, macOS only); `CP-05-31`
+to the ends where the backend reports Meta (`mac_cmd`: egui-winit on
+macOS only, eframe's web backend on every OS); `CP-05-31`
 the pointer maps over the whole root. Up and Down step a horizontal slider
 too; Left and Right do nothing on a vertical one. A pointer press focuses
 the thumb, and a bound value is never snapped without user input (rules,
@@ -3006,6 +3020,10 @@ proposal).
 
 Decision: deferred to the family PR (recommendation is the default
 proposal).
+
+Consequence (rules, 2026-10-20): `CP-07-10`: Field has no `.enabled`
+(D-79); a disabled `Ui` around the field disables its control and gives
+the label its faded look.
 
 ### D-115 · F7 anchored overlays (popover, tooltip)
 
