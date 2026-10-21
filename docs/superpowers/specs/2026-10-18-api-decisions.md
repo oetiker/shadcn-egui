@@ -159,6 +159,15 @@ Decision: (d) — as recommended.
 
 Decision: (c) — as recommended.
 
+Consequence (rules, 2026-10-21): Under axiom 3's criterion (D-32) the
+optional binding setters also cover accordion `.value(&mut Option<V>)`
+and `.value(&mut Vec<V>)` (bits `value`), collapsible `.open(&mut bool)`
+(bits `open`), carousel `.index(&mut usize)` and command `.search(&mut
+String)` (bits names the search `value` on the input, but command's root
+`value` is the highlighted item). The module-docs note on
+`CollapsingHeader::open(Option<bool>)` applies to collapsible's
+`.open(&mut bool)` too.
+
 ### D-5 · Icon slots: new slots, and per shape or per role
 
 - **Case:** `IconSlots` holds `check`, `chevron_down`, `close`. Checkbox
@@ -718,6 +727,11 @@ name on every component (rules, Modes; P1),
 `X::icon_only(.., icon, name)`, so Kbd's icon form is
 `Kbd::icon_only(icon, name)` (confirmed, maintainer, 2026-10-20).
 
+Consequence (rules, 2026-10-21): Accordion's mode constructors take no
+binding (D-32). The mode still fixes the binding type, now of the
+optional setter: `.value(&mut Option<V>)` on `Accordion::new()`,
+`.value(&mut Vec<V>)` on `Accordion::multiple()`.
+
 ### D-26 · How a selection group gets its items
 
 - **Case:** item data in the constructor (toggle-group, select), chained
@@ -750,6 +764,12 @@ name on every component (rules, Modes; P1),
 Decision: the stated criterion: (a) for select, native-select, toggle-group
 and the tabs list; (c) for radio-group, menu radio items and sidebar; the
 handle form for accordion — as recommended.
+
+Consequence (rules, 2026-10-21): The accordion's binding is optional
+(D-32), so the sketch becomes `Accordion::new().value(&mut
+open).show(ui, |acc| acc.item(..))`, and `Accordion::new().show(..)`
+keeps the state in memory. The handle form stays: the group still holds
+the state, from memory or from the binding.
 
 ### D-27 · Value form of list shortcuts
 
@@ -920,6 +940,32 @@ Decision: (c) with (c1) — as recommended.
 - **Covers:** CP-T2-2, CP-T1-13, CP-T2-8, CP-T2-7, CP-12-14, CP-12-28, CP-14-1, CP-14-11, CP-14-33, CP-15-6, CP-16-13, CP-19-10, CP-19-24, CP-16-25, CP-08-23
 
 Decision: (c), sidebar sub-menus (iii) — as recommended.
+
+Consequence (rules, 2026-10-21): Option (c) sorted state by kind, and
+no kind told a collapsible from a popover, both changed by their own
+trigger. Axiom 3 now sorts by one criterion: a binding is required only
+when the component cannot do its job without the app, because the app
+acts on the value or only app code changes it; state the component both
+changes and uses itself lives in memory with an optional binding named
+after the state; state no caller uses lives in memory only. Accordion
+and collapsible disclosure and the carousel index therefore move to
+memory with an optional binding (`Accordion::new().value(&mut
+Option<V>)`, `Accordion::multiple().value(&mut Vec<V>)`,
+`Collapsible::new().open(&mut bool)`, `Carousel::new(..).index(&mut
+usize)`), as bits' optional `bind:value` and `bind:open` and egui's
+`CollapsingHeader`; the Reason's departure from egui is gone. The
+sidebar sub-menu trade-off disappears with it: sub-menus use
+Collapsible's memory form, and neither the caller nor the sidebar keeps
+a separate state per sub-menu. Command's search text moves from memory
+only to memory with an optional `.search(&mut String)`, because a caller
+that turns off the built-in filter (D-118 `CP-08-21`) filters by it. The
+other rows keep their answer under the criterion: the chart legend's
+`&mut Vec<key>` stays required while the caller draws the series in the
+plot closure (D-104); questionnaire answers are data the app acts on;
+sidebar open, resizable layout and calendar month keep memory plus
+binding; message-scroller mode, the sonner queue and the open item of
+menubar and navigation-menu stay memory only. Memory keeps the
+accordion's open values, so `V` needs `Clone + Send + Sync + 'static`.
 
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
@@ -1533,6 +1579,11 @@ Decision: (a), (c) for `field_error` — as recommended.
 - **Covers:** CP-T4-10, CP-T10-10, CP-T10-8, CP-T5-5, CP-09-23, CP-10-8, CP-10-14, CP-12-29
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-21): `collapsible_trigger(resp, &mut open)`
+makes the collapsible's binding required, which axiom 3 no longer
+allows (D-32); the collapsible's form is D-119's `CP-12-27`. Taking the
+trigger by `&Response` or by value is unchanged.
 
 ### D-54 · Content form: text, closure, or both; leaf, container, or both
 
@@ -2439,6 +2490,14 @@ Consequence (rules, 2026-10-19): The rules state (a) as clauses (Kind templates:
 lists here are examples at the pin. A variant is not content, so there is
 no `separator_vertical` shortcut (D-18 (x)).
 
+Consequence (rules, 2026-10-21): Axiom 2 says why the named exceptions
+keep upstream's names with egui's shape: an egui name is copied only
+where one crate function is the single counterpart of one egui function.
+Three crate menus map to one `menu_button`. `tooltip` cannot become a
+`Response` method named `on_hover_text`: `Response` has an inherent
+method of that name, and an inherent method always wins over a trait
+method, so the crate's could never be called.
+
 ## Generator and recipes
 
 ### D-91 · `data-open`: a real state, as `OPEN` or `EXPANDED`
@@ -2816,6 +2875,9 @@ family PR (recommendation is the default proposal). Under D-69's decision
 the mobile mode (a sheet below 768 px window width) is on by default, as
 upstream.
 
+Consequence (rules, 2026-10-21): The sub-menu state trade-off of D-32 is
+gone: sub-menus use Collapsible's memory form (D-32 Consequence).
+
 ### D-108 · `message-scroller`: very large; the follow-bottom subset
 
 - **Case:** the full primitive (anchoring, tail spacer, prepend, opening
@@ -3181,6 +3243,10 @@ proposal). Select and command lists run in the crate `ScrollArea` (D-62
 (a)); select's list moves there in the F12 PR (CP-14-30 (i)). Triggers open
 on pointer down with press-drag-release (D-45).
 
+Consequence (rules, 2026-10-21): Command's search text lives in memory
+with an optional `.search(&mut String)` (D-32): with `.should_filter(false)`
+(`CP-08-21`) the caller filters the items by it.
+
 ### D-119 · F11 tabs and disclosure (accordion, collapsible)
 
 - **Case:** Choices that touch only accordion and collapsible.
@@ -3197,6 +3263,15 @@ on pointer down with press-drag-release (D-45).
 Decision: deferred to the family PR (recommendation is the default
 proposal). Accordion and collapsible animate their height as upstream (D-88
 (c)).
+
+Consequence (rules, 2026-10-21): Collapsible's open flag lives in memory
+with an optional `.open(&mut bool)` (D-32), so `CP-12-27`'s options
+change: the `if` pattern and `collapsible_trigger(resp, &mut open)` both
+need a caller `bool`, and a free function has no setter for an optional
+binding. The default proposal becomes the container
+`Collapsible::new().open(&mut open).show(..)`, with `.open` optional; the
+family PR decides how it takes the trigger. Accordion's binding is
+optional too: `Accordion::new().value(..)` (D-26).
 
 ### D-120 · F12 scroll and panes (scroll-area, resizable)
 
@@ -3278,6 +3353,9 @@ Decision: deferred to the family PR (recommendation is the default
 proposal). CP-16-4's self-wrapping table scrolls in the crate `ScrollArea`
 (D-62 (a)).
 
+Consequence (rules, 2026-10-21): The carousel index lives in memory with
+an optional `.index(&mut usize)` (D-32), the form CP-16-13 (c) sketched.
+
 ### D-123 · F15 toasts (sonner)
 
 - **Case:** Choices that touch only sonner.
@@ -3316,6 +3394,12 @@ literal); the narrow layout below 600 px is on by default (D-69).
 Decision: deferred to the family PR (recommendation is the default
 proposal). The attachment group scrolls in the crate `ScrollArea` (D-62
 (a)).
+
+Consequence (rules, 2026-10-21): The default proposal, the caller sets
+`Message::ghost(bool)`, conflicts with axiom 5: a child's context flows
+down by itself, with no extra argument. The recommendation is now that
+the bubble reports itself through the item registry and Message reads it
+from the previous pass (Part fn template). The family PR still decides.
 
 ### D-125 · F17 questionnaire
 
