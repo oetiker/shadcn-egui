@@ -1,7 +1,9 @@
 # API decisions: port all shadcn components
 
 Stage 2 of the plan `docs/superpowers/plans/2026-10-18-port-all-components.md`.
-Companion of the rules draft `docs/superpowers/specs/2026-10-18-api-rules.md`.
+Companion of the rules draft `docs/superpowers/specs/2026-10-18-api-rules.md`,
+its conformance spec `2026-10-18-conformance.md` and its implementation notes
+`2026-10-18-implementation-notes.md`.
 Every choice point (`CP-…`) of the survey
 `docs/superpowers/specs/2026-10-18-component-survey.md` is covered here,
 or on a `Settled because` line of the rules.
@@ -83,8 +85,8 @@ to use `ui.add_enabled`).
 Consequence (rules, 2026-10-20): Tabs loses `.enabled` as this decision
 says. Its bits root `disabled` disables every trigger, and a disabled `Ui`
 reproduces that: opacity comes from the style's `disabled:` rules, so the
-list track, which has none, keeps its look (rules, Looks and the Builder
-shape disabled clause). This replaces the 2026-10-19 consequence, which
+list track, which has none, keeps its look (conformance 2.2 and the rules'
+Disabled convention). This replaces the 2026-10-19 consequence, which
 kept `.enabled` on the ground that a disabled `Ui` fades the track.
 
 ### D-2 · Icon parameter form
@@ -367,7 +369,7 @@ budget has room, and F12 counts them.
 
 Decision: (c) — as recommended.
 
-Consequence (rules, 2026-10-19): The rules (T6) state when a component
+Consequence (rules, 2026-10-19): The rules (Kind templates, Ids) state when a component
 offers `.id_salt`: it keeps state across passes beyond egui's own focus and
 animation state, or wraps an egui widget that offers one. Card and alert
 offer it once they have an action part (D-48). On an overlay over a
@@ -457,8 +459,8 @@ IntoAtoms`, clickable or not; a parameter that mirrors an egui one takes
 egui's type (`hint_text` as `TextEdit::hint_text`). A crate widget honours
 every atom it accepts, and one it cannot honour (`Atom::custom`) fails a
 `debug_assert!`. Under (x), egui's `strong` and `weak` are no explicit
-colours: on a crate widget they resolve to the recipe colour (rules,
-Looks).
+colours: on a crate widget they resolve to the recipe colour
+(conformance 2.3).
 
 ### D-16 · Flags whose default is `true`, and the close-button name
 
@@ -550,7 +552,7 @@ Decision: (a), (i), (x) — as recommended.
 
 Consequence (rules, 2026-10-19): The enclosing `Ui`'s text colour of (i) is
 one source for crate text and crate icons alike, after the caller's
-explicit colour and the recipe's (rules, Looks); a container whose upstream
+explicit colour and the recipe's (conformance 2.3); a container whose upstream
 sets a text colour sets it on its content `Ui`.
 
 ### D-20 · Names of part functions and part types
@@ -645,7 +647,7 @@ themselves — as recommended.
 
 Decision: (a) — as recommended.
 
-Consequence (rules, 2026-10-19): Data items carry plain values (rules, T1):
+Consequence (rules, 2026-10-19): Data items carry plain values (rules, Data item):
 a select that can be empty is the mode constructor `Select::optional(id,
 &mut Option<T>, items)` over items of `T`, and `.allow_deselect` sits on
 that mode; no item is written `Some(..)`.
@@ -657,7 +659,7 @@ Consequence (rules, 2026-10-20): bits' toggle group has no deselect prop:
 a second press always clears (`toggle-group.svelte.js`, `toggleItem`).
 Option (a) gives a setter "where it is off by default and … where it is
 on", which assumed a prop; under P4 and the rule that an option setter
-exists only where upstream has the prop (rules, Builder shape),
+exists only where upstream has the prop (rules, concept 1),
 toggle-group has no `.allow_deselect` and always clears. Select
 (`allowDeselect`, default off) and calendar (`preventDeselect`, default
 off, so deselect on) keep the setter.
@@ -712,7 +714,7 @@ its own component; `Calendar::multiple` stays a mode constructor. (a) and
 `Kbd::icon`, `from_*` for alternative input forms).
 
 Consequence (rules, 2026-10-20): Icon-only content has one constructor
-name on every component (rules, Builder shape; P1),
+name on every component (rules, Modes; P1),
 `X::icon_only(.., icon, name)`, so Kbd's icon form is
 `Kbd::icon_only(icon, name)` (confirmed, maintainer, 2026-10-20).
 
@@ -949,7 +951,7 @@ Decision: (a), (iii) — as recommended.
 Consequence (rules, 2026-10-20): The binding setter `.open(&mut bool)`
 takes the state's name, so the associated functions are `is_open`,
 `set_open` and `toggle`; hover overlays (tooltip) have them too, keyed by
-the trigger (rules, T2).
+the trigger (rules, concept 3).
 
 ### D-34 · Initial value of memory-owned state
 
@@ -1025,7 +1027,7 @@ Decision: (b), (i) — as recommended.
 Decision: (b), chart tooltip on egui's default — as recommended.
 
 Consequence (rules, 2026-10-19): Under P4 the chart tooltip keeps
-upstream's behaviour and stays inside the chart (rules, T3); egui's default
+upstream's behaviour and stays inside the chart (conformance 5.6); egui's default
 alternatives are at most how the chart PR builds that.
 
 Consequence (rules, 2026-10-20): "flips to the opposite side only" leaves
@@ -1036,7 +1038,7 @@ axis; when it still overflows on any side, a start or end alignment tries
 the other alignment, the opposite side, then the opposite side with the
 other alignment (centred: the opposite side only); the first that fits
 wins, else the one that fits on the side axis with the least alignment
-overflow, else the least total overflow (rules, T3).
+overflow, else the least total overflow (conformance 5.6).
 `.align_alternatives` cannot build this, because egui's
 `find_best_align` takes an alternative only when the whole rect fits.
 
@@ -1087,7 +1089,7 @@ Consequence (rules, 2026-10-20): The Case misstates bits-ui 2.19.2 for the
 popover: `popover-content.svelte` sets `trapFocus = true` with `loop`, and
 the focus scope (`focus-scope.svelte.js`) moves focus to the first tabbable
 element on open unless the popover opened by hover. Under P4 the rules
-(T3) follow bits: overlays whose bits content traps focus (dialog,
+(conformance 5.4) follow bits: overlays whose bits content traps focus (dialog,
 alert-dialog, sheet, popover) move focus in and loop Tab; menus and list
 pickers (`trapFocus = false`) close on Tab; hints move no focus. Option
 (b)'s "anchored overlays return focus on close only; Tab out closes"
@@ -1097,8 +1099,8 @@ too: a menu moves focus into its panel, select keeps it on its trigger
 every way of closing, to the trigger the overlay opened from (a modal's:
 the widget the opening press or key landed on), else to the widget that
 held focus at open: in the browser the click on the trigger focuses it,
-and the crate gives a pressed widget focus too (rules, Behaviour). The ring
-follows the browser's `:focus-visible` modality (rules, Looks).
+and the crate gives a pressed widget focus too (conformance 4.1). The ring
+follows the browser's `:focus-visible` modality (conformance 2.6).
 
 ### D-40 · Hover overlays: mechanism, delays, keyboard opening
 
@@ -1133,7 +1135,7 @@ bits' 0.7 s / 0.3 s. egui's global `tooltip_delay` stays untouched, so plain
 `on_hover_text` tooltips keep egui's timing.
 
 Consequence (rules, 2026-10-19): Delays are `f32` seconds, egui's unit
-(rules, Behaviour).
+(rules, Parameter types).
 
 ### D-41 · Dismissal configuration
 
@@ -1371,7 +1373,7 @@ that the caller scrolls uses the crate `ScrollArea` in demos and docs (D-62
 (a)).
 
 Consequence (rules, 2026-10-19): Under the rules' bound-state rule
-(Compound 3) Tabs is no closure container: `Tabs` is the list widget, and
+(Container) Tabs is no closure container: `Tabs` is the list widget, and
 `tabs_content(ui, ..)` is the content part fn the caller calls after it,
 which applies the content text size. Container part fns return
 `InnerResponse<R>`, are called in upstream's source order (content after a
@@ -1390,8 +1392,8 @@ with a D-100 reason.
   an output struct.
 - **Options:** `action`: (a) always a closure slot stored in the builder
   (`Card::new().action(|ui| ..)`); it has the borrow trap of D-47 (a): an
-  action that touches state the body also edits does not compile (Compound
-  rule 2); (a') a prefixed part fn inside the `show` closure
+  action that touches state the body also edits does not compile (rules,
+  Container); (a') a prefixed part fn inside the `show` closure
   (`card_action(ui, ..)`, `alert_action(ui, ..)`), D-47 (d6)'s form for the
   header slot: the root draws the header from setter data before the
   closure and keeps the action slot free; the part, called first, paints
@@ -1423,7 +1425,7 @@ output field (i) — as recommended.
 
 Consequence (rules, 2026-10-19): The action part is placed from the
 previous pass's size, with `request_discard` when it changes (rules,
-Compound 6). It is called first because upstream places it before the
+Part fn; conformance 3.2). It is called first because upstream places it before the
 content in source order, which is Tab and reading order.
 
 ### D-49 · Media and image slots
@@ -1609,9 +1611,10 @@ Decision: (a) — as recommended.
 Decision: (a) — as recommended.
 
 Consequence (rules, 2026-10-19): Separator: its default orientation is
-upstream's horizontal (P4; rules, Behaviour), not the `Ui` layout's;
+upstream's horizontal (P4; conformance 1), not the `Ui` layout's;
 `ui.add(Separator::new().vertical())` gives the vertical one. The tag is
-the implementation note of the rules' context rule (Compound 5).
+the implementation note of the rules' context rule (concept 5;
+implementation notes 12).
 
 ### D-58 · A crate `Icon` inside `IntoAtoms` content
 
@@ -1638,7 +1641,7 @@ Decision: (a) in the form of D-129 — as recommended.
 
 Consequence (rules, 2026-10-20): Data items whose recipe draws one row
 with icon slots (tab triggers, toggle-group items) take `impl IntoAtoms`
-as the matching builders do (rules, Builder shape), so an icon goes into
+as the matching builders do (rules, Parameter types), so an icon goes into
 the same row the same way on `Toggle` and on a toggle-group item; the
 typed `.icon` slot stays on both.
 
@@ -1904,7 +1907,7 @@ Decision: (a) — as recommended.
 
 Consequence (rules, 2026-10-20): bits' roving focus
 (`internal/roving-focus-group.js`) ignores an arrow key off the group's
-axes, so focus stays (rules, T7). Its Tab stop has a memory: the item
+axes, so focus stays (conformance 4.2). Its Tab stop has a memory: the item
 last reached by an arrow key or turned on (`setCurrentTabStopId`), else
 the first; a component's own Tab-stop rule comes first where its
 primitive has one (bits tabs: a value that matches no trigger leaves no
@@ -2021,7 +2024,7 @@ weight; the decision rests on (s1)'s one width word per widget.
 Consequence (rules, 2026-10-19): (s1) leaves one width word per widget: the
 button, content-sized, takes `.width`, not the `min_width` the
 Recommendation lists, and the rules have no separate `.min_width` floor
-(T8).
+(rules, Sizing).
 
 ### D-72 · Default width of text-entry and choice controls
 
@@ -2123,7 +2126,7 @@ recommended. The module docs name the crate `ScrollArea` (D-62 (a)).
 
 Consequence (rules, 2026-10-20): "The parent's available height" is not a
 parent height in CSS terms: in egui it is the rest of the panel, or a
-row's `interact_size` floor. The rules (T8) resolve heights as CSS does:
+row's `interact_size` floor. The conformance spec (3.3) resolves heights as CSS does:
 `h-full` against a definite parent height only, else the recipe or
 `Metrics` minimum (a vertical slider's `min-h-40`); `self-stretch` in a
 row is the row's tallest other item from the previous pass (a vertical
@@ -2200,7 +2203,7 @@ no `.enabled`. shadcn's Field is a `div` with no `disabled` prop; its
 faded label (`group-data-[disabled=true]/field:opacity-50`) is a look the
 Field reads from a disabled `Ui`. FieldSet's `<fieldset disabled>`
 disables all its content, which a disabled `Ui` reproduces, and parts
-with no `disabled:` rule stay opaque (rules, Looks). AccordionItem,
+with no `disabled:` rule stay opaque (conformance 2.2). AccordionItem,
 MenubarMenu and HoverCard keep `.enabled`. This also answers D-114
 `CP-07-10`: the caller disables a field's control with `add_enabled_ui`.
 
@@ -2239,6 +2242,12 @@ Decision: (a) — as recommended.
 - **Covers:** CP-T9-15, CP-19-31
 
 Decision: (b) for questionnaire, (a) elsewhere — as recommended.
+
+Consequence (rules v4, 2026-10-21): Built-in Previous/Next buttons disable
+themselves at the ends (conformance 4.4). The caller override,
+`.next_enabled(bool)` and `.prev_enabled(bool)`, is the questionnaire's and
+is recorded here, not in the rules; another component offers it only where
+a demo needs it.
 
 ### D-82 · Overlay on a disabled trigger
 
@@ -2306,6 +2315,10 @@ Field — as recommended.
 - **Covers:** CP-T9-7, CP-15-18
 
 Decision: (b) — as recommended.
+
+Consequence (rules v4, 2026-10-21): The name is recorded here, not in the
+rules: `read_only(bool)` means "focus and navigate, no change"; calendar has
+it now, and the name is reserved for radio-group and checkbox.
 
 ### D-86 · Clickable display widgets and `link`
 
@@ -2392,7 +2405,7 @@ Decision: (a) with the per-component answers — as recommended.
 
 Consequence (rules, 2026-10-19): The AccessKit role is set after
 `widget_info`, which sets one from `WidgetType`. The decorative separator
-reports no `widget_info` (rules, T9).
+reports no `widget_info` (conformance 8).
 
 ## Shortcut functions
 
@@ -2422,7 +2435,7 @@ reports no `widget_info` (rules, T9).
 
 Decision: (a) with the named exceptions — as recommended.
 
-Consequence (rules, 2026-10-19): The rules state (a) as clauses (T10); the
+Consequence (rules, 2026-10-19): The rules state (a) as clauses (Kind templates: Shortcuts, Leaf, Anchored overlay); the
 lists here are examples at the pin. A variant is not content, so there is
 no `separator_vertical` shortcut (D-18 (x)).
 
@@ -2915,6 +2928,12 @@ items), and for the button the mode picks the `icon*` size variant of
 the chosen size. `CP-01-18` (never) is what the rules' `ICON_START`
 meaning gives: toggle demos put no `data-icon` on their icons.
 
+Consequence (rules v4, 2026-10-21): The rules state the icon-only mode for
+every component (conventions, Modes): where upstream spells it as size
+variants, the mode picks the icon variant of the chosen size and the size
+enum keeps the text sizes. The button's case, `ButtonSize` without `Icon`,
+`IconXs`, `IconSm` and `IconLg`, is recorded here only.
+
 ### D-112 · F4 choice controls (checkbox, slider)
 
 - **Case:** Choices that touch only checkbox and slider behaviour and the
@@ -2947,21 +2966,26 @@ proposal), except CP-05-27, decided now: default step 1, as bits
 (maintainer, P4), with `.step(0.0)` as a continuous mode the crate adds
 (maintainer, 2026-10-20).
 
-Consequence (rules, 2026-10-20): `CP-05-27`: the rules' upstream-defaults
-rule covers the step of 1 (bits: `min` 0, `max` 100, `step` 1). A
+Consequence (rules, 2026-10-20): `CP-05-27`: the upstream-defaults rule
+(conformance 1) covers the step of 1 (bits: `min` 0, `max` 100, `step` 1). A
 `0.0..=1.0` range then has two positions, which is usable, so the
 `debug_assert!` fires only for a step larger than the range;
 `.step(0.0)` opts into a continuous slider in egui's `step_by(0.0)`
 spelling, whose arrow keys move by 1 % of the range, the hundred steps of
-bits' default slider. The rules' key rule (Behaviour) replaces three
+bits' default slider. The key rule (conformance 4.1) replaces three
 default proposals by bits' behaviour (`slider.svelte.js`,
 `VALID_SLIDER_KEYS`): `CP-05-28` drop PageUp/PageDown; `CP-05-30` Meta+Arrow
 to the ends where the backend reports Meta (`mac_cmd`: egui-winit on
 macOS only, eframe's web backend on every OS); `CP-05-31`
 the pointer maps over the whole root. Up and Down step a horizontal slider
 too; Left and Right do nothing on a vertical one. A pointer press focuses
-the thumb, and a bound value is never snapped without user input (rules,
-T1).
+the thumb, and a bound value is never snapped without user input (conformance
+4.4).
+
+Consequence (rules v4, 2026-10-21): The slider's default step of 1 is an
+application of the upstream-defaults rule (conformance 1); the continuous
+mode `.step(0.0)`, in egui's `step_by(0.0)` spelling, is recorded here, not
+in the rules.
 
 ### D-113 · F5 text entry (input, textarea, input-otp, input-group)
 
@@ -3050,7 +3074,7 @@ Decision: deferred to the family PR (recommendation is the default
 proposal). Tooltip timing follows D-40 and D-130.
 
 Consequence (rules, 2026-10-19): An overlay with an arrow paints it for
-every side and alignment before it offers `.align` (rules, T3).
+every side and alignment before it offers `.align` (conformance 5.6).
 
 ### D-116 · F8 menus (dropdown-menu, context-menu, menubar)
 
@@ -3210,7 +3234,7 @@ egui's keyboard scrolling keeps working under the hidden bars.
   - `CP-13-28` degenerate input: clamp the caller's `page` into
     `1..=max(total_pages, 1)` and mark changed / clamp only for drawing,
     leave the value / leave it like upstream · clamp and mark changed, so
-    the write follows T1 (a widget that writes the caller's value marks
+    the write follows the rules' Leaf template (a widget that writes the caller's value marks
     `changed()`); the report's caveat (a silent write) no longer applies.
   - `CP-13-29` implementation: compose crate `Button` / paint with button
     recipes · compose `Button`.
@@ -3376,7 +3400,7 @@ window width (D-69).
 
 Decision: (b) — as recommended.
 
-Consequence (rules, 2026-10-19): The rules (T8) now state this decision:
+Consequence (rules, 2026-10-19): The rules (Sizing) and conformance 3.4 now state this decision:
 text wraps where the browser would wrap it, in a row as in a column, and
 Label offers `.wrap_mode`.
 
@@ -3475,7 +3499,7 @@ runs `on_begin_pass` only from `run_ui`). Dismissal reacts to the press,
 never to the overlay's own trigger; "top" for a press is the stack as the
 pass began; hover overlays are on the stack for Escape only. The stack is
 public, so overlays built outside the crate nest with crate overlays
-(rules, T2).
+(conformance 5.1).
 
 ### D-129 · How a crate `Icon` becomes an egui atom
 
@@ -3605,7 +3629,7 @@ Decision: (a) and (ii) — as recommended.
 
 ### D-133 · How a filling widget is capped without `available_width()` arithmetic
 
-- **Case:** T8 has `.max_width` cap a filling widget and text entry
+- **Case:** The sizing rules have `.max_width` cap a filling widget and text entry
   default to `Metrics::field_max_width`; that is
   `available_width().min(cap)`, which rule 6 of the porting standard
   forbids and the survey lists as a bug (`input.rs:138`). egui's own

@@ -137,8 +137,7 @@ maintainer on 2026-10-19; it replaces "a plain rename keeps a
 Shared primitives that several families need (for example a menu, roving
 focus, an overlay / sheet, a scroll area) and generator support for the
 gaps found in stage 1 land in a shared step of their own, before the
-first port that uses them, never inside a port (rules, Code and shared
-infrastructure). Whether a shared step is part of the cleanup or runs
+first port that uses them, never inside a port (Porting process). Whether a shared step is part of the cleanup or runs
 just before a family is the builder's call.
 
 **Planning rule for the shared step.** Before it starts, the step lists,
@@ -161,9 +160,10 @@ The shared step owes, besides the helpers it already has:
 - The control-plus-label row (one type for checkbox, switch and radio
   item: hit area, toggle, `widget_info`, label through the Label text
   path, per-control gap in `Metrics`).
-- Part opacity through one helper (`Painter::set_opacity`, rules, Looks)
+- Part opacity through one helper (`Painter::set_opacity`; conformance 2.2,
+  implementation notes 3)
   and `Theme::apply` setting `disabled_alpha` from the style.
-- Text placement as Blink (maintainer, 2026-10-20; rules, Looks): baseline
+- Text placement as Blink (maintainer, 2026-10-20; conformance 2.4): baseline
   = line top + floor((line height − (A + D)) / 2) + A, with ascent A and
   descent D each rounded to whole device pixels and the line gap unused
   when a line height is set; `<input>`-type fields round the half above
@@ -216,6 +216,75 @@ One family per pull request, in dependency order. Each port follows
 `port-component` and the rules, with its own snapshots, behaviour list,
 `component-map.md` row and `CHANGES.md` entry. Very-large components come
 last.
+
+## Porting process
+
+How a port and a shared step use the rules
+(`2026-10-18-api-rules.md`), the conformance spec
+(`2026-10-18-conformance.md`), the implementation notes
+(`2026-10-18-implementation-notes.md`) and the decisions
+(`2026-10-18-api-decisions.md`).
+
+### Reading order
+
+- A port reads the rules first, then, in the decisions document, its
+  family bundle (D-109 to D-126; the title names the components) and its
+  verdict entry if it has one (D-103 to D-108). Their default proposals
+  apply until the family PR decides. Other D-entries it opens only for
+  options and reasons.
+- A rule states the maintainer's decision, also where it differs from
+  the entry's recommendation. Where an entry's text and a rule differ,
+  the rule wins, and the entry's **Consequence** says what changed. A
+  rule that rests on a deferred bundle line stays a draft until the
+  family PR decides.
+- Before a component gets its own answer, the general rule is applied to
+  it. Where that gives an answer, the answer stands, and the D-entry
+  records it as a Consequence.
+- The porting standard (`plugin/skills/port-component/SKILL.md`) is the
+  second read. Where it and the rules differ, the rules win; the cleanup
+  brings the standard in line (Stage 3).
+- **Open (M-n)** marks a choice the principles do not settle. It lists
+  the options and a recommendation; the recommendation applies until the
+  maintainer decides.
+
+### Shared code
+
+- Code a second component needs is shared, not copied. A port that
+  writes what another component already has, or what a component the
+  plan names next will need, extracts a crate-private helper in the same
+  PR. A helper that exists is called, never restated. A copy is a
+  defect.
+- Shared code has one owner. Infrastructure several components use,
+  generator output and icon slots included, lands in its own step before
+  the first component that uses it. A port never ships a known-wrong
+  look while it waits for one. A part that one component draws for
+  another is built by the shared step when components of one step both
+  need it.
+
+### Tests and fixtures
+
+- Snapshot fixtures copy the upstream demo's props (a demo's
+  `align="start"` becomes `.align(..)` with start alignment).
+- A fixture whose content clips at the window edge is wrong, and so is
+  one that sidesteps a case a rule names (a wider window so a tooltip
+  need not flip, a fixed height so a separator need not stretch).
+- Per-style snapshots show every part a rule styles (a control's own
+  label).
+- Pure logic (the overlay stack, the item registry) gets unit tests.
+- Per-pass mechanisms are tested under both app loops (`run_ui` and an
+  own `begin_pass`/`end_pass` loop), from a root `Ui`, not an `Area`
+  whose first pass is a disabled sizing pass.
+- Behaviour tests send input as users and slow frames do: a press and
+  its release in one pass, a pointer path as well as an accesskit
+  action, a trigger at the window edge, every way an overlay closes.
+- Demo and reference screens use only the components' and layout
+  helpers' own responsive behaviour, never a width test of their own.
+  Their snapshot fixtures, and those of every component with a
+  responsive class, cover a mobile width (390 px) and a desktop width
+  (at least 1024 px).
+- The README's settings-screen image shows the desktop render (at least
+  1024 px) and the phone render (390 px) side by side, both from the
+  tested fixtures (maintainer, 2026-10-20).
 
 ## Constraints
 
