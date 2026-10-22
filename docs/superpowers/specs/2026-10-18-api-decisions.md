@@ -2154,6 +2154,15 @@ content-sized one fills `ui.add_sized`). Removed as a look: dialog
 `Modal`; a wider dialog is an app variant. The one-word rule (s1) and
 the clamp order stand for the setters that stay.
 
+Consequence (rules, 2026-10-22, second pass): axioms 1 and 8 decide
+whether a setter exists, axiom 2 only its shape. An overlay panel's
+width is part of its design, not an extent from where it sits, so the
+`.width` on popover, menus, menubar content and hover-card goes, as the
+dialog's did: a wider panel is an app variant. `Input` and `Textarea`
+keep `.max_width` (not egui's `desired_width`): the crate's word caps a
+filling widget, egui's sets a wanted width, and distinct meanings keep
+distinct names.
+
 ### D-72 · Default width of text-entry and choice controls
 
 - **Case:** Input and input-group cap at `Metrics::field_max_width`,
