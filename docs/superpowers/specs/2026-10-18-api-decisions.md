@@ -2455,7 +2455,8 @@ variant as its base plus the edit, not in `Style`, and rebuilds the
 recipes per style, so a style switch keeps every app variant. The edit
 gets `&mut XRecipes` for every component, one-part ones included: one
 `Recipe` field per upstream part, named after its `data-slot` in snake
-case, in a `#[non_exhaustive]` struct.
+case, in a `#[non_exhaustive]` struct. A part drawn as a pseudo-element
+takes its slot's name plus the pseudo-element's (`tabs_trigger_after`).
 
 ## State flags and behaviour
 
