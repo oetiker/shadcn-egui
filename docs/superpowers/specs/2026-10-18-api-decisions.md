@@ -825,6 +825,12 @@ open).show(ui, |acc| acc.item(..))`, and `Accordion::new().show(..)`
 keeps the state in memory. The handle form stays: the group still holds
 the state, from memory or from the binding.
 
+Consequence (rules, 2026-10-23, review 2): A handle part that takes an
+item value takes the value and its text as positional parameters,
+`acc.item(Faq::Shipping, "Shipping?", |ui| ..)` (maintainer,
+2026-10-23); `(value, text)` tuples convert only in `IntoIterator` item
+lists (select, native-select, toggle-group, the tabs list).
+
 ### D-27 · Value form of list shortcuts
 
 - **Case:** the select shortcut keeps `&mut usize` + `&[&str]`, while tabs
@@ -2755,15 +2761,17 @@ egui's name for a one-to-one counterpart, else the crate's shared word
 (P1), else upstream's; the menu and tooltip shortcuts take upstream's
 names under the third.
 
-## Generator and recipes
+Consequence (rules, 2026-10-22, O1): Renamed the tooltip shortcut to
+`on_hover_text(resp, text)`; reversed by review 2 (next paragraph).
 
-Consequence (rules, 2026-10-22, O1): By axiom 2's naming order the
-tooltip shortcut is the one-to-one counterpart of
-`Response::on_hover_text` and takes its name as a free function:
-`on_hover_text(resp, text) -> Response`, as `checkbox` beside
-`Ui::checkbox`. The crate's function does not clash with the inherent
-method. The menu shortcuts keep upstream's names. Reverses Q3 for the
-tooltip.
+Consequence (rules, 2026-10-23, review 2): The tooltip shortcut stays
+`tooltip(resp, text)` (maintainer, 2026-10-23, reversing O1). Axiom 2's
+first tier copies an egui name only for a counterpart that behaves as
+the egui function does; the crate tooltip has its own timer and popup,
+so a habitual `resp.on_hover_text(..)` would compile and silently give
+egui's tooltip. The menu shortcuts keep upstream's names as before.
+
+## Generator and recipes
 
 ### D-91 · `data-open`: a real state, as `OPEN` or `EXPANDED`
 

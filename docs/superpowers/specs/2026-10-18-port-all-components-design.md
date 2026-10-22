@@ -128,7 +128,7 @@ a correct shape cannot be found without the feature, correctness wins and
 the feature comes into the cleanup.
 
 Before 1.0 there are no `#[deprecated]` aliases or forwards: a rename
-(for example `toggle`, `tab_bar`, `tooltip` to `on_hover_text`), a removal (`id_source`) or a changed
+(for example `toggle`, `tab_bar`), a removal (`id_source`) or a changed
 signature (for example `Select` from `&mut usize` to `&mut T`) breaks at
 once, and CHANGES.md gives the upgrade step for each. (Changed by the
 maintainer on 2026-10-19; it replaces "a plain rename keeps a
