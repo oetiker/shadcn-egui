@@ -2450,6 +2450,13 @@ Consequence (rules, 2026-10-22, after v4 review): An app variant's edit
 receives the style name, so input-otp's form demo (`h-16 w-12` in vega,
 `h-12 w-11` in nova) is one app size with a value per style.
 
+Consequence (rules, 2026-10-22, O2 and O5): The theme keeps each app
+variant as its base plus the edit, not in `Style`, and rebuilds the
+recipes per style, so a style switch keeps every app variant. The edit
+gets `&mut XRecipes` for every component, one-part ones included: one
+`Recipe` field per upstream part, named after its `data-slot` in snake
+case, in a `#[non_exhaustive]` struct.
+
 ## State flags and behaviour
 
 ### D-79 · `.enabled(bool)` on containers and overlays
@@ -2748,6 +2755,14 @@ egui's name for a one-to-one counterpart, else the crate's shared word
 names under the third.
 
 ## Generator and recipes
+
+Consequence (rules, 2026-10-22, O1): By axiom 2's naming order the
+tooltip shortcut is the one-to-one counterpart of
+`Response::on_hover_text` and takes its name as a free function:
+`on_hover_text(resp, text) -> Response`, as `checkbox` beside
+`Ui::checkbox`. The crate's function does not clash with the inherent
+method. The menu shortcuts keep upstream's names. Reverses Q3 for the
+tooltip.
 
 ### D-91 · `data-open`: a real state, as `OPEN` or `EXPANDED`
 
