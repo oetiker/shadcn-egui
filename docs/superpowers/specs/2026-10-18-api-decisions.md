@@ -522,6 +522,12 @@ Consequence (rules, 2026-10-22, after v4 review): An accessible name
 (`X::icon_only(.., icon, name)`) is text the component reads and never
 draws, so it takes `impl Into<String>` (rules, Parameter types).
 
+Consequence (rules, 2026-10-23, review 2): Every public name that
+differs from upstream's carries `#[doc(alias = "<upstream name>")]`
+(`hint_text` for `placeholder`), so rustdoc search finds it from the
+upstream name. An alias is no forward, so the rule against deprecated
+aliases is untouched.
+
 ### D-16 · Flags whose default is `true`, and the close-button name
 
 - **Case:** `numbers`, `prev_next`, `viewport`, `close_on_select`,
@@ -622,6 +628,11 @@ alert and avatar, with app colours (`Role::custom`) where no palette
 role fits. (i) and (x) stay: the spinner's `.color` and the icon's
 colour are upstream props (spinner `color`, the lucide icon's `color`)
 and mirror egui's `Spinner::color` and `Image::tint`.
+
+Consequence (rules, 2026-10-23, review 2): Docs and examples name an
+app colour through a constant, `const BRAND: Role =
+Role::custom("brand");`, as they name app variants, so a misspelled
+name does not compile.
 
 ### D-20 · Names of part functions and part types
 
@@ -1384,6 +1395,13 @@ bits' 0.7 s / 0.3 s. egui's global `tooltip_delay` stays untouched, so plain
 Consequence (rules, 2026-10-19): Delays are `f32` seconds, egui's unit
 (rules, Parameter types).
 
+Consequence (rules, 2026-10-23, review 2): Option (ii) narrows to
+axiom 1: a hover overlay offers the delays upstream offers. bits
+Tooltip has `delayDuration` only, so the tooltip has `.open_delay` and
+no `.close_delay`; hover-card has both (`openDelay`, `closeDelay`);
+navigation-menu has `.open_delay` for `delayDuration`, and its
+`skipDelayDuration` waits for the family PR.
+
 ### D-41 · Dismissal configuration
 
 - **Case:** Only drawer sketched dismissal setters (`dismissible`, `modal`);
@@ -1840,6 +1858,14 @@ sizes take `impl IntoIterator<Item = usize>` (`.groups([3, 3])`), as
 every data list, in place of `&[usize]`. The avatar group and input-otp
 groups are recorded here, not in the rules.
 
+Consequence (rules, 2026-10-23, review 2): Axiom 4 now decides
+collapse against handle on upstream's API (maintainer, 2026-10-23):
+where upstream lets the caller arrange the parts (groups, separators),
+the root is a handle; otherwise the parts collapse into one widget.
+Input-otp's `children({cells})` snippet lets the caller place `Group`,
+`Slot` and `Separator`, so input-otp moves from (d) `.groups([3, 3])`
+to (b), a handle; the handle methods are for the family PR.
+
 ### D-56 · A crate widget restyled by its parent
 
 - **Case:** A button inside a button-group or input-group, input-group text,
@@ -1962,6 +1988,12 @@ return keeps `impl Widget` (`ui.add` returns the `Response`) and adds
 `TextEdit::show` returns `TextEditOutput`: input-otp `show(ui) ->
 InputOtpOutput` with `completed`. The output of a component with a state
 type carries its `id` (D-12).
+
+Consequence (rules, 2026-10-23, review 2): An upstream `on<Event>` prop
+becomes a `Response` query where egui has one (`changed()`,
+`clicked()`), else a field of the output (input-otp `completed`). As a
+handle (D-55), input-otp's root returns its output from `show(ui, |otp|
+..)`. The modal output is D-31's.
 
 ### D-61 · Container method name
 
@@ -2383,6 +2415,11 @@ native-select wrapper at the pin), not capped at `Metrics::field_max_width`.
 Decision: (a), native-select re-exports `SelectSize`, `Sm` offered — as
 recommended.
 
+Consequence (rules, 2026-10-23, review 2): A component without a size
+enum gets no app sizes; its app variants carry its sizes. Only
+components with a variant enum get a synthesized one (`XVariant` with
+`Default`).
+
 ### D-74 · Meaning of `size`
 
 - **Case:** `size` means a variant enum on most widgets but pixels on the
@@ -2517,6 +2554,22 @@ gets `&mut XRecipes` for every component, one-part ones included: one
 `Recipe` field per upstream part, named after its `data-slot` in snake
 case, in a `#[non_exhaustive]` struct. A part drawn as a pseudo-element
 takes its slot's name plus the pseudo-element's (`tabs_trigger_after`).
+
+Consequence (rules, 2026-10-23, review 2): A look an upstream demo
+gives with a class is an app variant, with no count of demos
+(maintainer, 2026-10-23); a style function upstream exports for another
+part (`navigationMenuTriggerStyle`, `buttonVariants` on a trigger) is a
+built-in variant of the receiving part. The edit gets a small
+vocabulary (maintainer, 2026-10-23): `Prop::set(v)` replaces the
+unconditional value and keeps the base's state rules, `Prop::on(state,
+v)` replaces the base's rules for that state as tailwind-merge does, and
+`Recipe::recolor(from, to)` swaps a colour role in a part. Axiom 8 no
+longer says an app variant keeps all of its base's state rules: it keeps
+those its edit does not name. `XRecipes` holds only parts the variant
+reaches (`tabs_content` goes from `TabsRecipes`). Input-otp has no size
+enum, so its per-style form slot is an app variant, not an app size
+(D-73). The light and dark forms of a theme share its app variants; the
+API for the switch is open.
 
 ## State flags and behaviour
 
@@ -3178,6 +3231,10 @@ Decision: (a), port in F20 — as recommended; sub-choices (i) to (iv)
 deferred to the family PR (recommendation is the default proposal). Under
 D-41's decision, hover items stay open on an outside touch, as upstream.
 
+Consequence (rules, 2026-10-23, review 2): The demo's
+`navigationMenuTriggerStyle()` on a `Link` is a built-in variant of the
+link, not an app variant (axiom 8). The root is a handle (D-55).
+
 ### D-107 · `sidebar`: very large
 
 - **Case:** eight palette roles (D-101), ~25 variants, ~15 parts; needs
@@ -3441,6 +3498,11 @@ but does not require one, so `pasteTransformer`, `textalign`,
 family PR needs them (P8). Input-otp's per-style slot size is an app
 size (D-78). Its active cell and caret are transient memory state with
 no state type and the auto id (D-12); its output is D-60's.
+
+Consequence (rules, 2026-10-23, review 2): Input-otp is a handle (D-55),
+so the caller places groups, slots and separators as upstream does;
+`onComplete` is the output's `completed` (D-60). `pattern` keeps the
+default proposal `fn(char) -> bool`.
 
 ### D-114 · F6 forms (field, native-select)
 

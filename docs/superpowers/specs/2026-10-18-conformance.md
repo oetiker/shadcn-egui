@@ -31,9 +31,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   from the active style's recipes, or from `Metrics` where upstream sets
   none (porting standard rule 5). They hold for every style, a restyled
   one included, not only the shipped ones.
-- An app variant or app size (rules, axiom 8) draws every field it does
-  not change as its base does, in every state, style and mode, and a
-  field it changes in every one of them.
+- An app variant or app size (rules, axiom 8) draws every value its edit
+  does not set as its base does, in every state, style and mode, and a
+  value it sets in every one of them.
 - egui state (enabled, hover, focus, the `Ui`'s text colour) selects
   which recipe rule applies. An egui setting (`disabled_alpha`,
   `override_text_color`, `strong_text_color`, `weak_text_color`,
@@ -346,10 +346,10 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   from its trigger.
 - Hints move no focus and never return focus.
 - However an overlay closes (Escape, an outside press, a close part,
-  `ui.close()`, the binding, a modal's flag), focus returns one pass later, if it is
-  gone or inside the closed overlays: to the trigger the overlay opened
-  from (for a modal, the widget the opening press or key landed on), else
-  to the widget that held focus when it opened.
+  `ui.close()`, the binding, a modal's flag), focus returns one pass
+  later, if it is gone or inside the closed overlays: to the trigger the
+  overlay opened from (for a modal, the widget the opening press or key
+  landed on), else to the widget that held focus when it opened.
 - Crate widgets get focus on press and on return. A plain egui widget
   gets focus back only when the overlay was opened or closed by keyboard,
   so no pointer action leaves a pressed look the browser does not show.

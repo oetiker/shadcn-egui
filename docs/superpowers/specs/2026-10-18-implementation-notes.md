@@ -9,8 +9,9 @@ in the same place.
 
 ## 1 · Shared code
 
-- One crate path per concern serves every component (rules, concept 7). A
-  component that needs a variant extends the path instead of copying it.
+- One crate path per concern serves every component, behind the one API
+  shape of rules, concept 7. A component that needs a variant extends the
+  path instead of copying it; code a second component needs is shared.
   The paths: the text path, the interaction state of a `Response`, a
   part's opacity, the recipe box (fill, border, shadow, focus ring), the
   press of a pass, the overlay stack, the overlay panel frame and its
@@ -200,8 +201,13 @@ sizing §Widget builders (`add_sized`), §TextEdit (`desired_width`,
   (base, variant, size). A part whose look comes from the base's state
   bits, not from a variant recipe (the tab trigger), gets its edited copy
   of the part recipe.
-- A field the edit sets replaces the base's rules for that field; an edit
-  that keeps them adds a rule (`Rule::important`).
+- `Prop::set` writes the unconditional value where the base keeps it, in
+  `base` or in a `When::ALWAYS` rule (every generated `icon_size`), and
+  leaves the state rules. `Prop::on(state, v)` drops the rules whose
+  condition is exactly `state` and adds one with the rank a generated
+  rule of that state has. `Recipe::recolor` maps `Paint::Role` values in
+  `base` and rules. A plain assignment (`Prop::fixed`) still replaces
+  every rule of the field.
 - The edit receives the `StyleName` the theme builds for. A `Style` carries
   only its `name`, so the theme maps it to the `StyleName`; a restyled
   style keeps the name of the style it came from.
