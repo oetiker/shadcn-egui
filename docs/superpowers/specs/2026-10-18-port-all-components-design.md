@@ -179,6 +179,15 @@ The shared step owes, besides the helpers it already has:
   timer, a group-id helper, the content-height row, the animated panel
   height for accordion and collapsible.
 - The crate `ScrollArea` before the first list that scrolls (D-62).
+- App variants and app sizes (rules, axiom 8; implementation notes 18):
+  the app case on every variant and size enum, a variant enum with the
+  single case `Default` where a component has none, `Theme::variant` and
+  `Theme::size`, the theme's map and the lookup helper; with them the app
+  colours of the recipe-completeness design (`Role::custom`, the theme's
+  light and dark map). They land before the first component that uses
+  them; the 14 existing components get the app case in the cleanup.
+- The memory-state type helper (rules, Memory-owned state; implementation
+  notes 19): binding, initial value, `XState` `load` and `store`.
 - Infrastructure defects:
   1. The recipe box paints `shadow-*` under the box, so it shows through
      transparent and translucent fills (vega light input 242 grey; dark
@@ -203,7 +212,9 @@ The shared step owes, besides the helpers it already has:
   the rules: "Interaction states" still describes the old disabled path
   (`ui_opacity` takes 1.0, `interaction_state(.., enabled, ..)`), and the
   Slider behaviour example lists PageUp/PageDown and a roving group that
-  always wraps, where bits differs.
+  always wraps, where bits differs. Rule 5 makes a value that only a docs
+  demo sets a caller parameter; under axiom 8 such a value is a look (an
+  app variant) or the caller's layout, never a setter of its own.
 - The build-ui references follow the new API:
   `plugin/skills/build-ui/references/icons.md` and `component-map.md`
   show an icon-only button as `ButtonSize::Icon`; it becomes

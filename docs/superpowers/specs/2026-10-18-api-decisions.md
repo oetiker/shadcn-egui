@@ -168,6 +168,13 @@ String)` (bits names the search `value` on the input, but command's root
 `CollapsingHeader::open(Option<bool>)` applies to collapsible's
 `.open(&mut bool)` too.
 
+Consequence (rules, 2026-10-22): The optional binding setters also cover
+the hover overlays, tooltip and hover-card `.open(&mut bool)` (bits
+`open` on Tooltip and LinkPreview), and the open item of menubar and
+navigation-menu, `.value(&mut Option<usize>)` (bits `value` on the
+root), the index of the open menu in call order. Each binding setter
+comes with `.default_<state>(..)` (D-34 Consequence).
+
 ### D-5 · Icon slots: new slots, and per shape or per role
 
 - **Case:** `IconSlots` holds `check`, `chevron_down`, `close`. Checkbox
@@ -272,6 +279,16 @@ Decision: (a) with `.gap(f32)` — as recommended.
 
 Decision: (b) — as recommended. Tooltip's open state is the crate's hover
 timer (D-130 (b)).
+
+Consequence (rules, 2026-10-22): Axiom 3 keeps memory only for state
+upstream does not let a caller bind, and bits binds `open` on Tooltip
+and LinkPreview and `value` on Menubar and NavigationMenu. Tooltip and
+hover-card therefore take `.open(&mut bool)` and `.default_open(bool)`
+like every anchored overlay; the hover timer (D-130 (b)) writes into the
+binding and a written binding opens or closes the overlay (conformance
+5.5). The open item of menubar and navigation-menu is memory plus
+`.value(&mut Option<usize>)`. The Recommendation's "memory only" for
+these four is gone.
 
 ### D-9 · What an overlay's `show` returns
 
@@ -563,6 +580,14 @@ Consequence (rules, 2026-10-19): The enclosing `Ui`'s text colour of (i) is
 one source for crate text and crate icons alike, after the caller's
 explicit colour and the recipe's (conformance 2.3); a container whose upstream
 sets a text colour sets it on its content `Ui`.
+
+Consequence (rules, 2026-10-22): Option (a) goes: there are no colour
+setters at the call (axiom 8). A demo's colours (`badge-colors`, `alert-
+colors`, the avatar badge's `bg-green-600`) are app variants of badge,
+alert and avatar, with app colours (`Role::custom`) where no palette
+role fits. (i) and (x) stay: the spinner's `.color` and the icon's
+colour are upstream props (spinner `color`, the lucide icon's `color`)
+and mirror egui's `Spinner::color` and `Image::tint`.
 
 ### D-20 · Names of part functions and part types
 
@@ -967,6 +992,14 @@ binding; message-scroller mode, the sonner queue and the open item of
 menubar and navigation-menu stay memory only. Memory keeps the
 accordion's open values, so `V` needs `Clone + Send + Sync + 'static`.
 
+Consequence (rules, 2026-10-22): The open item of menubar and
+navigation-menu moves from memory only to memory with an optional
+binding, `.value(&mut Option<usize>)`, because bits binds `value` on
+both roots. Memory only now holds exactly the state upstream does not
+let a caller bind: the message-scroller mode (only `ref` is bindable)
+and the sonner queue. Every row with memory plus binding also gets
+`.default_<state>(..)` (D-34) and a state type (D-33).
+
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
 - **Case:** app code may need to query or set memory-owned state
@@ -999,6 +1032,21 @@ takes the state's name, so the associated functions are `is_open`,
 `set_open` and `toggle`; hover overlays (tooltip) have them too, keyed by
 the trigger (rules, concept 3).
 
+Consequence (rules, 2026-10-22): Every memory-owned state has a state
+type `XState` in the form of egui's `CollapsingState`, option (b) in
+place of (a): `XState::load(ctx, id) -> Option<Self>`,
+`load_with_default_<state>(ctx, id, value) -> Self`, `store(&self,
+ctx)`, getters named after the state (`is_open()`, `index()`,
+`month()`), `set_<state>(..)` and `toggle()` for a flag. An overlay on a
+caller's trigger loads by the trigger (`PopoverState::load(ctx,
+&trigger)`). The associated functions (`Sidebar::toggle(ctx, id)`,
+`Popover::is_open(ctx, &trigger)`, `is_open`, `set_open` and `toggle` on
+the component type) and `Popover::id_for` go; the sidebar trigger
+toggles through `SidebarState`. egui's state types differ
+(`TextEditState::store(self, ctx, id)`; `CollapsingState::store(&self,
+ctx)` keeps its id); P3 picks `CollapsingState`'s form. (iii) for
+`expanded` stays.
+
 ### D-34 · Initial value of memory-owned state
 
 - **Case:** Memory-owned state (sidebar open, resizable layout, calendar
@@ -1015,6 +1063,16 @@ the trigger (rules, concept 3).
 - **Covers:** CP-T2-4
 
 Decision: (b) — as recommended.
+
+Consequence (rules, 2026-10-22): Revised: every memory-owned state with
+an optional binding takes its initial value through
+`.default_<state>(..)` (`.default_open(bool)`, `.default_value(..)`,
+`.default_index(..)`), anchored overlays included, as egui's
+`CollapsingHeader::default_open`. In Svelte an unbound bindable prop is
+the initial value (`<Accordion.Root type="single" value="0">`,
+`<Collapsible.Root open={item.isActive}>`), so the setter follows from
+upstream's API, not from what a demo does. The default is upstream's
+(overlays closed, sidebar open).
 
 ### D-35 · Persisting memory-owned state across restarts
 
@@ -1667,6 +1725,11 @@ upstream's horizontal (P4; conformance 1), not the `Ui` layout's;
 the implementation note of the rules' context rule (concept 5;
 implementation notes 12).
 
+Consequence (rules, 2026-10-22): The calendar's `.background(bool)`
+goes: a background is a look, and an app that disagrees with the context
+defines a calendar app variant (axiom 8). Inside a crate card or popover
+the calendar still takes the transparent background from the context.
+
 ### D-58 · A crate `Icon` inside `IntoAtoms` content
 
 - **Case:** Tab triggers, navigation links, alert-dialog buttons and
@@ -2077,6 +2140,20 @@ button, content-sized, takes `.width`, not the `min_width` the
 Recommendation lists, and the rules have no separate `.min_width` floor
 (rules, Sizing).
 
+Consequence (rules, 2026-10-22): Axiom 1 keeps a width setter only where
+upstream has the prop or it mirrors an egui setter; no upstream
+component here has a width prop. Kept, as egui mirrors: `.max_width` on
+input and textarea (`TextEdit::desired_width`) and progress
+(`ProgressBar::desired_width`), `.width` on select and native-select
+(`ComboBox::width`) and on popover, menus, menubar content and hover-
+card (`Popup::width`). Removed: `.max_width` on card, alert, aspect-
+ratio and slider, and `.width` on attachment, tabs and button; their
+width comes from the caller's `Ui` (a filling widget takes its width, a
+content-sized one fills `ui.add_sized`). Removed as a look: dialog
+`.width`, a recipe value (vega `sm:max-w-md`) with no width on egui's
+`Modal`; a wider dialog is an app variant. The one-word rule (s1) and
+the clamp order stand for the setters that stay.
+
 ### D-72 · Default width of text-entry and choice controls
 
 - **Case:** Input and input-group cap at `Metrics::field_max_width`,
@@ -2134,6 +2211,13 @@ recommended.
 
 Decision: (b) and (c) — as recommended.
 
+Consequence (rules, 2026-10-22): `Spinner::size(f32)` stays (egui
+`Spinner::size`). Sheet and drawer `size(f32)` and input-otp
+`slot_size(Vec2)` go: the size is a recipe value (the sheet's
+maximum width, the slot's `size-9`), changed through an app variant or app size (axiom 8).
+`Skeleton::new(impl Into<Vec2>)` stays: a skeleton has no size of its
+own, so its extent is the caller's, as `Ui::allocate_space`.
+
 ### D-75 · How a group shares size with its children
 
 - **Case:** Item group gap depends on its child size, the avatar group count
@@ -2183,6 +2267,11 @@ row's `interact_size` floor. The conformance spec (3.3) resolves heights as CSS 
 row is the row's tallest other item from the previous pass (a vertical
 separator beside `text-sm` text is 20 px, not 36).
 
+Consequence (rules, 2026-10-22): `.height(f32)` stays only where it
+mirrors egui: chart (`egui_plot::Plot::height`). Resizable, vertical
+carousel and message-scroller take their height from the caller's `Ui`
+(`ui.allocate_ui`), above the recipe or `Metrics` floor (axiom 8).
+
 ### D-77 · Fractions of the parent
 
 - **Case:** Bubble is capped at 80 % of its parent (`max-w-[80%]`),
@@ -2215,6 +2304,12 @@ Decision: as recommended.
 - **Covers:** CP-T8-9, CP-03-5, CP-15-15, CP-14-14, CP-14-31, CP-04-18, CP-01-25, CP-14-15
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-22): Axiom 1 no longer gives a setter for a
+value a demo changes; that value is a look (axiom 8). Toggle-group
+`.spacing(f32)` stays, as upstream's `spacing` prop. Calendar
+`cell_size`, input-otp `slot_size` and the sidebar widths go: they
+become app variants or app sizes of calendar, input-otp and sidebar.
 
 ## State flags and behaviour
 
@@ -2299,6 +2394,13 @@ themselves at the ends (conformance 4.4). The caller override,
 `.next_enabled(bool)` and `.prev_enabled(bool)`, is the questionnaire's and
 is recorded here, not in the rules; another component offers it only where
 a demo needs it.
+
+Consequence (rules, 2026-10-22): Axiom 1 no longer gives a setter
+because a demo needs it. The questionnaire keeps `.next_enabled(bool)`
+and `.prev_enabled(bool)` because upstream's Next and Previous parts
+pass `disabled` to their button (`questionnaire-navigation-state` sets
+it); a built-in Previous/Next of another component gets the setter only
+where upstream's part takes `disabled`.
 
 ### D-82 · Overlay on a disabled trigger
 
@@ -2934,6 +3036,11 @@ proposal).
 Consequence (rules, 2026-10-19): `CP-04-17`: the default proposal "infer"
 conflicts with P4; the rules decide horizontal, upstream's default (D-57).
 
+Consequence (rules, 2026-10-22): `CP-02-25`: skeleton
+`.corner_radius(..)` and `.circle(bool)` go; upstream's skeleton has no
+prop, and a round skeleton (`rounded-full` in the demo) is a skeleton
+app variant (axiom 8).
+
 ### D-110 · F2 content blocks (card, item, empty, avatar)
 
 - **Case / Options / Recommendation per item:**
@@ -2954,6 +3061,11 @@ conflicts with P4; the rules decide horizontal, upstream's default (D-57).
 Decision: deferred to the family PR (recommendation is the default
 proposal). The avatar's inner border follows D-95's decision (upstream's
 blended colour).
+
+Consequence (rules, 2026-10-22): `CP-03-25`: empty `.outline(bool)`
+goes; the dashed border is a demo class, so it is an empty app variant
+(axiom 8), whose border width comes from its recipe, not from a new
+`Metrics` field.
 
 ### D-111 · F3 buttons and groups
 
@@ -2995,6 +3107,12 @@ every component (conventions, Modes): where upstream spells it as size
 variants, the mode picks the icon variant of the chosen size and the size
 enum keeps the text sizes. The button's case, `ButtonSize` without `Icon`,
 `IconXs`, `IconSm` and `IconLg`, is recorded here only.
+
+Consequence (rules, 2026-10-22): `CP-01-26`: upstream's toggle-group
+item has `variant` and `size` props (`toggle-group-item.svelte`; the
+group's value wins when set), so under axiom 1 `ToggleItem` keeps
+`.variant(..)` and `.size(..)`, app variants included; the default
+proposal "drop" falls.
 
 ### D-112 · F4 choice controls (checkbox, slider)
 
@@ -3117,6 +3235,10 @@ proposal).
 Consequence (rules, 2026-10-20): `CP-07-10`: Field has no `.enabled`
 (D-79); a disabled `Ui` around the field disables its control and gives
 the label its faded look.
+
+Consequence (rules, 2026-10-22): `CP-07-18`: `.tight(bool)` goes; the
+tighter gap is a demo class, so it is a field-group app variant (axiom
+8). Nested groups are still detected through the `Ui`.
 
 ### D-115 · F7 anchored overlays (popover, tooltip)
 
@@ -3356,6 +3478,11 @@ proposal). CP-16-4's self-wrapping table scrolls in the crate `ScrollArea`
 Consequence (rules, 2026-10-21): The carousel index lives in memory with
 an optional `.index(&mut usize)` (D-32), the form CP-16-13 (c) sketched.
 
+Consequence (rules, 2026-10-22): `CP-16-19`: `align` and `loop` stay
+(embla `opts`, an upstream prop). `per_view` and `spacing` go: upstream
+sets them with classes on the content and the items (`basis-1/2
+lg:basis-1/3`, `-ms-1`, `ps-1` in `carousel-spacing`), so they are carousel app variants (axiom 8).
+
 ### D-123 · F15 toasts (sonner)
 
 - **Case:** Choices that touch only sonner.
@@ -3463,6 +3590,11 @@ Decision: deferred to the family PR (recommendation is the default
 proposal). Range-calendar is its own type (D-25 (d)); each calendar keeps
 the look its pinned classes render (D-97 (a)); the months layout follows the
 window width (D-69).
+
+Consequence (rules, 2026-10-22): `CP-15-11`: upstream's calendar has the
+`buttonVariant` prop (default `ghost`), so under axiom 1 the calendar
+takes `.button_variant(ButtonVariant)`, app variants included; the
+default proposal "fixed" falls.
 
 ## Added decisions
 

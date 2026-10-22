@@ -17,7 +17,8 @@ in the same place.
   placement, the hover timer, the item registry and the generic data item,
   a group's id, the control-plus-label row, the width and breakpoint
   helpers, the roving-focus helper, the list keyboard model, the crate
-  `ScrollArea`.
+  `ScrollArea`, the app-variant lookup (18) and the memory-state type
+  helper (19).
 - A part that one component draws for another lives in the drawing
   component's module: a control's own label is the `Label` module's.
 - A type several components share (`Orientation`, `Side`) lives in its own
@@ -114,6 +115,9 @@ in the same place.
   machinery.
 - One "press of this pass" helper serves the overlay stack and the hover
   timer.
+- A bound hover overlay writes the timer's open and close into the
+  binding, and a binding the app changed opens or closes it at once; the
+  timer then runs from that state (conformance 5.5).
 
 ## 10 · Placement
 
@@ -172,3 +176,29 @@ immediate items §Selection (`selectable_value`, `radio_value` runs,
 sizing §Widget builders (`add_sized`), §TextEdit (`desired_width`,
 `f32::INFINITY`); orientation §Direction and layout, §Focus and keyboard
 (`EventFilter`); state §widget_info and accessibility.
+
+## 18 · App variants
+
+- The theme keeps the app variants in one map behind an `Arc`, beside the
+  app colours, keyed by component and name: the base variant and the
+  edit. Cloning a `Theme` stays cheap and `Theme::current` copies no
+  recipe.
+- The edited recipes are built once per style and kept with the map, not
+  per pass; a style change rebuilds them.
+- The app case of a variant enum holds the `&'static str` name, so the
+  enum stays `Copy`, `Eq` and `const`-constructible. Two constants with
+  one name are one app variant.
+- A component resolves its variant through one helper that returns the
+  recipe stack and the state bits: the built-in variant's recipes, or the
+  app variant's edited copies with the base's bits. A name the theme does
+  not define fails a `debug_assert!` and resolves to the `Default` variant:
+  only the theme's entry knows the base.
+
+## 19 · Memory-state types
+
+- A state type keeps its `Id` and the value, as `CollapsingState`, and
+  stores it with `insert_temp`, or `insert_persisted` under `.persist`
+  (D-35: std types only).
+- One crate helper serves every state type: binding to memory at the
+  start of the call, memory to binding after a user change, the initial
+  value from `.default_<state>`, and the repaint on `store`.

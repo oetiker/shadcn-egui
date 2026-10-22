@@ -31,6 +31,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   from the active style's recipes, or from `Metrics` where upstream sets
   none (porting standard rule 5). They hold for every style, a restyled
   one included, not only the shipped ones.
+- An app variant or app size (rules, axiom 8) draws every field it does
+  not change as its base does, in every state, style and mode, and a
+  field it changes in every one of them.
 - egui state (enabled, hover, focus, the `Ui`'s text colour) selects
   which recipe rule applies. An egui setting (`disabled_alpha`,
   `override_text_color`, `strong_text_color`, `weak_text_color`,
@@ -167,10 +170,14 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   padding plus its fixed parts (chevron, gaps, a thumb's length, one
   glyph for text entry), never 0.
 - `f32::INFINITY` means fill.
-- Which width word a widget has follows from upstream's default width:
-  `w-full` fills, `w-fit` or no width is content-sized. Text entry fills
-  up to `Metrics::field_max_width`; select and native-select are `w-fit`;
-  a button is content-sized.
+- Whether a widget fills or is content-sized follows from upstream's
+  default width: `w-full` fills, `w-fit` or no width is content-sized.
+  Text entry fills up to `Metrics::field_max_width`; select and
+  native-select are `w-fit`; a button is content-sized. Where a widget has
+  a width word (rules, Sizing), this decides which.
+- A content-sized widget in a justified layout (`ui.add_sized`) takes the
+  layout's width, as egui's `Button`; its content stays placed as the
+  recipe places it.
 - A decorative fill never widens an auto-sized parent: in egui's sizing
   pass it reports its minimum.
 
@@ -346,6 +353,10 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   `delayDuration`), hover-card bits' 0.7 s open and 0.3 s close. egui's
   global `tooltip_delay` is neither read nor changed.
 - Hint overlays open for disabled triggers; action overlays do not.
+- A bound open flag behaves as bits' `bind:open`: the app opens or closes
+  the overlay by writing it, hover and focus then close or keep it as
+  usual, and every change the overlay makes shows in the binding. The
+  open item of menubar and navigation-menu binds the same way.
 
 ### 5.6 Collision
 
