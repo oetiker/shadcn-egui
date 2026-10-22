@@ -154,7 +154,8 @@ in the same place.
 ## 15 · Icons
 
 - `IconAtom(icon)` builds an image atom whose URI names an entry of a
-  process-wide icon registry.
+  process-wide icon registry. The entry records whether the caller gave a
+  colour, so a crate widget re-tints only an atom without one.
 
 ## 16 · Accessibility
 
@@ -193,12 +194,27 @@ sizing §Widget builders (`add_sized`), §TextEdit (`desired_width`,
   app variant's edited copies with the base's bits. A name the theme does
   not define fails a `debug_assert!` and resolves to the `Default` variant:
   only the theme's entry knows the base.
+- An app variant's recipes take the base's place in the recipe stack
+  (base, variant, size). A part whose look comes from the base's state
+  bits, not from a variant recipe (the tab trigger), gets its edited copy
+  of the part recipe.
+- A field the edit sets replaces the base's rules for that field; an edit
+  that keeps them adds a rule (`Rule::important`).
+- The edit receives the `StyleName` the theme builds for. A `Style` carries
+  only its `name`, so the theme maps it to the `StyleName`; a restyled
+  style keeps the name of the style it came from.
 
 ## 19 · Memory-state types
 
 - A state type keeps its `Id` and the value, as `CollapsingState`, and
   stores it with `insert_temp`, or `insert_persisted` under `.persist`
   (D-35: std types only).
-- One crate helper serves every state type: binding to memory at the
-  start of the call, memory to binding after a user change, the initial
-  value from `.default_<state>`, and the repaint on `store`.
+- One crate helper serves every state type. It keeps, beside the value,
+  the binding's value as it last saw it. At the start of a call with no
+  value in memory, memory takes `.default_<state>` if set, else the
+  binding's value, else upstream's default, and the binding takes
+  memory's value. Later calls: a binding that differs from the last seen
+  value sets memory; else a memory value that differs from the binding
+  (a `store`) sets the binding. After a user change, memory and binding
+  take the new value. `store` requests the repaint.
+- The helper calls `Context::check_for_id_clash` for the state id.

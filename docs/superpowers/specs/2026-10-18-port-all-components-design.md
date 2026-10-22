@@ -50,7 +50,7 @@ The 14 components share one main pattern: a builder
 (`Button::new(..).variant(..).size(..)`) added with `ui.add(..)`,
 `enabled(bool)` / `invalid(bool)` flags, variant and size enums, and
 `width(f32)` / `max_width(f32)` with `f32::INFINITY` meaning full width.
-These stay.
+These stay, with egui's width words: `max_width` becomes `desired_width`.
 
 Known drifts, to be settled by the rules:
 
@@ -182,12 +182,13 @@ The shared step owes, besides the helpers it already has:
 - App variants and app sizes (rules, axiom 8; implementation notes 18):
   the app case on every variant and size enum, a variant enum with the
   single case `Default` where a component has none, `Theme::variant` and
-  `Theme::size`, the theme's map and the lookup helper; with them the app
+  `Theme::size` with an edit that receives the style name, the theme's map and the lookup helper; with them the app
   colours of the recipe-completeness design (`Role::custom`, the theme's
   light and dark map). They land before the first component that uses
   them; the 14 existing components get the app case in the cleanup.
 - The memory-state type helper (rules, Memory-owned state; implementation
-  notes 19): binding, initial value, `XState` `load` and `store`.
+  notes 19): the default id and its clash check, the binding kept in step
+  with memory both ways, initial value, `XState` `load` and `store`.
 - Infrastructure defects:
   1. The recipe box paints `shadow-*` under the box, so it shows through
      transparent and translucent fills (vega light input 242 grey; dark

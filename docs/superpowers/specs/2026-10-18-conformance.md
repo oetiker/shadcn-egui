@@ -150,7 +150,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 
 - Upstream attributes map to flags: `data-open` to `EXPANDED`;
   `data-[side=*]` on panels to four `SIDE_*` flags; group children get
-  `FIRST`, `LAST`, `NOT_FIRST`, `NOT_LAST`; `SELECTED` keeps one meaning.
+  `FIRST`, `LAST`, `NOT_FIRST`, `NOT_LAST`. A flag has one meaning, the
+  attribute it stands for: `SELECTED` keeps one, and `ICON_START` means
+  "the content holds an icon with `data-icon="inline-start"`".
 - A typed icon slot sets `ICON_START` (or `ICON_END`) where that
   component's upstream demos put `data-icon` on their icons (button), and
   not where they do not (tab trigger, toggle).
@@ -197,8 +199,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 ### 3.3 Height
 
 - Heights resolve as CSS resolves them. `h-full` takes a parent height
-  only where the parent has a definite one: a crate container with a
-  fixed height or a `.height`.
+  only where the parent has a definite one: a crate container whose
+  height is fixed before its content is drawn (a recipe `h-*`, or the
+  height resizable takes from the caller's `Ui`).
 - An egui parent (`add_sized`, `allocate_ui`) is no definite parent.
   Against any other parent `h-full` is auto, and the recipe or `Metrics`
   minimum applies (a vertical slider's `min-h-40`).
@@ -257,6 +260,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 
 ### 4.3 List keyboard model
 
+- A filtered list hides a group none of whose items match, heading
+  included, and hides separators while a search is active (bits
+  `CommandGroup`, `alwaysRender`).
 - Pickers and menus share one list keyboard model: typeahead (1 s
   buffer), Home/End, loop, skipping disabled items, configured per
   component as its primitive does (PageUp/PageDown move in the select
@@ -267,7 +273,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 
 ### 4.4 Values and selection
 
-- A widget writes the caller's value only in response to user input.
+- A widget writes the caller's value only in response to user input. A
+  change the app makes through a state type or `.default_<state>` reaches
+  a binding on the next call (rules, Memory-owned state).
 - A bound value off the step grid or outside the range shows at its
   nearest position and stays as it is until the user changes it (bits).
 - A value that matches no item marks nothing and shows the placeholder.

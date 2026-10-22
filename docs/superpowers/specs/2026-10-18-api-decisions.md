@@ -175,6 +175,17 @@ navigation-menu, `.value(&mut Option<usize>)` (bits `value` on the
 root), the index of the open menu in call order. Each binding setter
 comes with `.default_<state>(..)` (D-34 Consequence).
 
+Consequence (rules, 2026-10-22, after v4 review): Axiom 2 gives a setter
+egui's name where it is the one-to-one counterpart of one egui setter.
+The optional open binding has two egui forms, `Window::open(&mut bool)`
+and `Popup::open_bool(&mut bool)`, so the crate keeps the one P2 names,
+`.open(&mut bool)`. The module docs name `Popup::open_bool` as the egui
+equivalent and `Popup::open(bool)` as the form that forces the state for
+one pass. The rules no longer state the module-docs note or the menubar
+and navigation-menu `.value(&mut Option<usize>)`; this entry holds both.
+A change stored through the state type reaches the binding on the next
+call (D-33).
+
 ### D-5 · Icon slots: new slots, and per shape or per role
 
 - **Case:** `IconSlots` holds `check`, `chevron_down`, `close`. Checkbox
@@ -402,6 +413,20 @@ offer it once they have an action part (D-48). On an overlay over a
 caller's trigger, `.id_salt` salts the trigger-derived id; it does not make
 the overlay reachable without the trigger.
 
+Consequence (rules, 2026-10-22, after v4 review): The default id follows
+egui. A component with a state type defaults to a fixed salt per
+component in the caller's `Ui` (as `ScrollArea`'s `"scroll_area"` and
+`Resize`'s `"resize"`) or to its label where it has one (as
+`CollapsingHeader`), not to an auto id. So the caller can name the id
+`XState::load` needs, and the state does not move when a widget is added
+above. A component without a state type keeps the default of the egui
+widget it wraps, or the auto id for transient state (input-otp's active
+cell, as `TextEdit`'s cursor). The component reports its id through its
+`Response` or its output (as `ScrollAreaOutput { id, .. }`) and calls
+`Context::check_for_id_clash`, as `ScrollArea` does: two components of
+one kind in one `Ui` share their state, and debug builds show egui's
+id-clash warning at both until the caller sets `.id_salt`.
+
 ### D-13 · What an in-flow container's `show` returns
 
 - **Case:** `Card::show`, `layout::row` and others return `R`; egui
@@ -487,6 +512,10 @@ every atom it accepts, and one it cannot honour (`Atom::custom`) fails a
 `debug_assert!`. Under (x), egui's `strong` and `weak` are no explicit
 colours: on a crate widget they resolve to the recipe colour
 (conformance 2.3).
+
+Consequence (rules, 2026-10-22, after v4 review): An accessible name
+(`X::icon_only(.., icon, name)`) is text the component reads and never
+draws, so it takes `impl Into<String>` (rules, Parameter types).
 
 ### D-16 · Flags whose default is `true`, and the close-button name
 
@@ -882,6 +911,12 @@ Decision: (a) — as recommended.
 
 Decision: (a), `checked(bool)` on the command item — as recommended.
 
+Consequence (rules, 2026-10-22, after v4 review): The rules state only
+the general flag, `selected(bool)` as egui's `Button::selected`. The
+command item's `checked(bool)` and the menu checkbox item's `&mut bool`
+binding stand here; `checked` is the crate's shared word for a drawn
+checkmark under the P1 tier of axiom 2.
+
 ## Open state
 
 ### D-31 · Open state of modals
@@ -1000,6 +1035,26 @@ let a caller bind: the message-scroller mode (only `ref` is bindable)
 and the sonner queue. Every row with memory plus binding also gets
 `.default_<state>(..)` (D-34) and a state type (D-33).
 
+Consequence (rules, 2026-10-22, after v4 review): Axiom 3's criterion
+now reads: a binding is required when the app acts on the value (a value
+control such as a checkbox, switch, toggle or slider; a selection; the
+tab whose content the caller draws) or when only app code changes it (a
+modal's open flag), as egui's `Checkbox::new(&mut b)`. Toggle keeps its
+required `&mut bool` although bits binds `pressed` optionally. State the
+component changes and uses itself, and that upstream lets a caller bind
+or drive, lives in memory with an optional binding. Carousel (shadcn
+`setApi`) and resizable (paneforge's `this`) are driven through an API
+object, so the carousel index and the resizable layout keep memory plus
+binding although upstream binds neither. State a caller can neither bind
+nor drive is memory only: the message-scroller mode and the sonner
+queue. The list of cases left axiom 3 for this entry: memory plus
+optional binding holds an anchored overlay's open flag, hover overlays
+included, the open item of menubar and navigation-menu, the sidebar's
+open flag, accordion and collapsible disclosure, the carousel index, the
+calendar month, the resizable layout and command's search text. Memory
+holds one value: a change stored through the state type reaches the
+binding on the next call (D-33).
+
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
 - **Case:** app code may need to query or set memory-owned state
@@ -1047,6 +1102,19 @@ toggles through `SidebarState`. egui's state types differ
 ctx)` keeps its id); P3 picks `CollapsingState`'s form. (iii) for
 `expanded` stays.
 
+Consequence (rules, 2026-10-22, after v4 review): `load` takes the id
+the component reports through its `Response` or output (D-12); an
+overlay on a caller's trigger loads after the trigger is drawn. A value
+stored through the state type reaches a binding on the next call: the
+component compares the binding with the value it last saw; a binding the
+app changed sets memory, else a stored value sets the binding, and the
+binding wins when both changed (axiom 6: anything that compiles has its
+effect). State in memory only has no state type.
+`load_with_default_<state>` and `toggle()` without `&Ui` were added by
+the rules, not by the maintainer's record; `toggle()` differs from
+`CollapsingState::toggle(&mut self, ui: &Ui)`, which requests the
+repaint itself, because the crate's `store` requests it.
+
 ### D-34 · Initial value of memory-owned state
 
 - **Case:** Memory-owned state (sidebar open, resizable layout, calendar
@@ -1074,6 +1142,13 @@ the initial value (`<Accordion.Root type="single" value="0">`,
 upstream's API, not from what a demo does. The default is upstream's
 (overlays closed, sidebar open).
 
+Consequence (rules, 2026-10-22, after v4 review): `.default_<state>`
+with a binding has an effect: it applies while memory holds no value
+(the component's first call, or after memory was cleared), as egui's
+`default_open` applies only while no state is stored, and the binding
+then takes that value. Without a binding it is the initial memory value,
+as before.
+
 ### D-35 · Persisting memory-owned state across restarts
 
 - **Case:** Upstream's sidebar keeps its open state in a cookie for 7 days
@@ -1095,6 +1170,9 @@ upstream's API, not from what a demo does. The default is upstream's
 
 Decision: (b) — as recommended.
 
+Consequence (rules, 2026-10-22, after v4 review): `.persist(bool)` is
+one of the host setters the rules list (Conventions, Enums and flags).
+
 ## Overlay placement, dismissal and focus
 
 ### D-36 · Placement setters on list overlays; align offset
@@ -1114,6 +1192,11 @@ Decision: (b) — as recommended.
 - **Covers:** CP-T3-1, CP-T3-2, CP-08-8
 
 Decision: (b), (i) — as recommended.
+
+Consequence (rules, 2026-10-22, after v4 review): The rules no longer
+state the align offset; (i) stands here. `.align` and `.gap` keep egui's
+names as the one-to-one counterparts of `Popup::align` and `Popup::gap`
+(axiom 2).
 
 ### D-37 · Collision fallback
 
@@ -1600,6 +1683,12 @@ Decision: (a) — as recommended.
 
 Decision: (a) for data lists and command, (b) for menus — as recommended.
 
+Consequence (rules, 2026-10-22, after v4 review): The rules state the
+general form: a group's label is a heading part, except where the group
+is a data list or hides when none of its items is shown; then the group
+is a container that carries its label. Command's hiding of empty groups
+is conformance 4.3.
+
 ### D-52 · What passive part functions return
 
 - **Case:** Separators, labels and headings return `()` (button-group
@@ -1681,6 +1770,15 @@ Decision: (a) — as recommended.
 - **Covers:** CP-08-19, CP-14-32, CP-16-14, CP-19-12, CP-13-1, CP-13-16, CP-04-26, CP-06-14, CP-14-35
 
 Decision: (b), (c), (a), (d) per layout problem as listed — as recommended.
+
+Consequence (rules, 2026-10-22, after v4 review): (b): handle methods
+are named after upstream's parts (`bc.link(..)`, `bc.page(..)`,
+`bc.ellipsis()`), and a method is `item(..)` only where the part is
+`Item`; the root is called as a container, `Breadcrumb::new().show(ui,
+|bc| ..) -> InnerResponse<R>` (rules, Handle). (d): input-otp group
+sizes take `impl IntoIterator<Item = usize>` (`.groups([3, 3])`), as
+every data list, in place of `&[usize]`. The avatar group and input-otp
+groups are recorded here, not in the rules.
 
 ### D-56 · A crate widget restyled by its parent
 
@@ -1798,6 +1896,13 @@ Decision: (b), spinner from the rotated `loader` slot — as recommended.
 
 Decision: (a) — as recommended.
 
+Consequence (rules, 2026-10-22, after v4 review): A leaf with more to
+return keeps `impl Widget` (`ui.add` returns the `Response`) and adds
+`show(ui) -> XOutput`, the output holding the `Response`, as
+`TextEdit::show` returns `TextEditOutput`: input-otp `show(ui) ->
+InputOtpOutput` with `completed`. The output of a component with a state
+type carries its `id` (D-12).
+
 ### D-61 · Container method name
 
 - **Case:** egui names the container method `show`, `show_inside` (`Panel`),
@@ -1895,6 +2000,10 @@ after F9 (sheet) and F10 (select, command), which use `egui::ScrollArea`
 until the F12 PR migrates them; the plan may instead move the scroll-area
 port before F9. The theme sets no `ScrollStyle` for plain egui scroll areas
 (D-135).
+
+Consequence (rules, 2026-10-22, after v4 review): The rules keep only
+that every crate component that scrolls uses the crate `ScrollArea`; the
+mirrored subset and the list of composites stand here.
 
 ### D-63 · The `layout` module, `layout::card`, `form_row` and `egui_extras`
 
@@ -2163,6 +2272,18 @@ keep `.max_width` (not egui's `desired_width`): the crate's word caps a
 filling widget, egui's sets a wanted width, and distinct meanings keep
 distinct names.
 
+Consequence (rules, 2026-10-22, after v4 review): Correction of the
+second pass, whose reason was wrong on the egui facts:
+`TextEdit::desired_width` is capped at the available width too
+(`allocate_width = desired_width.at_most(available_width)`,
+`text_edit/builder.rs:475`), so the crate's cap and egui's setter have
+one meaning, and `f32::INFINITY` fills in both. Maintainer decision:
+`.max_width` becomes `.desired_width` on input, textarea and progress;
+the crate's width words are egui's, `.width` (`ComboBox::width`) and
+`.desired_width`. egui's `ProgressBar::desired_width` is exact
+(`progress_bar.rs:119-122`); the crate's progress caps it at the
+available width, as every width setter does (conformance 3.1).
+
 ### D-72 · Default width of text-entry and choice controls
 
 - **Case:** Input and input-group cap at `Metrics::field_max_width`,
@@ -2281,6 +2402,11 @@ mirrors egui: chart (`egui_plot::Plot::height`). Resizable, vertical
 carousel and message-scroller take their height from the caller's `Ui`
 (`ui.allocate_ui`), above the recipe or `Metrics` floor (axiom 8).
 
+Consequence (rules, 2026-10-22, after v4 review): Conformance 3.3 no
+longer names a container with a `.height` as a definite parent: a crate
+container whose height is fixed before its content is drawn (a recipe
+`h-*`, or the height resizable takes from the caller's `Ui`) is one.
+
 ### D-77 · Fractions of the parent
 
 - **Case:** Bubble is capped at 80 % of its parent (`max-w-[80%]`),
@@ -2319,6 +2445,10 @@ value a demo changes; that value is a look (axiom 8). Toggle-group
 `.spacing(f32)` stays, as upstream's `spacing` prop. Calendar
 `cell_size`, input-otp `slot_size` and the sidebar widths go: they
 become app variants or app sizes of calendar, input-otp and sidebar.
+
+Consequence (rules, 2026-10-22, after v4 review): An app variant's edit
+receives the style name, so input-otp's form demo (`h-16 w-12` in vega,
+`h-12 w-11` in nova) is one app size with a value per style.
 
 ## State flags and behaviour
 
@@ -2608,6 +2738,14 @@ Three crate menus map to one `menu_button`. `tooltip` cannot become a
 `Response` method named `on_hover_text`: `Response` has an inherent
 method of that name, and an inherent method always wins over a trait
 method, so the crate's could never be called.
+
+Consequence (rules, 2026-10-22, after v4 review): The rules keep the
+criterion only (a shortcut when the constructor arguments are all a
+common call needs, and for every value picker over a list or a range);
+the lists of (a) stand here. Axiom 2's naming order has three tiers:
+egui's name for a one-to-one counterpart, else the crate's shared word
+(P1), else upstream's; the menu and tooltip shortcuts take upstream's
+names under the third.
 
 ## Generator and recipes
 
@@ -3176,6 +3314,9 @@ application of the upstream-defaults rule (conformance 1); the continuous
 mode `.step(0.0)`, in egui's `step_by(0.0)` spelling, is recorded here, not
 in the rules.
 
+Consequence (rules, 2026-10-22, after v4 review): `.step(0.0)` is one of
+the host setters the rules list (Conventions, Enums and flags).
+
 ### D-113 · F5 text entry (input, textarea, input-otp, input-group)
 
 - **Case:** Choices that touch only input, textarea, input-otp and input-group.
@@ -3214,6 +3355,14 @@ in the rules.
 
 Decision: deferred to the family PR (recommendation is the default
 proposal).
+
+Consequence (rules, 2026-10-22, after v4 review): Input and textarea
+take `.desired_width` (D-71). Under axiom 1 a bits prop allows a setter
+but does not require one, so `pasteTransformer`, `textalign`,
+`pushPasswordManagerStrategy` and `inputId` get setters only when the
+family PR needs them (P8). Input-otp's per-style slot size is an app
+size (D-78). Its active cell and caret are transient memory state with
+no state type and the auto id (D-12); its output is D-60's.
 
 ### D-114 · F6 forms (field, native-select)
 
@@ -3304,6 +3453,11 @@ every side and alignment before it offers `.align` (conformance 5.6).
 Decision: deferred to the family PR (recommendation is the default
 proposal), except CP-09-22, decided now: the trigger fires on pointer down,
 as bits (maintainer, P4; D-45).
+
+Consequence (rules, 2026-10-22, after v4 review): A plain menu item
+binds nothing, so it is a leaf in the menu's context
+(`ui.add(MenuItem::new("Copy"))`); checkbox and radio items carry their
+binding and are immediate items (rules, Immediate item).
 
 ### D-117 · F9 modals (dialog, alert-dialog, sheet, drawer)
 
@@ -3451,6 +3605,17 @@ Decision: deferred to the family PR (recommendation is the default
 proposal). Pagination's text below `sm` follows the window width by default
 (D-69).
 
+Consequence (rules, 2026-10-22, after v4 review): `CP-13-28`: the
+default proposal "clamp and mark changed" writes the caller's page
+without user input, against the Leaf template (a value leaf writes its
+binding only in response to user input) and conformance 4.4 (a bound
+value outside the range shows at its nearest position and stays).
+Recommendation: clamp only for drawing; the bound page shows at its
+nearest position and stays until the user changes it. The family PR
+decides. Breadcrumb: the root is `Breadcrumb::new().show(ui, |bc| ..)`,
+and the handle's methods are upstream's parts, `bc.link(..)`,
+`bc.page(..)`, `bc.ellipsis()` (rules, Handle).
+
 ### D-122 · F14 data display (table, carousel)
 
 - **Case:** the drag/fling/snap scroller primitive has no CP;
@@ -3491,6 +3656,11 @@ Consequence (rules, 2026-10-22): `CP-16-19`: `align` and `loop` stay
 (embla `opts`, an upstream prop). `per_view` and `spacing` go: upstream
 sets them with classes on the content and the items (`basis-1/2
 lg:basis-1/3`, `-ms-1`, `ps-1` in `carousel-spacing`), so they are carousel app variants (axiom 8).
+
+Consequence (rules, 2026-10-22, after v4 review): `CP-16-1` (moved from
+the rules): table rows come from a handle method that returns a row
+builder with flag setters (`.selected(bool)`), over columns declared up
+front; the handle's methods take upstream's part names (rules, Handle).
 
 ### D-123 · F15 toasts (sonner)
 
@@ -3604,6 +3774,11 @@ Consequence (rules, 2026-10-22): `CP-15-11`: upstream's calendar has the
 `buttonVariant` prop (default `ghost`), so under axiom 1 the calendar
 takes `.button_variant(ButtonVariant)`, app variants included; the
 default proposal "fixed" falls.
+
+Consequence (rules, 2026-10-22, after v4 review): The rules no longer
+state that a part with another component's variant prop takes that
+component's variant enum; the calendar's
+`.button_variant(ButtonVariant)` stands here.
 
 ## Added decisions
 
@@ -3782,6 +3957,12 @@ public, so overlays built outside the crate nest with crate overlays
 - **Covers:** none (no survey CP).
 
 Decision: (a'1) with (u1) — as recommended.
+
+Consequence (rules, 2026-10-22, after v4 review): An `IconAtom` inside a
+crate widget's content takes the recipe's state colour, as a typed slot
+does, unless the caller gave it a colour (conformance 2.3: the caller's
+colour first). So (a'1)'s re-tint applies only to an icon atom without a
+caller colour, and the two paths give one tint.
 
 ### D-130 · Tooltip mechanism: egui's tooltip or an own popup
 
