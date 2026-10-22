@@ -274,8 +274,8 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 ### 4.4 Values and selection
 
 - A widget writes the caller's value only in response to user input. A
-  change the app makes through a state type or `.default_<state>` reaches
-  a binding on the next call (rules, Memory-owned state).
+  change the app makes through a state type reaches a binding on the
+  next call (rules, Memory-owned state).
 - A bound value off the step grid or outside the range shows at its
   nearest position and stays as it is until the user changes it (bits).
 - A value that matches no item marks nothing and shows the placeholder.
@@ -318,7 +318,8 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   the overlay, is no outside press, and the trigger keeps toggling on
   click.
 - A modal closes on a press on its backdrop only while it is the top
-  overlay.
+  overlay. A modal closes by reporting `should_close()`; the app clears
+  its flag (rules, Modal).
 - A press counts also when its release arrives in the same pass.
 - Only a primary-button press dismisses (a context-menu trigger's
   secondary press too). A touch dismisses on its release, not on its
@@ -345,7 +346,7 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   from its trigger.
 - Hints move no focus and never return focus.
 - However an overlay closes (Escape, an outside press, a close part,
-  `ui.close()`, the binding), focus returns one pass later, if it is
+  `ui.close()`, the binding, a modal's flag), focus returns one pass later, if it is
   gone or inside the closed overlays: to the trigger the overlay opened
   from (for a modal, the widget the opening press or key landed on), else
   to the widget that held focus when it opened.

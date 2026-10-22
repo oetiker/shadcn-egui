@@ -326,6 +326,11 @@ these four is gone.
 Decision: (c) — as recommended. Modals return `Option<InnerResponse<R>>`
 (D-31 (c1)).
 
+Consequence (rules, 2026-10-23, review 2): D-31 now takes (d), so a
+modal's `show` returns `XOutput<R>` with `response`, `inner` and
+`should_close()`, as egui's `ModalResponse`, in place of
+`Option<InnerResponse<R>>`. Anchored overlays keep (c).
+
 ### D-10 · Return type of value shortcuts
 
 - **Case:** `checkbox` and `toggle` return `Response`; `select` and
@@ -964,6 +969,19 @@ checkmark under the P1 tier of axiom 2.
 
 Decision: (c) with (c1) — as recommended.
 
+Consequence (rules, 2026-10-23, review 2): Reversed to (d), egui's
+`Modal` form (maintainer, 2026-10-23): `Dialog::new(id_salt).show(ctx,
+|ui| ..)` takes no open flag; the app calls it while its own flag is
+set and clears the flag when the output's `should_close()` is true. The
+reason given for (c) does not hold: upstream's modals have a `Trigger`
+and are uncontrolled in the demos, as popovers are. The general rule,
+now first in axiom 3: where the egui counterpart leaves a state to the
+caller, the crate does too. The content closure may borrow the app's
+state, which the required binding forbade. `should_close()` follows the
+crate's dismissal, not `ModalResponse::should_close()` (D-117), so the
+output is a crate type that mirrors `ModalResponse`, with
+`#[must_use]`.
+
 ### D-32 · Who owns non-overlay state
 
 - **Case:** besides overlays, components hold disclosure state (accordion,
@@ -1061,6 +1079,13 @@ calendar month, the resizable layout and command's search text. Memory
 holds one value: a change stored through the state type reaches the
 binding on the next call (D-33).
 
+Consequence (rules, 2026-10-23, review 2): Axiom 3 no longer names a
+modal's open flag as a required binding; a modal leaves its flag to the
+app, as egui's `Modal` (D-31). A memory value of the caller's type, such
+as the accordion's `V`, is bound by egui's `SerializableAny`, which is
+`Clone + Send + Sync + 'static` and adds serde when egui's
+`persistence` feature is on (D-35).
+
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
 - **Case:** app code may need to query or set memory-owned state
@@ -1121,6 +1146,14 @@ the rules, not by the maintainer's record; `toggle()` differs from
 `CollapsingState::toggle(&mut self, ui: &Ui)`, which requests the
 repaint itself, because the crate's `store` requests it.
 
+Consequence (rules, 2026-10-23, review 2): `XState` has the members of
+`CollapsingState` (`load`, `load_with_default_<state>`, `store`,
+`remove`, `id`, the getter, `set_<state>`), each as egui has it; the one
+difference stays `toggle()` without `&Ui`. The rules no longer say "in
+the form of `CollapsingState`" without naming the members. `XState`
+serves code that reads or changes the state at run time; across
+restarts the binding or egui's persistence serves (D-35).
+
 ### D-34 · Initial value of memory-owned state
 
 - **Case:** Memory-owned state (sidebar open, resizable layout, calendar
@@ -1155,6 +1188,14 @@ with a binding has an effect: it applies while memory holds no value
 then takes that value. Without a binding it is the initial memory value,
 as before.
 
+Consequence (rules, 2026-10-23, review 2): A set binding wins over
+`.default_<state>` (maintainer, 2026-10-23), as egui's
+`CollapsingHeader::open(Some(..))` wins over `default_open`: the binding
+is the initial value, and `.default_<state>` applies only without a
+binding, while memory holds no value. This replaces the previous
+consequence. Setting both has no effect for the default, so it fails a
+`debug_assert!` (axiom 6).
+
 ### D-35 · Persisting memory-owned state across restarts
 
 - **Case:** Upstream's sidebar keeps its open state in a cookie for 7 days
@@ -1178,6 +1219,19 @@ Decision: (b) — as recommended.
 
 Consequence (rules, 2026-10-22, after v4 review): `.persist(bool)` is
 one of the host setters the rules list (Conventions, Enums and flags).
+
+Consequence (rules, 2026-10-23, review 2): Replaced by egui's own
+behaviour, option (a) in egui's form (maintainer, 2026-10-23):
+memory-owned state persists whenever egui's `persistence` feature is on,
+as `CollapsingState::store` uses `insert_persisted`, and there is no
+`.persist(bool)`, which compiled and did nothing without the feature.
+As in egui, state of an overlay stays temp (egui does not save its popup
+memory). "Std types only" goes: a value of the caller's type is bound by
+`egui::util::id_type_map::SerializableAny`, which follows the feature;
+crate-defined values are stored as std types. A set binding wins over
+a restored value (D-34), so persistence acts only where nothing is
+bound. Upstream's opt-in `autoSaveId` (resizable) has no crate setter:
+the layout persists as egui's `Resize` does.
 
 ## Overlay placement, dismissal and focus
 
@@ -3521,6 +3575,16 @@ binding and are immediate items (rules, Immediate item).
 Decision: deferred to the family PR (recommendation is the default
 proposal). The sheet slide and the drawer's motion animate as upstream (D-88
 (c)); the sheet body scrolls in the crate `ScrollArea` (D-47, D-62 (a)).
+
+Consequence (rules, 2026-10-23, review 2): The shell takes egui's
+`Modal` form (D-31): the closing rules above decide the output's
+`should_close()`, and the app clears its own flag. `CP-11-12` stays:
+Action does not close (bits; the destructive demo closes with
+`onclick`). Cancel and Action are styled buttons with upstream's
+`variant` and `size` props, so each is a leaf in the dialog's context
+with upstream's default (Cancel `outline` and closing, Action
+`default`) and a part fn shortcut, `alert_dialog_cancel(ui, text)` and
+`alert_dialog_action(ui, text)`. Plain `Close` parts stay `ui.close()`.
 
 ### D-118 · F10 pickers (select, command)
 

@@ -72,8 +72,10 @@ in the same place.
 - "Top" for a press is the stack as the pass began. egui clears
   `press_origin` on release, so the press position comes from this pass's
   `PointerButton { pressed: true }` event.
-- The modal shell does not use `ModalResponse::should_close()` as a whole,
-  which closes on any backdrop click.
+- A modal's `should_close()` is not `ModalResponse::should_close()`, which
+  is true on any backdrop click: it is true on `ui.close()` from the
+  content, on the Escape hook's mark, and on a backdrop press while the
+  modal is the top entry of the stack.
 - The stack's open, close and query operations are public, so an overlay
   built outside the crate nests with crate overlays.
 - The popup id of an overlay on a caller's trigger derives from the
@@ -207,13 +209,15 @@ sizing §Widget builders (`add_sized`), §TextEdit (`desired_width`,
 ## 19 · Memory-state types
 
 - A state type keeps its `Id` and the value, as `CollapsingState`, and
-  stores it with `insert_temp`, or `insert_persisted` under `.persist`
-  (D-35: std types only).
+  stores it with `insert_persisted`, an overlay's state with
+  `insert_temp`. A crate-defined value is stored as std types, so no
+  crate type needs serde when an app turns on egui's `persistence`; a
+  caller's type is bound by `SerializableAny`.
 - One crate helper serves every state type. It keeps, beside the value,
-  the binding's value as it last saw it. At the start of a call with no
-  value in memory, memory takes `.default_<state>` if set, else the
-  binding's value, else upstream's default, and the binding takes
-  memory's value. Later calls: a binding that differs from the last seen
+  the binding's value as it last saw it, in temp memory. On the first
+  call (no value last seen) a binding sets memory; without one, memory
+  keeps a value it holds (restored from storage), else takes
+  `.default_<state>`, else upstream's default. Later calls: a binding that differs from the last seen
   value sets memory; else a memory value that differs from the binding
   (a `store`) sets the binding. After a user change, memory and binding
   take the new value. `store` requests the repaint.
