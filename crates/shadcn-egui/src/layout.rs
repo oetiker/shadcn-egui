@@ -162,6 +162,66 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     response.inner
 }
 
+/// The width a widget takes (conformance 3.1; the one place a widget's
+/// width arithmetic lives, rule 6 of the porting standard): `requested`
+/// (the caller's width setter, else the widget's default), capped to the
+/// width `ui` has left, then raised to `content_min`, what the widget
+/// cannot shrink below (its padding and fixed parts). `f32::INFINITY`
+/// requests the full width; where that is unbounded too (a horizontal
+/// `ScrollArea`), the widget takes `content_min`. A NaN request is no
+/// request: the widget takes `content_min`, never NaN.
+#[must_use]
+pub fn capped_width(ui: &Ui, requested: f32, content_min: f32) -> f32 {
+    fit_width(requested, ui.available_width(), content_min)
+}
+
+/// [`capped_width`] for a floating overlay (dialog, popover): `requested`
+/// capped to the window's width less `inset` (upstream's
+/// `max-w-[calc(100%-Npx)]`, 0 without one), then raised to
+/// `content_min`.
+#[must_use]
+pub fn overlay_width(ctx: &egui::Context, requested: f32, inset: f32, content_min: f32) -> f32 {
+    fit_width(requested, ctx.content_rect().width() - inset, content_min)
+}
+
+/// Allocates `size` as the browser places a box wider than its room: the
+/// returned rect (and the response's) is `size`, but the parent `Ui` takes
+/// at most the width it has left, so a widget raised to its content
+/// minimum ([`capped_width`]) overflows past the inline end without
+/// widening its parent and the widgets that fill it.
+pub fn allocate_overflowing(
+    ui: &mut Ui,
+    size: egui::Vec2,
+    sense: egui::Sense,
+) -> (egui::Rect, egui::Response) {
+    let room = ui.available_width().max(0.0);
+    if size.x <= room {
+        return ui.allocate_exact_size(size, sense);
+    }
+    let (rect, mut response) = ui.allocate_exact_size(egui::vec2(room, size.y), sense);
+    // The response reports the widget's own rect; it senses only the part
+    // inside the parent.
+    response.rect = egui::Rect::from_min_size(rect.min, size);
+    (response.rect, response)
+}
+
+/// The clamp order of [`capped_width`]: cap first, then the content
+/// minimum, so a widget wider than its room overflows instead of
+/// truncating.
+fn fit_width(requested: f32, available: f32, content_min: f32) -> f32 {
+    // `f32::max` and `f32::min` return the other operand for NaN.
+    let content_min = content_min.max(0.0);
+    if requested.is_nan() {
+        return content_min;
+    }
+    let w = requested.min(available);
+    if w.is_finite() {
+        w.max(content_min)
+    } else {
+        content_min
+    }
+}
+
 /// Tailwind's `sm` breakpoint (40rem).
 const BREAKPOINT_SM: f32 = 640.0; // behaviour-ok: Tailwind default --breakpoint-sm
 /// Tailwind's `md` breakpoint (48rem).
@@ -239,4 +299,46 @@ pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce
                 });
             });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn width_caps_then_raises_to_the_content_minimum() {
+        assert_eq!(fit_width(300.0, 200.0, 50.0), 200.0);
+        assert_eq!(fit_width(100.0, 200.0, 50.0), 100.0);
+        // Cap first, then the minimum: an overflow, not a truncation.
+        assert_eq!(fit_width(300.0, 20.0, 50.0), 50.0);
+        // Fill.
+        assert_eq!(fit_width(f32::INFINITY, 200.0, 50.0), 200.0);
+        // Nothing finite requested and unbounded room: the minimum.
+        assert_eq!(fit_width(f32::INFINITY, f32::INFINITY, 50.0), 50.0);
+        assert_eq!(fit_width(120.0, f32::INFINITY, 50.0), 120.0);
+    }
+
+    #[test]
+    fn width_is_never_nan() {
+        // A NaN request does not fill (`NaN.min(x)` is `x`).
+        assert_eq!(fit_width(f32::NAN, 200.0, 50.0), 50.0);
+        assert_eq!(fit_width(300.0, f32::NAN, 50.0), 300.0);
+        assert_eq!(fit_width(f32::INFINITY, 200.0, f32::NAN), 200.0);
+        assert_eq!(fit_width(f32::NAN, f32::NAN, f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn an_overflowing_widget_keeps_its_parents_width() {
+        let ctx = egui::Context::default();
+        let mut widths = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.allocate_ui(egui::vec2(100.0, 200.0), |ui| {
+                ui.set_max_width(100.0);
+                let (rect, response) =
+                    allocate_overflowing(ui, egui::vec2(150.0, 20.0), egui::Sense::hover());
+                widths = Some((rect.width(), response.rect.width(), ui.min_rect().width()));
+            });
+        });
+        assert_eq!(widths, Some((150.0, 150.0, 100.0)));
+    }
 }

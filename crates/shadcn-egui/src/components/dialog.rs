@@ -14,7 +14,7 @@ use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::shared::{opacity, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
-use crate::Theme;
+use crate::{layout, Theme};
 use egui::{Align, Color32, Id, Layout, Margin, Rect, RichText, Shape, Ui, UiBuilder};
 
 pub struct Dialog<'a> {
@@ -92,8 +92,9 @@ impl<'a> Dialog<'a> {
             .width
             .or_else(|| pick(&l, |r| &r.max_width, g))
             .unwrap_or(f32::INFINITY);
-        let width = max_width.min(ctx.content_rect().width() - px(|r| &r.max_width_inset));
-        let inner_width = (width - pad_l - pad_r).max(0.0);
+        let width =
+            layout::overlay_width(ctx, max_width, px(|r| &r.max_width_inset), pad_l + pad_r);
+        let inner_width = width - pad_l - pad_r;
 
         let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
         let frame = panel.frame(Margin {

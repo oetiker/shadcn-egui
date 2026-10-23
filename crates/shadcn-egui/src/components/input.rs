@@ -8,14 +8,14 @@ use crate::components::shared::{
 };
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
-use crate::Theme;
-use egui::{Frame, Margin, Shape, TextEdit, Ui, Vec2, Widget};
+use crate::{layout, Theme};
+use egui::{Frame, Margin, RichText, Shape, TextEdit, Ui, Vec2, Widget};
 
 pub struct Input<'a> {
     text: &'a mut String,
     hint: String,
     password: bool,
-    max_width: f32,
+    max_width: Option<f32>,
     id_salt: Option<egui::Id>,
     enabled: bool,
     invalid: bool,
@@ -27,7 +27,7 @@ impl<'a> Input<'a> {
             text,
             hint: String::new(),
             password: false,
-            max_width: f32::NAN,
+            max_width: None,
             id_salt: None,
             enabled: true,
             invalid: false,
@@ -44,7 +44,7 @@ impl<'a> Input<'a> {
     /// Override the default maximum width (`Metrics::field_max_width`). Pass
     /// `f32::INFINITY` for full-width.
     pub fn max_width(mut self, w: f32) -> Self {
-        self.max_width = w;
+        self.max_width = Some(w);
         self
     }
     /// A stable id, independent of call order, from any hashable salt (a
@@ -111,19 +111,24 @@ impl<'a> Widget for Input<'a> {
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
-        let edit = TextEdit::singleline(self.text)
-            .hint_text(self.hint)
+        let mut edit = TextEdit::singleline(self.text);
+        if !self.hint.is_empty() {
+            // The placeholder takes the field's font: egui lays a plain
+            // string hint out in the `Ui`'s body style.
+            edit = edit.hint_text(RichText::new(self.hint).font(font.clone()));
+        }
+        let edit = edit
             .password(self.password)
             .interactive(enabled)
             .frame(Frame::NONE.inner_margin(margin))
-            .font(font)
+            .font(font.clone())
             .vertical_align(egui::Align::Center)
             .text_color(typed);
-        let max_width = if self.max_width.is_nan() {
-            t.metrics.field_max_width
-        } else {
-            self.max_width
-        };
+        let max_width = self.max_width.unwrap_or(t.metrics.field_max_width);
+        // The content minimum: the padding box around one glyph.
+        let content_min = f32::from(margin.left)
+            + f32::from(margin.right)
+            + ui.ctx().fonts_mut(|f| f.glyph_width(&font, 'M'));
         // The box goes under the text: reserve its place in paint order, fill
         // it once the focus state is known.
         let slot = ui.painter().add(Shape::Noop);
@@ -135,7 +140,7 @@ impl<'a> Widget for Input<'a> {
                 ui.set_opacity(fade);
                 // `add_sized`, with the id made in the `Ui` that shows the
                 // field: `TextEdit::id_salt` would hash the stored `Id` again.
-                let size = Vec2::new(ui.available_width().min(max_width), height);
+                let size = Vec2::new(layout::capped_width(ui, max_width, content_min), height);
                 let layout = egui::Layout::centered_and_justified(ui.layout().main_dir());
                 ui.allocate_ui_with_layout(size, layout, |ui| match self.id_salt {
                     Some(salt) => ui.add(edit.id(ui.make_persistent_id(salt))),

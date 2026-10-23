@@ -11,7 +11,7 @@ use crate::components::shared::{
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
-use crate::Theme;
+use crate::{layout, Theme};
 use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Shape, Ui, Widget};
 
 /// shadcn `TabsList` `variant`.
@@ -159,21 +159,20 @@ impl Widget for Tabs<'_> {
         let chrome = gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
         let hug_w = widths.iter().sum::<f32>() + chrome;
         // A NaN width, one below the triggers' own, or an unbounded `Ui`
-        // leaves the list as wide as its triggers. NaN is filtered before
-        // the cap: `f32::NAN.min(x)` is `x`.
-        let list_w = match self.width.filter(|w| *w > hug_w) {
-            Some(w) if w.min(ui.available_width()).is_finite() => {
-                w.min(ui.available_width()).max(hug_w)
-            }
-            _ => hug_w,
-        };
+        // leaves the list as wide as its triggers.
+        let list_w = self
+            .width
+            .map_or(hug_w, |w| layout::capped_width(ui, w, hug_w));
         let widths = if list_w > hug_w {
             flex_shares(&widths, list_w - chrome)
         } else {
             widths
         };
 
-        let (list_rect, mut resp) = ui.allocate_exact_size(vec2(list_w, list_h), Sense::hover());
+        // Wider than its room, the list overflows as `w-fit` does in the
+        // browser: the column keeps its width.
+        let (list_rect, mut resp) =
+            layout::allocate_overflowing(ui, vec2(list_w, list_h), Sense::hover());
         let ids: Vec<egui::Id> = (0..n).map(|i| resp.id.with(("tab", i))).collect();
         let mut x = list_rect.left() + pad_l;
         let trigger_rects: Vec<Rect> = widths

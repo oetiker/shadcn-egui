@@ -12,7 +12,7 @@ use crate::components::shared::{
     interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::style::{pick, Paint, Prop, Recipe, State};
-use crate::Theme;
+use crate::{layout, Theme};
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
 
 /// shadcn `orientation` of the slider.
@@ -138,17 +138,9 @@ impl Widget for Slider<'_> {
                 pick(&root, |r| &r.min_height, g).unwrap_or(0.0).max(along),
             )
         } else {
-            let width = ui.available_width();
-            vec2(
-                if width.is_finite() {
-                    width.max(along)
-                } else {
-                    along
-                },
-                cross,
-            )
+            vec2(layout::capped_width(ui, f32::INFINITY, along), cross)
         };
-        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
+        let (rect, base) = layout::allocate_overflowing(ui, size, Sense::hover());
 
         // Axis helpers: `a` runs along the slider from the minimum end.
         let (start, len) = if vertical {
