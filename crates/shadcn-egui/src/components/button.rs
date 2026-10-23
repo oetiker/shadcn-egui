@@ -5,7 +5,7 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{
-    interaction_state, line_box, paint_box, ring, shift, style_painter,
+    interaction_state, line_box, shift, style_painter, RecipeBox,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
@@ -245,34 +245,14 @@ impl Widget for Button {
         let st = interaction_state(&t, &resp, enabled, context);
         let painter = style_painter(ui, &[l], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
-        let bg = paint(|r| &r.bg);
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
         let fg = paint(|r| &r.text).unwrap_or(inherited);
-        let border = paint(|r| &r.border_color);
-        let ring_color = paint(|r| &r.ring_color);
-        let ring_w = pick(l, |r| &r.ring_width, st).unwrap_or(0.0);
         let rect = shift(
             rect,
             pick(l, |r| &r.shift_x, st),
             pick(l, |r| &r.shift_y, st),
         );
-        let radius = pick(l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
-
-        if let Some(s) = pick(l, |r| &r.shadow, st) {
-            painter.add(t.shadow(s).as_shape(rect, radius));
-        }
-        let clip_padding = pick(l, |r| &r.bg_clip_padding, st) == Some(true);
-        paint_box(
-            &painter,
-            rect,
-            radius,
-            bg,
-            border.map(|b| Stroke::new(border_w, b)),
-            clip_padding,
-        );
-        if let Some(c) = ring_color {
-            ring(&painter, rect, radius, ring_w, c);
-        }
+        RecipeBox::resolve(&t, l, st).paint(&painter, rect);
 
         // Content is centred; unequal icon-side padding shifts it.
         let mut x = rect.center().x - content_w / 2.0 + (pad_l - pad_r) / 2.0;

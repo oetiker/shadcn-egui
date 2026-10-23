@@ -146,6 +146,21 @@ pub fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
     rects
 }
 
+/// Every mesh shape in `out` (a recipe box's shadow, a border of unequal
+/// sides).
+pub fn mesh_shapes(out: &egui::FullOutput) -> Vec<egui::Mesh> {
+    fn walk(s: &egui::Shape, out: &mut Vec<egui::Mesh>) {
+        match s {
+            egui::Shape::Mesh(m) => out.push((**m).clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut meshes = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut meshes));
+    meshes
+}
+
 /// Every text shape a frame painted, in paint order.
 pub fn text_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::TextShape> {
     fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::TextShape>) {

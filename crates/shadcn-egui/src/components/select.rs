@@ -28,15 +28,14 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    box_shapes, interaction_state, line_box, opacity, ring, ring_shape, style_painter,
+    interaction_state, line_box, opacity, style_painter, RecipeBox,
     DEFAULT_SIDE_OFFSET,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
 use egui::{
-    vec2, Color32, Frame, Key, Margin, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Shape,
-    Stroke, Ui, Widget,
+    vec2, Color32, Key, Margin, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget,
 };
 
 /// Trigger height variant: shadcn `size="default" | "sm"`.
@@ -285,30 +284,7 @@ impl Widget for Select<'_> {
         if ui.is_rect_visible(rect) {
             let painter = style_painter(ui, &[&trig[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
-            let radius =
-                pick(&trig, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
-            let mut shapes = Vec::new();
-            if let Some(s) = pick(&trig, |r| &r.shadow, st) {
-                shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
-            }
-            let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
-            let clip_padding = pick(&trig, |r| &r.bg_clip_padding, st) == Some(true);
-            shapes.extend(box_shapes(
-                rect,
-                radius,
-                paint(|r| &r.bg),
-                border,
-                clip_padding,
-            ));
-            if let Some(c) = paint(|r| &r.ring_color) {
-                shapes.extend(ring_shape(
-                    rect,
-                    radius,
-                    pick(&trig, |r| &r.ring_width, st).unwrap_or(0.0),
-                    c,
-                ));
-            }
-            painter.extend(shapes);
+            RecipeBox::resolve(&t, &trig, st).paint(&painter, rect);
 
             let icon_rect = Rect::from_center_size(
                 egui::pos2(rect.right() - pad_r - icon_side / 2.0, rect.center().y),
@@ -363,8 +339,6 @@ impl Widget for Select<'_> {
                 px(&group, |r| &r.pad_bottom),
                 px(&group, |r| &r.pad_left),
             );
-            let radius = pick(&l, |r| &r.radius, gs).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
-            let ring_w = px(&l, |r| &r.ring_width);
             // The frame paints outside the list's `Ui`: fade its colours here.
             // Inside, the viewport sits in the content and the group in the
             // viewport; neither paints anything of its own.
@@ -376,23 +350,13 @@ impl Widget for Select<'_> {
                 ],
                 gs,
             );
-            let ring_color =
-                pick(&l, |r| &r.ring_color, gs).map(|p| t.paint(p).gamma_multiply(alpha));
-            let mut shadow =
-                pick(&l, |r| &r.shadow, gs).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
-            shadow.color = shadow.color.gamma_multiply(alpha);
-            let mut frame = Frame::new()
-                .corner_radius(radius.round() as u8)
-                .shadow(shadow)
-                .inner_margin(Margin {
-                    top: gpt.round() as i8,
-                    right: gpr.round() as i8,
-                    bottom: gpb.round() as i8,
-                    left: gpl.round() as i8,
-                });
-            if let Some(fill) = pick(&l, |r| &r.bg, gs).map(|p| t.paint(p)) {
-                frame = frame.fill(fill.gamma_multiply(alpha));
-            }
+            let panel = RecipeBox::resolve(&t, &l, gs).faded(alpha);
+            let frame = panel.frame(Margin {
+                top: gpt.round() as i8,
+                right: gpr.round() as i8,
+                bottom: gpb.round() as i8,
+                left: gpl.round() as i8,
+            });
             let item_font = egui::FontId::new(
                 t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)),
                 family_for(
@@ -464,12 +428,9 @@ impl Widget for Select<'_> {
                                     r.scroll_to_me(None);
                                 }
                                 if ui.is_rect_visible(row) {
-                                    let item_radius = pick(&item, |r| &r.radius, s)
-                                        .map_or(0.0, |r| t.radius_px(r, row.height() / 2.0));
-                                    let fill = pick(&item, |r| &r.bg, s).map(|p| t.paint(p));
                                     // The row's text and indicator sit in the row.
                                     let painter = style_painter(ui, &[&item[..]], s);
-                                    painter.extend(box_shapes(row, item_radius, fill, None, false));
+                                    RecipeBox::resolve(&t, &item, s).paint(&painter, row);
                                     // The row's own text colour serves tick and text alike.
                                     let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
                                     let color = pick(&item, |r| &r.text, s)
@@ -550,10 +511,10 @@ impl Widget for Select<'_> {
                 }
                 Popup::close_id(&ctx, popup_id);
             }
-            // `ring-1` lies outside the box; the frame's stroke would lie inside.
-            if let (Some(list), Some(color)) = (list, ring_color) {
-                let painter = ctx.layer_painter(list.response.layer_id);
-                ring(&painter, list.response.rect, radius, ring_w, color);
+            // Shadow and `ring-1` lie outside the box.
+            if let Some(list) = list {
+                ctx.layer_painter(list.response.layer_id)
+                    .extend(panel.outside_shapes(&ctx, list.response.rect));
             }
         }
         if !Popup::is_id_open(&ctx, popup_id) {

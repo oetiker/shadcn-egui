@@ -8,10 +8,10 @@
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
+use crate::components::shared::{interaction_state, style_painter, RecipeBox};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
-use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
+use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
 
 /// shadcn `orientation` of the slider.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -273,15 +273,8 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_center_size(rect.center(), vec2(rect.width(), thickness))
             };
-            let track_radius =
-                pick(&track, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, thickness / 2.0));
-            track_painter.extend(box_shapes(
-                track_rect,
-                track_radius,
-                paint(&track, |r| &r.bg),
-                None,
-                false,
-            ));
+            let track_box = RecipeBox::resolve(&t, &track, st);
+            track_box.paint(&track_painter, track_rect);
 
             let c = centre_of(frac_of(value));
             let range_rect = if vertical {
@@ -289,42 +282,12 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
-            range_painter.extend(box_shapes(
-                range_rect,
-                track_radius,
-                paint(&range, |r| &r.bg),
-                None,
-                false,
-            ));
+            // The track's `overflow-hidden` rounds the range with it.
+            if let Some(fill) = paint(&range, |r| &r.bg) {
+                range_painter.rect_filled(range_rect, track_box.radius_on(track_rect), fill);
+            }
 
-            let mut shapes = Vec::new();
-            if let Some(s) = pick(&thumb, |r| &r.shadow, st) {
-                shapes.push(Shape::from(
-                    t.shadow(s)
-                        .as_shape(thumb_rect, thumb_size.min_elem() / 2.0),
-                ));
-            }
-            let border_w = pick(&thumb, |r| &r.border_width, st).unwrap_or(0.0);
-            let border = paint(&thumb, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
-            let thumb_radius = pick(&thumb, |r| &r.radius, st)
-                .map_or(0.0, |r| t.radius_px(r, thumb_size.min_elem() / 2.0));
-            let clip_padding = pick(&thumb, |r| &r.bg_clip_padding, st) == Some(true);
-            shapes.extend(box_shapes(
-                thumb_rect,
-                thumb_radius,
-                paint(&thumb, |r| &r.bg),
-                border,
-                clip_padding,
-            ));
-            if let Some(c) = paint(&thumb, |r| &r.ring_color) {
-                shapes.extend(ring_shape(
-                    thumb_rect,
-                    thumb_radius,
-                    pick(&thumb, |r| &r.ring_width, st).unwrap_or(0.0),
-                    c,
-                ));
-            }
-            thumb_painter.extend(shapes);
+            RecipeBox::resolve(&t, &thumb, st).paint(&thumb_painter, thumb_rect);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));

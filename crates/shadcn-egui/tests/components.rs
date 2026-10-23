@@ -2125,11 +2125,44 @@ fn switch_paints_its_style_shadow() {
     let theme = Theme::vega_light();
     assert!(pick(&[&*theme.style.switch], |r| &r.shadow, State::NONE).is_some());
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
-    // egui paints a shadow as a blurred rect.
+    // The shadow is egui's blurred rect, cut to a mesh outside the box.
     assert!(
-        common::rect_shapes(&out).iter().any(|r| r.blur_width > 0.0),
+        common::mesh_shapes(&out)
+            .iter()
+            .any(|m| m.vertices.iter().any(|v| v.color.a() > 0)),
         "no shadow painted"
     );
+}
+
+/// An outer `box-shadow` paints only outside the border box (conformance
+/// 2.5): vega's light input has a transparent fill and `shadow-xs`, and no
+/// part of the shadow lies under it.
+#[test]
+fn shadow_paints_only_outside_the_border_box() {
+    let theme = Theme::vega_light();
+    let mut text = String::new();
+    let (rect, out) = common::measure_output(&theme, |ui| {
+        ui.add(shadcn_egui::components::input::Input::new(&mut text))
+    });
+    let meshes = common::mesh_shapes(&out);
+    assert!(!meshes.is_empty(), "no shadow painted");
+    // Inside the box: the rect minus its rounded corners, with a hair of slack.
+    let r = 12.0;
+    let inside = |p: egui::Pos2| {
+        let a = rect.shrink2(egui::vec2(r, 0.01));
+        let b = rect.shrink2(egui::vec2(0.01, r));
+        a.contains(p) || b.contains(p)
+    };
+    for m in &meshes {
+        for tri in m.indices.chunks_exact(3) {
+            let c = tri
+                .iter()
+                .map(|&i| m.vertices[i as usize].pos.to_vec2())
+                .fold(egui::Vec2::ZERO, |a, b| a + b)
+                / 3.0;
+            assert!(!inside(c.to_pos2()), "shadow triangle at {c:?} under {rect:?}");
+        }
+    }
 }
 
 /// A container's fade ends with its content, but a `Ui::disable` inside

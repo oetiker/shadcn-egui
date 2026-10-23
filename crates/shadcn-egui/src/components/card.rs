@@ -18,12 +18,12 @@
 //! is not read: the header paints no fill or border in any style, so its
 //! corners have nothing to shape.
 
-use crate::components::shared::{faded, opacity, ring};
-use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
+use crate::components::shared::{faded, opacity, RecipeBox};
+use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
 use egui::{
-    Align, CornerRadius, Id, Layout, Rect, Response, RichText, Sense, Shape, Stroke, Ui, UiBuilder,
+    Align, Id, Layout, Rect, Response, RichText, Sense, Shape, Ui, UiBuilder,
     WidgetInfo, WidgetType,
 };
 
@@ -116,13 +116,8 @@ impl<'a> Card<'a> {
             len(&content, |r| &r.pad_left, st),
             len(&content, |r| &r.pad_right, st),
         );
-        let radius = pick(&card, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
-        let fill = pick(&card, |r| &r.bg, st).map(|p| t.paint(p));
         let fg = pick(&card, |r| &r.text, st).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&card, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
-        let ring_width = len(&card, |r| &r.ring_width, st);
-        let ring_color = pick(&card, |r| &r.ring_color, st).map(|p| t.paint(p));
-        let shadow = pick(&card, |r| &r.shadow, st).map(|s| t.shadow(s));
         // Header, content and footer sit in the card.
         let alpha = opacity(&[&card[..]], st);
         let mut painter = ui.painter().clone();
@@ -204,51 +199,19 @@ impl<'a> Card<'a> {
         let card_bottom = bottom + pad_bottom;
         let outer = Rect::from_min_max(origin, egui::pos2(origin.x + outer_w, card_bottom));
 
-        // Paint behind the sections: shadow, fill, footer strip, then the ring.
-        let corner = CornerRadius::same(radius.round() as u8);
-        let mut shapes = Vec::new();
-        if let Some(s) = shadow {
-            shapes.push(Shape::from(s.as_shape(outer, corner)));
-        }
-        if let Some(fill) = fill {
-            shapes.push(Shape::rect_filled(outer, corner, fill));
-        }
-        painter.set(back, Shape::Vec(shapes));
+        // Paint behind the sections: the card's box, then the footer strip.
+        painter.set(back, Shape::Vec(RecipeBox::resolve(&t, &card, st).shapes(ui.ctx(), outer)));
         if let Some((idx, top, bottom)) = footer_shapes {
             let strip = Rect::from_min_max(
                 egui::pos2(outer.left(), top),
                 egui::pos2(outer.right(), bottom),
             );
-            let r_bottom = pick(&foot, |r| &r.radius_bottom, st)
-                .map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
-            let corner = CornerRadius {
-                nw: 0,
-                ne: 0,
-                sw: r_bottom.round() as u8,
-                se: r_bottom.round() as u8,
-            };
-            let mut strip_shapes = Vec::new();
-            if let Some(bg) = pick(&foot, |r| &r.bg, st).map(|p| t.paint(p)) {
-                strip_shapes.push(Shape::rect_filled(strip, corner, bg));
-            }
-            let line = len(&foot, |r| &r.border_top_width, st);
-            if line > 0.0 {
-                // `border-t` takes the default border colour.
-                let base_border = t.role(Role::Border); // behaviour-ok: shadcn base layer `* { @apply border-border }`
-                let color =
-                    pick(&foot, |r| &r.border_color, st).map_or(base_border, |p| t.paint(p));
-                strip_shapes.push(Shape::line_segment(
-                    [strip.left_top(), strip.right_top()],
-                    Stroke::new(line, color),
-                ));
-            }
             let mut strip_painter = painter.clone();
             strip_painter.multiply_opacity(opacity(&[&foot[..]], st));
-            strip_painter.set(idx, Shape::Vec(strip_shapes));
-        }
-        // `ring-1` lies outside the box.
-        if let Some(color) = ring_color {
-            ring(&painter, outer, radius, ring_width, color);
+            strip_painter.set(
+                idx,
+                Shape::Vec(RecipeBox::resolve(&t, &foot, st).shapes(ui.ctx(), strip)),
+            );
         }
 
         let response = ui.allocate_rect(outer, Sense::hover());

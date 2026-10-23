@@ -11,13 +11,12 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::shared::{faded, opacity, ring};
-use crate::style::{pick, Recipe, Role, State, TextSize, Weight};
+use crate::components::shared::{faded, opacity, RecipeBox};
+use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
 use egui::{
-    Align, Color32, CornerRadius, Frame, Id, Layout, Margin, Rect, RichText, Shape, Stroke, Ui,
-    UiBuilder,
+    Align, Color32, Id, Layout, Margin, Rect, RichText, Shape, Ui, UiBuilder,
 };
 
 pub struct Dialog<'a> {
@@ -86,7 +85,6 @@ impl<'a> Dialog<'a> {
             px(|r| &r.pad_left),
         );
         let gap = px(|r| &r.gap);
-        let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         // The frame paints outside the panel's `Ui`: fade its colours here.
@@ -99,22 +97,13 @@ impl<'a> Dialog<'a> {
         let width = max_width.min(ctx.content_rect().width() - px(|r| &r.max_width_inset));
         let inner_width = (width - pad_l - pad_r).max(0.0);
 
-        let mut frame = Frame::new()
-            .corner_radius(radius.round() as u8)
-            .inner_margin(Margin {
-                top: pad_t.round() as i8,
-                right: pad_r.round() as i8,
-                bottom: pad_b.round() as i8,
-                left: pad_l.round() as i8,
-            });
-        if let Some(fill) = pick(&l, |r| &r.bg, g).map(|p| t.paint(p)) {
-            frame = frame.fill(fill.gamma_multiply(alpha));
-        }
-        if let Some(s) = pick(&l, |r| &r.shadow, g) {
-            let mut shadow = t.shadow(s);
-            shadow.color = shadow.color.gamma_multiply(alpha);
-            frame = frame.shadow(shadow);
-        }
+        let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
+        let frame = panel.frame(Margin {
+            top: pad_t.round() as i8,
+            right: pad_r.round() as i8,
+            bottom: pad_b.round() as i8,
+            left: pad_l.round() as i8,
+        });
         let overlay_l = [&*t.style.dialog_overlay];
         let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
         // The overlay's opacity fades the backdrop, the app's colour too.
@@ -143,14 +132,9 @@ impl<'a> Dialog<'a> {
                 let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
                 (inner, close)
             });
-        // `ring-1` lies outside the box.
-        let ring_width = pick(&l, |r| &r.ring_width, g).unwrap_or(0.0);
-        if let Some(color) =
-            pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p).gamma_multiply(alpha))
-        {
-            let painter = ctx.layer_painter(resp.response.layer_id);
-            ring(&painter, resp.response.rect, radius, ring_width, color);
-        }
+        // Shadow and `ring-1` lie outside the box.
+        ctx.layer_painter(resp.response.layer_id)
+            .extend(panel.outside_shapes(ctx, resp.response.rect));
         let dismissed = resp.backdrop_response.clicked() || resp.should_close();
         let (inner, close) = resp.inner;
         if close || dismissed {
@@ -282,34 +266,9 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
-    let r_bottom = pick(&l, |r| &r.radius_bottom, g)
-        .map_or(0.0, |r| t.radius_px(r, f32::INFINITY))
-        .round() as u8;
-    let mut shapes = Vec::new();
-    if let Some(bg) = pick(&l, |r| &r.bg, g).map(|p| t.paint(p)) {
-        shapes.push(Shape::rect_filled(
-            strip,
-            CornerRadius {
-                nw: 0,
-                ne: 0,
-                sw: r_bottom,
-                se: r_bottom,
-            },
-            bg,
-        ));
-    }
-    let line = px(|r| &r.border_top_width);
-    if line > 0.0 {
-        // `border-t` takes the default border colour.
-        let base_border = t.role(Role::Border); // behaviour-ok: shadcn base layer `* { @apply border-border }`
-        let color = pick(&l, |r| &r.border_color, g).map_or(base_border, |p| t.paint(p));
-        shapes.push(Shape::line_segment(
-            [strip.left_top(), strip.right_top()],
-            Stroke::new(line, color),
-        ));
-    }
     let mut painter = ui.painter().clone();
     painter.multiply_opacity(alpha);
+    let shapes = RecipeBox::resolve(&t, &l, g).shapes(ui.ctx(), strip);
     painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.
     ui.allocate_rect(

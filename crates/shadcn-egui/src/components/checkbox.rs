@@ -8,10 +8,10 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::paint_icon;
-use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
-use crate::style::{pick, Paint, Prop, Recipe, State};
+use crate::components::shared::{interaction_state, style_painter, RecipeBox};
+use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
-use egui::{vec2, Rect, Sense, Shape, Stroke, Ui, Vec2, Widget};
+use egui::{vec2, Rect, Sense, Ui, Vec2, Widget};
 
 /// A checkbox. `checkbox(ui, &mut on)` is shorthand for
 /// `ui.add(Checkbox::new(&mut on))`.
@@ -86,32 +86,7 @@ impl Widget for Checkbox<'_> {
 
         if ui.is_rect_visible(rect) {
             let painter = style_painter(ui, &[&l[..]], st);
-            let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
-            let radius =
-                pick(&l, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
-            let mut shapes = Vec::new();
-            if let Some(s) = pick(&l, |r| &r.shadow, st) {
-                shapes.push(Shape::from(t.shadow(s).as_shape(rect, radius)));
-            }
-            let border_w = pick(&l, |r| &r.border_width, st).unwrap_or(0.0);
-            let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
-            let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
-            shapes.extend(box_shapes(
-                rect,
-                radius,
-                paint(|r| &r.bg),
-                border,
-                clip_padding,
-            ));
-            if let Some(c) = paint(|r| &r.ring_color) {
-                shapes.extend(ring_shape(
-                    rect,
-                    radius,
-                    pick(&l, |r| &r.ring_width, st).unwrap_or(0.0),
-                    c,
-                ));
-            }
-            painter.extend(shapes);
+            RecipeBox::resolve(&t, &l, st).paint(&painter, rect);
             if checked {
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
                 // `text-current`: the tick inherits the box's text colour.

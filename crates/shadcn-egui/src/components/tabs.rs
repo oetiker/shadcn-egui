@@ -7,12 +7,12 @@
 //! trigger (roving focus).
 
 use crate::components::shared::{
-    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
+    interaction_state, line_box, style_painter, ui_opacity, RecipeBox,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Shape, Stroke, Ui, Widget};
+use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Shape, Ui, Widget};
 
 /// shadcn `TabsList` `variant`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -270,17 +270,9 @@ impl Widget for Tabs<'_> {
             });
         }
         if ui.is_rect_visible(list_rect.expand(reach)) {
-            let list_radius = pick(&list, |r| &r.radius, g)
-                .map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
-            let track = pick(&list, |r| &r.bg, g).map(|p| t.paint(p));
             // The list sits in the tabs root; a trigger in the list.
-            style_painter(ui, &[&list[..], &root[..]], g).extend(box_shapes(
-                list_rect,
-                list_radius,
-                track,
-                None,
-                false,
-            ));
+            RecipeBox::resolve(&t, &list, g)
+                .paint(&style_painter(ui, &[&list[..], &root[..]], g), list_rect);
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
 
@@ -299,30 +291,7 @@ impl Widget for Tabs<'_> {
                 let fg = paint(&trigger, |r| &r.text)
                     .or(list_text)
                     .unwrap_or(inherited);
-                let radius = pick(&trigger, |r| &r.radius, st)
-                    .map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
-                if let Some(level) = pick(&trigger, |r| &r.shadow, st) {
-                    painter.add(t.shadow(level).as_shape(*rect, radius));
-                }
-                let stroke = paint(&trigger, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
-                let mut shapes =
-                    box_shapes(*rect, radius, paint(&trigger, |r| &r.bg), stroke, false);
-                if let Some(c) = paint(&trigger, |r| &r.ring_color) {
-                    shapes.extend(ring_shape(
-                        *rect,
-                        radius,
-                        px(&trigger, |r| &r.ring_width),
-                        c,
-                    ));
-                }
-                if let Some(c) = paint(&trigger, |r| &r.outline_color) {
-                    shapes.extend(ring_shape(
-                        *rect,
-                        radius,
-                        px(&trigger, |r| &r.outline_width),
-                        c,
-                    ));
-                }
+                let mut shapes = RecipeBox::resolve(&t, &trigger, st).shapes(ui.ctx(), *rect);
                 // The `after:` line indicator, placed against the padding box.
                 let bar_alpha = ui_opacity(ui, &[&after[..]], st);
                 if let (Some(c), true) = (paint(&after, |r| &r.bg), bar_alpha > 0.0) {

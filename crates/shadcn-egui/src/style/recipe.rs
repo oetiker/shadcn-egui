@@ -323,12 +323,32 @@ fn pick_props<'a, T: Copy + 'a>(
     pick_props_when(props, s).map(|(_, v)| v)
 }
 
+/// Like [`pick`], but also the winner's rank and layer, for comparing the
+/// winners of two fields that set one CSS property (a side's `rounded-l-*`
+/// against `rounded-*`).
+pub(crate) fn pick_ranked<T: Copy>(
+    layers: &[&Recipe],
+    field: impl Fn(&Recipe) -> &Prop<T>,
+    s: State,
+) -> Option<((u128, usize), T)> {
+    pick_props_keyed(layers.iter().map(|r| field(r)), s).map(|((rank, li, _), _, v)| ((rank, li), v))
+}
+
 fn pick_props_when<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
 ) -> Option<(When, T)> {
-    let mut best: Option<((u128, usize, usize), When, T)> = None;
-    let mut consider = |key: (u128, usize, usize), when: When, v: T| {
+    pick_props_keyed(props, s).map(|(_, when, v)| (when, v))
+}
+
+type PickKey = (u128, usize, usize);
+
+fn pick_props_keyed<'a, T: Copy + 'a>(
+    props: impl IntoIterator<Item = &'a Prop<T>>,
+    s: State,
+) -> Option<(PickKey, When, T)> {
+    let mut best: Option<(PickKey, When, T)> = None;
+    let mut consider = |key: PickKey, when: When, v: T| {
         if best.as_ref().is_none_or(|(k, _, _)| key >= *k) {
             best = Some((key, when, v));
         }
@@ -343,7 +363,7 @@ fn pick_props_when<'a, T: Copy + 'a>(
             }
         }
     }
-    best.map(|(_, when, v)| (when, v))
+    best
 }
 
 /// A palette colour role (shadcn CSS variable), or a fixed colour.

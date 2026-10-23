@@ -1,6 +1,6 @@
 //! Shared painting helpers for shadcn-style components.
 
-use crate::style::{pick, pick_when, Recipe, Shift, State, TextSize};
+use crate::style::{pick, pick_ranked, pick_when, Paint, Prop, Radius, Recipe, Shift, State, TextSize};
 use crate::Theme;
 use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 
@@ -78,75 +78,373 @@ pub fn line_box(theme: &Theme, layers: &[&Recipe], s: State, size: TextSize) -> 
         .map_or_else(|| theme.line_px(size), |k| k * theme.text_px(size))
 }
 
-/// Build a CornerRadius from an f32 radius, rounding to the nearest pixel.
-pub fn corner(r: f32) -> CornerRadius {
-    CornerRadius::same(r.round() as u8)
-}
-
-/// shadcn's focus/invalid ring: a `ring-N` box-shadow drawn just outside
-/// the part's border box.
-pub fn ring(painter: &egui::Painter, rect: Rect, radius: f32, width: f32, color: Color32) {
-    painter.extend(ring_shape(rect, radius, width, color));
-}
-
-/// The shape of [`ring`], if it has any width and colour.
-pub fn ring_shape(rect: Rect, radius: f32, width: f32, color: Color32) -> Option<Shape> {
-    (width > 0.0 && color.a() > 0).then(|| {
-        Shape::rect_stroke(
-            rect,
-            radius,
-            Stroke::new(width, color),
-            egui::StrokeKind::Outside,
-        )
-    })
-}
-
-/// A part's background and border, as shapes in paint order. The border
-/// lies inside `rect` (`box-sizing: border-box`). With `clip_padding`
-/// (`bg-clip-padding`) the fill stops inside the border, so a transparent or
-/// translucent border shows what lies under the part instead of the fill.
-pub fn box_shapes(
-    rect: Rect,
-    radius: f32,
+/// A part's box resolved from its recipe stack under one [`State`]: fill,
+/// border, shadow, focus or invalid ring (`ring-*`) and outline. Every crate
+/// widget and panel paints its box through it.
+///
+/// Resolve geometry (padding, size) with the state without interaction
+/// flags, and the box with the [`interaction_state`] of the paint, so the
+/// colours follow hover and focus while the size does not.
+///
+/// ```
+/// use shadcn_egui::components::shared::RecipeBox;
+/// use shadcn_egui::style::State;
+/// use shadcn_egui::Theme;
+///
+/// fn paint_card(ui: &egui::Ui, rect: egui::Rect) {
+///     let theme = Theme::current(ui.ctx());
+///     let card = [&*theme.style.card];
+///     let state = theme.state(ui.ctx(), State::NONE);
+///     RecipeBox::resolve(&theme, &card, state).paint(ui.painter(), rect);
+/// }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct RecipeBox {
+    /// Corner radii in px before CSS's clamping: nw, ne, sw, se.
+    radii: [f32; 4],
     fill: Option<Color32>,
-    border: Option<Stroke>,
+    border_color: Color32,
+    /// Border widths in px: top, right, bottom, left.
+    borders: [f32; 4],
     clip_padding: bool,
-) -> Vec<Shape> {
-    let border = border.filter(|b| b.width > 0.0);
-    let mut out = Vec::new();
-    if let Some(fill) = fill {
-        let inset = if clip_padding {
-            border.map_or(0.0, |b| b.width)
-        } else {
-            0.0
+    shadow: Option<egui::epaint::Shadow>,
+    ring: Option<Stroke>,
+    outline: Option<Stroke>,
+}
+
+/// `rounded-full` (`calc(infinity * 1px)`) as a finite length, so CSS's
+/// corner clamping can scale it.
+const FULL_RADIUS: f32 = 1.0e9; // behaviour-ok: stands in for CSS's infinite radius
+
+impl RecipeBox {
+    /// The box of the part whose recipes are `layers` (in upstream's class
+    /// order, as for [`pick`]) under `state`.
+    ///
+    /// A side's border width (`border-t-*`, `border-l-*`) and a corner's
+    /// radius (`rounded-t-*`, `rounded-b-*`, `rounded-l-*`, `rounded-r-*`)
+    /// win against `border-*` and `rounded-*` by rank, as in CSS; at equal
+    /// rank the later layer wins (tailwind-merge drops the earlier class),
+    /// and within one layer the side wins (Tailwind sorts the shorthand
+    /// first). A border without a colour of its own takes shadcn's base
+    /// `border-border`.
+    pub fn resolve(theme: &Theme, layers: &[&Recipe], state: State) -> Self {
+        // Candidates in Tailwind's property order: a later one wins a tie.
+        fn side<T: Copy>(cands: &[Option<((u128, usize), T)>]) -> Option<T> {
+            let mut best: Option<((u128, usize), T)> = None;
+            for c in cands.iter().flatten() {
+                if best.is_none_or(|(k, _)| c.0 >= k) {
+                    best = Some(*c);
+                }
+            }
+            best.map(|(_, v)| v)
+        }
+        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(layers, f, state).map(|p| theme.paint(p));
+        let width = |f: fn(&Recipe) -> &Prop<f32>| pick_ranked(layers, f, state);
+        let all = width(|r| &r.border_width);
+        let top = width(|r| &r.border_top_width);
+        let left = width(|r| &r.border_left_width);
+        let borders = [
+            side(&[all, top]).unwrap_or(0.0),
+            side(&[all]).unwrap_or(0.0),
+            side(&[all]).unwrap_or(0.0),
+            side(&[all, left]).unwrap_or(0.0),
+        ];
+        let radius = |f: fn(&Recipe) -> &Prop<Radius>| {
+            pick_ranked(layers, f, state).map(|(k, r)| {
+                let px = match r {
+                    Radius::Rung(crate::style::Rung::Full) => FULL_RADIUS,
+                    r => theme.radius_px(r, FULL_RADIUS),
+                };
+                (k, px)
+            })
         };
-        out.push(Shape::rect_filled(
-            rect.shrink(inset),
-            (radius - inset).max(0.0),
-            fill,
-        ));
+        let (base, t, r, b, l) = (
+            radius(|r| &r.radius),
+            radius(|r| &r.radius_top),
+            radius(|r| &r.radius_right),
+            radius(|r| &r.radius_bottom),
+            radius(|r| &r.radius_left),
+        );
+        // Tailwind's order: rounded, rounded-t, -r, -b, -l.
+        let corner = |a, b| side(&[base, a, b]).unwrap_or(0.0);
+        let ring_w = pick(layers, |r| &r.ring_width, state).unwrap_or(0.0);
+        let outline_w = pick(layers, |r| &r.outline_width, state).unwrap_or(0.0);
+        let stroke = |w: f32, c: Option<Color32>| {
+            c.filter(|c| w > 0.0 && c.a() > 0)
+                .map(|c| Stroke::new(w, c))
+        };
+        // shadcn's base layer `* { @apply border-border }`.
+        let base_border = theme.role(crate::style::Role::Border); // behaviour-ok: CSS base layer colour of every border
+        Self {
+            radii: [corner(t, l), corner(t, r), corner(b, l), corner(r, b)],
+            fill: paint(|r| &r.bg).filter(|c| c.a() > 0),
+            border_color: paint(|r| &r.border_color).unwrap_or(base_border),
+            borders,
+            clip_padding: pick(layers, |r| &r.bg_clip_padding, state) == Some(true),
+            shadow: pick(layers, |r| &r.shadow, state)
+                .map(|s| theme.shadow(s))
+                .filter(|s| *s != egui::epaint::Shadow::NONE),
+            ring: stroke(ring_w, paint(|r| &r.ring_color)),
+            outline: stroke(outline_w, paint(|r| &r.outline_color)),
+        }
     }
-    if let Some(b) = border {
-        out.push(Shape::rect_stroke(
-            rect,
-            radius,
-            b,
-            egui::StrokeKind::Inside,
-        ));
+
+    /// The same box with every colour faded by `opacity`: for a box an
+    /// egui container paints outside the `Ui` that carries the part's fade
+    /// (a popup's frame, a modal's panel).
+    #[inline]
+    pub fn faded(mut self, opacity: f32) -> Self {
+        self.fill = self.fill.map(|c| c.gamma_multiply(opacity));
+        self.border_color = self.border_color.gamma_multiply(opacity);
+        if let Some(s) = &mut self.shadow {
+            s.color = s.color.gamma_multiply(opacity);
+        }
+        for s in [&mut self.ring, &mut self.outline].into_iter().flatten() {
+            s.color = s.color.gamma_multiply(opacity);
+        }
+        self
+    }
+
+    /// The corner radii on `rect`, clamped as CSS clamps them: where two
+    /// radii on one side add up to more than its length, all four scale
+    /// down by the same factor (so `rounded-full` is half the short side).
+    pub fn radius_on(&self, rect: Rect) -> CornerRadius {
+        let [nw, ne, sw, se] = self.radii;
+        let (w, h) = (rect.width().max(0.0), rect.height().max(0.0));
+        let f = [(w, nw + ne), (w, sw + se), (h, nw + sw), (h, ne + se)]
+            .into_iter()
+            .filter(|(_, sum)| *sum > 0.0)
+            .map(|(len, sum)| len / sum)
+            .fold(1.0_f32, f32::min);
+        let c = |v: f32| (v * f).clamp(0.0, 255.0).round() as u8; // behaviour-ok: egui's u8 corner radius
+        CornerRadius {
+            nw: c(nw),
+            ne: c(ne),
+            sw: c(sw),
+            se: c(se),
+        }
+    }
+
+    /// The fill colour, if the recipe sets one that is not transparent.
+    #[inline]
+    pub fn fill(&self) -> Option<Color32> {
+        self.fill
+    }
+
+    /// The border widths: top, right, bottom, left.
+    #[inline]
+    pub fn border_widths(&self) -> [f32; 4] {
+        self.borders
+    }
+
+    /// The border as one stroke, if all four sides are as wide and not 0.
+    fn uniform_border(&self) -> Option<Stroke> {
+        let [t, r, b, l] = self.borders;
+        (t > 0.0 && t == r && t == b && t == l).then(|| Stroke::new(t, self.border_color))
+    }
+
+    /// The box as shapes in paint order on `rect`: shadow (outside the
+    /// border box only), ring, fill (inside the border under
+    /// `bg-clip-padding`), border inside `rect` (`box-sizing: border-box`),
+    /// outline.
+    pub fn shapes(&self, ctx: &egui::Context, rect: Rect) -> Vec<Shape> {
+        let radius = self.radius_on(rect);
+        let mut out = Vec::new();
+        out.extend(self.shadow_shape(ctx, rect, radius));
+        out.extend(outside_stroke(self.ring, rect, radius));
+        let [t, r, b, l] = self.borders;
+        if let Some(fill) = self.fill {
+            if self.clip_padding && t + r + b + l > 0.0 {
+                let inner = padding_box(rect, self.borders);
+                out.push(Shape::rect_filled(inner, inner_radius(radius, self.borders), fill));
+            } else {
+                out.push(Shape::rect_filled(rect, radius, fill));
+            }
+        }
+        if let Some(stroke) = self.uniform_border() {
+            out.push(Shape::rect_stroke(
+                rect,
+                radius,
+                stroke,
+                egui::StrokeKind::Inside,
+            ));
+        } else if t + r + b + l > 0.0 && self.border_color.a() > 0 {
+            // Sides of unequal width: the border box minus the padding box.
+            let mesh = tessellate(ctx, &egui::epaint::RectShape::filled(rect, radius, self.border_color));
+            let hole = rounded_polygon(padding_box(rect, self.borders), inner_radius(radius, self.borders));
+            out.push(Shape::mesh(clip_outside(&mesh, &hole)));
+        }
+        out.extend(outside_stroke(self.outline, rect, radius));
+        out
+    }
+
+    /// The shadow, ring and outline alone: what lies outside the border
+    /// box, for a box whose fill and border an egui `Frame` painted.
+    pub fn outside_shapes(&self, ctx: &egui::Context, rect: Rect) -> Vec<Shape> {
+        let radius = self.radius_on(rect);
+        let mut out = Vec::new();
+        out.extend(self.shadow_shape(ctx, rect, radius));
+        out.extend(outside_stroke(self.ring, rect, radius));
+        out.extend(outside_stroke(self.outline, rect, radius));
+        out
+    }
+
+    /// Paint [`RecipeBox::shapes`] with `painter`.
+    pub fn paint(&self, painter: &Painter, rect: Rect) {
+        painter.extend(self.shapes(painter.ctx(), rect));
+    }
+
+    /// An egui `Frame` with this box's fill, border and radii and `margin`
+    /// as its inner margin, for a panel whose size egui learns only while
+    /// it runs (a popup, a modal). It carries no shadow (egui's would show
+    /// through a translucent fill), ring or outline: paint
+    /// [`RecipeBox::outside_shapes`] on the frame's rect afterwards.
+    pub fn frame(&self, margin: egui::Margin) -> egui::Frame {
+        debug_assert!(
+            self.uniform_border().is_some() || self.borders == [0.0; 4],
+            "a frame strokes all four sides alike"
+        );
+        let c = |v: f32| v.clamp(0.0, 255.0).round() as u8; // behaviour-ok: egui's u8 corner radius
+        let [nw, ne, sw, se] = self.radii;
+        let mut frame = egui::Frame::new()
+            .corner_radius(CornerRadius {
+                nw: c(nw),
+                ne: c(ne),
+                sw: c(sw),
+                se: c(se),
+            })
+            .inner_margin(margin);
+        if let Some(fill) = self.fill {
+            frame = frame.fill(fill);
+        }
+        if let Some(border) = self.uniform_border() {
+            frame = frame.stroke(border);
+        }
+        frame
+    }
+
+    /// egui's blurred shadow rect cut to the outside of the border box: an
+    /// outer `box-shadow` never shows through the box (conformance 2.5).
+    fn shadow_shape(&self, ctx: &egui::Context, rect: Rect, radius: CornerRadius) -> Option<Shape> {
+        let s = self.shadow?;
+        let mesh = tessellate(ctx, &s.as_shape(rect, radius));
+        Some(Shape::mesh(clip_outside(&mesh, &rounded_polygon(rect, radius))))
+    }
+}
+
+/// A `ring-*` or `outline-*` just outside the border box.
+fn outside_stroke(stroke: Option<Stroke>, rect: Rect, radius: CornerRadius) -> Option<Shape> {
+    stroke.map(|s| Shape::rect_stroke(rect, radius, s, egui::StrokeKind::Outside))
+}
+
+/// The padding box: the border box minus each side's border.
+fn padding_box(rect: Rect, [t, r, b, l]: [f32; 4]) -> Rect {
+    Rect::from_min_max(rect.min + egui::vec2(l, t), rect.max - egui::vec2(r, b))
+}
+
+/// The padding box's corner radii: the outer radius minus the wider
+/// border that meets at the corner.
+fn inner_radius(radius: CornerRadius, [t, r, b, l]: [f32; 4]) -> CornerRadius {
+    let inset = |v: u8, a: f32, b: f32| (f32::from(v) - a.max(b)).max(0.0).round() as u8;
+    CornerRadius {
+        nw: inset(radius.nw, t, l),
+        ne: inset(radius.ne, t, r),
+        sw: inset(radius.sw, b, l),
+        se: inset(radius.se, b, r),
+    }
+}
+
+/// `shape` as the mesh egui's tessellator makes of it in this context.
+fn tessellate(ctx: &egui::Context, shape: &egui::epaint::RectShape) -> egui::Mesh {
+    let mut tess = egui::epaint::Tessellator::new(
+        ctx.pixels_per_point(),
+        ctx.tessellation_options(|o| *o),
+        [1, 1], // behaviour-ok: no text in a rect, the font atlas size is unused
+        Vec::new(),
+    );
+    let mut mesh = egui::Mesh::default();
+    tess.tessellate_rect(shape, &mut mesh);
+    mesh
+}
+
+/// The convex outline of a rounded rect, as egui's tessellator traces it.
+fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos2> {
+    let mut points = Vec::new();
+    egui::epaint::tessellator::path::rounded_rectangle(&mut points, rect, radius.into());
+    points.dedup_by(|a, b| (*a - *b).length_sq() < 1e-6);
+    points
+}
+
+/// The part of `mesh` that lies outside the convex `polygon`. A triangle
+/// that straddles an edge is cut along it, its vertex colours and texture
+/// coordinates interpolated.
+fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
+    use egui::epaint::Vertex;
+    let n = polygon.len();
+    let mut out = egui::Mesh::with_texture(mesh.texture_id);
+    if n < 3 {
+        out.append_ref(mesh);
+        return out;
+    }
+    let area: f32 = (0..n)
+        .map(|i| {
+            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+            a.x * b.y - b.x * a.y
+        })
+        .sum();
+    let orient = area.signum();
+    // > 0 inside edge `i`, < 0 outside it.
+    let side = |i: usize, p: egui::Pos2| {
+        let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+        orient * (b - a).x.mul_add(p.y - a.y, -(b - a).y * (p.x - a.x))
+    };
+    let lerp = |a: &Vertex, b: &Vertex, t: f32| Vertex {
+        pos: a.pos + (b.pos - a.pos) * t,
+        uv: a.uv + (b.uv - a.uv) * t,
+        color: a.color.lerp_to_gamma(b.color, t),
+    };
+    let mut emit = |poly: &[Vertex]| {
+        if poly.len() < 3 {
+            return;
+        }
+        let base = out.vertices.len() as u32;
+        out.vertices.extend_from_slice(poly);
+        for k in 1..poly.len() as u32 - 1 {
+            out.add_triangle(base, base + k, base + k + 1);
+        }
+    };
+    for tri in mesh.indices.chunks_exact(3) {
+        let mut inside: Vec<Vertex> = tri.iter().map(|&i| mesh.vertices[i as usize]).collect();
+        // Wholly outside one edge: keep it as it is.
+        if (0..n).any(|e| inside.iter().all(|v| side(e, v.pos) <= 0.0)) {
+            emit(&inside);
+            continue;
+        }
+        for e in 0..n {
+            let (mut keep_in, mut keep_out) = (Vec::new(), Vec::new());
+            for k in 0..inside.len() {
+                let (a, b) = (&inside[k], &inside[(k + 1) % inside.len()]);
+                let (da, db) = (side(e, a.pos), side(e, b.pos));
+                if da >= 0.0 {
+                    keep_in.push(*a);
+                } else {
+                    keep_out.push(*a);
+                }
+                if (da >= 0.0) != (db >= 0.0) {
+                    let v = lerp(a, b, da / (da - db));
+                    keep_in.push(v);
+                    keep_out.push(v);
+                }
+            }
+            emit(&keep_out);
+            inside = keep_in;
+            if inside.len() < 3 {
+                break;
+            }
+        }
     }
     out
-}
-
-/// Paint [`box_shapes`].
-pub fn paint_box(
-    painter: &egui::Painter,
-    rect: Rect,
-    radius: f32,
-    fill: Option<Color32>,
-    border: Option<Stroke>,
-    clip_padding: bool,
-) {
-    painter.extend(box_shapes(rect, radius, fill, border, clip_padding));
 }
 
 /// Apply `translate-x/y` to a part's rect. `Calc(f, n)` is `calc(f × 100% +
@@ -189,6 +487,7 @@ pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::style::Rung;
 
     #[test]
     fn opacity_multiplies_down_the_part_tree() {
@@ -198,5 +497,120 @@ mod tests {
         let parent: &[&Recipe] = &[&half];
         assert_eq!(opacity(&[part, parent], State::default()), 0.25);
         assert_eq!(opacity(&[], State::default()), 1.0);
+    }
+
+    fn area(mesh: &egui::Mesh) -> f32 {
+        mesh.indices
+            .chunks_exact(3)
+            .map(|t| {
+                let [a, b, c] = [0, 1, 2].map(|k| mesh.vertices[t[k] as usize].pos);
+                ((b - a).x * (c - a).y - (b - a).y * (c - a).x).abs() / 2.0
+            })
+            .sum()
+    }
+
+    #[test]
+    fn clip_outside_removes_the_polygon() {
+        let mut quad = egui::Mesh::default();
+        quad.add_colored_rect(
+            Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(10.0, 10.0)),
+            Color32::BLACK,
+        );
+        let hole = rounded_polygon(
+            Rect::from_min_size(egui::pos2(3.0, 3.0), egui::vec2(4.0, 4.0)),
+            CornerRadius::ZERO,
+        );
+        assert!((area(&clip_outside(&quad, &hole)) - 84.0).abs() < 1e-3);
+        // A polygon that covers the mesh leaves nothing; one beside it all.
+        let all = rounded_polygon(
+            Rect::from_min_size(egui::pos2(-1.0, -1.0), egui::vec2(12.0, 12.0)),
+            CornerRadius::ZERO,
+        );
+        assert_eq!(area(&clip_outside(&quad, &all)), 0.0);
+        let beside = rounded_polygon(
+            Rect::from_min_size(egui::pos2(20.0, 0.0), egui::vec2(4.0, 4.0)),
+            CornerRadius::ZERO,
+        );
+        assert!((area(&clip_outside(&quad, &beside)) - 100.0).abs() < 1e-3);
+    }
+
+    fn rounded(base: Option<Rung>, left: Option<Rung>, left_rank: u128) -> RecipeBox {
+        let mut r = Recipe::default();
+        r.radius.base = base.map(Radius::Rung);
+        if let Some(l) = left {
+            r.radius_left.rules.push(crate::style::Rule {
+                when: crate::style::When::ALWAYS,
+                rank: left_rank,
+                value: Radius::Rung(l),
+            });
+        }
+        let theme = Theme::vega_light();
+        RecipeBox::resolve(&theme, &[&r], State::NONE)
+    }
+
+    #[test]
+    fn corner_radii_resolve_per_side_and_clamp_as_css() {
+        let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(40.0, 20.0));
+        // `rounded-full` is half the short side.
+        let full = rounded(Some(Rung::Full), None, 0).radius_on(rect);
+        assert_eq!(full, CornerRadius::same(10));
+        // `rounded-l-none` beside `rounded-md` squares the left corners only.
+        let md = Theme::vega_light().rung(Rung::Md).round() as u8;
+        let left_none = rounded(Some(Rung::Md), Some(Rung::None), 0).radius_on(rect);
+        assert_eq!(
+            left_none,
+            CornerRadius {
+                nw: 0,
+                ne: md,
+                sw: 0,
+                se: md
+            }
+        );
+        // A side ranked below the shorthand loses to it.
+        let mut base = Recipe::default();
+        base.radius.rules.push(crate::style::Rule {
+            when: crate::style::When::ALWAYS,
+            rank: 2,
+            value: Radius::Rung(Rung::Md),
+        });
+        base.radius_left.rules.push(crate::style::Rule {
+            when: crate::style::When::ALWAYS,
+            rank: 1,
+            value: Radius::Rung(Rung::None),
+        });
+        let b = RecipeBox::resolve(&Theme::vega_light(), &[&base], State::NONE);
+        assert_eq!(b.radius_on(rect), CornerRadius::same(md));
+    }
+
+    #[test]
+    fn unequal_borders_paint_the_border_box_minus_the_padding_box() {
+        let mut r = Recipe::default();
+        r.border_width.base = Some(1.0);
+        r.border_left_width.base = Some(0.0);
+        let b = RecipeBox::resolve(&Theme::vega_light(), &[&r], State::NONE);
+        assert_eq!(b.border_widths(), [1.0, 1.0, 1.0, 0.0]);
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(20.0, 10.0));
+        let shapes = b.shapes(&ctx, rect);
+        let meshes: Vec<_> = shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Mesh(m) => Some(m),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(meshes.len(), 1);
+        let padding_box = Rect::from_min_max(egui::pos2(0.0, 1.0), egui::pos2(19.0, 9.0));
+        for t in meshes[0].indices.chunks_exact(3) {
+            let c = t
+                .iter()
+                .map(|&i| meshes[0].vertices[i as usize].pos.to_vec2())
+                .fold(egui::Vec2::ZERO, |a, b| a + b)
+                / 3.0;
+            assert!(!padding_box.shrink(0.01).contains(c.to_pos2()), "{c:?}");
+        }
+        // Top 20 + bottom 20 + right 8, plus egui's feathering band.
+        let border = area(meshes[0]);
+        assert!((48.0..48.0 + 60.0).contains(&border), "{border}");
     }
 }

@@ -11,11 +11,11 @@
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
-use crate::components::shared::{faded, opacity, ring, DEFAULT_SIDE_OFFSET};
+use crate::components::shared::{faded, opacity, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{Frame, Margin, PopupCloseBehavior, Response, RichText, Ui};
+use egui::{Margin, PopupCloseBehavior, Response, RichText, Ui};
 
 pub struct Popover<'a> {
     trigger: &'a Response,
@@ -58,30 +58,17 @@ impl<'a> Popover<'a> {
             px(|r| &r.pad_left),
         );
         let gap = px(|r| &r.gap);
-        let radius = pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
         // The frame paints outside the content's `Ui`: fade its colours here.
         let alpha = opacity(&[&l[..]], g);
-        let fill = pick(&l, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(alpha));
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
-        let ring_width = px(|r| &r.ring_width);
-        let ring_color = pick(&l, |r| &r.ring_color, g).map(|p| t.paint(p).gamma_multiply(alpha));
-        let mut shadow =
-            pick(&l, |r| &r.shadow, g).map_or(egui::epaint::Shadow::NONE, |s| t.shadow(s));
-        shadow.color = shadow.color.gamma_multiply(alpha);
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
-
-        let mut frame = Frame::new()
-            .corner_radius(radius.round() as u8)
-            .shadow(shadow)
-            .inner_margin(Margin {
-                top: pad_t.round() as i8,
-                right: pad_r.round() as i8,
-                bottom: pad_b.round() as i8,
-                left: pad_l.round() as i8,
-            });
-        if let Some(fill) = fill {
-            frame = frame.fill(fill);
-        }
+        let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
+        let frame = panel.frame(Margin {
+            top: pad_t.round() as i8,
+            right: pad_r.round() as i8,
+            bottom: pad_b.round() as i8,
+            left: pad_l.round() as i8,
+        });
         // No width from the builder or the recipe: CSS's initial `auto`,
         // the content's width.
         let inner_width = self
@@ -108,11 +95,11 @@ impl<'a> Popover<'a> {
                 }
                 content(ui)
             })?;
-        // `ring-1` lies outside the box; the frame's stroke would lie inside.
-        if let Some(color) = ring_color {
-            let painter = self.trigger.ctx.layer_painter(shown.response.layer_id);
-            ring(&painter, shown.response.rect, radius, ring_width, color);
-        }
+        // Shadow and `ring-1` lie outside the box.
+        self.trigger
+            .ctx
+            .layer_painter(shown.response.layer_id)
+            .extend(panel.outside_shapes(&self.trigger.ctx, shown.response.rect));
         Some(shown.inner)
     }
 }

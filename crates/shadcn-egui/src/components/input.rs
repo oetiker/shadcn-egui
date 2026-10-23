@@ -4,12 +4,12 @@
 //! paints.
 
 use crate::components::shared::{
-    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
+    interaction_state, line_box, style_painter, ui_opacity, RecipeBox,
 };
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
+use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{Frame, Margin, Shape, Stroke, TextEdit, Ui, Vec2, Widget};
+use egui::{Frame, Margin, Shape, TextEdit, Ui, Vec2, Widget};
 
 pub struct Input<'a> {
     text: &'a mut String,
@@ -146,30 +146,7 @@ impl<'a> Widget for Input<'a> {
             .inner;
 
         let st = interaction_state(&t, &resp, enabled, context);
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
-        let radius =
-            pick(&l, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, resp.rect.height() / 2.0));
-        let mut shapes = Vec::new();
-        if let Some(s) = pick(&l, |r| &r.shadow, st) {
-            shapes.push(Shape::from(t.shadow(s).as_shape(resp.rect, radius)));
-        }
-        let clip_padding = pick(&l, |r| &r.bg_clip_padding, st) == Some(true);
-        let border = paint(|r| &r.border_color).map(|b| Stroke::new(border_w, b));
-        shapes.extend(box_shapes(
-            resp.rect,
-            radius,
-            paint(|r| &r.bg),
-            border,
-            clip_padding,
-        ));
-        if let Some(c) = paint(|r| &r.ring_color) {
-            shapes.extend(ring_shape(
-                resp.rect,
-                radius,
-                pick(&l, |r| &r.ring_width, st).unwrap_or(0.0),
-                c,
-            ));
-        }
+        let shapes = RecipeBox::resolve(&t, &l, st).shapes(ui.ctx(), resp.rect);
         style_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
     }
