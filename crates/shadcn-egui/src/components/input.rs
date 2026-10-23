@@ -9,7 +9,7 @@ use crate::components::shared::{
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::{layout, Theme};
-use egui::{Frame, Margin, RichText, Shape, TextEdit, Ui, Vec2, Widget};
+use egui::{Frame, Margin, RichText, Sense, Shape, TextEdit, Ui, Vec2, Widget};
 
 pub struct Input<'a> {
     text: &'a mut String,
@@ -133,15 +133,21 @@ impl<'a> Widget for Input<'a> {
                     ui.visuals_mut().weak_text_color = Some(c);
                 }
                 ui.set_opacity(fade);
-                // `add_sized`, with the id made in the `Ui` that shows the
-                // field: `TextEdit::id_salt` would hash the stored `Id` again.
+                // As `add_sized`, with the id made in the `Ui` that shows
+                // the field: `TextEdit::id_salt` would hash the stored `Id`
+                // again. Raised to its content minimum, the field overflows
+                // its room without widening the parent (conformance 3.6).
                 let size = Vec2::new(layout::capped_width(ui, max_width, content_min), height);
-                let layout = egui::Layout::centered_and_justified(ui.layout().main_dir());
-                ui.allocate_ui_with_layout(size, layout, |ui| match self.id_salt {
-                    Some(salt) => ui.add(edit.id(ui.make_persistent_id(salt))),
-                    None => ui.add(edit),
-                })
-                .inner
+                let (rect, _) = layout::allocate_overflowing(ui, size, Sense::hover());
+                let mut field = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(rect)
+                        .layout(egui::Layout::centered_and_justified(ui.layout().main_dir())),
+                );
+                match self.id_salt {
+                    Some(salt) => field.add(edit.id(field.make_persistent_id(salt))),
+                    None => field.add(edit),
+                }
             })
             .inner;
 

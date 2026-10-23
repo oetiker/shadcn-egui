@@ -42,6 +42,7 @@ are recorded here. The format is based on
 - At phone width in the luma, vega and maia styles, a tab list wider than the page column no longer widens the card under it; the list runs past the column's edge as in the browser, and the card keeps the column's width.
 - An input's placeholder now has the size of the typed text: 16 px below 768 px, and 12 px in the lyra and mira styles, instead of always 14 px.
 - `Input::max_width(f32::NAN)` now gives the narrowest field instead of the default width.
+- An input in a column narrower than its smallest width now runs past the column's edge instead of widening the column and the widgets in it.
 - A select list whose options are wider than the window now stays inside the window and wraps the long option texts, instead of running past the window's edge; its minimum width is now the trigger's width, not 2 px more.
 
 ## 0.6.0 - 2026-10-17

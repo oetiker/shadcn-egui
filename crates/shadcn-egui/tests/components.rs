@@ -228,6 +228,37 @@ fn disabled_input_ignores_typing() {
     assert_eq!(h.state(), "");
 }
 
+/// A field raised to its content minimum overflows a column narrower than
+/// that minimum without widening the column (conformance 3.6), and still
+/// takes typed text.
+#[test]
+fn input_overflows_a_narrow_column_without_widening_it() {
+    use shadcn_egui::components::input::Input;
+    let ctx = egui::Context::default();
+    Theme::vega_light().apply(&ctx);
+    let mut text = String::new();
+    let mut widths = (0.0, 0.0);
+    for events in [vec![], vec![], vec![egui::Event::Text("ab".into())]] {
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                ui.allocate_ui(egui::vec2(10.0, 100.0), |ui| {
+                    ui.set_max_width(10.0);
+                    let field = ui.add(Input::new(&mut text).id_salt("narrow"));
+                    field.request_focus();
+                    widths = (field.rect.width(), ui.min_rect().width());
+                });
+            },
+        );
+    }
+    assert!(widths.0 > 10.0, "the field keeps its minimum: {widths:?}");
+    assert_eq!(widths.1, 10.0, "the column keeps its width");
+    assert_eq!(text, "ab");
+}
+
 #[test]
 fn input_height_follows_style() {
     use shadcn_egui::components::input::Input;
