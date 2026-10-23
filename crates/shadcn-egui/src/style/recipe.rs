@@ -10,9 +10,12 @@
 use std::ops::BitOr;
 
 /// State and context flags. A component builds one per paint; the theme adds
-/// [`State::DARK`]. Each flag stands for the Tailwind variants listed.
+/// [`State::DARK`]. Each flag stands for the Tailwind variants listed, and
+/// means the upstream attribute it stands for. Combine flags with `|` or
+/// [`State::or`]; the bit layout is private, so flags can be added without a
+/// break.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct State(pub u32);
+pub struct State(u128);
 
 impl State {
     pub const NONE: State = State(0);
@@ -34,7 +37,7 @@ impl State {
     pub const CHECKED: State = State(1 << 7);
     /// `data-unchecked:`, `data-[state=unchecked]:`
     pub const UNCHECKED: State = State(1 << 8);
-    /// `aria-expanded:`
+    /// `aria-expanded:`, `data-open:`
     pub const EXPANDED: State = State(1 << 9);
     /// `aria-[haspopup]:` (used negated: `not-aria-[haspopup]:`)
     pub const HAS_POPUP: State = State(1 << 10);
@@ -62,9 +65,62 @@ impl State {
     pub const VARIANT_DEFAULT: State = State(1 << 24);
     /// `has-data-[slot=card-footer]:`
     pub const HAS_FOOTER: State = State(1 << 25);
+    /// `data-[size=lg]:`, `group-data-[size=lg]/…:`
+    pub const SIZE_LG: State = State(1 << 26);
+    /// A group's first child (`:first-child`; button-group corners).
+    pub const FIRST: State = State(1 << 27);
+    /// A group's last child (`:last-child`, the last `[data-slot]` child).
+    pub const LAST: State = State(1 << 28);
+    /// A group child that is not the first (`:not(:first-child)`).
+    pub const NOT_FIRST: State = State(1 << 29);
+    /// A group child that is not the last (`:not(:last-child)`).
+    pub const NOT_LAST: State = State(1 << 30);
+    /// `sm:` (the window is at least 640 px wide; `layout::breakpoints`)
+    pub const SM: State = State(1 << 31);
+    /// `md:` (the window is at least 768 px wide)
+    pub const MD: State = State(1 << 32);
+    /// `data-[side=top]:` (the panel sits above its trigger)
+    pub const SIDE_TOP: State = State(1 << 33);
+    /// `data-[side=right]:`
+    pub const SIDE_RIGHT: State = State(1 << 34);
+    /// `data-[side=bottom]:`
+    pub const SIDE_BOTTOM: State = State(1 << 35);
+    /// `data-[side=left]:`
+    pub const SIDE_LEFT: State = State(1 << 36);
+    /// `has-[>svg]:`, `group-has-[>svg]/…:` (the part shows an icon)
+    pub const HAS_ICON: State = State(1 << 37);
+    /// `has-data-[slot=alert-action]:`
+    pub const HAS_ACTION: State = State(1 << 38);
+    /// `has-data-[slot=alert-dialog-media]:`, `group-has-data-[slot=alert-dialog-media]/…:`
+    pub const HAS_MEDIA: State = State(1 << 39);
+    /// `has-data-[slot=kbd]:`
+    pub const HAS_KBD: State = State(1 << 40);
+    /// `has-[>[data-slot=button-group]]:` (a nested button group)
+    pub const HAS_BUTTON_GROUP: State = State(1 << 41);
+    /// `has-[>[data-variant=outline]]:` (a child with the outline variant)
+    pub const HAS_OUTLINE: State = State(1 << 42);
+    /// `in-data-[slot=tooltip-content]:`, and a tooltip's `**:data-[slot=kbd]:`
+    pub const IN_TOOLTIP_CONTENT: State = State(1 << 43);
+    /// An avatar in an avatar group (the group's `*:data-[slot=avatar]:`)
+    pub const IN_AVATAR_GROUP: State = State(1 << 44);
+    /// A part of the destructive variant (`cn-alert-variant-destructive`'s
+    /// `*:data-[slot=alert-description]:`)
+    pub const VARIANT_DESTRUCTIVE: State = State(1 << 45);
+    /// `group-has-data-[size=lg]/…:` (the group holds a large child)
+    pub const HAS_SIZE_LG: State = State(1 << 46);
+    /// `group-has-data-[size=sm]/…:` (the group holds a small child)
+    pub const HAS_SIZE_SM: State = State(1 << 47);
+    /// `data-closed:` (bits' closed panel; `data-open:` is [`State::EXPANDED`])
+    pub const CLOSED: State = State(1 << 48);
+    /// `data-[state=delayed-open]:` (a tooltip opened after its delay)
+    pub const DELAYED_OPEN: State = State(1 << 49);
 
     pub const fn or(self, other: State) -> State {
         State(self.0 | other.0)
+    }
+    /// `self` without the flags in `other`.
+    pub const fn without(self, other: State) -> State {
+        State(self.0 & !other.0)
     }
     pub const fn with(self, flag: State, on: bool) -> State {
         if on {

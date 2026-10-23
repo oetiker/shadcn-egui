@@ -626,7 +626,10 @@ fn class_attributes(src: &str) -> impl Iterator<Item = usize> + '_ {
 /// (`class={c ? "a" : "b"}`), and so is a `?` anywhere outside strings,
 /// also in a call's arguments (`class={f(a?.b)}`). An identifier or a call
 /// without one (`class={cn(..)}`) is fine: the call is read where it
-/// stands.
+/// stands. A call nested in its arguments is skipped as [`cn_strings`]
+/// skips it, so a `?` there decides nothing about the part's string
+/// (`cn(buttonVariants({ variant: active ? "outline" : "ghost" }), "cn-x")`:
+/// the composed recipes are the runtime's).
 fn unread_class_attribute(src: &str) -> Result<(), String> {
     for at in class_attributes(src) {
         let rest = &src[at..];
@@ -636,7 +639,9 @@ fn unread_class_attribute(src: &str) -> Result<(), String> {
                 return true;
             }
             // A `?` outside strings, also inside a call: a conditional.
-            closing(rest, 0).is_some_and(|end| strings_free(&rest[1..end]).contains('?'))
+            closing(rest, 0).is_some_and(|end| {
+                strings_free(&without_nested_calls(&rest[1..end])).contains('?')
+            })
         });
         if braced || rest.starts_with('\'') {
             return Err(format!(
@@ -646,4 +651,34 @@ fn unread_class_attribute(src: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// `expr` with the argument text of every call nested inside the arguments
+/// of its outermost call blanked out (`cn(f(a ? b), "x")` keeps `cn(`,
+/// `f()` and `"x"`). Strings are skipped while looking for calls.
+fn without_nested_calls(expr: &str) -> String {
+    let b = expr.as_bytes();
+    let Some(open) = expr.find('(') else {
+        return expr.to_owned();
+    };
+    let mut out = String::with_capacity(expr.len());
+    out.push_str(&expr[..=open]);
+    let mut i = open + 1;
+    while i < b.len() {
+        let c = b[i];
+        if matches!(c, b'"' | b'\'' | b'`') {
+            let end = skip_string(b, i).unwrap_or(b.len() - 1);
+            out.push_str(&expr[i..=end]);
+            i = end + 1;
+        } else if c == b'(' && i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_') {
+            let end = closing(expr, i).unwrap_or(b.len() - 1);
+            out.push_str("()");
+            i = end + 1;
+        } else {
+            let ch = expr[i..].chars().next().expect("char boundary");
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    out
 }

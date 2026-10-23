@@ -17,3 +17,12 @@ slider.rs slider: cn-slider cn-slider-track cn-slider-range cn-slider-thumb
 switch.rs switch: cn-switch cn-switch-thumb
 tabs.rs tabs: cn-tabs cn-tabs-list cn-tabs-list-variant-default cn-tabs-list-variant-line cn-tabs-trigger cn-tabs-content
 tooltip.rs tooltip: cn-tooltip-content cn-tooltip-arrow
+kbd.rs kbd: cn-kbd cn-kbd-group
+progress.rs progress: cn-progress cn-progress-indicator
+alert.rs alert: cn-alert cn-alert-variant-default cn-alert-variant-destructive cn-alert-title cn-alert-description cn-alert-action
+avatar.rs avatar: cn-avatar cn-avatar-image cn-avatar-fallback cn-avatar-badge cn-avatar-group cn-avatar-group-count
+button_group.rs button-group: cn-button-group cn-button-group-orientation-horizontal cn-button-group-orientation-vertical cn-button-group-separator cn-button-group-text
+textarea.rs textarea: cn-textarea
+hover_card.rs hover-card: cn-hover-card-content
+alert_dialog.rs alert-dialog: cn-alert-dialog-overlay cn-alert-dialog-content cn-alert-dialog-header cn-alert-dialog-media cn-alert-dialog-title cn-alert-dialog-description cn-alert-dialog-footer cn-alert-dialog-cancel cn-alert-dialog-action
+pagination.rs pagination: cn-pagination cn-pagination-content cn-pagination-link cn-pagination-previous cn-pagination-previous-text cn-pagination-next cn-pagination-next-text cn-pagination-ellipsis

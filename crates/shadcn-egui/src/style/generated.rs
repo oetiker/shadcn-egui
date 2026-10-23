@@ -159,4 +159,92 @@ pub struct Style {
     pub tooltip_content: Box<Recipe>,
     /// `cn-tooltip-arrow`
     pub tooltip_arrow: Box<Recipe>,
+    /// `cn-kbd`
+    pub kbd: Box<Recipe>,
+    /// `cn-kbd-group`
+    pub kbd_group: Box<Recipe>,
+    /// `cn-progress`
+    pub progress: Box<Recipe>,
+    /// `cn-progress-indicator`
+    pub progress_indicator: Box<Recipe>,
+    /// `cn-alert`
+    pub alert: Box<Recipe>,
+    /// `cn-alert` `after:` pseudo-element
+    pub alert_after: Box<Recipe>,
+    /// `cn-alert-variant-default`
+    pub alert_variant_default: Box<Recipe>,
+    /// `cn-alert-variant-default` `after:` pseudo-element
+    pub alert_variant_default_after: Box<Recipe>,
+    /// `cn-alert-variant-destructive`
+    pub alert_variant_destructive: Box<Recipe>,
+    /// `cn-alert-variant-destructive` `after:` pseudo-element
+    pub alert_variant_destructive_after: Box<Recipe>,
+    /// `cn-alert-title`
+    pub alert_title: Box<Recipe>,
+    /// `cn-alert-description`
+    pub alert_description: Box<Recipe>,
+    /// `cn-alert-action`
+    pub alert_action: Box<Recipe>,
+    /// `cn-avatar`
+    pub avatar: Box<Recipe>,
+    /// `cn-avatar` `after:` pseudo-element
+    pub avatar_after: Box<Recipe>,
+    /// `cn-avatar-image`
+    pub avatar_image: Box<Recipe>,
+    /// `cn-avatar-fallback`
+    pub avatar_fallback: Box<Recipe>,
+    /// `cn-avatar-badge`
+    pub avatar_badge: Box<Recipe>,
+    /// `cn-avatar-group`
+    pub avatar_group: Box<Recipe>,
+    /// `cn-avatar-group-count`
+    pub avatar_group_count: Box<Recipe>,
+    /// `cn-button-group`
+    pub button_group: Box<Recipe>,
+    /// `cn-button-group-orientation-horizontal`
+    pub button_group_orientation_horizontal: Box<Recipe>,
+    /// `cn-button-group-orientation-vertical`
+    pub button_group_orientation_vertical: Box<Recipe>,
+    /// `cn-button-group-separator`
+    pub button_group_separator: Box<Recipe>,
+    /// `cn-button-group-text`
+    pub button_group_text: Box<Recipe>,
+    /// `cn-textarea`
+    pub textarea: Box<Recipe>,
+    /// `cn-hover-card-content`
+    pub hover_card_content: Box<Recipe>,
+    /// `cn-alert-dialog-overlay`
+    pub alert_dialog_overlay: Box<Recipe>,
+    /// `cn-alert-dialog-content`
+    pub alert_dialog_content: Box<Recipe>,
+    /// `cn-alert-dialog-header`
+    pub alert_dialog_header: Box<Recipe>,
+    /// `cn-alert-dialog-media`
+    pub alert_dialog_media: Box<Recipe>,
+    /// `cn-alert-dialog-title`
+    pub alert_dialog_title: Box<Recipe>,
+    /// `cn-alert-dialog-description`
+    pub alert_dialog_description: Box<Recipe>,
+    /// `cn-alert-dialog-footer`
+    pub alert_dialog_footer: Box<Recipe>,
+    /// `cn-alert-dialog-cancel`
+    pub alert_dialog_cancel: Box<Recipe>,
+    /// `cn-alert-dialog-action`
+    pub alert_dialog_action: Box<Recipe>,
+    /// `cn-pagination`
+    pub pagination: Box<Recipe>,
+    /// `cn-pagination-content`
+    pub pagination_content: Box<Recipe>,
+    /// `cn-pagination-link`
+    pub pagination_link: Box<Recipe>,
+    /// `cn-pagination-previous`
+    pub pagination_previous: Box<Recipe>,
+    /// `cn-pagination-previous-text`
+    pub pagination_previous_text: Box<Recipe>,
+    /// `cn-pagination-next`
+    pub pagination_next: Box<Recipe>,
+    /// `cn-pagination-next-text`
+    pub pagination_next_text: Box<Recipe>,
+    /// `cn-pagination-ellipsis`
+    pub pagination_ellipsis: Box<Recipe>,
 }

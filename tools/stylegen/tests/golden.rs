@@ -26,7 +26,7 @@ fn base(m: &Marker, field: Field) -> Option<Value> {
         .rfind(|d| d.field == field && d.all == 0 && d.none == 0 && d.rank == 0)
         .map(|d| d.value)
 }
-fn when(m: &Marker, field: Field, all: u32) -> Option<Value> {
+fn when(m: &Marker, field: Field, all: u128) -> Option<Value> {
     m.decls
         .iter()
         .rfind(|d| d.field == field && d.all == all)
@@ -167,7 +167,7 @@ fn part_of(style_name: &str, part: &str) -> Part {
         .unwrap_or_else(|| panic!("{part}"))
 }
 
-fn after_when(p: &Part, field: Field, all: u32) -> Option<Value> {
+fn after_when(p: &Part, field: Field, all: u128) -> Option<Value> {
     p.marker
         .after
         .iter()

@@ -174,7 +174,7 @@ pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context:
     let context = if live {
         context
     } else {
-        State(context.0 & !pointer_and_focus.0)
+        context.without(pointer_and_focus)
     };
     theme.state(
         context

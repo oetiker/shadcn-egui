@@ -61,7 +61,7 @@ pub enum Pseudo {
 
 #[derive(Debug, PartialEq)]
 pub enum V {
-    Cond { all: u32, none: u32, rank: u32 },
+    Cond { all: u128, none: u128, rank: u32 },
     Always { rank: u32 },
     Pseudo(Pseudo, u32),
     Ignore(&'static str),
@@ -93,6 +93,10 @@ pub struct Spec {
     pub classes: u32,
     /// Pseudo-elements.
     pub pseudo_elements: u32,
+    /// Element (type) selectors (`has-[>svg]` is `&:has(> svg)`, (0,0,1)).
+    /// At most one: it ranks half a class step, above the same class count
+    /// without it and below one class more.
+    pub elements: u32,
     /// Classes of a target that Tailwind sorts before its rival target of
     /// equal specificity: each loses that tie (half a class step in the
     /// rank).
@@ -105,6 +109,7 @@ impl std::ops::Add for Spec {
         Spec {
             classes: self.classes + o.classes,
             pseudo_elements: self.pseudo_elements + o.pseudo_elements,
+            elements: self.elements + o.elements,
             earlier: self.earlier + o.earlier,
         }
     }
@@ -114,18 +119,21 @@ impl std::ops::Add for Spec {
 pub const CLASS: Spec = Spec {
     classes: 1,
     pseudo_elements: 0,
+    elements: 0,
     earlier: 0,
 };
 /// One pseudo-element: (0,0,1).
 pub const PSEUDO_ELEMENT: Spec = Spec {
     classes: 0,
     pseudo_elements: 1,
+    elements: 0,
     earlier: 0,
 };
 /// No specificity: media and supports queries, `:where(…)`.
 pub const ZERO: Spec = Spec {
     classes: 0,
     pseudo_elements: 0,
+    elements: 0,
     earlier: 0,
 };
 /// `[&_svg:not([class*='size-'])]` over `[&>svg]`: one class, sorted
@@ -133,7 +141,15 @@ pub const ZERO: Spec = Spec {
 pub const SVG_NOT: Spec = Spec {
     classes: 1,
     pseudo_elements: 0,
+    elements: 0,
     earlier: 1,
+};
+/// One element selector: (0,0,1).
+pub const ELEMENT: Spec = Spec {
+    classes: 0,
+    pseudo_elements: 0,
+    elements: 1,
+    earlier: 0,
 };
 
 /// Every variant stylegen translates, by exact text, with the specificity
@@ -201,12 +217,61 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
         CLASS,
     ),
     ("has-data-[slot=card-footer]", Is("HAS_FOOTER"), CLASS),
+    // `data-open` is a real open state (D-91); bits sets `data-closed` on
+    // the same parts when closed. Neither is set on tooltip content.
+    ("data-open", Is("EXPANDED"), CLASS),
+    ("data-closed", Is("CLOSED"), CLASS),
+    ("data-[state=delayed-open]", Is("DELAYED_OPEN"), CLASS),
+    // The side a panel took (D-93): slide-in direction, arrow offset.
+    ("data-[side=top]", Is("SIDE_TOP"), CLASS),
+    ("data-[side=right]", Is("SIDE_RIGHT"), CLASS),
+    ("data-[side=bottom]", Is("SIDE_BOTTOM"), CLASS),
+    ("data-[side=left]", Is("SIDE_LEFT"), CLASS),
+    ("data-[size=lg]", Is("SIZE_LG"), CLASS),
+    ("group-data-[size=sm]/avatar", Is("SIZE_SM"), CLASS),
+    ("group-data-[size=default]/avatar", Is("SIZE_DEFAULT"), CLASS),
+    ("group-data-[size=lg]/avatar", Is("SIZE_LG"), CLASS),
+    (
+        "group-data-[size=sm]/alert-dialog-content",
+        Is("SIZE_SM"),
+        CLASS,
+    ),
+    (
+        "group-data-[size=default]/alert-dialog-content",
+        Is("SIZE_DEFAULT"),
+        CLASS,
+    ),
+    (
+        "group-has-data-[size=lg]/avatar-group",
+        Is("HAS_SIZE_LG"),
+        CLASS,
+    ),
+    (
+        "group-has-data-[size=sm]/avatar-group",
+        Is("HAS_SIZE_SM"),
+        CLASS,
+    ),
+    // `&:has(> svg)`: an element, (0,0,1).
+    ("has-[>svg]", Is("HAS_ICON"), ELEMENT),
+    ("group-has-[>svg]/alert", Is("HAS_ICON"), ELEMENT),
+    ("has-data-[slot=alert-action]", Is("HAS_ACTION"), CLASS),
+    ("has-data-[slot=alert-dialog-media]", Is("HAS_MEDIA"), CLASS),
+    (
+        "group-has-data-[slot=alert-dialog-media]/alert-dialog-content",
+        Is("HAS_MEDIA"),
+        CLASS,
+    ),
+    ("has-data-[slot=kbd]", Is("HAS_KBD"), CLASS),
+    ("has-[>[data-slot=button-group]]", Is("HAS_BUTTON_GROUP"), CLASS),
+    ("has-[>[data-variant=outline]]", Is("HAS_OUTLINE"), CLASS),
+    // `:where(*[data-slot=tooltip-content]) &`.
+    ("in-data-[slot=tooltip-content]", Is("IN_TOOLTIP_CONTENT"), ZERO),
     // The crate has no destructive select item.
     ("not-data-[variant=destructive]", Always, CLASS),
-    // An egui window counts as wider than the `sm` and `md` breakpoints.
+    // Media queries read the window width (D-69 (a), `layout::breakpoints`).
     // Media and supports queries add no specificity.
-    ("sm", Always, ZERO),
-    ("md", Always, ZERO),
+    ("sm", Is("SM"), ZERO),
+    ("md", Is("MD"), ZERO),
     // egui paints its own backdrop blur.
     ("supports-backdrop-filter", Always, ZERO),
     // A target's rules compete only with rules of the same target, so its
@@ -222,31 +287,17 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     ("[&>svg]", Target(Pseudo::Svg), ZERO),
 ];
 
-const ANIM: &str = "open/close animation state; egui shows and hides at once";
-const SIDE: &str = "the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)";
 const LEADING_IMAGE: &str = "card with a leading image is not offered";
-const KBD: &str = "keyboard-shortcut chip in a tooltip; the crate does not ship Kbd";
+/// D-100 (a): rules for links and paragraphs inside caller content.
+const CALLER_CONTENT: &str =
+    "styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)";
+const INPUT_GROUP: &str = "inside or around an InputGroup; the crate does not ship InputGroup";
 
 /// Every variant stylegen ignores, by exact text, with the reason.
 pub const IGNORED: &[(&str, &str)] = &[
-    ("data-open", ANIM),
-    ("data-closed", ANIM),
-    ("data-[state=delayed-open]", ANIM),
-    ("data-entering", ANIM),
-    ("data-exiting", ANIM),
-    ("data-ending-style", ANIM),
-    ("data-starting-style", ANIM),
-    ("data-[side=top]", SIDE),
-    ("data-[side=bottom]", SIDE),
-    ("data-[side=left]", SIDE),
-    ("data-[side=right]", SIDE),
-    // Shipped uses: card images, description links, select item spans, the
-    // select value wrapper.
-    ("*", "`*:` styles direct child elements the crate does not draw as elements"),
-    // Shipped uses: the tooltip Kbd chip, and the highlighted select item's
-    // icon and text, which the crate paints in the item's own text colour.
-    ("**", "`**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour"),
-    ("[a]", "link-styled badge/description anchors are not ported"),
+    ("[a]", CALLER_CONTENT),
+    ("[&_a]", CALLER_CONTENT),
+    ("[&_p:not(:last-child)]", CALLER_CONTENT),
     ("file", "file-input button; egui has no file input"),
     ("[.border-b]", "card header with an explicit border class is not offered"),
     ("[.border-t]", "card footer with an explicit border class is not offered"),
@@ -256,8 +307,17 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("group-has-[:focus-visible]/field-label", "inside a focused FieldLabel; the crate does not ship Field"),
     ("[span]", "select item text wrapper; the crate draws the item text itself"),
     ("data-[slot=select-value]", "select value wrapper; the crate draws the value itself"),
-    ("data-[slot=kbd]", KBD),
-    ("has-data-[slot=kbd]", KBD),
+    ("data-[slot=input-group]", INPUT_GROUP),
+    ("in-data-[slot=input-group]", INPUT_GROUP),
+    ("[&>[data-slot=input-group]:has(:focus-visible)]", INPUT_GROUP),
+    (
+        "[&>[data-slot=select-trigger]:not([class*='w-'])]",
+        "a select trigger in a button group keeps `w-fit`, its default width",
+    ),
+    (
+        "has-[select[aria-hidden=true]:last-child]",
+        "a hidden native `<select>` after a select trigger; the crate renders none, so the trigger is the group's last child (`LAST`)",
+    ),
     ("rtl", "right-to-left layout; the crate lays out left to right"),
     ("[&_svg]", crate::utility::SVG_CHILD),
     ("has-data-[slot=card-action]", "card header grid template; the crate lays out the header itself"),
@@ -486,7 +546,11 @@ pub fn encode(mask: u128, spec: Spec, important: bool) -> u128 {
         "variant bits overflow the rank mask"
     );
     assert!(spec.earlier <= spec.classes, "{spec:?}");
-    let steps = 2 * spec.classes - spec.earlier;
+    assert!(
+        spec.elements <= 1 && (spec.elements == 0 || spec.earlier == 0),
+        "element count {spec:?} does not fit its half step"
+    );
+    let steps = 2 * spec.classes + spec.elements - spec.earlier;
     assert!(
         steps < 1 << (R_PSEUDO_ELEMENT - R_CLASSES),
         "specificity class count {} overflows its rank bits",
@@ -562,13 +626,114 @@ pub fn variant(v: &str) -> V {
 /// The variants of one class, combined.
 #[derive(Debug, PartialEq)]
 pub struct Variants {
-    pub all: u32,
-    pub none: u32,
+    pub all: u128,
+    pub none: u128,
     /// The class's [`rank`].
     pub rank: u128,
     /// A pseudo target selects the field. It adds its specificity to the
     /// rank, but no variant bit.
     pub pseudo: Option<Pseudo>,
+    /// A child target moves the class to a child (D-95 (a)): `all` and
+    /// `none` are then the child's condition.
+    pub child: Option<ChildSel>,
+}
+
+/// What a child-target variant selects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChildSel {
+    /// Any child the part lays out: the part's `_child` recipe, which a
+    /// child stacks over its own while it sits in the part.
+    Any,
+    /// The child part with this `data-slot`: that part's own recipe, under
+    /// the context flags `resolve::CONTEXTS` names.
+    Slot(String),
+}
+
+/// Two classes, attributes or pseudo-classes: (0,2,0).
+const TWO_CLASSES: Spec = Spec {
+    classes: 2,
+    pseudo_elements: 0,
+    elements: 0,
+    earlier: 0,
+};
+/// A class and an element: (0,1,1).
+const CLASS_ELEMENT: Spec = Spec {
+    classes: 1,
+    pseudo_elements: 0,
+    elements: 1,
+    earlier: 0,
+};
+
+/// Every child-target variant, by exact text: the child it selects (`None`:
+/// any child), the flags the selector asks of the child, and the
+/// specificity the selector adds beyond the class itself. `*:` is
+/// `:is(& > *)` and `**:` is `:is(& *)`, which add nothing; a
+/// `data-[slot=S]` right after either names the child part and adds its
+/// attribute (one class). A child target adds no variant bit.
+pub const CHILD_TARGETS: &[(&str, Option<&str>, &[&str], Spec)] = &[
+    ("*", None, &[], ZERO),
+    ("**", None, &[], ZERO),
+    ("[&>*:not(:first-child)]", None, &["NOT_FIRST"], CLASS),
+    ("[&>*:not(:last-child)]", None, &["NOT_LAST"], CLASS),
+    // The last child with a data-slot: every crate child counts.
+    (
+        "[&>[data-slot]:not(:has(~[data-slot]))]",
+        None,
+        &["LAST"],
+        TWO_CLASSES,
+    ),
+    ("[&>input]", Some("input"), &[], ELEMENT),
+    (
+        "[&>input:focus-visible]",
+        Some("input"),
+        &["FOCUS_VISIBLE"],
+        CLASS_ELEMENT,
+    ),
+    (
+        "[&>[data-slot=select-trigger]:focus-visible]",
+        Some("select-trigger"),
+        &["FOCUS_VISIBLE"],
+        TWO_CLASSES,
+    ),
+];
+
+/// Why a `**:` class without a slot is ignored.
+pub const DESCENDANTS: &str = "`**:` without a child slot styles content the part draws in its own text colour (select item) or caller content";
+
+/// Flags a parent may hand to its children as context: a condition before a
+/// child target must be one of them, or the class is unsupported (the
+/// parent's hover is not the child's).
+fn context_flag(f: &str) -> bool {
+    matches!(f, "DARK" | "SM" | "MD")
+        || f.starts_with("HAS_")
+        || f.starts_with("SIZE_")
+        || f.starts_with("VARIANT_")
+}
+
+/// `*:[svg]` and `*:[svg:not([class*='size-'])]` name the part's own icon,
+/// as `[&>svg]` and `[&_svg:not([class*='size-'])]` do, with the same
+/// specificity: the pairs are spelt as those.
+pub fn normalise(variants: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(variants.len());
+    let mut i = 0;
+    while i < variants.len() {
+        let pair = variants.get(i + 1).map(String::as_str);
+        match (variants[i].as_str(), pair) {
+            ("*", Some("[svg]")) => {
+                out.push("[&>svg]".into());
+                i += 2;
+            }
+            ("*", Some("[svg:not([class*='size-'])]")) => {
+                out.push("[&_svg:not([class*='size-'])]".into());
+                i += 2;
+            }
+            _ => {
+                out.push(variants[i].clone());
+                i += 1;
+            }
+        }
+    }
+    out
 }
 
 #[derive(Debug, PartialEq)]
@@ -581,8 +746,17 @@ pub enum Skip {
 /// and `!important` flag; see the module docs. Variants that are not
 /// translated add nothing.
 pub fn rank<'a>(variants: impl IntoIterator<Item = &'a str>, important: bool) -> u128 {
+    rank_with(variants, ZERO, important)
+}
+
+/// [`rank`] with `extra` specificity (a child target's selector).
+pub fn rank_with<'a>(
+    variants: impl IntoIterator<Item = &'a str>,
+    extra: Spec,
+    important: bool,
+) -> u128 {
     let mut seen: Vec<&str> = Vec::new();
-    let (mut mask, mut spec) = (0u128, ZERO);
+    let (mut mask, mut spec) = (0u128, extra);
     for v in variants {
         if seen.contains(&v) {
             continue;
@@ -600,15 +774,57 @@ pub fn rank<'a>(variants: impl IntoIterator<Item = &'a str>, important: bool) ->
 }
 
 /// Combine a class's variants. The first variant that is ignored or
-/// unsupported decides for the whole class.
+/// unsupported decides for the whole class. A child target
+/// ([`CHILD_TARGETS`]) splits them: the flags before it are the parent's
+/// context, those after it and its own the child's state; both make the
+/// child's condition.
 pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
+    let vs = normalise(&c.variants);
     let mut out = Variants {
         all: 0,
         none: 0,
-        rank: rank(c.variants.iter().map(String::as_str), c.important),
+        rank: 0,
         pseudo: None,
+        child: None,
     };
-    for v in &c.variants {
+    let mut extra = ZERO;
+    let mut i = 0;
+    while i < vs.len() {
+        let v = vs[i].as_str();
+        i += 1;
+        if let Some((_, slot, flags, spec)) = CHILD_TARGETS.iter().find(|(n, ..)| *n == v) {
+            if out.child.is_some() {
+                return Err(Skip::Unsupported(format!("second child target `{v}`")));
+            }
+            if let Some(f) = crate::model::FLAGS
+                .iter()
+                .find(|(n, b)| (out.all | out.none) & b != 0 && !context_flag(n))
+            {
+                return Err(Skip::Unsupported(format!(
+                    "parent state `{}` before a child target",
+                    f.0
+                )));
+            }
+            extra = extra + *spec;
+            for f in *flags {
+                out.all |= flag(f);
+            }
+            let named = vs
+                .get(i)
+                .filter(|_| matches!(v, "*" | "**"))
+                .and_then(|n| n.strip_prefix("data-[slot=")?.strip_suffix(']'));
+            out.child = Some(match (slot, named) {
+                (Some(s), _) => ChildSel::Slot((*s).to_owned()),
+                (None, Some(s)) => {
+                    i += 1;
+                    extra = extra + CLASS;
+                    ChildSel::Slot(s.to_owned())
+                }
+                (None, None) if v == "**" => return Err(Skip::Ignore(DESCENDANTS)),
+                (None, None) => ChildSel::Any,
+            });
+            continue;
+        }
         match variant(v) {
             V::Cond { all, none, .. } => {
                 out.all |= all;
@@ -620,5 +836,6 @@ pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
             V::Unsupported => return Err(Skip::Unsupported(format!("variant `{v}`"))),
         }
     }
+    out.rank = rank_with(vs.iter().map(String::as_str), extra, c.important);
     Ok(out)
 }

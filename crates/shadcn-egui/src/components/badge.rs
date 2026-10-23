@@ -127,7 +127,7 @@ impl Widget for Badge {
         let st = if hoverable {
             st
         } else {
-            State(st.0 & !State::HOVER.0)
+            st.without(State::HOVER)
         };
         let painter = style_painter(ui, &[&l[..]], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));

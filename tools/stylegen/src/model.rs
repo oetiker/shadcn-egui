@@ -21,25 +21,32 @@ pub enum Field {
     MarginBottom,
     MarginLeft,
     Gap,
+    GapX,
+    SpaceX,
     InsetTop,
     InsetRight,
     InsetBottom,
     InsetLeft,
     IconSize,
+    IconShiftY,
     TextSize,
     LineHeight,
     Tracking,
     Weight,
     Uppercase,
     Underline,
+    TextWrap,
     Radius,
     RadiusTop,
     RadiusBottom,
+    RadiusLeft,
+    RadiusRight,
     Bg,
     BgClipPadding,
     Text,
     BorderWidth,
     BorderTopWidth,
+    BorderLeftWidth,
     BorderColor,
     RingWidth,
     RingColor,
@@ -47,11 +54,27 @@ pub enum Field {
     OutlineColor,
     Shadow,
     Opacity,
+    Blend,
     ShiftX,
     ShiftY,
     HitInsetX,
     HitInsetY,
     BackdropBlur,
+    Hidden,
+    AspectRatio,
+    ObjectCover,
+    FieldSizingContent,
+    Resizable,
+    Transition,
+    Duration,
+    AnimateIn,
+    AnimateOut,
+    EnterOpacity,
+    EnterScale,
+    EnterX,
+    EnterY,
+    ExitOpacity,
+    ExitScale,
 }
 
 impl Field {
@@ -74,25 +97,32 @@ impl Field {
             MarginBottom => "margin_bottom",
             MarginLeft => "margin_left",
             Gap => "gap",
+            GapX => "gap_x",
+            SpaceX => "space_x",
             InsetTop => "inset_top",
             InsetRight => "inset_right",
             InsetBottom => "inset_bottom",
             InsetLeft => "inset_left",
             IconSize => "icon_size",
+            IconShiftY => "icon_shift_y",
             TextSize => "text_size",
             LineHeight => "line_height",
             Tracking => "tracking",
             Weight => "weight",
             Uppercase => "uppercase",
             Underline => "underline",
+            TextWrap => "text_wrap",
             Radius => "radius",
             RadiusTop => "radius_top",
             RadiusBottom => "radius_bottom",
+            RadiusLeft => "radius_left",
+            RadiusRight => "radius_right",
             Bg => "bg",
             BgClipPadding => "bg_clip_padding",
             Text => "text",
             BorderWidth => "border_width",
             BorderTopWidth => "border_top_width",
+            BorderLeftWidth => "border_left_width",
             BorderColor => "border_color",
             RingWidth => "ring_width",
             RingColor => "ring_color",
@@ -100,11 +130,27 @@ impl Field {
             OutlineColor => "outline_color",
             Shadow => "shadow",
             Opacity => "opacity",
+            Blend => "blend",
             ShiftX => "shift_x",
             ShiftY => "shift_y",
             HitInsetX => "hit_inset_x",
             HitInsetY => "hit_inset_y",
             BackdropBlur => "backdrop_blur",
+            Hidden => "hidden",
+            AspectRatio => "aspect_ratio",
+            ObjectCover => "object_cover",
+            FieldSizingContent => "field_sizing_content",
+            Resizable => "resizable",
+            Transition => "transition",
+            Duration => "duration",
+            AnimateIn => "animate_in",
+            AnimateOut => "animate_out",
+            EnterOpacity => "enter_opacity",
+            EnterScale => "enter_scale",
+            EnterX => "enter_x",
+            EnterY => "enter_y",
+            ExitOpacity => "exit_opacity",
+            ExitScale => "exit_scale",
         }
     }
 }
@@ -119,7 +165,8 @@ pub enum RadiusV {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ShiftV {
     Px(f32),
-    SelfMinus(f32),
+    /// `calc(frac × 100% + px)` of the part's own size.
+    Calc(f32, f32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -139,6 +186,12 @@ pub enum Value {
     Weight(&'static str),
     Shadow(&'static str),
     Shift(ShiftV),
+    /// `TextWrap::Balance`, `TextWrap::Pretty`.
+    TextWrap(&'static str),
+    /// `Blend::Darken`, `Blend::Lighten`.
+    Blend(&'static str),
+    /// The `Transition` const names it ORs together.
+    Transition(&'static [&'static str]),
 }
 
 impl Value {
@@ -157,13 +210,22 @@ impl Value {
             Value::Weight(w) => format!("Weight::{w}"),
             Value::Shadow(s) => format!("ShadowLevel::{s}"),
             Value::Shift(ShiftV::Px(v)) => format!("Shift::Px({v:?})"),
-            Value::Shift(ShiftV::SelfMinus(v)) => format!("Shift::SelfMinus({v:?})"),
+            Value::Shift(ShiftV::Calc(f, v)) => format!("Shift::Calc({f:?}, {v:?})"),
+            Value::TextWrap(w) => format!("TextWrap::{w}"),
+            Value::Blend(b) => format!("Blend::{b}"),
+            Value::Transition(names) => match names.split_first() {
+                None => "Transition::NONE".into(),
+                Some((first, rest)) => rest.iter().fold(
+                    format!("Transition::{first}"),
+                    |acc, n| format!("{acc}.or(Transition::{n})"),
+                ),
+            },
         }
     }
 }
 
 /// `State` const names and bits; must match `src/style/recipe.rs`.
-pub const FLAGS: &[(&str, u32)] = &[
+pub const FLAGS: &[(&str, u128)] = &[
     ("DARK", 1 << 0),
     ("HOVER", 1 << 1),
     ("FOCUS", 1 << 2),
@@ -187,18 +249,42 @@ pub const FLAGS: &[(&str, u32)] = &[
     ("VARIANT_LINE", 1 << 23),
     ("VARIANT_DEFAULT", 1 << 24),
     ("HAS_FOOTER", 1 << 25),
+    ("SIZE_LG", 1 << 26),
+    ("FIRST", 1 << 27),
+    ("LAST", 1 << 28),
+    ("NOT_FIRST", 1 << 29),
+    ("NOT_LAST", 1 << 30),
+    ("SM", 1 << 31),
+    ("MD", 1 << 32),
+    ("SIDE_TOP", 1 << 33),
+    ("SIDE_RIGHT", 1 << 34),
+    ("SIDE_BOTTOM", 1 << 35),
+    ("SIDE_LEFT", 1 << 36),
+    ("HAS_ICON", 1 << 37),
+    ("HAS_ACTION", 1 << 38),
+    ("HAS_MEDIA", 1 << 39),
+    ("HAS_KBD", 1 << 40),
+    ("HAS_BUTTON_GROUP", 1 << 41),
+    ("HAS_OUTLINE", 1 << 42),
+    ("IN_TOOLTIP_CONTENT", 1 << 43),
+    ("IN_AVATAR_GROUP", 1 << 44),
+    ("VARIANT_DESTRUCTIVE", 1 << 45),
+    ("HAS_SIZE_LG", 1 << 46),
+    ("HAS_SIZE_SM", 1 << 47),
+    ("CLOSED", 1 << 48),
+    ("DELAYED_OPEN", 1 << 49),
 ];
 
-pub fn flag(name: &str) -> u32 {
+pub fn flag(name: &str) -> u128 {
     FLAGS
         .iter()
         .find(|(n, _)| *n == name)
         .map(|(_, b)| *b)
-        .expect("known flag")
+        .unwrap_or_else(|| panic!("unknown flag {name}"))
 }
 
 /// `State::A.or(State::B)` for a bit set, `State::NONE` for 0.
-pub fn state_expr(bits: u32) -> String {
+pub fn state_expr(bits: u128) -> String {
     let names: Vec<String> = FLAGS
         .iter()
         .filter(|(_, b)| bits & b != 0)

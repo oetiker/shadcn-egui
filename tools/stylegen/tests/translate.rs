@@ -367,7 +367,7 @@ fn tables_are_consistent() {
 #[test]
 fn model_matches_recipe_rs() {
     let src = read("../../crates/shadcn-egui/src/style/recipe.rs");
-    let consts: Vec<(String, u32)> = src
+    let consts: Vec<(String, u128)> = src
         .lines()
         .filter_map(|l| {
             let rest = l.trim().strip_prefix("pub const ")?;
@@ -377,10 +377,10 @@ fn model_matches_recipe_rs() {
                 .strip_suffix(");")?
                 .parse::<u32>()
                 .ok()?;
-            Some((name.to_owned(), 1 << bit))
+            Some((name.to_owned(), 1u128 << bit))
         })
         .collect();
-    let flags: Vec<(String, u32)> = FLAGS.iter().map(|(n, b)| (n.to_string(), *b)).collect();
+    let flags: Vec<(String, u128)> = FLAGS.iter().map(|(n, b)| (n.to_string(), *b)).collect();
     assert_eq!(flags, consts);
 
     let fields: Vec<String> = src
@@ -545,8 +545,8 @@ fn rank_order_agrees_with_specificity() {
     struct Rule {
         field: Field,
         value: Value,
-        all: u32,
-        none: u32,
+        all: u128,
+        none: u128,
         key: (u128, usize, usize),
         spec: (u32, u32),
         raw: String,

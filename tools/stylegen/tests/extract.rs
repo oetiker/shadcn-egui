@@ -204,6 +204,18 @@ fn unread_tv_and_class_forms_are_errors() {
     }
 }
 
+/// A conditional inside a call nested in `cn(..)` is skipped with that
+/// call (pagination-link's `buttonVariants({ variant: isActive ? .. })`):
+/// the part's string is the plain strings only.
+#[test]
+fn question_mark_in_a_nested_call_is_skipped() {
+    let c = r#"<a class={cn(buttonVariants({ size, variant: on ? "outline" : "ghost" }), "cn-a x", className)}></a>"#;
+    assert_eq!(class_strings(c).unwrap(), ["cn-a x"]);
+    // A conditional directly in the outer call's arguments still fails.
+    let bad = r#"<a class={cn(on ? "cn-a" : "cn-b", f(x))}></a>"#;
+    assert!(class_strings(bad).is_err());
+}
+
 #[test]
 fn quoted_variant_keys_are_keys() {
     let src = "const v = tv({ base: \"cn-x a\", variants: { size: { sm: \"cn-x-sm c\", \"icon-xs\": \"cn-x-icon d\" } } });";

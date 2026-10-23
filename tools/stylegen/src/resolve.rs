@@ -11,8 +11,8 @@ use std::collections::HashMap;
 pub struct Decl {
     pub field: Field,
     pub value: Value,
-    pub all: u32,
-    pub none: u32,
+    pub all: u128,
+    pub none: u128,
     /// Cascade rank: important, specificity, Tailwind variant order (see
     /// `variant.rs`).
     pub rank: u128,
@@ -31,8 +31,8 @@ pub struct Marker {
 
 #[derive(Clone, Debug)]
 pub struct VarDef {
-    pub all: u32,
-    pub none: u32,
+    pub all: u128,
+    pub none: u128,
     /// The defining class's variants and `!important` flag, for the rank
     /// of the rules that use the variable.
     pub variants: Vec<String>,

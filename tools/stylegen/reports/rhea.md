@@ -4,7 +4,7 @@
 
 Upstream: shadcn-svelte `493481fa`, `style-rhea.css`.
 
-Unsupported classes in shipped markers: **0** (exportable)
+Unsupported classes in shipped markers: **74** (not exportable)
 
 ## `cn-button`
 
@@ -466,4 +466,313 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `data-[side=right]:translate-y-1/2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=top]:translate-x-1/2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
 - ignored `data-[side=top]:translate-y-[calc(-50%+2px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
+
+## `cn-kbd`
+
+- **unsupported** `in-data-[slot=tooltip-content]:bg-background/20`: variant `in-data-[slot=tooltip-content]`
+- **unsupported** `in-data-[slot=tooltip-content]:text-background`: variant `in-data-[slot=tooltip-content]`
+- **unsupported** `dark:in-data-[slot=tooltip-content]:bg-background/10`: variant `in-data-[slot=tooltip-content]`
+- **unsupported** `font-sans`: font-* other than weight
+- **unsupported** `in-data-[slot=input-group]:bg-input`: variant `in-data-[slot=input-group]`
+- ignored `w-fit`: the component's default sizing
+- ignored `pointer-events-none`: browser behaviour the component handles itself
+- ignored `inline-flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+
+## `cn-kbd-group`
+
+- ignored `inline-flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+
+## `cn-progress`
+
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `overflow-x-hidden`: browser behaviour the component handles itself
+
+## `cn-progress-indicator`
+
+- **unsupported** `size-full`: spacing value
+- ignored `flex-1`: structure: egui layout is done by the component
+- ignored `transition-all`: animation or transition; out of scope (spec §4.4)
+
+## `cn-alert`
+
+- **unsupported** `has-data-[slot=alert-action]:relative`: variant `has-data-[slot=alert-action]`
+- **unsupported** `has-data-[slot=alert-action]:pr-18`: variant `has-data-[slot=alert-action]`
+- **unsupported** `has-[>svg]:grid-cols-[auto_1fr]`: variant `has-[>svg]`
+- **unsupported** `has-[>svg]:gap-x-2.5`: variant `has-[>svg]`
+- ignored `grid`: structure: egui layout is done by the component
+- ignored `text-left`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `*:[svg]:row-span-2`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[svg]:translate-y-0.5`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[svg]:text-current`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[svg:not([class*='size-'])]:size-4`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `group/alert`: browser behaviour the component handles itself
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+
+## `cn-alert-variant-destructive`
+
+- ignored `*:data-[slot=alert-description]:text-destructive/90`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[svg]:text-current`: `*:` styles direct child elements the crate does not draw as elements
+
+## `cn-alert-title`
+
+- **unsupported** `group-has-[>svg]/alert:col-start-2`: variant `group-has-[>svg]/alert`
+- **unsupported** `[&_a]:underline`: variant `[&_a]`
+- **unsupported** `[&_a]:underline-offset-3`: variant `[&_a]`
+- **unsupported** `[&_a]:hover:text-foreground`: variant `[&_a]`
+
+## `cn-alert-description`
+
+- **unsupported** `md:text-pretty`: text-* value
+- **unsupported** `[&_p:not(:last-child)]:mb-4`: variant `[&_p:not(:last-child)]`
+- **unsupported** `[&_a]:underline`: variant `[&_a]`
+- **unsupported** `[&_a]:underline-offset-3`: variant `[&_a]`
+- **unsupported** `[&_a]:hover:text-foreground`: variant `[&_a]`
+- ignored `text-balance`: egui has no balanced wrapping
+
+## `cn-alert-action`
+
+- ignored `absolute`: structure: egui layout is done by the component
+
+## `cn-avatar`
+
+- **unsupported** `data-[size=lg]:size-10`: variant `data-[size=lg]`
+- **unsupported** `after:mix-blend-darken`: no translation rule
+- **unsupported** `dark:after:mix-blend-lighten`: no translation rule
+- ignored `group/avatar`: browser behaviour the component handles itself
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `after:absolute`: structure: egui layout is done by the component
+
+## `cn-avatar-image`
+
+- **unsupported** `aspect-square`: no translation rule
+- **unsupported** `size-full`: spacing value
+- **unsupported** `object-cover`: no translation rule
+
+## `cn-avatar-fallback`
+
+- **unsupported** `size-full`: spacing value
+- **unsupported** `group-data-[size=sm]/avatar:text-xs`: variant `group-data-[size=sm]/avatar`
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+
+## `cn-avatar-badge`
+
+- **unsupported** `bg-blend-color`: bg-* value
+- **unsupported** `group-data-[size=sm]/avatar:size-2`: variant `group-data-[size=sm]/avatar`
+- **unsupported** `group-data-[size=sm]/avatar:[&>svg]:hidden`: variant `group-data-[size=sm]/avatar`
+- **unsupported** `group-data-[size=default]/avatar:size-2.5`: variant `group-data-[size=default]/avatar`
+- **unsupported** `group-data-[size=default]/avatar:[&>svg]:size-2`: variant `group-data-[size=default]/avatar`
+- **unsupported** `group-data-[size=lg]/avatar:size-3`: variant `group-data-[size=lg]/avatar`
+- **unsupported** `group-data-[size=lg]/avatar:[&>svg]:size-2`: variant `group-data-[size=lg]/avatar`
+- ignored `absolute`: structure: egui layout is done by the component
+- ignored `z-10`: browser behaviour the component handles itself
+- ignored `inline-flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+
+## `cn-avatar-group`
+
+- **unsupported** `-space-x-2`: no translation rule
+- ignored `group/avatar-group`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `*:data-[slot=avatar]:ring-2`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:data-[slot=avatar]:ring-background`: `*:` styles direct child elements the crate does not draw as elements
+
+## `cn-avatar-group-count`
+
+- **unsupported** `group-has-data-[size=lg]/avatar-group:size-10`: variant `group-has-data-[size=lg]/avatar-group`
+- **unsupported** `group-has-data-[size=sm]/avatar-group:size-6`: variant `group-has-data-[size=sm]/avatar-group`
+- **unsupported** `group-has-data-[size=lg]/avatar-group:[&>svg]:size-5`: variant `group-has-data-[size=lg]/avatar-group`
+- **unsupported** `group-has-data-[size=sm]/avatar-group:[&>svg]:size-3`: variant `group-has-data-[size=sm]/avatar-group`
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+
+## `cn-button-group`
+
+- **unsupported** `has-[>[data-slot=button-group]]:gap-2`: variant `has-[>[data-slot=button-group]]`
+- **unsupported** `has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-2xl`: variant `has-[select[aria-hidden=true]:last-child]`
+- **unsupported** `has-[>[data-variant=outline]]:[&>input]:border-border`: variant `has-[>[data-variant=outline]]`
+- **unsupported** `has-[>[data-variant=outline]]:[&>input:focus-visible]:border-ring`: variant `has-[>[data-variant=outline]]`
+- **unsupported** `has-[>[data-variant=outline]]:*:data-[slot=input-group]:border-border`: variant `has-[>[data-variant=outline]]`
+- **unsupported** `has-[>[data-variant=outline]]:[&>[data-slot=input-group]:has(:focus-visible)]:border-ring`: variant `has-[>[data-variant=outline]]`
+- **unsupported** `has-[>[data-variant=outline]]:*:data-[slot=select-trigger]:border-border`: variant `has-[>[data-variant=outline]]`
+- **unsupported** `has-[>[data-variant=outline]]:[&>[data-slot=select-trigger]:focus-visible]:border-ring`: variant `has-[>[data-variant=outline]]`
+- **unsupported** `[&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit`: variant `[&>[data-slot=select-trigger]:not([class*='w-'])]`
+- **unsupported** `[&>input]:flex-1`: variant `[&>input]`
+- ignored `group/button-group`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `w-fit`: the component's default sizing
+- ignored `items-stretch`: structure: egui layout is done by the component
+- ignored `*:focus-visible:relative`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:focus-visible:z-10`: `*:` styles direct child elements the crate does not draw as elements
+
+## `cn-button-group-orientation-horizontal`
+
+- **unsupported** `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-r-2xl!`: variant `[&>[data-slot]:not(:has(~[data-slot]))]`
+- **unsupported** `[&>*:not(:first-child)]:rounded-l-none`: variant `[&>*:not(:first-child)]`
+- **unsupported** `[&>*:not(:first-child)]:border-l-0`: variant `[&>*:not(:first-child)]`
+- **unsupported** `[&>*:not(:last-child)]:rounded-r-none`: variant `[&>*:not(:last-child)]`
+
+## `cn-button-group-orientation-vertical`
+
+- **unsupported** `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-b-2xl!`: variant `[&>[data-slot]:not(:has(~[data-slot]))]`
+- **unsupported** `[&>*:not(:first-child)]:rounded-t-none`: variant `[&>*:not(:first-child)]`
+- **unsupported** `[&>*:not(:first-child)]:border-t-0`: variant `[&>*:not(:first-child)]`
+- **unsupported** `[&>*:not(:last-child)]:rounded-b-none`: variant `[&>*:not(:last-child)]`
+- ignored `flex-col`: structure: egui layout is done by the component
+
+## `cn-button-group-separator`
+
+- **unsupported** `data-vertical:h-auto`: spacing value
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `self-stretch`: structure: egui layout is done by the component
+- ignored `data-horizontal:w-auto`: size or alignment relative to the parent; egui layout is done by the component
+
+## `cn-button-group-text`
+
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
+
+## `cn-textarea`
+
+- **unsupported** `resize-none`: no translation rule
+- **unsupported** `field-sizing-content`: no translation rule
+- ignored `transition-[color,box-shadow]`: animation or transition; out of scope (spec §4.4)
+- ignored `duration-200`: animation or transition; out of scope (spec §4.4)
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
+
+## `cn-hover-card-content`
+
+- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
+- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
+- ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
+- ignored `data-[side=bottom]:slide-in-from-top-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
+- ignored `data-[side=left]:slide-in-from-right-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
+- ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
+- ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
+- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
+- ignored `z-50`: browser behaviour the component handles itself
+- ignored `origin-(--bits-link-preview-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
+
+## `cn-alert-dialog-overlay`
+
+- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
+- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
+- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
+- ignored `fixed`: structure: egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
+
+## `cn-alert-dialog-content`
+
+- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
+- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
+- ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
+- ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
+- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
+- ignored `group/alert-dialog-content`: browser behaviour the component handles itself
+- ignored `fixed`: structure: egui layout is done by the component
+- ignored `top-1/2`: dialog centring: egui centres the dialog window
+- ignored `left-1/2`: dialog centring: egui centres the dialog window
+- ignored `z-50`: browser behaviour the component handles itself
+- ignored `grid`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `-translate-x-1/2`: dialog centring: egui centres the dialog window
+- ignored `-translate-y-1/2`: dialog centring: egui centres the dialog window
+
+## `cn-alert-dialog-header`
+
+- **unsupported** `place-items-center`: no translation rule
+- **unsupported** `has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr]`: variant `has-data-[slot=alert-dialog-media]`
+- **unsupported** `has-data-[slot=alert-dialog-media]:gap-x-6`: variant `has-data-[slot=alert-dialog-media]`
+- **unsupported** `sm:group-data-[size=default]/alert-dialog-content:place-items-start`: variant `group-data-[size=default]/alert-dialog-content`
+- **unsupported** `sm:group-data-[size=default]/alert-dialog-content:text-left`: variant `group-data-[size=default]/alert-dialog-content`
+- **unsupported** `sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]`: variant `group-data-[size=default]/alert-dialog-content`
+- ignored `grid`: structure: egui layout is done by the component
+- ignored `grid-rows-[auto_1fr]`: structure: egui layout is done by the component
+- ignored `text-center`: size or alignment relative to the parent; egui layout is done by the component
+
+## `cn-alert-dialog-media`
+
+- **unsupported** `sm:group-data-[size=default]/alert-dialog-content:row-span-2`: variant `group-data-[size=default]/alert-dialog-content`
+- ignored `inline-flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `*:[svg:not([class*='size-'])]:size-8`: `*:` styles direct child elements the crate does not draw as elements
+
+## `cn-alert-dialog-title`
+
+- **unsupported** `sm:group-data-[size=default]/alert-dialog-content:group-has-data-[slot=alert-dialog-media]/alert-dialog-content:col-start-2`: variant `group-data-[size=default]/alert-dialog-content`
+
+## `cn-alert-dialog-description`
+
+- **unsupported** `md:text-pretty`: text-* value
+- ignored `*:[a]:hover:text-foreground`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `text-balance`: egui has no balanced wrapping
+- ignored `*:[a]:underline`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[a]:underline-offset-3`: `*:` styles direct child elements the crate does not draw as elements
+
+## `cn-alert-dialog-footer`
+
+- **unsupported** `group-data-[size=sm]/alert-dialog-content:grid`: variant `group-data-[size=sm]/alert-dialog-content`
+- **unsupported** `group-data-[size=sm]/alert-dialog-content:grid-cols-2`: variant `group-data-[size=sm]/alert-dialog-content`
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `flex-col-reverse`: structure: egui layout is done by the component
+- ignored `sm:flex-row`: structure: egui layout is done by the component
+- ignored `sm:justify-end`: structure: egui layout is done by the component
+
+## `cn-pagination`
+
+- **unsupported** `mx-auto`: spacing value
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+
+## `cn-pagination-content`
+
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+
+## `cn-pagination-previous-text`
+
+- **unsupported** `hidden`: no translation rule
+- ignored `sm:block`: structure: egui layout is done by the component
+
+## `cn-pagination-next-text`
+
+- **unsupported** `hidden`: no translation rule
+- ignored `sm:block`: structure: egui layout is done by the component
+
+## `cn-pagination-ellipsis`
+
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
 

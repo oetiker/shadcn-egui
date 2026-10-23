@@ -13,6 +13,10 @@ pub enum U {
     After(Vec<(Field, Value)>),
     UseVar(Vec<Field>, String),
     VarDef(String, f32),
+    /// A display utility that shows the element (`block`, `flex`): with a
+    /// `hidden` class on the part it sets `hidden` false, else it is
+    /// structure and ignored with the reason.
+    Show(&'static str),
     /// `text-current`: the fields inherit. tailwind-merge drops an earlier
     /// class of the same fields and modifiers, so this clears them; the
     /// class itself is reported as ignored with the reason.
@@ -23,20 +27,22 @@ pub enum U {
 
 const LAYOUT: &str =
     "size or alignment relative to the parent; egui layout is done by the component";
-const ANIM: &str = "animation or transition; out of scope (spec §4.4)";
 const STRUCTURE: &str = "structure: egui layout is done by the component";
 const BROWSER: &str = "browser behaviour the component handles itself";
 /// Also the reason of the `[&_svg]` variant in `variant.rs`.
 pub const SVG_CHILD: &str =
     "svg child behaviour (pointer events, shrink); the crate paints icons itself";
+/// `[&>svg]:text-current`: what the icon gets anyway.
+const ICON_COLOUR: &str =
+    "the icon takes the part's text colour (`currentColor`), as the crate paints it";
 const DEFAULT_SIZE: &str = "the component's default sizing";
-const ANCHOR: &str = "bits-ui anchor variable: placement computed by egui";
+const ANCHOR: &str = "bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)";
+/// D-100 (a).
+const FONT_SANS: &str = "sets the theme's sans font, which crate text uses already (D-100)";
+const DEAD_BLEND: &str = "`background-blend-mode` without a background image: the browser paints the plain colour (dead rule, conformance 2.8)";
 const CENTRE: &str = "dialog centring: egui centres the dialog window";
 
 const IGNORE_EXACT: &[(&str, &str)] = &[
-    ("flex", STRUCTURE),
-    ("inline-flex", STRUCTURE),
-    ("grid", STRUCTURE),
     ("flex-col", STRUCTURE),
     ("flex-1", STRUCTURE),
     ("shrink-0", STRUCTURE),
@@ -45,23 +51,20 @@ const IGNORE_EXACT: &[(&str, &str)] = &[
     ("isolate", BROWSER),
     ("w-full", LAYOUT),
     ("h-full", LAYOUT),
+    ("size-full", LAYOUT),
     ("w-auto", LAYOUT),
-    ("block", STRUCTURE),
+    ("h-auto", LAYOUT),
+    ("mx-auto", LAYOUT),
+    ("font-sans", FONT_SANS),
+    ("bg-blend-color", DEAD_BLEND),
     ("text-left", LAYOUT),
     ("text-center", LAYOUT),
     ("select-none", BROWSER),
     ("pointer-events-none", BROWSER),
-    ("animate-in", ANIM),
-    ("animate-out", ANIM),
     (
         "rotate-45",
         "the tooltip arrow is painted as a rotated square by the component",
     ),
-    (
-        "translate-y-[calc(-50%-2px)]",
-        "tooltip arrow placement is component geometry",
-    ),
-    ("text-balance", "egui has no balanced wrapping"),
     ("fixed", STRUCTURE),
     ("flex-col-reverse", STRUCTURE),
     ("flex-row", STRUCTURE),
@@ -73,17 +76,12 @@ const IGNORE_EXACT: &[(&str, &str)] = &[
     ("h-fit", DEFAULT_SIZE),
     ("top-1/2", CENTRE),
     ("left-1/2", CENTRE),
-    ("-translate-x-1/2", CENTRE),
-    ("-translate-y-1/2", CENTRE),
 ];
+/// Display utilities that show the element ([`U::Show`]).
+const SHOW: &[&str] = &["block", "flex", "inline-flex", "grid"];
 /// Why `text-current` sets nothing: the reason [`U::Inherit`] reports.
 const INHERIT_TEXT: &str = "inherits the parent's text colour: the recipe leaves `text` empty";
 const IGNORE_PREFIX: &[(&str, &str)] = &[
-    ("transition", ANIM),
-    ("duration-", ANIM),
-    ("fade-", ANIM),
-    ("zoom-", ANIM),
-    ("slide-in-from-", ANIM),
     ("z-", BROWSER),
     ("scroll-my-", BROWSER),
     (
@@ -94,6 +92,7 @@ const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("justify-", STRUCTURE),
     ("self-", STRUCTURE),
     ("place-content-", STRUCTURE),
+    ("place-items-", STRUCTURE),
     ("col-", STRUCTURE),
     ("row-", STRUCTURE),
     ("grid-cols-", STRUCTURE),
@@ -205,14 +204,20 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             if let Some(v) = u.strip_prefix("size-").and_then(spacing) {
                 return px(&[IconSize], v);
             }
-            let ignored = IGNORE_EXACT.iter().any(|(k, _)| *k == u)
-                || u == "text-current"
-                || IGNORE_PREFIX.iter().any(|(k, _)| u.starts_with(k));
-            return if ignored {
-                U::Ignore(SVG_CHILD)
-            } else {
-                U::Unsupported("svg child utility other than size-*")
-            };
+            if let Some(v) = u.strip_prefix("translate-y-").and_then(spacing) {
+                return U::Set(vec![(IconShiftY, Value::Shift(ShiftV::Px(v)))]);
+            }
+            if u == "text-current" {
+                return U::Ignore(ICON_COLOUR);
+            }
+            if let Some((_, why)) = IGNORE_EXACT
+                .iter()
+                .chain(IGNORE_PREFIX)
+                .find(|(k, _)| *k == u || (u.starts_with(k) && k.ends_with('-')))
+            {
+                return U::Ignore(if *why == STRUCTURE { why } else { SVG_CHILD });
+            }
+            return U::Unsupported("svg child utility other than size-* and translate-y-*");
         }
         Some(Pseudo::After) => {
             // `after:-inset-*` grows the hit area (checkbox, switch, slider thumb).
@@ -240,6 +245,24 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     }
     if let Some((_, why)) = IGNORE_EXACT.iter().find(|(k, _)| *k == u) {
         return U::Ignore(why);
+    }
+    if SHOW.contains(&u) {
+        return U::Show(STRUCTURE);
+    }
+    if let Some(m) = motion(u) {
+        return m;
+    }
+    match u {
+        "hidden" => return U::Set(vec![(Hidden, Value::Bool(true))]),
+        "aspect-square" => return U::Set(vec![(AspectRatio, Value::Factor(1.0))]),
+        "object-cover" => return U::Set(vec![(ObjectCover, Value::Bool(true))]),
+        "field-sizing-content" => return U::Set(vec![(FieldSizingContent, Value::Bool(true))]),
+        "resize-none" => return U::Set(vec![(Resizable, Value::Bool(false))]),
+        "text-balance" => return U::Set(vec![(TextWrap, Value::TextWrap("Balance"))]),
+        "text-pretty" => return U::Set(vec![(TextWrap, Value::TextWrap("Pretty"))]),
+        "mix-blend-darken" => return U::Set(vec![(Blend, Value::Blend("Darken"))]),
+        "mix-blend-lighten" => return U::Set(vec![(Blend, Value::Blend("Lighten"))]),
+        _ => {}
     }
     if u == "text-current" {
         return U::Inherit(vec![Text], INHERIT_TEXT);
@@ -289,7 +312,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         ("mb-", &[MarginBottom]),
         ("ml-", &[MarginLeft]),
         ("m-", &[MarginTop, MarginRight, MarginBottom, MarginLeft]),
+        ("gap-x-", &[GapX]),
         ("gap-", &[Gap]),
+        ("space-x-", &[SpaceX]),
         ("inset-x-", &[InsetLeft, InsetRight]),
         ("inset-y-", &[InsetTop, InsetBottom]),
         ("inset-", &[InsetTop, InsetRight, InsetBottom, InsetLeft]),
@@ -312,6 +337,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             "lg" => px(&[MaxWidth], 512.0),
             "xl" => px(&[MaxWidth], 576.0),
             "2xl" => px(&[MaxWidth], 672.0),
+            _ if spacing(v).is_some() => spaced(&[MaxWidth], v, 1.0),
             _ => match v
                 .strip_prefix("[calc(100%-")
                 .and_then(|r| r.strip_suffix(")]"))
@@ -386,6 +412,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         "border" => return px(&[BorderWidth], 1.0),
         "border-none" => return px(&[BorderWidth], 0.0),
         "border-t" => return px(&[BorderTopWidth], 1.0),
+        "border-l" => return px(&[BorderLeftWidth], 1.0),
         "ring" => return px(&[RingWidth], 1.0),
         "outline" => return px(&[OutlineWidth], 1.0),
         _ => {}
@@ -393,6 +420,8 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     for (prefix, field) in [
         ("rounded-t-", RadiusTop),
         ("rounded-b-", RadiusBottom),
+        ("rounded-l-", RadiusLeft),
+        ("rounded-r-", RadiusRight),
         ("rounded-", Radius),
     ] {
         if let Some(v) = u.strip_prefix(prefix) {
@@ -422,6 +451,11 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     if let Some(v) = u.strip_prefix("border-") {
         if let Ok(n) = v.parse::<f32>() {
             return px(&[BorderWidth], n);
+        }
+        for (side, field) in [("t-", BorderTopWidth), ("l-", BorderLeftWidth)] {
+            if let Some(n) = v.strip_prefix(side).and_then(|n| n.parse::<f32>().ok()) {
+                return px(&[field], n);
+            }
         }
         if v.starts_with("b-")
             || v.starts_with("l-")
@@ -490,12 +524,8 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     }
     for (prefix, field) in [("translate-x-", ShiftX), ("translate-y-", ShiftY)] {
         if let Some(v) = body.strip_prefix(prefix) {
-            if let Some(n) = v
-                .strip_prefix("[calc(100%-")
-                .and_then(|r| r.strip_suffix(")]"))
-                .and_then(length)
-            {
-                return U::Set(vec![(field, Value::Shift(ShiftV::SelfMinus(n)))]);
+            if let Some((f, n)) = calc(v) {
+                return U::Set(vec![(field, Value::Shift(ShiftV::Calc(f * sign, n * sign)))]);
             }
             return spacing(v).map_or(U::Unsupported("translate value"), |n| {
                 U::Set(vec![(field, Value::Shift(ShiftV::Px(n * sign)))])
@@ -516,6 +546,91 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     U::Unsupported("no translation rule")
 }
 
+/// A translate value as a share of the part's own size plus pixels:
+/// `1/2`, `full`, `[calc(100%-2px)]`, `[calc(-50%+1px)]`.
+fn calc(v: &str) -> Option<(f32, f32)> {
+    match v {
+        "full" => return Some((1.0, 0.0)),
+        "1/2" => return Some((0.5, 0.0)),
+        _ => {}
+    }
+    let inner = v.strip_prefix("[calc(")?.strip_suffix(")]")?;
+    let (pct, rest) = inner.split_once('%')?;
+    let f = pct.parse::<f32>().ok()? / 100.0;
+    let n = match rest.as_bytes().first()? {
+        b'+' => length(&rest[1..])?,
+        b'-' => -length(&rest[1..])?,
+        _ => return None,
+    };
+    Some((f, n))
+}
+
+/// Motion classes (D-88, axiom 8: a value a class gives is a look):
+/// tw-animate-css enter and exit (`animate-in`, `fade-in-0`, `zoom-in-95`,
+/// `slide-in-from-top-2`), `duration-*` (seconds, also the animation's
+/// duration) and `transition-*` (the properties that animate).
+fn motion(u: &str) -> Option<U> {
+    use Field::*;
+    let set = |f: Field, v: Value| Some(U::Set(vec![(f, v)]));
+    match u {
+        "animate-in" => return set(AnimateIn, Value::Bool(true)),
+        "animate-out" => return set(AnimateOut, Value::Bool(true)),
+        "fade-in" => return set(EnterOpacity, Value::Factor(0.0)),
+        "fade-out" => return set(ExitOpacity, Value::Factor(0.0)),
+        _ => {}
+    }
+    let pct = |v: &str| v.parse::<f32>().ok().map(|n| n / 100.0);
+    if let Some(v) = u.strip_prefix("fade-in-") {
+        return Some(pct(v).map_or(U::Unsupported("fade value"), |n| U::Set(vec![(EnterOpacity, Value::Factor(n))])));
+    }
+    if let Some(v) = u.strip_prefix("fade-out-") {
+        return Some(pct(v).map_or(U::Unsupported("fade value"), |n| U::Set(vec![(ExitOpacity, Value::Factor(n))])));
+    }
+    if let Some(v) = u.strip_prefix("zoom-in-") {
+        return Some(pct(v).map_or(U::Unsupported("zoom value"), |n| U::Set(vec![(EnterScale, Value::Factor(n))])));
+    }
+    if let Some(v) = u.strip_prefix("zoom-out-") {
+        return Some(pct(v).map_or(U::Unsupported("zoom value"), |n| U::Set(vec![(ExitScale, Value::Factor(n))])));
+    }
+    if let Some(rest) = u.strip_prefix("slide-in-from-") {
+        // The panel starts that far off towards the named side.
+        for (side, field, sign) in [
+            ("top-", EnterY, -1.0),
+            ("bottom-", EnterY, 1.0),
+            ("left-", EnterX, -1.0),
+            ("right-", EnterX, 1.0),
+        ] {
+            if let Some(v) = rest.strip_prefix(side) {
+                return Some(spacing(v).map_or(U::Unsupported("slide value"), |n| {
+                    U::Set(vec![(field, Value::Px(n * sign))])
+                }));
+            }
+        }
+        return Some(U::Unsupported("slide side"));
+    }
+    if let Some(v) = u.strip_prefix("duration-") {
+        return Some(v.parse::<f32>().map_or(U::Unsupported("duration value"), |ms| {
+            U::Set(vec![(Duration, Value::Factor(ms / 1000.0))])
+        }));
+    }
+    let props: Option<&'static [&'static str]> = match u {
+        "transition" => Some(&["COLORS", "OPACITY", "SHADOW", "TRANSFORM", "FILTER"]),
+        "transition-all" => Some(&["ALL"]),
+        "transition-colors" => Some(&["COLORS"]),
+        "transition-opacity" => Some(&["OPACITY"]),
+        "transition-shadow" => Some(&["SHADOW"]),
+        "transition-transform" => Some(&["TRANSFORM"]),
+        "transition-none" => Some(&[]),
+        "transition-[color,box-shadow]" => Some(&["COLOR", "SHADOW"]),
+        "transition-[color,box-shadow,background-color]" => {
+            Some(&["COLOR", "SHADOW", "BACKGROUND"])
+        }
+        _ if u.starts_with("transition") => return Some(U::Unsupported("transition value")),
+        _ => None,
+    };
+    props.map(|p| U::Set(vec![(Transition, Value::Transition(p))]))
+}
+
 fn leading_factor(v: &str) -> Option<f32> {
     Some(match v {
         "none" => 1.0,
@@ -532,6 +647,7 @@ fn radius(v: &str) -> Option<RadiusV> {
     let rung = |s: &str| -> Option<&'static str> {
         Some(match s {
             "none" => "None",
+            "xs" => "Xs",
             "sm" => "Sm",
             "md" => "Md",
             "lg" => "Lg",
