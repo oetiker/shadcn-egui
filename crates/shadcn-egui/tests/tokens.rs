@@ -52,6 +52,11 @@ fn scanner_catches_literals() {
         violations("let f = FontId::proportional(t.metrics.text_xs);").len(),
         0
     );
+    // Unit tests compare against literal colours by design.
+    let tests =
+        "let c = t.fg;\n#[cfg(test)]\nmod tests {\n    const C: Color32 = Color32::WHITE;\n}\n";
+    assert_eq!(violations(non_test_code(tests)).len(), 0);
+    assert_eq!(violations(tests).len(), 1);
 }
 
 #[test]
@@ -66,7 +71,7 @@ fn components_use_theme_tokens() {
     let mut found = Vec::new();
     for f in files {
         let src = std::fs::read_to_string(&f).expect("readable source");
-        for v in violations(&src) {
+        for v in violations(non_test_code(&src)) {
             found.push(format!("{}:{v}", f.display()));
         }
     }
@@ -108,7 +113,7 @@ fn strict_violations(source: &str) -> Vec<String> {
             .nth(1)
             .is_some_and(|r| !r.trim().is_empty());
         let stale_quote = comment.contains("// base:");
-        let role = code.contains("Role::");
+        let role = palette_role(code);
         let shadow = code.contains("Shadow {");
         let alpha = [
             "gamma_multiply(",
@@ -135,6 +140,34 @@ fn strict_violations(source: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Whether `code` names a palette role (`Role::Foreground`): a variant of
+/// the style's `Role`, not an accesskit role (`accesskit::Role::Alert`, or
+/// `Role::Button` where accesskit's `Role` is imported).
+fn palette_role(code: &str) -> bool {
+    static VARIANTS: std::sync::LazyLock<Vec<String>> = std::sync::LazyLock::new(|| {
+        let src =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/style/recipe.rs"))
+                .expect("recipe.rs readable");
+        let body = src
+            .split_once("pub enum Role {")
+            .and_then(|(_, rest)| rest.split_once('}'))
+            .expect("recipe.rs defines `enum Role`")
+            .0;
+        body.lines()
+            .map(|l| l.trim().trim_end_matches(','))
+            .filter(|l| l.starts_with(char::is_uppercase))
+            .map(str::to_owned)
+            .collect()
+    });
+    code.match_indices("Role::").any(|(at, m)| {
+        let variant: String = code[at + m.len()..]
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+        !code[..at].ends_with("accesskit::") && VARIANTS.contains(&variant)
+    })
 }
 
 /// A line split into its code, with string and char literals blanked and
@@ -348,6 +381,11 @@ fn strict_scanner_catches_literals() {
         0
     );
     assert_eq!(n("let fg = t.role(Role::Foreground);"), 1);
+    assert_eq!(n("let p = Paint::Role(Role::Ring, 0.5);"), 1);
+    // Accesskit roles are semantics, not looks.
+    assert_eq!(n("node.set_role(accesskit::Role::Alert);"), 0);
+    assert_eq!(n("node.set_role(egui::accesskit::Role::Dialog);"), 0);
+    assert_eq!(n("node.set_role(Role::Button);"), 0);
     assert_eq!(
         n("let fg = t.role(Role::Foreground); // behaviour-ok: inherits Foreground"),
         0
