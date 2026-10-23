@@ -338,6 +338,13 @@ call rule). Return types are unchanged. A call that draws its own
 trigger is the mode constructor `X::from_trigger(impl IntoAtoms)` and
 returns `InnerResponse<Option<R>>`, as `menu_button`.
 
+Consequence (rules, 2026-10-23, fix 6): `X::from_trigger(impl
+IntoAtoms)` is renamed `X::button(impl IntoAtoms)`, as egui's
+`MenuButton::new(atoms)`: `from_*` reads as another input form, and
+egui's `Popup::from_response(&resp)` is what `X::new(&resp)` mirrors
+(P10, P2). Its return stays `InnerResponse<Option<R>>`, as
+`menu_button`.
+
 ### D-10 · Return type of value shortcuts
 
 - **Case:** `checkbox` and `toggle` return `Response`; `select` and
@@ -438,6 +445,12 @@ cell, as `TextEdit`'s cursor). The component reports its id through its
 `Context::check_for_id_clash`, as `ScrollArea` does: two components of
 one kind in one `Ui` share their state, and debug builds show egui's
 id-clash warning at both until the caller sets `.id_salt`.
+
+Consequence (rules, 2026-10-23, fix 6): A constructor id is `id_salt:
+impl Hash` also where the egui counterpart takes an `Id` (`Modal::new`,
+`Area::new`); egui itself is inconsistent (`ComboBox::from_id_salt`
+takes a salt), so this is a P3 pick, stated as one. The toaster no
+longer takes an id: one toaster per app on a fixed global id (D-123).
 
 ### D-13 · What an in-flow container's `show` returns
 
@@ -667,6 +680,12 @@ type named by this rule (`CardTitle`, `CardFooter`), placed with
 `ui.add(..)` or `.show(ui, ..)`, and the part fn (`card_title`,
 `card_footer`) is its shortcut, which does exactly what one builder call
 does (axiom 4).
+
+Consequence (rules, 2026-10-23, fix 6): A part several components share
+takes the crate's shared word (axiom 2, third tier), not a component
+prefix: `MenuItem` and `MenuSeparator` (`menu_separator`) serve dropdown
+menu, context menu and menubar. The rules state this once, beside the
+prefix rule (Names).
 
 ## Selection
 
@@ -914,6 +933,14 @@ control. Every
 choice shortcut takes the label as egui's does: `checkbox(ui, &mut b,
 text)`, `switch(ui, &mut b, text)`, `radio_value(ui, &mut v, x, text)`.
 
+Consequence (rules, 2026-10-23, fix 6): The own label is `.label(impl
+IntoAtoms)`, replacing `impl Into<WidgetText>` of 2026-10-20: `checkbox`
+takes egui's name, so it takes egui's shape, and egui's `Checkbox` and
+`Ui::checkbox` take atoms (axiom 2, P2). The text atom wraps in the
+width beside the control, and every other atom is honoured (axiom 6);
+conformance 4.5 says so. One shape for every choice control's label
+(axiom 7): switch and radio item take atoms too.
+
 ### D-29 · Index base
 
 - **Case:** pagination counts pages from 1 (bits-ui, matches the label);
@@ -1123,6 +1150,11 @@ memory value of the caller's type is bound by `Clone + Send + Sync +
 'static` again, with no serde. This replaces the `SerializableAny`
 bound of the previous consequence.
 
+Consequence (rules, 2026-10-23, fix 6): The questionnaire's answers type
+is `QuestionnaireAnswers`, not `QuestionnaireState`: the suffix `State`
+names only a memory-state type (D-33), so the caller's own value type
+takes another name.
+
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
 - **Case:** app code may need to query or set memory-owned state
@@ -1195,6 +1227,14 @@ Consequence (rules, 2026-10-23, fix 5): With persistence gone (D-35), `XState`
 serves code that reads or changes the state at run time only; an app
 that keeps a state across restarts saves and restores it through the
 binding.
+
+Consequence (rules, 2026-10-23, fix 6): `XState` has `CollapsingState`'s
+members; where it differs from egui the rules name the difference as a
+P3 pick, not as mirroring: an overlay on a caller's trigger loads by the
+drawn trigger (`PopoverState::load(ctx, &trigger)`, egui's `load` takes
+an `Id`), and `store` requests a repaint (egui's does not), so
+`toggle()` takes no `Ui` (egui's takes `&Ui`). No type other than a
+memory-state type ends in `State` (D-32).
 
 ### D-34 · Initial value of memory-owned state
 
@@ -1449,6 +1489,12 @@ no `.close_delay`; hover-card has both (`openDelay`, `closeDelay`);
 navigation-menu has `.open_delay` for `delayDuration`, and its
 `skipDelayDuration` waits for the family PR.
 
+Consequence (rules, 2026-10-23, fix 6): Navigation-menu's
+`skipDelayDuration` is a setter, `.skip_delay(f32)`, as an upstream prop
+(axiom 1), named as the other delays. The tooltip root has no such prop;
+its provider's `skipDelayDuration` becomes the tooltip's default under
+the Provider rule, with no tooltip setter.
+
 ### D-41 · Dismissal configuration
 
 - **Case:** Only drawer sketched dismissal setters (`dismissible`, `modal`);
@@ -1700,6 +1746,13 @@ Consequence (rules, 2026-10-23, fix 5): Container parts are builders with a
 shortcut (D-20); the part fn of this entry is the shortcut and returns
 what the builder's `show` returns.
 
+Consequence (rules, 2026-10-23, fix 6): No part is called beside its
+root (rules, Part): a part lives inside its root as upstream nests it,
+so context flows down (axiom 5). The 2026-10-19 form, the `Tabs` list
+leaf followed by `tabs_content(ui, ..)`, goes. Tabs is a handle (D-55):
+`Tabs::new(&mut tab).show(ui, |t| { t.list(items); t.content(Tab::A,
+|ui| ..); })`, the content part applying the content text size.
+
 ### D-48 · Meaning of `action`, and how a secondary part's `Response` comes back
 
 - **Case:** `action` means a closure (card, alert), an icon button (sidebar
@@ -1876,6 +1929,12 @@ methods do: `tooltip(resp, text)` by value, `context_menu(&resp, ..)`.
 the crate cannot prevent, so the build-ui skill lists such egui
 look-alikes (design, Stage 3).
 
+Consequence (rules, 2026-10-23, fix 6): An icon-only trigger is the
+caller's own trigger,
+`DropdownMenu::new(&ui.add(Button::icon_only(..)))`; there is no
+`X::button` × `icon_only` mode (P1). Icon-only content is a mode on
+every component with text content.
+
 ### D-54 · Content form: text, closure, or both; leaf, container, or both
 
 - **Case:** Tooltip, bubble and alert are sketched with a text form and a
@@ -1893,6 +1952,11 @@ look-alikes (design, Stage 3).
 - **Covers:** CP-T4-11, CP-T5-7, CP-10-9, CP-18-14, CP-03-12, CP-07-6, CP-04-15, CP-12-4
 
 Decision: (a) — as recommended.
+
+Consequence (rules, 2026-10-23, fix 6): Where one type is both a leaf
+and a container, `new` takes the same required arguments in both forms;
+the closure form adds the caller's content with `.show(ui, |ui| ..)`.
+Tabs leaves this entry's list (D-47: a handle).
 
 ### D-55 · How non-selection collections get their items
 
@@ -1936,6 +2000,17 @@ Consequence (rules, 2026-10-23, fix 5): The handle stands in for the `Ui`: a par
 goes into it as into a `Ui` (`h.add(BreadcrumbLink::new(..))`,
 `AccordionItem::new(..).show(h, |ui| ..)`), and each handle method is
 that part's shortcut (axiom 4).
+
+Consequence (rules, 2026-10-23, fix 6): The criterion is sharpened
+(axiom 4): where upstream lets the caller arrange the parts, the root is
+a handle if it holds state about those parts (which is open or active,
+values across slots, roving focus), else a container. Tabs becomes a
+handle (D-47); breadcrumb, which holds no such state, becomes a
+container with parts (D-121). The handle derefs to the `Ui` it wraps, so
+parts go in as into any `Ui` (`h.add(XPart::new(..))`,
+`XPart::new(..).show(h, |ui| ..)`); the handle's methods are its parts'
+only shortcuts, and a handle part has no free `x_part(ui, ..)`. This
+replaces fix 5's `h.add(BreadcrumbLink::new(..))` example.
 
 ### D-56 · A crate widget restyled by its parent
 
@@ -2066,6 +2141,11 @@ becomes a `Response` query where egui has one (`changed()`,
 handle (D-55), input-otp's root returns its output from `show(ui, |otp|
 ..)`. The modal output is D-31's.
 
+Consequence (rules, 2026-10-23, fix 6): A handle or container whose
+upstream root has an event returns `XOutput` as a leaf does, with
+`response`, `inner` from the closure and the event fields:
+`InputOtpOutput { response, inner, completed, .. }` (P1).
+
 ### D-61 · Container method name
 
 - **Case:** egui names the container method `show`, `show_inside` (`Panel`),
@@ -2090,6 +2170,11 @@ Consequence (rules, 2026-10-23, fix 5): The verb is `show` and its first
 argument the `Ui` for every kind but the leaf, overlays and modals
 included (axiom 4, P3: egui's targets differ between `Popup::show`,
 `Modal::show` and `CollapsingHeader::show`).
+
+Consequence (rules, 2026-10-23, fix 6): A toast places nothing, so its
+builder's terminal call takes the `&Context`:
+`Toast::new(text).show(ctx) -> ToastId`, as egui's `Window::show(ctx)`
+(D-123). The rules state this as the one exception to `show(ui, ..)`.
 
 ### D-62 · Scroll areas: own type, theme only, or helper
 
@@ -2975,6 +3060,12 @@ one builder call and does exactly what it does (axiom 4): every part
 has one, named after the part (D-20). The tooltip and context-menu
 shortcuts take the trigger in place of the `Ui` (D-53).
 
+Consequence (rules, 2026-10-23, fix 6): `toast(ctx, text)` is the
+shortcut of `Toast::new(text).show(ctx)`, no longer the only call
+(D-123). Parts inside a handle have the handle's methods as their only
+shortcuts (D-55), so a part has one shortcut, never a free function and
+a handle method both.
+
 ## Generator and recipes
 
 ### D-91 · `data-open`: a real state, as `OPEN` or `EXPANDED`
@@ -3332,6 +3423,13 @@ Consequence (rules, 2026-10-23, review 2): The demo's
 `navigationMenuTriggerStyle()` on a `Link` is a built-in variant of the
 link, not an app variant (axiom 8). The root is a handle (D-55).
 
+Consequence (rules, 2026-10-23, fix 6): The optional binding of the open
+item is upstream's `.value` (axiom 2: egui's name only for a one-to-one
+counterpart), `&mut Option<V>`. `skipDelayDuration` is `.skip_delay`
+(D-40). The Indicator is an upstream part shadcn exports and styles, so
+it is a part the caller places (rules, Part); sub-choice (ii) "skip the
+Indicator" no longer applies.
+
 ### D-107 · `sidebar`: very large
 
 - **Case:** eight palette roles (D-101), ~25 variants, ~15 parts; needs
@@ -3552,6 +3650,11 @@ in the rules.
 Consequence (rules, 2026-10-22, after v4 review): `.step(0.0)` is one of
 the host setters the rules list (Conventions, Enums and flags).
 
+Consequence (rules, 2026-10-23, fix 6): `.step(0.0)` leaves the rules'
+host-setter list: `step` is an upstream prop, so it is no host setter,
+and its continuous `0.0` spelling is this entry's, as the 2026-10-21
+consequence recorded.
+
 ### D-113 · F5 text entry (input, textarea, input-otp, input-group)
 
 - **Case:** Choices that touch only input, textarea, input-otp and input-group.
@@ -3603,6 +3706,12 @@ Consequence (rules, 2026-10-23, review 2): Input-otp is a handle (D-55),
 so the caller places groups, slots and separators as upstream does;
 `onComplete` is the output's `completed` (D-60). `pattern` keeps the
 default proposal `fn(char) -> bool`.
+
+Consequence (rules, 2026-10-23, fix 6): Input-otp's root returns
+`InputOtpOutput { response, inner, completed, .. }` (D-60). `pattern` is
+decided as `fn(char) -> bool`: a regex needs a dependency (P7), and a
+`fn` pointer borrows nothing (P5); the rules state the idea for every
+predicate prop (Parameter types).
 
 ### D-114 · F6 forms (field, native-select)
 
@@ -3813,6 +3922,12 @@ binding. The default proposal becomes the container
 family PR decides how it takes the trigger. Accordion's binding is
 optional too: `Accordion::new().value(..)` (D-26).
 
+Consequence (rules, 2026-10-23, fix 6): Accordion's optional binding
+keeps upstream's name `.value` (axiom 2), and its type follows the mode:
+`Accordion::new()` binds `&mut Option<V>`, `Accordion::multiple()` binds
+`&mut Vec<V>`, on distinct types (axiom 6, Selection). Tabs is a handle
+with list and content parts (D-47).
+
 ### D-120 · F12 scroll and panes (scroll-area, resizable)
 
 - **Case:** Choices that touch only scroll-area and resizable.
@@ -3873,6 +3988,13 @@ nearest position and stays until the user changes it. The family PR
 decides. Breadcrumb: the root is `Breadcrumb::new().show(ui, |bc| ..)`,
 and the handle's methods are upstream's parts, `bc.link(..)`,
 `bc.page(..)`, `bc.ellipsis()` (rules, Handle).
+
+Consequence (rules, 2026-10-23, fix 6): Breadcrumb holds no state about
+its parts, so it is a container, not a handle (D-55):
+`Breadcrumb::new().show(ui, |ui| { ui.add(BreadcrumbLink::new(..));
+breadcrumb_separator(ui); })`, with part shortcuts `breadcrumb_link`,
+`breadcrumb_page`, `breadcrumb_ellipsis`. This replaces the 2026-10-22
+handle form with `bc.link(..)`.
 
 ### D-122 · F14 data display (table, carousel)
 
@@ -3956,6 +4078,16 @@ becomes `toast(ctx, impl Into<Toast>) -> ToastId` (`toast(ctx, "Saved")`
 or `toast(ctx, Toast::new(text).description(..))`), on the `&Context` as
 egui's app-level calls (P2), so eframe's `App::logic` can raise one. Only
 `Toaster::new().show(ui)` is placed.
+
+Consequence (rules, 2026-10-23, fix 6): A toast is a builder whose
+terminal call is `Toast::new(text).show(ctx) -> ToastId` (axiom 4: a
+free function is only a shortcut), with the shortcut `toast(ctx, text)`;
+it shows on the `&Context` because it places nothing, as egui's
+`Window::show(ctx)`. This replaces the consequence after fix 5
+(`toast(ctx, impl Into<Toast>)`). The toaster is global,
+`Toaster::new()` with no id, one per app (`CP-16-26`); several toasters
+wait for this family's PR (P8), as do updating and dismissing a toast by
+id (`CP-16-28`).
 
 ### D-124 · F16 chat parts (bubble, message, attachment, marker)
 
