@@ -59,7 +59,9 @@ struct Entry {
 #[derive(Default)]
 struct Registry {
     index: HashMap<Key, usize>,
-    entries: Vec<Entry>,
+    /// Each entry with its URI, leaked once: the registry only grows, and
+    /// an atom then borrows its URI instead of building it every frame.
+    entries: Vec<(Entry, &'static str)>,
 }
 
 fn registry() -> &'static Mutex<Registry> {
@@ -68,26 +70,24 @@ fn registry() -> &'static Mutex<Registry> {
 }
 
 /// The URI of `e`, registering it on first use.
-fn register(e: Entry) -> String {
+fn register(e: Entry) -> &'static str {
     let mut r = registry().lock().unwrap_or_else(|e| e.into_inner());
     let k = key(&e);
-    let n = match r.index.get(&k) {
-        Some(&n) => n,
-        None => {
-            let n = r.entries.len();
-            r.entries.push(e);
-            r.index.insert(k, n);
-            n
-        }
-    };
-    format!("{SCHEME}{n}")
+    if let Some(&n) = r.index.get(&k) {
+        return r.entries[n].1;
+    }
+    let n = r.entries.len();
+    let uri: &'static str = format!("{SCHEME}{n}").leak();
+    r.entries.push((e, uri));
+    r.index.insert(k, n);
+    uri
 }
 
 /// The entry a URI of the icon scheme names.
 fn lookup(uri: &str) -> Option<Entry> {
     let n: usize = uri.strip_prefix(SCHEME)?.parse().ok()?;
     let r = registry().lock().unwrap_or_else(|e| e.into_inner());
-    r.entries.get(n).copied()
+    r.entries.get(n).map(|&(e, _)| e)
 }
 
 /// The image of `e`, at its side, tinted with `tint` if given.
@@ -168,14 +168,16 @@ pub(crate) fn install(ctx: &Context) {
     if !ctx.is_loader_installed(LOADER_ID) {
         ctx.add_image_loader(Arc::new(IconLoader::default()));
     }
-    let untinted: Vec<usize> = {
+    let untinted: Vec<&'static str> = {
         let r = registry().lock().unwrap_or_else(|e| e.into_inner());
-        (0..r.entries.len())
-            .filter(|&n| !r.entries[n].tinted)
+        r.entries
+            .iter()
+            .filter(|(e, _)| !e.tinted)
+            .map(|&(_, uri)| uri)
             .collect()
     };
-    for n in untinted {
-        ctx.forget_image(&format!("{SCHEME}{n}"));
+    for uri in untinted {
+        ctx.forget_image(uri);
     }
 }
 
@@ -282,7 +284,7 @@ mod tests {
         let c = register(entry(icons.check, true));
         assert!(a != b && a != c);
         assert_eq!(register(entry(icons.check, false)), a);
-        assert_eq!(lookup(&b), Some(entry(icons.close, false)));
+        assert_eq!(lookup(b), Some(entry(icons.close, false)));
         assert_eq!(lookup("shadcn-icon://x"), None);
         assert_eq!(lookup("file://1"), None);
     }
@@ -299,7 +301,7 @@ mod tests {
         let check = crate::icons::lucide::SLOTS.check;
         let load = |tinted| {
             let Ok(ImagePoll::Ready { image }) =
-                loader.load(&ctx, &register(entry(check, tinted)), hint)
+                loader.load(&ctx, register(entry(check, tinted)), hint)
             else {
                 panic!("icon not loaded")
             };
@@ -339,5 +341,18 @@ mod tests {
             })
             .collect();
         assert_eq!(looks, vec![(red, true), (white, true)]);
+    }
+
+    /// An atom borrows its registered URI: converting one every frame
+    /// builds no string.
+    #[test]
+    fn an_atom_borrows_its_uri() {
+        let icon = crate::icons::lucide::SLOTS.check;
+        // Two conversions share the URI's address only if they borrow it.
+        let uri = |a: IconAtom| match egui::Atom::from(a).kind {
+            egui::AtomKind::Image(i) => i.uri().expect("uri").as_ptr(),
+            _ => panic!("not an image atom"),
+        };
+        assert_eq!(uri(IconAtom::new(icon)), uri(IconAtom::new(icon)));
     }
 }
