@@ -632,6 +632,21 @@ pub fn text_entry_state(theme: &Theme, resp: &Response, context: State) -> State
     state_of(theme, resp, context, true)
 }
 
+/// Reports `make_info` for `resp` as [`Response::widget_info`] does, then
+/// gives the widget an accessible `role` that egui's `WidgetType` lacks
+/// (upstream's `role="alert"`, `alertdialog`, `navigation`, `group`).
+/// `widget_info` sets a role from the `WidgetType`, so the role is set
+/// after it; the name, value and state stay those of `make_info`.
+pub fn widget_info_with_role(
+    resp: &Response,
+    role: egui::accesskit::Role,
+    make_info: impl Fn() -> egui::WidgetInfo,
+) {
+    resp.widget_info(make_info);
+    resp.ctx
+        .accesskit_node_builder(resp.id, |node| node.set_role(role));
+}
+
 fn state_of(theme: &Theme, resp: &Response, context: State, keyboard: bool) -> State {
     let live = resp.enabled() && !context.contains(State::DISABLED);
     let pointer_and_focus = State::HOVER | State::ACTIVE | State::FOCUS | State::FOCUS_VISIBLE;
