@@ -107,3 +107,6 @@ crates.
   adapter). Regenerate baselines by deleting the PNGs a change touches,
   then `UPDATE_SNAPSHOTS=1 cargo test`; kittest ignores changes on
   anti-aliased edges, even with `force`. Look at every changed PNG.
+  The harness adds a strict check (no anti-aliasing allowance, small
+  tolerance) after kittest's; snapshot tests go through it, never through
+  kittest's snapshot functions directly (`clippy.toml` forbids them).
