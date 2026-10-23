@@ -18,6 +18,7 @@ are recorded here. The format is based on
 
 ### Fixed
 - A checked checkbox with keyboard focus now shows the focus border instead of the checked border, as shadcn does; so does a checked switch in the styles that give it a checked border.
+- In the luma and rhea styles, an invalid switch that is checked now shows the red invalid border instead of the checked border, as shadcn does.
 
 ## 0.6.0 - 2026-10-17
 ### New
