@@ -46,7 +46,7 @@ impl<'a> Popover<'a> {
     /// Show the content while open. Returns its value while open.
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<R> {
         let t = Theme::current(&self.trigger.ctx);
-        let g = t.state(State::NONE);
+        let g = t.state(&self.trigger.ctx, State::NONE);
         let l = [&*t.style.popover_content];
         let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
             pick(&l, f, g).unwrap_or(0.0)
@@ -122,7 +122,7 @@ impl<'a> Popover<'a> {
 /// header's.
 pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
-    let g = t.state(State::NONE);
+    let g = t.state(ui.ctx(), State::NONE);
     let header = &*t.style.popover_header;
     let title_l = [header, &*t.style.popover_title];
     let desc_l = [header, &*t.style.popover_description];

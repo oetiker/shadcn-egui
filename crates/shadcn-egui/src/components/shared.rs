@@ -177,6 +177,7 @@ pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context:
         context.without(pointer_and_focus)
     };
     theme.state(
+        &resp.ctx,
         context
             .with(State::HOVER, live && resp.hovered())
             .with(State::ACTIVE, live && resp.is_pointer_button_down_on())

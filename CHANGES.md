@@ -7,8 +7,10 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- Components follow the window width as shadcn's `sm:` (640 px) and `md:` (768 px) breakpoints do: below 768 px an input's text is 16 px instead of 14 px, and below 640 px a dialog spans the window less a 16 px margin on each side. `layout::window_at_least`, `layout::wider_than` and `layout::breakpoints` give an app the same checks.
 
 ### Changed
+- `Theme::state` takes the egui context as its first argument, to read the window width.
 - `State` no longer exposes its bits: combine flags with `|` or `State::or` and drop one with `State::without`. `Shift::SelfMinus(n)` is now `Shift::Calc(1.0, -n)`, which also expresses a share of the part's own size such as `translate-x-1/2`.
 - `theme.style` recipes carry more of each style: corner radii per side, the left border, column gaps, text wrapping, blend modes, visibility, and the enter, exit and transition motion values.
 

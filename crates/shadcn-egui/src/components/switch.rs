@@ -67,7 +67,7 @@ impl Widget for Switch<'_> {
             SwitchSize::Sm => State::SIZE_SM,
         };
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(size_bit.with(State::INVALID, self.invalid));
+        let g = t.state(ui.ctx(), size_bit.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&track, f, g).unwrap_or(0.0);
 
         // No size: CSS's initial `auto`, the thumb inside the border.
@@ -138,7 +138,7 @@ impl Widget for Switch<'_> {
             let home =
                 Rect::from_min_size(rect.left_center() + vec2(border_w, -size.y / 2.0), size);
             let at = |checked: bool| {
-                let s = t.state(context(checked));
+                let s = t.state(ui.ctx(), context(checked));
                 shift(
                     home,
                     pick(&thumb, |r| &r.shift_x, s),

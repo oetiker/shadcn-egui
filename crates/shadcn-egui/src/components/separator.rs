@@ -16,7 +16,7 @@ fn line(
 ) {
     let t = Theme::current(ui.ctx());
     let l = [&*t.style.separator];
-    let st = t.state(orientation);
+    let st = t.state(ui.ctx(), orientation);
     let px = pick(&l, thickness, st).unwrap_or(t.metrics.border);
     let (rect, _) = ui.allocate_exact_size(size(px, ui), Sense::hover());
     if ui.is_rect_visible(rect) {

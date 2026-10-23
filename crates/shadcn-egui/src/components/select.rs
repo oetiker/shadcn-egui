@@ -122,7 +122,7 @@ impl Widget for Select<'_> {
             .with(State::INVALID, self.invalid)
             .with(State::PLACEHOLDER, !has_value);
         // Geometry depends on neither interaction nor the open state.
-        let g = t.state(context);
+        let g = t.state(ui.ctx(), context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&trig, f, g).unwrap_or(0.0);
         let border_w = get(|r| &r.border_width);
         let (pad_l, pad_r) = (
@@ -354,8 +354,8 @@ impl Widget for Select<'_> {
             let l = [&*t.style.select_content];
             let item = [&*t.style.select_item];
             let group = [&*t.style.select_group];
-            let gs = t.state(State::NONE);
-            let ist = t.state(State::FOCUS.with(State::SELECTED, false));
+            let gs = t.state(ui.ctx(), State::NONE);
+            let ist = t.state(ui.ctx(), State::FOCUS.with(State::SELECTED, false));
             let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, gs).unwrap_or(0.0);
             let (gpt, gpr, gpb, gpl) = (
                 px(&group, |r| &r.pad_top),
@@ -459,7 +459,7 @@ impl Widget for Select<'_> {
                                 let state = State::NONE
                                     .with(State::FOCUS, highlighted)
                                     .with(State::SELECTED, i == current);
-                                let s = t.state(state);
+                                let s = t.state(ui.ctx(), state);
                                 if highlighted && (moved || hl_missing) {
                                     r.scroll_to_me(None);
                                 }

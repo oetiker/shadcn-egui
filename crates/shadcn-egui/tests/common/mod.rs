@@ -146,6 +146,20 @@ pub fn rect_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::RectShape> {
     rects
 }
 
+/// Every text shape a frame painted, in paint order.
+pub fn text_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::TextShape> {
+    fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::TextShape>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.clone()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut texts = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+    texts
+}
+
 /// The colour the first text a frame painted reaches the screen in,
 /// resolved as epaint's tessellator does: the shape's override colour, or
 /// its fallback colour for glyphs laid out in `Color32::PLACEHOLDER`, then

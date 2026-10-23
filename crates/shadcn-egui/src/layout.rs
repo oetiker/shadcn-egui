@@ -119,6 +119,40 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     .inner
 }
 
+/// Tailwind's `sm` breakpoint (40rem).
+const BREAKPOINT_SM: f32 = 640.0; // behaviour-ok: Tailwind default --breakpoint-sm
+/// Tailwind's `md` breakpoint (48rem).
+const BREAKPOINT_MD: f32 = 768.0; // behaviour-ok: Tailwind default --breakpoint-md
+
+/// The breakpoint helper for media queries (`sm:`, `md:`, `@media (width
+/// >= N)`): whether the window is at least `px` wide. Upstream's
+/// breakpoints are `min-width` queries, so the boundary counts as wide.
+pub fn window_at_least(ctx: &egui::Context, px: f32) -> bool {
+    ctx.content_rect().width() >= px
+}
+
+/// The breakpoint helper for container queries (`@md/field-group`,
+/// `@container (width >= N)`): whether the width `ui` has left is at
+/// least `px`. With [`window_at_least`], the one written-down exception to
+/// single-pass sizing: a widget reads its room here, never with arithmetic
+/// of its own.
+pub fn wider_than(ui: &Ui, px: f32) -> bool {
+    ui.available_width() >= px
+}
+
+/// The media-query flags of the window: [`State::SM`] at 640 px and up,
+/// [`State::MD`] at 768 px and up. [`Theme::state`] adds them to every
+/// state it resolves.
+///
+/// [`State::SM`]: crate::style::State::SM
+/// [`State::MD`]: crate::style::State::MD
+pub fn breakpoints(ctx: &egui::Context) -> crate::style::State {
+    use crate::style::State;
+    State::NONE
+        .with(State::SM, window_at_least(ctx, BREAKPOINT_SM))
+        .with(State::MD, window_at_least(ctx, BREAKPOINT_MD))
+}
+
 /// A row whose `left` content hugs the start and `right` content hugs the end
 /// (justify-content: space-between).
 pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {

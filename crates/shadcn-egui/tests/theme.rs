@@ -52,9 +52,11 @@ fn new_detects_dark_from_palette() {
 
 #[test]
 fn state_adds_dark() {
-    assert!(Theme::vega_dark().state(State::HOVER).contains(State::DARK));
+    assert!(Theme::vega_dark()
+        .state(&egui::Context::default(), State::HOVER)
+        .contains(State::DARK));
     assert!(!Theme::vega_light()
-        .state(State::HOVER)
+        .state(&egui::Context::default(), State::HOVER)
         .contains(State::DARK));
 }
 
@@ -144,7 +146,10 @@ fn consumer_override_takes_effect() {
     s.button_size_default.height.base = Some(40.0);
     let t = Theme::new(s, Palette::dark(), 10.0);
     assert_eq!(
-        t.style.button_size_default.height.get(t.state(State::NONE)),
+        t.style
+            .button_size_default
+            .height
+            .get(t.state(&egui::Context::default(), State::NONE)),
         Some(40.0)
     );
 }
@@ -153,10 +158,14 @@ fn consumer_override_takes_effect() {
 fn consumer_set_dark_is_honoured() {
     let mut t = Theme::new(Style::vega(), Palette::dark(), 10.0);
     t.dark = false;
-    assert!(!t.state(State::HOVER).contains(State::DARK));
+    assert!(!t
+        .state(&egui::Context::default(), State::HOVER)
+        .contains(State::DARK));
     let mut t = Theme::new(Style::vega(), Palette::light(), 10.0);
     t.dark = true;
-    assert!(t.state(State::HOVER).contains(State::DARK));
+    assert!(t
+        .state(&egui::Context::default(), State::HOVER)
+        .contains(State::DARK));
 }
 
 use shadcn_egui::icons::lucide::{CHECK, CHEVRON_DOWN, SLOTS as LUCIDE_SLOTS, X as CLOSE};

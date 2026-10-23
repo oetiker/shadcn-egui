@@ -15,7 +15,7 @@ The helpers live in `shadcn_egui::layout`.
 | a `.card` block | `shadcn_egui::layout::card(ui, \|ui\| ...)`, or `components::card::Card` for sizes and a footer |
 | label + control form row | `shadcn_egui::layout::form_row(ui, label_w, "Label", \|ui\| ...)` |
 | app shell (sidebar/topbar/main) | `SidePanel` / `TopBottomPanel` / `CentralPanel` |
-| responsive breakpoints | branch on `ui.available_width()` each frame |
+| responsive breakpoints (`sm:`, `md:`, `@container`) | branch on `shadcn_egui::layout::window_at_least(ui.ctx(), px)` (media query) or `layout::wider_than(ui, px)` (container query); components apply their own |
 | CSS Grid tracks | `StripBuilder` rows × cells (no named lines) |
 
 Every gap `N` here is a named constant from the design (Tailwind `gap-N` is

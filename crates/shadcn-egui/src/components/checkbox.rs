@@ -51,7 +51,7 @@ impl Widget for Checkbox<'_> {
         let l = [&*t.style.checkbox];
         let enabled = self.enabled && ui.is_enabled();
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(State::NONE.with(State::INVALID, self.invalid));
+        let g = t.state(ui.ctx(), State::NONE.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
 
         // No size: CSS's initial `auto`, the indicator's tick inside the

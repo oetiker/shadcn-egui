@@ -87,7 +87,12 @@ impl<'a> Tabs<'a> {
     /// The gap between the list and the content below it (shadcn `Tabs` root `gap`).
     pub fn content_gap(ui: &Ui) -> f32 {
         let t = Theme::current(ui.ctx());
-        pick(&[&*t.style.tabs], |r| &r.gap, t.state(State::NONE)).unwrap_or(0.0)
+        pick(
+            &[&*t.style.tabs],
+            |r| &r.gap,
+            t.state(ui.ctx(), State::NONE),
+        )
+        .unwrap_or(0.0)
     }
 }
 
@@ -107,7 +112,7 @@ impl Widget for Tabs<'_> {
         let after = [&*s.tabs_trigger_after];
 
         // Geometry depends neither on the selection nor on interaction.
-        let g = t.state(State::HORIZONTAL.or(variant_bit));
+        let g = t.state(ui.ctx(), State::HORIZONTAL.or(variant_bit));
         let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
         let (pad_t, pad_r, pad_b, pad_l) = (
             geo(&list, |r| &r.pad_top),

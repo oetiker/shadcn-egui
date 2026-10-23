@@ -42,7 +42,7 @@ impl Widget for Label {
         let t = Theme::current(ui.ctx());
         let l = [&*t.style.label];
         let enabled = self.enabled && ui.is_enabled();
-        let st = t.state(State::NONE.with(State::DISABLED, !enabled));
+        let st = t.state(ui.ctx(), State::NONE.with(State::DISABLED, !enabled));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, st);
         let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
         let text_px = t.text_px(size);
@@ -73,7 +73,7 @@ impl Widget for Label {
 pub fn description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let l = [&*t.style.card_description];
-    let st = t.state(State::NONE);
+    let st = t.state(ui.ctx(), State::NONE);
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
     let px = t.text_px(size);
     // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.

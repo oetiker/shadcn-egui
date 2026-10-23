@@ -59,7 +59,8 @@ drawing code holds no style value of its own.
    app. Map each state or context condition to a `State` flag
    (`references/styles.md` has the table). Resolve a property over the
    stacked recipes in the order upstream joins their classes, with `pick`.
-   Build the state with `theme.state(..)`, which adds `DARK`, or with
+   Build the state with `theme.state(ctx, ..)`, which adds `DARK` and the
+   window's `SM` and `MD` breakpoint flags, or with
    `interaction_state` (below) for a widget that reacts to the pointer and
    the keyboard.
 4. **Base classes go into the recipes.** A class the component source sets
@@ -84,7 +85,9 @@ drawing code holds no style value of its own.
    the caller passes, not a literal in the component.
 6. **egui sizing.** The widget sets its own size before placement (single
    pass). Use the `shadcn_egui::layout` helpers, no `available_width()`
-   arithmetic. Resolve geometry without interaction states: the size does not
+   arithmetic; a breakpoint reads the window through
+   `layout::window_at_least` (`sm:`, `md:`; `theme.state` sets `SM` and
+   `MD`) or its container through `layout::wider_than`. Resolve geometry without interaction states: the size does not
    change on hover.
 7. **Context.** The widget API takes whatever context the recipe conditions
    need: icon side (`ICON_START`, `ICON_END`), size variant (`SIZE_SM`),

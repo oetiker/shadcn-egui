@@ -99,7 +99,10 @@ impl<'a> Card<'a> {
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         let t = Theme::current(ui.ctx());
         let has_footer = self.footer.is_some();
-        let st = t.state(self.size.state().with(State::HAS_FOOTER, has_footer));
+        let st = t.state(
+            ui.ctx(),
+            self.size.state().with(State::HAS_FOOTER, has_footer),
+        );
         let card = [&*t.style.card];
         let content = [&*t.style.card_content];
         let foot = [&*t.style.card_footer];
@@ -260,7 +263,7 @@ impl<'a> Card<'a> {
 /// design's spacing.
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
-    let st = t.state(current_size(ui).state());
+    let st = t.state(ui.ctx(), current_size(ui).state());
     let l = [&*t.style.card_content];
     let gap = len(&l, |r| &r.gap, st);
     ui.scope(|ui| {
@@ -281,7 +284,10 @@ pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
 /// The resolved `opacity` of one card part, at the current card's size.
 fn part_opacity(ui: &Ui, part: fn(&crate::style::Style) -> &Recipe) -> f32 {
     let t = Theme::current(ui.ctx());
-    opacity(&[&[part(&t.style)][..]], t.state(current_size(ui).state()))
+    opacity(
+        &[&[part(&t.style)][..]],
+        t.state(ui.ctx(), current_size(ui).state()),
+    )
 }
 
 /// `card-header` with a `card-action` to the right of the title and
@@ -313,7 +319,7 @@ fn header_column(ui: &mut Ui, title: &str, description: &str) {
     let gap = len(
         &[&*t.style.card_header],
         |r| &r.gap,
-        t.state(current_size(ui).state()),
+        t.state(ui.ctx(), current_size(ui).state()),
     );
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
@@ -325,7 +331,7 @@ fn header_column(ui: &mut Ui, title: &str, description: &str) {
 /// `card-title`: size, weight and line height of the style.
 pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
-    let st = t.state(current_size(ui).state());
+    let st = t.state(ui.ctx(), current_size(ui).state());
     let l = [&*t.style.card_title];
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Base);
     let px = t.text_px(size);
@@ -345,7 +351,7 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
 /// `card-description`: muted text at the style's size.
 pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
-    let st = t.state(current_size(ui).state());
+    let st = t.state(ui.ctx(), current_size(ui).state());
     let l = [&*t.style.card_description];
     let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
     let line =

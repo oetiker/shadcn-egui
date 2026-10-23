@@ -176,7 +176,7 @@ impl Widget for Button {
             .with(State::INVALID, self.invalid)
             .with(State::HAS_POPUP, self.has_popup);
         // Geometry never depends on hover or press: resolve it before allocating.
-        let g = t.state(context);
+        let g = t.state(ui.ctx(), context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
         let (pad_l, pad_r, gap, border_w) = (
             get(|r| &r.pad_left),

@@ -266,11 +266,11 @@ impl Theme {
     }
 
     /// The component state `s` plus this theme's [`State::DARK`], and the
-    /// `sm:` and `md:` window flags.
-    pub fn state(&self, s: State) -> State {
-        // A1c: breakpoint helper replaces this (the flags follow the window
-        // width there; until then every window counts as wide).
-        s.with(State::DARK, self.dark).or(State::SM).or(State::MD)
+    /// `sm:` and `md:` flags of the window `ctx` draws
+    /// ([`crate::layout::breakpoints`]).
+    pub fn state(&self, ctx: &egui::Context, s: State) -> State {
+        s.with(State::DARK, self.dark)
+            .or(crate::layout::breakpoints(ctx))
     }
 
     /// A radius rung in px: shadcn's scale multiplies `--radius`.
@@ -880,7 +880,8 @@ impl Theme {
             // earlier theme had set one.
             let egui_default = egui::style::Spacing::default();
             let button = [&*self.style.button_size_default];
-            let none = self.state(State::NONE);
+            // Set once, not per pass: no window breakpoint applies.
+            let none = State::NONE.with(State::DARK, self.dark);
             let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
             let pad_x =
                 pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);

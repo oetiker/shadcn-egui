@@ -111,7 +111,7 @@ impl Widget for Slider<'_> {
         let step = self.step;
 
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(orient);
+        let g = t.state(ui.ctx(), orient);
         let size_of = |l: &[&Recipe]| {
             vec2(
                 pick(l, |r| &r.width, g).unwrap_or(0.0),

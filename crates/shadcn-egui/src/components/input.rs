@@ -80,7 +80,7 @@ impl<'a> Widget for Input<'a> {
         let enabled = self.enabled && ui.is_enabled();
         let context = State::NONE.with(State::INVALID, self.invalid);
         // Geometry never depends on focus: resolve it before allocating.
-        let g = t.state(context);
+        let g = t.state(ui.ctx(), context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let border_w = get(|r| &r.border_width);
         let inset = |pad: f32| (pad + border_w).round() as i8;

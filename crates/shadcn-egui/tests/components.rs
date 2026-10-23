@@ -123,7 +123,7 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     }
     // Control: the same response, enabled, is hovered, pressed and focused.
     let pointer = State::HOVER | State::ACTIVE | State::FOCUS_VISIBLE;
-    // A1c: the breakpoint helper sets SM and MD from the window width.
+    // egui's default window is wider than `md`.
     let theme_flags = State::DARK | State::SM | State::MD;
     assert_eq!(live, pointer | State::INVALID | theme_flags);
     assert_eq!(disabled, State::INVALID | State::DISABLED | theme_flags);
@@ -2166,4 +2166,37 @@ fn faded_keeps_a_disable_inside_its_content() {
             "an already disabled Ui"
         );
     });
+}
+
+/// shadcn input `text-base md:text-sm`: the field text is 16 px in a window
+/// narrower than 768 px, 14 px from 768 px up.
+#[test]
+fn input_text_follows_md_breakpoint() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega_light();
+    let text_px = |width: f32| {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, 400.0),
+            )),
+            ..Default::default()
+        };
+        let mut text = String::from("Hello");
+        let mut out = None;
+        for _ in 0..2 {
+            out = Some(ctx.run_ui(input.clone(), |ui| {
+                ui.add(Input::new(&mut text));
+            }));
+        }
+        common::text_shapes(&out.unwrap())
+            .iter()
+            .map(|t| t.galley.job.sections[0].format.font_id.size)
+            .next()
+            .expect("the field's text")
+    };
+    assert_eq!(text_px(767.0), theme.metrics.text_base);
+    assert_eq!(text_px(768.0), theme.metrics.text_sm);
 }

@@ -18,7 +18,7 @@ const ARC_STEPS: usize = 4;
 /// Attach a shadcn tooltip to `resp`: `tooltip(ui.add(..), "Mute")`.
 pub fn tooltip(resp: Response, text: &str) -> Response {
     let t = Theme::current(&resp.ctx);
-    let g = t.state(State::NONE);
+    let g = t.state(&resp.ctx, State::NONE);
     let content = [&*t.style.tooltip_content];
     let arrow = [&*t.style.tooltip_arrow];
     let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {

@@ -76,7 +76,7 @@ impl<'a> Dialog<'a> {
             return None;
         }
         let t = Theme::current(ctx);
-        let g = t.state(State::NONE);
+        let g = t.state(ctx, State::NONE);
         let l = [&*t.style.dialog_content];
         let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let (pad_t, pad_r, pad_b, pad_l) = (
@@ -163,7 +163,7 @@ impl<'a> Dialog<'a> {
 /// `dialog-header` with its title and description.
 fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let t = Theme::current(ui.ctx());
-    let g = t.state(State::NONE);
+    let g = t.state(ui.ctx(), State::NONE);
     let gap = pick(&[&*t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
     let content = [&*t.style.dialog_content];
     let heading = [&*t.style.dialog_title];
@@ -213,7 +213,7 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
 /// true when clicked. It is placed without moving the cursor,
 /// so it does not grow the panel.
 fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
-    let g = t.state(State::NONE);
+    let g = t.state(ui.ctx(), State::NONE);
     let at = [&*t.style.dialog_close];
     let (top, right) = (
         pick(&at, |r| &r.inset_top, g).unwrap_or(0.0),
@@ -246,7 +246,7 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
 /// strip bleeds to the dialog's edges and bottom.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let t = Theme::current(ui.ctx());
-    let g = t.state(State::NONE);
+    let g = t.state(ui.ctx(), State::NONE);
     let l = [&*t.style.dialog_footer];
     let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
     let (pad_t, pad_r, pad_b, pad_l) = (
