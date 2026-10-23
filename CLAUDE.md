@@ -104,5 +104,6 @@ crates.
   `plugin/skills/port-component/references/upstream.md`. Downloads go to a scratch
   directory, never into the repository.
 - Snapshot tests render headlessly (egui_kittest + wgpu, mesa software
-  adapter). Regenerate baselines with `UPDATE_SNAPSHOTS=1 cargo test`, then
-  look at every changed PNG.
+  adapter). Regenerate baselines by deleting the PNGs a change touches,
+  then `UPDATE_SNAPSHOTS=1 cargo test`; kittest ignores changes on
+  anti-aliased edges, even with `force`. Look at every changed PNG.
