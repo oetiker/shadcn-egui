@@ -57,8 +57,6 @@ const IGNORE_EXACT: &[(&str, &str)] = &[
     ("mx-auto", LAYOUT),
     ("font-sans", FONT_SANS),
     ("bg-blend-color", DEAD_BLEND),
-    ("text-left", LAYOUT),
-    ("text-center", LAYOUT),
     ("select-none", BROWSER),
     ("pointer-events-none", BROWSER),
     (
@@ -267,6 +265,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         "resize-none" => return U::Set(vec![(Resizable, Value::Bool(false))]),
         "text-balance" => return U::Set(vec![(TextWrap, Value::TextWrap("Balance"))]),
         "text-pretty" => return U::Set(vec![(TextWrap, Value::TextWrap("Pretty"))]),
+        "text-left" => return U::Set(vec![(TextAlign, Value::TextAlign("Left"))]),
+        "text-center" => return U::Set(vec![(TextAlign, Value::TextAlign("Center"))]),
+        "text-right" => return U::Set(vec![(TextAlign, Value::TextAlign("Right"))]),
         "mix-blend-darken" => return U::Set(vec![(Blend, Value::Blend("Darken"))]),
         "mix-blend-lighten" => return U::Set(vec![(Blend, Value::Blend("Lighten"))]),
         _ => {}

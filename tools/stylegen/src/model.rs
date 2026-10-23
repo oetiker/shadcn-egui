@@ -37,6 +37,7 @@ pub enum Field {
     Uppercase,
     Underline,
     TextWrap,
+    TextAlign,
     Radius,
     RadiusTop,
     RadiusBottom,
@@ -114,6 +115,7 @@ impl Field {
             Uppercase => "uppercase",
             Underline => "underline",
             TextWrap => "text_wrap",
+            TextAlign => "text_align",
             Radius => "radius",
             RadiusTop => "radius_top",
             RadiusBottom => "radius_bottom",
@@ -190,6 +192,8 @@ pub enum Value {
     Shift(ShiftV),
     /// `TextWrap::Balance`, `TextWrap::Pretty`.
     TextWrap(&'static str),
+    /// `TextAlign::Left`, `TextAlign::Center`, `TextAlign::Right`.
+    TextAlign(&'static str),
     /// `Blend::Darken`, `Blend::Lighten`.
     Blend(&'static str),
     /// The `Transition` const names it ORs together.
@@ -214,6 +218,7 @@ impl Value {
             Value::Shift(ShiftV::Px(v)) => format!("Shift::Px({v:?})"),
             Value::Shift(ShiftV::Calc(f, v)) => format!("Shift::Calc({f:?}, {v:?})"),
             Value::TextWrap(w) => format!("TextWrap::{w}"),
+            Value::TextAlign(a) => format!("TextAlign::{a}"),
             Value::Blend(b) => format!("Blend::{b}"),
             Value::Transition(names) => match names.split_first() {
                 None => "Transition::NONE".into(),

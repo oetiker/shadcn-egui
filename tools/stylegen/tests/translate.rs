@@ -191,6 +191,15 @@ fn radius_and_misc() {
         set("translate-x-[calc(100%-2px)]"),
         [(Field::ShiftX, Value::Shift(ShiftV::Calc(1.0, -2.0)))]
     );
+    // Text alignment is a look (rules axiom 8), not layout.
+    assert_eq!(
+        set("text-center"),
+        [(Field::TextAlign, Value::TextAlign("Center"))]
+    );
+    assert_eq!(
+        set("text-left"),
+        [(Field::TextAlign, Value::TextAlign("Left"))]
+    );
 }
 
 #[test]
@@ -433,6 +442,7 @@ fn model_matches_recipe_rs() {
         Uppercase,
         Underline,
         TextWrap,
+        TextAlign,
         Radius,
         RadiusTop,
         RadiusBottom,

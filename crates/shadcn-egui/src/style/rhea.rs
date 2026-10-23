@@ -2078,6 +2078,7 @@ fn alert() -> Box<Recipe> {
         },
         icon_shift_y: Prop::fixed(Shift::Px(2.0)),
         text_size: Prop::fixed(TextSize::Sm),
+        text_align: Prop::fixed(TextAlign::Left),
         radius: Prop::fixed(Radius::Rung(Rung::Xl2)),
         border_width: Prop::fixed(1.0),
         ..Recipe::default()
@@ -2407,6 +2408,32 @@ fn textarea() -> Box<Recipe> {
             ],
         },
         radius: Prop::fixed(Radius::Rung(Rung::Xl2)),
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl2) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl2) },
+            ],
+        },
         bg: Prop::fixed(Paint::Role(Role::Input, 0.5)),
         text: Prop {
             base: None,
@@ -2415,6 +2442,18 @@ fn textarea() -> Box<Recipe> {
             ],
         },
         border_width: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
         border_color: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
@@ -2647,6 +2686,12 @@ fn alert_dialog_header() -> Box<Recipe> {
             base: None,
             rules: vec![
                 Rule { when: When::new(State::HAS_MEDIA, State::NONE), rank: (1 << 37) | (1 << 122), value: 24.0 },
+            ],
+        },
+        text_align: Prop {
+            base: Some(TextAlign::Center),
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT.or(State::SM), State::NONE), rank: (1 << 11) | (1 << 66) | (1 << 122), value: TextAlign::Left },
             ],
         },
         ..Recipe::default()

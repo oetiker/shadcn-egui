@@ -433,12 +433,16 @@ pub struct Context {
 }
 
 /// Children of a button group: the crate parts upstream's demos place in
-/// one. A separator or a nested group draws no border or corner, so the
-/// position rules (`[&>*:not(:first-child)]:rounded-l-none`) change
-/// nothing on it.
+/// one, and textarea, a field like input. A nested group draws no fill,
+/// border or ring, so the position rules (`[&>*:not(:first-child)]:rounded-l-none`)
+/// change no pixel of it. On a separator the `none` corners and `border-*-0`
+/// meet a part with square corners and no border; only the `LAST` corner
+/// rule would round a separator that ends a group, and that is left open:
+/// the group's orientation flag would collide with the separator's own.
 const BUTTON_GROUP_CHILDREN: &[&str] = &[
     "cn-button",
     "cn-input",
+    "cn-textarea",
     "cn-select-trigger",
     "cn-button-group-text",
 ];

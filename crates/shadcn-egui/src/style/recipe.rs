@@ -448,6 +448,14 @@ pub enum TextWrap {
     Pretty,
 }
 
+/// `text-left`, `text-center`, `text-right`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
+}
+
 /// `mix-blend-darken`, `mix-blend-lighten`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Blend {
@@ -547,6 +555,8 @@ pub struct Recipe {
     pub underline: Prop<bool>,
     /// `text-balance`, `text-pretty`: how the part breaks its text.
     pub text_wrap: Prop<TextWrap>,
+    /// `text-left`, `text-center`, `text-right`: where the part's lines sit.
+    pub text_align: Prop<TextAlign>,
     pub radius: Prop<Radius>,
     pub radius_top: Prop<Radius>,
     pub radius_bottom: Prop<Radius>,

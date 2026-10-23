@@ -474,7 +474,6 @@ Unsupported classes in shipped markers: **30** (not exportable)
 
 ## `cn-alert`
 
-- ignored `text-left`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `has-data-[slot=alert-action]:relative`: structure: egui layout is done by the component
 - ignored `has-[>svg]:grid-cols-[auto_1fr]`: structure: egui layout is done by the component
 - ignored `*:[svg]:row-span-2`: structure: egui layout is done by the component
@@ -580,17 +579,17 @@ Unsupported classes in shipped markers: **30** (not exportable)
 
 ## `cn-button-group-orientation-horizontal`
 
-- moved `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST)
-- moved `[&>*:not(:first-child)]:rounded-l-none` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:first-child)]:border-l-0` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:last-child)]:rounded-r-none` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
+- moved `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST)
+- moved `[&>*:not(:first-child)]:rounded-l-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
+- moved `[&>*:not(:first-child)]:border-l-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
+- moved `[&>*:not(:last-child)]:rounded-r-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
 
 ## `cn-button-group-orientation-vertical`
 
-- moved `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST)
-- moved `[&>*:not(:first-child)]:rounded-t-none` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:first-child)]:border-t-0` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:last-child)]:rounded-b-none` to `cn-button`, `cn-input`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- moved `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST)
+- moved `[&>*:not(:first-child)]:rounded-t-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
+- moved `[&>*:not(:first-child)]:border-t-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
+- moved `[&>*:not(:last-child)]:rounded-b-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
 - ignored `flex-col`: structure: egui layout is done by the component
 
 ## `cn-button-group-separator`
@@ -618,6 +617,14 @@ Unsupported classes in shipped markers: **30** (not exportable)
 
 ## `cn-textarea`
 
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
 - **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
@@ -651,10 +658,8 @@ Unsupported classes in shipped markers: **30** (not exportable)
 
 - ignored `grid-rows-[auto_1fr]`: structure: egui layout is done by the component
 - ignored `place-items-center`: structure: egui layout is done by the component
-- ignored `text-center`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr]`: structure: egui layout is done by the component
 - ignored `sm:group-data-[size=default]/alert-dialog-content:place-items-start`: structure: egui layout is done by the component
-- ignored `sm:group-data-[size=default]/alert-dialog-content:text-left`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]`: structure: egui layout is done by the component
 - ignored `grid`: structure: egui layout is done by the component
 

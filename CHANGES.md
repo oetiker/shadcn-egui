@@ -12,7 +12,7 @@ are recorded here. The format is based on
 ### Changed
 - `Theme::state` takes the egui context as its first argument, to read the window width.
 - `State` no longer exposes its bits: combine flags with `|` or `State::or` and drop one with `State::without`. `Shift::SelfMinus(n)` is now `Shift::Calc(1.0, -n)`, which also expresses a share of the part's own size such as `translate-x-1/2`.
-- `theme.style` recipes carry more of each style: corner radii per side, the left border, column gaps, text wrapping, blend modes, visibility, and the enter, exit and transition motion values.
+- `theme.style` recipes carry more of each style: corner radii per side, the left border, column gaps, text wrapping and alignment, blend modes, visibility, and the enter, exit and transition motion values.
 
 ### Fixed
 - A checked checkbox with keyboard focus now shows the focus border instead of the checked border, as shadcn does; so does a checked switch in the styles that give it a checked border.
