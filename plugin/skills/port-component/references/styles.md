@@ -111,10 +111,10 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `tracking` | `tracking-*` |
 | `weight` | `font-normal`, `font-medium`, `font-semibold`, `font-bold` |
 | `uppercase`, `underline` | `uppercase`, `underline` |
-| `radius`, `radius_top`, `radius_bottom` | `rounded-*`, `rounded-t-*`, `rounded-b-*` |
+| `radius`, `radius_top`, `radius_right`, `radius_bottom`, `radius_left` | `rounded-*`, `rounded-t-*`, `rounded-r-*`, `rounded-b-*`, `rounded-l-*` |
 | `bg`, `text` | `bg-*`, `text-*` (with `/alpha` and `color-mix`) |
 | `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::RecipeBox`) |
-| `border_width`, `border_top_width` | `border`, `border-t`, `border-N` |
+| `border_width`, `border_top_width`, `border_left_width` | `border`, `border-t`, `border-l`, `border-N` |
 | `border_color` | `border-*` colour |
 | `ring_width`, `ring_color` | `ring-N`, `ring-*` |
 | `outline_width`, `outline_color` | `outline-N`, `outline-*`; `outline-none` and `outline-hidden` are 0 |
