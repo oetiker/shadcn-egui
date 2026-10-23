@@ -225,7 +225,10 @@ run leaves `<name>.old.png` (the previous baseline) and a failing comparison
 leaves `<name>.new.png` and `<name>.diff.png` beside the baselines.
 Never commit them: delete them after looking, and add
 `tests/snapshots/*.old.png`, `*.new.png` and `*.diff.png` to
-`.gitignore`. An app with its own render or screenshot path (for example a
+`.gitignore`. To catch such edge changes in the test run too, compare
+`h.render()` with the PNG again after `h.snapshot(..)` passes, every pixel,
+each channel within 2 levels: shadcn-egui's own tests do that in
+`crates/shadcn-egui/tests/common/strict.rs`. An app with its own render or screenshot path (for example a
 softbuffer rasterizer) may capture the PNG there instead: the point is to look
 at a real render.
 

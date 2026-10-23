@@ -3,6 +3,9 @@
 #![allow(dead_code)]
 
 pub mod logcap;
+mod strict;
+
+pub use strict::*;
 
 use egui_kittest::{Harness, SnapshotResults};
 use shadcn_egui::style::Style;
@@ -106,8 +109,7 @@ pub fn snapshot_with_themes(
     for (suffix, theme) in themes {
         let mut h = page_harness(size, theme, &mut ui_fn);
         prepare(&mut h);
-        h.snapshot(format!("{name}_{suffix}"));
-        results.extend(h.take_snapshot_results());
+        results.add(try_snapshot(&mut h, format!("{name}_{suffix}")));
     }
 }
 
@@ -236,8 +238,7 @@ pub fn snapshot_widths(
     for width in [PHONE, DESKTOP] {
         for (suffix, theme) in &themes {
             let mut h = page_harness(egui::vec2(width, height), theme.clone(), &mut ui_fn);
-            h.snapshot(format!("{name}_{width}_{suffix}"));
-            results.extend(h.take_snapshot_results());
+            results.add(try_snapshot(&mut h, format!("{name}_{width}_{suffix}")));
         }
     }
 }

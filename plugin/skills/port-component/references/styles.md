@@ -282,5 +282,6 @@ it changes.
 5. Re-baseline the snapshots: delete `crates/shadcn-egui/tests/snapshots/*.png`,
    run `UPDATE_SNAPSHOTS=1 cargo test`, and look at the PNGs that changed.
    kittest ignores a change on anti-aliased pixels, so a baseline that is not
-   deleted can keep stale pixels (`references/upstream.md`, Snapshots).
+   deleted can keep stale pixels; the strict check then fails the next test
+   run (`references/upstream.md`, Snapshots).
 6. Commit the generated files, the reports and the PNGs together.

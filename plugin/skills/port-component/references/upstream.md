@@ -109,6 +109,16 @@ doubt, delete `crates/shadcn-egui/tests/snapshots/*.png` and regenerate all:
 `git status` then lists the PNGs that changed, and a deleted PNG that does not
 come back belongs to no test any more.
 
+Every snapshot goes through `tests/common/strict.rs` (`common::snapshot`,
+`common::try_snapshot`, `common::try_image_snapshot`; `clippy.toml` forbids
+kittest's own calls). After kittest's comparison passes, it compares the render
+with the PNG again, anti-aliased pixels included, each channel within
+`common::TOLERANCE` levels. A failure names the strict check and leaves
+`<name>.new.png` and `<name>.diff.png` (failing pixels in red) beside the
+baseline. `UPDATE_SNAPSHOTS=1` does not fix it, because kittest does not
+rewrite that PNG: delete the PNG and regenerate. In update mode the strict
+check does not run.
+
 Open every PNG the component appears in, also those of other tests (the
 gallery, forms) that now look different, and compare each with the
 shadcn-svelte docs page for that style. Re-baseline the PNGs the port

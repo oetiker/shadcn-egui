@@ -71,7 +71,7 @@ fn readme_settings_screen() {
     image::imageops::replace(&mut both, &desktop, 0, 0);
     image::imageops::replace(&mut both, &phone, i64::from(desktop.width() + gap), 0);
     let docs = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs");
-    egui_kittest::image_snapshot_options(
+    common::image_snapshot_options(
         &both,
         "settings-screen",
         &SnapshotOptions::new().output_path(docs),

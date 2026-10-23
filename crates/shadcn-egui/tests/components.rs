@@ -829,10 +829,7 @@ fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) 
             }
         }
         let img = stacked.expect("at least one row");
-        results.add(egui_kittest::try_image_snapshot(
-            &img,
-            format!("{name}_{suffix}"),
-        ));
+        results.add(common::try_image_snapshot(&img, format!("{name}_{suffix}")));
     }
 }
 

@@ -1,5 +1,7 @@
 //! The gallery example's screen: every component under the default preset.
 
+mod common;
+
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::{Harness, SnapshotOptions, SnapshotResults};
@@ -36,13 +38,16 @@ fn gallery_default_preset() {
     let mut results = SnapshotResults::new();
     for (suffix, mode) in [("light", Mode::Light), ("dark", Mode::Dark)] {
         let mut h = harness(GalleryState::new(Preset::default(), mode), FULL);
-        h.snapshot(format!("gallery_{suffix}"));
-        results.extend(h.take_snapshot_results());
+        results.add(common::try_snapshot(&mut h, format!("gallery_{suffix}")));
     }
     let docs = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs");
     let mut h = harness(GalleryState::default(), egui::vec2(1280.0, 900.0));
-    h.snapshot_options("gallery-screen", &SnapshotOptions::new().output_path(docs));
-    results.extend(h.take_snapshot_results());
+    let options = SnapshotOptions::new().output_path(docs);
+    results.add(common::try_snapshot_options(
+        &mut h,
+        "gallery-screen",
+        &options,
+    ));
 }
 
 fn stateful(state: GalleryState) -> Harness<'static, GalleryState> {
@@ -108,5 +113,5 @@ fn gallery_after_applying_a_code() {
     // Leave the Apply button unhovered.
     h.hover_at(egui::pos2(1270.0, 1530.0));
     h.run();
-    h.snapshot("gallery_code_b2D0wqNxT_light");
+    common::snapshot(&mut h, "gallery_code_b2D0wqNxT_light");
 }
