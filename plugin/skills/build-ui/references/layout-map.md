@@ -52,6 +52,13 @@ fn footer(ui: &mut egui::Ui) {
   checkbox rows), lower `interact_size.y` in a scope around the list:
   `ui.scope(|ui| { ui.spacing_mut().interact_size.y = ROW_H; … })`, with
   `ROW_H` the design's row height.
+- In `layout::row`, `wrap_row` and `space_between` a child wider than the
+  room left (an input or select raised to its content minimum, a long
+  label) pushes the children after it past its whole width, and the row
+  does not widen its parent, as a flex row in the browser. A plain
+  `ui.horizontal` cannot: the next child covers the overflow, and a child
+  that runs past the room widens the parent. Use the crate rows for rows of
+  controls.
 - `card_content` spaces its children with the gap of the style's
   `cn-card-content` recipe, and only vega sets one (nova, maia, lyra, mira,
   luma and rhea set none). Put the

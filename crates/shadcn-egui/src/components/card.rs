@@ -183,11 +183,10 @@ impl<'a> Card<'a> {
                 ),
             );
             // A row as high as a control, like `ui.horizontal`.
-            let mut row = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(inner)
-                    .layout(Layout::left_to_right(Align::Center)),
-            );
+            let mut row = ui.new_child(crate::layout::row_builder(
+                inner,
+                Layout::left_to_right(Align::Center),
+            ));
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
             if let Some(fg) = fg {
                 row.visuals_mut().override_text_color = Some(fg);

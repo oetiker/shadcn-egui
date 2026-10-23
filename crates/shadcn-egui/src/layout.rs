@@ -23,6 +23,11 @@ const ROW_HEIGHT_EPSILON: f32 = 0.01; // behaviour-ok: float tolerance, not a de
 /// holds one does not shrink after a taller child goes; a `ScrollArea`
 /// grows the row to its full content height. Content that registers no
 /// widget (shapes painted directly, `allocate_space`) is not measured.
+///
+/// A child wider than the room left pushes the children after it past its
+/// whole width, and the row takes no more than its room in the parent, so
+/// the overflow does not widen the parent: the browser's flex row. A plain
+/// `ui.horizontal` cannot do that (see [`allocate_overflowing`]).
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let floor = ui.spacing().interact_size.y;
@@ -46,23 +51,21 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         .ctx()
         .viewport(|v| v.this_pass.widgets.get_layer(layer).count());
     let size = egui::vec2(ui.available_size_before_wrap().x, height);
-    // The row's child Ui: the entry it registers, and the `id` its
+    // The entries the row's two Uis register, and the `id` the row's
     // children name as parent.
-    let (mut own, mut row_ui) = (id, id);
-    let inner = ui
-        .allocate_ui_with_layout(size, layout, |ui| {
-            (own, row_ui) = (ui.unique_id(), ui.id());
-            ui.spacing_mut().item_spacing.x = gap;
-            add(ui)
-        })
-        .inner;
+    let (mut own, mut row_ui) = ([id; 2], id);
+    let inner = overflow_row(ui, size, layout, |room, ui| {
+        (own, row_ui) = ([room.unique_id(), ui.unique_id()], ui.id());
+        ui.spacing_mut().item_spacing.x = gap;
+        add(ui)
+    });
     let content = ui.ctx().viewport(|v| {
         let added: Vec<egui::WidgetRect> = v
             .this_pass
             .widgets
             .get_layer(layer)
             .skip(before)
-            .filter(|w| w.id != own)
+            .filter(|w| !own.contains(&w.id))
             .copied()
             .collect();
         // Rebuild the tree from the creation order: a Ui registers before
@@ -114,9 +117,61 @@ pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         egui::Layout::left_to_right(egui::Align::Center)
     };
     let size = egui::vec2(ui.available_size_before_wrap().x, 0.0);
-    ui.allocate_ui_with_layout(size, layout.with_main_wrap(true), |ui| {
+    overflow_row(ui, size, layout.with_main_wrap(true), |_, ui| {
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
         add(ui)
+    })
+}
+
+/// The tag on the `Ui` of a crate row ([`row`], [`wrap_row`],
+/// [`space_between`], a card footer), where [`allocate_overflowing`]
+/// allocates a widget's whole width.
+const ROW_TAG: &str = "shadcn_egui::layout::row";
+
+/// The `UiBuilder` of a crate row's `Ui`: `max_rect` and `layout`, tagged
+/// as a row. The caller allocates only the part of the row's `min_rect`
+/// that fits its room, so an overflowing child pushes its siblings without
+/// widening the parent.
+pub(crate) fn row_builder(max_rect: egui::Rect, layout: egui::Layout) -> egui::UiBuilder {
+    egui::UiBuilder::new()
+        .max_rect(max_rect)
+        .layout(layout)
+        .ui_stack_info(egui::UiStackInfo::default().with_tag(ROW_TAG))
+}
+
+/// Whether `ui` is a crate row, or a horizontal `Ui` (a scope, an enabled
+/// scope) inside one.
+fn in_row(ui: &Ui) -> bool {
+    ui.stack()
+        .iter()
+        .take_while(|s| s.layout_direction.is_horizontal())
+        .any(|s| s.tags().contains(ROW_TAG))
+}
+
+/// A crate row of `size` in `layout`, placed as `allocate_ui_with_layout`
+/// places it. `add` gets the `Ui` that holds the room and the row's own
+/// `Ui`, built inside it with [`row_builder`]. The row's children may run
+/// past the room; the room takes the row's `min_rect` cut to its own
+/// width, and the parent allocates that.
+fn overflow_row<R>(
+    ui: &mut Ui,
+    size: egui::Vec2,
+    layout: egui::Layout,
+    add: impl FnOnce(&Ui, &mut Ui) -> R,
+) -> R {
+    ui.allocate_ui_with_layout(size, layout, |room| {
+        let max = room.max_rect();
+        let mut row = room.new_child(row_builder(max, layout));
+        let inner = add(room, &mut row);
+        // Dropping the row registers its `min_rect`.
+        let used = row.min_rect();
+        drop(row);
+        let x = |v: f32| v.clamp(max.left(), max.right());
+        room.advance_cursor_after_rect(egui::Rect::from_x_y_ranges(
+            x(used.left())..=x(used.right()),
+            used.y_range(),
+        ));
+        inner
     })
     .inner
 }
@@ -193,16 +248,20 @@ pub fn overlay_width(ctx: &egui::Context, requested: f32, inset: f32, content_mi
 /// a right-aligned column or a right-to-left row, and evenly on both
 /// sides in a centred column.
 ///
-/// In a row, the next widget starts after the room the parent gave, so
-/// it covers the overflowing part, where the browser would place it after
-/// the whole box: egui can move a row's cursor only by growing the row.
+/// In a crate row ([`row`], [`wrap_row`], [`space_between`], a card
+/// footer), or a horizontal scope inside one, the widget takes its whole
+/// width and the next widget starts after it, as in the browser; the row
+/// keeps the overflow from its own parent. In a plain `ui.horizontal` the
+/// next widget starts after the room the parent gave, so it covers the
+/// overflowing part: egui can move a row's cursor only by growing the row,
+/// and that would widen the row's parent.
 pub fn allocate_overflowing(
     ui: &mut Ui,
     size: egui::Vec2,
     sense: egui::Sense,
 ) -> (egui::Rect, egui::Response) {
     let room = ui.available_width().max(0.0);
-    if size.x <= room {
+    if size.x <= room || in_row(ui) {
         return ui.allocate_exact_size(size, sense);
     }
     let (rect, mut response) = ui.allocate_exact_size(egui::vec2(room, size.y), sense);
@@ -279,7 +338,13 @@ pub(crate) fn breakpoints(ctx: &egui::Context) -> crate::style::State {
 /// A row whose `left` content hugs the start and `right` content hugs the end
 /// (justify-content: space-between).
 pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
-    ui.horizontal(|ui| {
+    // `ui.horizontal`'s size and layout, as a crate row.
+    let size = egui::vec2(
+        ui.available_size_before_wrap().x,
+        ui.spacing().interact_size.y,
+    );
+    let layout = egui::Layout::left_to_right(egui::Align::Center);
+    overflow_row(ui, size, layout, |_, ui| {
         left(ui);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             right(ui);
@@ -355,6 +420,78 @@ mod tests {
             });
         });
         assert_eq!(widths, Some((150.0, 150.0, 100.0)));
+    }
+
+    /// `rows` in a column 100 wide: the left edge of the widget after a
+    /// 150 wide overflowing one, and the column's width afterwards.
+    fn after_overflow(rows: impl Fn(&mut Ui, &mut dyn FnMut(&mut Ui))) -> (f32, f32) {
+        let ctx = egui::Context::default();
+        let mut out = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let max = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 200.0));
+            let mut column = ui.new_child(egui::UiBuilder::new().max_rect(max));
+            let mut next = 0.0;
+            rows(&mut column, &mut |ui| {
+                allocate_overflowing(ui, egui::vec2(150.0, 20.0), egui::Sense::hover());
+                next = ui
+                    .allocate_exact_size(egui::vec2(10.0, 20.0), egui::Sense::hover())
+                    .0
+                    .left();
+            });
+            out = Some((next, column.min_rect().width()));
+        });
+        out.expect("ran")
+    }
+
+    /// In a crate row an overflowing child pushes its siblings past its
+    /// whole width, and the column holding the row keeps its width, as a
+    /// flex row in the browser.
+    #[test]
+    fn a_crate_row_places_siblings_after_the_overflow() {
+        assert_eq!(
+            after_overflow(|ui, add| row(ui, 4.0, |ui| add(ui))),
+            (154.0, 100.0)
+        );
+        assert_eq!(
+            after_overflow(|ui, add| wrap_row(ui, 4.0, |ui| add(ui))),
+            // The sibling does not fit the rest of the line: the next one.
+            (0.0, 100.0)
+        );
+        assert_eq!(
+            after_overflow(|ui, add| space_between(ui, |ui| add(ui), |_| {})),
+            (150.0 + 8.0, 100.0)
+        );
+        // In a scope inside the row too.
+        assert_eq!(
+            after_overflow(|ui, add| row(ui, 4.0, |ui| {
+                ui.scope(|ui| add(ui));
+            })),
+            (154.0, 100.0)
+        );
+    }
+
+    /// In a plain `ui.horizontal` the next widget covers the overflow,
+    /// and a widget that runs past the room still widens the parent.
+    #[test]
+    fn a_plain_horizontal_row_overlaps_the_overflow() {
+        assert_eq!(
+            after_overflow(|ui, add| {
+                ui.horizontal(|ui| add(ui));
+            }),
+            (108.0, 118.0)
+        );
+    }
+
+    /// An egui widget wider than a crate row's room does not widen the
+    /// row's parent either.
+    #[test]
+    fn a_crate_row_keeps_an_egui_widget_overflow_from_its_parent() {
+        assert_eq!(
+            after_overflow(|ui, _| row(ui, 4.0, |ui| {
+                ui.allocate_exact_size(egui::vec2(150.0, 20.0), egui::Sense::hover());
+            })),
+            (0.0, 100.0)
+        );
     }
 
     /// The overflow goes where a flex item's goes: the end of a left
