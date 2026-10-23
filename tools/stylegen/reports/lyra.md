@@ -8,12 +8,12 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-button`
 
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `group/button`: browser behaviour the component handles itself
 - ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
@@ -155,12 +155,12 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-input`
 
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `file:h-6`: file-input button; egui has no file input
 - ignored `file:text-xs`: file-input button; egui has no file input
 - ignored `file:font-medium`: file-input button; egui has no file input
@@ -194,12 +194,12 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-select-trigger`
 
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `select-none`: browser behaviour the component handles itself
 - ignored `*:data-[slot=select-value]:flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
@@ -536,19 +536,25 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-button-group-orientation-horizontal`
 
-- moved `[&>*:not(:first-child)]:rounded-l-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:first-child)]:border-l-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:last-child)]:rounded-r-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
+- moved `[&>*:not(:first-child)]:rounded-l-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- moved `[&>*:not(:first-child)]:border-l-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- moved `[&>*:not(:last-child)]:rounded-r-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
 
 ## `cn-button-group-orientation-vertical`
 
-- moved `[&>*:not(:first-child)]:rounded-t-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:first-child)]:border-t-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- moved `[&>*:not(:last-child)]:rounded-b-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- moved `[&>*:not(:first-child)]:rounded-t-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- moved `[&>*:not(:first-child)]:border-t-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- moved `[&>*:not(:last-child)]:rounded-b-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `flex-col`: structure: egui layout is done by the component
 
 ## `cn-button-group-separator`
 
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `relative`: structure: egui layout is done by the component
 - ignored `self-stretch`: structure: egui layout is done by the component
 - ignored `data-horizontal:w-auto`: size or alignment relative to the parent; egui layout is done by the component
@@ -556,24 +562,24 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-button-group-text`
 
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-textarea`
 
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST)
-- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
 - ignored `flex`: structure: egui layout is done by the component

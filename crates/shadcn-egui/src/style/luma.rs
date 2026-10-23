@@ -138,27 +138,27 @@ fn button() -> Box<Recipe> {
         radius_top: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_bottom: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         radius_left: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_right: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         bg_clip_padding: Prop::fixed(true),
@@ -166,13 +166,13 @@ fn button() -> Box<Recipe> {
         border_top_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_left_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_color: Prop {
@@ -934,27 +934,27 @@ fn input() -> Box<Recipe> {
         radius_top: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_bottom: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         radius_left: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_right: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         bg: Prop::fixed(Paint::Role(Role::Input, 0.5)),
@@ -968,13 +968,13 @@ fn input() -> Box<Recipe> {
         border_top_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_left_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_color: Prop {
@@ -1155,27 +1155,27 @@ fn select_trigger() -> Box<Recipe> {
         radius_top: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_bottom: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         radius_left: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_right: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         bg: Prop::fixed(Paint::Role(Role::Input, 0.5)),
@@ -1189,13 +1189,13 @@ fn select_trigger() -> Box<Recipe> {
         border_top_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_left_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_color: Prop {
@@ -2323,7 +2323,45 @@ fn button_group_separator() -> Box<Recipe> {
                 Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 1.0 },
             ],
         },
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+            ],
+        },
         bg: Prop::fixed(Paint::Role(Role::Input, 1.0)),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
         ..Recipe::default()
     })
 }
@@ -2345,27 +2383,27 @@ fn button_group_text() -> Box<Recipe> {
         radius_top: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_bottom: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         radius_left: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_right: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
@@ -2373,13 +2411,13 @@ fn button_group_text() -> Box<Recipe> {
         border_top_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_left_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         ..Recipe::default()
@@ -2403,27 +2441,27 @@ fn textarea() -> Box<Recipe> {
         radius_top: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_bottom: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         radius_left: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
             ],
         },
         radius_right: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_LAST), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::LAST), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Xl4) },
             ],
         },
         bg: Prop::fixed(Paint::Role(Role::Input, 0.5)),
@@ -2437,13 +2475,13 @@ fn textarea() -> Box<Recipe> {
         border_top_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::VERTICAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_left_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::HORIZONTAL).or(State::NOT_FIRST), State::NONE), rank: 1 << 122, value: 0.0 },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
             ],
         },
         border_color: Prop {

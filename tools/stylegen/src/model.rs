@@ -281,6 +281,8 @@ pub const FLAGS: &[(&str, u128)] = &[
     ("HAS_SIZE_SM", 1 << 47),
     ("CLOSED", 1 << 48),
     ("DELAYED_OPEN", 1 << 49),
+    ("IN_GROUP_HORIZONTAL", 1 << 50),
+    ("IN_GROUP_VERTICAL", 1 << 51),
 ];
 
 pub fn flag(name: &str) -> u128 {

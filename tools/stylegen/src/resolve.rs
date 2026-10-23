@@ -433,17 +433,19 @@ pub struct Context {
 }
 
 /// Children of a button group: the crate parts upstream's demos place in
-/// one, and textarea, a field like input. A nested group draws no fill,
-/// border or ring, so the position rules (`[&>*:not(:first-child)]:rounded-l-none`)
-/// change no pixel of it. On a separator the `none` corners and `border-*-0`
-/// meet a part with square corners and no border; only the `LAST` corner
-/// rule would round a separator that ends a group, and that is left open:
-/// the group's orientation flag would collide with the separator's own.
+/// one, textarea (a field like input) and the group's separator. A nested
+/// group draws no fill, border or ring, so the position rules
+/// (`[&>*:not(:first-child)]:rounded-l-none`) change no pixel of it. The
+/// group's orientation reaches its children as `IN_GROUP_HORIZONTAL` or
+/// `IN_GROUP_VERTICAL`, apart from a child's own `data-orientation`
+/// (`HORIZONTAL`, `VERTICAL`): a separator is perpendicular to its group,
+/// and a separator that ends the group takes the group's last-child corner.
 const BUTTON_GROUP_CHILDREN: &[&str] = &[
     "cn-button",
     "cn-input",
     "cn-textarea",
     "cn-select-trigger",
+    "cn-button-group-separator",
     "cn-button-group-text",
 ];
 
@@ -470,12 +472,12 @@ pub const CONTEXTS: &[Context] = &[
     },
     Context {
         parent: "cn-button-group-orientation-horizontal",
-        flags: &["IN_BUTTON_GROUP", "HORIZONTAL"],
+        flags: &["IN_BUTTON_GROUP", "IN_GROUP_HORIZONTAL"],
         children: BUTTON_GROUP_CHILDREN,
     },
     Context {
         parent: "cn-button-group-orientation-vertical",
-        flags: &["IN_BUTTON_GROUP", "VERTICAL"],
+        flags: &["IN_BUTTON_GROUP", "IN_GROUP_VERTICAL"],
         children: BUTTON_GROUP_CHILDREN,
     },
 ];

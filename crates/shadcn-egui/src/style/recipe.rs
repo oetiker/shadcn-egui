@@ -114,6 +114,14 @@ impl State {
     pub const CLOSED: State = State(1 << 48);
     /// `data-[state=delayed-open]:` (a tooltip opened after its delay)
     pub const DELAYED_OPEN: State = State(1 << 49);
+    /// A child of a group whose `data-orientation` is horizontal
+    /// (`cn-button-group-orientation-horizontal`'s `[&>*]` rules), apart
+    /// from the child's own orientation ([`State::HORIZONTAL`])
+    pub const IN_GROUP_HORIZONTAL: State = State(1 << 50);
+    /// A child of a group whose `data-orientation` is vertical
+    /// (`cn-button-group-orientation-vertical`'s `[&>*]` rules), apart from
+    /// the child's own orientation ([`State::VERTICAL`])
+    pub const IN_GROUP_VERTICAL: State = State(1 << 51);
 
     pub const fn or(self, other: State) -> State {
         State(self.0 | other.0)
