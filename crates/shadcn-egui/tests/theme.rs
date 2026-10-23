@@ -103,22 +103,39 @@ fn text_and_shadow() {
     let t = Theme::vega_dark();
     assert_eq!(t.text_px(TextSize::Sm), 14.0);
     assert_eq!(t.text_px(TextSize::Px(12.8)), 12.8);
-    assert_eq!(t.shadow(ShadowLevel::None), egui::epaint::Shadow::NONE);
-    // (level, y offset, blur, black alpha) from the Tailwind v4 shadow scale.
-    for (level, y, blur, a) in [
-        (ShadowLevel::Xs2, 1, 0, 13),
-        (ShadowLevel::Xs, 1, 2, 13),
-        (ShadowLevel::Sm, 1, 3, 26),
-        (ShadowLevel::Md, 4, 6, 26),
-        (ShadowLevel::Lg, 10, 15, 26),
-        (ShadowLevel::Xl, 20, 25, 26),
-        (ShadowLevel::Xl2, 25, 50, 64),
+    assert!(t.shadow(ShadowLevel::None).is_empty());
+    // Tailwind v4 theme.css: (level, [(y offset, blur, spread, alpha)]).
+    for (level, want) in [
+        (ShadowLevel::Xs2, &[(1.0, 0.0, 0.0, 0.05)][..]),
+        (ShadowLevel::Xs, &[(1.0, 2.0, 0.0, 0.05)]),
+        (
+            ShadowLevel::Sm,
+            &[(1.0, 3.0, 0.0, 0.1), (1.0, 2.0, -1.0, 0.1)],
+        ),
+        (
+            ShadowLevel::Md,
+            &[(4.0, 6.0, -1.0, 0.1), (2.0, 4.0, -2.0, 0.1)],
+        ),
+        (
+            ShadowLevel::Lg,
+            &[(10.0, 15.0, -3.0, 0.1), (4.0, 6.0, -4.0, 0.1)],
+        ),
+        (
+            ShadowLevel::Xl,
+            &[(20.0, 25.0, -5.0, 0.1), (8.0, 10.0, -6.0, 0.1)],
+        ),
+        (ShadowLevel::Xl2, &[(25.0, 50.0, -12.0, 0.25)]),
     ] {
-        let s = t.shadow(level);
-        assert_eq!(s.offset, [0, y], "{level:?}");
-        assert_eq!(s.blur, blur, "{level:?}");
-        assert_eq!(s.spread, 0, "{level:?}");
-        assert_eq!(s.color, egui::Color32::from_black_alpha(a), "{level:?}");
+        let got: Vec<_> = t
+            .shadow(level)
+            .iter()
+            .map(|l| {
+                assert_eq!(l.offset().x, 0.0, "{level:?}");
+                assert_eq!(l.color(), egui::Color32::BLACK, "{level:?}");
+                (l.offset().y, l.blur(), l.spread(), l.alpha())
+            })
+            .collect();
+        assert_eq!(got, want, "{level:?}");
     }
 }
 

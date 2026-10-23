@@ -371,25 +371,90 @@ impl Theme {
             TextSize::Px(v) => v * m.line_base / m.text_base,
         }
     }
-    /// Tailwind v4 shadows, first layer only (egui draws one); egui's spread
-    /// is unsigned, so Tailwind's negative spreads become 0.
-    pub fn shadow(&self, s: ShadowLevel) -> egui::epaint::Shadow {
-        let (y, blur, a) = match s {
-            ShadowLevel::None => return egui::epaint::Shadow::NONE,
-            ShadowLevel::Xs2 => (1, 0, 0.05),
-            ShadowLevel::Xs => (1, 2, 0.05),
-            ShadowLevel::Sm => (1, 3, 0.10),
-            ShadowLevel::Md => (4, 6, 0.10),
-            ShadowLevel::Lg => (10, 15, 0.10),
-            ShadowLevel::Xl => (20, 25, 0.10),
-            ShadowLevel::Xl2 => (25, 50, 0.25),
-        };
-        egui::epaint::Shadow {
-            offset: [0, y],
-            blur,
-            spread: 0,
-            color: Color32::from_black_alpha((a * 255.0_f32).round() as u8),
+    /// Tailwind v4's `shadow-*` scale with every layer, first layer on top
+    /// as CSS paints it. [`RecipeBox`](crate::components::shared::RecipeBox)
+    /// draws them to the browser's pixels.
+    pub fn shadow(&self, s: ShadowLevel) -> &'static [ShadowLayer] {
+        const fn l(y: f32, blur: f32, spread: f32, alpha: f32) -> ShadowLayer {
+            ShadowLayer::new(egui::vec2(0.0, y), blur, spread, Color32::BLACK, alpha)
         }
+        // Tailwind v4 theme.css `--shadow-*`.
+        const XS2: &[ShadowLayer] = &[l(1.0, 0.0, 0.0, 0.05)];
+        const XS: &[ShadowLayer] = &[l(1.0, 2.0, 0.0, 0.05)];
+        const SM: &[ShadowLayer] = &[l(1.0, 3.0, 0.0, 0.1), l(1.0, 2.0, -1.0, 0.1)];
+        const MD: &[ShadowLayer] = &[l(4.0, 6.0, -1.0, 0.1), l(2.0, 4.0, -2.0, 0.1)];
+        const LG: &[ShadowLayer] = &[l(10.0, 15.0, -3.0, 0.1), l(4.0, 6.0, -4.0, 0.1)];
+        const XL: &[ShadowLayer] = &[l(20.0, 25.0, -5.0, 0.1), l(8.0, 10.0, -6.0, 0.1)];
+        const XL2: &[ShadowLayer] = &[l(25.0, 50.0, -12.0, 0.25)];
+        match s {
+            ShadowLevel::None => &[],
+            ShadowLevel::Xs2 => XS2,
+            ShadowLevel::Xs => XS,
+            ShadowLevel::Sm => SM,
+            ShadowLevel::Md => MD,
+            ShadowLevel::Lg => LG,
+            ShadowLevel::Xl => XL,
+            ShadowLevel::Xl2 => XL2,
+        }
+    }
+}
+
+/// One layer of a CSS `box-shadow` (outer): offset, blur radius and spread
+/// in px, colour and alpha. The blur is CSS's: a Gaussian with a standard
+/// deviation of half the blur radius. The alpha is kept apart from the
+/// colour so `0.1` stays exact (egui's colours have 8-bit alpha).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ShadowLayer {
+    offset: egui::Vec2,
+    blur: f32,
+    spread: f32,
+    color: Color32,
+    alpha: f32,
+}
+
+impl ShadowLayer {
+    /// A layer as CSS writes it: `<x> <y> <blur> <spread> <color> / <alpha>`.
+    /// `color`'s own alpha is ignored.
+    pub const fn new(
+        offset: egui::Vec2,
+        blur: f32,
+        spread: f32,
+        color: Color32,
+        alpha: f32,
+    ) -> Self {
+        Self {
+            offset,
+            blur,
+            spread,
+            color,
+            alpha,
+        }
+    }
+    /// The x and y offset in px.
+    #[inline]
+    pub fn offset(&self) -> egui::Vec2 {
+        self.offset
+    }
+    /// The blur radius in px (CSS's; the Gaussian's deviation is half).
+    #[inline]
+    pub fn blur(&self) -> f32 {
+        self.blur
+    }
+    /// The spread in px; negative shrinks the shadow.
+    #[inline]
+    pub fn spread(&self) -> f32 {
+        self.spread
+    }
+    /// The colour; its alpha is not used.
+    #[inline]
+    pub fn color(&self) -> Color32 {
+        self.color
+    }
+    /// The alpha, 0 to 1.
+    #[inline]
+    pub fn alpha(&self) -> f32 {
+        self.alpha
     }
 }
 

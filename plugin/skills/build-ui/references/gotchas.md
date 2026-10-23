@@ -53,8 +53,9 @@
   card in two areas at the same `Order` can swap z-order once another window
   has been shown, leaving the backdrop on top. `Dialog` uses `egui::Modal`,
   which draws both in one area.
-- **No multi-stop/radial gradients, no per-widget box-shadow stacks.** One `Shadow`
-  per `Frame`; gradients need a hand-built `Mesh`.
+- **No multi-stop/radial gradients.** Gradients need a hand-built `Mesh`. A
+  `box-shadow` stack goes through `RecipeBox`, which draws every Tailwind
+  layer; egui's own `Shadow` is one linear ramp and does not match the browser.
 - **Apply the theme once, not every frame.** Call `Theme::apply` right after the
   context is created, and again only when the theme changes (for example a light/dark
   toggle). It sets the dark and the light style alike, so a system theme switch

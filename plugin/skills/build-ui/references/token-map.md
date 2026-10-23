@@ -17,7 +17,7 @@
 | `--radius` (10px) | `Theme.radius`; `radius_sm/md/lg/xl` |
 | 4px spacing grid | `Spacing.item_spacing`, margins |
 | 14px / medium | `text_styles[Body]` + `shadcn_egui::theme::family_for(ctx, Weight::Medium)` |
-| `shadow-*` | `Theme::shadow(ShadowLevel)`; the style's recipes pick the level |
+| `shadow-*` | `Theme::shadow(ShadowLevel)` gives every layer as a `ShadowLayer`; the style's recipes pick the level and `RecipeBox` paints it |
 | dialog overlay `bg-black/50` | the style's `dialog_overlay` recipe (`bg`) |
 | `text-xs` / `text-sm` / `text-base` / `text-lg` | `Metrics.text_xs` / `text_sm` / `text_base` / `text_lg` |
 | control heights, paddings, gaps, card padding, dialog and popover widths | the style's recipes (`button_size_*`, `card`, `dialog_content`, ...), not `Metrics` |

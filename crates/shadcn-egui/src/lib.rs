@@ -28,6 +28,7 @@
 //! repository (not in the crates.io package) shows every component under
 //! any preset: `cargo run --example gallery --features fonts-all,icons-all`.
 
+mod box_shadow;
 pub mod color;
 pub mod components;
 pub mod fonts;
@@ -45,7 +46,7 @@ pub use preset::{
 };
 pub use shadcn_egui_core::*;
 pub use style::Style;
-pub use theme::{theme, MenuColors, Metrics, Palette, Theme, ThemeFonts};
+pub use theme::{theme, MenuColors, Metrics, Palette, ShadowLayer, Theme, ThemeFonts};
 
 // The Claude Code skills under plugin/skills/ name this crate's API. Compiling
 // their rust fences as doctests makes an API change fail `cargo test` until

@@ -1,7 +1,8 @@
 //! Shared painting helpers for shadcn-style components.
 
+use crate::box_shadow::clamp_radii;
 use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, TextSize};
-use crate::Theme;
+use crate::{ShadowLayer, Theme};
 use egui::{
     Color32, Context, CornerRadius, Id, Key, Painter, PointerButton, Rect, Response, Shape, Stroke,
     Ui,
@@ -146,7 +147,9 @@ pub struct RecipeBox {
     /// Border widths in px: top, right, bottom, left.
     borders: [f32; 4],
     clip_padding: bool,
-    shadow: Option<egui::epaint::Shadow>,
+    /// `box-shadow` layers, first on top, and their fade.
+    shadow: &'static [ShadowLayer],
+    shadow_opacity: f32,
     ring: Option<Stroke>,
     outline: Option<Stroke>,
 }
@@ -220,9 +223,8 @@ impl RecipeBox {
             border_color: paint(|r| &r.border_color).unwrap_or(base_border),
             borders,
             clip_padding: pick(layers, |r| &r.bg_clip_padding, state) == Some(true),
-            shadow: pick(layers, |r| &r.shadow, state)
-                .map(|s| theme.shadow(s))
-                .filter(|s| *s != egui::epaint::Shadow::NONE),
+            shadow: pick(layers, |r| &r.shadow, state).map_or(&[], |s| theme.shadow(s)),
+            shadow_opacity: INITIAL_OPACITY,
             ring: stroke(ring_w, paint(|r| &r.ring_color)),
             outline: stroke(outline_w, paint(|r| &r.outline_color)),
         }
@@ -235,9 +237,7 @@ impl RecipeBox {
     pub fn faded(mut self, opacity: f32) -> Self {
         self.fill = self.fill.map(|c| c.gamma_multiply(opacity));
         self.border_color = self.border_color.gamma_multiply(opacity);
-        if let Some(s) = &mut self.shadow {
-            s.color = s.color.gamma_multiply(opacity);
-        }
+        self.shadow_opacity *= opacity;
         for s in [&mut self.ring, &mut self.outline].into_iter().flatten() {
             s.color = s.color.gamma_multiply(opacity);
         }
@@ -248,14 +248,8 @@ impl RecipeBox {
     /// radii on one side add up to more than its length, all four scale
     /// down by the same factor (so `rounded-full` is half the short side).
     pub fn radius_on(&self, rect: Rect) -> CornerRadius {
-        let [nw, ne, sw, se] = self.radii;
-        let (w, h) = (rect.width().max(0.0), rect.height().max(0.0));
-        let f = [(w, nw + ne), (w, sw + se), (h, nw + sw), (h, ne + se)]
-            .into_iter()
-            .filter(|(_, sum)| *sum > 0.0)
-            .map(|(len, sum)| len / sum)
-            .fold(1.0_f32, f32::min); // behaviour-ok: radii never grow, only shrink
-        let c = |v: f32| (v * f).clamp(0.0, 255.0).round() as u8; // behaviour-ok: egui's u8 corner radius
+        let [nw, ne, sw, se] = clamp_radii(self.radii, rect);
+        let c = |v: f32| v.clamp(0.0, 255.0).round() as u8; // behaviour-ok: egui's u8 corner radius
         CornerRadius {
             nw: c(nw),
             ne: c(ne),
@@ -372,15 +366,33 @@ impl RecipeBox {
         frame
     }
 
-    /// egui's blurred shadow rect cut to the outside of the border box: an
-    /// outer `box-shadow` never shows through the box (conformance 2.5).
+    /// Every shadow layer as the browser blurs it, cut to the outside of
+    /// the border box: an outer `box-shadow` never shows through the box
+    /// (conformance 2.5).
     fn shadow_shape(&self, ctx: &egui::Context, rect: Rect, radius: CornerRadius) -> Option<Shape> {
-        let s = self.shadow?;
-        let mesh = tessellate(ctx, &s.as_shape(rect, radius));
-        Some(Shape::mesh(clip_outside(
-            &mesh,
-            &rounded_polygon(rect, radius),
-        )))
+        (!self.shadow.is_empty() && self.shadow_opacity > 0.0).then(|| {
+            // The fill's rect as egui's tessellator places it.
+            let rect = on_pixels(ctx, rect);
+            Shape::Mesh(crate::box_shadow::shadow_mesh(
+                ctx,
+                rect,
+                clamp_radii(self.radii, rect),
+                radius,
+                self.shadow,
+                self.shadow_opacity,
+            ))
+        })
+    }
+}
+
+/// `rect` on the physical pixel grid where egui rounds rects before it
+/// fills them, so a shadow's cut meets the fill's edge.
+fn on_pixels(ctx: &egui::Context, rect: Rect) -> Rect {
+    use egui::emath::GuiRounding as _;
+    if ctx.tessellation_options(|o| o.round_rects_to_pixels) {
+        rect.round_to_pixels(ctx.pixels_per_point())
+    } else {
+        rect
     }
 }
 
@@ -420,7 +432,7 @@ fn tessellate(ctx: &egui::Context, shape: &egui::epaint::RectShape) -> egui::Mes
 }
 
 /// The convex outline of a rounded rect, as egui's tessellator traces it.
-fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos2> {
+pub(crate) fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos2> {
     let mut points = Vec::new();
     egui::epaint::tessellator::path::rounded_rectangle(&mut points, rect, radius.into());
     points.dedup_by(|a, b| (*a - *b).length_sq() < 1e-6);
@@ -429,8 +441,8 @@ fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos2> {
 
 /// The part of `mesh` that lies outside the convex `polygon`. A triangle
 /// that straddles an edge is cut along it, its vertex colours and texture
-/// coordinates interpolated.
-fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
+/// coordinates interpolated; one wholly inside is dropped at once.
+pub(crate) fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
     use egui::epaint::Vertex;
     let n = polygon.len();
     let mut out = egui::Mesh::with_texture(mesh.texture_id);
@@ -465,31 +477,51 @@ fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
             out.add_triangle(base, base + k, base + k + 1);
         }
     };
+    // Buffers shared by every triangle: each cut adds at most one vertex.
+    let (mut inside, mut next, mut cut_off) = (
+        Vec::with_capacity(n + 3),
+        Vec::with_capacity(n + 3),
+        Vec::with_capacity(n + 3),
+    );
     for tri in mesh.indices.as_chunks::<3>().0 {
-        let mut inside: Vec<Vertex> = tri.iter().map(|&i| mesh.vertices[i as usize]).collect();
-        // Wholly outside one edge: keep it as it is.
-        if (0..n).any(|e| inside.iter().all(|v| side(e, v.pos) <= 0.0)) {
-            emit(&inside);
+        let tri = tri.map(|i| mesh.vertices[i as usize]);
+        let (mut all_inside, mut outside_one) = (true, false);
+        for e in 0..n {
+            let d = tri.map(|v| side(e, v.pos));
+            if d.iter().all(|&d| d <= 0.0) {
+                outside_one = true;
+                break;
+            }
+            all_inside &= d.iter().all(|&d| d >= 0.0);
+        }
+        if outside_one {
+            emit(&tri);
             continue;
         }
+        if all_inside {
+            continue;
+        }
+        inside.clear();
+        inside.extend_from_slice(&tri);
         for e in 0..n {
-            let (mut keep_in, mut keep_out) = (Vec::new(), Vec::new());
+            next.clear();
+            cut_off.clear();
             for k in 0..inside.len() {
                 let (a, b) = (&inside[k], &inside[(k + 1) % inside.len()]);
                 let (da, db) = (side(e, a.pos), side(e, b.pos));
                 if da >= 0.0 {
-                    keep_in.push(*a);
+                    next.push(*a);
                 } else {
-                    keep_out.push(*a);
+                    cut_off.push(*a);
                 }
                 if (da >= 0.0) != (db >= 0.0) {
                     let v = lerp(a, b, da / (da - db));
-                    keep_in.push(v);
-                    keep_out.push(v);
+                    next.push(v);
+                    cut_off.push(v);
                 }
             }
-            emit(&keep_out);
-            inside = keep_in;
+            emit(&cut_off);
+            std::mem::swap(&mut inside, &mut next);
             if inside.len() < 3 {
                 break;
             }
