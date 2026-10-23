@@ -11,7 +11,7 @@
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
-use crate::components::shared::{faded, opacity, RecipeBox, DEFAULT_SIDE_OFFSET};
+use crate::components::shared::{opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -129,14 +129,15 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
         .map(|p| t.paint(p));
     let muted = pick(&desc_l, |r| &r.text, g).map(|p| t.paint(p));
     // The title and the description sit in the header.
-    let fade = |part: &Recipe| opacity(&[&[part][..]], g);
-    let (title_fade, desc_fade) = (
-        fade(&t.style.popover_title),
-        fade(&t.style.popover_description),
+    let (title_l, desc_l2, header_l) = (
+        [&*t.style.popover_title],
+        [&*t.style.popover_description],
+        [header],
     );
-    let header_fade = fade(header);
     ui.scope(|ui| {
-        ui.multiply_opacity(header_fade);
+        // The header holds the title and description: they take one fade out.
+        let disabled = g.with(State::DISABLED, !ui.is_enabled());
+        ui.multiply_opacity(opacity(&[&header_l[..]], disabled));
         ui.spacing_mut().item_spacing.y = gap;
         let mut title = RichText::new(title)
             .size(title_px)
@@ -145,14 +146,14 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
         if let Some(c) = title_color {
             title = title.color(c);
         }
-        faded(ui, title_fade, |ui| ui.label(title));
+        part_ui(ui, &[&title_l[..]], g, |ui| ui.label(title));
         let mut description = RichText::new(description)
             .size(desc_px)
             .line_height(Some(desc_line));
         if let Some(c) = muted {
             description = description.color(c);
         }
-        faded(ui, desc_fade, |ui| ui.label(description));
+        part_ui(ui, &[&desc_l2[..]], g, |ui| ui.label(description));
     });
 }
 

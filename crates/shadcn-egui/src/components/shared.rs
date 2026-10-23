@@ -1,6 +1,6 @@
 //! Shared painting helpers for shadcn-style components.
 
-use crate::style::{pick, pick_ranked, pick_when, Paint, Prop, Radius, Recipe, Shift, State, TextSize};
+use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, TextSize};
 use crate::Theme;
 use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
 
@@ -20,47 +20,45 @@ pub fn opacity(chain: &[&[&Recipe]], s: State) -> f32 {
         .product()
 }
 
-/// A part's resolved [`opacity`] for painting in `ui`. In a disabled `Ui`
-/// (`ui.add_enabled(false, ..)`, `Ui::disable`) egui has faded every shape
-/// once already, standing in for the style's `disabled:` fade. So where a
-/// rule that needs `DISABLED` wins a part's pick, that part's own opacity
-/// is 1.0: the `disabled:` rule replaces the part's base value, as in CSS,
-/// and egui's fade replaces the rule. Where none wins, the normal pick
-/// applies (a base 0.5 stays 0.5 on top of egui's fade).
-pub fn ui_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
-    if ui.is_enabled() {
-        return opacity(chain, s);
+/// The `Ui`'s opacity without egui's disabled fade. `Ui::disable` multiplies
+/// the painter's opacity by `visuals.disabled_alpha`; a nested disable fades
+/// again, which the `Ui` does not report, so one fade only is taken out.
+fn opacity_without_fade(ui: &Ui) -> f32 {
+    let fade = ui.visuals().disabled_alpha();
+    if ui.is_enabled() || fade <= 0.0 {
+        ui.opacity()
+    } else {
+        (ui.opacity() / fade).min(1.0) // behaviour-ok: opacity never exceeds 1
     }
-    chain
-        .iter()
-        .map(|stack| match pick_when(stack, |r| &r.opacity, s) {
-            Some((when, _)) if when.all.contains(State::DISABLED) => INITIAL_OPACITY,
-            Some((_, v)) => v,
-            None => INITIAL_OPACITY,
-        })
-        .product()
 }
 
-/// The `Ui`'s painter, faded by the part's [`ui_opacity`] (`chain` as in
-/// [`opacity`], for example the style's `disabled:opacity-50`). egui fades
-/// shape by shape: where a part lies on another (a switch thumb on its
-/// track) the lower part shows through, which CSS opacity on the whole
-/// group would not show.
-pub fn style_painter(ui: &Ui, chain: &[&[&Recipe]], s: State) -> Painter {
+/// The opacity a crate part paints at in `ui`: the `Ui`'s opacity with one
+/// egui disabled fade taken out, times the part's [`opacity`] (`chain` as
+/// there) under `s`, with `DISABLED` added in a disabled `Ui`. So a part
+/// fades by its style's `disabled:` rule, not by egui's fade, and a part
+/// with no such rule stays opaque in a disabled `Ui`, as in a disabled
+/// `<fieldset>` (conformance 2.2).
+pub fn part_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
+    let s = s.with(State::DISABLED, s.contains(State::DISABLED) || !ui.is_enabled());
+    opacity_without_fade(ui) * opacity(chain, s)
+}
+
+/// The `Ui`'s painter at the part's [`part_opacity`]. egui fades shape by
+/// shape: where a part lies on another (a switch thumb on its track) the
+/// lower part shows through, which CSS opacity on the whole group would not
+/// show.
+pub fn part_painter(ui: &Ui, chain: &[&[&Recipe]], s: State) -> Painter {
     let mut painter = ui.painter().clone();
-    painter.multiply_opacity(ui_opacity(ui, chain, s));
+    painter.set_opacity(part_opacity(ui, chain, s));
     painter
 }
 
-/// Run `add` with everything it paints in `ui` faded by `opacity` (a
-/// container part's resolved [`opacity`]), then restore the `Ui`'s own
-/// opacity. Unlike a scope, this adds no layout of its own. Parts nested in
-/// `add` multiply their own opacity on top, as CSS does. A
-/// [`Ui::disable`] inside `add` (a disabled card action) keeps its fade:
+/// Run `add` with `ui` at `opacity`, then restore the `Ui`'s own opacity.
+/// A [`Ui::disable`] inside `add` (a disabled card action) keeps its fade:
 /// the `Ui` stays disabled, so what it paints afterwards stays faded too.
-pub fn faded<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+fn with_opacity<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let (before, was_enabled) = (ui.opacity(), ui.is_enabled());
-    ui.multiply_opacity(opacity);
+    ui.set_opacity(opacity);
     let inner = add(ui);
     ui.set_opacity(before);
     // Restoring `before` undid the fade egui's `disable` multiplied in.
@@ -68,6 +66,33 @@ pub fn faded<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R 
         ui.multiply_opacity(ui.visuals().disabled_alpha());
     }
     inner
+}
+
+/// Run `add`, which draws a crate part through egui (a title through
+/// `ui.label`), at the part's [`part_opacity`]. Unlike a scope, this adds no
+/// layout of its own.
+pub fn part_ui<R>(
+    ui: &mut Ui,
+    chain: &[&[&Recipe]],
+    s: State,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let opacity = part_opacity(ui, chain, s);
+    with_opacity(ui, opacity, add)
+}
+
+/// Run `add`, the caller's content of a container part, at the part's
+/// opacity. egui's disabled fade stays, so plain egui widgets in it show the
+/// theme's `disabled_alpha`, and crate parts in it take it out again with
+/// [`part_opacity`]. Unlike a scope, this adds no layout of its own.
+pub fn content_ui<R>(
+    ui: &mut Ui,
+    chain: &[&[&Recipe]],
+    s: State,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let opacity = ui.opacity() * opacity(chain, s.with(State::DISABLED, s.contains(State::DISABLED) || !ui.is_enabled()));
+    with_opacity(ui, opacity, add)
 }
 
 /// The height of one line of a part's text: its `leading-*` times the font
@@ -216,7 +241,7 @@ impl RecipeBox {
             .into_iter()
             .filter(|(_, sum)| *sum > 0.0)
             .map(|(len, sum)| len / sum)
-            .fold(1.0_f32, f32::min);
+            .fold(1.0_f32, f32::min); // behaviour-ok: radii never grow, only shrink
         let c = |v: f32| (v * f).clamp(0.0, 255.0).round() as u8; // behaviour-ok: egui's u8 corner radius
         CornerRadius {
             nw: c(nw),

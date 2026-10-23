@@ -4,7 +4,7 @@
 //! paints.
 
 use crate::components::shared::{
-    interaction_state, line_box, style_painter, ui_opacity, RecipeBox,
+    interaction_state, line_box, part_opacity, part_painter, RecipeBox,
 };
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -106,7 +106,8 @@ impl<'a> Widget for Input<'a> {
                 + f32::from(margin.bottom)
         });
 
-        let fade = ui_opacity(ui, &[&l[..]], g.with(State::DISABLED, !enabled));
+        // The `TextEdit` is the field's own text: it paints at the part's opacity.
+        let fade = part_opacity(ui, &[&l[..]], g.with(State::DISABLED, !enabled));
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
@@ -131,8 +132,7 @@ impl<'a> Widget for Input<'a> {
                 if let Some(c) = placeholder {
                     ui.visuals_mut().weak_text_color = Some(c);
                 }
-                // In a disabled `Ui`, `fade` leaves out the `disabled:` rule.
-                ui.multiply_opacity(fade);
+                ui.set_opacity(fade);
                 // `add_sized`, with the id made in the `Ui` that shows the
                 // field: `TextEdit::id_salt` would hash the stored `Id` again.
                 let size = Vec2::new(ui.available_width().min(max_width), height);
@@ -147,7 +147,7 @@ impl<'a> Widget for Input<'a> {
 
         let st = interaction_state(&t, &resp, enabled, context);
         let shapes = RecipeBox::resolve(&t, &l, st).shapes(ui.ctx(), resp.rect);
-        style_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
+        part_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
     }
 }

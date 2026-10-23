@@ -11,7 +11,7 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::shared::{faded, opacity, RecipeBox};
+use crate::components::shared::{opacity, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
@@ -162,17 +162,14 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let desc_line = pick(&desc, |r| &r.line_height, g)
         .map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
     // The title and the description sit in the header.
-    let fade = |l: &[&Recipe]| opacity(&[l], g);
-    let (header_fade, title_fade, desc_fade) = (
-        fade(&[&*t.style.dialog_header]),
-        fade(&heading),
-        fade(&desc),
-    );
+    let header_l = [&*t.style.dialog_header];
     ui.scope(|ui| {
-        ui.multiply_opacity(header_fade);
+        // The header holds the title and description: they take one fade out.
+        let disabled = g.with(State::DISABLED, !ui.is_enabled());
+        ui.multiply_opacity(opacity(&[&header_l[..]], disabled));
         ui.spacing_mut().item_spacing.y = gap;
         // upstream: dialog-title carries `cn-font-heading`
-        faded(ui, title_fade, |ui| {
+        part_ui(ui, &[&heading[..]], g, |ui| {
             ui.label(
                 RichText::new(title)
                     .family(heading_family_for(ui.ctx(), weight))
@@ -187,7 +184,7 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
             if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
                 text = text.color(c);
             }
-            faded(ui, desc_fade, |ui| ui.label(text));
+            part_ui(ui, &[&desc[..]], g, |ui| ui.label(text));
         }
     });
 }

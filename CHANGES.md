@@ -15,10 +15,12 @@ are recorded here. The format is based on
 - `Theme::state` takes the egui context as its first argument, to read the window width.
 - `State` no longer exposes its bits: combine flags with `|` or `State::or` and drop one with `State::without`. `Shift::SelfMinus(n)` is now `Shift::Calc(1.0, -n)`, which also expresses a share of the part's own size such as `translate-x-1/2`.
 - `components::shared::RecipeBox` replaces `box_shapes`, `paint_box`, `ring`, `ring_shape` and `corner` for apps that paint their own parts: `RecipeBox::resolve(&theme, &recipes, state).paint(&painter, rect)` paints fill, border, shadow, ring and outline from a recipe stack, with each corner's radius and each side's border.
+- `components::shared::part_painter`, `part_opacity`, `part_ui` and `content_ui` replace `style_painter`, `ui_opacity` and `faded`: a part now paints at its own opacity with egui's disabled fade taken out once, and `content_ui` fades a container's content while plain egui widgets in it keep the theme's disabled fade.
 - `theme.style` recipes carry more of each style: corner radii per side, the left border, column gaps, text wrapping and alignment, blend modes, visibility, and the enter, exit and transition motion values.
 
 ### Fixed
 - A shadow no longer shows through a transparent or translucent box: the light vega input, select trigger and checkbox no longer look grey inside, and dark-mode switches, inputs and outline buttons no longer darken their translucent fill.
+- Plain egui widgets in a disabled area now fade by the style's disabled opacity (`disabled:opacity-50`) instead of egui's own value, and a style's `disabled:opacity-*` on a part shows at exactly that value inside a disabled area.
 - Rounded corners now paint the focus ring under the box's edge, as the browser does, so the ring's corner pixels match shadcn's.
 - A checked checkbox with keyboard focus now shows the focus border instead of the checked border, as shadcn does; so does a checked switch in the styles that give it a checked border.
 - The lines of a `layout::wrap_row` are now as high as their tallest item and exactly the gap apart; before, a line of badges or other items lower than a button took a button's height, so its lines stood further apart than the gap.

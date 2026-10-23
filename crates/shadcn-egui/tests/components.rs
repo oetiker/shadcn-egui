@@ -2169,24 +2169,74 @@ fn shadow_paints_only_outside_the_border_box() {
 /// the content (for example a disabled card action) keeps egui's disabled
 /// fade for what the `Ui` paints afterwards, as the `Ui` stays disabled.
 #[test]
-fn faded_keeps_a_disable_inside_its_content() {
-    use shadcn_egui::components::shared::faded;
+fn content_ui_keeps_a_disable_inside_its_content() {
+    use shadcn_egui::components::shared::content_ui;
+    use shadcn_egui::style::{Recipe, State};
+    let mut half = Recipe::default();
+    half.opacity.base = Some(0.5);
+    let chain: &[&[&Recipe]] = &[&[&half]];
     let ctx = egui::Context::default();
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
         let alpha = ui.visuals().disabled_alpha();
-        faded(ui, 0.5, |ui| ui.disable());
+        content_ui(ui, chain, State::NONE, |ui| {
+            assert_eq!(ui.opacity(), 0.5);
+            ui.disable()
+        });
         assert!(!ui.is_enabled());
         assert!(
             (ui.opacity() - alpha).abs() < 1e-6,
-            "opacity {} after a disable inside faded, egui's fade is {alpha}",
+            "opacity {} after a disable inside content_ui, egui's fade is {alpha}",
             ui.opacity()
         );
-        faded(ui, 0.5, |_| {});
+        content_ui(ui, chain, State::NONE, |_| {});
         assert!(
             (ui.opacity() - alpha).abs() < 1e-6,
             "an already disabled Ui"
         );
     });
+}
+
+/// A crate part paints at the `Ui`'s opacity with one egui disabled fade
+/// taken out, times its own value (conformance 2.2, implementation notes
+/// 3): its `disabled:opacity-25` gives 25 %, not 25 % of egui's fade, and a
+/// part without a `disabled:` rule stays opaque in a disabled `Ui`.
+#[test]
+fn part_opacity_takes_one_egui_fade_out() {
+    use shadcn_egui::components::shared::part_opacity;
+    use shadcn_egui::style::{Recipe, Rule, State, When};
+    let mut quarter = Recipe::default();
+    quarter.opacity.rules.push(Rule {
+        when: When::new(State::DISABLED, State::NONE),
+        rank: 1,
+        value: 0.25,
+    });
+    let plain = Recipe::default();
+    let ctx = egui::Context::default();
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        assert_eq!(part_opacity(ui, &[&[&quarter]], State::NONE), 1.0);
+        ui.add_enabled_ui(false, |ui| {
+            assert!((part_opacity(ui, &[&[&quarter]], State::NONE) - 0.25).abs() < 1e-6);
+            assert!((part_opacity(ui, &[&[&plain]], State::NONE) - 1.0).abs() < 1e-6);
+            // A nested disable fades twice in egui; one fade only comes out.
+            ui.add_enabled_ui(false, |ui| {
+                let fade = ui.visuals().disabled_alpha();
+                let got = part_opacity(ui, &[&[&plain]], State::NONE);
+                assert!((got - fade).abs() < 1e-6, "{got}");
+            });
+        });
+    });
+}
+
+/// `Theme::apply` gives plain egui widgets the style's control opacity.
+#[test]
+fn theme_sets_disabled_alpha_from_the_style() {
+    use shadcn_egui::style::{pick, State};
+    for (name, theme) in common::themes() {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let want = pick(&[&*theme.style.button], |r| &r.opacity, State::DISABLED).unwrap();
+        assert_eq!(ctx.global_style().visuals.disabled_alpha, want, "{name}");
+    }
 }
 
 /// shadcn input `text-base md:text-sm`: the field text is 16 px in a window

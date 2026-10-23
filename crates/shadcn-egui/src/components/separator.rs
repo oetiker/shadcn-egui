@@ -3,7 +3,7 @@
 //! classes are the `separator` recipe: a `bg-border` line, `h-px` / `w-px`
 //! thick, or `metrics.border` thick where the recipe sets no thickness.
 
-use crate::components::shared::style_painter;
+use crate::components::shared::part_painter;
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
 use egui::{Sense, Ui, Vec2};
@@ -21,7 +21,7 @@ fn line(
     let (rect, _) = ui.allocate_exact_size(size(px, ui), Sense::hover());
     if ui.is_rect_visible(rect) {
         if let Some(c) = pick(&l, |r| &r.bg, st).map(|p| t.paint(p)) {
-            style_painter(ui, &[&l[..]], st).rect_filled(rect, 0.0, c);
+            part_painter(ui, &[&l[..]], st).rect_filled(rect, 0.0, c);
         }
     }
 }

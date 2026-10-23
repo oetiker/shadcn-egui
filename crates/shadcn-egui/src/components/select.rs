@@ -28,7 +28,7 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    interaction_state, line_box, opacity, style_painter, RecipeBox,
+    interaction_state, line_box, opacity, part_painter, RecipeBox,
     DEFAULT_SIDE_OFFSET,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
@@ -282,7 +282,7 @@ impl Widget for Select<'_> {
         // The trigger.
         let st = interaction_state(&t, &resp, enabled, context.with(State::EXPANDED, open));
         if ui.is_rect_visible(rect) {
-            let painter = style_painter(ui, &[&trig[..]], st);
+            let painter = part_painter(ui, &[&trig[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
             RecipeBox::resolve(&t, &trig, st).paint(&painter, rect);
 
@@ -294,7 +294,7 @@ impl Widget for Select<'_> {
             if let Some(c) = icon_color {
                 // The chevron sits in the trigger: both opacities apply.
                 paint_icon(
-                    &style_painter(ui, &[&icon[..], &trig[..]], st),
+                    &part_painter(ui, &[&icon[..], &trig[..]], st),
                     icon_rect,
                     &t.icons.select_trigger,
                     c,
@@ -429,7 +429,7 @@ impl Widget for Select<'_> {
                                 }
                                 if ui.is_rect_visible(row) {
                                     // The row's text and indicator sit in the row.
-                                    let painter = style_painter(ui, &[&item[..]], s);
+                                    let painter = part_painter(ui, &[&item[..]], s);
                                     RecipeBox::resolve(&t, &item, s).paint(&painter, row);
                                     // The row's own text colour serves tick and text alike.
                                     let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content

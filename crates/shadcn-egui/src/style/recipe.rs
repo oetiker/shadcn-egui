@@ -306,23 +306,6 @@ pub fn pick<T: Copy>(
     pick_props(layers.iter().map(|r| field(r)), s)
 }
 
-/// Like [`pick`], but also the condition of the winning candidate: the
-/// rule's [`When`], or [`When::ALWAYS`] for a base value.
-pub(crate) fn pick_when<T: Copy>(
-    layers: &[&Recipe],
-    field: impl Fn(&Recipe) -> &Prop<T>,
-    s: State,
-) -> Option<(When, T)> {
-    pick_props_when(layers.iter().map(|r| field(r)), s)
-}
-
-fn pick_props<'a, T: Copy + 'a>(
-    props: impl IntoIterator<Item = &'a Prop<T>>,
-    s: State,
-) -> Option<T> {
-    pick_props_when(props, s).map(|(_, v)| v)
-}
-
 /// Like [`pick`], but also the winner's rank and layer, for comparing the
 /// winners of two fields that set one CSS property (a side's `rounded-l-*`
 /// against `rounded-*`).
@@ -331,14 +314,14 @@ pub(crate) fn pick_ranked<T: Copy>(
     field: impl Fn(&Recipe) -> &Prop<T>,
     s: State,
 ) -> Option<((u128, usize), T)> {
-    pick_props_keyed(layers.iter().map(|r| field(r)), s).map(|((rank, li, _), _, v)| ((rank, li), v))
+    pick_props_keyed(layers.iter().map(|r| field(r)), s).map(|((rank, li, _), v)| ((rank, li), v))
 }
 
-fn pick_props_when<'a, T: Copy + 'a>(
+fn pick_props<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
-) -> Option<(When, T)> {
-    pick_props_keyed(props, s).map(|(_, when, v)| (when, v))
+) -> Option<T> {
+    pick_props_keyed(props, s).map(|(_, v)| v)
 }
 
 type PickKey = (u128, usize, usize);
@@ -346,20 +329,20 @@ type PickKey = (u128, usize, usize);
 fn pick_props_keyed<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
-) -> Option<(PickKey, When, T)> {
-    let mut best: Option<(PickKey, When, T)> = None;
-    let mut consider = |key: PickKey, when: When, v: T| {
-        if best.as_ref().is_none_or(|(k, _, _)| key >= *k) {
-            best = Some((key, when, v));
+) -> Option<(PickKey, T)> {
+    let mut best: Option<(PickKey, T)> = None;
+    let mut consider = |key: PickKey, v: T| {
+        if best.as_ref().is_none_or(|(k, _)| key >= *k) {
+            best = Some((key, v));
         }
     };
     for (li, p) in props.into_iter().enumerate() {
         if let Some(v) = p.base {
-            consider((0, li, 0), When::ALWAYS, v);
+            consider((0, li, 0), v);
         }
         for (ri, r) in p.rules.iter().enumerate() {
             if r.when.matches(s) {
-                consider((r.rank, li, ri + 1), r.when, r.value);
+                consider((r.rank, li, ri + 1), r.value);
             }
         }
     }

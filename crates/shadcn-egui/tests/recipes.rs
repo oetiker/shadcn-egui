@@ -1448,9 +1448,10 @@ fn without_disabled(p: &mut shadcn_egui::style::Prop<f32>) {
     p.rules.retain(|r| !r.when.all.contains(State::DISABLED));
 }
 
-/// Inside a disabled `Ui` egui fades every shape once, standing in for the
-/// style's `disabled:` fade. Where no `disabled:` rule matches, a part's
-/// other opacity (here an app's base 0.5) still applies on top of it.
+/// Inside a disabled `Ui` a part paints at its own opacity, with egui's
+/// fade taken out (conformance 2.2). Against vega's `disabled:opacity-50`,
+/// an app's base 0.25 without that rule halves the paint; a part with no
+/// `disabled:` rule (badge, separator) stays opaque, so its base 0.5 halves it.
 #[test]
 fn disabled_ui_keeps_a_parts_own_opacity() {
     use shadcn_egui::components::badge::Badge;
@@ -1467,7 +1468,7 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
             "button",
             |s| {
                 without_disabled(&mut s.button.opacity);
-                s.button.opacity.base = Some(0.5);
+                s.button.opacity.base = Some(0.25);
             },
             |ui| ui.add(Button::new("Save")),
         ),
@@ -1475,7 +1476,7 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
             "label",
             |s| {
                 without_disabled(&mut s.label.opacity);
-                s.label.opacity.base = Some(0.5);
+                s.label.opacity.base = Some(0.25);
             },
             |ui| ui.add(Label::new("Email")),
         ),
@@ -1488,7 +1489,7 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
             "checkbox",
             |s| {
                 without_disabled(&mut s.checkbox.opacity);
-                s.checkbox.opacity.base = Some(0.5);
+                s.checkbox.opacity.base = Some(0.25);
             },
             |ui| ui.add(Checkbox::new(&mut true)),
         ),
@@ -1496,7 +1497,7 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
             "switch",
             |s| {
                 without_disabled(&mut s.switch.opacity);
-                s.switch.opacity.base = Some(0.5);
+                s.switch.opacity.base = Some(0.25);
             },
             |ui| ui.add(Switch::new(&mut true)),
         ),
@@ -1504,7 +1505,7 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
             "input",
             |s| {
                 without_disabled(&mut s.input.opacity);
-                s.input.opacity.base = Some(0.5);
+                s.input.opacity.base = Some(0.25);
             },
             |ui| ui.add(Input::new(&mut "typed".to_owned())),
         ),

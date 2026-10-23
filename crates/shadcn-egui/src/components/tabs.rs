@@ -7,7 +7,7 @@
 //! trigger (roving focus).
 
 use crate::components::shared::{
-    interaction_state, line_box, style_painter, ui_opacity, RecipeBox,
+    interaction_state, line_box, opacity, part_painter, RecipeBox,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -272,7 +272,7 @@ impl Widget for Tabs<'_> {
         if ui.is_rect_visible(list_rect.expand(reach)) {
             // The list sits in the tabs root; a trigger in the list.
             RecipeBox::resolve(&t, &list, g)
-                .paint(&style_painter(ui, &[&list[..], &root[..]], g), list_rect);
+                .paint(&part_painter(ui, &[&list[..], &root[..]], g), list_rect);
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
 
@@ -281,7 +281,7 @@ impl Widget for Tabs<'_> {
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, enabled, context);
-                let painter = style_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
+                let painter = part_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
                 let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.paint(p))
                 };
@@ -293,7 +293,8 @@ impl Widget for Tabs<'_> {
                     .unwrap_or(inherited);
                 let mut shapes = RecipeBox::resolve(&t, &trigger, st).shapes(ui.ctx(), *rect);
                 // The `after:` line indicator, placed against the padding box.
-                let bar_alpha = ui_opacity(ui, &[&after[..]], st);
+                // The painter already carries the trigger's chain.
+                let bar_alpha = opacity(&[&after[..]], st);
                 if let (Some(c), true) = (paint(&after, |r| &r.bg), bar_alpha > 0.0) {
                     let inner = rect.shrink(border_w);
                     let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);

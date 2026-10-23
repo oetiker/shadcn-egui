@@ -8,7 +8,7 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::paint_icon;
-use crate::components::shared::{interaction_state, style_painter, RecipeBox};
+use crate::components::shared::{interaction_state, part_painter, RecipeBox};
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Ui, Vec2, Widget};
@@ -85,7 +85,7 @@ impl Widget for Checkbox<'_> {
         let st = interaction_state(&t, &resp, enabled, context);
 
         if ui.is_rect_visible(rect) {
-            let painter = style_painter(ui, &[&l[..]], st);
+            let painter = part_painter(ui, &[&l[..]], st);
             RecipeBox::resolve(&t, &l, st).paint(&painter, rect);
             if checked {
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
@@ -95,7 +95,7 @@ impl Widget for Checkbox<'_> {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
                     // The indicator sits in the box: both opacities apply.
                     paint_icon(
-                        &style_painter(ui, &[&ind[..], &l[..]], st),
+                        &part_painter(ui, &[&ind[..], &l[..]], st),
                         icon_rect,
                         &t.icons.check,
                         color,

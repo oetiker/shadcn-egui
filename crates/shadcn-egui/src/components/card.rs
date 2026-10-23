@@ -18,7 +18,7 @@
 //! is not read: the header paints no fill or border in any style, so its
 //! corners have nothing to shape.
 
-use crate::components::shared::{faded, opacity, RecipeBox};
+use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
@@ -101,7 +101,10 @@ impl<'a> Card<'a> {
         let has_footer = self.footer.is_some();
         let st = t.state(
             ui.ctx(),
-            self.size.state().with(State::HAS_FOOTER, has_footer),
+            self.size
+                .state()
+                .with(State::HAS_FOOTER, has_footer)
+                .with(State::DISABLED, !ui.is_enabled()),
         );
         let card = [&*t.style.card];
         let content = [&*t.style.card_content];
@@ -120,8 +123,7 @@ impl<'a> Card<'a> {
         let text_px = t.text_px(pick(&card, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
         // Header, content and footer sit in the card.
         let alpha = opacity(&[&card[..]], st);
-        let mut painter = ui.painter().clone();
-        painter.multiply_opacity(alpha);
+        let painter = part_painter(ui, &[&card[..]], st);
 
         let outer_w = ui.available_width();
         let origin = ui.cursor().min;
@@ -226,7 +228,7 @@ impl<'a> Card<'a> {
 /// design's spacing.
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
-    let st = t.state(ui.ctx(), current_size(ui).state());
+    let st = card_state(ui);
     let l = [&*t.style.card_content];
     let gap = len(&l, |r| &r.gap, st);
     ui.scope(|ui| {
@@ -239,17 +241,20 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// `card-header` with its title and description.
 pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
-    faded(ui, part_opacity(ui, |s| &s.card_header), |ui| {
+    let t = Theme::current(ui.ctx());
+    content_ui(ui, &[&[&*t.style.card_header][..]], card_state(ui), |ui| {
         header_column(ui, title, description)
     });
 }
 
-/// The resolved `opacity` of one card part, at the current card's size.
-fn part_opacity(ui: &Ui, part: fn(&crate::style::Style) -> &Recipe) -> f32 {
+/// The state of a card part: the current card's size, disabled with the `Ui`.
+fn card_state(ui: &Ui) -> State {
     let t = Theme::current(ui.ctx());
-    opacity(
-        &[&[part(&t.style)][..]],
-        t.state(ui.ctx(), current_size(ui).state()),
+    t.state(
+        ui.ctx(),
+        current_size(ui)
+            .state()
+            .with(State::DISABLED, !ui.is_enabled()),
     )
 }
 
@@ -262,11 +267,11 @@ pub fn card_header_with_action(
     action: impl FnOnce(&mut Ui),
 ) {
     // The action sits in the header, beside the title and description.
-    let header = part_opacity(ui, |s| &s.card_header);
-    let action_fade = part_opacity(ui, |s| &s.card_action);
-    faded(ui, header, |ui| {
+    let t = Theme::current(ui.ctx());
+    let st = card_state(ui);
+    content_ui(ui, &[&[&*t.style.card_header][..]], st, |ui| {
         ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-            faded(ui, action_fade, action);
+            content_ui(ui, &[&[&*t.style.card_action][..]], st, action);
             let width = ui.available_width();
             ui.allocate_ui_with_layout(
                 egui::vec2(width, 0.0),
@@ -301,7 +306,7 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
     let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
     // upstream: card-title carries `cn-font-heading`
-    faded(ui, opacity(&[&l[..]], st), |ui| {
+    part_ui(ui, &[&l[..]], st, |ui| {
         ui.label(
             RichText::new(text)
                 .family(heading_family_for(ui.ctx(), weight))
@@ -325,5 +330,5 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     if let Some(c) = pick(&l, |r| &r.text, st).map(|p| t.paint(p)) {
         text = text.color(c);
     }
-    faded(ui, opacity(&[&l[..]], st), |ui| ui.label(text))
+    part_ui(ui, &[&l[..]], st, |ui| ui.label(text))
 }

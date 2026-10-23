@@ -896,7 +896,12 @@ impl Theme {
             s.spacing.window_margin = egui::Margin::same(0);
             s.spacing.interact_size.y = height.unwrap_or(egui_default.interact_size.y);
 
+            // Plain egui widgets fade as the style's controls do
+            // (`disabled:opacity-50` on the button).
+            let control = State::NONE.with(State::DARK, self.dark).or(State::DISABLED);
+            let disabled_alpha = pick(&[&*self.style.button], |r| &r.opacity, control);
             let v = &mut s.visuals;
+            v.disabled_alpha = disabled_alpha.unwrap_or(v.disabled_alpha);
             v.dark_mode = self.dark;
             v.panel_fill = p.background;
             v.window_fill = p.card;
