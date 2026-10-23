@@ -185,10 +185,12 @@ impl Widget for Select<'_> {
         let was_open = Popup::is_id_open(&ctx, popup_id);
 
         // Keyboard: the trigger keeps focus while the list is open, so the
-        // arrows are claimed here, not left to egui's focus movement. egui
-        // does not focus on a click, so a list opened by the mouse takes the
-        // keys while no widget has focus; once Tab moves focus to another
-        // widget, the keys are that widget's.
+        // arrows are claimed here, not left to egui's focus movement. A press
+        // focuses the trigger (`pressable`), but a click on the open list's
+        // padding or scroll bar makes egui drop that focus without giving it
+        // to another widget; the list keeps the keys then, as bits' content
+        // does while open. Once Tab moves focus to another widget, the keys
+        // are that widget's.
         let mut moved = false;
         let mut chosen = None;
         let focused = resp.has_focus();
