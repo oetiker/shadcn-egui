@@ -187,8 +187,15 @@ pub fn overlay_width(ctx: &egui::Context, requested: f32, inset: f32, content_mi
 /// Allocates `size` as the browser places a box wider than its room: the
 /// returned rect (and the response's) is `size`, but the parent `Ui` takes
 /// at most the width it has left, so a widget raised to its content
-/// minimum ([`capped_width`]) overflows past the inline end without
-/// widening its parent and the widgets that fill it.
+/// minimum ([`capped_width`]) overflows without widening its parent and
+/// the widgets that fill it. It overflows as a flex item does: past the
+/// end in a left-aligned column or a left-to-right row, past the start in
+/// a right-aligned column or a right-to-left row, and evenly on both
+/// sides in a centred column.
+///
+/// In a row, the next widget starts after the room the parent gave, so
+/// it covers the overflowing part, where the browser would place it after
+/// the whole box: egui can move a row's cursor only by growing the row.
 pub fn allocate_overflowing(
     ui: &mut Ui,
     size: egui::Vec2,
@@ -199,9 +206,17 @@ pub fn allocate_overflowing(
         return ui.allocate_exact_size(size, sense);
     }
     let (rect, mut response) = ui.allocate_exact_size(egui::vec2(room, size.y), sense);
+    let layout = ui.layout();
+    let stretched = layout.is_vertical() && layout.cross_justify();
+    let left = match layout.horizontal_placement() {
+        _ if stretched => rect.left(),
+        egui::Align::Min => rect.left(),
+        egui::Align::Center => rect.center().x - size.x / 2.0,
+        egui::Align::Max => rect.right() - size.x,
+    };
     // The response reports the widget's own rect; it senses only the part
     // inside the parent.
-    response.rect = egui::Rect::from_min_size(rect.min, size);
+    response.rect = egui::Rect::from_min_size(egui::pos2(left, rect.top()), size);
     (response.rect, response)
 }
 
@@ -340,5 +355,47 @@ mod tests {
             });
         });
         assert_eq!(widths, Some((150.0, 150.0, 100.0)));
+    }
+
+    /// The overflow goes where a flex item's goes: the end of a left
+    /// column, both sides of a centred one, the start of a right column
+    /// and of a right-to-left row.
+    #[test]
+    fn an_overflowing_widget_overflows_as_its_layout_aligns() {
+        use egui::{Align, Layout};
+        let overflow = |layout: Layout| {
+            let ctx = egui::Context::default();
+            let mut span = None;
+            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let max =
+                    egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(100.0, 50.0));
+                let mut child = ui.new_child(egui::UiBuilder::new().max_rect(max).layout(layout));
+                let (rect, _) =
+                    allocate_overflowing(&mut child, egui::vec2(150.0, 20.0), egui::Sense::hover());
+                span = Some((rect.left(), rect.right(), child.min_rect().width()));
+            });
+            span.expect("ran")
+        };
+        assert_eq!(
+            overflow(Layout::top_down(Align::Min)),
+            (100.0, 250.0, 100.0)
+        );
+        assert_eq!(
+            overflow(Layout::top_down(Align::Center)),
+            (75.0, 225.0, 100.0)
+        );
+        assert_eq!(overflow(Layout::top_down(Align::Max)), (50.0, 200.0, 100.0));
+        assert_eq!(
+            overflow(Layout::top_down_justified(Align::Center)),
+            (100.0, 250.0, 100.0)
+        );
+        assert_eq!(
+            overflow(Layout::left_to_right(Align::Center)),
+            (100.0, 250.0, 100.0)
+        );
+        assert_eq!(
+            overflow(Layout::right_to_left(Align::Center)),
+            (50.0, 200.0, 100.0)
+        );
     }
 }
