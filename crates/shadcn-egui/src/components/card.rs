@@ -21,7 +21,7 @@
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
-use crate::Theme;
+use crate::{layout, Theme};
 use egui::{
     Align, Id, Layout, Rect, Response, RichText, Sense, Shape, Ui, UiBuilder, WidgetInfo,
     WidgetType,
@@ -125,7 +125,9 @@ impl<'a> Card<'a> {
         let alpha = opacity(&[&card[..]], st);
         let painter = part_painter(ui, &[&card[..]], st);
 
-        let outer_w = ui.available_width();
+        // `w-full` in a column: the room left, or the content minimum where
+        // that is unbounded (conformance 3.1).
+        let outer_w = layout::capped_width(ui, f32::INFINITY, side_l + side_r);
         let origin = ui.cursor().min;
         let back = ui.painter().add(Shape::Noop);
 

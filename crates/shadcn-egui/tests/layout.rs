@@ -96,6 +96,22 @@ fn layout_card_matches_the_default_card() {
     assert_eq!(a, b);
 }
 
+/// In unbounded room the card takes its content minimum, its side padding
+/// (conformance 3.1), never an infinite width.
+#[test]
+fn a_card_in_unbounded_room_takes_its_padding() {
+    use shadcn_egui::components::card::Card;
+    let theme = Theme::vega_dark();
+    let rect = common::measure(&theme, |ui| {
+        ui.allocate_ui(egui::vec2(f32::INFINITY, 400.0), |ui| {
+            ui.scope(|ui| Card::new().show(ui, |_| ())).response
+        })
+        .inner
+    });
+    // vega's card content is `px-6`.
+    assert_eq!(rect.width(), 48.0, "{rect:?}");
+}
+
 #[test]
 fn wrap_row_wraps_when_out_of_width() {
     use std::cell::RefCell;
