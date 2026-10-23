@@ -8,8 +8,10 @@ use common::Loop;
 use egui::{Key, Rect};
 use shadcn_egui::components::button::Button;
 use shadcn_egui::components::checkbox::Checkbox;
+use shadcn_egui::components::select::Select;
 use shadcn_egui::components::shared::{interaction_state, pressable, ActivationKeys};
 use shadcn_egui::components::slider::Slider;
+use shadcn_egui::components::switch::Switch;
 use shadcn_egui::components::tabs::Tabs;
 use shadcn_egui::style::State;
 use shadcn_egui::Theme;
@@ -163,4 +165,71 @@ fn tab_trigger_selects_on_press() {
     run(common::pointer_down(password.center()));
     assert_eq!(active.get(), 1, "selected on press");
     assert!(ctx.memory(|m| m.focused().is_some()), "and focused");
+}
+
+/// bits' switch toggles on Enter and Space, both on keydown, once per key
+/// repeat; the key coming up does nothing.
+#[test]
+fn switch_toggles_on_enter_and_space_presses_with_repeats() {
+    let ctx = egui::Context::default();
+    let (rect, on) = (Cell::new(Rect::NOTHING), Cell::new(false));
+    let run = |events| {
+        common::pass(Loop::RunUi, &ctx, events, |ui| {
+            Theme::vega_light().apply(ui.ctx());
+            let mut v = on.get();
+            rect.set(ui.add(Switch::new(&mut v)).rect);
+            on.set(v);
+        });
+    };
+    run(vec![]);
+    run(common::click(rect.get().center()));
+    assert!(on.get(), "a click toggles and focuses");
+    run(common::key(Key::Enter));
+    assert!(!on.get(), "Enter");
+    run(common::key(Key::Space));
+    assert!(on.get(), "Space");
+    run(common::key_down(Key::Enter));
+    assert!(!on.get(), "on keydown");
+    run(vec![egui::Event::Key {
+        key: Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: true,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    assert!(on.get(), "a repeat toggles again");
+    run(common::key_up(Key::Enter));
+    assert!(on.get(), "keyup does nothing");
+}
+
+/// bits' select trigger opens on Enter, Space and ArrowDown, on keydown.
+#[test]
+fn closed_select_opens_on_enter_space_and_arrow_down() {
+    const FRUITS: [&str; 3] = ["Apple", "Banana", "Cherry"];
+    let ctx = egui::Context::default();
+    let (open, value) = (Cell::new(false), Cell::new(0usize));
+    let run = |events| {
+        common::pass(Loop::RunUi, &ctx, events, |ui| {
+            Theme::vega_light().apply(ui.ctx());
+            let mut v = value.get();
+            let resp = ui.add(Select::new("fruit", &mut v, &FRUITS));
+            open.set(egui::Popup::is_id_open(
+                ui.ctx(),
+                egui::Popup::default_response_id(&resp),
+            ));
+            value.set(v);
+        });
+    };
+    run(vec![]);
+    run(common::key(Key::Tab));
+    assert!(!open.get());
+    for k in [Key::Enter, Key::Space, Key::ArrowDown] {
+        run(common::key_down(k));
+        assert!(open.get(), "{k:?} opens");
+        run(common::key_up(k));
+        // Enter chooses the highlighted option and closes the list.
+        run(common::key(Key::Enter));
+        assert!(!open.get(), "after {k:?}, Enter closes");
+        assert_eq!(value.get(), 0, "the highlight stayed on the value");
+    }
 }
