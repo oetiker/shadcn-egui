@@ -444,20 +444,15 @@ fn card_title_uses_the_heading_font_snapshot() {
 #[test]
 fn dialog_title_uses_the_heading_font_snapshot() {
     use shadcn_egui::components::dialog::Dialog;
-    common::snapshot_with_themes(
-        "dialog_heading_font",
-        vec2(480.0, 260.0),
-        heading_themes(),
-        |ui| {
-            let mut open = true;
-            Dialog::new("heading_font", "Oxanium heading")
-                .description("Body text stays Inter")
-                .show(ui.ctx(), &mut open, |ui| {
-                    ui.label("Dialog content");
-                });
-        },
-        |_| {},
-    );
+    // `max-w-[calc(100%-2rem)] sm:max-w-sm`: the phone and the desktop width.
+    common::snapshot_widths("dialog_heading_font", 260.0, heading_themes(), |ui| {
+        let mut open = true;
+        Dialog::new("heading_font", "Oxanium heading")
+            .description("Body text stays Inter")
+            .show(ui.ctx(), &mut open, |ui| {
+                ui.label("Dialog content");
+            });
+    });
 }
 
 /// With `fonts-all`, every font whose licence allows a crate resolves to

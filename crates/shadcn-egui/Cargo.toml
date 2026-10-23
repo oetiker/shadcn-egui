@@ -199,6 +199,9 @@ icons-all = ["icons-tabler", "icons-phosphor", "icons-remixicon", "icons-hugeico
 [dev-dependencies]
 eframe = "0.34"
 egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
+# Composes the README's settings image from two snapshot renders; already
+# in the tree through egui_kittest.
+image = { version = "0.25", default-features = false }
 # Tests compare against a heading font that differs from the body font.
 shadcn-egui-font-oxanium.workspace = true
 

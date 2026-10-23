@@ -72,9 +72,10 @@ live.
 
 `cargo run --example settings` opens a settings page built from Badge,
 Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
-Tabs, with a toolbar that switches style, mode and radius.
+Tabs, with a toolbar that switches style, mode and radius. The image shows
+it at a desktop width (1280 px) and at a phone width (390 px).
 
-![shadcn-egui settings screen](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/settings-screen.png)
+![shadcn-egui settings screen at 1280 px and at 390 px wide](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/settings-screen.png)
 
 ## Features
 

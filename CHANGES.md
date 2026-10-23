@@ -18,6 +18,8 @@ are recorded here. The format is based on
 
 ### Fixed
 - A checked checkbox with keyboard focus now shows the focus border instead of the checked border, as shadcn does; so does a checked switch in the styles that give it a checked border.
+- The lines of a `layout::wrap_row` are now as high as their tallest item and exactly the gap apart; before, a line of badges or other items lower than a button took a button's height, so its lines stood further apart than the gap.
+- In the settings example, rows of buttons and badges wrap onto further lines in a narrow window instead of running past the card.
 - A `layout::vstack` inside a `layout::wrap_row` now moves to the next line as a whole when it does not fit, as a flex item does, instead of running past the right edge.
 - In the luma and rhea styles, an invalid switch that is checked now shows the red invalid border instead of the checked border, as shadcn does.
 

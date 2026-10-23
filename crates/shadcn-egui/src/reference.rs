@@ -182,7 +182,7 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             });
             separator(ui);
             label(ui, "Channel status");
-            layout::row(ui, 8.0, |ui| {
+            layout::wrap_row(ui, 8.0, |ui| {
                 badge(ui, "Active", BadgeVariant::Default);
                 badge(ui, "Beta", BadgeVariant::Secondary);
                 badge(ui, "Deprecated", BadgeVariant::Destructive);
@@ -199,12 +199,10 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             card_description(ui, "Buttons, badges, a slider and a select.");
             separator(ui);
             label(ui, "Button variants");
-            layout::row(ui, 8.0, |ui| {
+            layout::wrap_row(ui, 8.0, |ui| {
                 let _ = ui.add(Button::new("Default").variant(ButtonVariant::Default));
                 let _ = ui.add(Button::new("Secondary").variant(ButtonVariant::Secondary));
                 let _ = ui.add(Button::new("Destructive").variant(ButtonVariant::Destructive));
-            });
-            layout::row(ui, 8.0, |ui| {
                 let _ = ui.add(Button::new("Outline").variant(ButtonVariant::Outline));
                 let _ = ui.add(Button::new("Ghost").variant(ButtonVariant::Ghost));
                 let _ = ui.add(Button::new("Link").variant(ButtonVariant::Link));
@@ -229,7 +227,7 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             });
             separator(ui);
             label(ui, "Badges");
-            layout::row(ui, 8.0, |ui| {
+            layout::wrap_row(ui, 8.0, |ui| {
                 badge(ui, "Default", BadgeVariant::Default);
                 badge(ui, "Secondary", BadgeVariant::Secondary);
                 badge(ui, "Destructive", BadgeVariant::Destructive);

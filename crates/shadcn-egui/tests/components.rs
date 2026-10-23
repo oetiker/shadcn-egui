@@ -235,7 +235,8 @@ fn input_height_follows_style() {
 fn input_snapshot() {
     use shadcn_egui::components::input::Input;
     use shadcn_egui::components::label::label;
-    common::snapshot_all("input", egui::vec2(300.0, 390.0), |ui| {
+    // `text-base md:text-sm`: the phone and the desktop text size.
+    common::snapshot_widths("input", 390.0, common::snapshot_themes(), |ui| {
         let mut empty = String::new();
         let mut filled = String::from("you@example.com");
         let mut invalid = String::from("not an email");

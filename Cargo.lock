@@ -2935,6 +2935,7 @@ dependencies = [
  "egui",
  "egui_extras",
  "egui_kittest",
+ "image",
  "log",
  "shadcn-egui-core",
  "shadcn-egui-font-dm-sans",

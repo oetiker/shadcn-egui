@@ -122,6 +122,11 @@ fn wrap_row_wraps_when_out_of_width() {
         *r
     );
     assert_eq!(r[1].left() - r[0].right(), 8.0, "horizontal gap");
+    assert_eq!(
+        r[2].top() - r[0].bottom(),
+        8.0,
+        "lines as high as their items, `gap` apart"
+    );
 }
 
 /// `vstack` items of a `wrap_row` wrap as a whole, as flex items: each

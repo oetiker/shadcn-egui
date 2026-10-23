@@ -105,7 +105,16 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// items on a line and between wrapped lines. A [`vstack`] item wraps as a
 /// whole, as a flex item does.
 pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
-    ui.horizontal_wrapped(|ui| {
+    // As `horizontal_wrapped`, but each line is as high as its tallest item:
+    // egui's own starts every line `interact_size.y` high, which puts more
+    // than `gap` between lines of smaller items (badges).
+    let layout = if ui.layout().prefer_right_to_left() {
+        egui::Layout::right_to_left(egui::Align::Center)
+    } else {
+        egui::Layout::left_to_right(egui::Align::Center)
+    };
+    let size = egui::vec2(ui.available_size_before_wrap().x, 0.0);
+    ui.allocate_ui_with_layout(size, layout.with_main_wrap(true), |ui| {
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
         add(ui)
     })
