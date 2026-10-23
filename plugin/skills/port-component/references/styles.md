@@ -113,7 +113,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `uppercase`, `underline` | `uppercase`, `underline` |
 | `radius`, `radius_top`, `radius_bottom` | `rounded-*`, `rounded-t-*`, `rounded-b-*` |
 | `bg`, `text` | `bg-*`, `text-*` (with `/alpha` and `color-mix`) |
-| `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::paint_box`) |
+| `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::RecipeBox`) |
 | `border_width`, `border_top_width` | `border`, `border-t`, `border-N` |
 | `border_color` | `border-*` colour |
 | `ring_width`, `ring_color` | `ring-N`, `ring-*` |
@@ -131,10 +131,11 @@ therefore shows a little less contrast than in the browser, and where one
 part lies on another (a switch or slider thumb on its track) the lower part
 shows through. The value comes from the recipe's `opacity` prop
 (`shared::opacity` multiplies it down the part tree, so the line underline
-of a disabled tab fades with the tab), and `shared::style_painter` applies
-it once: inside a disabled `Ui`, which egui fades already, a part whose
-`disabled:` rule wins paints at egui's fade alone, and a part without one
-keeps its other opacity on top of that fade.
+of a disabled tab fades with the tab), and `shared::part_painter` applies
+it once: inside a disabled `Ui`, which egui fades already, the part paints
+at the `Ui`'s opacity with egui's fade taken out, times its own value under
+`DISABLED`, so a part fades by its style's `disabled:` rule, not by egui's
+fade.
 
 `State` flags (`crates/shadcn-egui/src/style/recipe.rs`) and the variants they stand for.
 `Theme::state(ctx, s)` adds `DARK` and the window's `SM` and `MD`. A flag

@@ -8,6 +8,9 @@ are recorded here. The format is based on
 
 ### New
 - Components follow the window width as shadcn's `sm:` (640 px) and `md:` (768 px) breakpoints do: below 768 px an input's text is 16 px instead of 14 px, and below 640 px a dialog spans the window less a 16 px margin on each side. `layout::window_at_least` gives an app the same check on the window width, and `layout::container_at_least` on the width left in its `Ui`.
+- `IconAtom::new(icon)` puts a crate icon wherever egui takes atoms, such as an `egui::Button`'s content. Without `.tint(..)` it draws in the theme's text colour, and a crate widget draws it in its own state colour; a text colour that a host `Ui` overrides does not reach it, so tint it there.
+- `layout::capped_width`, `layout::overlay_width` and `layout::allocate_overflowing` give an app's own widget the crate's width rules: a width capped to the room or the window and raised to the content's minimum, and a widget wider than its room that overflows instead of widening its column.
+- `components::shared::widget_info_with_role` gives an app's own widget a screen-reader role that egui's widget types lack, such as alert, alertdialog, navigation or group.
 
 ### Changed
 - Every icon library now supplies a plain down chevron, up, left and right chevrons and a three-dot icon to `Theme::icons`, as upstream's components use them. The Select trigger icon moved from `chevron_down` to `select_trigger`, and an app builds its own icon set from `IconSlots::all(icon)` instead of listing every slot, so later slots do not break it.
@@ -17,6 +20,9 @@ are recorded here. The format is based on
 - `components::shared::RecipeBox` replaces `box_shapes`, `paint_box`, `ring`, `ring_shape` and `corner` for apps that paint their own parts: `RecipeBox::resolve(&theme, &recipes, state).paint(&painter, rect)` paints fill, border, shadow, ring and outline from a recipe stack, with each corner's radius and each side's border.
 - `components::shared::part_painter`, `part_opacity`, `part_ui` and `content_ui` replace `style_painter`, `ui_opacity` and `faded`: a part now paints at its own opacity with egui's disabled fade taken out once, and `content_ui` fades a container's content while plain egui widgets in it keep the theme's disabled fade.
 - `theme.style` recipes carry more of each style: corner radii per side, the left border, column gaps, text wrapping and alignment, blend modes, visibility, and the enter, exit and transition motion values.
+- `components::shared::interaction_state` no longer takes an `enabled` argument: it reads the disabled state from the widget's `Ui`. Apps that paint their own clickable parts call `pressable(&mut response, ActivationKeys::..)` for focus on press and the element's own keys, and use `text_entry_state` for a field that takes typed text.
+- A mouse or touch press now focuses buttons, checkboxes, switches, slider thumbs, tab triggers and the select trigger without showing a focus ring, as the browser does; the ring shows only after the focus moved by keyboard, while an input shows it on any focus.
+- Keys act as on shadcn's elements: Space clicks a button when released, Enter no longer toggles a checkbox, Enter and Space no longer move a focused slider to the mouse pointer, and pressing a tab selects it on the press.
 
 ### Fixed
 - A shadow no longer shows through a transparent or translucent box: the light vega input, select trigger and checkbox no longer look grey inside, and dark-mode switches, inputs and outline buttons no longer darken their translucent fill.
@@ -27,6 +33,9 @@ are recorded here. The format is based on
 - In the settings example, rows of buttons and badges wrap onto further lines in a narrow window instead of running past the card.
 - A `layout::vstack` inside a `layout::wrap_row` now moves to the next line as a whole when it does not fit, as a flex item does, instead of running past the right edge.
 - In the luma and rhea styles, an invalid switch that is checked now shows the red invalid border instead of the checked border, as shadcn does.
+- At phone width in the luma, vega and maia styles, a tab list wider than the page column no longer widens the card under it; the list runs past the column's edge as in the browser, and the card keeps the column's width.
+- An input's placeholder now has the size of the typed text: 16 px below 768 px, and 12 px in the lyra and mira styles, instead of always 14 px.
+- `Input::max_width(f32::NAN)` now gives the narrowest field instead of the default width.
 
 ## 0.6.0 - 2026-10-17
 ### New

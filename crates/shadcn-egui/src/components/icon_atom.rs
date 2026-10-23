@@ -9,7 +9,9 @@
 //! colour, as a typed `.icon` slot (conformance 2.3). In an egui host an
 //! atom without a caller colour draws in the theme's text colour, which
 //! the loader bakes in; [`crate::Theme::apply`] makes it draw again on a
-//! theme change. The image loader is installed by [`crate::Theme::apply`];
+//! theme change. egui gives an image atom no colour of its `Ui`, so a
+//! text colour the host `Ui` overrides does not reach it: give such an
+//! atom [`IconAtom::tint`]. The image loader is installed by [`crate::Theme::apply`];
 //! it rasterises at the size egui asks for. The registry only grows, one
 //! small entry per distinct icon, side and colour mode.
 

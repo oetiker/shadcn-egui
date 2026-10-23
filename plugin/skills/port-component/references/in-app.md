@@ -14,10 +14,16 @@ the crate.
 - `shadcn_egui::style::{pick, Recipe, Prop, Rule, When, State, Paint, Role, Radius, Rung, TextSize, Weight}`.
 - `Theme::{state, paint, role, radius_px, text_px, line_px, shadow}` to turn
   recipe values into pixels and colours.
-- `shadcn_egui::components::shared::interaction_state` for hover, press and
-  focus, and the other helpers in `components::shared` (`paint_box`, `ring`,
-  `opacity`, `ui_opacity` and `style_painter` for a part's fade, `faded` for a container
-  part's content, `line_box` for the height of a line of text).
+- `shadcn_egui::components::shared::interaction_state` (`text_entry_state`
+  for typed text) for hover, press and focus, and the other helpers in
+  `components::shared`: `pressable` for focus on press and activation keys,
+  `RecipeBox` for a part's fill, border, shadow, ring and outline,
+  `opacity`, `part_opacity` and `part_painter` for a part's fade, `part_ui`
+  and `content_ui` for a crate part or caller content drawn through egui,
+  `line_box` for the height of a line of text, `widget_info_with_role` for
+  an accessible role egui's `WidgetType` lacks.
+- `shadcn_egui::layout::{capped_width, overlay_width, allocate_overflowing}`
+  for a widget's width and its allocation.
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
 
 ## Recipes for new markers

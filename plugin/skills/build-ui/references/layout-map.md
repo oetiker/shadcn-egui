@@ -13,6 +13,7 @@ The helpers live in `shadcn_egui::layout`.
 | fixed + fluid columns | `StripBuilder` `Size::exact(w)` + `Size::remainder()` |
 | proportional columns (`fr`) | `StripBuilder` `Size::relative(frac)` |
 | a `.card` block | `shadcn_egui::layout::card(ui, \|ui\| ...)`, or `components::card::Card` for sizes and a footer |
+| `w-full max-w-*` on a custom-painted widget, `max-w-[calc(100%-Npx)]` on a floating panel | `shadcn_egui::layout::capped_width(ui, max, content_min)`, `layout::overlay_width(ctx, max, inset, content_min)`; allocate with `layout::allocate_overflowing` so a widget wider than its room overflows instead of widening its column |
 | label + control form row | `shadcn_egui::layout::form_row(ui, label_w, "Label", \|ui\| ...)` |
 | app shell (sidebar/topbar/main) | `SidePanel` / `TopBottomPanel` / `CentralPanel` |
 | responsive breakpoints (`sm:`, `md:`, `@container`) | branch on `shadcn_egui::layout::window_at_least(ui.ctx(), px)` (media query) or `layout::container_at_least(ui, px)` (container query); components apply their own |

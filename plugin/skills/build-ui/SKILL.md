@@ -251,7 +251,9 @@ See `references/gotchas.md` for the reasons.
   (`let mut s = Style::nova(); s.<part>.<field> = …;`, or an important rule
   as in "Restyle a component part"), never into copies of crate code.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`
-  (role, label, enabled, selected), or screen readers see nothing.
+  (role, label, enabled, selected), or screen readers see nothing; a role
+  egui's `WidgetType` lacks goes through
+  `shadcn_egui::components::shared::widget_info_with_role`.
 
 ## Acceptance bar
 

@@ -85,7 +85,11 @@ drawing code holds no style value of its own.
    the caller passes, not a literal in the component.
 6. **egui sizing.** The widget sets its own size before placement (single
    pass). Use the `shadcn_egui::layout` helpers, no `available_width()`
-   arithmetic; a breakpoint reads the window through
+   arithmetic: `layout::capped_width(ui, requested, content_min)` caps a
+   width to the room and raises it to the content minimum,
+   `layout::overlay_width` does the same against the window, and
+   `layout::allocate_overflowing` lets a widget wider than its room
+   overflow without widening its parent; a breakpoint reads the window through
    `layout::window_at_least` (`sm:`, `md:`; `theme.state` sets `SM` and
    `MD`) or its container through `layout::container_at_least`. Resolve
    geometry without interaction states: the size does not change on hover.
@@ -189,7 +193,9 @@ back, Right and Down forward) whatever its orientation.
   back to the content size (`shared::line_box` for a line of text), never
   to 0, so an app that replaces a recipe whole keeps a usable widget.
 - Geometry is resolved without interaction states.
-- Every custom-painted widget reports itself with `resp.widget_info(..)`.
+- Every custom-painted widget reports itself with `resp.widget_info(..)`;
+  a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
+  `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.
 
 ## Dependency discipline
 
