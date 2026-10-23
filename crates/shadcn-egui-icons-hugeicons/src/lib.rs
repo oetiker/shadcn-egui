@@ -2,7 +2,7 @@
 //! Hugeicons, free stroke-rounded set 4.3.5 (MIT), from the npm package @hugeicons/core-free-icons.
 //!
 //! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the
-//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).
+//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button, ...).
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
@@ -12181,8 +12181,15 @@ pub const ALL: &[&Icon] = &[
 ];
 
 /// The icons shadcn-egui's components draw.
-pub const SLOTS: IconSlots = IconSlots {
-    check: TICK_02,
-    chevron_down: UNFOLD_MORE,
-    close: CANCEL_01,
+pub const SLOTS: IconSlots = {
+    let mut s = IconSlots::all(TICK_02);
+    s.check = TICK_02;
+    s.select_trigger = UNFOLD_MORE;
+    s.chevron_down_plain = ARROW_DOWN_01;
+    s.chevron_up = ARROW_UP_01;
+    s.chevron_left = ARROW_LEFT_01;
+    s.chevron_right = ARROW_RIGHT_01;
+    s.more_horizontal = MORE_HORIZONTAL_CIRCLE_01;
+    s.close = CANCEL_01;
+    s
 };

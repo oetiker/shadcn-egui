@@ -3,7 +3,7 @@
 //! icongen --out src/icons.rs [--module-path crate::components::icon]
 //!         [--provenance "Lucide v1.54.0 (ISC)"] path/to/mic.svg ...
 //!     Rust `Seg` slices, opaque strokes only (filled or translucent shapes are an error).
-//! icongen --crate-dir crates/shadcn-egui-icons-x --slots check=..,chevron_down=..,close=..
+//! icongen --crate-dir crates/shadcn-egui-icons-x --slots check=..,select_trigger=..,...,close=..
 //!         [--provenance TEXT] [--measure] path/to/*.svg
 //!     A whole icon crate: DIR/src/lib.rs and DIR/src/icons.bin.
 //! icongen --measure path/to/*.svg
@@ -14,7 +14,7 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: icongen --out FILE [--module-path PATH] [--provenance TEXT] SVG...\n       icongen --crate-dir DIR --slots check=I,chevron_down=I,close=I [--provenance TEXT] [--measure] SVG...\n       icongen --measure SVG...";
+const USAGE: &str = "usage: icongen --out FILE [--module-path PATH] [--provenance TEXT] SVG...\n       icongen --crate-dir DIR --slots SLOT=I,... (every IconSlots field) [--provenance TEXT] [--measure] SVG...\n       icongen --measure SVG...";
 
 fn main() -> ExitCode {
     match run(std::env::args().skip(1).collect()) {

@@ -101,14 +101,59 @@ impl Iterator for SegIter {
     }
 }
 
-/// The icons the components draw, one per role. Each icon crate exports its
-/// set as `SLOTS`; `shadcn_egui::Theme::icons` holds the active one.
+/// The icons the components draw: a slot per shape, plus a slot named
+/// after its role where an icon library draws that role with another icon
+/// than the shape's. Each icon crate exports its set as `SLOTS`;
+/// `shadcn_egui::Theme::icons` holds the active one.
+///
+/// New slots arrive in minor releases, so the struct cannot be built with
+/// a literal: start from [`IconSlots::all`] and set the slots to change.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct IconSlots {
     /// Checkbox tick and the selected Select item.
     pub check: Icon,
-    /// Select trigger (each library uses its own icon here).
-    pub chevron_down: Icon,
+    /// Select trigger: a down chevron, or the library's up-and-down
+    /// selector (tabler, hugeicons).
+    pub select_trigger: Icon,
+    /// A plain down chevron (Select's scroll-down button).
+    pub chevron_down_plain: Icon,
+    /// An up chevron (Select's scroll-up button).
+    pub chevron_up: Icon,
+    /// A left chevron (pagination's previous link and button).
+    pub chevron_left: Icon,
+    /// A right chevron (pagination's next link and button).
+    pub chevron_right: Icon,
+    /// Three dots in a row (pagination's ellipsis).
+    pub more_horizontal: Icon,
     /// Dialog close button.
     pub close: Icon,
+}
+
+impl IconSlots {
+    /// Every slot draws `icon`. Set the slots to change from there:
+    ///
+    /// ```
+    /// # use shadcn_egui_core::{Icon, IconShape, IconSlots};
+    /// # const DOT: Icon = Icon { name: "dot", size: 24.0, shape: IconShape::Segs(&[]) };
+    /// # const TICK: Icon = DOT;
+    /// const SLOTS: IconSlots = {
+    ///     let mut s = IconSlots::all(DOT);
+    ///     s.check = TICK;
+    ///     s
+    /// };
+    /// assert_eq!(SLOTS.check, TICK);
+    /// ```
+    pub const fn all(icon: Icon) -> Self {
+        Self {
+            check: icon,
+            select_trigger: icon,
+            chevron_down_plain: icon,
+            chevron_up: icon,
+            chevron_left: icon,
+            chevron_right: icon,
+            more_horizontal: icon,
+            close: icon,
+        }
+    }
 }

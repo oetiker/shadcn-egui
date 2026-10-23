@@ -685,11 +685,20 @@ fn badges_group(ui: &mut egui::Ui) {
     });
 }
 
+/// Width of one icon slot in the icons group: wide enough for the longest
+/// slot name (`chevron_down_plain`), so the cells wrap as a grid.
+const ICON_CELL_WIDTH: f32 = 148.0;
+
 fn icons_group(ui: &mut egui::Ui) {
     let t = Theme::current(ui.ctx());
     let slots = [
         ("check", &t.icons.check),
-        ("chevron_down", &t.icons.chevron_down),
+        ("select_trigger", &t.icons.select_trigger),
+        ("chevron_down_plain", &t.icons.chevron_down_plain),
+        ("chevron_up", &t.icons.chevron_up),
+        ("chevron_left", &t.icons.chevron_left),
+        ("chevron_right", &t.icons.chevron_right),
+        ("more_horizontal", &t.icons.more_horizontal),
         ("close", &t.icons.close),
     ];
     group(
@@ -697,13 +706,24 @@ fn icons_group(ui: &mut egui::Ui) {
         "Icons",
         "The icons the components draw, from the preset's icon library.",
         |ui| {
-            layout::wrap_row(ui, 24.0, |ui| {
+            // Top-aligned and wrapping. Each cell has a known width, so the
+            // row moves it to the next line when it does not fit; a bare
+            // vstack has no size before it is drawn and never wraps.
+            let wrap = egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true);
+            ui.with_layout(wrap, |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(24.0, 16.0);
                 for (slot, icon) in slots {
-                    layout::vstack(ui, 4.0, |ui| {
-                        let name = label(ui, icon.name);
-                        let _ = ui.add(IconView::new(icon).size(24.0)).labelled_by(name.id);
-                        description(ui, slot);
-                    });
+                    let cell = egui::vec2(ICON_CELL_WIDTH, 0.0);
+                    ui.allocate_ui_with_layout(
+                        cell,
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+                            let name = label(ui, icon.name);
+                            let _ = ui.add(IconView::new(icon).size(24.0)).labelled_by(name.id);
+                            description(ui, slot);
+                        },
+                    );
                 }
             });
         },

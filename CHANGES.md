@@ -10,6 +10,8 @@ are recorded here. The format is based on
 - Components follow the window width as shadcn's `sm:` (640 px) and `md:` (768 px) breakpoints do: below 768 px an input's text is 16 px instead of 14 px, and below 640 px a dialog spans the window less a 16 px margin on each side. `layout::window_at_least`, `layout::wider_than` and `layout::breakpoints` give an app the same checks.
 
 ### Changed
+- Every icon library now supplies a plain down chevron, up, left and right chevrons and a three-dot icon to `Theme::icons`, as upstream's components use them. The Select trigger icon moved from `chevron_down` to `select_trigger`, and an app builds its own icon set from `IconSlots::all(icon)` instead of listing every slot, so later slots do not break it.
+- The browser gallery's icon card shows every icon slot and wraps them onto several lines.
 - `Theme::state` takes the egui context as its first argument, to read the window width.
 - `State` no longer exposes its bits: combine flags with `|` or `State::or` and drop one with `State::without`. `Shift::SelfMinus(n)` is now `Shift::Calc(1.0, -n)`, which also expresses a share of the part's own size such as `translate-x-1/2`.
 - `theme.style` recipes carry more of each style: corner radii per side, the left border, column gaps, text wrapping and alignment, blend modes, visibility, and the enter, exit and transition motion values.

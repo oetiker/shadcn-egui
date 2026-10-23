@@ -3,7 +3,7 @@
 //! the disabled fade come from the style's
 //! `cn-select-trigger`, `cn-select-trigger-icon`, `cn-select-content`,
 //! `cn-select-group`, `cn-select-item` and `cn-select-item-indicator`
-//! recipes. The chevron and the tick are the theme's `chevron_down` and
+//! recipes. The chevron and the tick are the theme's `select_trigger` and
 //! `check` icons ([`crate::Theme::icons`]).
 //!
 //! The trigger is a custom-painted box (an `egui::ComboBox` cannot take
@@ -320,7 +320,7 @@ impl Widget for Select<'_> {
                 paint_icon(
                     &style_painter(ui, &[&icon[..], &trig[..]], st),
                     icon_rect,
-                    &t.icons.chevron_down,
+                    &t.icons.select_trigger,
                     c,
                     t.metrics.icon_stroke,
                 );

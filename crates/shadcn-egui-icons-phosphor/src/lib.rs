@@ -2,7 +2,7 @@
 //! Phosphor Icons, regular weight 2.1.1 (MIT), from the npm package @phosphor-icons/core.
 //!
 //! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the
-//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).
+//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button, ...).
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
@@ -3050,8 +3050,15 @@ pub const ALL: &[&Icon] = &[
 ];
 
 /// The icons shadcn-egui's components draw.
-pub const SLOTS: IconSlots = IconSlots {
-    check: CHECK,
-    chevron_down: CARET_DOWN,
-    close: X,
+pub const SLOTS: IconSlots = {
+    let mut s = IconSlots::all(CHECK);
+    s.check = CHECK;
+    s.select_trigger = CARET_DOWN;
+    s.chevron_down_plain = CARET_DOWN;
+    s.chevron_up = CARET_UP;
+    s.chevron_left = CARET_LEFT;
+    s.chevron_right = CARET_RIGHT;
+    s.more_horizontal = DOTS_THREE;
+    s.close = X;
+    s
 };

@@ -2,7 +2,7 @@
 //! Remix Icon, pinned to its last Apache-2.0 release and never updated 4.8.0 (Apache-2.0), from the npm package remixicon.
 //!
 //! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the
-//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).
+//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button, ...).
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
@@ -6406,8 +6406,15 @@ pub const ALL: &[&Icon] = &[
 ];
 
 /// The icons shadcn-egui's components draw.
-pub const SLOTS: IconSlots = IconSlots {
-    check: CHECK_LINE,
-    chevron_down: ARROW_DOWN_S_LINE,
-    close: CLOSE_LINE,
+pub const SLOTS: IconSlots = {
+    let mut s = IconSlots::all(CHECK_LINE);
+    s.check = CHECK_LINE;
+    s.select_trigger = ARROW_DOWN_S_LINE;
+    s.chevron_down_plain = ARROW_DOWN_S_LINE;
+    s.chevron_up = ARROW_UP_S_LINE;
+    s.chevron_left = ARROW_LEFT_S_LINE;
+    s.chevron_right = ARROW_RIGHT_S_LINE;
+    s.more_horizontal = MORE_LINE;
+    s.close = CLOSE_LINE;
+    s
 };

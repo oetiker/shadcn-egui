@@ -2,7 +2,7 @@
 //! Lucide 1.55.0 (ISC), from the npm package lucide-static.
 //!
 //! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the
-//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).
+//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button, ...).
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
@@ -4320,8 +4320,15 @@ pub const ALL: &[&Icon] = &[
 ];
 
 /// The icons shadcn-egui's components draw.
-pub const SLOTS: IconSlots = IconSlots {
-    check: CHECK,
-    chevron_down: CHEVRON_DOWN,
-    close: X,
+pub const SLOTS: IconSlots = {
+    let mut s = IconSlots::all(CHECK);
+    s.check = CHECK;
+    s.select_trigger = CHEVRON_DOWN;
+    s.chevron_down_plain = CHEVRON_DOWN;
+    s.chevron_up = CHEVRON_UP;
+    s.chevron_left = CHEVRON_LEFT;
+    s.chevron_right = CHEVRON_RIGHT;
+    s.more_horizontal = MORE_HORIZONTAL;
+    s.close = X;
+    s
 };

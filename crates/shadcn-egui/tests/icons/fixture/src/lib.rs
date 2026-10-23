@@ -2,7 +2,7 @@
 //! icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)
 //!
 //! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the
-//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).
+//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button, ...).
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
@@ -40,8 +40,15 @@ pub const ALL: &[&Icon] = &[
 ];
 
 /// The icons shadcn-egui's components draw.
-pub const SLOTS: IconSlots = IconSlots {
-    check: MIXED,
-    chevron_down: RING,
-    close: X,
+pub const SLOTS: IconSlots = {
+    let mut s = IconSlots::all(MIXED);
+    s.check = MIXED;
+    s.select_trigger = RING;
+    s.chevron_down_plain = RING;
+    s.chevron_up = RING;
+    s.chevron_left = RING;
+    s.chevron_right = RING;
+    s.more_horizontal = RING;
+    s.close = X;
+    s
 };

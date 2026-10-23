@@ -142,10 +142,12 @@ tools/icongen/scripts/generate-crates.sh <scratch dir> [lib...]
 ```
 
 Each crate holds every icon as a `pub const` (a range into one `icons.bin`
-blob), `ALL`, and `SLOTS` for the checkbox tick, the select trigger and the
-close button. Remix Icon stays at its last Apache-2.0 release. A component
-that needs a new slot icon adds it to `IconSlots` in `shadcn-egui-core` and
-to the `slots()` table in `generate-crates.sh`.
+blob), `ALL`, and `SLOTS`, one icon per `IconSlots` field (checkbox tick, select
+trigger, chevrons, close button, ...). Remix Icon stays at its last Apache-2.0 release. A component
+that needs a new slot icon adds it to `IconSlots` and `IconSlots::all` in
+`shadcn-egui-core`, to `SLOT_NAMES` in `tools/icongen/src/lib.rs` and to the
+`slots()` table in `generate-crates.sh`, with the icon upstream's
+`IconPlaceholder` names for each library.
 
 After changing icongen, regenerate the test fixtures:
 
@@ -157,7 +159,7 @@ cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   tools/icongen/tests/fixtures/{mic,circle-alert,settings,x,power,monitor}.svg
 cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   --crate-dir crates/shadcn-egui/tests/icons/fixture \
-  --slots check=mixed,chevron_down=ring,close=x \
+  --slots check=mixed,select_trigger=ring,chevron_down_plain=ring,chevron_up=ring,chevron_left=ring,chevron_right=ring,more_horizontal=ring,close=x \
   --provenance "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)" \
   tools/icongen/tests/fixtures/{big-box,faded,mixed,ring,square-hole,star-evenodd,x}.svg
 ```

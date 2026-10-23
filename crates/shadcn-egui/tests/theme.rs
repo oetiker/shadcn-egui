@@ -168,20 +168,24 @@ fn consumer_set_dark_is_honoured() {
         .contains(State::DARK));
 }
 
-use shadcn_egui::icons::lucide::{CHECK, CHEVRON_DOWN, SLOTS as LUCIDE_SLOTS, X as CLOSE};
+use shadcn_egui::icons::lucide::{
+    CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, MORE_HORIZONTAL,
+    SLOTS as LUCIDE_SLOTS, X as CLOSE,
+};
 use shadcn_egui::{FontName, IconLibrary, IconSlots, MenuColors};
 
 #[test]
 fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
     let t = Theme::vega_light();
-    assert_eq!(
-        t.icons,
-        IconSlots {
-            check: CHECK,
-            chevron_down: CHEVRON_DOWN,
-            close: CLOSE
-        }
-    );
+    let mut lucide = IconSlots::all(CLOSE);
+    lucide.check = CHECK;
+    lucide.select_trigger = CHEVRON_DOWN;
+    lucide.chevron_down_plain = CHEVRON_DOWN;
+    lucide.chevron_up = CHEVRON_UP;
+    lucide.chevron_left = CHEVRON_LEFT;
+    lucide.chevron_right = CHEVRON_RIGHT;
+    lucide.more_horizontal = MORE_HORIZONTAL;
+    assert_eq!(t.icons, lucide);
     assert_eq!(t.icons, LUCIDE_SLOTS);
     assert_eq!(t.menu, MenuColors::default());
     assert_eq!(
@@ -193,11 +197,7 @@ fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
 
 #[test]
 fn icon_and_menu_builders() {
-    let crosses = IconSlots {
-        check: CLOSE,
-        chevron_down: CLOSE,
-        close: CLOSE,
-    };
+    let crosses = IconSlots::all(CLOSE);
     assert_eq!(Theme::vega_light().icons(crosses).icons, crosses);
     let menu = MenuColors {
         palette: Some(Palette::dark()),

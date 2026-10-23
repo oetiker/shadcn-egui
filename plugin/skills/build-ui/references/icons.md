@@ -71,9 +71,12 @@ fn icons(ui: &mut egui::Ui) {
 ## Icon slots
 
 Components draw a few icons of their own: the checkbox tick and the selected
-Select item (`check`), the Select trigger chevron (`chevron_down`) and the
-Dialog close button (`close`). These come from `Theme::icons`, an
-`IconSlots` value. A preset fills the slots from its icon library's `SLOTS`,
+Select item (`check`), the Select trigger icon (`select_trigger`), the plain
+chevrons (`chevron_down_plain`, `chevron_up`, `chevron_left`,
+`chevron_right`), three dots (`more_horizontal`) and the Dialog close button
+(`close`). These come from `Theme::icons`, an `IconSlots` value. It gains
+slots over time, so build one from `IconSlots::all(icon)` and set the slots
+to change. A preset fills the slots from its icon library's `SLOTS`,
 so switching the library changes these icons too. Without a preset, a theme
 uses Lucide's slots; `theme.icons(shadcn_egui::icons::lucide::SLOTS)` sets
 them explicitly, and `shadcn_egui::icons::slots(IconLibrary::…)` returns a
