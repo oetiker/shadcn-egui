@@ -18,7 +18,7 @@
 //! is not read: the header paints no fill or border in any style, so its
 //! corners have nothing to shape.
 
-use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
+use crate::components::shared::{content_ui, part_painter, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::{layout, Theme};
@@ -122,7 +122,6 @@ impl<'a> Card<'a> {
         let fg = pick(&card, |r| &r.text, st).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&card, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
         // Header, content and footer sit in the card.
-        let alpha = opacity(&[&card[..]], st);
         let painter = part_painter(ui, &[&card[..]], st);
 
         // `w-full` in a column: the room left, or the content minimum where
@@ -145,7 +144,6 @@ impl<'a> Card<'a> {
                 .layout(Layout::top_down(Align::Min)),
         );
         body.spacing_mut().item_spacing.y = gap;
-        body.multiply_opacity(alpha);
         if let Some(fg) = fg {
             body.visuals_mut().override_text_color = Some(fg);
         }
@@ -157,7 +155,7 @@ impl<'a> Card<'a> {
         let previous = body.ctx().data(|d| d.get_temp::<CardSize>(size_key()));
         body.ctx()
             .data_mut(|d| d.insert_temp(size_key(), self.size));
-        let result = add(&mut body);
+        let result = content_ui(&mut body, &[&card[..]], st, add);
         body.ctx().data_mut(|d| match previous {
             Some(p) => {
                 d.insert_temp(size_key(), p);
@@ -191,11 +189,10 @@ impl<'a> Card<'a> {
                     .layout(Layout::left_to_right(Align::Center)),
             );
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
-            row.multiply_opacity(opacity(&[&foot[..], &card[..]], st));
             if let Some(fg) = fg {
                 row.visuals_mut().override_text_color = Some(fg);
             }
-            footer(&mut row);
+            content_ui(&mut row, &[&foot[..], &card[..]], st, footer);
             let strip_bottom = row.min_rect().bottom().max(inner.top()) + f_bottom;
             footer_shapes = Some((strip_bg, strip_top, strip_bottom));
             bottom = strip_bottom;
@@ -213,9 +210,7 @@ impl<'a> Card<'a> {
                 egui::pos2(outer.left(), top),
                 egui::pos2(outer.right(), bottom),
             );
-            let mut strip_painter = painter.clone();
-            strip_painter.multiply_opacity(opacity(&[&foot[..]], st));
-            strip_painter.set(
+            part_painter(ui, &[&foot[..], &card[..]], st).set(
                 idx,
                 Shape::Vec(RecipeBox::resolve(&t, &foot, st).shapes(ui.ctx(), strip)),
             );
@@ -237,9 +232,8 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let l = [&*t.style.card_content];
     let gap = len(&l, |r| &r.gap, st);
     ui.scope(|ui| {
-        ui.multiply_opacity(opacity(&[&l[..]], st));
         ui.spacing_mut().item_spacing.y = gap;
-        add(ui)
+        content_ui(ui, &[&l[..]], st, add)
     })
     .inner
 }

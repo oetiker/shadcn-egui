@@ -144,6 +144,42 @@ fn dialog_close_button_can_be_hidden() {
     assert!(h.query_by_label("Close").is_none());
 }
 
+/// A part paints at its own `disabled:` opacity, not egui's fade
+/// (conformance 2.2): nova's footer strip has no `disabled:` rule, so in a
+/// disabled area of the dialog it keeps its full colour, as in a disabled
+/// `<fieldset>`.
+#[test]
+fn a_disabled_dialog_footer_keeps_its_strip_colour() {
+    use shadcn_egui::style::{pick, State};
+    let theme = Theme::new(shadcn_egui::Style::nova(), Palette::light(), 10.0);
+    let strip = pick(&[&*theme.style.dialog_footer], |r| &r.bg, State::NONE)
+        .map(|p| theme.paint(p))
+        .expect("nova's footer has a strip");
+    let fills = |disabled: bool| {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        // No fade-in of the modal's area.
+        ctx.global_style_mut(|s| s.animation_time = 0.0);
+        let mut out = None;
+        for _ in 0..2 {
+            out = Some(ctx.run_ui(egui::RawInput::default(), |ui| {
+                Dialog::new("d", "Title").show(ui.ctx(), &mut true, |ui| {
+                    ui.add_enabled_ui(!disabled, |ui| dialog::footer(ui, |_| {}));
+                });
+            }));
+        }
+        common::rect_shapes(&out.expect("ran"))
+            .into_iter()
+            .map(|r| r.fill)
+            .collect::<Vec<_>>()
+    };
+    assert!(fills(false).contains(&strip), "enabled strip");
+    assert!(
+        fills(true).contains(&strip),
+        "disabled strip keeps {strip:?}"
+    );
+}
+
 #[test]
 fn dialog_snapshot() {
     common::snapshot_all("dialog", vec2(800.0, 500.0), |ui| {

@@ -11,7 +11,7 @@
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
-use crate::components::shared::{opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
+use crate::components::shared::{content_ui, opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
@@ -76,7 +76,6 @@ impl<'a> Popover<'a> {
             .frame(frame)
             .show(|ui| {
                 let slot = RecipeBox::reserve(ui);
-                ui.multiply_opacity(alpha);
                 if let Some(w) = inner_width {
                     ui.set_width(w);
                 }
@@ -89,7 +88,7 @@ impl<'a> Popover<'a> {
                         font.size = text_px;
                     }
                 }
-                (content(ui), slot)
+                (content_ui(ui, &[&l[..]], g, content), slot)
             })?;
         let (inner, slot) = shown.inner;
         panel.paint_reserved(
@@ -133,25 +132,24 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
         [header],
     );
     ui.scope(|ui| {
-        // The header holds the title and description: they take one fade out.
-        let disabled = g.with(State::DISABLED, !ui.is_enabled());
-        ui.multiply_opacity(opacity(&[&header_l[..]], disabled));
         ui.spacing_mut().item_spacing.y = gap;
-        let mut title = RichText::new(title)
-            .size(title_px)
-            .line_height(Some(title_line))
-            .family(family_for(ui.ctx(), weight));
-        if let Some(c) = title_color {
-            title = title.color(c);
-        }
-        part_ui(ui, &[&title_l[..]], g, |ui| ui.label(title));
-        let mut description = RichText::new(description)
-            .size(desc_px)
-            .line_height(Some(desc_line));
-        if let Some(c) = muted {
-            description = description.color(c);
-        }
-        part_ui(ui, &[&desc_l2[..]], g, |ui| ui.label(description));
+        content_ui(ui, &[&header_l[..]], g, |ui| {
+            let mut title = RichText::new(title)
+                .size(title_px)
+                .line_height(Some(title_line))
+                .family(family_for(ui.ctx(), weight));
+            if let Some(c) = title_color {
+                title = title.color(c);
+            }
+            part_ui(ui, &[&title_l[..]], g, |ui| ui.label(title));
+            let mut description = RichText::new(description)
+                .size(desc_px)
+                .line_height(Some(desc_line));
+            if let Some(c) = muted {
+                description = description.color(c);
+            }
+            part_ui(ui, &[&desc_l2[..]], g, |ui| ui.label(description));
+        });
     });
 }
 

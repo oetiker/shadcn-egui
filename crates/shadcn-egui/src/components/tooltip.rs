@@ -6,7 +6,7 @@
 //! centre lies on the content edge, below or above the content, centred on the
 //! trigger.
 
-use crate::components::shared::{opacity, RecipeBox};
+use crate::components::shared::{content_ui, opacity, RecipeBox};
 use crate::style::{pick, State, TextSize};
 use crate::Theme;
 use egui::{pos2, Color32, Pos2, RectAlign, Response, RichText, Shape};
@@ -52,13 +52,12 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(frame);
     let shown = tip.show(|ui| {
         let slot = RecipeBox::reserve(ui);
-        ui.multiply_opacity(alpha);
         ui.set_max_width(max_w - pad_l - pad_r);
         let mut label = RichText::new(text).size(text_px).line_height(Some(line));
         if let Some(fg) = fg {
             label = label.color(fg);
         }
-        ui.label(label);
+        content_ui(ui, &[&content[..]], g, |ui| ui.label(label));
         slot
     });
     if let Some(shown) = &shown {

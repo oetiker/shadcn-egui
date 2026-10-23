@@ -28,8 +28,8 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    interaction_state, line_box, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
-    DEFAULT_SIDE_OFFSET,
+    content_ui, interaction_state, line_box, opacity, part_painter, pressable, ActivationKeys,
+    RecipeBox, DEFAULT_SIDE_OFFSET,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -351,13 +351,7 @@ impl Widget for Select<'_> {
             // Inside, the viewport sits in the content and the group in the
             // viewport; neither paints anything of its own.
             let alpha = opacity(&[&l[..]], gs);
-            let inner_alpha = opacity(
-                &[
-                    &[&*t.style.select_group][..],
-                    &[&*t.style.select_viewport][..],
-                ],
-                gs,
-            );
+            let viewport = [&*t.style.select_viewport];
             let panel = RecipeBox::resolve(t, &l, gs).faded(alpha);
             let frame = panel.frame([gpt, gpr, gpb, gpl]);
             let item_font = egui::FontId::new(
@@ -423,105 +417,108 @@ impl Widget for Select<'_> {
                 .frame(frame)
                 .show(|ui| {
                     let slot = RecipeBox::reserve(ui);
-                    ui.multiply_opacity(alpha * inner_alpha);
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
-                    egui::ScrollArea::vertical()
-                        .max_height(max_h.max(0.0))
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            for (i, galley) in galleys.iter().enumerate() {
-                                let (_, row) = ui.allocate_space(vec2(
-                                    inner_w,
-                                    (galley.size().y.max(line) + ipt + ipb).max(min_row),
-                                ));
-                                let r = ui.interact(row, resp.id.with(("item", i)), Sense::click());
-                                if r.hovered() && pointer_moved {
-                                    hover_hl = Some(i);
-                                }
-                                if r.clicked() {
-                                    clicked = Some(i);
-                                }
-                                let highlighted = hl == i;
-                                let state = State::NONE
-                                    .with(State::FOCUS, highlighted)
-                                    .with(State::SELECTED, i == current);
-                                let s = t.state(ui.ctx(), state);
-                                if highlighted && (moved || hl_missing) {
-                                    r.scroll_to_me(None);
-                                }
-                                if ui.is_rect_visible(row) {
-                                    // The row's text and indicator sit in the row.
-                                    let painter = part_painter(ui, &[&item[..]], s);
-                                    RecipeBox::resolve(t, &item, s).paint(&painter, row);
-                                    // The row's own text colour serves tick and text alike.
-                                    let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
-                                    let color = pick(&item, |r| &r.text, s)
-                                        .or(pick(&l, |r| &r.text, s))
-                                        .map_or(inherited, |p| t.paint(p));
-                                    let text_painter = {
-                                        let mut p = painter.clone();
-                                        p.multiply_opacity(opacity(
-                                            &[&[&*t.style.select_item_text][..]],
-                                            s,
-                                        ));
-                                        p
-                                    };
-                                    text_painter.galley(
-                                        egui::pos2(
-                                            row.left() + ipl,
-                                            row.center().y - galley.size().y / 2.0,
-                                        ),
-                                        galley.clone(),
-                                        color,
-                                    );
-                                    if i == current {
-                                        let ind = [&*t.style.select_item_indicator];
-                                        // No size: CSS's initial `auto`, the
-                                        // tick at the row's `[&_svg]:size-*`.
-                                        let tick_side = pick(&item, |r| &r.icon_size, s)
-                                            .unwrap_or(t.metrics.icon);
-                                        let (w, h) = (
-                                            pick(&ind, |r| &r.width, s).unwrap_or(tick_side),
-                                            pick(&ind, |r| &r.height, s).unwrap_or(tick_side),
-                                        );
-                                        let right =
-                                            pick(&ind, |r| &r.inset_right, s).unwrap_or(0.0);
-                                        let tick = Rect::from_center_size(
-                                            egui::pos2(
-                                                row.right() - right - w / 2.0,
-                                                row.center().y,
-                                            ),
-                                            vec2(w, h),
-                                        );
-                                        // The icon sits in the indicator.
-                                        let mut tick_painter = painter.clone();
-                                        tick_painter.multiply_opacity(opacity(
-                                            &[
-                                                &ind[..],
-                                                &[&*t.style.select_item_indicator_icon][..],
-                                            ],
-                                            s,
-                                        ));
-                                        paint_icon(
-                                            &tick_painter,
-                                            tick,
-                                            &t.icons.check,
-                                            color,
-                                            t.metrics.icon_stroke,
-                                        );
+                    // The rows sit in the group, the group in the viewport,
+                    // the viewport in the content.
+                    let chain = [&group[..], &viewport[..], &l[..]];
+                    content_ui(ui, &chain, gs, |ui| {
+                        egui::ScrollArea::vertical()
+                            .max_height(max_h.max(0.0))
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                for (i, galley) in galleys.iter().enumerate() {
+                                    let (_, row) = ui.allocate_space(vec2(
+                                        inner_w,
+                                        (galley.size().y.max(line) + ipt + ipb).max(min_row),
+                                    ));
+                                    let r =
+                                        ui.interact(row, resp.id.with(("item", i)), Sense::click());
+                                    if r.hovered() && pointer_moved {
+                                        hover_hl = Some(i);
                                     }
+                                    if r.clicked() {
+                                        clicked = Some(i);
+                                    }
+                                    let highlighted = hl == i;
+                                    let state = State::NONE
+                                        .with(State::FOCUS, highlighted)
+                                        .with(State::SELECTED, i == current);
+                                    let s = t.state(ui.ctx(), state);
+                                    if highlighted && (moved || hl_missing) {
+                                        r.scroll_to_me(None);
+                                    }
+                                    if ui.is_rect_visible(row) {
+                                        // The row's text and indicator sit in the row.
+                                        let painter = part_painter(ui, &[&item[..]], s);
+                                        RecipeBox::resolve(t, &item, s).paint(&painter, row);
+                                        // The row's own text colour serves tick and text alike.
+                                        let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
+                                        let color = pick(&item, |r| &r.text, s)
+                                            .or(pick(&l, |r| &r.text, s))
+                                            .map_or(inherited, |p| t.paint(p));
+                                        let text_painter = part_painter(
+                                            ui,
+                                            &[&[&*t.style.select_item_text][..], &item[..]],
+                                            s,
+                                        );
+                                        text_painter.galley(
+                                            egui::pos2(
+                                                row.left() + ipl,
+                                                row.center().y - galley.size().y / 2.0,
+                                            ),
+                                            galley.clone(),
+                                            color,
+                                        );
+                                        if i == current {
+                                            let ind = [&*t.style.select_item_indicator];
+                                            // No size: CSS's initial `auto`, the
+                                            // tick at the row's `[&_svg]:size-*`.
+                                            let tick_side = pick(&item, |r| &r.icon_size, s)
+                                                .unwrap_or(t.metrics.icon);
+                                            let (w, h) = (
+                                                pick(&ind, |r| &r.width, s).unwrap_or(tick_side),
+                                                pick(&ind, |r| &r.height, s).unwrap_or(tick_side),
+                                            );
+                                            let right =
+                                                pick(&ind, |r| &r.inset_right, s).unwrap_or(0.0);
+                                            let tick = Rect::from_center_size(
+                                                egui::pos2(
+                                                    row.right() - right - w / 2.0,
+                                                    row.center().y,
+                                                ),
+                                                vec2(w, h),
+                                            );
+                                            // The icon sits in the indicator.
+                                            let tick_painter = part_painter(
+                                                ui,
+                                                &[
+                                                    &[&*t.style.select_item_indicator_icon][..],
+                                                    &ind[..],
+                                                    &item[..],
+                                                ],
+                                                s,
+                                            );
+                                            paint_icon(
+                                                &tick_painter,
+                                                tick,
+                                                &t.icons.check,
+                                                color,
+                                                t.metrics.icon_stroke,
+                                            );
+                                        }
+                                    }
+                                    r.widget_info(|| {
+                                        egui::WidgetInfo::selected(
+                                            egui::WidgetType::SelectableLabel,
+                                            true,
+                                            i == current,
+                                            self.options[i],
+                                        )
+                                    });
                                 }
-                                r.widget_info(|| {
-                                    egui::WidgetInfo::selected(
-                                        egui::WidgetType::SelectableLabel,
-                                        true,
-                                        i == current,
-                                        self.options[i],
-                                    )
-                                });
-                            }
-                        });
+                            });
+                    });
                     slot
                 });
             if let Some(i) = hover_hl.filter(|&i| i != hl) {

@@ -11,7 +11,7 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::shared::{opacity, part_ui, RecipeBox};
+use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::{layout, Theme};
@@ -111,7 +111,6 @@ impl<'a> Dialog<'a> {
             .frame(frame)
             .show(ctx, |ui| {
                 let slot = RecipeBox::reserve(ui);
-                ui.multiply_opacity(alpha);
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
                 if let Some(fg) = fg {
@@ -122,10 +121,12 @@ impl<'a> Dialog<'a> {
                         font.size = text_px;
                     }
                 }
-                header(ui, self.title, self.description);
-                let inner = body(ui);
-                let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
-                (inner, close, slot)
+                content_ui(ui, &[&l[..]], g, |ui| {
+                    header(ui, self.title, self.description);
+                    let inner = body(ui);
+                    let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
+                    (inner, close, slot)
+                })
             });
         let dismissed = resp.backdrop_response.clicked() || resp.should_close();
         let (inner, close, slot) = resp.inner;
@@ -157,28 +158,27 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     // The title and the description sit in the header.
     let header_l = [&*t.style.dialog_header];
     ui.scope(|ui| {
-        // The header holds the title and description: they take one fade out.
-        let disabled = g.with(State::DISABLED, !ui.is_enabled());
-        ui.multiply_opacity(opacity(&[&header_l[..]], disabled));
         ui.spacing_mut().item_spacing.y = gap;
-        // upstream: dialog-title carries `cn-font-heading`
-        part_ui(ui, &[&heading[..]], g, |ui| {
-            ui.label(
-                RichText::new(title)
-                    .family(heading_family_for(ui.ctx(), weight))
-                    .size(px)
-                    .line_height(Some(line)),
-            )
-        });
-        if let Some(d) = description {
-            let mut text = RichText::new(d)
-                .size(t.text_px(desc_size))
-                .line_height(Some(desc_line));
-            if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
-                text = text.color(c);
+        content_ui(ui, &[&header_l[..]], g, |ui| {
+            // upstream: dialog-title carries `cn-font-heading`
+            part_ui(ui, &[&heading[..]], g, |ui| {
+                ui.label(
+                    RichText::new(title)
+                        .family(heading_family_for(ui.ctx(), weight))
+                        .size(px)
+                        .line_height(Some(line)),
+                )
+            });
+            if let Some(d) = description {
+                let mut text = RichText::new(d)
+                    .size(t.text_px(desc_size))
+                    .line_height(Some(desc_line));
+                if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
+                    text = text.color(c);
+                }
+                part_ui(ui, &[&desc[..]], g, |ui| ui.label(text));
             }
-            part_ui(ui, &[&desc[..]], g, |ui| ui.label(text));
-        }
+        });
     });
 }
 
@@ -235,7 +235,6 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         px(|r| &r.margin_left),
     );
     let gap = pick(&l, |r| &r.gap, g).unwrap_or(0.0);
-    let alpha = opacity(&[&l[..]], g);
 
     let at = ui.max_rect();
     let top = ui.cursor().top();
@@ -251,13 +250,11 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             .layout(Layout::right_to_left(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = gap;
-    row.multiply_opacity(alpha);
-    add(&mut row);
+    content_ui(&mut row, &[&l[..]], g, add);
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
-    let mut painter = ui.painter().clone();
-    painter.multiply_opacity(alpha);
+    let painter = part_painter(ui, &[&l[..]], g);
     let shapes = RecipeBox::resolve(&t, &l, g).shapes(ui.ctx(), strip);
     painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.
