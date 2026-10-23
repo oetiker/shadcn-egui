@@ -37,10 +37,10 @@ fn committed_fixture_crate_is_current() {
     let committed_blob = std::fs::read(format!("{dir}/icons.bin")).expect("committed icons.bin");
     assert!(
         committed_src == src,
-        "fixture lib.rs is stale: regenerate it (references/icons.md)"
+        "fixture lib.rs is stale: regenerate it (plugin/skills/port-component/references/upstream.md, After changing icongen)"
     );
     assert!(
         committed_blob == blob,
-        "fixture icons.bin is stale: regenerate it (references/icons.md)"
+        "fixture icons.bin is stale: regenerate it (plugin/skills/port-component/references/upstream.md, After changing icongen)"
     );
 }
