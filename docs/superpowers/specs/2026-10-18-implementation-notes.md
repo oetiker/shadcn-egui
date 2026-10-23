@@ -143,6 +143,9 @@ in the same place.
 - The item registry keeps the children's count, size and ids from the
   previous pass by id, gives each child its position flags through the
   parent context, and calls `request_discard` when they change.
+- A handle wraps the child `Ui` that carries its root's tag and implements
+  `DerefMut<Target = Ui>`, so a part placed through it reads the root's
+  state as any child reads its parent's (rules, Handle).
 
 ## 13 · Layout helpers
 

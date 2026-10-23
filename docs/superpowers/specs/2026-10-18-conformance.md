@@ -286,11 +286,12 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 
 ### 4.5 A choice control's own label
 
-- A control's own label is drawn through the Label text path (`RichText`
-  attributes kept) and composed with the control as that control's
-  upstream demo composes the two, with that demo's gap per control from
-  `Metrics`.
-- It wraps as Label does, in the width beside the control.
+- A control's own label is atoms, as egui's `Checkbox` takes them: its
+  text is drawn through the Label text path (`RichText` attributes kept),
+  every other atom is shown as egui shows it, and the label is composed
+  with the control as that control's upstream demo composes the two, with
+  that demo's gap per control from `Metrics`.
+- Its text wraps as Label does, in the width beside the control.
 - A press on it acts on the control (`<label for>`).
 
 ## 5 · Overlays
