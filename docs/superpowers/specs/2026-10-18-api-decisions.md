@@ -4490,6 +4490,12 @@ breakpoint helper serves calendar, sonner, sidebar and pagination by
 default, so beside `layout::wider_than(ui, px)` (container width) it offers
 a window-width form for upstream's media queries.
 
+Consequence (rules, 2026-10-23, axiom 2 and P1): the helpers test "at
+least", as a `min-width` query does, so their names say so and match each
+other: `layout::container_at_least(ui, px)` for the container width and
+`layout::window_at_least(ctx, px)` for the viewport width that a media
+query reads. `wider_than` is not used.
+
 ### D-134 · Group-position protocol (first, last, stretch)
 
 - **Case:** button-group, toggle-group, input-group and input-otp need
