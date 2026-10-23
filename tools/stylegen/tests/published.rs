@@ -57,6 +57,11 @@ fn part_strings_match_the_published_components() {
             }
             for m in &line.markers {
                 let (_, classes) = parts.iter().find(|(n, _)| n == m).expect("part");
+                // A slot part without a class string of its own (styled by
+                // its parent's `*:data-[slot=..]:` rules) has none to find.
+                if classes.is_empty() {
+                    continue;
+                }
                 let ours = canonical(&expand(classes, m, &css).join(" "));
                 compared += 1;
                 if !published.contains(&ours) && !allowed(style, m) {
@@ -65,7 +70,8 @@ fn part_strings_match_the_published_components() {
             }
         }
     }
-    // 112 parts in markers.txt, each for vega and nova.
+    // 113 parts in markers.txt, 112 with a class string (all but
+    // `slot:select-value`), each for vega and nova.
     assert_eq!(compared, 224, "compared {compared} parts");
     assert!(
         missing.is_empty(),

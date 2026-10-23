@@ -4,7 +4,7 @@
 use crate::class::split;
 use crate::model::{Field, Value};
 use crate::utility::{utility, U};
-use crate::variant::{class_variants, rank, ChildSel, Skip, IGNORED};
+use crate::variant::{class_variants, rank, ChildSel, Skip};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -450,6 +450,12 @@ const BUTTON_GROUP_CHILDREN: &[&str] = &[
 ];
 
 pub const CONTEXTS: &[Context] = &[
+    // The value (`select-value`) the trigger shows.
+    Context {
+        parent: "cn-select-trigger",
+        flags: &[],
+        children: &[],
+    },
     Context {
         parent: "cn-tooltip-content",
         flags: &["IN_TOOLTIP_CONTENT"],
@@ -482,11 +488,17 @@ pub const CONTEXTS: &[Context] = &[
     },
 ];
 
+/// Upstream slots of components the crate does not ship, with the reason.
+/// A rule a parent gives such a slot has no part to draw it; any other
+/// slot without a crate part makes the rule unsupported, never ignored, as
+/// the rule gives a look (axiom 8).
+const UNSHIPPED_SLOTS: &[(&str, &str)] = &[("input-group", crate::variant::INPUT_GROUP)];
+
 /// Move every child-target decl to the part that draws the child, under
 /// the parent's [`Context`] flags: a named slot to that slot's part, `*:`
 /// to each crate child, or to the parent's `_child` recipe where it has
-/// none. A slot without a crate part is ignored for the reason its
-/// `data-[slot=..]` variant has, else unsupported.
+/// none. A slot without a crate part is ignored where the crate does not
+/// ship its component ([`UNSHIPPED_SLOTS`]), else unsupported.
 pub fn route(parts: &mut [Part]) {
     for i in 0..parts.len() {
         let moved = std::mem::take(&mut parts[i].marker.moved);
@@ -497,8 +509,7 @@ pub fn route(parts: &mut [Part]) {
             if let ChildSel::Slot(s) = &mv.child {
                 let names = [format!("cn-{s}"), format!("slot:{s}")];
                 if !parts.iter().any(|p| names.contains(&p.name)) {
-                    let v = format!("data-[slot={s}]");
-                    match IGNORED.iter().find(|(n, _)| *n == v) {
+                    match UNSHIPPED_SLOTS.iter().find(|(n, _)| n == s) {
                         Some((_, why)) => {
                             let line = (mv.raw, *why);
                             if !parts[i].marker.ignored.contains(&line) {

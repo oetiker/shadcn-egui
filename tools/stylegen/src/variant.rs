@@ -314,7 +314,7 @@ const LEADING_IMAGE: &str = "card with a leading image is not offered";
 /// D-100 (a): rules for links and paragraphs inside caller content.
 const CALLER_CONTENT: &str =
     "styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)";
-const INPUT_GROUP: &str = "inside or around an InputGroup; the crate does not ship InputGroup";
+pub const INPUT_GROUP: &str = "inside or around an InputGroup; the crate does not ship InputGroup";
 
 /// Every variant stylegen ignores, by exact text, with the reason.
 pub const IGNORED: &[(&str, &str)] = &[
@@ -329,7 +329,6 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("[img:last-child]", "card with a trailing image is not offered"),
     ("group-has-[:focus-visible]/field-label", "inside a focused FieldLabel; the crate does not ship Field"),
     ("[span]", "select item text wrapper; the crate draws the item text itself"),
-    ("data-[slot=select-value]", "select value wrapper; the crate draws the value itself"),
     ("data-[slot=input-group]", INPUT_GROUP),
     ("in-data-[slot=input-group]", INPUT_GROUP),
     ("[&>[data-slot=input-group]:has(:focus-visible)]", INPUT_GROUP),

@@ -150,6 +150,8 @@ fn part_string(
             .filter(|s| !s.split_whitespace().any(|t| t.starts_with("cn-")))
             .collect();
         return match plain.as_slice() {
+            // Styled only by its parent's `*:data-[slot=..]:` rules.
+            [] if strings.is_empty() => Ok(String::new()),
             [one] => Ok((*one).clone()),
             _ => Err(format!(
                 "{part}: ui/{dir}/{file} has {} class strings without a marker, expected one",

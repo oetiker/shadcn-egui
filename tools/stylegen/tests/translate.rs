@@ -1137,3 +1137,43 @@ fn custom_data_variants_add_no_specificity() {
         })
     );
 }
+
+/// A value a parent's rule gives a slot without a crate part is a look
+/// with nowhere to go: unsupported, unless the crate does not ship the
+/// slot's component (input-group). A slot with a part takes the rule.
+#[test]
+fn route_reports_a_look_on_a_slot_without_a_part() {
+    use stylegen::resolve::{route, Part};
+    let part = |name: &str, classes: &[&str]| Part {
+        name: name.to_owned(),
+        marker: translate(
+            &classes.iter().map(|c| (*c).to_owned()).collect::<Vec<_>>(),
+            &Vars::new(),
+        ),
+        corrections: Vec::new(),
+    };
+    let mut ps = vec![
+        part(
+            "cn-tooltip-content",
+            &[
+                "*:data-[slot=nosuch]:gap-2",
+                "*:data-[slot=input-group]:gap-2",
+                "*:data-[slot=kbd]:gap-2",
+            ],
+        ),
+        part("cn-kbd", &[]),
+    ];
+    route(&mut ps);
+    let tooltip = &ps[0].marker;
+    let unsupported: Vec<&str> = tooltip
+        .unsupported
+        .iter()
+        .map(|(c, _)| c.as_str())
+        .collect();
+    assert_eq!(unsupported, ["*:data-[slot=nosuch]:gap-2"]);
+    assert!(tooltip
+        .ignored
+        .iter()
+        .any(|(c, _)| c == "*:data-[slot=input-group]:gap-2"));
+    assert_eq!(ps[1].marker.routed.len(), 1, "{:?}", ps[1].marker.routed);
+}

@@ -127,6 +127,8 @@ pub struct Style {
     pub select_scroll_up_button: Box<Recipe>,
     /// `cn-select-scroll-down-button`
     pub select_scroll_down_button: Box<Recipe>,
+    /// `data-slot="select-value"` (no style marker)
+    pub select_value: Box<Recipe>,
     /// `data-slot="separator"` (no style marker)
     pub separator: Box<Recipe>,
     /// `cn-slider`

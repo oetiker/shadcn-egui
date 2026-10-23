@@ -201,6 +201,7 @@ Unsupported classes in shipped markers: **0** (exportable)
 
 ## `cn-select-trigger`
 
+- moved `*:data-[slot=select-value]:gap-1.5` to `slot:select-value` under State::NONE
 - from `cn-button-group`: `has-[>[data-variant=outline]]:*:data-[slot=select-trigger]:border-border` under State::IN_BUTTON_GROUP.or(State::HAS_OUTLINE)
 - from `cn-button-group`: `has-[>[data-variant=outline]]:[&>[data-slot=select-trigger]:focus-visible]:border-ring` under State::FOCUS_VISIBLE.or(State::IN_BUTTON_GROUP).or(State::HAS_OUTLINE)
 - from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-r-4xl!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
@@ -223,7 +224,6 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `flex`: structure: egui layout is done by the component
-- ignored `*:data-[slot=select-value]:gap-1.5`: select value wrapper; the crate draws the value itself
 
 ## `cn-select-trigger-icon`
 
@@ -303,6 +303,10 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `flex`: structure: egui layout is done by the component
+
+## `slot:select-value`
+
+- from `cn-select-trigger`: `*:data-[slot=select-value]:gap-1.5` under State::NONE
 
 ## `slot:separator`
 

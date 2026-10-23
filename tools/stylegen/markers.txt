@@ -1,7 +1,8 @@
 # <crate file> <upstream ui dir>: <cn markers the style CSS defines for it>
 # `slot:<name>` names a part without a `cn-*` marker: the one class string
 # without a marker in `ui/<dir>/<name>.svelte` (upstream names that file
-# after the part's `data-slot`).
+# after the part's `data-slot`), or none where the file has no class string
+# and only its parent's `*:data-[slot=<name>]:` rules style it.
 button.rs button: cn-button cn-button-variant-default cn-button-variant-outline cn-button-variant-secondary cn-button-variant-ghost cn-button-variant-destructive cn-button-variant-link cn-button-size-xs cn-button-size-sm cn-button-size-default cn-button-size-lg cn-button-size-icon-xs cn-button-size-icon-sm cn-button-size-icon cn-button-size-icon-lg
 badge.rs badge: cn-badge cn-badge-variant-default cn-badge-variant-secondary cn-badge-variant-destructive cn-badge-variant-outline cn-badge-variant-ghost cn-badge-variant-link
 card.rs card: cn-card cn-card-header cn-card-title cn-card-description cn-card-action cn-card-content cn-card-footer
@@ -11,7 +12,7 @@ dialog.rs dialog: cn-dialog-overlay cn-dialog-content cn-dialog-close cn-dialog-
 input.rs input: cn-input
 label.rs label: cn-label
 popover.rs popover: cn-popover-content cn-popover-header cn-popover-title cn-popover-description
-select.rs select: cn-select-trigger cn-select-trigger-icon cn-select-content cn-select-viewport cn-select-group cn-select-label cn-select-item cn-select-item-indicator cn-select-item-indicator-icon cn-select-item-text cn-select-separator cn-select-scroll-up-button cn-select-scroll-down-button
+select.rs select: cn-select-trigger cn-select-trigger-icon cn-select-content cn-select-viewport cn-select-group cn-select-label cn-select-item cn-select-item-indicator cn-select-item-indicator-icon cn-select-item-text cn-select-separator cn-select-scroll-up-button cn-select-scroll-down-button slot:select-value
 separator.rs separator: slot:separator
 slider.rs slider: cn-slider cn-slider-track cn-slider-range cn-slider-thumb
 switch.rs switch: cn-switch cn-switch-thumb

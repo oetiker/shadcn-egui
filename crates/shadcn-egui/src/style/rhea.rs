@@ -64,6 +64,7 @@ pub(super) fn style() -> Style {
         select_separator: select_separator(),
         select_scroll_up_button: select_scroll_up_button(),
         select_scroll_down_button: select_scroll_down_button(),
+        select_value: select_value(),
         separator: separator(),
         slider: slider(),
         slider_track: slider_track(),
@@ -1432,6 +1433,18 @@ fn select_scroll_down_button() -> Box<Recipe> {
             ],
         },
         bg: Prop::fixed(Paint::Role(Role::Popover, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn select_value() -> Box<Recipe> {
+    Box::new(Recipe {
+        gap: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 122, value: 6.0 },
+            ],
+        },
         ..Recipe::default()
     })
 }
