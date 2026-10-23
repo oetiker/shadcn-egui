@@ -189,7 +189,7 @@ fn radius_and_misc() {
     );
     assert_eq!(
         set("translate-x-[calc(100%-2px)]"),
-        [(Field::ShiftX, Value::Shift(ShiftV::SelfMinus(2.0)))]
+        [(Field::ShiftX, Value::Shift(ShiftV::Calc(1.0, -2.0)))]
     );
 }
 
@@ -220,8 +220,8 @@ fn vars() {
 
 #[test]
 fn ignored_and_unsupported() {
-    assert!(matches!(utility("flex", None), U::Ignore(_)));
-    assert!(matches!(utility("duration-100", None), U::Ignore(_)));
+    assert!(matches!(utility("flex", None), U::Show(_)));
+    assert!(matches!(utility("isolate", None), U::Ignore(_)));
     assert!(matches!(utility("border-b-input", None), U::Unsupported(_)));
     assert!(matches!(utility("bogus-utility", None), U::Unsupported(_)));
 }
@@ -251,7 +251,9 @@ fn variants() {
     assert!(
         matches!(variant("group-data-[size=sm]/switch"), V::Cond { all, .. } if all == 1 << 19)
     );
-    assert!(matches!(variant("md"), V::Always { rank: r } if r == rank("md")));
+    assert!(
+        matches!(variant("md"), V::Cond { all, rank: r, .. } if all == flag("MD") && r == rank("md"))
+    );
     assert!(matches!(
         variant("[&_svg:not([class*='size-'])]"),
         V::Pseudo(Pseudo::Svg, _)
@@ -410,25 +412,33 @@ fn model_matches_recipe_rs() {
         MarginBottom,
         MarginLeft,
         Gap,
+        GapX,
+        SpaceX,
         InsetTop,
         InsetRight,
         InsetBottom,
         InsetLeft,
         IconSize,
+        IconShiftY,
+        IconHidden,
         TextSize,
         LineHeight,
         Tracking,
         Weight,
         Uppercase,
         Underline,
+        TextWrap,
         Radius,
         RadiusTop,
         RadiusBottom,
+        RadiusLeft,
+        RadiusRight,
         Bg,
         BgClipPadding,
         Text,
         BorderWidth,
         BorderTopWidth,
+        BorderLeftWidth,
         BorderColor,
         RingWidth,
         RingColor,
@@ -436,11 +446,27 @@ fn model_matches_recipe_rs() {
         OutlineColor,
         Shadow,
         Opacity,
+        Blend,
         ShiftX,
         ShiftY,
         HitInsetX,
         HitInsetY,
         BackdropBlur,
+        Hidden,
+        AspectRatio,
+        ObjectCover,
+        FieldSizingContent,
+        Resizable,
+        Transition,
+        Duration,
+        AnimateIn,
+        AnimateOut,
+        EnterOpacity,
+        EnterScale,
+        EnterX,
+        EnterY,
+        ExitOpacity,
+        ExitScale,
     ];
     let names: Vec<String> = all.iter().map(|f| f.rust_name().to_owned()).collect();
     assert_eq!(names, fields);
@@ -657,7 +683,8 @@ fn important_class_gets_the_top_rank_bit() {
             all: 0,
             none: 0,
             rank: 1 << R_IMPORTANT,
-            pseudo: Some(Pseudo::Svg)
+            pseudo: Some(Pseudo::Svg),
+            child: None,
         }
     );
     assert_eq!(
@@ -700,11 +727,14 @@ fn ignore_reasons_follow_the_spec_groups() {
         U::Ignore(w) => w,
         other => panic!("{u}: {other:?}"),
     };
+    // Display classes show a hidden part, else are structure (`U::Show`).
+    for u in ["flex", "grid", "inline-flex", "block"] {
+        assert!(
+            matches!(utility(u, None), U::Show(w) if w == why("relative", None)),
+            "{u}"
+        );
+    }
     let structure = [
-        "flex",
-        "grid",
-        "inline-flex",
-        "block",
         "items-center",
         "justify-between",
         "justify-self-end",
@@ -727,7 +757,7 @@ fn ignore_reasons_follow_the_spec_groups() {
         "@container/card-header",
     ];
     for u in structure {
-        assert_eq!(why(u, None), why("flex", None), "{u}");
+        assert_eq!(why(u, None), why("relative", None), "{u}");
     }
     let browser = [
         "pointer-events-none",
@@ -743,9 +773,10 @@ fn ignore_reasons_follow_the_spec_groups() {
         "peer",
         "group/button",
     ];
-    // The spec also lists `transition-*` here; it keeps the animation
-    // reason of `duration-*` and `fade-*`.
-    assert_eq!(why("transition-all", None), why("duration-100", None));
+    // Motion classes are looks (rules axiom 8): recipe values.
+    for u in ["transition-all", "duration-100", "fade-in-0", "zoom-in-95"] {
+        assert!(matches!(utility(u, None), U::Set(_)), "{u}");
+    }
     for u in browser {
         assert_eq!(why(u, None), why("peer", None), "{u}");
     }
@@ -759,7 +790,7 @@ fn ignore_reasons_follow_the_spec_groups() {
 /// The winning value of `field` under `state` in one class list, as `pick`
 /// resolves it: the matching decl with the highest rank, the later one on a
 /// tie.
-fn winner(classes: &[&str], field: Field, state: u32) -> Option<Value> {
+fn winner(classes: &[&str], field: Field, state: u128) -> Option<Value> {
     let classes: Vec<String> = classes.iter().map(|c| (*c).to_owned()).collect();
     translate(&classes, &Vars::new())
         .decls
@@ -914,17 +945,26 @@ fn svg_targets_keep_their_variant_order() {
 /// moves a variant fails here.
 #[test]
 fn ranks_pin_tailwind_order() {
-    const ORDER: [&str; 55] = [
+    const ORDER: [&str; 79] = [
         "not-aria-[haspopup]",
         "not-data-checked",
         "not-data-selected",
         "not-data-[variant=destructive]",
         "not-dark",
         "group-has-disabled/field",
+        "group-has-data-[size=lg]/avatar-group",
+        "group-has-data-[size=sm]/avatar-group",
+        "group-has-data-[slot=alert-dialog-media]/alert-dialog-content",
+        "group-has-[>svg]/alert",
         "group-data-horizontal/tabs",
         "group-data-vertical/tabs",
         "group-data-[disabled=true]",
+        "group-data-[size=default]/alert-dialog-content",
+        "group-data-[size=default]/avatar",
         "group-data-[size=default]/switch",
+        "group-data-[size=lg]/avatar",
+        "group-data-[size=sm]/alert-dialog-content",
+        "group-data-[size=sm]/avatar",
         "group-data-[size=sm]/card",
         "group-data-[size=sm]/switch",
         "group-data-[variant=default]/tabs-list",
@@ -939,18 +979,27 @@ fn ranks_pin_tailwind_order() {
         "active",
         "disabled",
         "in-data-[slot=button-group]",
+        "in-data-[slot=tooltip-content]",
         "has-data-[icon=inline-end]",
         "has-data-[icon=inline-start]",
+        "has-data-[slot=alert-action]",
+        "has-data-[slot=alert-dialog-media]",
         "has-data-[slot=card-footer]",
+        "has-data-[slot=kbd]",
+        "has-[>[data-slot=button-group]]",
+        "has-[>[data-variant=outline]]",
+        "has-[>svg]",
         "aria-checked",
         "aria-expanded",
         "aria-invalid",
         "data-active",
         "data-checked",
+        "data-closed",
         "data-disabled",
         "data-highlighted",
         "data-horizontal",
         "data-invalid",
+        "data-open",
         "data-placeholder",
         "data-selected",
         "data-unchecked",
@@ -959,9 +1008,15 @@ fn ranks_pin_tailwind_order() {
         "data-[disabled=true]",
         "data-[orientation=horizontal]",
         "data-[orientation=vertical]",
+        "data-[side=bottom]",
+        "data-[side=left]",
+        "data-[side=right]",
+        "data-[side=top]",
         "data-[size=default]",
+        "data-[size=lg]",
         "data-[size=sm]",
         "data-[state=checked]",
+        "data-[state=delayed-open]",
         "data-[state=unchecked]",
         "data-[variant=line]",
         "supports-backdrop-filter",

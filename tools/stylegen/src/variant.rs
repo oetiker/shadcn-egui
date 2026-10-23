@@ -229,7 +229,11 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     ("data-[side=left]", Is("SIDE_LEFT"), CLASS),
     ("data-[size=lg]", Is("SIZE_LG"), CLASS),
     ("group-data-[size=sm]/avatar", Is("SIZE_SM"), CLASS),
-    ("group-data-[size=default]/avatar", Is("SIZE_DEFAULT"), CLASS),
+    (
+        "group-data-[size=default]/avatar",
+        Is("SIZE_DEFAULT"),
+        CLASS,
+    ),
     ("group-data-[size=lg]/avatar", Is("SIZE_LG"), CLASS),
     (
         "group-data-[size=sm]/alert-dialog-content",
@@ -262,10 +266,18 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
         CLASS,
     ),
     ("has-data-[slot=kbd]", Is("HAS_KBD"), CLASS),
-    ("has-[>[data-slot=button-group]]", Is("HAS_BUTTON_GROUP"), CLASS),
+    (
+        "has-[>[data-slot=button-group]]",
+        Is("HAS_BUTTON_GROUP"),
+        CLASS,
+    ),
     ("has-[>[data-variant=outline]]", Is("HAS_OUTLINE"), CLASS),
     // `:where(*[data-slot=tooltip-content]) &`.
-    ("in-data-[slot=tooltip-content]", Is("IN_TOOLTIP_CONTENT"), ZERO),
+    (
+        "in-data-[slot=tooltip-content]",
+        Is("IN_TOOLTIP_CONTENT"),
+        ZERO,
+    ),
     // The crate has no destructive select item.
     ("not-data-[variant=destructive]", Always, CLASS),
     // Media queries read the window width (D-69 (a), `layout::breakpoints`).
@@ -796,6 +808,13 @@ pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
             if out.child.is_some() {
                 return Err(Skip::Unsupported(format!("second child target `{v}`")));
             }
+            let named = vs
+                .get(i)
+                .filter(|_| matches!(v, "*" | "**"))
+                .and_then(|n| n.strip_prefix("data-[slot=")?.strip_suffix(']'));
+            if v == "**" && named.is_none() {
+                return Err(Skip::Ignore(DESCENDANTS));
+            }
             if let Some(f) = crate::model::FLAGS
                 .iter()
                 .find(|(n, b)| (out.all | out.none) & b != 0 && !context_flag(n))
@@ -809,10 +828,6 @@ pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
             for f in *flags {
                 out.all |= flag(f);
             }
-            let named = vs
-                .get(i)
-                .filter(|_| matches!(v, "*" | "**"))
-                .and_then(|n| n.strip_prefix("data-[slot=")?.strip_suffix(']'));
             out.child = Some(match (slot, named) {
                 (Some(s), _) => ChildSel::Slot((*s).to_owned()),
                 (None, Some(s)) => {
@@ -820,7 +835,6 @@ pub fn class_variants(c: &Class) -> Result<Variants, Skip> {
                     extra = extra + CLASS;
                     ChildSel::Slot(s.to_owned())
                 }
-                (None, None) if v == "**" => return Err(Skip::Ignore(DESCENDANTS)),
                 (None, None) => ChildSel::Any,
             });
             continue;

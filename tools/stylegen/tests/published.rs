@@ -65,8 +65,8 @@ fn part_strings_match_the_published_components() {
             }
         }
     }
-    // 72 parts in markers.txt, each for vega and nova.
-    assert_eq!(compared, 144, "compared {compared} parts");
+    // 112 parts in markers.txt, each for vega and nova.
+    assert_eq!(compared, 224, "compared {compared} parts");
     assert!(
         missing.is_empty(),
         "not in published output:\n{}",

@@ -149,12 +149,12 @@ pub fn paint_box(
     painter.extend(box_shapes(rect, radius, fill, border, clip_padding));
 }
 
-/// Apply `translate-x/y` to a part's rect. `SelfMinus(n)` is `calc(100% - n)`
-/// of the part's own size.
+/// Apply `translate-x/y` to a part's rect. `Calc(f, n)` is `calc(f × 100% +
+/// n)` of the part's own size.
 pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
     let d = |s: Option<Shift>, own: f32| match s {
         Some(Shift::Px(v)) => v,
-        Some(Shift::SelfMinus(v)) => own - v,
+        Some(Shift::Calc(f, v)) => own * f + v,
         None => 0.0,
     };
     rect.translate(egui::vec2(d(x, rect.width()), d(y, rect.height())))

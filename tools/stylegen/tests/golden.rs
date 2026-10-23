@@ -340,7 +340,7 @@ fn every_exported_style_translates_every_part() {
 /// variants stays.
 #[test]
 fn text_current_clears_earlier_text_colours() {
-    let text = |v: &[&str]| -> Vec<(u32, Value)> {
+    let text = |v: &[&str]| -> Vec<(u128, Value)> {
         translate(&classes(v), &Vars::new())
             .decls
             .iter()

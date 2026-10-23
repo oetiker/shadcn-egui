@@ -639,9 +639,8 @@ fn unread_class_attribute(src: &str) -> Result<(), String> {
                 return true;
             }
             // A `?` outside strings, also inside a call: a conditional.
-            closing(rest, 0).is_some_and(|end| {
-                strings_free(&without_nested_calls(&rest[1..end])).contains('?')
-            })
+            closing(rest, 0)
+                .is_some_and(|end| strings_free(&without_nested_calls(&rest[1..end])).contains('?'))
         });
         if braced || rest.starts_with('\'') {
             return Err(format!(

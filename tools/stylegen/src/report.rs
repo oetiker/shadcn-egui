@@ -16,12 +16,19 @@ pub fn report(style: &str, pin: &str, parts: &[Part]) -> String {
     );
     for p in parts {
         let (name, m) = (&p.name, &p.marker);
-        if m.unsupported.is_empty() && m.ignored.is_empty() && p.corrections.is_empty() {
+        if m.unsupported.is_empty()
+            && m.ignored.is_empty()
+            && p.corrections.is_empty()
+            && m.routed.is_empty()
+        {
             continue;
         }
         s += &format!("## `{name}`\n\n");
         for c in &p.corrections {
             s += &format!("- {c}\n");
+        }
+        for r in &m.routed {
+            s += &format!("- {r}\n");
         }
         for (c, why) in &m.unsupported {
             s += &format!("- **unsupported** `{c}`: {why}\n");

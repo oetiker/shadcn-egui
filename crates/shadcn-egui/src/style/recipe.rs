@@ -177,17 +177,23 @@ impl When {
 /// specificity, one `1 << 122` each (bits 122 to 125); bit 121, a half
 /// step, which `[&_svg:not([class*='size-'])]:` adds where `[&>svg]:` adds
 /// nothing (more specific, but it loses a tie of equal specificity to
-/// `[&>svg]:`); and below that the Tailwind v4 variant-order bitmask, one
-/// bit per distinct variant, which decides between equal ranks above.
+/// `[&>svg]:`), and which an element selector adds (`has-[>svg]:` is
+/// `&:has(> svg)`, (0,0,1): above the same class count without it, below
+/// one class more); and below that the Tailwind v4 variant-order bitmask,
+/// one bit per distinct variant, which decides between equal ranks above.
 ///
 /// To rank an app's rule like a generated one, OR the variant bits taken
 /// from a generated rule with the same variants, then add `1 << 122` per
 /// state variant (`hover:`, `dark:`, `data-*:`, `aria-*:`, `group-*:`,
 /// `peer-*:`, `has-*:`, `not-*:`), `1 << 121` for
-/// `[&_svg:not([class*='size-'])]:`, nothing for `sm:`, `md:`,
-/// `supports-*:` and `in-*:` (their variant bits still count), and
-/// `1 << 126` for `placeholder:`. `after:` and `[&>svg]:` add nothing at
-/// all: no specificity and no variant bit.
+/// `[&_svg:not([class*='size-'])]:` and for an element selector
+/// (`has-[>svg]:`), nothing for `sm:`, `md:`, `supports-*:` and `in-*:`
+/// (their variant bits still count), and `1 << 126` for `placeholder:`.
+/// `after:` and `[&>svg]:` add nothing at all: no specificity and no
+/// variant bit. A rule a parent gives its children (`*:`, `[&>*:not(..)]:`)
+/// sits in the child's recipe under the parent's context flags and ranks
+/// with its whole selector: the child's `data-slot` or position
+/// pseudo-class adds its class step, and the target adds no variant bit.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,
@@ -423,11 +429,75 @@ pub enum ShadowLevel {
     Xl2,
 }
 
-/// A translation: fixed pixels, or `calc(100% - Npx)` of the part's own size.
+/// A translation: fixed pixels, or a share of the part's own size plus
+/// pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shift {
     Px(f32),
-    SelfMinus(f32),
+    /// `calc(frac × 100% + px)`: `translate-x-1/2` is `Calc(0.5, 0.0)`,
+    /// `translate-y-[calc(100%-2px)]` is `Calc(1.0, -2.0)`.
+    Calc(f32, f32),
+}
+
+/// `text-balance`, `text-pretty`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextWrap {
+    /// Lines of about equal length.
+    Balance,
+    /// No single word alone on the last line.
+    Pretty,
+}
+
+/// `mix-blend-darken`, `mix-blend-lighten`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blend {
+    Darken,
+    Lighten,
+}
+
+/// The properties a `transition-*` class animates, as a set.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Transition(u16);
+
+impl Transition {
+    /// `transition-none`.
+    pub const NONE: Transition = Transition(0);
+    /// `color`.
+    pub const COLOR: Transition = Transition(1 << 0);
+    /// `background-color`.
+    pub const BACKGROUND: Transition = Transition(1 << 1);
+    /// `border-color`.
+    pub const BORDER_COLOR: Transition = Transition(1 << 2);
+    /// `outline-color`.
+    pub const OUTLINE_COLOR: Transition = Transition(1 << 3);
+    /// `opacity`.
+    pub const OPACITY: Transition = Transition(1 << 4);
+    /// `box-shadow` (shadows and rings).
+    pub const SHADOW: Transition = Transition(1 << 5);
+    /// `translate`, `scale`, `rotate`, `transform`.
+    pub const TRANSFORM: Transition = Transition(1 << 6);
+    /// `filter`, `backdrop-filter`.
+    pub const FILTER: Transition = Transition(1 << 7);
+    /// Every other property (size, position): only in [`Transition::ALL`].
+    pub const OTHER: Transition = Transition(1 << 8);
+    /// `transition-colors`.
+    pub const COLORS: Transition = Transition(0b1111);
+    /// `transition-all`.
+    pub const ALL: Transition = Transition(0x1ff);
+
+    pub const fn or(self, other: Transition) -> Transition {
+        Transition(self.0 | other.0)
+    }
+    pub const fn contains(self, other: Transition) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl BitOr for Transition {
+    type Output = Transition;
+    fn bitor(self, o: Transition) -> Transition {
+        self.or(o)
+    }
 }
 
 /// Everything a style can say about one part. Lengths are logical px.
@@ -451,6 +521,11 @@ pub struct Recipe {
     pub margin_bottom: Prop<f32>,
     pub margin_left: Prop<f32>,
     pub gap: Prop<f32>,
+    /// `gap-x-N`: the gap between columns only.
+    pub gap_x: Prop<f32>,
+    /// `space-x-N`: a margin between neighbouring children (negative overlaps
+    /// them: avatar group `-space-x-2`).
+    pub space_x: Prop<f32>,
     /// `top-N` etc. of an absolutely placed part (dialog close button).
     pub inset_top: Prop<f32>,
     pub inset_right: Prop<f32>,
@@ -458,6 +533,10 @@ pub struct Recipe {
     pub inset_left: Prop<f32>,
     /// `[&_svg:not([class*='size-'])]:size-N` and `[&>svg]:size-N`.
     pub icon_size: Prop<f32>,
+    /// `[&>svg]:translate-y-N`: the icon's vertical nudge.
+    pub icon_shift_y: Prop<Shift>,
+    /// `[&>svg]:hidden`: the part shows no icon.
+    pub icon_hidden: Prop<bool>,
     pub text_size: Prop<TextSize>,
     /// `leading-*` as a multiple of the font size.
     pub line_height: Prop<f32>,
@@ -466,9 +545,15 @@ pub struct Recipe {
     pub weight: Prop<Weight>,
     pub uppercase: Prop<bool>,
     pub underline: Prop<bool>,
+    /// `text-balance`, `text-pretty`: how the part breaks its text.
+    pub text_wrap: Prop<TextWrap>,
     pub radius: Prop<Radius>,
     pub radius_top: Prop<Radius>,
     pub radius_bottom: Prop<Radius>,
+    /// `rounded-l-*`: the two left corners.
+    pub radius_left: Prop<Radius>,
+    /// `rounded-r-*`: the two right corners.
+    pub radius_right: Prop<Radius>,
     pub bg: Prop<Paint>,
     /// `bg-clip-padding`: the fill stops inside the border, so a transparent
     /// border shows what lies under the part.
@@ -476,6 +561,8 @@ pub struct Recipe {
     pub text: Prop<Paint>,
     pub border_width: Prop<f32>,
     pub border_top_width: Prop<f32>,
+    /// `border-l`, `border-l-N`.
+    pub border_left_width: Prop<f32>,
     pub border_color: Prop<Paint>,
     pub ring_width: Prop<f32>,
     pub ring_color: Prop<Paint>,
@@ -485,6 +572,8 @@ pub struct Recipe {
     pub outline_color: Prop<Paint>,
     pub shadow: Prop<ShadowLevel>,
     pub opacity: Prop<f32>,
+    /// `mix-blend-*`: how the part's paint blends with what lies under it.
+    pub blend: Prop<Blend>,
     pub shift_x: Prop<Shift>,
     /// `active:translate-y-px` is the press nudge.
     pub shift_y: Prop<Shift>,
@@ -493,6 +582,39 @@ pub struct Recipe {
     pub hit_inset_y: Prop<f32>,
     /// `backdrop-blur-*` in px.
     pub backdrop_blur: Prop<f32>,
+    /// `hidden`: the part is not drawn; a display class (`sm:flex`) shows it
+    /// again (`false`).
+    pub hidden: Prop<bool>,
+    /// `aspect-square`: width over height.
+    pub aspect_ratio: Prop<f32>,
+    /// `object-cover`: an image fills the part and is cropped to it.
+    pub object_cover: Prop<bool>,
+    /// `field-sizing-content`: a text area grows with its content.
+    pub field_sizing_content: Prop<bool>,
+    /// `resize-none`: `false`, the user cannot resize the part.
+    pub resizable: Prop<bool>,
+    /// `transition-*`: the properties that animate when they change.
+    pub transition: Prop<Transition>,
+    /// `duration-N` in seconds: of the transition and of the enter and exit
+    /// animation.
+    pub duration: Prop<f32>,
+    /// `animate-in`: the part plays its enter animation when it opens.
+    pub animate_in: Prop<bool>,
+    /// `animate-out`: the part plays its exit animation when it closes.
+    pub animate_out: Prop<bool>,
+    /// `fade-in-N`: the opacity the enter animation starts from.
+    pub enter_opacity: Prop<f32>,
+    /// `zoom-in-N`: the scale the enter animation starts from.
+    pub enter_scale: Prop<f32>,
+    /// `slide-in-from-left-N` (negative), `-right-N`: the horizontal offset in px
+    /// the enter animation starts from.
+    pub enter_x: Prop<f32>,
+    /// `slide-in-from-top-N` (negative), `-bottom-N`: the vertical offset in px.
+    pub enter_y: Prop<f32>,
+    /// `fade-out-N`: the opacity the exit animation ends at.
+    pub exit_opacity: Prop<f32>,
+    /// `zoom-out-N`: the scale the exit animation ends at.
+    pub exit_scale: Prop<f32>,
 }
 
 #[cfg(test)]

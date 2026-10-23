@@ -210,6 +210,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             if u == "text-current" {
                 return U::Ignore(ICON_COLOUR);
             }
+            if u == "hidden" {
+                return U::Set(vec![(IconHidden, Value::Bool(true))]);
+            }
             if let Some((_, why)) = IGNORE_EXACT
                 .iter()
                 .chain(IGNORE_PREFIX)
@@ -217,7 +220,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             {
                 return U::Ignore(if *why == STRUCTURE { why } else { SVG_CHILD });
             }
-            return U::Unsupported("svg child utility other than size-* and translate-y-*");
+            return U::Unsupported("svg child utility other than size-*, translate-y-* and hidden");
         }
         Some(Pseudo::After) => {
             // `after:-inset-*` grows the hit area (checkbox, switch, slider thumb).
@@ -238,6 +241,8 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
                     U::Unsupported("CSS variable under after:; the _after recipe takes fields only")
                 }
                 U::Inherit(..) => U::Unsupported("inherited value under after:"),
+                // The pseudo-element is drawn whenever it has fields.
+                U::Show(why) => U::Ignore(why),
                 other @ (U::After(_) | U::Ignore(_) | U::Unsupported(_)) => other,
             };
         }
@@ -525,7 +530,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     for (prefix, field) in [("translate-x-", ShiftX), ("translate-y-", ShiftY)] {
         if let Some(v) = body.strip_prefix(prefix) {
             if let Some((f, n)) = calc(v) {
-                return U::Set(vec![(field, Value::Shift(ShiftV::Calc(f * sign, n * sign)))]);
+                // `+ 0.0` turns `-0.0` into `0.0`.
+                let calc = ShiftV::Calc(f * sign + 0.0, n * sign + 0.0);
+                return U::Set(vec![(field, Value::Shift(calc))]);
             }
             return spacing(v).map_or(U::Unsupported("translate value"), |n| {
                 U::Set(vec![(field, Value::Shift(ShiftV::Px(n * sign)))])
@@ -581,16 +588,24 @@ fn motion(u: &str) -> Option<U> {
     }
     let pct = |v: &str| v.parse::<f32>().ok().map(|n| n / 100.0);
     if let Some(v) = u.strip_prefix("fade-in-") {
-        return Some(pct(v).map_or(U::Unsupported("fade value"), |n| U::Set(vec![(EnterOpacity, Value::Factor(n))])));
+        return Some(pct(v).map_or(U::Unsupported("fade value"), |n| {
+            U::Set(vec![(EnterOpacity, Value::Factor(n))])
+        }));
     }
     if let Some(v) = u.strip_prefix("fade-out-") {
-        return Some(pct(v).map_or(U::Unsupported("fade value"), |n| U::Set(vec![(ExitOpacity, Value::Factor(n))])));
+        return Some(pct(v).map_or(U::Unsupported("fade value"), |n| {
+            U::Set(vec![(ExitOpacity, Value::Factor(n))])
+        }));
     }
     if let Some(v) = u.strip_prefix("zoom-in-") {
-        return Some(pct(v).map_or(U::Unsupported("zoom value"), |n| U::Set(vec![(EnterScale, Value::Factor(n))])));
+        return Some(pct(v).map_or(U::Unsupported("zoom value"), |n| {
+            U::Set(vec![(EnterScale, Value::Factor(n))])
+        }));
     }
     if let Some(v) = u.strip_prefix("zoom-out-") {
-        return Some(pct(v).map_or(U::Unsupported("zoom value"), |n| U::Set(vec![(ExitScale, Value::Factor(n))])));
+        return Some(pct(v).map_or(U::Unsupported("zoom value"), |n| {
+            U::Set(vec![(ExitScale, Value::Factor(n))])
+        }));
     }
     if let Some(rest) = u.strip_prefix("slide-in-from-") {
         // The panel starts that far off towards the named side.
@@ -609,9 +624,12 @@ fn motion(u: &str) -> Option<U> {
         return Some(U::Unsupported("slide side"));
     }
     if let Some(v) = u.strip_prefix("duration-") {
-        return Some(v.parse::<f32>().map_or(U::Unsupported("duration value"), |ms| {
-            U::Set(vec![(Duration, Value::Factor(ms / 1000.0))])
-        }));
+        return Some(
+            v.parse::<f32>()
+                .map_or(U::Unsupported("duration value"), |ms| {
+                    U::Set(vec![(Duration, Value::Factor(ms / 1000.0))])
+                }),
+        );
     }
     let props: Option<&'static [&'static str]> = match u {
         "transition" => Some(&["COLORS", "OPACITY", "SHADOW", "TRANSFORM", "FILTER"]),
@@ -647,7 +665,6 @@ fn radius(v: &str) -> Option<RadiusV> {
     let rung = |s: &str| -> Option<&'static str> {
         Some(match s {
             "none" => "None",
-            "xs" => "Xs",
             "sm" => "Sm",
             "md" => "Md",
             "lg" => "Lg",
@@ -661,6 +678,11 @@ fn radius(v: &str) -> Option<RadiusV> {
     };
     if let Some(r) = rung(v) {
         return Some(RadiusV::Rung(r));
+    }
+    // Tailwind's own `--radius-xs` (0.125rem): shadcn's theme does not
+    // derive it from `--radius`.
+    if v == "xs" {
+        return Some(RadiusV::Px(2.0));
     }
     let inner = v.strip_prefix('[')?.strip_suffix(']')?;
     if let Some(n) = length(inner) {

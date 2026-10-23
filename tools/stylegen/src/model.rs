@@ -29,6 +29,7 @@ pub enum Field {
     InsetLeft,
     IconSize,
     IconShiftY,
+    IconHidden,
     TextSize,
     LineHeight,
     Tracking,
@@ -105,6 +106,7 @@ impl Field {
             InsetLeft => "inset_left",
             IconSize => "icon_size",
             IconShiftY => "icon_shift_y",
+            IconHidden => "icon_hidden",
             TextSize => "text_size",
             LineHeight => "line_height",
             Tracking => "tracking",
@@ -215,10 +217,11 @@ impl Value {
             Value::Blend(b) => format!("Blend::{b}"),
             Value::Transition(names) => match names.split_first() {
                 None => "Transition::NONE".into(),
-                Some((first, rest)) => rest.iter().fold(
-                    format!("Transition::{first}"),
-                    |acc, n| format!("{acc}.or(Transition::{n})"),
-                ),
+                Some((first, rest)) => {
+                    rest.iter().fold(format!("Transition::{first}"), |acc, n| {
+                        format!("{acc}.or(Transition::{n})")
+                    })
+                }
             },
         }
     }

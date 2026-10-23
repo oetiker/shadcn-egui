@@ -1,3 +1,7 @@
 # <style> <part>  # why this part's string is not in the published component
 # Upstream changed after the pin, or the published build rewrote the
 # string in a way canonical() in published.rs does not undo.
+vega cn-alert-dialog-cancel  # no style gives the marker classes: the part string is the marker alone, which the published build drops
+vega cn-alert-dialog-action  # as cn-alert-dialog-cancel
+nova cn-alert-dialog-cancel  # as vega
+nova cn-alert-dialog-action  # as vega

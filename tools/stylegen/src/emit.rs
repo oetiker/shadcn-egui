@@ -14,7 +14,8 @@ pub fn field_name(part: &str) -> String {
 }
 
 /// The `Style` fields as `(field, doc)`: each part in `markers.txt` order,
-/// followed by its `_after` part where any style gives it `after:` classes.
+/// followed by its `_after` part where any style gives it `after:` classes
+/// and its `_child` part where any style gives caller content `*:` classes.
 pub fn fields(styles: &[&[Part]]) -> Vec<(String, String)> {
     let first = styles.first().copied().unwrap_or_default();
     // `s[i]` below is part `i` of every style.
@@ -35,6 +36,15 @@ pub fn fields(styles: &[&[Part]]) -> Vec<(String, String)> {
             out.push((
                 format!("{}_after", field_name(&p.name)),
                 format!("`{}` `after:` pseudo-element", p.name),
+            ));
+        }
+        if styles.iter().any(|s| !s[i].marker.child.is_empty()) {
+            out.push((
+                format!("{}_child", field_name(&p.name)),
+                format!(
+                    "`{}` `*:` rules on caller content, which has no crate part",
+                    p.name
+                ),
             ));
         }
     }
@@ -92,6 +102,7 @@ pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[
     for p in parts {
         decls.insert(field_name(&p.name), &p.marker.decls);
         decls.insert(format!("{}_after", field_name(&p.name)), &p.marker.after);
+        decls.insert(format!("{}_child", field_name(&p.name)), &p.marker.child);
     }
     let mut fns = String::new();
     for (field, _) in fields {
