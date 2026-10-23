@@ -230,7 +230,9 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 
 ### 3.6 Painting bounds
 
-- Components paint inside their allocation.
+- Components paint inside their allocation, except content that
+  overflows as the browser overflows it (2.5, 3.1): the allocation keeps
+  the capped width, and the overflow does not widen the parent.
 
 ## 4 · Input
 

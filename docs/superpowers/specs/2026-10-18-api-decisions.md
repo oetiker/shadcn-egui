@@ -4496,6 +4496,11 @@ other: `layout::container_at_least(ui, px)` for the container width and
 `layout::window_at_least(ctx, px)` for the viewport width that a media
 query reads. `wider_than` is not used.
 
+Consequence (conformance 3.1, 2026-10-23): the width is raised to the
+content minimum after the cap, so the cap helper takes it:
+`layout::capped_width(ui, requested, content_min)`. A NaN request takes
+the content minimum.
+
 ### D-134 · Group-position protocol (first, last, stretch)
 
 - **Case:** button-group, toggle-group, input-group and input-otp need
