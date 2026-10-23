@@ -52,7 +52,10 @@ draws itself from the active style's recipes; it does not hard-code a look.
   from the input. Then the specificity the variants add to the class: the
   count of classes, attributes and pseudo-classes, `1 << 122` each (`dark:`,
   `hover:`, `data-[size=sm]:`; `sm:`, `md:`, `supports-*:`, `in-*:`, `after:`
-  and `[&>svg]:` add none), and bit 121 for `[&_svg:not([class*='size-'])]:`,
+  and `[&>svg]:` add none, and so do shadcn-svelte's own `data-open:`,
+  `data-closed:`, `data-checked:`, `data-unchecked:`, `data-disabled:`,
+  `data-active:`, `data-horizontal:` and `data-vertical:`, which are
+  `:where()`; an element selector such as `has-[>svg]:` adds a half step), and bit 121 for `[&_svg:not([class*='size-'])]:`,
   a half step: one class more specific than `[&>svg]:`, but Tailwind sorts it
   first, so at equal specificity the `[&>svg]:` rule wins. The lowest bits
   hold one bit per Tailwind variant the class uses (targets have none), in
@@ -134,7 +137,10 @@ it once: inside a disabled `Ui`, which egui fades already, a part whose
 keeps its other opacity on top of that fade.
 
 `State` flags (`crates/shadcn-egui/src/style/recipe.rs`) and the variants they stand for.
-`Theme::state(s)` adds `DARK`.
+`Theme::state(ctx, s)` adds `DARK` and the window's `SM` and `MD`. A flag
+means the upstream attribute it stands for wherever it sits: `SIZE_SM` is
+`data-size="sm"` on the part or, through `group-data-[size=sm]/…:`, on its
+group.
 
 | Flag | Variants |
 |---|---|
@@ -147,16 +153,32 @@ keeps its other opacity on top of that fade.
 | `INVALID` | `aria-invalid:`, `data-invalid:` |
 | `CHECKED` | `data-checked:`, `aria-checked:`, `data-[state=checked]:` |
 | `UNCHECKED` | `data-unchecked:`, `data-[state=unchecked]:` |
-| `EXPANDED` | `aria-expanded:` |
+| `EXPANDED` | `aria-expanded:`, `data-open:` |
+| `CLOSED` | `data-closed:` (a closed panel) |
+| `DELAYED_OPEN` | `data-[state=delayed-open]:` (a tooltip opened after its delay) |
 | `HAS_POPUP` | `aria-[haspopup]:` (used negated: `not-aria-[haspopup]:`) |
 | `SELECTED` | `data-active:`, `data-[active=true]:`, `data-selected:` |
 | `PLACEHOLDER` | `data-placeholder:`, `placeholder:` (placeholder text shows) |
 | `ICON_START` / `ICON_END` | `has-data-[icon=inline-start]:` / `has-data-[icon=inline-end]:` |
-| `IN_BUTTON_GROUP` | `in-data-[slot=button-group]:` |
-| `SIZE_SM` / `SIZE_DEFAULT` | `data-[size=sm]:` / `data-[size=default]:`, `group-data-[size=…]/…:` |
-| `VERTICAL` / `HORIZONTAL` | `data-vertical:`, `data-[orientation=vertical]:`, `group-data-vertical/…:` and the horizontal forms |
+| `HAS_ICON` | `has-[>svg]:`, `group-has-[>svg]/…:` (the part shows an icon) |
+| `SIZE_SM` / `SIZE_DEFAULT` / `SIZE_LG` | `data-[size=sm]:` / `data-[size=default]:` / `data-[size=lg]:`, and `group-data-[size=…]/…:` |
+| `HAS_SIZE_SM` / `HAS_SIZE_LG` | `group-has-data-[size=sm]/…:` / `group-has-data-[size=lg]/…:` (the group holds a small or large child) |
+| `VERTICAL` / `HORIZONTAL` | the part's own orientation: `data-vertical:`, `data-[orientation=vertical]:`, `group-data-vertical/…:` and the horizontal forms |
 | `VARIANT_LINE` / `VARIANT_DEFAULT` | `data-[variant=line]:` / `group-data-[variant=default]/…:` |
+| `VARIANT_DESTRUCTIVE` | a part of the destructive variant (`cn-alert-variant-destructive`'s `*:data-[slot=alert-description]:`) |
+| `SIDE_TOP` / `SIDE_RIGHT` / `SIDE_BOTTOM` / `SIDE_LEFT` | `data-[side=top]:` and the other sides (where a panel sits against its trigger) |
+| `SM` / `MD` | `sm:` / `md:` (the window is at least 640 / 768 points wide) |
 | `HAS_FOOTER` | `has-data-[slot=card-footer]:` |
+| `HAS_ACTION` | `has-data-[slot=alert-action]:` |
+| `HAS_MEDIA` | `has-data-[slot=alert-dialog-media]:`, `group-has-data-[slot=alert-dialog-media]/…:` |
+| `HAS_KBD` | `has-data-[slot=kbd]:` |
+| `HAS_BUTTON_GROUP` | `has-[>[data-slot=button-group]]:` (a nested button group) |
+| `HAS_OUTLINE` | `has-[>[data-variant=outline]]:` (a child with the outline variant) |
+| `IN_BUTTON_GROUP` | `in-data-[slot=button-group]:`, and every child rule of a button group |
+| `IN_GROUP_HORIZONTAL` / `IN_GROUP_VERTICAL` | a child of a group whose `data-orientation` is horizontal / vertical (the group's `[&>*]` rules), apart from the child's own orientation |
+| `FIRST` / `LAST` / `NOT_FIRST` / `NOT_LAST` | a group child's position: `:first-child`, `:last-child` (the last `[data-slot]` child), `:not(:first-child)`, `:not(:last-child)` |
+| `IN_TOOLTIP_CONTENT` | `in-data-[slot=tooltip-content]:`, and a tooltip's `**:data-[slot=kbd]:` |
+| `IN_AVATAR_GROUP` | an avatar in an avatar group (the group's `*:data-[slot=avatar]:`) |
 
 A rule's `When` is `all` (flags that must be set) plus `none` (flags that must
 not be set; this is how a negated variant works). A component sets only the
@@ -169,7 +191,12 @@ line height for a recipe's `text_size`.
 
 ## Breakpoints
 
-`sm:` and `md:` count as **matched**: an egui desktop window is wider than both.
+`sm:` and `md:` are media queries on the window width, as in the browser:
+`Theme::state(ctx, s)` sets `SM` when the window is at least 640 points wide
+and `MD` at 768, so a component that builds its state there follows the
+window by itself. A layout or a screen reads the same test through
+`layout::window_at_least(ctx, px)`, and a container query (`@md/…`) through
+`layout::container_at_least(ui, px)`; never with width arithmetic of its own.
 Larger breakpoints (`lg:` and up) are unsupported, so a marker that uses one
 cannot be exported.
 
