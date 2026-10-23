@@ -200,3 +200,189 @@ pub fn restyled(mut theme: Theme, f: impl FnOnce(&mut Style)) -> Theme {
     f(std::sync::Arc::make_mut(&mut theme.style));
     theme
 }
+
+/// The phone width of a two-width fixture (conformance 3.5).
+pub const PHONE: f32 = 390.0;
+/// The desktop width of a two-width fixture.
+pub const DESKTOP: f32 = 1280.0;
+
+/// One snapshot per `(suffix, theme)` at the phone and at the desktop
+/// width, `height` high: `{name}_390_{suffix}.png` and
+/// `{name}_1280_{suffix}.png`. For components and screens with
+/// responsive classes (`sm:`, `md:`), which must work at both.
+pub fn snapshot_widths(
+    name: &str,
+    height: f32,
+    themes: Vec<(&'static str, Theme)>,
+    mut ui_fn: impl FnMut(&mut egui::Ui),
+) {
+    // One result set for all harnesses, as in `snapshot_with_themes`.
+    let mut results = SnapshotResults::new();
+    for width in [PHONE, DESKTOP] {
+        for (suffix, theme) in &themes {
+            let mut h = page_harness(egui::vec2(width, height), theme.clone(), &mut ui_fn);
+            h.snapshot(format!("{name}_{width}_{suffix}"));
+            results.extend(h.take_snapshot_results());
+        }
+    }
+}
+
+/// The window of [`pass`] and [`own_pass`].
+pub const PASS_WINDOW: egui::Vec2 = egui::vec2(600.0, 400.0);
+
+/// The two ways an app drives egui (conformance 6): `Context::run_ui`,
+/// which runs egui's pass hooks, and its own `begin_pass`/`end_pass` loop,
+/// which runs none.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Loop {
+    RunUi,
+    Own,
+}
+
+impl Loop {
+    pub const BOTH: [Loop; 2] = [Loop::RunUi, Loop::Own];
+}
+
+/// One pass of `app_loop` on `ctx`: `events` are the pass's input, and
+/// `ui_fn` draws into a root `Ui` filling a [`PASS_WINDOW`] window. Neither
+/// loop applies a theme: a test that needs one applies it in `ui_fn`.
+pub fn pass(
+    app_loop: Loop,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    ui_fn: impl FnOnce(&mut egui::Ui),
+) -> egui::FullOutput {
+    match app_loop {
+        Loop::RunUi => {
+            let mut ui_fn = Some(ui_fn);
+            ctx.run_ui(window_input(events), |ui| {
+                if let Some(f) = ui_fn.take() {
+                    f(ui)
+                }
+            })
+        }
+        Loop::Own => own_pass(ctx, events, ui_fn),
+    }
+}
+
+/// One pass of an app's own `begin_pass`/`end_pass` loop: egui runs no
+/// plugin, so no pass hook either, and `ui_fn` draws into a root `Ui`
+/// built by hand, as such an app does.
+pub fn own_pass(
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    ui_fn: impl FnOnce(&mut egui::Ui),
+) -> egui::FullOutput {
+    ctx.begin_pass(window_input(events));
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, PASS_WINDOW);
+    let builder = egui::UiBuilder::new().max_rect(window);
+    ui_fn(&mut egui::Ui::new(
+        ctx.clone(),
+        egui::Id::new("own_pass"),
+        builder,
+    ));
+    ctx.end_pass()
+}
+
+fn window_input(events: Vec<egui::Event>) -> egui::RawInput {
+    egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, PASS_WINDOW)),
+        events,
+        ..Default::default()
+    }
+}
+
+/// `key` goes down (and stays down until [`key_up`]).
+pub fn key_down(key: egui::Key) -> Vec<egui::Event> {
+    vec![key_event(key, true, egui::Modifiers::NONE)]
+}
+
+/// `key` comes up.
+pub fn key_up(key: egui::Key) -> Vec<egui::Event> {
+    vec![key_event(key, false, egui::Modifiers::NONE)]
+}
+
+/// A press and the release of `key` in one pass, as a slow frame delivers
+/// a quick tap.
+pub fn key(key: egui::Key) -> Vec<egui::Event> {
+    key_with(egui::Modifiers::NONE, key)
+}
+
+/// [`key`] with `modifiers` held.
+pub fn key_with(modifiers: egui::Modifiers, key: egui::Key) -> Vec<egui::Event> {
+    vec![
+        key_event(key, true, modifiers),
+        key_event(key, false, modifiers),
+    ]
+}
+
+fn key_event(key: egui::Key, pressed: bool, modifiers: egui::Modifiers) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers,
+    }
+}
+
+/// Move the pointer to `pos` and press the primary button there.
+pub fn pointer_down(pos: egui::Pos2) -> Vec<egui::Event> {
+    vec![egui::Event::PointerMoved(pos), pointer_button(pos, true)]
+}
+
+/// Release the primary button at `pos`.
+pub fn pointer_up(pos: egui::Pos2) -> Vec<egui::Event> {
+    vec![pointer_button(pos, false)]
+}
+
+/// A press and its release at `pos` in one pass, as a slow frame delivers
+/// a quick click.
+pub fn click(pos: egui::Pos2) -> Vec<egui::Event> {
+    let mut events = pointer_down(pos);
+    events.extend(pointer_up(pos));
+    events
+}
+
+fn pointer_button(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+/// The pointer moving from `from` to `to` in `steps` even moves, as a
+/// mouse does: one event per step, `to` last. A pass that gets the path
+/// sees every point a hover-tracking widget would.
+pub fn pointer_path(from: egui::Pos2, to: egui::Pos2, steps: usize) -> Vec<egui::Event> {
+    (1..=steps.max(1))
+        .map(|i| egui::Event::PointerMoved(from.lerp(to, i as f32 / steps.max(1) as f32)))
+        .collect()
+}
+
+/// The label of the one focused node of a kittest harness, if any.
+pub fn focused_label<S>(h: &Harness<'_, S>) -> Option<String> {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    h.query_all(egui_kittest::kittest::by())
+        .find(|n| n.accesskit_node().is_focused())
+        .and_then(|n| n.accesskit_node().label())
+}
+
+/// The bounds of the node labelled `label` in a pass's accesskit update
+/// (the context needs `enable_accesskit`).
+pub fn bounds_by_label(out: &egui::FullOutput, label: &str) -> Option<egui::Rect> {
+    let update = out.platform_output.accesskit_update.as_ref()?;
+    update
+        .nodes
+        .iter()
+        .find(|(_, n)| n.label() == Some(label))
+        .and_then(|(_, n)| n.bounds())
+        .map(|b| {
+            egui::Rect::from_min_max(
+                egui::pos2(b.x0 as f32, b.y0 as f32),
+                egui::pos2(b.x1 as f32, b.y1 as f32),
+            )
+        })
+}

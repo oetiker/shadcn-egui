@@ -107,7 +107,7 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     let target = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(80.0, 30.0));
     let ctx = egui::Context::default();
     let (mut live, mut disabled) = (State::NONE, State::NONE);
-    for events in [vec![], pointer_down(target.center()), vec![]] {
+    for events in [vec![], common::pointer_down(target.center()), vec![]] {
         let _ = ctx.run_ui(
             egui::RawInput {
                 events,
@@ -171,19 +171,6 @@ fn focused_button_shows_ring_and_ring_border() {
             .any(|r| r.stroke.width == 1.0 && r.stroke.color == ring),
         "no ring-coloured border in {shapes:?}"
     );
-}
-
-/// Move the pointer to `pos` and press the primary button there.
-fn pointer_down(pos: egui::Pos2) -> Vec<egui::Event> {
-    vec![
-        egui::Event::PointerMoved(pos),
-        egui::Event::PointerButton {
-            pos,
-            button: egui::PointerButton::Primary,
-            pressed: true,
-            modifiers: egui::Modifiers::NONE,
-        },
-    ]
 }
 
 #[test]
@@ -1224,7 +1211,7 @@ fn disabled_button_ignores_clicks() {
         let ctx = egui::Context::default();
         frame(&ctx, enabled, vec![]);
         let (rect, rest) = frame(&ctx, enabled, vec![]);
-        frame(&ctx, enabled, pointer_down(rect.center()));
+        frame(&ctx, enabled, common::pointer_down(rect.center()));
         (rest, frame(&ctx, enabled, vec![]).1)
     }
     // Control: an enabled button does change under a pressed pointer.
