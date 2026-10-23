@@ -599,6 +599,37 @@ fn select_item_rows_have_the_text_sm_line_plus_padding() {
     }
 }
 
+/// An option wider than the window caps the list to the window (conformance
+/// 3.1); its text wraps in its row, as the browser wraps it.
+#[test]
+fn select_list_is_capped_to_the_window() {
+    const LONG: [&str; 2] = [
+        "Short",
+        "An option whose text is far wider than this narrow window",
+    ];
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 300.0))
+        .build_ui_state(
+            |ui, value: &mut usize| {
+                Theme::vega_light().apply(ui.ctx());
+                ui.add(Select::new("long", value, &LONG).width(150.0));
+            },
+            0usize,
+        );
+    h.run();
+    open_select(&mut h);
+    let short = h.get_by_label(LONG[0]).rect();
+    let long = h.get_by_label(LONG[1]).rect();
+    assert!(long.right() <= 200.0, "row ends at {}", long.right());
+    assert_eq!(long.width(), short.width(), "rows share the list width");
+    assert!(
+        long.height() > short.height(),
+        "the long text wraps: {} vs {}",
+        long.height(),
+        short.height()
+    );
+}
+
 /// Pixels darker than (60, 60, 60) once the list of a light-mode Select is open.
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
     let bg = theme.palette.background;

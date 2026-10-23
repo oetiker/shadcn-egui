@@ -33,7 +33,7 @@ use crate::components::shared::{
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
-use crate::Theme;
+use crate::{layout, Theme};
 use egui::{vec2, Color32, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
 
 /// Trigger height variant: shadcn `size="default" | "sm"`.
@@ -370,7 +370,7 @@ impl Widget for Select<'_> {
             let item_size = pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm);
             let line = pick(&item, |r| &r.line_height, ist)
                 .map_or_else(|| t.line_px(item_size), |k| k * t.text_px(item_size));
-            let galleys: Vec<_> = self
+            let mut galleys: Vec<_> = self
                 .options
                 .iter()
                 .map(|o| {
@@ -383,7 +383,26 @@ impl Widget for Select<'_> {
             let needed = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max) + ipl + ipr;
             let side_offset = self.side_offset;
             let min_w = px(&l, |r| &r.min_width).max(rect.width());
-            let inner_w = (min_w - gpl - gpr).max(needed);
+            // The list is `w-fit` with `min-w-*` and the trigger's width,
+            // capped to the window (conformance 3.1); the content minimum
+            // is the group's and an item's padding.
+            let [_, br, _, bl] = panel.border_widths();
+            let chrome = gpl + gpr + br + bl;
+            let outer_w =
+                layout::overlay_width(&ctx, min_w.max(needed + chrome), 0.0, chrome + ipl + ipr);
+            let inner_w = outer_w - chrome;
+            // Capped, an item's text wraps in its row, as the browser wraps it.
+            let text_w = inner_w - ipl - ipr;
+            for (galley, o) in galleys.iter_mut().zip(self.options) {
+                if galley.size().x > text_w {
+                    *galley = painter.layout(
+                        (*o).to_owned(),
+                        item_font.clone(),
+                        Color32::PLACEHOLDER,
+                        text_w,
+                    );
+                }
+            }
             let screen = ctx.content_rect();
             let max_h = (screen.bottom() - rect.bottom()).max(rect.top() - screen.top())
                 - side_offset
