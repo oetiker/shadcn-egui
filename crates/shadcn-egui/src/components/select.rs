@@ -24,7 +24,8 @@
 //! style but unused). Each row paints its tick and text in the row's own
 //! text colour, which is what the `**:` descendant classes of
 //! `cn-select-item` ask for. Without `width`, the trigger is as wide as its
-//! widest option (`w-fit` would make it jump with the chosen text).
+//! widest option (`w-fit` would make it jump with the chosen text); either
+//! width is capped to the room (conformance 3.1).
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
@@ -90,7 +91,8 @@ impl<'a> Select<'a> {
         self.invalid = yes;
         self
     }
-    /// Trigger width in points; default is the widest option.
+    /// Trigger width in points, capped to the room; default is the widest
+    /// option.
     pub fn width(mut self, w: f32) -> Self {
         self.width = Some(w);
         self
@@ -156,7 +158,10 @@ impl Widget for Select<'_> {
                     .x
             })
             .fold(0.0, f32::max);
-        let width = self.width.unwrap_or(fit + gap + icon_side + pad_l + pad_r);
+        // `w-fit`, capped to the room, raised to the padding, gap and
+        // chevron; the text area shrinks and clips (conformance 3.1).
+        let chrome = gap + icon_side + pad_l + pad_r;
+        let width = layout::capped_width(ui, self.width.unwrap_or(fit + chrome), chrome);
         // No height: CSS's initial `auto`, one line of text in the padding box.
         let height = pick(&trig, |r| &r.height, g).unwrap_or_else(|| {
             line_box(&t, &trig, g, text_size)
@@ -167,7 +172,14 @@ impl Widget for Select<'_> {
                 + border_w * 2.0
         });
 
-        let (_, rect) = ui.allocate_space(vec2(width, height));
+        // Overflowing at its content minimum, the trigger keeps its parent's
+        // width (conformance 3.6); otherwise `allocate_space` takes a
+        // justified layout's width, as egui's `Button` does.
+        let rect = if width > ui.available_width() {
+            layout::allocate_overflowing(ui, vec2(width, height), Sense::hover()).0
+        } else {
+            ui.allocate_space(vec2(width, height)).1
+        };
         let sense = if enabled {
             Sense::click()
         } else {

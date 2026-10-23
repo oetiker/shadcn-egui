@@ -666,6 +666,61 @@ fn select_list_is_capped_to_the_window() {
     );
 }
 
+/// The trigger is `w-fit`, capped to the room (conformance 3.1): an option
+/// wider than the window, or a wider `width`, keeps it inside the window.
+#[test]
+fn select_trigger_is_capped_to_the_room() {
+    const LONG: [&str; 2] = [
+        "Short",
+        "An option whose text is far wider than this narrow window",
+    ];
+    for width in [None, Some(400.0)] {
+        let mut h = Harness::builder()
+            .with_size(vec2(200.0, 300.0))
+            .build_ui_state(
+                move |ui, value: &mut usize| {
+                    Theme::vega_light().apply(ui.ctx());
+                    let select = Select::new("long", value, &LONG);
+                    match width {
+                        Some(w) => ui.add(select.width(w)),
+                        None => ui.add(select),
+                    };
+                },
+                0usize,
+            );
+        h.run();
+        let trigger = h.get_by_role(egui::accesskit::Role::ComboBox).rect();
+        assert!(
+            trigger.right() <= 200.0,
+            "{width:?}: trigger ends at {}",
+            trigger.right()
+        );
+    }
+}
+
+/// Where the room is narrower than the trigger's padding, gap and chevron,
+/// the trigger takes that content minimum (conformance 3.1) and overflows
+/// without widening its parent (3.6).
+#[test]
+fn select_trigger_in_no_room_takes_its_content_minimum() {
+    let ctx = egui::Context::default();
+    Theme::vega_light().apply(&ctx);
+    let mut v = 0usize;
+    let mut rects = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+    for _ in 0..2 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let parent = ui.allocate_ui(vec2(0.0, 100.0), |ui| {
+                ui.add(Select::new("fruit", &mut v, &FRUITS)).rect
+            });
+            rects = (parent.inner, parent.response.rect);
+        });
+    }
+    let (trigger, parent) = rects;
+    // vega: pl-2.5, pr-2, a 1 px border each side, gap-1.5, a size-4 chevron.
+    assert_eq!(trigger.width(), 10.0 + 8.0 + 2.0 + 6.0 + 16.0);
+    assert_eq!(parent.width(), 0.0, "the parent keeps its width");
+}
+
 /// Pixels darker than (60, 60, 60) once the list of a light-mode Select is open.
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
     let bg = theme.palette.background;

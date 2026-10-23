@@ -44,6 +44,7 @@ are recorded here. The format is based on
 - `Input::max_width(f32::NAN)` now gives the narrowest field instead of the default width.
 - An input in a column narrower than its smallest width now runs past the column's edge instead of widening the column and the widgets in it.
 - A select list whose options are wider than the window now stays inside the window and wraps the long option texts, instead of running past the window's edge; its minimum width is now the trigger's width, not 2 px more.
+- A select trigger whose longest option, or whose `.width(..)`, is wider than the room left in its column now stays inside the column and cuts its text off, instead of running past the window's edge; in a column narrower than its padding and chevron it runs past the column's edge without widening the column.
 
 ## 0.6.0 - 2026-10-17
 ### New
