@@ -3947,8 +3947,15 @@ literal); the narrow layout below 600 px is on by default (D-69).
 Consequence (rules, 2026-10-23, fix 5): Under the one call rule a toast is a
 builder, `Toast::new(text).show(ui) -> ToastId`, with the shortcut
 `toast(ui, text)`, and the toaster is `Toaster::new().show(ui)`,
-returning the events. A toast raised in eframe's `App::logic`, which has
-only a `&Context`, waits for the next `ui` pass (open question of fix 5).
+returning the events.
+
+Consequence (rules, 2026-10-23, after fix 5): Raising a toast places
+nothing, so the one call rule does not apply and a `show` that draws
+nothing would surprise (P10). Upstream's global `toast(message, options)`
+becomes `toast(ctx, impl Into<Toast>) -> ToastId` (`toast(ctx, "Saved")`
+or `toast(ctx, Toast::new(text).description(..))`), on the `&Context` as
+egui's app-level calls (P2), so eframe's `App::logic` can raise one. Only
+`Toaster::new().show(ui)` is placed.
 
 ### D-124 · F16 chat parts (bubble, message, attachment, marker)
 
