@@ -217,10 +217,12 @@ were dropped without being handled": write one test per mode, or merge the
 results with `h.take_snapshot_results()` and `SnapshotResults::extend`.
 
 Generate the PNG with `UPDATE_SNAPSHOTS=1 cargo test`; it lands in
-`tests/snapshots/`. Open it, compare it with the design, change the code, and
-render again. An update run leaves `<name>.old.png` (the previous baseline)
-and a failing comparison leaves `<name>.new.png` and `<name>.diff.png` beside
-the baselines.
+`tests/snapshots/`. Delete the PNG before each such run: kittest ignores a
+change on anti-aliased pixels (1 px borders, rounded corners), even with
+`UPDATE_SNAPSHOTS=force`, so an existing PNG can keep the old edges. Open the
+PNG, compare it with the design, change the code, and render again. An update
+run leaves `<name>.old.png` (the previous baseline) and a failing comparison
+leaves `<name>.new.png` and `<name>.diff.png` beside the baselines.
 Never commit them: delete them after looking, and add
 `tests/snapshots/*.old.png`, `*.new.png` and `*.diff.png` to
 `.gitignore`. An app with its own render or screenshot path (for example a

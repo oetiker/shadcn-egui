@@ -99,8 +99,15 @@ inside a multi-line block comment are. Neither are Lucide icon data blocks
 
 Render with `common::snapshot_all(name, size, ui_fn)` from
 `crates/shadcn-egui/tests/common/mod.rs`: one PNG per style and mode
-(`<name>_vega_dark.png`, `<name>_nova_light.png`, …). Generate them with
+(`<name>_vega_dark.png`, `<name>_nova_light.png`, …). Delete the baselines
+the change touches, then generate them with
 `UPDATE_SNAPSHOTS=1 cargo test -p shadcn-egui --jobs 4 -- --test-threads 4`.
+kittest ignores a change on anti-aliased pixels (1 px borders, rounded
+corners, the end of a line), even with `UPDATE_SNAPSHOTS=force`, so a baseline
+that is not deleted can keep stale pixels while the test passes. When in
+doubt, delete `crates/shadcn-egui/tests/snapshots/*.png` and regenerate all:
+`git status` then lists the PNGs that changed, and a deleted PNG that does not
+come back belongs to no test any more.
 
 Open every PNG the component appears in, also those of other tests (the
 gallery, forms) that now look different, and compare each with the

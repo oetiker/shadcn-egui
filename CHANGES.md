@@ -45,6 +45,7 @@ are recorded here. The format is based on
 - An input in a column narrower than its smallest width now runs past the column's edge instead of widening the column and the widgets in it.
 - A select list whose options are wider than the window now stays inside the window and wraps the long option texts, instead of running past the window's edge; its minimum width is now the trigger's width, not 2 px more.
 - A select trigger whose longest option, or whose `.width(..)`, is wider than the room left in its column now stays inside the column and cuts its text off, instead of running past the window's edge; in a column narrower than its padding and chevron it runs past the column's edge without widening the column.
+- The `build-ui` and `port-component` skills said to regenerate snapshot PNGs with `UPDATE_SNAPSHOTS=1` alone, which keeps the old pixels of 1 px borders and rounded corners while the test passes. They now say to delete the PNGs a change touches first.
 
 ## 0.6.0 - 2026-10-17
 ### New

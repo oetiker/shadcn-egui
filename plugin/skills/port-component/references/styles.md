@@ -279,6 +279,8 @@ it changes.
 4. Re-port every component that `drift` lists (a marker that appeared or
    disappeared), following the standard in
    `SKILL.md` and `references/upstream.md`.
-5. Re-baseline the snapshots (`UPDATE_SNAPSHOTS=1 cargo test`) and look at the
-   PNGs that changed.
+5. Re-baseline the snapshots: delete `crates/shadcn-egui/tests/snapshots/*.png`,
+   run `UPDATE_SNAPSHOTS=1 cargo test`, and look at the PNGs that changed.
+   kittest ignores a change on anti-aliased pixels, so a baseline that is not
+   deleted can keep stale pixels (`references/upstream.md`, Snapshots).
 6. Commit the generated files, the reports and the PNGs together.
