@@ -24,6 +24,7 @@ through `ui.add(..)` and return an `egui::Response`. The markers are the
 | `<Popover>` + Trigger/Content | `let t = ui.add(Button::new("Open")); shadcn_egui::components::popover::Popover::new(&t).width(..).side_offset(..).show(\|ui\| ..)`; `side_offset` is the gap between the trigger and the popup, default 4. A click on the trigger toggles it; Esc or a click outside closes it. `popover_header(ui, title, description)` inside. Markers: `cn-popover-content`, `cn-popover-header`, `cn-popover-title`, `cn-popover-description` |
 | `<Tooltip>` | `shadcn_egui::components::tooltip::tooltip(ui.add(..), "text")`. Markers: `cn-tooltip-content`, `cn-tooltip-arrow` |
 | Lucide `<Mic />` | `shadcn_egui::components::icon::IconView::new(&shadcn_egui::icons::lucide::MIC)` with `.size(..)`, `.color(..)`; `paint_icon(painter, rect, icon, color, stroke)` for custom widgets. See `icons.md` |
+| An icon inside `IntoAtoms` content (`egui::Button`, a crate widget's content) | `shadcn_egui::components::icon_atom::IconAtom::new(icon)`, with `.size(..)` and `.tint(..)`. Without a tint it draws in the theme's text colour, and a crate widget draws it in its state colour, as its `.icon` slot; a tinted one keeps its colour everywhere. Needs `Theme::apply` |
 
 Not yet ported: RadioGroup, Tags or Chips, Menubar, Table, DropdownMenu,
 Accordion, gradients. Port a missing one with `shadcn-egui:port-component`

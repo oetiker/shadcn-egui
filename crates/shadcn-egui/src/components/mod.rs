@@ -4,6 +4,7 @@ pub mod card;
 pub mod checkbox;
 pub mod dialog;
 pub mod icon;
+pub mod icon_atom;
 mod icon_raster;
 pub mod input;
 pub mod label;
