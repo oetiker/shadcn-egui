@@ -47,7 +47,7 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 
 - A disabled part paints at the opacity its style's `disabled:` rules
   give, multiplied along upstream's part tree as CSS multiplies it, not
-  along egui's `Ui` nesting: a part fn inside a container's content
+  along egui's `Ui` nesting: a part inside a container's content
   closure paints at container × part.
 - A style that sets `disabled:opacity-25` shows 25 %. A part with no
   `disabled:` rule stays opaque in a disabled `Ui`, as in a disabled
@@ -402,9 +402,11 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 ## 7 · Animation
 
 - Components animate where upstream animates (spinner, skeleton pulse,
-  progress value, accordion and collapsible height, sheet slide, sidebar
-  width, navigation-menu viewport, carousel slide, toast stack, shimmer,
-  scroller), with upstream's timing.
+  progress value, accordion and collapsible height, sheet slide, dialog
+  and overlay fade and zoom, sidebar width, navigation-menu viewport,
+  carousel slide, toast stack, shimmer, scroller), with upstream's timing.
+- An overlay that closes runs its exit motion first; a modal reports
+  `should_close()` once it has run.
 - `style.animation_time == 0` counts as reduced motion.
 - Caret blink is egui's.
 

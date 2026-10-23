@@ -180,11 +180,14 @@ The shared step owes, besides the helpers it already has:
   height for accordion and collapsible.
 - The crate `ScrollArea` before the first list that scrolls (D-62).
 - App variants and app sizes (rules, axiom 8; implementation notes 18):
-  the app case on every variant and size enum, a variant enum with the
-  single case `Default` where a component has none, `Theme::variant` and
-  `Theme::size` with an edit that receives the style name, the theme's map and the lookup helper; with them the app
-  colours of the recipe-completeness design (`Role::custom`, the theme's
-  light and dark map). They land before the first component that uses
+  `AppVariant<X>` and the app case on every variant and size enum, a
+  variant enum with the single case `Default` where a component has none,
+  `Theme::variant` and `Theme::size` with an edit that receives the style
+  name, the theme's map and the lookup helper; with them the app colours
+  of the recipe-completeness design (`Role::custom`, the theme's light and
+  dark map). A theme holds both palettes and follows egui's
+  `ctx.set_theme(ThemePreference)` in place of `Theme::vega_light()` and
+  `Theme::vega_dark()`. They land before the first component that uses
   them; the 14 existing components get the app case in the cleanup.
 - The memory-state type helper (rules, Memory-owned state; implementation
   notes 19): the default id and its clash check, the binding kept in step
@@ -216,6 +219,11 @@ The shared step owes, besides the helpers it already has:
   always wraps, where bits differs. Rule 5 makes a value that only a docs
   demo sets a caller parameter; under axiom 8 such a value is a look (an
   app variant) or the caller's layout, never a setter of its own.
+- The build-ui skill gets a table of the egui look-alikes that bypass the
+  crate: egui methods with a crate counterpart of the same or a similar
+  name that stay callable (`ui.checkbox`, `ui.radio_value`,
+  `resp.context_menu`, `resp.on_hover_text`, `ui.menu_button`), each with
+  the crate call to use instead.
 - The build-ui references follow the new API:
   `plugin/skills/build-ui/references/icons.md` and `component-map.md`
   show an icon-only button as `ButtonSize::Icon`; it becomes

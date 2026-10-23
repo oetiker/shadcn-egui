@@ -74,9 +74,10 @@ in the same place.
   `press_origin` on release, so the press position comes from this pass's
   `PointerButton { pressed: true }` event.
 - A modal's `should_close()` is not `ModalResponse::should_close()`, which
-  is true on any backdrop click: it is true on `ui.close()` from the
-  content, on the Escape hook's mark, and on a backdrop press while the
-  modal is the top entry of the stack.
+  is true on any backdrop click: it is true once the exit motion has run
+  that `ui.close()` from the content, the Escape hook's mark, or a
+  backdrop press while the modal is the top entry of the stack started.
+  The app keeps calling `show` meanwhile, which runs the motion.
 - The stack's open, close and query operations are public, so an overlay
   built outside the crate nests with crate overlays.
 - The popup id of an overlay on a caller's trigger derives from the
@@ -189,9 +190,13 @@ sizing §Widget builders (`add_sized`), §TextEdit (`desired_width`,
   recipe.
 - The edited recipes are built once per style and kept with the map, not
   per pass; a style change rebuilds them.
-- The app case of a variant enum holds the `&'static str` name, so the
-  enum stays `Copy`, `Eq` and `const`-constructible. Two constants with
-  one name are one app variant.
+- `AppVariant<X>` holds the `&'static str` name and a `PhantomData<X>`;
+  `From<AppVariant<X>> for X` builds the enum's hidden app case, so the
+  enum stays `Copy` and `Eq`. Two constants with one name are one app
+  variant.
+- The edited recipes exist for each mode: a recipe lookup reads the mode
+  from `Context::theme()`, so `ctx.set_theme(..)` and egui's system mode
+  switch them, and `Theme::current` returns the theme with both palettes.
 - A component resolves its variant through one helper that returns the
   recipe stack and the state bits: the built-in variant's recipes, or the
   app variant's edited copies with the base's bits. A name the theme does
@@ -215,16 +220,16 @@ sizing §Widget builders (`add_sized`), §TextEdit (`desired_width`,
 ## 19 · Memory-state types
 
 - A state type keeps its `Id` and the value, as `CollapsingState`, and
-  stores it with `insert_persisted`, an overlay's state with
-  `insert_temp`. A crate-defined value is stored as std types, so no
-  crate type needs serde when an app turns on egui's `persistence`; a
-  caller's type is bound by `SerializableAny`.
+  stores it with `insert_temp`, so a caller's type needs no serde. Only
+  an opt-in upstream offers (resizable `autoSaveId`) stores with
+  `insert_persisted`, as std types (`Vec<f32>`), behind the crate's
+  `persistence` feature.
 - One crate helper serves every state type. It keeps, beside the value,
   the binding's value as it last saw it, in temp memory. On the first
   call (no value last seen) a binding sets memory; without one, memory
-  keeps a value it holds (restored from storage), else takes
-  `.default_<state>`, else upstream's default. Later calls: a binding that differs from the last seen
-  value sets memory; else a memory value that differs from the binding
+  keeps a value it holds, else takes `.default_<state>`, else upstream's
+  default. Later calls: a binding that differs from the last seen value
+  sets memory; else a memory value that differs from the binding
   (a `store`) sets the binding. After a user change, memory and binding
   take the new value. `store` requests the repaint.
 - The helper calls `Context::check_for_id_clash` for the state id.
