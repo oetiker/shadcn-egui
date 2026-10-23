@@ -15,7 +15,7 @@ use crate::components::shared::{opacity, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::{layout, Theme};
-use egui::{Align, Color32, Id, Layout, Margin, Rect, RichText, Shape, Ui, UiBuilder};
+use egui::{Align, Color32, Id, Layout, Rect, RichText, Shape, Ui, UiBuilder};
 
 pub struct Dialog<'a> {
     id: Id,
@@ -97,12 +97,7 @@ impl<'a> Dialog<'a> {
         let inner_width = width - pad_l - pad_r;
 
         let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
-        let frame = panel.frame(Margin {
-            top: pad_t.round() as i8,
-            right: pad_r.round() as i8,
-            bottom: pad_b.round() as i8,
-            left: pad_l.round() as i8,
-        });
+        let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         let overlay_l = [&*t.style.dialog_overlay];
         let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
         // The overlay's opacity fades the backdrop, the app's colour too.
@@ -115,6 +110,7 @@ impl<'a> Dialog<'a> {
             .backdrop_color(backdrop)
             .frame(frame)
             .show(ctx, |ui| {
+                let slot = RecipeBox::reserve(ui);
                 ui.multiply_opacity(alpha);
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
@@ -129,13 +125,11 @@ impl<'a> Dialog<'a> {
                 header(ui, self.title, self.description);
                 let inner = body(ui);
                 let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
-                (inner, close)
+                (inner, close, slot)
             });
-        // Shadow and `ring-1` lie outside the box.
-        ctx.layer_painter(resp.response.layer_id)
-            .extend(panel.outside_shapes(ctx, resp.response.rect));
         let dismissed = resp.backdrop_response.clicked() || resp.should_close();
-        let (inner, close) = resp.inner;
+        let (inner, close, slot) = resp.inner;
+        panel.paint_reserved(ctx, resp.response.layer_id, slot, resp.response.rect);
         if close || dismissed {
             *open = false;
         }

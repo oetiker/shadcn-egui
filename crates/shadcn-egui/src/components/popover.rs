@@ -15,7 +15,7 @@ use crate::components::shared::{opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{Margin, PopupCloseBehavior, Response, RichText, Ui};
+use egui::{PopupCloseBehavior, Response, RichText, Ui};
 
 pub struct Popover<'a> {
     trigger: &'a Response,
@@ -63,12 +63,7 @@ impl<'a> Popover<'a> {
         let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
         let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
-        let frame = panel.frame(Margin {
-            top: pad_t.round() as i8,
-            right: pad_r.round() as i8,
-            bottom: pad_b.round() as i8,
-            left: pad_l.round() as i8,
-        });
+        let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         // No width from the builder or the recipe: CSS's initial `auto`,
         // the content's width.
         let inner_width = self
@@ -80,6 +75,7 @@ impl<'a> Popover<'a> {
             .gap(self.side_offset)
             .frame(frame)
             .show(|ui| {
+                let slot = RecipeBox::reserve(ui);
                 ui.multiply_opacity(alpha);
                 if let Some(w) = inner_width {
                     ui.set_width(w);
@@ -93,14 +89,16 @@ impl<'a> Popover<'a> {
                         font.size = text_px;
                     }
                 }
-                content(ui)
+                (content(ui), slot)
             })?;
-        // Shadow and `ring-1` lie outside the box.
-        self.trigger
-            .ctx
-            .layer_painter(shown.response.layer_id)
-            .extend(panel.outside_shapes(&self.trigger.ctx, shown.response.rect));
-        Some(shown.inner)
+        let (inner, slot) = shown.inner;
+        panel.paint_reserved(
+            &self.trigger.ctx,
+            shown.response.layer_id,
+            slot,
+            shown.response.rect,
+        );
+        Some(inner)
     }
 }
 

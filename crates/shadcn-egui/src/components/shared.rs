@@ -321,49 +321,68 @@ impl RecipeBox {
         out
     }
 
-    /// The shadow, ring and outline alone: what lies outside the border
-    /// box, for a box whose fill and border an egui `Frame` painted.
-    pub fn outside_shapes(&self, ctx: &egui::Context, rect: Rect) -> Vec<Shape> {
-        let radius = self.radius_on(rect);
-        let mut out = Vec::new();
-        out.extend(self.shadow_shape(ctx, rect, radius));
-        out.extend(outside_stroke(self.ring, rect, radius));
-        out.extend(outside_stroke(self.outline, rect, radius));
-        out
-    }
-
     /// Paint [`RecipeBox::shapes`] with `painter`.
     pub fn paint(&self, painter: &Painter, rect: Rect) {
         painter.extend(self.shapes(painter.ctx(), rect));
     }
 
-    /// An egui `Frame` with this box's fill, border and radii and `margin`
-    /// as its inner margin, for a panel whose size egui learns only while
-    /// it runs (a popup, a modal). It carries no shadow (egui's would show
-    /// through a translucent fill), ring or outline: paint
-    /// [`RecipeBox::outside_shapes`] on the frame's rect afterwards.
-    pub fn frame(&self, margin: egui::Margin) -> egui::Frame {
-        debug_assert!(
-            self.uniform_border().is_some() || self.borders == [0.0; 4],
-            "a frame strokes all four sides alike"
-        );
-        let c = |v: f32| v.clamp(0.0, 255.0).round() as u8; // behaviour-ok: egui's u8 corner radius
-        let [nw, ne, sw, se] = self.radii;
-        let mut frame = egui::Frame::new()
-            .corner_radius(CornerRadius {
-                nw: c(nw),
-                ne: c(ne),
-                sw: c(sw),
-                se: c(se),
-            })
-            .inner_margin(margin);
-        if let Some(fill) = self.fill {
-            frame = frame.fill(fill);
-        }
-        if let Some(border) = self.uniform_border() {
-            frame = frame.stroke(border);
-        }
-        frame
+    /// An egui `Frame` that paints nothing, its inner margin `padding`
+    /// (top, right, bottom, left) plus the border widths, for a panel whose
+    /// size egui learns only while it runs (a popup, a modal). Its first
+    /// call in the panel's closure is [`RecipeBox::reserve`]; after `show`,
+    /// [`RecipeBox::paint_reserved`] paints the box under the content.
+    ///
+    /// ```
+    /// use shadcn_egui::components::shared::RecipeBox;
+    /// use shadcn_egui::style::State;
+    /// use shadcn_egui::Theme;
+    ///
+    /// fn panel(ctx: &egui::Context) {
+    ///     let theme = Theme::current(ctx);
+    ///     let popover = [&*theme.style.popover_content];
+    ///     let state = theme.state(ctx, State::NONE);
+    ///     let panel = RecipeBox::resolve(&theme, &popover, state);
+    ///     let shown = egui::Area::new(egui::Id::new("panel")).show(ctx, |ui| {
+    ///         panel
+    ///             .frame([16.0; 4])
+    ///             .show(ui, |ui| {
+    ///                 let slot = RecipeBox::reserve(ui);
+    ///                 ui.label("Content");
+    ///                 slot
+    ///             })
+    ///             .inner
+    ///     });
+    ///     panel.paint_reserved(ctx, shown.response.layer_id, shown.inner, shown.response.rect);
+    /// }
+    /// ```
+    pub fn frame(&self, padding: [f32; 4]) -> egui::Frame {
+        let [t, r, b, l] = std::array::from_fn(|i| (padding[i] + self.borders[i]).round() as i8);
+        egui::Frame::NONE.inner_margin(egui::Margin {
+            left: l,
+            right: r,
+            top: t,
+            bottom: b,
+        })
+    }
+
+    /// Hold the box's place in `ui`'s layer, under everything the panel's
+    /// content paints after it.
+    pub fn reserve(ui: &Ui) -> egui::layers::ShapeIdx {
+        ui.painter().add(Shape::Noop)
+    }
+
+    /// Paint the box on `rect` into the place [`RecipeBox::reserve`] held
+    /// in `layer`: shadow, ring, fill, border and outline under the content,
+    /// as CSS paints a box under its children.
+    pub fn paint_reserved(
+        &self,
+        ctx: &egui::Context,
+        layer: egui::LayerId,
+        slot: egui::layers::ShapeIdx,
+        rect: Rect,
+    ) {
+        ctx.layer_painter(layer)
+            .set(slot, Shape::Vec(self.shapes(ctx, rect)));
     }
 
     /// Every shadow layer as the browser blurs it, cut to the outside of

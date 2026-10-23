@@ -34,9 +34,7 @@ use crate::components::shared::{
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::Theme;
-use egui::{
-    vec2, Color32, Key, Margin, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget,
-};
+use egui::{vec2, Color32, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
 
 /// Trigger height variant: shadcn `size="default" | "sm"`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -359,12 +357,7 @@ impl Widget for Select<'_> {
                 gs,
             );
             let panel = RecipeBox::resolve(t, &l, gs).faded(alpha);
-            let frame = panel.frame(Margin {
-                top: gpt.round() as i8,
-                right: gpr.round() as i8,
-                bottom: gpb.round() as i8,
-                left: gpl.round() as i8,
-            });
+            let frame = panel.frame([gpt, gpr, gpb, gpl]);
             let item_font = egui::FontId::new(
                 t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)),
                 family_for(
@@ -408,6 +401,7 @@ impl Widget for Select<'_> {
                 .gap(side_offset)
                 .frame(frame)
                 .show(|ui| {
+                    let slot = RecipeBox::reserve(ui);
                     ui.multiply_opacity(alpha * inner_alpha);
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
@@ -507,6 +501,7 @@ impl Widget for Select<'_> {
                                 });
                             }
                         });
+                    slot
                 });
             if let Some(i) = hover_hl.filter(|&i| i != hl) {
                 ctx.data_mut(|d| d.insert_temp(hl_id, i));
@@ -519,10 +514,8 @@ impl Widget for Select<'_> {
                 }
                 Popup::close_id(&ctx, popup_id);
             }
-            // Shadow and `ring-1` lie outside the box.
             if let Some(list) = list {
-                ctx.layer_painter(list.response.layer_id)
-                    .extend(panel.outside_shapes(&ctx, list.response.rect));
+                panel.paint_reserved(&ctx, list.response.layer_id, list.inner, list.response.rect);
             }
         }
         if !Popup::is_id_open(&ctx, popup_id) {
