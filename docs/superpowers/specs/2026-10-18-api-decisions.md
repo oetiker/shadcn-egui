@@ -2012,6 +2012,14 @@ parts go in as into any `Ui` (`h.add(XPart::new(..))`,
 only shortcuts, and a handle part has no free `x_part(ui, ..)`. This
 replaces fix 5's `h.add(BreadcrumbLink::new(..))` example.
 
+Consequence (rules, 2026-10-23, after fix 6): Tab content inside the
+tabs handle cannot borrow the app while the handle holds `&mut self.tab`
+(`|ui| self.account_ui(ui)` does not compile), against P10. Upstream's
+tabs content takes no context (only the style's text size), so it is
+drawn after the root as `TabsContent::new().show(ui, |ui| match self.tab
+{ .. })`, egui's `selectable_value` then `match` (P2). The handle keeps
+the list and its triggers.
+
 ### D-56 · A crate widget restyled by its parent
 
 - **Case:** A button inside a button-group or input-group, input-group text,
