@@ -42,6 +42,11 @@ fn opacity_without_fade(ui: &Ui) -> f32 {
 /// fades by its style's `disabled:` rule, not by egui's fade, and a part
 /// with no such rule stays opaque in a disabled `Ui`, as in a disabled
 /// `<fieldset>` (conformance 2.2).
+///
+/// A nested disable fades twice: `ui.add_enabled_ui(false, ..)` inside a
+/// `Ui` that is already disabled multiplies egui's fade in again, which the
+/// `Ui` does not report, so a part there paints at that one extra fade.
+/// Disable an area once.
 pub fn part_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
     let s = s.with(
         State::DISABLED,
@@ -92,6 +97,10 @@ pub fn part_ui<R>(
 /// opacity. egui's disabled fade stays, so plain egui widgets in it show the
 /// theme's `disabled_alpha`, and crate parts in it take it out again with
 /// [`part_opacity`]. Unlike a scope, this adds no layout of its own.
+///
+/// A nested disable fades twice, here as in [`part_opacity`]:
+/// `ui.add_enabled_ui(false, ..)` inside a disabled container fades its
+/// widgets by the theme's `disabled_alpha` once more.
 pub fn content_ui<R>(
     ui: &mut Ui,
     chain: &[&[&Recipe]],

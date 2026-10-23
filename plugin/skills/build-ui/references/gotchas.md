@@ -45,6 +45,11 @@
   every frame while the fade runs (`ctx.request_repaint()` while `0 < alpha < 1`)
   or drop the fade and show/hide in one step, which is the right call under a
   CPU rasterizer.
+- **A nested disable fades twice.** `ui.add_enabled_ui(false, ..)` inside a
+  `Ui` that is already disabled (a disabled card's content) multiplies
+  egui's fade in again, so its widgets show at 25 % instead of the style's
+  50 %; the crate cannot see the second fade. Disable an area once, at its
+  outermost `Ui`.
 - **One remembered popup.** egui's popup memory holds one open popup id, so
   opening a Popover closes any open menu or combo box (as on the web). For a
   popover inside a popover, keep the inner one's state yourself
