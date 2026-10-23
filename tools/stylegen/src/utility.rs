@@ -213,12 +213,14 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             if u == "hidden" {
                 return U::Set(vec![(IconHidden, Value::Bool(true))]);
             }
-            if let Some((_, why)) = IGNORE_EXACT
+            if IGNORE_EXACT
                 .iter()
                 .chain(IGNORE_PREFIX)
-                .find(|(k, _)| *k == u || (u.starts_with(k) && k.ends_with('-')))
+                .any(|(k, _)| *k == u || (u.starts_with(k) && k.ends_with('-')))
             {
-                return U::Ignore(if *why == STRUCTURE { why } else { SVG_CHILD });
+                // Grid placement of the icon (`*:[svg]:row-span-2`) is layout.
+                let grid = u.starts_with("row-") || u.starts_with("col-");
+                return U::Ignore(if grid { STRUCTURE } else { SVG_CHILD });
             }
             return U::Unsupported("svg child utility other than size-*, translate-y-* and hidden");
         }

@@ -152,6 +152,15 @@ pub const ELEMENT: Spec = Spec {
     earlier: 0,
 };
 
+/// shadcn-svelte's own `@custom-variant`s (`shadcn-svelte/tailwind.css`,
+/// which the docs site imports): `data-checked` is
+/// `&:where([data-state="checked"]), &:where([data-checked]..)`, so it and
+/// every compound around it (`not-data-checked`, `peer-data-disabled`,
+/// `group-data-horizontal/tabs`) add no specificity. A focused checked
+/// checkbox therefore takes `focus-visible:border-ring` over
+/// `data-checked:border-primary`, as in the browser.
+const WHERE: Spec = ZERO;
+
 /// Every variant stylegen translates, by exact text, with the specificity
 /// it adds.
 pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
@@ -163,23 +172,23 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     ("data-highlighted", Is("FOCUS"), CLASS),
     ("active", Is("ACTIVE"), CLASS),
     ("disabled", Is("DISABLED"), CLASS),
-    ("data-disabled", Is("DISABLED"), CLASS),
+    ("data-disabled", Is("DISABLED"), WHERE),
     ("data-[disabled=true]", Is("DISABLED"), CLASS),
     ("group-data-[disabled=true]", Is("DISABLED"), CLASS),
     ("group-has-disabled/field", Is("DISABLED"), CLASS),
     ("peer-disabled", Is("DISABLED"), CLASS),
-    ("peer-data-disabled", Is("DISABLED"), CLASS),
+    ("peer-data-disabled", Is("DISABLED"), WHERE),
     ("aria-invalid", Is("INVALID"), CLASS),
     ("data-invalid", Is("INVALID"), CLASS),
-    ("data-checked", Is("CHECKED"), CLASS),
+    ("data-checked", Is("CHECKED"), WHERE),
     ("data-[state=checked]", Is("CHECKED"), CLASS),
     ("aria-checked", Is("CHECKED"), CLASS),
-    ("data-unchecked", Is("UNCHECKED"), CLASS),
+    ("data-unchecked", Is("UNCHECKED"), WHERE),
     ("data-[state=unchecked]", Is("UNCHECKED"), CLASS),
-    ("not-data-checked", IsNot("CHECKED"), CLASS),
+    ("not-data-checked", IsNot("CHECKED"), WHERE),
     ("aria-expanded", Is("EXPANDED"), CLASS),
     ("not-aria-[haspopup]", IsNot("HAS_POPUP"), CLASS),
-    ("data-active", Is("SELECTED"), CLASS),
+    ("data-active", Is("SELECTED"), WHERE),
     ("data-[active=true]", Is("SELECTED"), CLASS),
     ("data-selected", Is("SELECTED"), CLASS),
     ("not-data-selected", IsNot("SELECTED"), CLASS),
@@ -199,12 +208,12 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
         Is("SIZE_DEFAULT"),
         CLASS,
     ),
-    ("data-vertical", Is("VERTICAL"), CLASS),
+    ("data-vertical", Is("VERTICAL"), WHERE),
     ("data-[orientation=vertical]", Is("VERTICAL"), CLASS),
-    ("group-data-vertical/tabs", Is("VERTICAL"), CLASS),
-    ("data-horizontal", Is("HORIZONTAL"), CLASS),
+    ("group-data-vertical/tabs", Is("VERTICAL"), WHERE),
+    ("data-horizontal", Is("HORIZONTAL"), WHERE),
     ("data-[orientation=horizontal]", Is("HORIZONTAL"), CLASS),
-    ("group-data-horizontal/tabs", Is("HORIZONTAL"), CLASS),
+    ("group-data-horizontal/tabs", Is("HORIZONTAL"), WHERE),
     ("data-[variant=line]", Is("VARIANT_LINE"), CLASS),
     (
         "group-data-[variant=line]/tabs-list",
@@ -219,8 +228,8 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     ("has-data-[slot=card-footer]", Is("HAS_FOOTER"), CLASS),
     // `data-open` is a real open state (D-91); bits sets `data-closed` on
     // the same parts when closed. Neither is set on tooltip content.
-    ("data-open", Is("EXPANDED"), CLASS),
-    ("data-closed", Is("CLOSED"), CLASS),
+    ("data-open", Is("EXPANDED"), WHERE),
+    ("data-closed", Is("CLOSED"), WHERE),
     ("data-[state=delayed-open]", Is("DELAYED_OPEN"), CLASS),
     // The side a panel took (D-93): slide-in direction, arrow offset.
     ("data-[side=top]", Is("SIDE_TOP"), CLASS),
@@ -372,7 +381,23 @@ const ROOTS: &[(&str, u32)] = &[
     ("xl", BREAKPOINT_GROUP),
     ("2xl", BREAKPOINT_GROUP),
     ("dark", 1199),
+    // shadcn-svelte's `@custom-variant`s in `shadcn-svelte/tailwind.css`
+    // order. A custom variant with a new name is registered after every
+    // built-in one (`Variants.set` takes `lastOrder + 1`), so these sort
+    // after `dark` and take precedence over the `data` root's functional
+    // form.
+    ("data-open", CUSTOM),
+    ("data-closed", CUSTOM + 1),
+    ("data-checked", CUSTOM + 2),
+    ("data-unchecked", CUSTOM + 3),
+    ("data-disabled", CUSTOM + 4),
+    ("data-active", CUSTOM + 5),
+    ("data-horizontal", CUSTOM + 6),
+    ("data-vertical", CUSTOM + 7),
 ];
+
+/// The first order after the built-in variants.
+const CUSTOM: u32 = 2000;
 
 const BREAKPOINT_GROUP: u32 = 1046;
 

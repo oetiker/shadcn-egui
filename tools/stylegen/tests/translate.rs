@@ -259,7 +259,7 @@ fn variants() {
         V::Pseudo(Pseudo::Svg, _)
     ));
     assert!(matches!(variant("after"), V::Pseudo(Pseudo::After, _)));
-    assert!(matches!(variant("data-open"), V::Ignore(_)));
+    assert!(matches!(variant("data-open"), V::Cond { all, .. } if all == flag("EXPANDED")));
     assert!(matches!(variant("[a]"), V::Ignore(_)));
     assert!(matches!(variant("lg"), V::Unsupported));
     // Only exact, listed text translates: an unknown group name is not guessed.
@@ -312,7 +312,11 @@ fn tailwind_variant_order() {
     let less = |a: &str, z: &str| assert_eq!(tw_cmp(a, z), Some(Ordering::Less), "{a} < {z}");
     // Inside a root: named values by text, then arbitrary values by text.
     less("aria-checked", "aria-invalid");
-    less("data-vertical", "data-[active=true]");
+    less("data-selected", "data-[active=true]");
+    // shadcn-svelte's `@custom-variant data-vertical` comes after every
+    // built-in variant, `dark` included.
+    less("dark", "data-vertical");
+    less("data-checked", "data-vertical");
     less("data-[size=default]", "data-[size=sm]");
     // Compound: inner variant first, then no modifier before a modifier,
     // then modifiers by text.
@@ -326,7 +330,8 @@ fn tailwind_variant_order() {
     assert_eq!(tw_cmp("bogus", "hover"), None);
     // Ranks are dense indices in that order.
     assert!(rank("aria-checked") < rank("aria-invalid"));
-    assert!(rank("data-checked") < rank("dark"));
+    assert!(rank("data-selected") < rank("dark"));
+    assert!(rank("dark") < rank("data-checked"));
 }
 
 /// The rank table is sorted by the port of `Variants.compare`: for every
@@ -805,10 +810,11 @@ fn winner(classes: &[&str], field: Field, state: u128) -> Option<Value> {
 /// (0,1,0). Tailwind emits the breakpoint later, but the browser picks h-7.
 #[test]
 fn specificity_beats_variant_order() {
-    let sm = flag("SIZE_SM");
+    let md = flag("MD");
+    let sm = flag("SIZE_SM") | md;
     let classes = ["data-[size=sm]:h-7", "md:h-9"];
     assert_eq!(winner(&classes, Field::Height, sm), Some(Value::Px(28.0)));
-    assert_eq!(winner(&classes, Field::Height, 0), Some(Value::Px(36.0)));
+    assert_eq!(winner(&classes, Field::Height, md), Some(Value::Px(36.0)));
     // Class order does not matter either.
     let swapped = ["md:h-9", "data-[size=sm]:h-7"];
     assert_eq!(winner(&swapped, Field::Height, sm), Some(Value::Px(28.0)));
@@ -939,7 +945,8 @@ fn svg_targets_keep_their_variant_order() {
 
 /// `rank_of` over every translated variant, in the order Tailwind 4.3.3
 /// `Variants.compare` sorts them with the default theme (the breakpoints
-/// sit between `supports-*` and `dark`). No two of them tie. Unlike
+/// sit between `supports-*` and `dark`, shadcn-svelte's custom `data-*`
+/// variants after `dark`). No two of them tie. Unlike
 /// `ranks_follow_tailwind_order`, which checks the table against the port
 /// of `compare`, this pins the result itself: a change to the port that
 /// moves a variant fails here.
@@ -947,17 +954,15 @@ fn svg_targets_keep_their_variant_order() {
 fn ranks_pin_tailwind_order() {
     const ORDER: [&str; 79] = [
         "not-aria-[haspopup]",
-        "not-data-checked",
         "not-data-selected",
         "not-data-[variant=destructive]",
         "not-dark",
+        "not-data-checked",
         "group-has-disabled/field",
         "group-has-data-[size=lg]/avatar-group",
         "group-has-data-[size=sm]/avatar-group",
         "group-has-data-[slot=alert-dialog-media]/alert-dialog-content",
         "group-has-[>svg]/alert",
-        "group-data-horizontal/tabs",
-        "group-data-vertical/tabs",
         "group-data-[disabled=true]",
         "group-data-[size=default]/alert-dialog-content",
         "group-data-[size=default]/avatar",
@@ -969,6 +974,8 @@ fn ranks_pin_tailwind_order() {
         "group-data-[size=sm]/switch",
         "group-data-[variant=default]/tabs-list",
         "group-data-[variant=line]/tabs-list",
+        "group-data-horizontal/tabs",
+        "group-data-vertical/tabs",
         "peer-disabled",
         "peer-data-disabled",
         "placeholder",
@@ -992,18 +999,10 @@ fn ranks_pin_tailwind_order() {
         "aria-checked",
         "aria-expanded",
         "aria-invalid",
-        "data-active",
-        "data-checked",
-        "data-closed",
-        "data-disabled",
         "data-highlighted",
-        "data-horizontal",
         "data-invalid",
-        "data-open",
         "data-placeholder",
         "data-selected",
-        "data-unchecked",
-        "data-vertical",
         "data-[active=true]",
         "data-[disabled=true]",
         "data-[orientation=horizontal]",
@@ -1023,6 +1022,14 @@ fn ranks_pin_tailwind_order() {
         "sm",
         "md",
         "dark",
+        "data-open",
+        "data-closed",
+        "data-checked",
+        "data-unchecked",
+        "data-disabled",
+        "data-active",
+        "data-horizontal",
+        "data-vertical",
         "[&_svg:not([class*='size-'])]",
         "[&>svg]",
     ];
@@ -1055,17 +1062,14 @@ fn marker_classes(style: &str, marker: &str) -> Vec<String> {
         .1
 }
 
-/// A focused, checked checkbox shows the checked border, not the focus
+/// A focused, checked checkbox shows the focus border, not the checked
 /// border. Tailwind emits `focus-visible:border-ring` before
-/// `data-checked:border-primary`; both are (0,2,0), so the later one wins in
-/// the browser. The luma switch has the same pair. The vega switch has no
-/// checked border, so the ring border shows there.
+/// `data-checked:border-primary`, but shadcn-svelte's `data-checked` is
+/// `&:where(..)`: (0,1,0) against (0,2,0), so the focus border wins in the
+/// browser. The luma switch has the same pair; the vega switch has no
+/// checked border.
 #[test]
-fn checked_border_beats_focus_visible_border() {
-    let primary = Some(Value::Paint {
-        role: "Primary",
-        alpha: 1.0,
-    });
+fn focus_visible_border_beats_checked_border() {
     let ring = Some(Value::Paint {
         role: "Ring",
         alpha: 1.0,
@@ -1077,7 +1081,7 @@ fn checked_border_beats_focus_visible_border() {
         let classes: Vec<&str> = owned.iter().map(String::as_str).collect();
         assert_eq!(
             winner(&classes, Field::BorderColor, both),
-            primary,
+            ring,
             "{style} {marker} focused and checked"
         );
         assert_eq!(
@@ -1089,4 +1093,37 @@ fn checked_border_beats_focus_visible_border() {
     let owned = marker_classes("vega", "cn-switch");
     let classes: Vec<&str> = owned.iter().map(String::as_str).collect();
     assert_eq!(winner(&classes, Field::BorderColor, both), ring);
+}
+
+/// shadcn-svelte's `data-checked` is `&:where(..)`: no specificity, so
+/// `focus-visible:border-ring` (0,2,0) beats `data-checked:border-primary`
+/// (0,1,0) on a focused checked checkbox, though Tailwind emits the custom
+/// variant later.
+#[test]
+fn custom_data_variants_add_no_specificity() {
+    let both = flag("CHECKED") | flag("FOCUS_VISIBLE");
+    let classes = ["focus-visible:border-ring", "data-checked:border-primary"];
+    let ring = Value::Paint {
+        role: "Ring",
+        alpha: 1.0,
+    };
+    assert_eq!(winner(&classes, Field::BorderColor, both), Some(ring));
+    // Alone, the checked rule still applies.
+    assert_eq!(
+        winner(&classes, Field::BorderColor, flag("CHECKED")),
+        Some(Value::Paint {
+            role: "Primary",
+            alpha: 1.0
+        })
+    );
+    // At equal specificity the custom variant sorts after `dark`.
+    let dark = flag("DARK") | flag("CHECKED");
+    let classes = ["data-checked:bg-primary", "dark:bg-input"];
+    assert_eq!(
+        winner(&classes, Field::Bg, dark),
+        Some(Value::Paint {
+            role: "Input",
+            alpha: 1.0
+        })
+    );
 }
