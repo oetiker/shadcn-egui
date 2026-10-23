@@ -258,6 +258,27 @@ impl RecipeBox {
         }
     }
 
+    /// The box on `rect` inside `outer` on `outer_rect` with `overflow:
+    /// hidden`: a corner that sits on the outer box's corner takes the
+    /// rounder of the two radii. Exact while the inner box's other corners
+    /// stay clear of the outer box's rounding.
+    pub(crate) fn clipped_by(mut self, outer: &RecipeBox, outer_rect: Rect, rect: Rect) -> Self {
+        let outer_radii = clamp_radii(outer.radii, outer_rect);
+        let near = |a: f32, b: f32| (a - b).abs() < f32::EPSILON * a.abs().max(b.abs()).max(1.0); // behaviour-ok: float equality tolerance
+        let corners = [
+            (rect.left_top(), outer_rect.left_top()),
+            (rect.right_top(), outer_rect.right_top()),
+            (rect.left_bottom(), outer_rect.left_bottom()),
+            (rect.right_bottom(), outer_rect.right_bottom()),
+        ];
+        for (i, (p, q)) in corners.into_iter().enumerate() {
+            if near(p.x, q.x) && near(p.y, q.y) {
+                self.radii[i] = self.radii[i].max(outer_radii[i]);
+            }
+        }
+        self
+    }
+
     /// The fill colour, if the recipe sets one that is not transparent.
     #[inline]
     pub fn fill(&self) -> Option<Color32> {
@@ -772,6 +793,19 @@ mod tests {
             CornerRadius::ZERO,
         );
         assert!((area(&clip_outside(&quad, &beside)) - 100.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_clipped_box_takes_the_outer_rounding_where_corners_meet() {
+        let theme = Theme::vega_light();
+        let mut full = Recipe::default();
+        full.radius.base = Some(Radius::Rung(Rung::Full));
+        let outer = RecipeBox::resolve(&theme, &[&full], State::NONE);
+        let inner = RecipeBox::resolve(&theme, &[&Recipe::default()], State::NONE);
+        let track = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 6.0));
+        let range = Rect::from_min_max(track.min, egui::pos2(40.0, 6.0));
+        let r = inner.clipped_by(&outer, track, range).radius_on(range);
+        assert_eq!((r.nw, r.sw, r.ne, r.se), (3, 3, 0, 0));
     }
 
     fn rounded(base: Option<Rung>, left: Option<Rung>, left_rank: u128) -> RecipeBox {

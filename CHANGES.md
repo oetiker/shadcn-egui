@@ -28,6 +28,7 @@ are recorded here. The format is based on
 ### Fixed
 - Shadows now match the browser: popovers, select lists, dialogs, cards, tabs and controls draw every layer of their Tailwind shadow with its negative spread and the browser's soft blur. Before, a maia popover's shadow stuck out 12 px too far on each side, and the other styles' overlay shadows had a hard, short edge and lacked their second layer.
 - The shadow and focus ring of a popover, select list or dialog now lie under the panel and its content, as in the browser, instead of over the panel's outer edge and over content that runs past it.
+- A tooltip now shows the border, ring, shadow and per-corner radii that a style or an app sets on `theme.style.tooltip_content`, and a slider range and the tabs line indicator follow their own recipe's radius and border; a slider range's end is square under the thumb, as in the browser, instead of taking the track's rounding.
 - A shadow no longer shows through a transparent or translucent box: the light vega input, select trigger and checkbox no longer look grey inside, and dark-mode switches, inputs and outline buttons no longer darken their translucent fill.
 - Plain egui widgets in a disabled area now fade by the style's disabled opacity (`disabled:opacity-50`) instead of egui's own value, and a style's `disabled:opacity-*` on a part shows at exactly that value inside a disabled area.
 - Rounded corners now paint the focus ring under the box's edge, as the browser does, so the ring's corner pixels match shadcn's.

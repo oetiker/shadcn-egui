@@ -6,10 +6,10 @@
 //! centre lies on the content edge, below or above the content, centred on the
 //! trigger.
 
-use crate::components::shared::opacity;
+use crate::components::shared::{opacity, RecipeBox};
 use crate::style::{pick, State, TextSize};
 use crate::Theme;
-use egui::{pos2, Color32, Frame, Margin, Pos2, RectAlign, Response, RichText, Shape};
+use egui::{pos2, Color32, Pos2, RectAlign, Response, RichText, Shape};
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
 
 /// Corner arc segments of the rounded arrow.
@@ -40,7 +40,7 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     // colours here. The arrow sits in the content.
     let alpha = opacity(&[&content[..]], g);
     let arrow_alpha = opacity(&[&arrow[..], &content[..]], g);
-    let fill = pick(&content, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(alpha));
+    let panel = RecipeBox::resolve(&t, &content, g).faded(alpha);
     let fg = pick(&content, |r| &r.text, g).map(|p| t.paint(p));
     let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(arrow_alpha));
     let mut tip = egui::Tooltip::for_enabled(&resp);
@@ -48,27 +48,27 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
     let size = pick(&arrow, |r| &r.width, g).unwrap_or(0.0);
     let reach = size * FRAC_1_SQRT_2;
-    let mut frame = Frame::new()
-        .corner_radius(radius.round() as u8)
-        .inner_margin(Margin {
-            top: pad_t.round() as i8,
-            right: pad_r.round() as i8,
-            bottom: pad_b.round() as i8,
-            left: pad_l.round() as i8,
-        });
-    if let Some(f) = fill {
-        frame = frame.fill(f);
-    }
+    let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
     tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(frame);
     let shown = tip.show(|ui| {
+        let slot = RecipeBox::reserve(ui);
         ui.multiply_opacity(alpha);
         ui.set_max_width(max_w - pad_l - pad_r);
         let mut label = RichText::new(text).size(text_px).line_height(Some(line));
         if let Some(fg) = fg {
             label = label.color(fg);
         }
-        ui.label(label)
+        ui.label(label);
+        slot
     });
+    if let Some(shown) = &shown {
+        panel.paint_reserved(
+            &resp.ctx,
+            shown.response.layer_id,
+            shown.inner,
+            shown.response.rect,
+        );
+    }
     if let (Some(shown), Some(fill)) = (shown, arrow_fill) {
         let r = pick(&arrow, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, size / 2.0));
         let area = shown.response.rect;

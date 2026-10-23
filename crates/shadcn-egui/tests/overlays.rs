@@ -321,6 +321,35 @@ fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
     }
 }
 
+/// The tooltip paints its box through the recipe box: a border an app
+/// gives it in `theme.style` shows (review F4).
+#[test]
+fn tooltip_box_takes_the_styles_border() {
+    use shadcn_egui::style::{Paint, Prop, Role};
+    let theme = common::restyled(Theme::vega_light(), |s| {
+        s.tooltip_content.border_width = Prop::fixed(4.0);
+        s.tooltip_content.border_color = Prop::fixed(Paint::Role(Role::Destructive, 1.0));
+    });
+    let red = theme.palette.destructive;
+    let mut h = Harness::builder()
+        .with_size(vec2(240.0, 120.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            tooltip_trigger(ui);
+        });
+    h.run();
+    h.get_by_label("Hover me").hover();
+    h.run();
+    let text = h.get_by_label("Add to library").rect();
+    let img = h.render().expect("render");
+    let y = text.center().y as u32;
+    let found = (0..text.left() as u32).rev().any(|x| {
+        let c = img.get_pixel(x, y);
+        egui::Color32::from_rgb(c[0], c[1], c[2]) == red
+    });
+    assert!(found, "no destructive border left of the tooltip text");
+}
+
 #[test]
 fn tooltip_snapshot() {
     common::snapshot_all_with("tooltip", vec2(240.0, 140.0), tooltip_trigger, |h| {

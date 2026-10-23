@@ -12,7 +12,7 @@ use crate::components::shared::{
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
 use crate::{layout, Theme};
-use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Shape, Ui, Widget};
+use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Ui, Widget};
 
 /// shadcn `TabsList` `variant`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -296,7 +296,7 @@ impl Widget for Tabs<'_> {
                 // The `after:` line indicator, placed against the padding box.
                 // The painter already carries the trigger's chain.
                 let bar_alpha = opacity(&[&after[..]], st);
-                if let (Some(c), true) = (paint(&after, |r| &r.bg), bar_alpha > 0.0) {
+                if bar_alpha > 0.0 {
                     let inner = rect.shrink(border_w);
                     let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);
                     let bar = Rect::from_min_max(
@@ -306,7 +306,11 @@ impl Widget for Tabs<'_> {
                         ),
                         pos2(inner.right() - px(&after, |r| &r.inset_right), bottom),
                     );
-                    shapes.push(Shape::rect_filled(bar, 0.0, c.gamma_multiply(bar_alpha)));
+                    shapes.extend(
+                        RecipeBox::resolve(&t, &after, st)
+                            .faded(bar_alpha)
+                            .shapes(ui.ctx(), bar),
+                    );
                 }
                 painter.extend(shapes);
                 let galley = galleys[i].clone();

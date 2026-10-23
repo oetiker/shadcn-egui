@@ -11,7 +11,7 @@
 use crate::components::shared::{
     interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
 };
-use crate::style::{pick, Paint, Prop, Recipe, State};
+use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
 
@@ -260,8 +260,6 @@ impl Widget for Slider<'_> {
             let track_painter = part_painter(ui, &[&track[..], &root[..]], st);
             let range_painter = part_painter(ui, &[&range[..], &track[..], &root[..]], st);
             let thumb_painter = part_painter(ui, &[&thumb[..], &root[..]], st);
-            let paint =
-                |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
 
             let track_rect = if vertical {
                 Rect::from_center_size(rect.center(), vec2(thickness, rect.height()))
@@ -277,10 +275,10 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
-            // The track's `overflow-hidden` rounds the range with it.
-            if let Some(fill) = paint(&range, |r| &r.bg) {
-                range_painter.rect_filled(range_rect, track_box.radius_on(track_rect), fill);
-            }
+            // The track's `overflow-hidden` rounds the range where they meet.
+            RecipeBox::resolve(&t, &range, st)
+                .clipped_by(&track_box, track_rect, range_rect)
+                .paint(&range_painter, range_rect);
 
             RecipeBox::resolve(&t, &thumb, st).paint(&thumb_painter, thumb_rect);
         }
