@@ -331,6 +331,13 @@ modal's `show` returns `XOutput<R>` with `response`, `inner` and
 `should_close()`, as egui's `ModalResponse`, in place of
 `Option<InnerResponse<R>>`. Anchored overlays keep (c).
 
+Consequence (rules, 2026-10-23, fix 5): The anchored overlay's `show` takes the
+`Ui` for context and layer, `Popover::new(&resp).show(ui, |ui| ..)`,
+and the modal's `Dialog::new(id_salt).show(ui, |ui| ..)` (axiom 4, one
+call rule). Return types are unchanged. A call that draws its own
+trigger is the mode constructor `X::from_trigger(impl IntoAtoms)` and
+returns `InnerResponse<Option<R>>`, as `menu_button`.
+
 ### D-10 · Return type of value shortcuts
 
 - **Case:** `checkbox` and `toggle` return `Response`; `select` and
@@ -654,6 +661,12 @@ Consequence (rules, 2026-10-19): Part types follow the same rule with
 upstream's part name (`TabsTrigger`, `SelectItem`); the sketched `Tab` item
 is `TabsTrigger`. Label's description part is upstream's FieldDescription
 and becomes `field_description` with the Field port.
+
+Consequence (rules, 2026-10-23, fix 5): Every part is a builder with a part
+type named by this rule (`CardTitle`, `CardFooter`), placed with
+`ui.add(..)` or `.show(ui, ..)`, and the part fn (`card_title`,
+`card_footer`) is its shortcut, which does exactly what one builder call
+does (axiom 4).
 
 ## Selection
 
@@ -993,6 +1006,14 @@ crate's dismissal, not `ModalResponse::should_close()` (D-117), so the
 output is a crate type that mirrors `ModalResponse`, with
 `#[must_use]`.
 
+Consequence (rules, 2026-10-23, fix 5): `show` takes `ui` in place of `ctx`
+(axiom 4; eframe 0.34 gives every app a `&mut Ui`). `should_close()`
+turns true only after the exit motion has run (P4: upstream animates
+the close), so the app keeps calling `show` until then and clears its
+flag on `should_close()` alone; content closes the modal with
+`ui.close()`, also on an Action click. This resolves fix 4's open
+question on the modal close animation.
+
 ### D-32 · Who owns non-overlay state
 
 - **Case:** besides overlays, components hold disclosure state (accordion,
@@ -1097,6 +1118,11 @@ as the accordion's `V`, is bound by egui's `SerializableAny`, which is
 `Clone + Send + Sync + 'static` and adds serde when egui's
 `persistence` feature is on (D-35).
 
+Consequence (rules, 2026-10-23, fix 5): Memory-owned state is temp (D-35), so a
+memory value of the caller's type is bound by `Clone + Send + Sync +
+'static` again, with no serde. This replaces the `SerializableAny`
+bound of the previous consequence.
+
 ### D-33 · Reading and driving memory-owned state; a trigger's `expanded`
 
 - **Case:** app code may need to query or set memory-owned state
@@ -1165,6 +1191,11 @@ the form of `CollapsingState`" without naming the members. `XState`
 serves code that reads or changes the state at run time; across
 restarts the binding or egui's persistence serves (D-35).
 
+Consequence (rules, 2026-10-23, fix 5): With persistence gone (D-35), `XState`
+serves code that reads or changes the state at run time only; an app
+that keeps a state across restarts saves and restores it through the
+binding.
+
 ### D-34 · Initial value of memory-owned state
 
 - **Case:** Memory-owned state (sidebar open, resizable layout, calendar
@@ -1207,6 +1238,9 @@ binding, while memory holds no value. This replaces the previous
 consequence. Setting both has no effect for the default, so it fails a
 `debug_assert!` (axiom 6).
 
+Consequence (rules, 2026-10-23, fix 5): The `debug_assert!` for a binding plus
+`.default_<state>` stays (axiom 6).
+
 ### D-35 · Persisting memory-owned state across restarts
 
 - **Case:** Upstream's sidebar keeps its open state in a cookie for 7 days
@@ -1243,6 +1277,19 @@ crate-defined values are stored as std types. A set binding wins over
 a restored value (D-34), so persistence acts only where nothing is
 bound. Upstream's opt-in `autoSaveId` (resizable) has no crate setter:
 the layout persists as egui's `Resize` does.
+
+Consequence (rules, 2026-10-23, fix 5): Reversed (maintainer, 2026-10-23, P4):
+restart persistence is behaviour, so nothing persists by default;
+memory-owned state is stored with `insert_temp`, also with egui's
+`persistence` feature on, and no type needs serde. Persistence exists
+only where upstream offers it as an opt-in, under axiom 1: resizable's
+`autoSaveId` becomes a setter that stores the layout (`Vec<f32>`) with
+`insert_persisted`. The setter exists only with the crate's
+`persistence` feature, which turns on egui's, so it never compiles
+without effect (axiom 6). The sidebar's cookie is no opt-in: upstream
+writes it, and the app reads it back and passes it as `open`
+(shadcn-svelte's `+layout.server.ts`), so in the crate the app keeps the
+flag through the binding.
 
 ## Overlay placement, dismissal and focus
 
@@ -1649,6 +1696,10 @@ text size and colour reach caller widgets through the content `Ui`;
 `leading-*` reaches crate-drawn text only and is ignored for caller content
 with a D-100 reason.
 
+Consequence (rules, 2026-10-23, fix 5): Container parts are builders with a
+shortcut (D-20); the part fn of this entry is the shortcut and returns
+what the builder's `show` returns.
+
 ### D-48 · Meaning of `action`, and how a secondary part's `Response` comes back
 
 - **Case:** `action` means a closure (card, alert), an icon button (sidebar
@@ -1782,6 +1833,12 @@ is conformance 4.3.
 
 Decision: (a), (c) for `field_error` — as recommended.
 
+Consequence (rules, 2026-10-23, fix 5): A passive part is a builder placed with
+`ui.add(..)` and its shortcut returns what that call returns, the
+`Response` (axiom 4). (c) for `field_error` cannot hold under it, since
+`Widget::ui` returns a `Response`: with no message the part allocates
+nothing and returns an empty `Response`.
+
 ### D-53 · How overlays and helpers take their trigger
 
 - **Case:** Overlay builders take `&Response`; `tooltip(resp, text)` takes
@@ -1809,6 +1866,15 @@ Consequence (rules, 2026-10-21): `collapsible_trigger(resp, &mut open)`
 makes the collapsible's binding required, which axiom 3 no longer
 allows (D-32); the collapsible's form is D-119's `CP-12-27`. Taking the
 trigger by `&Response` or by value is unchanged.
+
+Consequence (rules, 2026-10-23, fix 5): Overlay builders keep `&Response` in
+`new` and take the `Ui` in `show` (axiom 4). A shortcut on a caller's
+trigger takes the trigger in place of the `Ui`, as egui's `Response`
+methods do: `tooltip(resp, text)` by value, `context_menu(&resp, ..)`.
+`context_menu` keeps upstream's name as `checkbox` keeps egui's (P1):
+`Response::context_menu` stays callable and gives egui's menu, which
+the crate cannot prevent, so the build-ui skill lists such egui
+look-alikes (design, Stage 3).
 
 ### D-54 · Content form: text, closure, or both; leaf, container, or both
 
@@ -1865,6 +1931,11 @@ the root is a handle; otherwise the parts collapse into one widget.
 Input-otp's `children({cells})` snippet lets the caller place `Group`,
 `Slot` and `Separator`, so input-otp moves from (d) `.groups([3, 3])`
 to (b), a handle; the handle methods are for the family PR.
+
+Consequence (rules, 2026-10-23, fix 5): The handle stands in for the `Ui`: a part
+goes into it as into a `Ui` (`h.add(BreadcrumbLink::new(..))`,
+`AccordionItem::new(..).show(h, |ui| ..)`), and each handle method is
+that part's shortcut (axiom 4).
 
 ### D-56 · A crate widget restyled by its parent
 
@@ -2014,6 +2085,11 @@ handle (D-55), input-otp's root returns its output from `show(ui, |otp|
 
 Decision: (a) — as recommended. The mirrored-type exception is live: the
 crate `ScrollArea` (D-62 (a)) keeps egui's `show_rows`.
+
+Consequence (rules, 2026-10-23, fix 5): The verb is `show` and its first
+argument the `Ui` for every kind but the leaf, overlays and modals
+included (axiom 4, P3: egui's targets differ between `Popup::show`,
+`Modal::show` and `CollapsingHeader::show`).
 
 ### D-62 · Scroll areas: own type, theme only, or helper
 
@@ -2571,6 +2647,15 @@ enum, so its per-style form slot is an app variant, not an app size
 (D-73). The light and dark forms of a theme share its app variants; the
 API for the switch is open.
 
+Consequence (rules, 2026-10-23, fix 5): `X::app(name)` returns `AppVariant<X>`,
+`Theme::variant(app: AppVariant<V>, base: V, ..)` and `Theme::size`
+take it first, and `impl From<AppVariant<V>> for V` lets
+`.variant(DANGER)` compile, so a swapped pair does not (P5; P8:
+crate-wide). The light/dark switch is egui's (P2): a theme holds both
+palettes, `Theme::apply` installs both looks, and the crate follows
+`ctx.set_theme(ThemePreference)`, system mode included; both modes share
+the app variants. This replaces "the API for the switch is open".
+
 ## State flags and behaviour
 
 ### D-79 · `.enabled(bool)` on containers and overlays
@@ -2795,6 +2880,13 @@ navigation-menu viewport, carousel slides, sonner stack, shimmer text,
 scroller), with upstream's durations and easings, all honouring
 `style.animation_time == 0` as reduced motion; caret blink stays egui's.
 
+Consequence (rules, 2026-10-23, fix 5): (c) covers the dialog and its overlay
+too: upstream fades and zooms them out (`data-closed:fade-out-0
+zoom-out-95`, 100 ms in the style CSS), which the list above does not
+name; conformance 7 now lists them. An overlay runs its exit motion
+before it is gone, and a modal reports `should_close()` once it has run
+(D-31).
+
 ### D-89 · Accessibility roles egui's `WidgetType` lacks
 
 - **Case:** Egui's `WidgetType` has no switch, tab, menu, dialog, log or
@@ -2877,6 +2969,11 @@ first tier copies an egui name only for a counterpart that behaves as
 the egui function does; the crate tooltip has its own timer and popup,
 so a habitual `resp.on_hover_text(..)` would compile and silently give
 egui's tooltip. The menu shortcuts keep upstream's names as before.
+
+Consequence (rules, 2026-10-23, fix 5): A free function is only a shortcut for
+one builder call and does exactly what it does (axiom 4): every part
+has one, named after the part (D-20). The tooltip and context-menu
+shortcuts take the trigger in place of the `Ui` (D-53).
 
 ## Generator and recipes
 
@@ -3261,6 +3358,9 @@ upstream.
 
 Consequence (rules, 2026-10-21): The sub-menu state trade-off of D-32 is
 gone: sub-menus use Collapsible's memory form (D-32 Consequence).
+
+Consequence (rules, 2026-10-23, fix 5): The sidebar's cookie persistence is the
+app's, through the `.open(&mut bool)` binding (D-35).
 
 ### D-108 · `message-scroller`: very large; the follow-bottom subset
 
@@ -3648,6 +3748,11 @@ with upstream's default (Cancel `outline` and closing, Action
 `default`) and a part fn shortcut, `alert_dialog_cancel(ui, text)` and
 `alert_dialog_action(ui, text)`. Plain `Close` parts stay `ui.close()`.
 
+Consequence (rules, 2026-10-23, fix 5): The shell's `show` takes `ui` (D-31).
+`should_close()` turns true after the exit motion. `CP-11-12` holds:
+Action does not close by itself, so the demo's `onclick` close becomes
+`ui.close()` in the content (rules, Modal example).
+
 ### D-118 · F10 pickers (select, command)
 
 - **Case:** Choices that touch only select and command.
@@ -3726,6 +3831,9 @@ proposal). Under D-62 (a) F12 ports a real widget (the crate `ScrollArea`
 with its own bars, thumb drag, track click, hover widening) and moves
 select's list onto it; CP-14-29's skip still holds, and the PR checks that
 egui's keyboard scrolling keeps working under the hidden bars.
+
+Consequence (rules, 2026-10-23, fix 5): Resizable's `autoSaveId` is an opt-in
+setter behind the crate's `persistence` feature (D-35).
 
 ### D-121 · F13 paging (breadcrumb, pagination)
 
@@ -3835,6 +3943,12 @@ front; the handle's methods take upstream's part names (rules, Handle).
 Decision: deferred to the family PR (recommendation is the default
 proposal). The description colour is D-96's decision (svelte-sonner's
 literal); the narrow layout below 600 px is on by default (D-69).
+
+Consequence (rules, 2026-10-23, fix 5): Under the one call rule a toast is a
+builder, `Toast::new(text).show(ui) -> ToastId`, with the shortcut
+`toast(ui, text)`, and the toaster is `Toaster::new().show(ui)`,
+returning the events. A toast raised in eframe's `App::logic`, which has
+only a `&Context`, waits for the next `ui` pass (open question of fix 5).
 
 ### D-124 · F16 chat parts (bubble, message, attachment, marker)
 
