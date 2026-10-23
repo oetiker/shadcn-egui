@@ -56,11 +56,6 @@ impl<'a> Input<'a> {
         self.id_salt = Some(egui::Id::new(salt));
         self
     }
-    /// The former name of [`Input::id_salt`], for `'static` strings only.
-    #[deprecated(since = "0.5.0", note = "use id_salt")]
-    pub fn id_source(self, s: &'static str) -> Self {
-        self.id_salt(s)
-    }
     /// `false` draws the field disabled: no focus, no typing.
     pub fn enabled(mut self, yes: bool) -> Self {
         self.enabled = yes;

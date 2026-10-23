@@ -1364,7 +1364,7 @@ fn input_id_salt_takes_runtime_salts() {
 
 /// A string salt gives the field the id it had in 0.4, where `Input` passed
 /// the salt to egui's own `TextEdit::id_salt` inside a scope and
-/// `add_sized`; the deprecated `id_source` gives the same id.
+/// `add_sized`.
 #[test]
 fn input_id_salt_keeps_the_0_4_id() {
     use shadcn_egui::components::input::Input;
@@ -1386,10 +1386,7 @@ fn input_id_salt_keeps_the_0_4_id() {
         .id
     });
     let salted = id_of(&mut |ui| ui.add(Input::new(&mut text).id_salt("login-user")).id);
-    #[allow(deprecated)]
-    let sourced = id_of(&mut |ui| ui.add(Input::new(&mut text).id_source("login-user")).id);
     assert_eq!(salted, reference, "id_salt");
-    assert_eq!(sourced, reference, "id_source");
 }
 
 /// A badge takes any icon, also one borrowed from the theme for a moment.

@@ -24,6 +24,7 @@ are recorded here. The format is based on
 - `components::shared::interaction_state` no longer takes an `enabled` argument: it reads the disabled state from the widget's `Ui`. Apps that paint their own clickable parts call `pressable(&mut response, ActivationKeys::..)` for focus on press and the element's own keys, and use `text_entry_state` for a field that takes typed text.
 - A mouse or touch press now focuses buttons, checkboxes, switches, slider thumbs, tab triggers and the select trigger without showing a focus ring, as the browser does; the ring shows only after the focus moved by keyboard, while an input shows it on any focus.
 - Keys act as on shadcn's elements: Space clicks a button when released, Enter no longer toggles a checkbox, Enter and Space no longer move a focused slider to the mouse pointer, and pressing a tab selects it on the press.
+- `Input::id_source` is removed; use `Input::id_salt`, which takes the same string.
 
 ### Fixed
 - Shadows now match the browser: popovers, select lists, dialogs, cards, tabs and controls draw every layer of their Tailwind shadow with its negative spread and the browser's soft blur. Before, a maia popover's shadow stuck out 12 px too far on each side, and the other styles' overlay shadows had a hard, short edge and lacked their second layer.
