@@ -167,11 +167,11 @@ const BREAKPOINT_SM: f32 = 640.0; // behaviour-ok: Tailwind default --breakpoint
 /// Tailwind's `md` breakpoint (48rem).
 const BREAKPOINT_MD: f32 = 768.0; // behaviour-ok: Tailwind default --breakpoint-md
 
-/// The breakpoint helper for media queries (`sm:`, `md:`, `@media (width
-/// >= N)`): whether the window is at least `px` points wide. It reads what
-/// a media query reads, the whole viewport (`Context::viewport_rect`),
-/// safe-area insets included. Upstream's breakpoints are `min-width`
-/// queries, so the boundary counts as wide.
+/// The breakpoint helper for media queries (`sm:`, `md:`,
+/// `@media (width >= N)`): whether the window is at least `px` points
+/// wide. It reads what a media query reads, the whole viewport
+/// (`Context::viewport_rect`), safe-area insets included. Upstream's
+/// breakpoints are `min-width` queries, so the boundary counts as wide.
 #[must_use]
 pub fn window_at_least(ctx: &egui::Context, px: f32) -> bool {
     ctx.viewport_rect().width() >= px
