@@ -43,7 +43,9 @@
 //! A rule's rank packs these into one `u128`, compared as an integer:
 //! [`R_IMPORTANT`] (bit 127) for an `!important` class,
 //! [`R_PSEUDO_ELEMENT`] (bit 126) for a pseudo-element, the class steps
-//! (`2 * classes - earlier`) in bits [`R_CLASSES`]`..126`, and the OR of
+//! (`2 * classes + elements - earlier`: an element selector such as
+//! `has-[>svg]` adds a half step, [`Spec::elements`]) in bits
+//! [`R_CLASSES`]`..126`, and the OR of
 //! `1u128 << bit` over the variants below [`R_CLASSES`], so variants have at
 //! most [`R_CLASSES`] distinct bits. Targets add no variant bit.
 

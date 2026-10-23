@@ -266,8 +266,8 @@ impl Theme {
     }
 
     /// The component state `s` plus this theme's [`State::DARK`], and the
-    /// `sm:` and `md:` flags of the window `ctx` draws
-    /// ([`crate::layout::breakpoints`]).
+    /// `sm:` flag (the window is at least 640 points wide) and `md:` flag
+    /// (768 points), as [`crate::layout::window_at_least`] tests them.
     pub fn state(&self, ctx: &egui::Context, s: State) -> State {
         s.with(State::DARK, self.dark)
             .or(crate::layout::breakpoints(ctx))

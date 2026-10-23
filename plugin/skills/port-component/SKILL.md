@@ -87,8 +87,8 @@ drawing code holds no style value of its own.
    pass). Use the `shadcn_egui::layout` helpers, no `available_width()`
    arithmetic; a breakpoint reads the window through
    `layout::window_at_least` (`sm:`, `md:`; `theme.state` sets `SM` and
-   `MD`) or its container through `layout::wider_than`. Resolve geometry without interaction states: the size does not
-   change on hover.
+   `MD`) or its container through `layout::container_at_least`. Resolve
+   geometry without interaction states: the size does not change on hover.
 7. **Context.** The widget API takes whatever context the recipe conditions
    need: icon side (`ICON_START`, `ICON_END`), size variant (`SIZE_SM`),
    orientation, enclosing slot (`IN_BUTTON_GROUP`).

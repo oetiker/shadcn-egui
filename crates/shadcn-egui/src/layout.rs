@@ -6,7 +6,8 @@ use crate::Theme;
 use egui::Ui;
 use egui_extras::{Size, StripBuilder};
 
-/// A row height change below this is float noise, not a reason to redo a pass.
+/// A row height or stack width change below this is float noise, not a
+/// reason to redo a pass.
 const ROW_HEIGHT_EPSILON: f32 = 0.01; // behaviour-ok: float tolerance, not a design token
 
 /// Horizontal stack with an explicit gap (flex-direction: row; gap: N;
@@ -101,7 +102,8 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// Horizontal stack that wraps onto further lines when it runs out of width
 /// (flex-direction: row; flex-wrap: wrap; gap: N). The gap applies both between
-/// items on a line and between wrapped lines.
+/// items on a line and between wrapped lines. A [`vstack`] item wraps as a
+/// whole, as a flex item does.
 pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
@@ -111,12 +113,44 @@ pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 }
 
 /// Vertical stack with an explicit gap (flex-direction: column; gap: N).
+///
+/// As an item of a [`wrap_row`] it behaves as a flex item: its text takes
+/// its widest, unwrapped width, and the stack starts a new line when that
+/// width does not fit the rest of the line. egui wraps only an item whose
+/// size it knows before the item draws, so the stack takes its width from
+/// the previous pass and redoes a pass when it changes. Alone on a line too
+/// narrow for it, its text wraps (flex-shrink).
 pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
-    ui.vertical(|ui| {
+    if !ui.layout().main_wrap() {
+        return ui
+            .vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = gap;
+                add(ui)
+            })
+            .inner;
+    }
+    let id = ui.next_auto_id().with("shadcn_egui::layout::vstack");
+    let stored = ui.data(|d| d.get_temp::<f32>(id));
+    let line_start = ui.cursor().min.x <= ui.max_rect().min.x;
+    if !line_start && stored.is_some_and(|w| w > ui.available_size_before_wrap().x) {
+        ui.end_row();
+    }
+    let fits = stored.is_none_or(|w| w <= ui.available_size_before_wrap().x);
+    let response = ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
+        if fits {
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        }
         add(ui)
-    })
-    .inner
+    });
+    // Only an unwrapped pass measures the stack's own width.
+    let width = response.response.rect.width();
+    if fits && stored.is_none_or(|w| (w - width).abs() > ROW_HEIGHT_EPSILON) {
+        ui.data_mut(|d| d.insert_temp(id, width));
+        ui.ctx()
+            .request_discard("layout::vstack width changed in a wrap_row");
+    }
+    response.inner
 }
 
 /// Tailwind's `sm` breakpoint (40rem).
@@ -125,18 +159,22 @@ const BREAKPOINT_SM: f32 = 640.0; // behaviour-ok: Tailwind default --breakpoint
 const BREAKPOINT_MD: f32 = 768.0; // behaviour-ok: Tailwind default --breakpoint-md
 
 /// The breakpoint helper for media queries (`sm:`, `md:`, `@media (width
-/// >= N)`): whether the window is at least `px` wide. Upstream's
-/// breakpoints are `min-width` queries, so the boundary counts as wide.
+/// >= N)`): whether the window is at least `px` points wide. It reads what
+/// a media query reads, the whole viewport (`Context::viewport_rect`),
+/// safe-area insets included. Upstream's breakpoints are `min-width`
+/// queries, so the boundary counts as wide.
+#[must_use]
 pub fn window_at_least(ctx: &egui::Context, px: f32) -> bool {
-    ctx.content_rect().width() >= px
+    ctx.viewport_rect().width() >= px
 }
 
 /// The breakpoint helper for container queries (`@md/field-group`,
 /// `@container (width >= N)`): whether the width `ui` has left is at
-/// least `px`. With [`window_at_least`], the one written-down exception to
-/// single-pass sizing: a widget reads its room here, never with arithmetic
-/// of its own.
-pub fn wider_than(ui: &Ui, px: f32) -> bool {
+/// least `px` points; the boundary counts as wide. With
+/// [`window_at_least`], the one written-down exception to single-pass
+/// sizing: a widget reads its room here, never with arithmetic of its own.
+#[must_use]
+pub fn container_at_least(ui: &Ui, px: f32) -> bool {
     ui.available_width() >= px
 }
 
@@ -146,7 +184,8 @@ pub fn wider_than(ui: &Ui, px: f32) -> bool {
 ///
 /// [`State::SM`]: crate::style::State::SM
 /// [`State::MD`]: crate::style::State::MD
-pub fn breakpoints(ctx: &egui::Context) -> crate::style::State {
+#[must_use]
+pub(crate) fn breakpoints(ctx: &egui::Context) -> crate::style::State {
     use crate::style::State;
     State::NONE
         .with(State::SM, window_at_least(ctx, BREAKPOINT_SM))

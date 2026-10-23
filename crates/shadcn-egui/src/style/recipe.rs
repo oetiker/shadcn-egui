@@ -75,7 +75,7 @@ impl State {
     pub const NOT_FIRST: State = State(1 << 29);
     /// A group child that is not the last (`:not(:last-child)`).
     pub const NOT_LAST: State = State(1 << 30);
-    /// `sm:` (the window is at least 640 px wide; `layout::breakpoints`)
+    /// `sm:` (the window is at least 640 px wide; `Theme::state` sets it)
     pub const SM: State = State(1 << 31);
     /// `md:` (the window is at least 768 px wide)
     pub const MD: State = State(1 << 32);

@@ -7,7 +7,7 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
-- Components follow the window width as shadcn's `sm:` (640 px) and `md:` (768 px) breakpoints do: below 768 px an input's text is 16 px instead of 14 px, and below 640 px a dialog spans the window less a 16 px margin on each side. `layout::window_at_least`, `layout::wider_than` and `layout::breakpoints` give an app the same checks.
+- Components follow the window width as shadcn's `sm:` (640 px) and `md:` (768 px) breakpoints do: below 768 px an input's text is 16 px instead of 14 px, and below 640 px a dialog spans the window less a 16 px margin on each side. `layout::window_at_least` gives an app the same check on the window width, and `layout::container_at_least` on the width left in its `Ui`.
 
 ### Changed
 - Every icon library now supplies a plain down chevron, up, left and right chevrons and a three-dot icon to `Theme::icons`, as upstream's components use them. The Select trigger icon moved from `chevron_down` to `select_trigger`, and an app builds its own icon set from `IconSlots::all(icon)` instead of listing every slot, so later slots do not break it.
@@ -18,6 +18,7 @@ are recorded here. The format is based on
 
 ### Fixed
 - A checked checkbox with keyboard focus now shows the focus border instead of the checked border, as shadcn does; so does a checked switch in the styles that give it a checked border.
+- A `layout::vstack` inside a `layout::wrap_row` now moves to the next line as a whole when it does not fit, as a flex item does, instead of running past the right edge.
 - In the luma and rhea styles, an invalid switch that is checked now shows the red invalid border instead of the checked border, as shadcn does.
 
 ## 0.6.0 - 2026-10-17

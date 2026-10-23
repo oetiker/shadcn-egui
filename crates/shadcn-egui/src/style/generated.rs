@@ -169,16 +169,10 @@ pub struct Style {
     pub progress_indicator: Box<Recipe>,
     /// `cn-alert`
     pub alert: Box<Recipe>,
-    /// `cn-alert` `after:` pseudo-element
-    pub alert_after: Box<Recipe>,
     /// `cn-alert-variant-default`
     pub alert_variant_default: Box<Recipe>,
-    /// `cn-alert-variant-default` `after:` pseudo-element
-    pub alert_variant_default_after: Box<Recipe>,
     /// `cn-alert-variant-destructive`
     pub alert_variant_destructive: Box<Recipe>,
-    /// `cn-alert-variant-destructive` `after:` pseudo-element
-    pub alert_variant_destructive_after: Box<Recipe>,
     /// `cn-alert-title`
     pub alert_title: Box<Recipe>,
     /// `cn-alert-description`

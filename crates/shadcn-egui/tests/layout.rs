@@ -124,6 +124,42 @@ fn wrap_row_wraps_when_out_of_width() {
     assert_eq!(r[1].left() - r[0].right(), 8.0, "horizontal gap");
 }
 
+/// `vstack` items of a `wrap_row` wrap as a whole, as flex items: each
+/// keeps its unwrapped width, and one that does not fit the rest of the
+/// line starts the next line. Under both app loops: the stack redoes a pass
+/// to learn its width.
+#[test]
+fn vstack_items_wrap_in_a_wrap_row() {
+    for app_loop in common::Loop::BOTH {
+        let ctx = egui::Context::default();
+        let mut rects = Vec::new();
+        for _ in 0..3 {
+            rects.clear();
+            let _ = common::pass(app_loop, &ctx, vec![], |ui| {
+                rects.clear();
+                ui.set_max_width(300.0);
+                layout::wrap_row(ui, 8.0, |ui| {
+                    for _ in 0..4 {
+                        let r = layout::vstack(ui, 4.0, |ui| ui.label("a long unbroken name").rect);
+                        rects.push(r);
+                    }
+                });
+            });
+        }
+        let one_line = rects[0].height();
+        assert!(
+            rects.iter().all(|r| r.height() == one_line),
+            "{app_loop:?}: no label wraps: {rects:?}"
+        );
+        assert!(
+            rects.iter().all(|r| r.right() <= 300.0),
+            "{app_loop:?}: none overflows: {rects:?}"
+        );
+        let lines = rects.iter().filter(|r| r.top() > rects[0].top()).count();
+        assert!(lines > 0, "{app_loop:?}: some items wrap: {rects:?}");
+    }
+}
+
 /// The vertical centres of a row and its children (a label, then a button
 /// `tall`er or shorter than egui's row height), after the row has settled.
 fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32) {
