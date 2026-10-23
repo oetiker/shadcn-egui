@@ -28,7 +28,7 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    interaction_state, line_box, opacity, part_painter, RecipeBox,
+    interaction_state, line_box, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
     DEFAULT_SIDE_OFFSET,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
@@ -180,6 +180,8 @@ impl Widget for Select<'_> {
             ui.make_persistent_id(("shadcn_select", self.id)),
             sense,
         );
+        // bits' trigger opens on Enter and Space, both on press.
+        pressable(&mut resp, ActivationKeys::EnterAndSpace);
         let popup_id = Popup::default_response_id(&resp);
         let hl_id = popup_id.with("highlight");
         let was_open = Popup::is_id_open(&ctx, popup_id);
@@ -280,7 +282,13 @@ impl Widget for Select<'_> {
         let open = Popup::is_id_open(&ctx, popup_id) && enabled;
 
         // The trigger.
-        let st = interaction_state(&t, &resp, enabled, context.with(State::EXPANDED, open));
+        let st = interaction_state(
+            &t,
+            &resp,
+            context
+                .with(State::EXPANDED, open)
+                .with(State::DISABLED, !enabled),
+        );
         if ui.is_rect_visible(rect) {
             let painter = part_painter(ui, &[&trig[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
@@ -350,7 +358,7 @@ impl Widget for Select<'_> {
                 ],
                 gs,
             );
-            let panel = RecipeBox::resolve(&t, &l, gs).faded(alpha);
+            let panel = RecipeBox::resolve(t, &l, gs).faded(alpha);
             let frame = panel.frame(Margin {
                 top: gpt.round() as i8,
                 right: gpr.round() as i8,
@@ -430,7 +438,7 @@ impl Widget for Select<'_> {
                                 if ui.is_rect_visible(row) {
                                     // The row's text and indicator sit in the row.
                                     let painter = part_painter(ui, &[&item[..]], s);
-                                    RecipeBox::resolve(&t, &item, s).paint(&painter, row);
+                                    RecipeBox::resolve(t, &item, s).paint(&painter, row);
                                     // The row's own text colour serves tick and text alike.
                                     let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
                                     let color = pick(&item, |r| &r.text, s)

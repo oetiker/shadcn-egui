@@ -2,7 +2,10 @@
 
 use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, TextSize};
 use crate::Theme;
-use egui::{Color32, CornerRadius, Painter, Rect, Response, Shape, Stroke, Ui};
+use egui::{
+    Color32, Context, CornerRadius, Id, Key, Painter, PointerButton, Rect, Response, Shape, Stroke,
+    Ui,
+};
 
 /// CSS's initial `opacity`.
 const INITIAL_OPACITY: f32 = 1.0; // behaviour-ok: CSS initial value of opacity
@@ -39,7 +42,10 @@ fn opacity_without_fade(ui: &Ui) -> f32 {
 /// with no such rule stays opaque in a disabled `Ui`, as in a disabled
 /// `<fieldset>` (conformance 2.2).
 pub fn part_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
-    let s = s.with(State::DISABLED, s.contains(State::DISABLED) || !ui.is_enabled());
+    let s = s.with(
+        State::DISABLED,
+        s.contains(State::DISABLED) || !ui.is_enabled(),
+    );
     opacity_without_fade(ui) * opacity(chain, s)
 }
 
@@ -91,7 +97,14 @@ pub fn content_ui<R>(
     s: State,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    let opacity = ui.opacity() * opacity(chain, s.with(State::DISABLED, s.contains(State::DISABLED) || !ui.is_enabled()));
+    let opacity = ui.opacity()
+        * opacity(
+            chain,
+            s.with(
+                State::DISABLED,
+                s.contains(State::DISABLED) || !ui.is_enabled(),
+            ),
+        );
     with_opacity(ui, opacity, add)
 }
 
@@ -282,7 +295,11 @@ impl RecipeBox {
         if let Some(fill) = self.fill {
             if self.clip_padding && t + r + b + l > 0.0 {
                 let inner = padding_box(rect, self.borders);
-                out.push(Shape::rect_filled(inner, inner_radius(radius, self.borders), fill));
+                out.push(Shape::rect_filled(
+                    inner,
+                    inner_radius(radius, self.borders),
+                    fill,
+                ));
             } else {
                 out.push(Shape::rect_filled(rect, radius, fill));
             }
@@ -296,8 +313,14 @@ impl RecipeBox {
             ));
         } else if t + r + b + l > 0.0 && self.border_color.a() > 0 {
             // Sides of unequal width: the border box minus the padding box.
-            let mesh = tessellate(ctx, &egui::epaint::RectShape::filled(rect, radius, self.border_color));
-            let hole = rounded_polygon(padding_box(rect, self.borders), inner_radius(radius, self.borders));
+            let mesh = tessellate(
+                ctx,
+                &egui::epaint::RectShape::filled(rect, radius, self.border_color),
+            );
+            let hole = rounded_polygon(
+                padding_box(rect, self.borders),
+                inner_radius(radius, self.borders),
+            );
             out.push(Shape::mesh(clip_outside(&mesh, &hole)));
         }
         out.extend(outside_stroke(self.outline, rect, radius));
@@ -354,7 +377,10 @@ impl RecipeBox {
     fn shadow_shape(&self, ctx: &egui::Context, rect: Rect, radius: CornerRadius) -> Option<Shape> {
         let s = self.shadow?;
         let mesh = tessellate(ctx, &s.as_shape(rect, radius));
-        Some(Shape::mesh(clip_outside(&mesh, &rounded_polygon(rect, radius))))
+        Some(Shape::mesh(clip_outside(
+            &mesh,
+            &rounded_polygon(rect, radius),
+        )))
     }
 }
 
@@ -439,7 +465,7 @@ fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
             out.add_triangle(base, base + k, base + k + 1);
         }
     };
-    for tri in mesh.indices.chunks_exact(3) {
+    for tri in mesh.indices.as_chunks::<3>().0 {
         let mut inside: Vec<Vertex> = tri.iter().map(|&i| mesh.vertices[i as usize]).collect();
         // Wholly outside one edge: keep it as it is.
         if (0..n).any(|e| inside.iter().all(|v| side(e, v.pos) <= 0.0)) {
@@ -483,28 +509,149 @@ pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
     rect.translate(egui::vec2(d(x, rect.width()), d(y, rect.height())))
 }
 
+/// Which keys activate a focused widget: those of upstream's element
+/// (conformance 4.1). egui fakes a click for Space and Enter on any focused
+/// clickable widget; [`pressable`] replaces that with these.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActivationKeys {
+    /// A native `<button>`: Enter clicks on press, Space on release, and
+    /// the held Space shows `ACTIVE`.
+    Button,
+    /// Enter and Space both click on press: bits switch and tab trigger.
+    EnterAndSpace,
+    /// Space clicks on press, Enter does nothing: bits checkbox.
+    Space,
+    /// Enter clicks on press: an `<a>`, a link look.
+    Enter,
+    /// No key clicks: a slider thumb, whose keys are its own.
+    None,
+}
+
+fn modality_id() -> Id {
+    Id::new("shadcn_egui::focus_modality")
+}
+
+fn space_id() -> Id {
+    Id::new("shadcn_egui::space_down_on")
+}
+
+/// Whether focus last moved by keyboard, as the browser tracks it for
+/// `:focus-visible` (conformance 2.6), crate-wide. The last key or pointer
+/// press decides; a focus move the crate makes in answer to a press (an
+/// overlay opened by click) keeps the press's modality, as the browser
+/// keeps it for a scripted `focus()`. It starts as keyboard, as a page that
+/// has seen no input shows a ring on a scripted focus.
+pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
+    let pass = ctx.cumulative_pass_nr();
+    let (seen, keyboard) = ctx
+        .data(|d| d.get_temp::<(u64, bool)>(modality_id()))
+        .unwrap_or((u64::MAX, true));
+    if seen == pass {
+        return keyboard;
+    }
+    // The raw events: a widget may have consumed the key already.
+    let last = ctx.input(|i| {
+        i.raw.events.iter().rev().find_map(|e| match e {
+            egui::Event::Key { pressed: true, .. } => Some(true),
+            egui::Event::PointerButton { pressed: true, .. } => Some(false),
+            _ => None,
+        })
+    });
+    let keyboard = last.unwrap_or(keyboard);
+    ctx.data_mut(|d| d.insert_temp(modality_id(), (pass, keyboard)));
+    keyboard
+}
+
+/// Make `resp` act on press and keys as upstream's element: a pointer
+/// press focuses it, as the browser focuses a button, a tab trigger or a
+/// slider thumb on press, without a ring (conformance 2.6, 4.1); and
+/// `clicked()` fires for `keys` only. Call it right after the interaction,
+/// before reading `clicked()`. A disabled or non-clicking `resp` is left
+/// as it is.
+pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
+    if !resp.enabled() || !resp.sense.senses_click() {
+        return;
+    }
+    let ctx = resp.ctx.clone();
+    // A press and its release in one pass leave no press down, only a click.
+    let pressed_on = resp.is_pointer_button_down_on() || resp.clicked_by(PointerButton::Primary);
+    if pressed_on && ctx.input(|i| i.pointer.any_pressed()) && !resp.has_focus() {
+        resp.request_focus();
+    }
+    let focused = resp.has_focus();
+    let (enter, space_down, space_up, access) = ctx.input(|i| {
+        (
+            i.key_pressed(Key::Enter),
+            i.key_pressed(Key::Space),
+            i.key_released(Key::Space),
+            i.has_accesskit_action_request(resp.id, egui::accesskit::Action::Click),
+        )
+    });
+    let held = ctx.data(|d| d.get_temp::<Id>(space_id())) == Some(resp.id);
+    let mut click = false;
+    if focused {
+        click = match keys {
+            ActivationKeys::Button => enter || (space_up && (held || space_down)),
+            ActivationKeys::EnterAndSpace => enter || space_down,
+            ActivationKeys::Space => space_down,
+            ActivationKeys::Enter => enter,
+            ActivationKeys::None => false,
+        };
+    }
+    // The held Space of a `<button>`: `ACTIVE` until it comes up or focus
+    // leaves, a click only if it comes up on the focused button.
+    if keys == ActivationKeys::Button && focused && space_down && !space_up {
+        ctx.data_mut(|d| d.insert_temp(space_id(), resp.id));
+    } else if held && (space_up || !focused) {
+        ctx.data_mut(|d| d.remove::<Id>(space_id()));
+    }
+    resp.flags
+        .set(egui::response::Flags::FAKE_PRIMARY_CLICKED, click || access);
+}
+
 /// A widget's [`State`] for one paint: `context` (variant, icon side, …),
-/// what pointer and keyboard do to `resp`, and the theme's `DARK`. Keyboard
-/// focus is `FOCUS_VISIBLE`: egui focuses a widget by Tab or code, never by
-/// click. A disabled widget (`enabled` false, or a disabled `Ui`) gets
+/// what pointer and keyboard do to `resp`, and the theme's `DARK`. `FOCUS`
+/// is set while `resp` has focus; `FOCUS_VISIBLE` too where the browser's
+/// `:focus-visible` would match: focus moved by keyboard, not by a pointer
+/// press (crate-wide modality, conformance 2.6). A held Space on a
+/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`, or
+/// `DISABLED` in `context` for a widget's own `enabled` flag) gets
 /// `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`, even if
-/// `context` has them: shadcn's `disabled:pointer-events-none`. A composite
-/// widget passes the response of its focusable inner part (a select's
-/// trigger, a slider's thumb), so focus and press are read where they happen.
-pub fn interaction_state(theme: &Theme, resp: &Response, enabled: bool, context: State) -> State {
-    let live = enabled && resp.enabled();
+/// `context` has them: shadcn's `disabled:pointer-events-none`. A
+/// composite widget passes the response of its focusable inner part (a
+/// select's trigger, a slider's thumb), so focus and press are read where
+/// they happen. For a widget that takes typed text use [`text_entry_state`].
+pub fn interaction_state(theme: &Theme, resp: &Response, context: State) -> State {
+    state_of(theme, resp, context, focus_modality_keyboard(&resp.ctx))
+}
+
+/// [`interaction_state`] for a widget that takes typed text (input,
+/// textarea): the browser's `:focus-visible` matches it whenever it has
+/// focus, after a pointer press too.
+pub fn text_entry_state(theme: &Theme, resp: &Response, context: State) -> State {
+    state_of(theme, resp, context, true)
+}
+
+fn state_of(theme: &Theme, resp: &Response, context: State, keyboard: bool) -> State {
+    let live = resp.enabled() && !context.contains(State::DISABLED);
     let pointer_and_focus = State::HOVER | State::ACTIVE | State::FOCUS | State::FOCUS_VISIBLE;
     let context = if live {
         context
     } else {
         context.without(pointer_and_focus)
     };
+    let focused = live && resp.has_focus();
+    let space_held = resp.ctx.data(|d| d.get_temp::<Id>(space_id())) == Some(resp.id);
     theme.state(
         &resp.ctx,
         context
             .with(State::HOVER, live && resp.hovered())
-            .with(State::ACTIVE, live && resp.is_pointer_button_down_on())
-            .with(State::FOCUS_VISIBLE, live && resp.has_focus())
+            .with(
+                State::ACTIVE,
+                live && (resp.is_pointer_button_down_on() || focused && space_held),
+            )
+            .with(State::FOCUS, context.contains(State::FOCUS) || focused)
+            .with(State::FOCUS_VISIBLE, focused && keyboard)
             .with(State::DISABLED, !live),
     )
 }
@@ -526,7 +673,9 @@ mod tests {
 
     fn area(mesh: &egui::Mesh) -> f32 {
         mesh.indices
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|t| {
                 let [a, b, c] = [0, 1, 2].map(|k| mesh.vertices[t[k] as usize].pos);
                 ((b - a).x * (c - a).y - (b - a).y * (c - a).x).abs() / 2.0
@@ -626,7 +775,7 @@ mod tests {
             .collect();
         assert_eq!(meshes.len(), 1);
         let padding_box = Rect::from_min_max(egui::pos2(0.0, 1.0), egui::pos2(19.0, 9.0));
-        for t in meshes[0].indices.chunks_exact(3) {
+        for t in meshes[0].indices.as_chunks::<3>().0 {
             let c = t
                 .iter()
                 .map(|&i| meshes[0].vertices[i as usize].pos.to_vec2())

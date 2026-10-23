@@ -1,13 +1,13 @@
 //! shadcn Tabs, ported from shadcn-svelte `ui/tabs/*.svelte` at
 //! `tools/stylegen/PIN`. Every value comes from the style's `cn-tabs-list`,
 //! `cn-tabs-list-variant-*`, `cn-tabs-trigger` recipes and the trigger's
-//! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a click selects,
+//! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a press focuses and selects,
 //! Left/Right move the selection (and wrap), Home/End jump to the first/last
 //! tab (automatic activation). The list is one Tab stop, on the selected
 //! trigger (roving focus).
 
 use crate::components::shared::{
-    interaction_state, line_box, opacity, part_painter, RecipeBox,
+    interaction_state, line_box, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -202,18 +202,20 @@ impl Widget for Tabs<'_> {
                 } else {
                     Sense::CLICK
                 };
-                ui.interact(*r, *id, sense)
+                let mut resp = ui.interact(*r, *id, sense);
+                pressable(&mut resp, ActivationKeys::EnterAndSpace);
+                resp
             })
             .collect();
 
-        // Selection: a click, or the arrow/Home/End keys on a focused trigger.
-        // Only a key moves the focus along: focus is what shows the ring,
-        // and a click must not show it.
+        // Selection: a click, focus (bits' automatic activation, so a press
+        // selects as it focuses), or the arrow/Home/End keys on a focused
+        // trigger, which move the focus along.
         let mut next = None;
         let mut by_key = false;
         if enabled {
             for (i, r) in resps.iter().enumerate() {
-                if r.clicked() {
+                if r.clicked() || r.gained_focus() {
                     next = Some(i);
                 }
                 if r.has_focus() {
@@ -280,7 +282,7 @@ impl Widget for Tabs<'_> {
                 let context = State::HORIZONTAL
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
-                let st = interaction_state(&t, r, enabled, context);
+                let st = interaction_state(&t, r, context.with(State::DISABLED, !enabled));
                 let painter = part_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
                 let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.paint(p))

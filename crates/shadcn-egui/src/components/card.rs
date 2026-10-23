@@ -23,8 +23,8 @@ use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
 use egui::{
-    Align, Id, Layout, Rect, Response, RichText, Sense, Shape, Ui, UiBuilder,
-    WidgetInfo, WidgetType,
+    Align, Id, Layout, Rect, Response, RichText, Sense, Shape, Ui, UiBuilder, WidgetInfo,
+    WidgetType,
 };
 
 /// `data-size` of a card: `default` or `sm`.
@@ -202,7 +202,10 @@ impl<'a> Card<'a> {
         let outer = Rect::from_min_max(origin, egui::pos2(origin.x + outer_w, card_bottom));
 
         // Paint behind the sections: the card's box, then the footer strip.
-        painter.set(back, Shape::Vec(RecipeBox::resolve(&t, &card, st).shapes(ui.ctx(), outer)));
+        painter.set(
+            back,
+            Shape::Vec(RecipeBox::resolve(&t, &card, st).shapes(ui.ctx(), outer)),
+        );
         if let Some((idx, top, bottom)) = footer_shapes {
             let strip = Rect::from_min_max(
                 egui::pos2(outer.left(), top),

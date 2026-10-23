@@ -5,7 +5,7 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{
-    interaction_state, line_box, shift, part_painter, RecipeBox,
+    interaction_state, line_box, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
 use crate::theme::family_for;
@@ -234,7 +234,8 @@ impl Widget for Button {
         } else {
             Sense::hover()
         };
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), sense);
+        let (rect, mut resp) = ui.allocate_exact_size(Vec2::new(width, height), sense);
+        pressable(&mut resp, ActivationKeys::Button);
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
         });
@@ -242,7 +243,7 @@ impl Widget for Button {
             return resp;
         }
 
-        let st = interaction_state(&t, &resp, enabled, context);
+        let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
         let painter = part_painter(ui, &[l], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour

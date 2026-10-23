@@ -104,16 +104,26 @@ drawing code holds no style value of its own.
     the user's consent (below).
 
 ```rust
-use shadcn_egui::components::shared::interaction_state;
+use shadcn_egui::components::shared::{
+    interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
+};
 use shadcn_egui::style::{pick, State};
 use shadcn_egui::Theme;
 
-/// The height of a small button, resolved the way `Button` does it.
-fn button_height(ui: &egui::Ui, resp: &egui::Response) -> f32 {
+/// A small square button: geometry, press, keys, state and box the way
+/// `Button` does them.
+fn small_button(ui: &mut egui::Ui) -> egui::Response {
     let theme = Theme::current(ui.ctx());
     let s = &theme.style;
-    let st = interaction_state(&theme, resp, true, State::default());
-    pick(&[&*s.button, &*s.button_size_sm], |r| &r.height, st).unwrap_or(0.0)
+    let layers = [&*s.button, &*s.button_size_sm];
+    // Geometry never depends on interaction.
+    let geometry = theme.state(ui.ctx(), State::NONE);
+    let side = pick(&layers, |r| &r.height, geometry).unwrap_or(0.0);
+    let (rect, mut resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
+    pressable(&mut resp, ActivationKeys::Button);
+    let st = interaction_state(&theme, &resp, State::NONE);
+    RecipeBox::resolve(&theme, &layers, st).paint(&part_painter(ui, &[&layers[..]], st), rect);
+    resp
 }
 ```
 
@@ -147,27 +157,34 @@ back, Right and Down forward) whatever its orientation.
 ## Interaction states
 
 - One shared helper,
-  `shadcn_egui::components::shared::interaction_state(&theme, &resp, enabled, context)`,
+  `shadcn_egui::components::shared::interaction_state(&theme, &resp, context)`,
   turns a `Response` into a `State`: the context flags, `HOVER`, `ACTIVE`,
-  keyboard focus as `FOCUS_VISIBLE`, and `DARK`. Do not re-derive it per
-  component, or components will disagree.
-- A disabled widget never gets `HOVER`, `ACTIVE` or `FOCUS_VISIBLE`. It gets
-  `DISABLED` only.
-- A disabled part fades by its recipe's `opacity` (`disabled:opacity-50`):
+  `FOCUS` while focused, `FOCUS_VISIBLE` where the browser's
+  `:focus-visible` would match (focus moved by keyboard, tracked
+  crate-wide), and `DARK`. A widget that takes typed text uses
+  `text_entry_state`, which shows the ring after a pointer focus too. Do
+  not re-derive either per component, or components will disagree.
+- Call `shared::pressable(&mut resp, keys)` right after the interaction of
+  anything clickable: a pointer press then focuses it without a ring, as
+  the browser does, and `clicked()` fires on the element's own keys
+  (`ActivationKeys::Button` for a `<button>`: Enter on press, Space on
+  release; `EnterAndSpace`, `Space` or `Enter` for a bits primitive or a
+  link; `None` for a slider thumb).
+- Disabled state comes from the `Ui`; a widget with its own `enabled` flag
+  adds `DISABLED` to the context. A disabled widget never gets `HOVER`,
+  `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`. It gets `DISABLED` only.
+- A part fades by its recipe's `opacity` (`disabled:opacity-50`):
   `shared::opacity(&[part_stack, parent_stack], state)` multiplies the
-  values down the part tree as CSS does, and
-  `shared::style_painter(ui, &[part_stack, parent_stack], state)` returns the
-  painter faded by it. In a disabled `Ui` egui has faded every shape once
-  already. There `style_painter` (and `shared::ui_opacity`, the bare value)
-  takes 1.0 where the winning rule of a part's pick needs `DISABLED`: as in
-  CSS, the `disabled:` rule replaces the part's base opacity, and egui's fade
-  stands in for the rule. Where no such rule wins, the part's other opacity applies
-  on top of egui's fade. Pass `DISABLED` in the state whenever the `Ui` is
-  disabled. Every part reads its `opacity`, not only a disabled one: a child
-  part's painter multiplies the parent's chain, a container part fades the
-  `Ui` it hands to its content with `shared::faded(ui, opacity, |ui| ..)`,
-  and colours an egui `Frame` paints outside that `Ui` (fill, shadow, ring)
-  are faded with `gamma_multiply`.
+  values down the part tree as CSS does. `shared::part_painter(ui, chain,
+  state)` returns the painter at the part's opacity: the `Ui`'s opacity
+  with egui's disabled fade taken out once, times the part's own value, with
+  `DISABLED` added in a disabled `Ui` (`shared::part_opacity` is the bare
+  value). So a part fades by its style's `disabled:` rule, not by egui's
+  fade. A crate part drawn through egui (a title through `ui.label`) runs
+  in `shared::part_ui(ui, chain, state, |ui| ..)`; a container hands the
+  caller's content `shared::content_ui(ui, chain, state, |ui| ..)`, which
+  keeps egui's fade for plain egui widgets. A box an egui container paints
+  outside that `Ui` (a popup frame) takes `RecipeBox::faded(opacity)`.
 - An empty size `Prop` is CSS's initial value: `width` and `height` fall
   back to the content size (`shared::line_box` for a line of text), never
   to 0, so an app that replaces a recipe whole keeps a usable widget.

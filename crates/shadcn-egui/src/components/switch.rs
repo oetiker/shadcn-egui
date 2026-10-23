@@ -4,7 +4,9 @@
 //! `cn-switch-thumb` recipes. The thumb sits inside the track's 1px transparent border and
 //! slides between its two positions with `animate_bool`.
 
-use crate::components::shared::{interaction_state, shift, part_painter, RecipeBox};
+use crate::components::shared::{
+    interaction_state, part_painter, pressable, shift, ActivationKeys, RecipeBox,
+};
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
 use egui::{lerp, vec2, Rect, Sense, Ui, Widget};
@@ -85,6 +87,7 @@ impl Widget for Switch<'_> {
             Sense::hover()
         };
         let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        pressable(&mut resp, ActivationKeys::EnterAndSpace);
         if enabled && resp.clicked() {
             *self.on = !*self.on;
             resp.mark_changed();
@@ -99,7 +102,7 @@ impl Widget for Switch<'_> {
                 })
                 .with(State::INVALID, self.invalid)
         };
-        let st = interaction_state(&t, &resp, enabled, context(on));
+        let st = interaction_state(&t, &resp, context(on).with(State::DISABLED, !enabled));
         let how_on = ui.ctx().animate_bool(base.id, on);
 
         if ui.is_rect_visible(rect) {

@@ -15,9 +15,7 @@ use crate::components::shared::{opacity, part_ui, RecipeBox};
 use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::heading_family_for;
 use crate::Theme;
-use egui::{
-    Align, Color32, Id, Layout, Margin, Rect, RichText, Shape, Ui, UiBuilder,
-};
+use egui::{Align, Color32, Id, Layout, Margin, Rect, RichText, Shape, Ui, UiBuilder};
 
 pub struct Dialog<'a> {
     id: Id,

@@ -116,13 +116,18 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
             |ui| {
                 let resp = ui.interact(target, egui::Id::new("target"), egui::Sense::click());
                 resp.request_focus();
-                live = interaction_state(&theme, &resp, true, State::INVALID);
-                disabled = interaction_state(&theme, &resp, false, State::INVALID | State::FOCUS);
+                live = interaction_state(&theme, &resp, State::INVALID);
+                disabled = interaction_state(
+                    &theme,
+                    &resp,
+                    State::INVALID | State::FOCUS | State::DISABLED,
+                );
             },
         );
     }
-    // Control: the same response, enabled, is hovered, pressed and focused.
-    let pointer = State::HOVER | State::ACTIVE | State::FOCUS_VISIBLE;
+    // Control: the same response, enabled, is hovered, pressed and focused,
+    // without a ring: the last input was a pointer press.
+    let pointer = State::HOVER | State::ACTIVE | State::FOCUS;
     // egui's default window is wider than `md`.
     let theme_flags = State::DARK | State::SM | State::MD;
     assert_eq!(live, pointer | State::INVALID | theme_flags);
@@ -2154,13 +2159,16 @@ fn shadow_paints_only_outside_the_border_box() {
         a.contains(p) || b.contains(p)
     };
     for m in &meshes {
-        for tri in m.indices.chunks_exact(3) {
+        for tri in m.indices.as_chunks::<3>().0 {
             let c = tri
                 .iter()
                 .map(|&i| m.vertices[i as usize].pos.to_vec2())
                 .fold(egui::Vec2::ZERO, |a, b| a + b)
                 / 3.0;
-            assert!(!inside(c.to_pos2()), "shadow triangle at {c:?} under {rect:?}");
+            assert!(
+                !inside(c.to_pos2()),
+                "shadow triangle at {c:?} under {rect:?}"
+            );
         }
     }
 }

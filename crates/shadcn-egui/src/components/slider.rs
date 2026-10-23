@@ -8,7 +8,9 @@
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{interaction_state, part_painter, RecipeBox};
+use crate::components::shared::{
+    interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
+};
 use crate::style::{pick, Paint, Prop, Recipe, State};
 use crate::Theme;
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
@@ -187,6 +189,7 @@ impl Widget for Slider<'_> {
             Sense::hover()
         };
         let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        pressable(&mut resp, ActivationKeys::None);
 
         let mut moved = false;
         if enabled && hi > lo {
@@ -255,7 +258,7 @@ impl Widget for Slider<'_> {
         let pointer_on_thumb = ui
             .input(|i| i.pointer.hover_pos())
             .is_some_and(|p| thumb_rect.expand2(hit_inset).contains(p));
-        let st = interaction_state(&t, &resp, enabled, orient);
+        let st = interaction_state(&t, &resp, orient.with(State::DISABLED, !enabled));
         let st = st.with(
             State::HOVER,
             st.contains(State::HOVER) && (pointer_on_thumb || resp.dragged()),

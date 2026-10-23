@@ -8,7 +8,9 @@
 //! value is a plain `bool`.
 
 use crate::components::icon::paint_icon;
-use crate::components::shared::{interaction_state, part_painter, RecipeBox};
+use crate::components::shared::{
+    interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
+};
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Ui, Vec2, Widget};
@@ -71,6 +73,7 @@ impl Widget for Checkbox<'_> {
             Sense::hover()
         };
         let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        pressable(&mut resp, ActivationKeys::Space);
         if enabled && resp.clicked() {
             *self.checked = !*self.checked;
             resp.mark_changed();
@@ -82,7 +85,7 @@ impl Widget for Checkbox<'_> {
             State::UNCHECKED
         })
         .with(State::INVALID, self.invalid);
-        let st = interaction_state(&t, &resp, enabled, context);
+        let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
 
         if ui.is_rect_visible(rect) {
             let painter = part_painter(ui, &[&l[..]], st);

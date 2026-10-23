@@ -123,7 +123,7 @@ impl Widget for Badge {
             return resp;
         }
 
-        let st = interaction_state(&t, &resp, enabled, context);
+        let st = interaction_state(&t, &resp, context);
         let st = if hoverable {
             st
         } else {

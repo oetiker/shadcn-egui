@@ -4,7 +4,7 @@
 //! paints.
 
 use crate::components::shared::{
-    interaction_state, line_box, part_opacity, part_painter, RecipeBox,
+    line_box, part_opacity, part_painter, text_entry_state, RecipeBox,
 };
 use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
 use crate::theme::family_for;
@@ -145,7 +145,7 @@ impl<'a> Widget for Input<'a> {
             })
             .inner;
 
-        let st = interaction_state(&t, &resp, enabled, context);
+        let st = text_entry_state(&t, &resp, context.with(State::DISABLED, !enabled));
         let shapes = RecipeBox::resolve(&t, &l, st).shapes(ui.ctx(), resp.rect);
         part_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
