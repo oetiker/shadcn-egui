@@ -243,24 +243,19 @@ impl Loop {
     pub const BOTH: [Loop; 2] = [Loop::RunUi, Loop::Own];
 }
 
-/// One pass of `app_loop` on `ctx`: `events` are the pass's input, and
-/// `ui_fn` draws into a root `Ui` filling a [`PASS_WINDOW`] window. Neither
-/// loop applies a theme: a test that needs one applies it in `ui_fn`.
+/// One frame of `app_loop` on `ctx`: `events` are the frame's input, and
+/// `ui_fn` draws into a root `Ui` filling a [`PASS_WINDOW`] window. Under
+/// `run_ui`, a pass that calls `request_discard` is followed by another
+/// pass in the same frame, which runs `ui_fn` again. Neither loop applies
+/// a theme: a test that needs one applies it in `ui_fn`.
 pub fn pass(
     app_loop: Loop,
     ctx: &egui::Context,
     events: Vec<egui::Event>,
-    ui_fn: impl FnOnce(&mut egui::Ui),
+    ui_fn: impl FnMut(&mut egui::Ui),
 ) -> egui::FullOutput {
     match app_loop {
-        Loop::RunUi => {
-            let mut ui_fn = Some(ui_fn);
-            ctx.run_ui(window_input(events), |ui| {
-                if let Some(f) = ui_fn.take() {
-                    f(ui)
-                }
-            })
-        }
+        Loop::RunUi => ctx.run_ui(window_input(events), ui_fn),
         Loop::Own => own_pass(ctx, events, ui_fn),
     }
 }
@@ -271,7 +266,7 @@ pub fn pass(
 pub fn own_pass(
     ctx: &egui::Context,
     events: Vec<egui::Event>,
-    ui_fn: impl FnOnce(&mut egui::Ui),
+    mut ui_fn: impl FnMut(&mut egui::Ui),
 ) -> egui::FullOutput {
     ctx.begin_pass(window_input(events));
     let window = egui::Rect::from_min_size(egui::Pos2::ZERO, PASS_WINDOW);

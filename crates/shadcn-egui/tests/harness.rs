@@ -4,7 +4,6 @@ mod common;
 
 use common::Loop;
 use egui::{pos2, Key};
-use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
 use shadcn_egui::components::button::Button;
 use shadcn_egui::components::input::Input;
@@ -43,11 +42,43 @@ fn click_in_one_pass_under_both_loops() {
         };
         run(vec![]);
         run(common::click(rect.get().center()));
+        assert_eq!(
+            clicks.get(),
+            1,
+            "{app_loop:?}: press and release in one pass"
+        );
         run(vec![]);
         run(common::pointer_down(rect.get().center()));
+        assert_eq!(clicks.get(), 1, "{app_loop:?}: a press alone is no click");
         run(common::pointer_up(rect.get().center()));
-        run(vec![]);
-        assert_eq!(clicks.get(), 2, "{app_loop:?}");
+        assert_eq!(clicks.get(), 2, "{app_loop:?}: press, then release");
+    }
+}
+
+/// A pass that calls `request_discard` is redrawn in the same frame under
+/// `run_ui`, and the kept pass shows the content; the own loop runs one
+/// pass, which shows it too.
+#[test]
+fn discarded_pass_is_redrawn_under_both_loops() {
+    for app_loop in Loop::BOTH {
+        let ctx = egui::Context::default();
+        let mut passes = 0;
+        let out = common::pass(app_loop, &ctx, vec![], |ui| {
+            passes += 1;
+            ui.label("Kept");
+            if passes == 1 {
+                ui.ctx().request_discard("test");
+            }
+        });
+        let expected = match app_loop {
+            Loop::RunUi => 2,
+            Loop::Own => 1,
+        };
+        assert_eq!(passes, expected, "{app_loop:?}");
+        let drawn = common::text_shapes(&out)
+            .iter()
+            .any(|t| t.galley.text() == "Kept");
+        assert!(drawn, "{app_loop:?}: the kept pass draws the content");
     }
 }
 
@@ -121,7 +152,9 @@ fn focused_label_follows_tab() {
     h.key_press(Key::Tab);
     h.run();
     assert_eq!(common::focused_label(&h).as_deref(), Some("One"));
-    h.get_by_label("Two");
+    h.key_press(Key::Tab);
+    h.run();
+    assert_eq!(common::focused_label(&h).as_deref(), Some("Two"));
 }
 
 /// A node's accesskit bounds are its widget's rect.
