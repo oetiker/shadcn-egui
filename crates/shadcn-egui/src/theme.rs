@@ -265,9 +265,12 @@ impl Theme {
         t
     }
 
-    /// The component state `s` plus this theme's [`State::DARK`].
+    /// The component state `s` plus this theme's [`State::DARK`], and the
+    /// `sm:` and `md:` window flags.
     pub fn state(&self, s: State) -> State {
-        s.with(State::DARK, self.dark)
+        // A1c: breakpoint helper replaces this (the flags follow the window
+        // width there; until then every window counts as wide).
+        s.with(State::DARK, self.dark).or(State::SM).or(State::MD)
     }
 
     /// A radius rung in px: shadcn's scale multiplies `--radius`.

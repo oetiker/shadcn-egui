@@ -123,8 +123,10 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     }
     // Control: the same response, enabled, is hovered, pressed and focused.
     let pointer = State::HOVER | State::ACTIVE | State::FOCUS_VISIBLE;
-    assert_eq!(live, pointer | State::INVALID | State::DARK);
-    assert_eq!(disabled, State::INVALID | State::DISABLED | State::DARK);
+    // A1c: the breakpoint helper sets SM and MD from the window width.
+    let theme_flags = State::DARK | State::SM | State::MD;
+    assert_eq!(live, pointer | State::INVALID | theme_flags);
+    assert_eq!(disabled, State::INVALID | State::DISABLED | theme_flags);
 }
 
 /// shadcn `bg-clip-padding` with `border border-transparent`: a solid

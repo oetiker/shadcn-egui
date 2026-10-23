@@ -88,9 +88,11 @@ pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
 
 /// One style's values; `markers` in the order of the `Style` fields.
 ///
-/// Each recipe gets its own function: one struct literal with every recipe
-/// keeps all their temporaries in one stack frame, about 0.5 MB in a debug
-/// build, which overflows small thread stacks.
+/// Each recipe gets its own function that boxes it: one struct literal with
+/// every recipe keeps all their temporaries in one stack frame, about 0.5 MB
+/// in a debug build, which overflows small thread stacks; so does a
+/// `Box::new(recipe())` per field, which gives each unboxed `Recipe` its
+/// own slot in `style()`.
 pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[Part]) -> String {
     let mut s = header(
         pin,
@@ -109,8 +111,8 @@ pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[
         match decls.get(field).and_then(|d| recipe(d)) {
             None => s += &format!("        {field}: Box::default(),\n"),
             Some(body) => {
-                s += &format!("        {field}: Box::new({field}()),\n");
-                fns += &format!("\nfn {field}() -> Recipe {{\n    {body}\n}}\n");
+                s += &format!("        {field}: {field}(),\n");
+                fns += &format!("\nfn {field}() -> Box<Recipe> {{\n    Box::new({body})\n}}\n");
             }
         }
     }
