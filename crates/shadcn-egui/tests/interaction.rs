@@ -56,6 +56,63 @@ fn press_focuses_without_ring_and_keyboard_focus_shows_it() {
     assert!(!b.contains(State::FOCUS));
 }
 
+/// The browser takes `:focus-visible` when focus moves: a pointer press or
+/// drag that moves no focus leaves the ring of a keyboard focus, and a key
+/// pressed on a widget a click focused shows the ring, a Ctrl shortcut not.
+#[test]
+fn the_ring_follows_focus_changes_not_every_press() {
+    let ctx = egui::Context::default();
+    two_targets(&ctx, vec![]);
+    two_targets(&ctx, common::key(Key::Tab));
+    let [a, _] = two_targets(&ctx, vec![]);
+    assert!(a.contains(State::FOCUS_VISIBLE), "Tab: {a:?}");
+    // A drag on empty ground: no click, so egui keeps the focus.
+    let (from, to) = (egui::pos2(300.0, 200.0), egui::pos2(360.0, 200.0));
+    two_targets(&ctx, common::pointer_down(from));
+    two_targets(&ctx, vec![egui::Event::PointerMoved(to)]);
+    let [a, _] = two_targets(&ctx, common::pointer_up(to));
+    assert!(
+        a.contains(State::FOCUS | State::FOCUS_VISIBLE),
+        "drag: {a:?}"
+    );
+
+    let b = egui::pos2(140.0, 15.0);
+    two_targets(&ctx, common::pointer_down(b));
+    let [_, bs] = two_targets(&ctx, common::pointer_up(b));
+    assert!(bs.contains(State::FOCUS) && !bs.contains(State::FOCUS_VISIBLE));
+    let [_, bs] = two_targets(&ctx, common::key_with(egui::Modifiers::COMMAND, Key::S));
+    assert!(!bs.contains(State::FOCUS_VISIBLE), "a shortcut: {bs:?}");
+    let [_, bs] = two_targets(&ctx, common::key(Key::ArrowLeft));
+    assert!(bs.contains(State::FOCUS_VISIBLE), "a key: {bs:?}");
+}
+
+/// The modality follows input in passes where no crate widget asks for
+/// it: [`Theme::apply`]'s pass hooks take a key pressed in such a pass.
+#[test]
+fn the_modality_sees_passes_without_crate_widgets() {
+    let ctx = egui::Context::default();
+    let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(80.0, 30.0));
+    let run = |events, ask: bool| {
+        let mut st = State::NONE;
+        common::pass(Loop::RunUi, &ctx, events, |ui| {
+            Theme::vega_light().apply(ui.ctx());
+            let mut resp = ui.interact(rect, egui::Id::new("t"), egui::Sense::click());
+            if ask {
+                pressable(&mut resp, ActivationKeys::Button);
+                st = interaction_state(&Theme::vega_light(), &resp, State::NONE);
+            }
+        });
+        st
+    };
+    run(vec![], true);
+    run(common::pointer_down(rect.center()), true);
+    let st = run(common::pointer_up(rect.center()), true);
+    assert!(st.contains(State::FOCUS) && !st.contains(State::FOCUS_VISIBLE));
+    run(common::key(Key::ArrowLeft), false);
+    let st = run(vec![], true);
+    assert!(st.contains(State::FOCUS_VISIBLE), "{st:?}");
+}
+
 /// A `<button>`: Enter clicks on press; Space shows `ACTIVE` while held and
 /// clicks on release; a Space released after focus left clicks nothing.
 #[test]

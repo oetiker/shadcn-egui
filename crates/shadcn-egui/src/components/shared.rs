@@ -616,31 +616,85 @@ fn space_id() -> Id {
     Id::new("shadcn_egui::space_down_on")
 }
 
-/// Whether focus last moved by keyboard, as the browser tracks it for
-/// `:focus-visible` (conformance 2.6), crate-wide. The last key or pointer
-/// press decides; a focus move the crate makes in answer to a press (an
-/// overlay opened by click) keeps the press's modality, as the browser
-/// keeps it for a scripted `focus()`. It starts as keyboard, as a page that
-/// has seen no input shows a ring on a scripted focus.
+/// The crate-wide focus modality: the focused widget as last seen, whether
+/// `:focus-visible` holds for it, and what this pass's input was.
+#[derive(Clone, Copy, Debug)]
+struct Modality {
+    focused: Option<Id>,
+    keyboard: bool,
+    pass: u64,
+    /// The last key press (`true`) or pointer button event (`false`) of
+    /// `pass`, if any.
+    input: Option<bool>,
+}
+
+/// Whether `:focus-visible` holds for the focused widget, as the browser
+/// tracks it (conformance 2.6), crate-wide. The modality is taken when
+/// focus changes: by the pass's last key press or pointer button event,
+/// and a focus move with no input in its pass (an overlay giving focus
+/// back, a scripted focus) keeps the one before, as the browser keeps it
+/// for a script's `focus()`. A key press while focus stays makes the
+/// focused widget focus-visible; a pointer press that moves no focus (a
+/// drag on a scroll bar, a press on the focused widget) changes nothing.
+/// A key pressed with Ctrl, Alt or Command is a shortcut and counts as no
+/// key, as in Chrome. It starts as keyboard, as a page that has seen no
+/// input shows a ring on a scripted focus.
+///
+/// [`Theme::apply`] runs it at the start and end of every pass, so a
+/// focus change in a pass where no crate widget asks is taken with that
+/// pass's input; without the hooks, the first crate call of a pass does
+/// the work (conformance 6).
 pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
-    let (seen, keyboard) = ctx
-        .data(|d| d.get_temp::<(u64, bool)>(modality_id()))
-        .unwrap_or((u64::MAX, true));
-    if seen == pass {
-        return keyboard;
+    let focused = ctx.memory(|m| m.focused());
+    let mut m = ctx
+        .data(|d| d.get_temp::<Modality>(modality_id()))
+        .unwrap_or(Modality {
+            focused,
+            keyboard: true,
+            pass: u64::MAX,
+            input: None,
+        });
+    if m.pass != pass {
+        // The raw events: a widget may have consumed the key already.
+        m.input = ctx.input(|i| {
+            i.raw.events.iter().rev().find_map(|e| match e {
+                egui::Event::Key {
+                    pressed: true,
+                    modifiers,
+                    ..
+                } => (!(modifiers.alt || modifiers.ctrl || modifiers.command || modifiers.mac_cmd))
+                    .then_some(true),
+                egui::Event::PointerButton { .. } => Some(false),
+                _ => None,
+            })
+        });
+        m.pass = pass;
+        if m.input == Some(true) {
+            m.keyboard = true;
+        }
     }
-    // The raw events: a widget may have consumed the key already.
-    let last = ctx.input(|i| {
-        i.raw.events.iter().rev().find_map(|e| match e {
-            egui::Event::Key { pressed: true, .. } => Some(true),
-            egui::Event::PointerButton { pressed: true, .. } => Some(false),
-            _ => None,
-        })
-    });
-    let keyboard = last.unwrap_or(keyboard);
-    ctx.data_mut(|d| d.insert_temp(modality_id(), (pass, keyboard)));
-    keyboard
+    if focused != m.focused {
+        m.focused = focused;
+        m.keyboard = m.input.unwrap_or(m.keyboard);
+    }
+    ctx.data_mut(|d| d.insert_temp(modality_id(), m));
+    m.keyboard
+}
+
+/// Run [`focus_modality_keyboard`] at the start and end of every pass of
+/// `ctx`; installed once.
+pub(crate) fn install_focus_modality(ctx: &Context) {
+    let id = Id::new("shadcn_egui::focus_modality_hooks");
+    if ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(id, true));
+    let track = |ui: &mut Ui| {
+        focus_modality_keyboard(ui.ctx());
+    };
+    ctx.on_begin_pass("shadcn_egui::focus_modality", std::sync::Arc::new(track));
+    ctx.on_end_pass("shadcn_egui::focus_modality", std::sync::Arc::new(track));
 }
 
 /// Make `resp` act on press and keys as upstream's element: a pointer

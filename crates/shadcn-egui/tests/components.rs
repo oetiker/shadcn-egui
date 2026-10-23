@@ -115,7 +115,10 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
             },
             |ui| {
                 let resp = ui.interact(target, egui::Id::new("target"), egui::Sense::click());
-                resp.request_focus();
+                // The press focuses it.
+                if ui.input(|i| i.pointer.any_pressed()) {
+                    resp.request_focus();
+                }
                 live = interaction_state(&theme, &resp, State::INVALID);
                 disabled = interaction_state(
                     &theme,
@@ -126,7 +129,7 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
         );
     }
     // Control: the same response, enabled, is hovered, pressed and focused,
-    // without a ring: the last input was a pointer press.
+    // without a ring: a pointer press moved focus.
     let pointer = State::HOVER | State::ACTIVE | State::FOCUS;
     // egui's default window is wider than `md`.
     let theme_flags = State::DARK | State::SM | State::MD;

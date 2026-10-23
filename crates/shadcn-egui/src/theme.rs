@@ -916,6 +916,7 @@ impl Theme {
     fn apply_inner(&self, ctx: &egui::Context, base: Option<FontDefinitions>) {
         install_fonts(ctx, self.fonts, base);
         crate::components::icon_atom::install(ctx);
+        crate::components::shared::install_focus_modality(ctx);
         let p = &self.palette;
         let m = &self.metrics;
         let hairline = m.border;
