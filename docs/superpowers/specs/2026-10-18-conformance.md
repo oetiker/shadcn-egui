@@ -403,7 +403,7 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 ## 7 · Animation
 
 - Components animate where upstream animates (spinner, skeleton pulse,
-  progress value, accordion and collapsible height, sheet slide, dialog
+  progress value, accordion height, sheet slide, dialog
   and overlay fade and zoom, sidebar width, navigation-menu viewport,
   carousel slide, toast stack, shimmer, scroller), with upstream's timing.
 - An overlay that closes runs its exit motion first; a modal reports

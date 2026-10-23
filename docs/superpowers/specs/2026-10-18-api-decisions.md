@@ -1836,6 +1836,14 @@ Decision: (a) — as recommended.
 
 Decision: (a) — as recommended.
 
+Consequence (rules, 2026-10-23, axiom 4): a free function is only a
+shortcut for one builder call, and a container has no shortcut. A
+layout-only group around its items is a container builder:
+`KbdGroup::new().show(ui, |ui| ..)`, no `kbd_group`. A group that is a part
+inside its root (`button_group_separator`, `button_group_text`) keeps its
+part shortcut. Bubble and message groups get the same test in their
+family PR.
+
 ### D-51 · Labelled groups of items
 
 - **Case:** Select groups carry their label (`SelectGroup { label, items
@@ -2979,6 +2987,15 @@ zoom-out-95`, 100 ms in the style CSS), which the list above does not
 name; conformance 7 now lists them. An overlay runs its exit motion
 before it is gone, and a modal reports `should_close()` once it has run
 (D-31).
+
+Consequence (rules, 2026-10-23, concept 1): collapsible height is not
+animated. Upstream's collapsible content has no class in the part, the
+styles or the demos, and bits animates only what CSS sets, so the browser
+shows no motion; the list above named it by mistake. Motion values that a
+class gives (`duration-*`, `fade-*`, `zoom-*`, `slide-in-*`, `ease-*`,
+`transition-*`) are looks: stylegen emits them into the recipe, and an
+app variant can change them (axiom 8). Delays that a prop gives stay
+behaviour, as setters.
 
 ### D-89 · Accessibility roles egui's `WidgetType` lacks
 
