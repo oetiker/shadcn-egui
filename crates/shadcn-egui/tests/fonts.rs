@@ -479,7 +479,7 @@ fn fonts_all_resolves_every_shipped_font() {
             assert!(!f.license.is_empty(), "{}: licence text", c[0]);
             assert!(
                 (-0.5..0.5).contains(&f.y_offset_factor),
-                "{}: measured offset",
+                "{}: baseline correction (0 unless the font still sits off Chrome's)",
                 c[0]
             );
         }

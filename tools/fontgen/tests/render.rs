@@ -25,7 +25,7 @@ fn variants_follow_the_font_name_enum() {
 }
 
 #[test]
-fn rows_parse_variable_static_and_unmeasured() {
+fn rows_parse_variable_static_and_unset_correction() {
     let rows = sample();
     assert_eq!(rows.len(), 4);
     assert_eq!(
@@ -33,7 +33,10 @@ fn rows_parse_variable_static_and_unmeasured() {
         Files::Variable("ofl/inter/Inter[opsz,wght].ttf".into())
     );
     assert_eq!(rows[0].y_offset_factor, Some(0.1));
-    assert_eq!(rows[1].y_offset_factor, None, "`-` means not measured yet");
+    assert_eq!(
+        rows[1].y_offset_factor, None,
+        "`-` means no baseline correction set yet"
+    );
     assert_eq!(
         rows[3].files,
         Files::Static(vec![(
@@ -116,7 +119,7 @@ fn apache_and_static_crates_render() {
     ), "{roboto}");
     assert!(
         roboto.contains("y_offset_factor: 0.0,"),
-        "unmeasured renders as 0.0: {roboto}"
+        "an unset correction renders as 0.0: {roboto}"
     );
     assert!(crate_cargo_toml(&rows[1]).contains("license = \"MIT AND Apache-2.0\"\n"));
     assert!(
