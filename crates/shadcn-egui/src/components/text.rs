@@ -33,7 +33,7 @@
 //! }
 //! ```
 
-use crate::style::{pick, pick_where, Recipe, State, TextSize, Weight};
+use crate::style::{pick, pick_where, Recipe, State, TextSize, TextWrap, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
 use egui::text::{LayoutJob, TextWrapping};
@@ -43,6 +43,8 @@ use egui::{
     TextWrapMode, Ui, Vec2, WidgetText,
 };
 use std::sync::Arc;
+
+mod wrap;
 
 /// The UiStack tag a crate container puts on its content `Ui` to pass the
 /// line-height factor (`leading-*`) to crate text inside, which egui
@@ -84,6 +86,7 @@ pub struct TextLook {
     underline: bool,
     underline_width: f32,
     leading: Leading,
+    wrap_style: Option<TextWrap>,
 }
 
 impl TextLook {
@@ -124,6 +127,7 @@ impl TextLook {
             underline: pick(layers, |r| &r.underline, state) == Some(true),
             underline_width: theme.metrics.border,
             leading: Leading::Inline,
+            wrap_style: pick(layers, |r| &r.text_wrap, state),
         }
     }
 
@@ -270,9 +274,8 @@ impl TextLook {
         wrap: TextWrapMode,
         width: f32,
     ) -> TextBlock {
-        let mut job = self.job(ui, text.into());
-        job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
-        let source = ui.ctx().fonts_mut(|f| f.layout_job(job));
+        let job = self.job(ui, text.into());
+        let source = self.lay_out(ui.ctx(), job, wrap, width);
         TextBlock {
             galley: place_rows(ui.ctx(), source.clone(), self.leading, 0.0),
             source,
@@ -287,10 +290,9 @@ impl TextLook {
     pub fn label(&self, ui: &mut Ui, text: impl Into<WidgetText>, wrap: TextWrapMode) -> Response {
         let mut job = self.job(ui, text.into());
         fill_color(&mut job, self.resolved_color(ui));
-        job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, ui.available_width());
         job.halign = ui.layout().horizontal_placement();
         job.justify = ui.layout().horizontal_justify();
-        let source = ui.ctx().fonts_mut(|f| f.layout_job(job));
+        let source = self.lay_out(ui.ctx(), job, wrap, ui.available_width());
         let galley = place_rows(ui.ctx(), source.clone(), self.leading, 0.0);
         // `egui::Label`'s own `ui`, with the rows placed for the origin the
         // label gets (the placement moves glyphs only, not the size).
@@ -346,10 +348,135 @@ impl TextLook {
     ) -> Arc<Galley> {
         let mut job = self.job(ui, text.into());
         fill_color(&mut job, color);
-        job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
-        let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
+        let galley = self.lay_out(ui.ctx(), job, wrap, width);
         place_rows(ui.ctx(), galley, self.leading, 0.0)
     }
+}
+
+impl TextLook {
+    /// `job` laid out by egui, wrapped as `wrap` and `width` say. Under
+    /// `text-balance` or `text-pretty` the wrapped text breaks where Blink
+    /// breaks it (see [`wrap`]): the chosen breaks become forced ones for
+    /// egui, and the galley keeps the caller's text. Balance applies to the
+    /// first paragraph only (Blink balances from the block's first line),
+    /// pretty to each.
+    fn lay_out(
+        &self,
+        ctx: &egui::Context,
+        mut job: LayoutJob,
+        wrap: TextWrapMode,
+        width: f32,
+    ) -> Arc<Galley> {
+        job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
+        let style = match self.wrap_style {
+            Some(TextWrap::Balance) => wrap::Style::Balance,
+            Some(TextWrap::Pretty) => wrap::Style::Pretty,
+            None => return ctx.fonts_mut(|f| f.layout_job(job)),
+        };
+        if wrap != TextWrapMode::Wrap || !width.is_finite() {
+            return ctx.fonts_mut(|f| f.layout_job(job));
+        }
+        let mut free = job.clone();
+        free.wrap = TextWrapping::no_max_width();
+        let flat = ctx.fonts_mut(|f| f.layout_job(free));
+        let ppp = ctx.pixels_per_point();
+        let key = (
+            Arc::as_ptr(&flat) as usize,
+            width.to_bits(),
+            ppp.to_bits(),
+            style == wrap::Style::Balance,
+        );
+        let id = egui::Id::new("shadcn_egui::text::wrapped");
+        let frame = ctx.cumulative_frame_nr();
+        let hit = ctx.data_mut(|d| {
+            let cache = d.get_temp_mut_or_default::<WrapCache>(id);
+            if cache.frame != frame {
+                cache.entries.retain(|_, e| e.2 + 1 >= frame);
+                cache.frame = frame;
+            }
+            let e = cache.entries.get_mut(&key)?;
+            Arc::ptr_eq(&e.0, &flat).then(|| {
+                e.2 = frame;
+                e.1.clone()
+            })
+        });
+        if let Some(galley) = hit {
+            return galley;
+        }
+        let out = self.break_styled(ctx, &flat, job, style, width);
+        ctx.data_mut(|d| {
+            d.get_temp_mut_or_default::<WrapCache>(id)
+                .entries
+                .insert(key, (flat, out.clone(), frame));
+        });
+        out
+    }
+
+    /// [`TextLook::lay_out`] past its cache: `flat` is `job` on one row per
+    /// paragraph.
+    fn break_styled(
+        &self,
+        ctx: &egui::Context,
+        flat: &Galley,
+        mut job: LayoutJob,
+        style: wrap::Style,
+        width: f32,
+    ) -> Arc<Galley> {
+        let ppp = ctx.pixels_per_point();
+        let font = job.sections.first().map(|s| s.format.font_id.clone());
+        let space = font.map_or(0.0, |f| ctx.fonts_mut(|fs| fs.glyph_width(&f, ' ')));
+        let byte_of: Vec<usize> = job.text.char_indices().map(|(b, _)| b).collect();
+        let text_len = byte_of.len();
+        // Byte offsets where a line starts after a chosen break.
+        let mut starts = Vec::new();
+        let mut first = 0;
+        for (p, placed) in flat.rows.iter().enumerate() {
+            let glyphs = &placed.row.glyphs;
+            if p == 0 || style == wrap::Style::Pretty {
+                let chars: Vec<_> = glyphs
+                    .iter()
+                    .map(|g| (g.chr, g.pos.x, g.pos.x + g.advance_width))
+                    .collect();
+                let cands = wrap::candidates(&chars);
+                let found = wrap::breaks(&cands, style, width, self.size, ppp, space, text_len);
+                starts.extend(found.into_iter().flatten().map(|s| byte_of[first + s]));
+            }
+            first += glyphs.len() + usize::from(placed.ends_with_newline);
+        }
+        if starts.is_empty() {
+            return ctx.fonts_mut(|f| f.layout_job(job));
+        }
+        let original = job.clone();
+        let mut inserted = false;
+        for &b in starts.iter().rev() {
+            if b > 0 && job.text.as_bytes()[b - 1] == b' ' {
+                job.text.replace_range(b - 1..b, "\n");
+            } else {
+                // After a hyphen: a forced break goes in, the text grows.
+                job.text.insert(b, '\n');
+                for s in &mut job.sections {
+                    let r = &mut s.byte_range;
+                    *r = (r.start + usize::from(r.start >= b))..(r.end + usize::from(r.end >= b));
+                }
+                inserted = true;
+            }
+        }
+        let mut galley = ctx.fonts_mut(|f| f.layout_job(job));
+        if !inserted {
+            Arc::make_mut(&mut galley).job = Arc::new(original);
+        }
+        galley
+    }
+}
+
+/// The galleys [`TextLook::lay_out`] broke under a wrap style in this frame
+/// and the one before: by the one-row galley's address, width, scale and
+/// style, that galley, the result and the frame it was last used.
+#[derive(Clone, Default)]
+struct WrapCache {
+    frame: u64,
+    #[allow(clippy::type_complexity)]
+    entries: std::collections::HashMap<(usize, u32, u32, bool), (Arc<Galley>, Arc<Galley>, u64)>,
 }
 
 /// Every placeholder colour of `job` (text and underline) set to `color`.

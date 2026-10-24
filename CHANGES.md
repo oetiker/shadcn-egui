@@ -7,6 +7,7 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- Text a style marks `text-balance` or `text-pretty` breaks its lines where Chrome does: balanced text of up to six lines gets lines of about equal length, and pretty text no longer leaves a single short word alone on its last line. Text that Chrome leaves alone (one line, more than six lines for balance, a word wider than the box) wraps as before.
 - Components follow the window width as shadcn's `sm:` (640 px) and `md:` (768 px) breakpoints do: below 768 px an input's text is 16 px instead of 14 px, and below 640 px a dialog spans the window less a 16 px margin on each side. `layout::window_at_least` gives an app the same check on the window width, and `layout::container_at_least` on the width left in its `Ui`.
 - `IconAtom::new(icon)` puts a crate icon wherever egui takes atoms, such as an `egui::Button`'s content. Without `.tint(..)` it draws in the theme's text colour, and a crate widget draws it in its own state colour; a text colour that a host `Ui` overrides does not reach it, so tint it there.
 - `layout::capped_width`, `layout::overlay_width` and `layout::allocate_overflowing` give an app's own widget the crate's width rules: a width capped to the room or the window and raised to the content's minimum, and a widget wider than its room that overflows instead of widening its column.
