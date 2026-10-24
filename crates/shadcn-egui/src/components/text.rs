@@ -453,6 +453,71 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
     m
 }
 
+/// A galley placed by [`place_rows`], with what it was placed from.
+#[derive(Clone)]
+struct Placed {
+    source: Arc<Galley>,
+    ppp: f32,
+    leading: Leading,
+    placed: Arc<Galley>,
+    frame: u64,
+}
+
+/// The galleys [`place_rows`] placed in this frame and the one before, by
+/// the address of the galley egui laid out. egui's galley cache hands out
+/// the same galley while the text stays the same, so an idle widget's text
+/// is placed once, not once per frame.
+#[derive(Clone, Default)]
+struct PlacedCache {
+    frame: u64,
+    entries: std::collections::HashMap<usize, Placed>,
+}
+
+/// [`place_galley_rows`], cached per galley egui laid out (notes §1: an
+/// idle widget allocates nothing beyond egui's own).
+pub(crate) fn place_rows(
+    ctx: &egui::Context,
+    galley: Arc<Galley>,
+    leading: Leading,
+) -> Arc<Galley> {
+    let id = egui::Id::new("shadcn_egui::text::placed");
+    let (ppp, frame) = (ctx.pixels_per_point(), ctx.cumulative_frame_nr());
+    let key = Arc::as_ptr(&galley) as usize;
+    let hit = ctx.data_mut(|d| {
+        let cache = d.get_temp_mut_or_default::<PlacedCache>(id);
+        if cache.frame != frame {
+            // Text not shown in the last frame is gone from egui's cache too.
+            cache.entries.retain(|_, e| e.frame + 1 >= frame);
+            cache.frame = frame;
+        }
+        let e = cache.entries.get_mut(&key)?;
+        let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.leading == leading;
+        same.then(|| {
+            e.frame = frame;
+            e.placed.clone()
+        })
+    });
+    if let Some(placed) = hit {
+        return placed;
+    }
+    // Placing reads the font tables through `ctx.data`: not inside the
+    // `data_mut` above.
+    let placed = place_galley_rows(ctx, galley.clone(), leading);
+    ctx.data_mut(|d| {
+        let entry = Placed {
+            source: galley,
+            ppp,
+            leading,
+            placed: placed.clone(),
+            frame,
+        };
+        d.get_temp_mut_or_default::<PlacedCache>(id)
+            .entries
+            .insert(key, entry);
+    });
+    placed
+}
+
 /// `galley` with each row in its line box as Blink lays it out: the line
 /// tops at the unrounded sum of the line heights above, the baseline
 /// where Blink paints it, the half leading (split by `leading`) and the
@@ -462,7 +527,7 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
 /// pixel and puts the baseline at the font's ascent; here each row keeps
 /// its line box as its rect (selection and cursor span it) and its glyphs
 /// move inside it. The galley is as tall as its line boxes.
-pub(crate) fn place_rows(
+fn place_galley_rows(
     ctx: &egui::Context,
     mut galley: Arc<Galley>,
     leading: Leading,
@@ -687,7 +752,8 @@ mod tests {
                 // The drawn glyphs move with the baseline: each vertex
                 // keeps egui's offset from its glyph's baseline.
                 let mut job = look.job(ui, text.into());
-                job.wrap = TextWrapping::from_wrap_mode_and_width(TextWrapMode::Extend, f32::INFINITY);
+                job.wrap =
+                    TextWrapping::from_wrap_mode_and_width(TextWrapMode::Extend, f32::INFINITY);
                 let egui_galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
                 for (placed, egui_row) in galley.rows.iter().zip(&egui_galley.rows) {
                     let (y, y0) = (placed.glyphs[0].pos.y, egui_row.glyphs[0].pos.y);
@@ -704,6 +770,29 @@ mod tests {
     }
 
     #[test]
+    fn an_unchanged_text_is_placed_once() {
+        let ctx = egui::Context::default();
+        let mut galleys = Vec::new();
+        for _ in 0..3 {
+            let _ = ctx.run_ui(Default::default(), |ui| {
+                let look = TextLook::resolve(ui, &[], State::NONE);
+                let block = look.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
+                galleys.push(block.galley().clone());
+            });
+        }
+        assert!(Arc::ptr_eq(&galleys[0], &galleys[1]));
+        assert!(Arc::ptr_eq(&galleys[1], &galleys[2]));
+        // Another scale places it again.
+        ctx.set_pixels_per_point(2.0);
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            let look = TextLook::resolve(ui, &[], State::NONE);
+            let block = look.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
+            assert!(!Arc::ptr_eq(&galleys[2], block.galley()));
+            assert_eq!(block.galley().pixels_per_point, 2.0);
+        });
+    }
+
+    #[test]
     fn metrics_follow_a_font_switch_under_the_same_key() {
         // A theme that switches fonts keeps its key names: the metrics
         // must come from the face now under the key.
@@ -711,7 +800,8 @@ mod tests {
         let defs = |data: egui::FontData| {
             let mut d = egui::FontDefinitions::empty();
             d.font_data.insert("k".into(), Arc::new(data));
-            d.families.insert(FontFamily::Proportional, vec!["k".into()]);
+            d.families
+                .insert(FontFamily::Proportional, vec!["k".into()]);
             d
         };
         let measure = |ctx: &egui::Context| {
