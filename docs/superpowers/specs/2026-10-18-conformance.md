@@ -81,7 +81,11 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   top + floor((line height − (A + D)) / 2) + A, with the font's ascent A
   and descent D each rounded to whole device pixels, and the font's line
   gap unused when a line height is set.
-- A text-entry field (`<input>`) rounds that half up instead.
+- A text-entry field (`<input>`) places its text as Blink's editor does:
+  one `line-height: normal` line (A + D plus the font's line gap) centred
+  in the field's content box, the half above rounded up in device pixels,
+  the baseline floor(gap / 2) + A below that line's top. Caret and
+  selection span that line, not the field's line box.
 - A and D come from the font's own tables (typo metrics where the font
   sets `USE_TYPO_METRICS`, else `hhea`), by one generic path with no
   per-font table.
