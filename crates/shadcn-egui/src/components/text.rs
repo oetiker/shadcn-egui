@@ -33,7 +33,7 @@
 //! }
 //! ```
 
-use crate::style::{pick, Recipe, State, TextSize, Weight};
+use crate::style::{pick, pick_where, Recipe, State, TextSize, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
 use egui::text::{LayoutJob, TextWrapping};
@@ -90,16 +90,26 @@ impl TextLook {
     /// The text look of the part whose recipes are `layers` (in upstream's
     /// class order) under `state`. What the recipes leave out comes from
     /// `ui`: the size from its `TextStyle::Body`, the line height from the
-    /// factor of an enclosing [`content_scope`] (else CSS's 1.5 of the
-    /// base size), the colour from its text colour at paint time.
+    /// ratio of the recipes' named `text-*` size, else from the factor of an
+    /// enclosing [`content_scope`] (else CSS's 1.5 of the base size), the
+    /// colour from its text colour at paint time.
     pub fn resolve(ui: &Ui, layers: &[&Recipe], state: State) -> Self {
         let theme = Theme::current(ui.ctx());
         let recipe_size = pick(layers, |r| &r.text_size, state);
         let size = recipe_size.map_or_else(|| body_size(ui), |s| theme.text_px(s));
-        let line_height = match (pick(layers, |r| &r.line_height, state), recipe_size) {
+        // A named `text-*` sets a line height too, as a ratio of its own
+        // size: an arbitrary `text-[0.8rem]` over it keeps that ratio, and
+        // one alone inherits the line height as other text does.
+        let named = pick_where(
+            layers,
+            |r| &r.text_size,
+            |s| !matches!(s, TextSize::Px(_)),
+            state,
+        );
+        let line_height = match (pick(layers, |r| &r.line_height, state), named) {
             (Some(k), _) => k * size,
-            // Tailwind's `text-*` sets a line height too.
-            (None, Some(s)) => theme.line_px(s),
+            (None, Some(n)) if Some(n) == recipe_size => theme.line_px(n),
+            (None, Some(n)) => theme.line_px(n) / theme.text_px(n) * size,
             (None, None) => inherited_line_factor(ui)
                 .map_or_else(|| theme.line_px(TextSize::Px(size)), |k| k * size),
         };
@@ -699,6 +709,38 @@ mod tests {
             let job = look.job(ui, red.into());
             // token-ok: test data, a caller's explicit attribute
             assert_eq!(job.sections[0].format.color, Color32::RED);
+        });
+    }
+
+    /// An arbitrary size over a named one (nova's `cn-button` `text-sm`,
+    /// then `cn-button-size-sm` `text-[0.8rem]`) keeps the named size's
+    /// line-height ratio, as CSS's unitless `--text-sm--line-height`; an
+    /// arbitrary size alone inherits the line height.
+    #[test]
+    fn arbitrary_size_keeps_the_named_sizes_line_ratio() {
+        with_ui(1.0, |ui| {
+            let theme = Theme::current(ui.ctx());
+            let m = &theme.metrics;
+            let mut named = Recipe::default();
+            named.text_size.base = Some(TextSize::Sm);
+            let mut arbitrary = Recipe::default();
+            arbitrary.text_size.base = Some(TextSize::Px(12.8));
+            let look = TextLook::resolve(ui, &[&named, &arbitrary], State::NONE);
+            assert_eq!(look.size(), 12.8);
+            assert_eq!(look.line_height(), m.line_sm / m.text_sm * 12.8);
+            // The named size alone keeps its own line height.
+            let look = TextLook::resolve(ui, &[&arbitrary, &named], State::NONE);
+            assert_eq!(look.line_height(), m.line_sm);
+            // Alone: the inherited factor, or CSS's 1.5.
+            let look = TextLook::resolve(ui, &[&arbitrary], State::NONE);
+            assert_eq!(look.line_height(), 12.8 * 1.5);
+            let mut container = Recipe::default();
+            container.text_size.base = Some(TextSize::Lg);
+            let outer = TextLook::resolve(ui, &[&container], State::NONE);
+            content_scope(ui, &outer, |ui| {
+                let look = TextLook::resolve(ui, &[&arbitrary], State::NONE);
+                assert_eq!(look.line_height(), m.line_lg / m.text_lg * 12.8);
+            });
         });
     }
 

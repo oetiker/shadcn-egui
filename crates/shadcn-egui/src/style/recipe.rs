@@ -317,6 +317,28 @@ pub(crate) fn pick_ranked<T: Copy>(
     pick_props_keyed(layers.iter().map(|r| field(r)), s).map(|((rank, li, _), v)| ((rank, li), v))
 }
 
+/// Like [`pick`], over the candidates that `keep` accepts only: the value
+/// a CSS property takes when only some values of a field declare it (a
+/// named `text-*` declares a line height, `text-[0.8rem]` does not).
+pub(crate) fn pick_where<T: Copy>(
+    layers: &[&Recipe],
+    field: impl Fn(&Recipe) -> &Prop<T>,
+    keep: impl Fn(&T) -> bool,
+    s: State,
+) -> Option<T> {
+    let kept: Vec<Prop<T>> = layers
+        .iter()
+        .map(|r| {
+            let p = field(r);
+            Prop {
+                base: p.base.filter(|v| keep(v)),
+                rules: p.rules.iter().filter(|r| keep(&r.value)).copied().collect(),
+            }
+        })
+        .collect();
+    pick_props(&kept, s)
+}
+
 fn pick_props<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
