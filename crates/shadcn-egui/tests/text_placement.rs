@@ -11,6 +11,9 @@
 //!   `text-sm`) and Input at phone width, a block of three 19.5 px rows
 //!   below one such row (a fractional origin) and a `text-sm` line below
 //!   one.
+//! - the x of every char of a kerned text in the vega and nova Input (the
+//!   caret and selection stops) and where its glyph is drawn
+//!   (`text_placement/chrome-input-glyphs.tsv`, from the same script).
 //!
 //! The reference rows are in `text_placement/chrome-baselines.tsv`
 //! (device px from the element's border-box top), measured from headless
@@ -446,4 +449,162 @@ fn text_sits_on_chromes_pixels() {
 #[test]
 fn nova_and_fractional_origins_sit_on_chromes_pixels() {
     sits_on_chromes_pixels(nova, drawn_nova);
+}
+
+const GLYPHS: &str = include_str!("text_placement/chrome-input-glyphs.tsv");
+/// Keep in step with GLYPH_TEXT in `scripts/chrome-text-baselines.mjs`.
+const GLYPH_TEXT: &str = "To AVAY, Wave 7.5x Ky";
+/// How far a glyph's x may sit from Chrome's, in device px: Chrome keeps
+/// positions in 1/64 css px; the kerning of a variable font at a location
+/// off its default differs from HarfBuzz's by up to 2 font units (0.07 px
+/// at 2x: outfit, space-grotesk), less than egui's quarter-pixel bins.
+const GLYPH_SLACK: f32 = 0.1;
+/// Text origins not on Chrome's x yet: (font, scale). At 1.5x Chrome
+/// draws the input's 1px border one device pixel wide (Blink floors
+/// border widths to device pixels), the crate 1.5, so the text starts half
+/// a device pixel further right and rounds to the next pixel.
+const KNOWN_ORIGINS: [f32; 1] = [1.5];
+
+/// The input's text as drawn, in device px from the input's left: per
+/// char its x (where the caret and the selection stop) and the left edge
+/// of its quad in the mesh (`None` for a space), then the right edge of
+/// the row as its last x.
+struct DrawnGlyphs {
+    xs: Vec<f32>,
+    quads: Vec<Option<f32>>,
+    /// The left edge of the quad egui draws for char `i` with its pen at
+    /// `x` device px from the input's left.
+    reference: Box<dyn Fn(usize, f32) -> f32>,
+}
+
+fn drawn_glyphs(ctx: &egui::Context, screen: Option<Rect>, font: &str, ppp: f32) -> DrawnGlyphs {
+    let mut value = String::from(GLYPH_TEXT);
+    let mut item = |ui: &mut egui::Ui, i: usize| {
+        if i == 0 {
+            ui.add(Input::new(&mut value).max_width(320.0))
+        } else {
+            ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover())
+        }
+    };
+    let mut f = frame(ctx, screen, Vec::new(), &mut item);
+    for _ in 0..2 {
+        f = frame(ctx, screen, Vec::new(), &mut item);
+    }
+    let t = f.text_in(0, font).clone();
+    assert_eq!(t.galley.text(), GLYPH_TEXT, "{font}");
+    assert_eq!(t.galley.rows.len(), 1, "{font}");
+    let row = &t.galley.rows[0];
+    let left = (t.pos.x * ppp).round() - (f.items[0].left() * ppp).round();
+    let origin = left + row.pos.x * ppp;
+    let quad = |mesh: &egui::Mesh, first: usize| {
+        mesh.vertices[first..first + 4]
+            .iter()
+            .map(|v| v.pos.x)
+            .fold(f32::MAX, f32::min)
+    };
+    let glyphs = &row.row.glyphs;
+    let mut xs: Vec<f32> = glyphs.iter().map(|g| origin + g.pos.x * ppp).collect();
+    xs.push(origin + row.row.size.x * ppp);
+    let quads = glyphs
+        .iter()
+        .map(|g| {
+            (!g.chr.is_whitespace())
+                .then(|| origin + quad(&row.row.visuals.mesh, g.first_vertex as usize) * ppp)
+        })
+        .collect();
+    let format = t.galley.job.sections[0].format.clone();
+    let chars: Vec<char> = GLYPH_TEXT.chars().collect();
+    let ctx = ctx.clone();
+    let reference = Box::new(move |i: usize, x: f32| {
+        let mut job = egui::text::LayoutJob::single_section(chars[i].to_string(), format.clone());
+        job.sections[0].leading_space = (x - origin) / ppp;
+        let g = ctx.fonts_mut(|f| f.layout_job(job));
+        origin + quad(&g.rows[0].visuals.mesh, 0) * ppp
+    });
+    DrawnGlyphs {
+        xs,
+        quads,
+        reference,
+    }
+}
+
+/// The input's text keeps Chrome's glyph positions (conformance 3.4): each
+/// char's x (caret and selection) within `GLYPH_SLACK` of Chrome's, and
+/// its glyph drawn where egui draws it with the pen at Chrome's x (egui
+/// bins the pen to a quarter device pixel; near a bin's edge either
+/// neighbour within the slack counts).
+#[test]
+fn input_glyphs_sit_on_chromes_x() {
+    let mut wrong = Vec::new();
+    let mut compared = 0;
+    for name in FontName::ALL.iter().copied() {
+        let Some(files) = fonts::files(name) else {
+            continue;
+        };
+        for scale in SCALES {
+            for item in ["input", "nova-input"] {
+                let tag = format!("{} {scale}x {item}", name.id());
+                let want: Vec<f32> = GLYPHS
+                    .lines()
+                    .skip(1)
+                    .map(|l| l.split('\t').collect::<Vec<_>>())
+                    .find(|c| {
+                        c[0] == name.id() && c[1].parse::<f32>().ok() == Some(scale) && c[2] == item
+                    })
+                    .unwrap_or_else(|| panic!("{tag}: no Chrome row"))[3]
+                    .split(',')
+                    .map(|x| x.parse().unwrap())
+                    .collect();
+                let ctx = egui::Context::default();
+                ctx.set_pixels_per_point(scale);
+                let screen = if item == "input" {
+                    Theme::vega_light().fonts(files, None).apply(&ctx);
+                    None
+                } else {
+                    Theme::new(Style::nova(), Palette::light(), 10.0)
+                        .fonts(files, None)
+                        .apply(&ctx);
+                    Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(390.0, 800.0)))
+                };
+                let got = drawn_glyphs(&ctx, screen, name.id(), scale);
+                assert_eq!(want.len(), got.xs.len(), "{tag}");
+                compared += 1;
+                if want[0] != got.xs[0] && !KNOWN_ORIGINS.contains(&scale) {
+                    wrong.push(format!(
+                        "{tag} origin: crate {}, Chrome {}",
+                        got.xs[0], want[0]
+                    ));
+                }
+                // From here on, x from the text's origin.
+                let want: Vec<f32> = want.iter().map(|w| got.xs[0] + w - want[0]).collect();
+                for (i, (w, g)) in want.iter().zip(&got.xs).enumerate().skip(1) {
+                    compared += 1;
+                    if (w - g).abs() > GLYPH_SLACK {
+                        wrong.push(format!("{tag} char {i} x: crate {g}, Chrome {w}"));
+                    }
+                }
+                for (i, q) in got.quads.iter().enumerate() {
+                    let Some(q) = q else { continue };
+                    compared += 1;
+                    let fits = [0.0, -GLYPH_SLACK, GLYPH_SLACK]
+                        .iter()
+                        .any(|d| ((got.reference)(i, want[i] + d) - q).abs() < 1e-3);
+                    if !fits {
+                        let at = (got.reference)(i, want[i]);
+                        wrong.push(format!("{tag} char {i} drawn at {q}, at Chrome's x {at}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        compared >= 2 * SCALES.len() * (GLYPH_TEXT.len() + 1),
+        "{compared}"
+    );
+    assert!(
+        wrong.is_empty(),
+        "{} of {compared} glyphs off Chrome's x:\n{}",
+        wrong.len(),
+        wrong.join("\n")
+    );
 }

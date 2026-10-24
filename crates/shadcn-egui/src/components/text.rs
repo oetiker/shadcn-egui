@@ -484,8 +484,11 @@ impl TextLook {
             TextWrapping::from_wrap_mode_and_width(wrap, width)
         };
         let mut inserted = false;
-        // The original char behind each char of `out`, for the row widths.
+        // The original char behind each char of `out`, for the row widths,
+        // and the exact x of its pen on its line, in points.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);
+        let mut pens: Vec<f32> = Vec::with_capacity(n);
+        let mut pen = 0.0;
         let mut line_start = true;
         let mut prev_section = usize::MAX;
         for (i, &c) in chars.iter().enumerate() {
@@ -501,6 +504,7 @@ impl TextLook {
                     format: job.sections[section_of[i - 1]].format.clone(),
                 });
                 origin.push(None);
+                pens.push(0.0);
                 inserted = true;
                 line_start = true;
             }
@@ -524,23 +528,42 @@ impl TextLook {
                 format,
             });
             origin.push(Some(i));
+            // egui's own pen: the advance it gives the char before, then
+            // the gap (Chrome's advance and the kerning).
+            pen = if line_start {
+                gap
+            } else {
+                pen + adv.egui[i - 1] + gap
+            };
+            pens.push(pen);
             line_start = c == '\n';
         }
         if out.sections.is_empty() {
             out.sections = job.sections.clone();
         }
+        let justify = out.justify;
         let mut galley = ctx.fonts_mut(|f| f.layout_job(out));
-        // A row ends at Chrome's right edge of its last char, not egui's.
+        // egui draws each glyph at its pen, a quarter device pixel binned,
+        // but keeps the pen cut to the device pixel below as the glyph's x
+        // (the caret, the selection and the row width follow it). Unless
+        // egui justified the row (and placed it again), each glyph keeps
+        // its exact pen, and a row ends at Chrome's right edge of its last
+        // char.
         let g = Arc::make_mut(&mut galley);
         let mut at = 0;
         let mut right = f32::NEG_INFINITY;
         for placed in &mut g.rows {
             let glyphs = placed.row.glyphs.len();
-            let last = (glyphs > 0)
-                .then(|| origin.get(at + glyphs - 1).copied().flatten())
-                .flatten();
-            if let Some(i) = last {
-                Arc::make_mut(&mut placed.row).size.x += adv.chrome[i] - adv.egui[i];
+            if !justify {
+                let row = Arc::make_mut(&mut placed.row);
+                for (k, glyph) in row.glyphs.iter_mut().enumerate() {
+                    if let Some(&x) = pens.get(at + k) {
+                        glyph.pos.x = x;
+                    }
+                }
+                if let Some(&Some(i)) = glyphs.checked_sub(1).and_then(|k| origin.get(at + k)) {
+                    row.size.x = pens[at + glyphs - 1] + adv.chrome[i];
+                }
             }
             right = right.max(placed.pos.x + placed.row.size.x);
             at += glyphs + usize::from(placed.ends_with_newline);

@@ -45,6 +45,14 @@
 // font where that rule picks the wrong row. In Chrome 156 the row below the
 // H is empty for all 26 fonts, eb-garamond included.
 //
+// Input glyphs (a second file, crates/shadcn-egui/tests/text_placement/
+// chrome-input-glyphs.tsv): the vega input (14px) and the nova input (16px),
+// both 320px wide, hold GLYPH_TEXT, a text with kerned pairs and no
+// ligatures. Per row (font, scale, item): the x of every char's left edge,
+// then the right edge of the last char, in device px from the input's
+// border-box left, from DOM Ranges over the text node of the input's inner
+// editor (reached through CDP, which sees user-agent shadow roots).
+//
 // Each scale runs in its own Chrome with --force-device-scale-factor, as on
 // a HiDPI screen. Emulation.setDeviceMetricsOverride is not the same: at 2x
 // it puts the input baseline 2 device px lower (inter: 48, not 46) and
@@ -52,7 +60,7 @@
 //
 // Usage (Node 22+, no packages):
 //   node scripts/chrome-text-baselines.mjs <chrome-binary> [<output.tsv>]
-// or set CHROME and OUT; SCALES=1,2 measures other device scales (each must
+// or set CHROME and OUT (GLYPHS_OUT for the glyph file); SCALES=1,2 measures other device scales (each must
 // put the elements on whole device pixels). The output defaults to the committed TSV.
 // DEBUG_ROWS=1 also prints per row the editor height and the ink ratios of
 // the last row and the row below. Chrome's profiles and the generated pages
@@ -74,8 +82,12 @@ if (!CHROME) {
   console.error('usage: node scripts/chrome-text-baselines.mjs <chrome-binary> [<output.tsv>]');
   process.exit(2);
 }
+const GLYPHS_OUT = process.env.GLYPHS_OUT ||
+  path.join(path.dirname(OUT), 'chrome-input-glyphs.tsv');
 const SCALES = (process.env.SCALES || '1,1.5,2').split(',').map(Number);
 const TEXT = 'HHHH';
+// Keep in step with GLYPH_TEXT in crates/shadcn-egui/tests/text_placement.rs.
+const GLYPH_TEXT = 'To AVAY, Wave 7.5x Ky';
 
 // Vega style classes (shadcn-ui registry style-vega, Tailwind v4 defaults
 // expanded), neutral light theme.
@@ -144,6 +156,61 @@ function page(fontUrl, weight) {
   return `<!doctype html><html><head><meta charset=utf-8><style>
 @font-face { font-family: F; src: url('${fontUrl}') format('truetype'); font-weight: ${weight}; font-display: block; }
 ${CSS}</style></head><body><div class=col>${rows.join('')}</div><div class="col col2">${rows2.join('')}</div></body></html>`;
+}
+
+function glyphPage(fontUrl, weight) {
+  return `<!doctype html><html><head><meta charset=utf-8><style>
+@font-face { font-family: F; src: url('${fontUrl}') format('truetype'); font-weight: ${weight}; font-display: block; }
+${CSS} .input, .nova-input { width: 320px; }</style></head><body><div class=col>
+<div class=row><input class="g input" data-item=input value="${GLYPH_TEXT}"></div>
+<div class=row><input class="g nova-input" data-item=nova-input value="${GLYPH_TEXT}"></div>
+</div></body></html>`;
+}
+
+// Per input of the glyph page: the left edge of every char of its text,
+// then the right edge of the last, in device px from the input's left.
+async function measureGlyphs(cdp, sid, font, s, tmp) {
+  const html = path.join(tmp, `${font.id}-glyphs.html`);
+  fs.writeFileSync(html, glyphPage(pathToFileURL(font.file).href, font.weight));
+  const loaded = cdp.once('Page.loadEventFired', sid);
+  await cdp.send('Page.navigate', { url: pathToFileURL(html).href }, sid);
+  await loaded;
+  const { result } = await cdp.send('Runtime.evaluate', {
+    awaitPromise: true, returnByValue: true,
+    expression: `document.fonts.ready.then(() => [...document.fonts].map((f) => f.status).join())` }, sid);
+  if (result.value !== 'loaded') throw new Error(`${font.id}: font not loaded (${result.value})`);
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true }, sid);
+  const inputs = [];
+  const walk = (n) => {
+    if (n.nodeName === 'INPUT') inputs.push(n);
+    for (const c of [...(n.children || []), ...(n.shadowRoots || [])]) walk(c);
+  };
+  walk(root);
+  const out = [];
+  for (const input of inputs) {
+    const item = input.attributes[input.attributes.indexOf('data-item') + 1];
+    const editor = input.shadowRoots[0].children.find((c) => c.nodeName === 'DIV');
+    const text = (editor.children || []).find((c) => c.nodeType === 3);
+    if (!text || text.nodeValue !== GLYPH_TEXT) throw new Error(`${font.id}: no text in the ${item} editor`);
+    const { object } = await cdp.send('DOM.resolveNode', { nodeId: text.nodeId }, sid);
+    const { result: r } = await cdp.send('Runtime.callFunctionOn', {
+      objectId: object.objectId, returnByValue: true, functionDeclaration: `function () {
+        const el = this.getRootNode().host.getBoundingClientRect();
+        const editor = this.parentNode.getBoundingClientRect();
+        const g = document.createRange();
+        const xs = [];
+        for (let i = 0; i < this.length; i++) {
+          g.setStart(this, i); g.setEnd(this, i + 1);
+          xs.push(g.getBoundingClientRect().left - el.left);
+        }
+        xs.push(g.getBoundingClientRect().right - el.left);
+        return { xs, fits: editor.right - el.left >= xs[xs.length - 1] };
+      }` }, sid);
+    if (!r.value.fits) throw new Error(`${font.id} ${s}x ${item}: the text overflows the editor`);
+    out.push([font.id, s, item, r.value.xs.map((x) => +(x * s).toFixed(3)).join(',')]);
+  }
+  if (out.length !== 2) throw new Error(`${font.id}: ${out.length} glyph inputs`);
+  return out;
 }
 
 function fonts() {
@@ -402,7 +469,7 @@ async function measure(cdp, sid, font, s, tmp) {
       out.push([font.id, s, n > 1 ? `${item}-${k + 1}` : item, '-', ink, '-', '-', '-', '-', '-']);
     }
   }
-  return out;
+  return { rows: out, glyphs: await measureGlyphs(cdp, sid, font, s, tmp) };
 }
 
 async function run(s, tmp) {
@@ -415,9 +482,13 @@ async function run(s, tmp) {
     await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sid);
     const { result } = await cdp.send('Runtime.evaluate', { expression: 'devicePixelRatio', returnByValue: true }, sid);
     if (result.value !== s) throw new Error(`devicePixelRatio ${result.value}, wanted ${s}`);
-    const rows = [];
-    for (const font of fonts()) rows.push(...await measure(cdp, sid, font, s, tmp));
-    return rows;
+    const rows = [], glyphs = [];
+    for (const font of fonts()) {
+      const m = await measure(cdp, sid, font, s, tmp);
+      rows.push(...m.rows);
+      glyphs.push(...m.glyphs);
+    }
+    return { rows, glyphs };
   } finally {
     // Browser.close lets Chrome remove its own temporary files; kill is the fallback.
     const exited = new Promise((r) => proc.once('exit', r));
@@ -431,12 +502,20 @@ async function run(s, tmp) {
 if (process.env.DEBUG_ROWS) globalThis.debugRows = true;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-baselines-'));
 try {
-  const rows = [];
-  for (const s of SCALES) rows.push(...await run(s, tmp));
-  rows.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0)));
+  const rows = [], glyphs = [];
+  for (const s of SCALES) {
+    const m = await run(s, tmp);
+    rows.push(...m.rows);
+    glyphs.push(...m.glyphs);
+  }
+  const order = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0));
+  rows.sort(order);
+  glyphs.sort(order);
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, ['font\tscale\titem\tline_top\tbaseline\tsel_top\tsel_bottom\tcaret_top\tcaret_bottom\tcaret_w', ...rows.map((r) => r.join('\t'))].join('\n') + '\n');
   console.error(`wrote ${rows.length} rows to ${OUT}`);
+  fs.writeFileSync(GLYPHS_OUT, ['font\tscale\titem\tx', ...glyphs.map((r) => r.join('\t'))].join('\n') + '\n');
+  console.error(`wrote ${glyphs.length} rows to ${GLYPHS_OUT}`);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
