@@ -44,6 +44,7 @@ use egui::{
 };
 use std::sync::Arc;
 
+mod shape;
 mod wrap;
 
 /// The UiStack tag a crate container puts on its content `Ui` to pass the
@@ -354,129 +355,213 @@ impl TextLook {
 }
 
 impl TextLook {
-    /// `job` laid out by egui, wrapped as `wrap` and `width` say. Under
-    /// `text-balance` or `text-pretty` the wrapped text breaks where Blink
-    /// breaks it (see [`wrap`]): the chosen breaks become forced ones for
-    /// egui, and the galley keeps the caller's text. Balance applies to the
-    /// first paragraph only (Blink balances from the block's first line),
-    /// pretty to each.
+    /// `job` laid out by egui with Chrome's glyph positions (see
+    /// [`shape`]), wrapped as `wrap` and `width` say. Wrapped text breaks
+    /// where Blink breaks it (see [`wrap`]): trailing spaces hang, and
+    /// under `text-balance` or `text-pretty` the lines follow those
+    /// breakers. Balance applies to the first paragraph only (Blink
+    /// balances from the block's first line), pretty to each. The breaks
+    /// become forced ones for egui; the galley keeps the caller's text
+    /// where no hyphen break added a line feed. Results are cached per
+    /// job, width, mode and scale (notes §1).
     fn lay_out(
         &self,
         ctx: &egui::Context,
-        mut job: LayoutJob,
+        job: LayoutJob,
         wrap: TextWrapMode,
         width: f32,
     ) -> Arc<Galley> {
-        job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
-        let style = match self.wrap_style {
-            Some(TextWrap::Balance) => wrap::Style::Balance,
-            Some(TextWrap::Pretty) => wrap::Style::Pretty,
-            None => return ctx.fonts_mut(|f| f.layout_job(job)),
-        };
-        if wrap != TextWrapMode::Wrap || !width.is_finite() {
-            return ctx.fonts_mut(|f| f.layout_job(job));
-        }
-        let mut free = job.clone();
-        free.wrap = TextWrapping::no_max_width();
-        let flat = ctx.fonts_mut(|f| f.layout_job(free));
+        use std::hash::{Hash, Hasher};
         let ppp = ctx.pixels_per_point();
-        let key = (
-            Arc::as_ptr(&flat) as usize,
-            width.to_bits(),
-            ppp.to_bits(),
-            style == wrap::Style::Balance,
-        );
-        let id = egui::Id::new("shadcn_egui::text::wrapped");
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        job.hash(&mut hasher);
+        let style = self.wrap_style.map(|s| s as u8);
+        (wrap as u8, width.to_bits(), ppp.to_bits(), style).hash(&mut hasher);
+        // A theme switch keeps the family names for other faces.
+        for section in &job.sections {
+            let face = shape::family_face(ctx, &section.format.font_id.family);
+            face.map(|f| Arc::as_ptr(&f) as usize).hash(&mut hasher);
+        }
+        let key = hasher.finish();
+        let id = egui::Id::new("shadcn_egui::text::laid_out");
         let frame = ctx.cumulative_frame_nr();
         let hit = ctx.data_mut(|d| {
-            let cache = d.get_temp_mut_or_default::<WrapCache>(id);
+            let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
             if cache.frame != frame {
-                cache.entries.retain(|_, e| e.2 + 1 >= frame);
+                cache.entries.retain(|_, e| e.1 + 1 >= frame);
                 cache.frame = frame;
             }
             let e = cache.entries.get_mut(&key)?;
-            Arc::ptr_eq(&e.0, &flat).then(|| {
-                e.2 = frame;
-                e.1.clone()
-            })
+            e.1 = frame;
+            Some(e.0.clone())
         });
         if let Some(galley) = hit {
             return galley;
         }
-        let out = self.break_styled(ctx, &flat, job, style, width);
+        let out = self.shape_and_lay_out(ctx, job, wrap, width);
         ctx.data_mut(|d| {
-            d.get_temp_mut_or_default::<WrapCache>(id)
+            d.get_temp_mut_or_default::<LayoutCache>(id)
                 .entries
-                .insert(key, (flat, out.clone(), frame));
+                .insert(key, (out.clone(), frame));
         });
         out
     }
 
-    /// [`TextLook::lay_out`] past its cache: `flat` is `job` on one row per
-    /// paragraph.
-    fn break_styled(
+    /// [`TextLook::lay_out`] past its cache.
+    fn shape_and_lay_out(
         &self,
         ctx: &egui::Context,
-        flat: &Galley,
-        mut job: LayoutJob,
-        style: wrap::Style,
+        job: LayoutJob,
+        wrap: TextWrapMode,
         width: f32,
     ) -> Arc<Galley> {
-        let ppp = ctx.pixels_per_point();
-        let font = job.sections.first().map(|s| s.format.font_id.clone());
-        let space = font.map_or(0.0, |f| ctx.fonts_mut(|fs| fs.glyph_width(&f, ' ')));
-        let byte_of: Vec<usize> = job.text.char_indices().map(|(b, _)| b).collect();
-        let text_len = byte_of.len();
-        // Byte offsets where a line starts after a chosen break.
-        let mut starts = Vec::new();
-        let mut first = 0;
-        for (p, placed) in flat.rows.iter().enumerate() {
-            let glyphs = &placed.row.glyphs;
-            if p == 0 || style == wrap::Style::Pretty {
-                let chars: Vec<_> = glyphs
+        let adv = shape::advances(ctx, &job);
+        let chars: Vec<char> = job.text.chars().collect();
+        let n = chars.len();
+        let breaking = wrap == TextWrapMode::Wrap && width.is_finite();
+        // `starts[i]`: a line starts at char `i` after a chosen break.
+        let mut starts = vec![false; n + 1];
+        if breaking {
+            let ppp = ctx.pixels_per_point();
+            let size = job
+                .sections
+                .first()
+                .map_or(self.size, |s| s.format.font_id.size);
+            let space = job.sections.first().map_or(0.0, |s| {
+                ctx.fonts_mut(|f| f.glyph_width(&s.format.font_id, ' '))
+            });
+            let mut first = 0;
+            for (p, para) in chars.split(|c| *c == '\n').enumerate() {
+                // Each char's left and right edge on the paragraph's line.
+                let mut x = 0.0;
+                let edges: Vec<(char, f32, f32)> = para
                     .iter()
-                    .map(|g| (g.chr, g.pos.x, g.pos.x + g.advance_width))
+                    .enumerate()
+                    .map(|(i, &c)| {
+                        x += if i == 0 { 0.0 } else { adv.kern[first + i] };
+                        let left = x;
+                        x += adv.chrome[first + i];
+                        (c, left, x)
+                    })
                     .collect();
-                let cands = wrap::candidates(&chars);
-                let found = wrap::breaks(&cands, style, width, self.size, ppp, space, text_len);
-                starts.extend(found.into_iter().flatten().map(|s| byte_of[first + s]));
-            }
-            first += glyphs.len() + usize::from(placed.ends_with_newline);
-        }
-        if starts.is_empty() {
-            return ctx.fonts_mut(|f| f.layout_job(job));
-        }
-        let original = job.clone();
-        let mut inserted = false;
-        for &b in starts.iter().rev() {
-            if b > 0 && job.text.as_bytes()[b - 1] == b' ' {
-                job.text.replace_range(b - 1..b, "\n");
-            } else {
-                // After a hyphen: a forced break goes in, the text grows.
-                job.text.insert(b, '\n');
-                for s in &mut job.sections {
-                    let r = &mut s.byte_range;
-                    *r = (r.start + usize::from(r.start >= b))..(r.end + usize::from(r.end >= b));
+                let cands = wrap::candidates(&edges);
+                let style = match self.wrap_style {
+                    Some(TextWrap::Balance) if p == 0 => Some(wrap::Style::Balance),
+                    Some(TextWrap::Pretty) => Some(wrap::Style::Pretty),
+                    _ => None,
+                };
+                let found = style
+                    .and_then(|s| wrap::breaks(&cands, s, width, size, ppp, space, n))
+                    .unwrap_or_else(|| wrap::normal(&cands, width, ppp));
+                for s in found {
+                    starts[first + s] = true;
                 }
-                inserted = true;
+                first += para.len() + 1;
             }
         }
-        let mut galley = ctx.fonts_mut(|f| f.layout_job(job));
+        // One section per char, each moved by the gap that puts it where
+        // Chrome puts it: egui advances the char before by its own width,
+        // the section's leading space adds the rest and the kerning.
+        let mut section_of = Vec::with_capacity(n);
+        for (si, s) in job.sections.iter().enumerate() {
+            section_of.extend(std::iter::repeat_n(
+                si,
+                job.text[s.byte_range.clone()].chars().count(),
+            ));
+        }
+        let mut out = LayoutJob {
+            sections: Vec::with_capacity(n),
+            text: String::with_capacity(job.text.len() + 8),
+            ..job.clone()
+        };
+        out.wrap = if breaking {
+            let mut w = TextWrapping::no_max_width();
+            if job.justify {
+                w.max_width = width;
+            }
+            w
+        } else {
+            TextWrapping::from_wrap_mode_and_width(wrap, width)
+        };
+        let mut inserted = false;
+        // The original char behind each char of `out`, for the row widths.
+        let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);
+        let mut line_start = true;
+        let mut prev_section = usize::MAX;
+        for (i, &c) in chars.iter().enumerate() {
+            let si = section_of.get(i).copied().unwrap_or(0);
+            let section = &job.sections[si];
+            if starts[i] && !(i > 0 && chars[i - 1] == ' ') {
+                // After a hyphen: a forced break goes in, the text grows.
+                let at = out.text.len();
+                out.text.push('\n');
+                out.sections.push(egui::text::LayoutSection {
+                    leading_space: 0.0,
+                    byte_range: at..at + 1,
+                    format: job.sections[section_of[i - 1]].format.clone(),
+                });
+                origin.push(None);
+                inserted = true;
+                line_start = true;
+            }
+            let c = if c == ' ' && starts[i + 1] { '\n' } else { c };
+            let mut gap = if line_start {
+                0.0
+            } else {
+                adv.chrome[i - 1] - adv.egui[i - 1] + adv.kern[i]
+            };
+            if si != prev_section {
+                gap += section.leading_space;
+                prev_section = si;
+            }
+            let mut format = section.format.clone();
+            format.extra_letter_spacing = 0.0;
+            let at = out.text.len();
+            out.text.push(c);
+            out.sections.push(egui::text::LayoutSection {
+                leading_space: gap,
+                byte_range: at..out.text.len(),
+                format,
+            });
+            origin.push(Some(i));
+            line_start = c == '\n';
+        }
+        if out.sections.is_empty() {
+            out.sections = job.sections.clone();
+        }
+        let mut galley = ctx.fonts_mut(|f| f.layout_job(out));
+        // A row ends at Chrome's right edge of its last char, not egui's.
+        let g = Arc::make_mut(&mut galley);
+        let mut at = 0;
+        let mut right = f32::NEG_INFINITY;
+        for placed in &mut g.rows {
+            let glyphs = placed.row.glyphs.len();
+            let last = (glyphs > 0)
+                .then(|| origin.get(at + glyphs - 1).copied().flatten())
+                .flatten();
+            if let Some(i) = last {
+                Arc::make_mut(&mut placed.row).size.x += adv.chrome[i] - adv.egui[i];
+            }
+            right = right.max(placed.pos.x + placed.row.size.x);
+            at += glyphs + usize::from(placed.ends_with_newline);
+        }
+        if job.halign == Align::LEFT && right.is_finite() {
+            g.rect.max.x = g.rect.min.x + right;
+        }
         if !inserted {
-            Arc::make_mut(&mut galley).job = Arc::new(original);
+            g.job = Arc::new(job);
         }
         galley
     }
 }
 
-/// The galleys [`TextLook::lay_out`] broke under a wrap style in this frame
-/// and the one before: by the one-row galley's address, width, scale and
-/// style, that galley, the result and the frame it was last used.
+/// The galleys [`TextLook::lay_out`] laid out in this frame and the one
+/// before: by the hash of the job, width, mode, scale and faces, the galley
+/// and the frame it was last used.
 #[derive(Clone, Default)]
-struct WrapCache {
+struct LayoutCache {
     frame: u64,
-    #[allow(clippy::type_complexity)]
-    entries: std::collections::HashMap<(usize, u32, u32, bool), (Arc<Galley>, Arc<Galley>, u64)>,
+    entries: std::collections::HashMap<u64, (Arc<Galley>, u64)>,
 }
 
 /// Every placeholder colour of `job` (text and underline) set to `color`.

@@ -112,6 +112,29 @@ fn greedy(
     Some(ends)
 }
 
+/// Blink's normal line breaking (`text-wrap: wrap`) over `cands` at
+/// `width` (points): each line ends at the last candidate that fits, its
+/// trailing spaces hanging; a line where none fits takes the first, its
+/// word overflowing (`overflow-wrap: normal`). The char index where each
+/// line after the first starts. `ppp` gives Blink's `LayoutUnit`.
+pub(super) fn normal(cands: &[Candidate], width: f32, ppp: f32) -> Vec<usize> {
+    let eps = 1.0 / (64.0 * ppp);
+    let mut out = Vec::new();
+    let mut s = 0;
+    while s + 1 < cands.len() {
+        let start = cands[s].pos_no_break;
+        let e = (s + 1..cands.len())
+            .take_while(|&e| cands[e].pos_if_break - start <= width + eps)
+            .last()
+            .unwrap_or(s + 1);
+        if e + 1 < cands.len() {
+            out.push(cands[e].start);
+        }
+        s = e;
+    }
+    out
+}
+
 /// `ScoreLineBreaker::Optimize` for the paragraph part `cands` (its first
 /// candidate is the start of its first line): the candidate indices ending
 /// each line, or `None` where Blink gives up (fewer than three break
