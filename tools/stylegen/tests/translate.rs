@@ -783,7 +783,6 @@ fn ignore_reasons_follow_the_spec_groups() {
         "isolate",
         "z-50",
         "whitespace-nowrap",
-        "line-clamp-2",
         "overflow-hidden",
         "peer",
         "group/button",
@@ -800,6 +799,40 @@ fn ignore_reasons_follow_the_spec_groups() {
     assert_eq!(why("shrink-0", Some(Pseudo::Svg)), svg);
     // The prefix list counts too.
     assert_eq!(why("cursor-pointer", Some(Pseudo::Svg)), svg);
+}
+
+/// `line-clamp-N` sets `display: -webkit-box`; Tailwind 4.3.3 emits the
+/// display utilities after it, so a display class on the same target and
+/// variants wins and Chrome clamps nothing (the select value). Without one
+/// the clamp is real, and the crate does not build it yet.
+#[test]
+fn a_display_class_cancels_a_line_clamp() {
+    use stylegen::resolve::{CLAMP_CANCELLED, CLAMP_EFFECTIVE};
+    let run = |classes: &[&str]| {
+        let classes: Vec<String> = classes.iter().map(|c| (*c).to_owned()).collect();
+        translate(&classes, &Vars::new())
+    };
+    let select = run(&[
+        "*:data-[slot=select-value]:line-clamp-1",
+        "*:data-[slot=select-value]:flex",
+    ]);
+    assert!(select.ignored.contains(&(
+        "*:data-[slot=select-value]:line-clamp-1".into(),
+        CLAMP_CANCELLED
+    )));
+    assert!(select.unsupported.is_empty());
+    for classes in [
+        &["line-clamp-2"][..],
+        &["line-clamp-1", "md:flex"],
+        &["flex", "*:line-clamp-1"],
+    ] {
+        let m = run(classes);
+        assert!(
+            m.unsupported.iter().any(|(_, why)| why == CLAMP_EFFECTIVE),
+            "{classes:?}"
+        );
+    }
+    assert!(run(&["flex", "line-clamp-3"]).unsupported.is_empty());
 }
 
 /// The winning value of `field` under `state` in one class list, as `pick`

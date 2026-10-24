@@ -81,10 +81,21 @@ pub fn collect_vars(css: &[(String, Vec<String>)]) -> Vars {
     vars
 }
 
+/// Why a `line-clamp-N` under a display class clamps nothing.
+pub const CLAMP_CANCELLED: &str = "line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text";
+/// Why a `line-clamp-N` that Chrome applies is not translated.
+pub const CLAMP_EFFECTIVE: &str =
+    "line clamp: the crate does not clamp lines yet (no ported part has one)";
+
 pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     let mut m = Marker::default();
     type Show = (String, &'static str, u128, u128, u128, usize);
     let mut shows: Vec<Show> = Vec::new();
+    // Line clamps and display classes, by target and variants: a display
+    // class of the same target and at least the clamp's rank cancels it.
+    type Target = (Option<ChildSel>, u128, u128, u128);
+    let mut clamps: Vec<(String, Target)> = Vec::new();
+    let mut displays: Vec<Target> = Vec::new();
     for (idx, raw) in classes.iter().enumerate() {
         let c = split(raw);
         let v = match class_variants(&c) {
@@ -123,9 +134,13 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
         match utility(&c.utility, v.pseudo) {
             U::Set(list) => set(list, false, &mut m),
             U::After(list) => set(list, true, &mut m),
+            U::Clamp(_) => clamps.push((raw.clone(), (v.child.clone(), v.all, v.none, v.rank))),
             _ if v.child.is_some() => match utility(&c.utility, v.pseudo) {
                 U::Ignore(why) => m.ignored.push((raw.clone(), why)),
-                U::Show(why) => m.ignored.push((raw.clone(), why)),
+                U::Show(why) => {
+                    displays.push((v.child.clone(), v.all, v.none, v.rank));
+                    m.ignored.push((raw.clone(), why));
+                }
                 _ => m.unsupported.push((
                     raw.clone(),
                     "CSS variable or inherited value on a child target".into(),
@@ -167,7 +182,10 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                 });
                 m.ignored.push((raw.clone(), why));
             }
-            U::Show(why) => shows.push((raw.clone(), why, v.all, v.none, v.rank, idx)),
+            U::Show(why) => {
+                displays.push((None, v.all, v.none, v.rank));
+                shows.push((raw.clone(), why, v.all, v.none, v.rank, idx));
+            }
             U::Ignore(why) => m.ignored.push((raw.clone(), why)),
             U::Unsupported(why) => m.unsupported.push((raw.clone(), why.to_owned())),
         }
@@ -187,6 +205,16 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
             });
         } else {
             m.ignored.push((raw, why));
+        }
+    }
+    for (raw, (child, all, none, rank)) in clamps {
+        let cancelled = displays
+            .iter()
+            .any(|d| d.0 == child && d.1 == all && d.2 == none && d.3 >= rank);
+        if cancelled {
+            m.ignored.push((raw, CLAMP_CANCELLED));
+        } else {
+            m.unsupported.push((raw, CLAMP_EFFECTIVE.into()));
         }
     }
     m.decls = merge(std::mem::take(&mut m.decls));

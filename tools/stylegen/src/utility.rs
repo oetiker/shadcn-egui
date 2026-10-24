@@ -21,6 +21,11 @@ pub enum U {
     /// class of the same fields and modifiers, so this clears them; the
     /// class itself is reported as ignored with the reason.
     Inherit(Vec<Field>, &'static str),
+    /// `line-clamp-N`: N lines, cut with an ellipsis. Tailwind emits the
+    /// display utilities after it, so a display class on the same target
+    /// and variants wins over its `display: -webkit-box` and nothing is
+    /// clamped; [`crate::resolve::translate`] decides which.
+    Clamp(u32),
     Ignore(&'static str),
     Unsupported(&'static str),
 }
@@ -100,7 +105,6 @@ const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("group/", BROWSER),
     ("cursor-", BROWSER),
     ("overflow-", BROWSER),
-    ("line-clamp-", BROWSER),
     ("origin-", ANCHOR),
 ];
 
@@ -243,6 +247,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
                 U::Inherit(..) => U::Unsupported("inherited value under after:"),
                 // The pseudo-element is drawn whenever it has fields.
                 U::Show(why) => U::Ignore(why),
+                U::Clamp(_) => U::Unsupported("line-clamp under after:"),
                 other @ (U::After(_) | U::Ignore(_) | U::Unsupported(_)) => other,
             };
         }
@@ -253,6 +258,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     }
     if SHOW.contains(&u) {
         return U::Show(STRUCTURE);
+    }
+    if let Some(n) = u.strip_prefix("line-clamp-").and_then(|n| n.parse().ok()) {
+        return U::Clamp(n);
     }
     if let Some(m) = motion(u) {
         return m;

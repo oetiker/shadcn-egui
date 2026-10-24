@@ -214,12 +214,12 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `justify-between`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
-- ignored `*:data-[slot=select-value]:line-clamp-1`: browser behaviour the component handles itself
 - ignored `*:data-[slot=select-value]:flex`: structure: egui layout is done by the component
 - ignored `*:data-[slot=select-value]:items-center`: structure: egui layout is done by the component
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `flex`: structure: egui layout is done by the component
+- ignored `*:data-[slot=select-value]:line-clamp-1`: line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text
 
 ## `cn-select-trigger-icon`
 
