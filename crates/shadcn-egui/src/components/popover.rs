@@ -107,7 +107,7 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let title_look = TextLook::resolve(ui, &title_l, g);
     let content_color = pick(&[&*t.style.popover_content], |r| &r.text, g).map(|p| t.paint(p));
     let title_look = match (title_look.recipe_color(), content_color) {
-        (None, Some(c)) => title_look.with_color(c),
+        (None, Some(c)) => title_look.color(c),
         _ => title_look,
     };
     let desc_look = TextLook::resolve(ui, &desc_l, g);

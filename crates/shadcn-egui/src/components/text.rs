@@ -28,7 +28,7 @@
 //!     let look = TextLook::resolve(ui, &layers, theme.state(ui.ctx(), State::NONE));
 //!     let block = look.layout(ui, text, egui::TextWrapMode::Wrap, ui.available_width());
 //!     let (rect, resp) = ui.allocate_exact_size(block.size(), egui::Sense::hover());
-//!     block.paint(ui.painter(), rect.min, look.color(ui));
+//!     block.paint(ui.painter(), rect.min, look.resolved_color(ui));
 //!     resp
 //! }
 //! ```
@@ -136,7 +136,7 @@ impl TextLook {
     /// The colour of text without an explicit colour, in place of the
     /// recipe's (a part whose colour comes from another part's state).
     #[inline]
-    pub fn with_color(mut self, color: Color32) -> Self {
+    pub fn color(mut self, color: Color32) -> Self {
         self.color = Some(color);
         self
     }
@@ -185,7 +185,7 @@ impl TextLook {
 
     /// The colour of text without an explicit colour: the recipe's, else
     /// `ui`'s text colour.
-    pub fn color(&self, ui: &Ui) -> Color32 {
+    pub fn resolved_color(&self, ui: &Ui) -> Color32 {
         self.color.unwrap_or_else(|| ui.visuals().text_color())
     }
 
@@ -263,7 +263,7 @@ impl TextLook {
     /// the browser places it, in the look's colour.
     pub fn label(&self, ui: &mut Ui, text: impl Into<WidgetText>, wrap: TextWrapMode) -> Response {
         let mut job = self.job(ui, text.into());
-        fill_color(&mut job, self.color(ui));
+        fill_color(&mut job, self.resolved_color(ui));
         job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, ui.available_width());
         job.halign = ui.layout().horizontal_placement();
         job.justify = ui.layout().horizontal_justify();
@@ -707,7 +707,7 @@ mod tests {
         with_ui(1.0, |ui| {
             let look = TextLook::resolve(ui, &[], State::NONE);
             ui.visuals_mut().override_text_color = Some(Color32::GREEN);
-            assert_eq!(look.color(ui), Color32::GREEN);
+            assert_eq!(look.resolved_color(ui), Color32::GREEN);
         });
     }
 

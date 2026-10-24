@@ -25,7 +25,8 @@ are recorded here. The format is based on
 - A mouse or touch press now focuses buttons, checkboxes, switches, slider thumbs, tab triggers and the select trigger without showing a focus ring, as the browser does; the ring shows only after the focus moved by keyboard, while an input shows it on any focus.
 - Keys act as on shadcn's elements: Space clicks a button when released, Enter no longer toggles a checkbox, Enter and Space no longer move a focused slider to the mouse pointer, and pressing a tab selects it on the press.
 - `Input::id_source` is removed; use `Input::id_salt`, which takes the same string.
-- `components::shared::line_box` is removed. `components::text::TextLook` resolves a part's text from its recipes and lays it out and paints it as the crate's own widgets do; `TextLook::line_height` is the height of one line.
+- `components::shared::line_box` is removed. `components::text::TextLook` resolves a part's text from its recipes and lays it out and paints it as the crate's own widgets do: `.label(..)` adds it as an egui label, `.layout(..)` returns a `TextBlock` to paint, `.color(..)` sets its colour, `.resolved_color(ui)` reads it and `.leading(Leading::Field)` places it as in a text field; `TextLook::line_height` is the height of one line.
+- `components::text::content_scope` hands a container's text size, line height and colour to the crate text inside it.
 
 ### Fixed
 - Text sits on the pixel row Chrome puts it on: in Inter, badges, tooltips, extra-small buttons and the text in inputs (typed and placeholder) moved 1 px down, card titles 3 px down, descriptions and help text 2 px down and dialog titles 1 px up, while buttons, tabs, select triggers, select lists and labels kept their place. With another font, text moves up to 2 px up or down, as the font crates no longer carry a per-font vertical offset (`FontFiles::y_offset_factor` is 0 for every font).

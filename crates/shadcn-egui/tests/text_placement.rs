@@ -158,7 +158,7 @@ fn drawn(files: &'static FontFiles, ppp: f32) -> Vec<(String, [Option<f32>; 6])>
                             let text = look.layout(ui, "HHHH HHHH HHHH", wrap, word * 1.5);
                             let (rect, resp) =
                                 ui.allocate_exact_size(text.size(), egui::Sense::hover());
-                            text.paint(ui.painter(), rect.min, look.color(ui));
+                            text.paint(ui.painter(), rect.min, look.resolved_color(ui));
                             resp
                         }
                     })

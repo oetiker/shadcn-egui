@@ -26,7 +26,9 @@ the crate.
   `TextLook::resolve(ui, &recipes, state)` resolves size, weight, colour
   and line height, `.layout(..)` returns a `TextBlock` as tall as its line
   boxes with each baseline where the browser puts it, `.label(..)` shows it
-  as an egui label, and `content_scope` hands a container's `text-*` and
+  as an egui label, `.color(c)` sets the colour of a part whose colour
+  comes from another part, `.resolved_color(ui)` is the colour to paint a
+  `TextBlock` in, and `content_scope` hands a container's `text-*` and
   text colour to its content.
 - `shadcn_egui::layout::{capped_width, overlay_width, allocate_overflowing}`
   for a widget's width and its allocation.

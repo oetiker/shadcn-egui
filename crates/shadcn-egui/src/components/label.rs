@@ -71,7 +71,7 @@ pub fn description(ui: &mut Ui, text: &str) -> Response {
     let muted = t.role(Role::MutedForeground); // behaviour-ok: inherits; reads card_description first
     let look = match look.recipe_color() {
         Some(_) => look,
-        None => look.with_color(muted),
+        None => look.color(muted),
     };
     look.label(ui, text, TextWrapMode::Wrap)
 }
