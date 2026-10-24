@@ -75,7 +75,7 @@ fn shipped_fonts_are_measured() {
         .collect();
     assert!(
         unmeasured.is_empty(),
-        "measure with tests/font_offset.rs: {unmeasured:?}"
+        "check against Chrome with crates/shadcn-egui/tests/text_placement.rs: {unmeasured:?}"
     );
 }
 
