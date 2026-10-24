@@ -107,7 +107,7 @@ The CI runs them; to run them locally:
 scripts/check-version-files.sh
 scripts/check-packages.sh
 scripts/check-package-size.sh
-cargo publish --dry-run --workspace --jobs 4
+scripts/check-publish.sh --jobs 4
 ```
 
 ## Adding a font or an icon set

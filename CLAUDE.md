@@ -25,9 +25,9 @@ crates.
 - `web/index.html` — the browser gallery's loading page; the scripts below
   build it into the site and `.github/workflows/pages.yml` deploys it.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
-  `check-version-files.sh`, `build-web-gallery.sh` (builds the browser
-  gallery), `install-wasm-bindgen.sh` (fetches the matching
-  `wasm-bindgen` CLI).
+  `check-publish.sh`, `check-version-files.sh`, `build-web-gallery.sh`
+  (builds the browser gallery), `install-wasm-bindgen.sh` (fetches the
+  matching `wasm-bindgen` CLI).
 - `plugin/` — the Claude Code plugin: `skills/` and
   `.claude-plugin/plugin.json`. The marketplace that installs it is
   `.claude-plugin/marketplace.json` at the root.
@@ -95,7 +95,7 @@ crates.
   scripts/check-version-files.sh
   scripts/check-packages.sh
   scripts/check-package-size.sh
-  cargo publish --dry-run --workspace --jobs 4
+  scripts/check-publish.sh --jobs 4
   ```
 
 - Generators run from the repository root: `stylegen generate|drift
