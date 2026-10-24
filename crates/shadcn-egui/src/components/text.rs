@@ -453,12 +453,15 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
     m
 }
 
-/// `galley` with each row moved so its baseline sits where Blink puts it
-/// in the row's line box: ascent and descent of the row's first font
-/// rounded to whole device pixels, the leading split by `leading`. egui
-/// puts the baseline at the font's ascent rounded once, and its row
-/// includes the line gap. The galley keeps its size, the line boxes, so
-/// layout, selection and the cursor follow it.
+/// `galley` with each row in its line box as Blink lays it out: the line
+/// tops at the unrounded sum of the line heights above, the baseline
+/// where Blink paints it, the half leading (split by `leading`) and the
+/// ascent of the row's first font added to the line top in device pixels,
+/// ascent and descent each rounded to whole device pixels, the sum
+/// rounded to the pixel. egui rounds every row's height and top to the
+/// pixel and puts the baseline at the font's ascent; here each row keeps
+/// its line box as its rect (selection and cursor span it) and its glyphs
+/// move inside it. The galley is as tall as its line boxes.
 pub(crate) fn place_rows(
     ctx: &egui::Context,
     mut galley: Arc<Galley>,
@@ -468,6 +471,8 @@ pub(crate) fn place_rows(
     let g = Arc::make_mut(&mut galley);
     let job = g.job.clone();
     let mut bounds = egui::Rect::NOTHING;
+    // The line top of the row, in points from the galley top.
+    let mut top = 0.0;
     // The byte where the row starts in the job's text: rows take its
     // characters in order, a row ended by `\n` one more.
     let mut byte = 0;
@@ -477,44 +482,53 @@ pub(crate) fn place_rows(
         for _ in 0..chars {
             byte += job.text[byte..].chars().next().map_or(0, char::len_utf8);
         }
-        let Some(glyph) = placed.row.glyphs.first() else {
-            continue;
-        };
-        let Some(section) = job
+        let section = job
             .sections
             .iter()
             .find(|s| s.byte_range.contains(&start))
-            .or(job.sections.last())
-        else {
-            continue;
-        };
-        let format = &section.format;
-        let (size, line) = (format.font_id.size, placed.row.size.y);
-        let em = family_vmetrics(ctx, &format.font_id.family).unwrap_or(VMetrics {
-            ascent: glyph.font_face_ascent / size,
-            descent: (glyph.font_face_height - glyph.font_face_ascent) / size,
-            line_gap: 0.0,
-        });
-        let ascent = (em.ascent * size * ppp).round();
-        let descent = (em.descent * size * ppp).round();
-        let half = match leading {
-            Leading::Inline => ((line * ppp - ascent - descent) / 2.0).floor(),
-            Leading::Field => {
-                let gap = (em.line_gap * size * ppp).round();
-                ((line * ppp - ascent - descent - gap) / 2.0).ceil() + (gap / 2.0).floor()
-            }
-        };
-        let shift = (half + ascent - (glyph.pos.y * ppp).round()) / ppp;
-        placed.pos.y += shift;
-        bounds |= placed
+            .or(job.sections.last());
+        // The row's line box: its tallest line height, as egui takes it
+        // before rounding; an empty row has its section's.
+        let line = placed
             .row
-            .visuals
-            .mesh_bounds
-            .translate(placed.pos.to_vec2());
+            .glyphs
+            .iter()
+            .map(|g| g.line_height)
+            .reduce(f32::max)
+            .or_else(|| section.and_then(|s| s.format.line_height))
+            .unwrap_or(placed.row.size.y);
+        placed.pos.y = top;
+        let row = Arc::make_mut(&mut placed.row);
+        row.size.y = line;
+        if let (Some(glyph), Some(section)) = (row.glyphs.first(), section) {
+            let size = section.format.font_id.size;
+            let em = family_vmetrics(ctx, &section.format.font_id.family).unwrap_or(VMetrics {
+                ascent: glyph.font_face_ascent / size,
+                descent: (glyph.font_face_height - glyph.font_face_ascent) / size,
+                line_gap: 0.0,
+            });
+            let ascent = (em.ascent * size * ppp).round();
+            let descent = (em.descent * size * ppp).round();
+            let half = match leading {
+                Leading::Inline => ((line * ppp - ascent - descent) / 2.0).floor(),
+                Leading::Field => {
+                    let gap = (em.line_gap * size * ppp).round();
+                    ((line * ppp - ascent - descent - gap) / 2.0).ceil() + (gap / 2.0).floor()
+                }
+            };
+            let baseline = (top * ppp + half + ascent).round() / ppp - top;
+            let shift = egui::vec2(0.0, baseline - glyph.pos.y);
+            for glyph in &mut row.glyphs {
+                glyph.pos.y += shift.y;
+            }
+            row.visuals.mesh.translate(shift);
+            row.visuals.mesh_bounds = row.visuals.mesh_bounds.translate(shift);
+        }
+        bounds |= row.visuals.mesh_bounds.translate(placed.pos.to_vec2());
+        top += line;
     }
-    if bounds.is_positive() {
-        g.mesh_bounds = bounds;
-    }
+    g.rect.max.y = g.rect.min.y + top;
+    g.mesh_bounds = bounds;
     galley
 }
 
@@ -637,6 +651,54 @@ mod tests {
                 let g = (em.line_gap * 10.0 * ppp).round();
                 let up = ((30.0 * ppp - a - d - g) / 2.0).ceil() + (g / 2.0).floor() + a;
                 assert_eq!(baselines(block.galley(), ppp), [up]);
+            });
+        }
+    }
+
+    #[test]
+    fn fractional_line_boxes_stay_unrounded() {
+        // `text-xs/relaxed`: 12 px text on 19.5 px lines. Blink keeps the
+        // line tops at k * 19.5 and rounds only the painted baseline.
+        for ppp in [1.0, 1.5, 2.0] {
+            with_ui(ppp, |ui| {
+                let mut r = Recipe::default();
+                r.text_size.base = Some(TextSize::Px(12.0));
+                r.line_height.base = Some(1.625);
+                let look = TextLook::resolve(ui, &[&r], State::NONE);
+                let text = "Hg\nHg\nHg";
+                let block = look.layout(ui, text, TextWrapMode::Extend, f32::INFINITY);
+                let galley = block.galley();
+                assert_eq!(block.size().y, 58.5);
+                let tops: Vec<_> = galley.rows.iter().map(|r| r.rect()).collect();
+                for (k, rect) in tops.iter().enumerate() {
+                    assert_eq!((rect.top(), rect.height()), (k as f32 * 19.5, 19.5));
+                }
+                let font = look.font_id(ui.ctx());
+                let em = family_vmetrics(ui.ctx(), &font.family).expect("font tables");
+                let (a, d) = (
+                    (em.ascent * 12.0 * ppp).round(),
+                    (em.descent * 12.0 * ppp).round(),
+                );
+                let half = ((19.5 * ppp - a - d) / 2.0).floor();
+                let want: Vec<_> = (0..3)
+                    .map(|k| (k as f32 * 19.5 * ppp + half + a).round())
+                    .collect();
+                assert_eq!(baselines(galley, ppp), want);
+                // The drawn glyphs move with the baseline: each vertex
+                // keeps egui's offset from its glyph's baseline.
+                let mut job = look.job(ui, text.into());
+                job.wrap = TextWrapping::from_wrap_mode_and_width(TextWrapMode::Extend, f32::INFINITY);
+                let egui_galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
+                for (placed, egui_row) in galley.rows.iter().zip(&egui_galley.rows) {
+                    let (y, y0) = (placed.glyphs[0].pos.y, egui_row.glyphs[0].pos.y);
+                    let mesh = &placed.visuals.mesh.vertices;
+                    for (v, v0) in mesh.iter().zip(&egui_row.visuals.mesh.vertices) {
+                        assert!((v.pos.y - y - (v0.pos.y - y0)).abs() < 1e-4);
+                    }
+                    // and land on the device pixel grid.
+                    let top = (placed.pos.y + mesh[0].pos.y) * ppp;
+                    assert!((top - top.round()).abs() < 1e-3, "{top}");
+                }
             });
         }
     }

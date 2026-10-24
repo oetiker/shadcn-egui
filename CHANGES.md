@@ -29,6 +29,7 @@ are recorded here. The format is based on
 
 ### Fixed
 - Text sits on the pixel row Chrome puts it on: in Inter, badges, tooltips, extra-small buttons and the text in inputs (typed and placeholder) moved 1 px down, card titles 3 px down, descriptions and help text 2 px down and dialog titles 1 px up, while buttons, tabs, select triggers, select lists and labels kept their place. With another font, text moves up to 2 px up or down, as the font crates no longer carry a per-font vertical offset (`FontFiles::y_offset_factor` is 0 for every font).
+- Text on a line height that is not a whole pixel, such as descriptions in the lyra and mira styles and small buttons in nova, sits on Chrome's pixel row on every wrapped line, and what follows it starts where the browser starts it; before, the third line of a lyra card description sat 1 px low. Selecting text in a label highlights the line the text sits in, not a band up to 2 px lower.
 - A card footer's text now takes the card's text size, not only its colour.
 - Shadows now match the browser: popovers, select lists, dialogs, cards, tabs and controls draw every layer of their Tailwind shadow with its negative spread and the browser's soft blur. Before, a maia popover's shadow stuck out 12 px too far on each side, and the other styles' overlay shadows had a hard, short edge and lacked their second layer.
 - The shadow and focus ring of a popover, select list or dialog now lie under the panel and its content, as in the browser, instead of over the panel's outer edge and over content that runs past it.
