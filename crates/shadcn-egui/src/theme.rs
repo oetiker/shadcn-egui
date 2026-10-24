@@ -979,6 +979,8 @@ impl Theme {
             v.hyperlink_color = p.primary;
             v.selection.bg_fill = p.primary.gamma_multiply(0.35);
             v.selection.stroke = Stroke::new(hairline, p.ring);
+            // Chrome's caret: 1 css px of the text colour (`caret-color: auto`).
+            v.text_cursor.stroke = Stroke::new(1.0_f32, p.foreground);
             v.widgets.noninteractive.bg_fill = p.background;
             v.widgets.noninteractive.bg_stroke = Stroke::new(hairline, p.border);
             v.widgets.noninteractive.fg_stroke = Stroke::new(hairline, p.foreground);
