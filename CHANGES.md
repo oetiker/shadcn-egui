@@ -33,6 +33,7 @@ are recorded here. The format is based on
 - A card footer's text now takes the card's text size, not only its colour.
 - An input's caret is 1 px wide in the text colour and as tall as the font, and its selection highlight is as tall as the text line, as in Chrome; before, the caret was 2 px wide in the ring colour and both ran 3 to 6 px taller. On a phone-width window the text in nova and rhea inputs moved 1 px up to Chrome's row.
 - Plain egui text fields under the theme draw a 1 px caret in the text colour.
+- The label of a `layout::form_row` now has the look of a `Label`: the style's label font, weight and colour, on Chrome's pixel row, instead of egui's plain body text.
 - Shadows now match the browser: popovers, select lists, dialogs, cards, tabs and controls draw every layer of their Tailwind shadow with its negative spread and the browser's soft blur. Before, a maia popover's shadow stuck out 12 px too far on each side, and the other styles' overlay shadows had a hard, short edge and lacked their second layer.
 - The shadow and focus ring of a popover, select list or dialog now lie under the panel and its content, as in the browser, instead of over the panel's outer edge and over content that runs past it.
 - A tooltip now shows the border, ring, shadow and per-corner radii that a style or an app sets on `theme.style.tooltip_content`, and a slider range and the tabs line indicator follow their own recipe's radius and border; a slider range's end is square under the thumb, as in the browser, instead of taking the track's rounding.

@@ -72,6 +72,30 @@ fn form_row_puts_the_control_after_the_label_column() {
     assert!(row.height() >= theme.line_px(shadcn_egui::style::TextSize::Sm));
 }
 
+/// `form_row` draws its label as the crate's `Label`: the same recipe text
+/// (font, line box, colour), not egui's `ui.label`.
+#[test]
+fn form_row_label_is_the_crate_label() {
+    use shadcn_egui::components::label::Label;
+    let theme = Theme::vega_dark();
+    let alone = common::measure_output(&theme, |ui| ui.add(Label::new("Name"))).1;
+    let in_row = common::measure_output(&theme, |ui| {
+        ui.scope(|ui| layout::form_row(ui, 100.0, "Name", |_| {}))
+            .response
+    })
+    .1;
+    let (a, b) = (
+        &common::text_shapes(&alone)[0],
+        &common::text_shapes(&in_row)[0],
+    );
+    assert_eq!(a.galley.rows.len(), b.galley.rows.len());
+    for (ra, rb) in a.galley.rows.iter().zip(&b.galley.rows) {
+        assert_eq!(ra.size, rb.size);
+        assert_eq!(ra.visuals.mesh.vertices, rb.visuals.mesh.vertices);
+    }
+    assert_eq!(common::text_colour(&alone), common::text_colour(&in_row));
+}
+
 /// `layout::card` is the default-size card.
 #[test]
 fn layout_card_matches_the_default_card() {

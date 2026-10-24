@@ -369,7 +369,7 @@ pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce
             .horizontal(|mut strip| {
                 strip.cell(|ui| {
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.label(label);
+                        ui.add(crate::components::label::Label::new(label));
                     });
                 });
                 strip.cell(|ui| {
