@@ -27,7 +27,9 @@ const LAST_LINE_PENALTY_MULTIPLIER: f32 = 4.0;
 const ORPHANS_PENALTY: f32 = 10000.0;
 
 /// The break candidates of one paragraph (no forced break inside) from
-/// each char and its glyph's left and right edge: a sentinel at the start,
+/// each char and its glyph's left edge (after the kerning against the char
+/// before) and right edge (before the kerning against the next): a
+/// sentinel at the start,
 /// one after each run of spaces followed by text and after a hyphen between
 /// a non-space and a non-digit (UAX #14 HY), a sentinel at the end of the
 /// last non-space char.
@@ -42,17 +44,20 @@ pub(super) fn candidates(chars: &[(char, f32, f32)]) -> Vec<Candidate> {
     let mut end = x0;
     let mut i = 0;
     while i < chars.len() {
-        let (c, left, right) = chars[i];
+        let (c, _, right) = chars[i];
         if c == ' ' {
             let mut j = i;
             while j < chars.len() && chars[j].0 == ' ' {
                 j += 1;
             }
             if i > 0 && j < chars.len() {
+                // The line ends where its last glyph ends shaped alone
+                // (Blink reshapes a word end that is not safe to break):
+                // without the kerning against the space.
                 out.push(Candidate {
                     start: j,
                     pos_no_break: chars[j].1,
-                    pos_if_break: left,
+                    pos_if_break: chars[i - 1].2,
                     penalty: 0.0,
                 });
             }
@@ -68,7 +73,7 @@ pub(super) fn candidates(chars: &[(char, f32, f32)]) -> Vec<Candidate> {
         {
             out.push(Candidate {
                 start: i + 1,
-                pos_no_break: right,
+                pos_no_break: chars[i + 1].1,
                 pos_if_break: right,
                 penalty: 0.0,
             });
