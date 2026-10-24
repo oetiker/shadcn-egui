@@ -12,10 +12,10 @@
 //! state of your own.
 
 use crate::components::shared::{content_ui, opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
-use crate::style::{pick, Recipe, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::components::text::{content_scope, TextLook};
+use crate::style::{pick, State};
 use crate::Theme;
-use egui::{PopupCloseBehavior, Response, RichText, Ui};
+use egui::{PopupCloseBehavior, Response, TextWrapMode, Ui};
 
 pub struct Popover<'a> {
     trigger: &'a Response,
@@ -60,8 +60,6 @@ impl<'a> Popover<'a> {
         let gap = px(|r| &r.gap);
         // The frame paints outside the content's `Ui`: fade its colours here.
         let alpha = opacity(&[&l[..]], g);
-        let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         // No width from the builder or the recipe: CSS's initial `auto`,
@@ -80,15 +78,10 @@ impl<'a> Popover<'a> {
                     ui.set_width(w);
                 }
                 ui.spacing_mut().item_spacing.y = gap;
-                if let Some(fg) = fg {
-                    ui.visuals_mut().override_text_color = Some(fg);
-                }
-                for style in [egui::TextStyle::Body, egui::TextStyle::Button] {
-                    if let Some(font) = ui.style_mut().text_styles.get_mut(&style) {
-                        font.size = text_px;
-                    }
-                }
-                (content_ui(ui, &[&l[..]], g, content), slot)
+                // The content's `text-*` and text colour reach what it holds.
+                let look = TextLook::resolve(ui, &l, g);
+                let inner = content_scope(ui, &look, |ui| content_ui(ui, &[&l[..]], g, content));
+                (inner.inner, slot)
             })?;
         let (inner, slot) = shown.inner;
         panel.paint_reserved(
@@ -111,20 +104,13 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let title_l = [header, &*t.style.popover_title];
     let desc_l = [header, &*t.style.popover_description];
     let gap = pick(&[header], |r| &r.gap, g).unwrap_or(0.0);
-    let text = |l: &[&Recipe]| {
-        let size = pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-        let px = t.text_px(size);
-        // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
-        let line = pick(l, |r| &r.line_height, g).map_or_else(|| t.line_px(size), |k| k * px);
-        (px, line)
+    let title_look = TextLook::resolve(ui, &title_l, g);
+    let content_color = pick(&[&*t.style.popover_content], |r| &r.text, g).map(|p| t.paint(p));
+    let title_look = match (title_look.recipe_color(), content_color) {
+        (None, Some(c)) => title_look.with_color(c),
+        _ => title_look,
     };
-    let (title_px, title_line) = text(&title_l);
-    let (desc_px, desc_line) = text(&desc_l);
-    let weight = pick(&title_l, |r| &r.weight, g).unwrap_or(Weight::Normal);
-    let title_color = pick(&title_l, |r| &r.text, g)
-        .or(pick(&[&*t.style.popover_content], |r| &r.text, g))
-        .map(|p| t.paint(p));
-    let muted = pick(&desc_l, |r| &r.text, g).map(|p| t.paint(p));
+    let desc_look = TextLook::resolve(ui, &desc_l, g);
     // The title and the description sit in the header.
     let (title_l, desc_l2, header_l) = (
         [&*t.style.popover_title],
@@ -134,21 +120,12 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(ui, &[&header_l[..]], g, |ui| {
-            let mut title = RichText::new(title)
-                .size(title_px)
-                .line_height(Some(title_line))
-                .family(family_for(ui.ctx(), weight));
-            if let Some(c) = title_color {
-                title = title.color(c);
-            }
-            part_ui(ui, &[&title_l[..]], g, |ui| ui.label(title));
-            let mut description = RichText::new(description)
-                .size(desc_px)
-                .line_height(Some(desc_line));
-            if let Some(c) = muted {
-                description = description.color(c);
-            }
-            part_ui(ui, &[&desc_l2[..]], g, |ui| ui.label(description));
+            part_ui(ui, &[&title_l[..]], g, |ui| {
+                title_look.label(ui, title, TextWrapMode::Wrap)
+            });
+            part_ui(ui, &[&desc_l2[..]], g, |ui| {
+                desc_look.label(ui, description, TextWrapMode::Wrap)
+            });
         });
     });
 }

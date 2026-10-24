@@ -7,9 +7,10 @@
 //! trigger.
 
 use crate::components::shared::{content_ui, opacity, RecipeBox};
-use crate::style::{pick, State, TextSize};
+use crate::components::text::TextLook;
+use crate::style::{pick, State};
 use crate::Theme;
-use egui::{pos2, Color32, Pos2, RectAlign, Response, RichText, Shape};
+use egui::{pos2, Color32, Pos2, RectAlign, Response, Shape, TextWrapMode};
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
 
 /// Corner arc segments of the rounded arrow.
@@ -30,18 +31,12 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
         px(|r| &r.pad_bottom),
         px(|r| &r.pad_left),
     );
-    let text_size = pick(&content, |r| &r.text_size, g).unwrap_or(TextSize::Xs);
-    let text_px = t.text_px(text_size);
-    // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
-    let line =
-        pick(&content, |r| &r.line_height, g).map_or_else(|| t.line_px(text_size), |k| k * text_px);
     let radius = pick(&content, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, f32::INFINITY));
     // The frame and the arrow paint outside the content's `Ui`: fade their
     // colours here. The arrow sits in the content.
     let alpha = opacity(&[&content[..]], g);
     let arrow_alpha = opacity(&[&arrow[..], &content[..]], g);
     let panel = RecipeBox::resolve(&t, &content, g).faded(alpha);
-    let fg = pick(&content, |r| &r.text, g).map(|p| t.paint(p));
     let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(arrow_alpha));
     let mut tip = egui::Tooltip::for_enabled(&resp);
     let max_w = pick(&content, |r| &r.max_width, g).unwrap_or(f32::INFINITY);
@@ -53,11 +48,10 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     let shown = tip.show(|ui| {
         let slot = RecipeBox::reserve(ui);
         ui.set_max_width(max_w - pad_l - pad_r);
-        let mut label = RichText::new(text).size(text_px).line_height(Some(line));
-        if let Some(fg) = fg {
-            label = label.color(fg);
-        }
-        content_ui(ui, &[&content[..]], g, |ui| ui.label(label));
+        let look = TextLook::resolve(ui, &content, g);
+        content_ui(ui, &[&content[..]], g, |ui| {
+            look.label(ui, text, TextWrapMode::Wrap)
+        });
         slot
     });
     if let Some(shown) = &shown {

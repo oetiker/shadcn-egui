@@ -5,12 +5,12 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{
-    interaction_state, line_box, part_painter, pressable, shift, ActivationKeys, RecipeBox,
+    interaction_state, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style, TextSize, Weight};
-use crate::theme::family_for;
+use crate::components::text::TextLook;
+use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style};
 use crate::Theme;
-use egui::{Color32, Response, Sense, Stroke, Ui, Vec2, Widget};
+use egui::{Response, Sense, TextWrapMode, Ui, Vec2, Widget};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonVariant {
@@ -185,30 +185,20 @@ impl Widget for Button {
             get(|r| &r.border_width),
         );
         let icon_px = pick(l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
-        let text_size = pick(l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-        let text_px = t.text_px(text_size);
-        let weight = pick(l, |r| &r.weight, g).unwrap_or(Weight::Normal);
-        let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        let fonts = ui.painter().clone();
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
-        let layout = |underline: Stroke| {
-            let mut job = egui::text::LayoutJob::simple_singleline(
-                self.text.clone(),
-                font.clone(),
-                Color32::PLACEHOLDER,
-            );
-            job.sections[0].format.underline = underline;
-            fonts.layout_job(job)
+        let look = TextLook::resolve(ui, l, g);
+        let layout = |ui: &Ui, look: &TextLook| {
+            look.layout(ui, self.text.as_str(), TextWrapMode::Extend, f32::INFINITY)
         };
-        let galley = layout(Stroke::NONE);
+        let galley = layout(ui, &look);
         let icon_only = self.icon_only();
         let has_icon = icon_only.is_some() || self.icon.is_some() || self.icon_end.is_some();
         // No height: CSS's initial `auto`, the content's height.
         let content_h = if icon_only.is_some() {
             icon_px
         } else {
-            let line = line_box(&t, l, g, text_size).max(galley.size().y);
+            let line = galley.size().y;
             if has_icon {
                 line.max(icon_px)
             } else {
@@ -272,15 +262,17 @@ impl Widget for Button {
             draw_icon(&icon, x);
             x += icon_px + gap;
         }
-        let galley = if pick(l, |r| &r.underline, st) == Some(true) {
-            layout(Stroke::new(t.metrics.border, fg))
-        } else {
+        // A state's `underline` (the link variant on hover) lays out again.
+        let paint_look = TextLook::resolve(ui, l, st);
+        let galley = if paint_look.underlined() == look.underlined() {
             galley
+        } else {
+            layout(ui, &paint_look)
         };
         let text_w = galley.size().x;
-        painter.galley(
+        galley.paint(
+            &painter,
             egui::pos2(x, rect.center().y - galley.size().y / 2.0),
-            galley,
             fg,
         );
         if let Some(icon) = self.icon_end {

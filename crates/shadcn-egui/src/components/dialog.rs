@@ -12,10 +12,10 @@
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
-use crate::style::{pick, Recipe, State, TextSize, Weight};
-use crate::theme::heading_family_for;
+use crate::components::text::{content_scope, TextLook};
+use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
-use egui::{Align, Color32, Id, Layout, Rect, RichText, Shape, Ui, UiBuilder};
+use egui::{Align, Color32, Id, Layout, Rect, Shape, TextWrapMode, Ui, UiBuilder};
 
 pub struct Dialog<'a> {
     id: Id,
@@ -83,8 +83,6 @@ impl<'a> Dialog<'a> {
             px(|r| &r.pad_left),
         );
         let gap = px(|r| &r.gap);
-        let fg = pick(&l, |r| &r.text, g).map(|p| t.paint(p));
-        let text_px = t.text_px(pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm));
         // The frame paints outside the panel's `Ui`: fade its colours here.
         let alpha = opacity(&[&l[..]], g);
 
@@ -113,20 +111,17 @@ impl<'a> Dialog<'a> {
                 let slot = RecipeBox::reserve(ui);
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
-                if let Some(fg) = fg {
-                    ui.visuals_mut().override_text_color = Some(fg);
-                }
-                for style in [egui::TextStyle::Body, egui::TextStyle::Button] {
-                    if let Some(font) = ui.style_mut().text_styles.get_mut(&style) {
-                        font.size = text_px;
-                    }
-                }
-                content_ui(ui, &[&l[..]], g, |ui| {
-                    header(ui, self.title, self.description);
-                    let inner = body(ui);
-                    let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
-                    (inner, close, slot)
+                // The panel's `text-*` and text colour reach its content.
+                let look = TextLook::resolve(ui, &l, g);
+                content_scope(ui, &look, |ui| {
+                    content_ui(ui, &[&l[..]], g, |ui| {
+                        header(ui, self.title, self.description);
+                        let inner = body(ui);
+                        let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
+                        (inner, close, slot)
+                    })
                 })
+                .inner
             });
         let dismissed = resp.backdrop_response.clicked() || resp.should_close();
         let (inner, close, slot) = resp.inner;
@@ -143,40 +138,24 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
     let t = Theme::current(ui.ctx());
     let g = t.state(ui.ctx(), State::NONE);
     let gap = pick(&[&*t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
-    let content = [&*t.style.dialog_content];
     let heading = [&*t.style.dialog_title];
-    let size = pick(&heading, |r| &r.text_size, g)
-        .or_else(|| pick(&content, |r| &r.text_size, g))
-        .unwrap_or(TextSize::Sm);
-    let px = t.text_px(size);
-    let line = pick(&heading, |r| &r.line_height, g).map_or_else(|| t.line_px(size), |k| k * px);
-    let weight = pick(&heading, |r| &r.weight, g).unwrap_or(Weight::Normal);
+    // upstream: dialog-title carries `cn-font-heading`; without a `text-*`
+    // it takes the panel's, which the content scope passes.
+    let title_look = TextLook::resolve(ui, &heading, g).heading(true);
     let desc = [&*t.style.dialog_description];
-    let desc_size = pick(&desc, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-    let desc_line = pick(&desc, |r| &r.line_height, g)
-        .map_or_else(|| t.line_px(desc_size), |k| k * t.text_px(desc_size));
+    let desc_look = TextLook::resolve(ui, &desc, g);
     // The title and the description sit in the header.
     let header_l = [&*t.style.dialog_header];
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(ui, &[&header_l[..]], g, |ui| {
-            // upstream: dialog-title carries `cn-font-heading`
             part_ui(ui, &[&heading[..]], g, |ui| {
-                ui.label(
-                    RichText::new(title)
-                        .family(heading_family_for(ui.ctx(), weight))
-                        .size(px)
-                        .line_height(Some(line)),
-                )
+                title_look.label(ui, title, TextWrapMode::Wrap)
             });
             if let Some(d) = description {
-                let mut text = RichText::new(d)
-                    .size(t.text_px(desc_size))
-                    .line_height(Some(desc_line));
-                if let Some(c) = pick(&desc, |r| &r.text, g).map(|p| t.paint(p)) {
-                    text = text.color(c);
-                }
-                part_ui(ui, &[&desc[..]], g, |ui| ui.label(text));
+                part_ui(ui, &[&desc[..]], g, |ui| {
+                    desc_look.label(ui, d, TextWrapMode::Wrap)
+                });
             }
         });
     });

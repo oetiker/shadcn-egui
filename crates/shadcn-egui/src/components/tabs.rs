@@ -7,12 +7,12 @@
 //! trigger (roving focus).
 
 use crate::components::shared::{
-    interaction_state, line_box, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
+    interaction_state, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
 };
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::components::text::TextLook;
+use crate::style::{pick, Paint, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
-use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Ui, Widget};
+use egui::{pos2, vec2, Key, Modifiers, Rect, Response, Sense, TextWrapMode, Ui, Widget};
 
 /// shadcn `TabsList` `variant`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -126,24 +126,18 @@ impl Widget for Tabs<'_> {
             geo(&trigger, |r| &r.border_width),
         );
         let gap = geo(&list, |r| &r.gap);
-        let text_size = pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-        let text_px = t.text_px(text_size);
-        let weight = pick(&trigger, |r| &r.weight, g).unwrap_or(Weight::Normal);
-        let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        let painter = ui.painter().clone();
         // The text colour depends on the state: lay out in egui's placeholder
         // colour, paint in the final one.
+        let look = TextLook::resolve(ui, &trigger, g);
         let galleys: Vec<_> = self
             .labels
             .iter()
-            .map(|l| painter.layout_no_wrap(l.clone(), font.clone(), Color32::PLACEHOLDER))
+            .map(|l| look.layout(ui, l.as_str(), TextWrapMode::Extend, f32::INFINITY))
             .collect();
         // No list height: CSS's initial `auto`, the triggers' own height,
         // which `h-[calc(100%-1px)]` of an `auto` parent leaves at `auto` too.
-        let trigger_auto = galleys
-            .iter()
-            .map(|g| g.size().y)
-            .fold(line_box(&t, &trigger, g, text_size), f32::max)
+        // A trigger's content is its line box.
+        let trigger_auto = look.line_height()
             + geo(&trigger, |r| &r.pad_top)
             + geo(&trigger, |r| &r.pad_bottom)
             + border_w * 2.0;
@@ -313,8 +307,8 @@ impl Widget for Tabs<'_> {
                     );
                 }
                 painter.extend(shapes);
-                let galley = galleys[i].clone();
-                painter.galley(rect.center() - galley.size() / 2.0, galley, fg);
+                let galley = &galleys[i];
+                galley.paint(&painter, rect.center() - galley.size() / 2.0, fg);
             }
         }
         resp

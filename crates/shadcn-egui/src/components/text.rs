@@ -242,21 +242,45 @@ impl TextLook {
     /// the browser places it, in the look's colour.
     pub fn label(&self, ui: &mut Ui, text: impl Into<WidgetText>, wrap: TextWrapMode) -> Response {
         let mut job = self.job(ui, text.into());
-        let color = self.color(ui);
-        for section in &mut job.sections {
-            if section.format.color == Color32::PLACEHOLDER {
-                section.format.color = color;
-            }
-            if section.format.underline.color == Color32::PLACEHOLDER {
-                section.format.underline.color = color;
-            }
-        }
+        fill_color(&mut job, self.color(ui));
         job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, ui.available_width());
         job.halign = ui.layout().horizontal_placement();
         job.justify = ui.layout().horizontal_justify();
         let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
         let galley = place_rows(ui.ctx(), galley, self.leading);
         ui.add(egui::Label::new(galley))
+    }
+}
+
+impl TextLook {
+    /// [`TextLook::layout`] with every colour the caller did not set
+    /// replaced by `color` in the galley itself, for a galley egui paints
+    /// (a `TextEdit`'s hint text).
+    pub(crate) fn layout_colored(
+        &self,
+        ui: &Ui,
+        text: impl Into<WidgetText>,
+        wrap: TextWrapMode,
+        width: f32,
+        color: Color32,
+    ) -> Arc<Galley> {
+        let mut job = self.job(ui, text.into());
+        fill_color(&mut job, color);
+        job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
+        let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
+        place_rows(ui.ctx(), galley, self.leading)
+    }
+}
+
+/// Every placeholder colour of `job` (text and underline) set to `color`.
+fn fill_color(job: &mut LayoutJob, color: Color32) {
+    for section in &mut job.sections {
+        if section.format.color == Color32::PLACEHOLDER {
+            section.format.color = color;
+        }
+        if section.format.underline.color == Color32::PLACEHOLDER {
+            section.format.underline.color = color;
+        }
     }
 }
 

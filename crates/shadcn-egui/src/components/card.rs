@@ -19,11 +19,11 @@
 //! corners have nothing to shape.
 
 use crate::components::shared::{content_ui, part_painter, part_ui, RecipeBox};
-use crate::style::{pick, Recipe, State, TextSize, Weight};
-use crate::theme::heading_family_for;
+use crate::components::text::{content_scope, TextLook};
+use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
 use egui::{
-    Align, Id, Layout, Rect, Response, RichText, Sense, Shape, Ui, UiBuilder, WidgetInfo,
+    Align, Id, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder, WidgetInfo,
     WidgetType,
 };
 
@@ -119,8 +119,8 @@ impl<'a> Card<'a> {
             len(&content, |r| &r.pad_left, st),
             len(&content, |r| &r.pad_right, st),
         );
-        let fg = pick(&card, |r| &r.text, st).map(|p| t.paint(p));
-        let text_px = t.text_px(pick(&card, |r| &r.text_size, st).unwrap_or(TextSize::Sm));
+        // The card's `text-*` and text colour reach its content.
+        let look = TextLook::resolve(ui, &card, st);
         // Header, content and footer sit in the card.
         let painter = part_painter(ui, &[&card[..]], st);
 
@@ -144,18 +144,11 @@ impl<'a> Card<'a> {
                 .layout(Layout::top_down(Align::Min)),
         );
         body.spacing_mut().item_spacing.y = gap;
-        if let Some(fg) = fg {
-            body.visuals_mut().override_text_color = Some(fg);
-        }
-        for style in [egui::TextStyle::Body, egui::TextStyle::Button] {
-            if let Some(font) = body.style_mut().text_styles.get_mut(&style) {
-                font.size = text_px;
-            }
-        }
         let previous = body.ctx().data(|d| d.get_temp::<CardSize>(size_key()));
         body.ctx()
             .data_mut(|d| d.insert_temp(size_key(), self.size));
-        let result = content_ui(&mut body, &[&card[..]], st, add);
+        let result =
+            content_scope(&mut body, &look, |ui| content_ui(ui, &[&card[..]], st, add)).inner;
         body.ctx().data_mut(|d| match previous {
             Some(p) => {
                 d.insert_temp(size_key(), p);
@@ -188,10 +181,9 @@ impl<'a> Card<'a> {
                 Layout::left_to_right(Align::Center),
             ));
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
-            if let Some(fg) = fg {
-                row.visuals_mut().override_text_color = Some(fg);
-            }
-            content_ui(&mut row, &[&foot[..], &card[..]], st, footer);
+            content_scope(&mut row, &look, |ui| {
+                content_ui(ui, &[&foot[..], &card[..]], st, footer)
+            });
             let strip_bottom = row.min_rect().bottom().max(inner.top()) + f_bottom;
             footer_shapes = Some((strip_bg, strip_top, strip_bottom));
             bottom = strip_bottom;
@@ -299,18 +291,10 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let st = t.state(ui.ctx(), current_size(ui).state());
     let l = [&*t.style.card_title];
-    let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Base);
-    let px = t.text_px(size);
-    let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
-    let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
     // upstream: card-title carries `cn-font-heading`
+    let look = TextLook::resolve(ui, &l, st).heading(true);
     part_ui(ui, &[&l[..]], st, |ui| {
-        ui.label(
-            RichText::new(text)
-                .family(heading_family_for(ui.ctx(), weight))
-                .size(px)
-                .line_height(Some(line)),
-        )
+        look.label(ui, text, TextWrapMode::Wrap)
     })
 }
 
@@ -319,14 +303,8 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let st = t.state(ui.ctx(), current_size(ui).state());
     let l = [&*t.style.card_description];
-    let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
-    let line =
-        pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * t.text_px(size));
-    let mut text = RichText::new(text)
-        .size(t.text_px(size))
-        .line_height(Some(line));
-    if let Some(c) = pick(&l, |r| &r.text, st).map(|p| t.paint(p)) {
-        text = text.color(c);
-    }
-    part_ui(ui, &[&l[..]], st, |ui| ui.label(text))
+    let look = TextLook::resolve(ui, &l, st);
+    part_ui(ui, &[&l[..]], st, |ui| {
+        look.label(ui, text, TextWrapMode::Wrap)
+    })
 }

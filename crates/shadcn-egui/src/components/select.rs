@@ -29,13 +29,13 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    content_ui, interaction_state, line_box, opacity, part_painter, pressable, ActivationKeys,
-    RecipeBox, DEFAULT_SIDE_OFFSET,
+    content_ui, interaction_state, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
+    DEFAULT_SIDE_OFFSET,
 };
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::components::text::TextLook;
+use crate::style::{pick, Paint, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
-use egui::{vec2, Color32, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
+use egui::{vec2, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
 
 /// Trigger height variant: shadcn `size="default" | "sm"`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -136,37 +136,29 @@ impl Widget for Select<'_> {
             .or_else(|| pick(&trig, |r| &r.icon_size, g))
             .unwrap_or(t.metrics.icon);
         let icon_h = pick(&icon, |r| &r.height, g).unwrap_or(icon_side);
-        let weight = pick(&trig, |r| &r.weight, g).unwrap_or(Weight::Normal);
-        let text_size = pick(&trig, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-        let font = egui::FontId::new(t.text_px(text_size), family_for(&ctx, weight));
-        let painter = ui.painter().clone();
+        let look = TextLook::resolve(ui, &trig, g);
+        let one_line =
+            |ui: &Ui, text: &str| look.layout(ui, text, egui::TextWrapMode::Extend, f32::INFINITY);
         let shown = if has_value {
             self.options[*self.selected]
         } else {
             self.placeholder.as_str()
         };
-        let galley = painter.layout_no_wrap(shown.to_owned(), font.clone(), Color32::PLACEHOLDER);
+        let galley = one_line(ui, shown);
         let fit = self
             .options
             .iter()
             .copied()
             .chain(std::iter::once(self.placeholder.as_str()))
-            .map(|o| {
-                painter
-                    .layout_no_wrap(o.to_owned(), font.clone(), Color32::PLACEHOLDER)
-                    .size()
-                    .x
-            })
+            .map(|o| one_line(ui, o).size().x)
             .fold(0.0, f32::max);
         // `w-fit`, capped to the room, raised to the padding, gap and
         // chevron; the text area shrinks and clips (conformance 3.1).
         let chrome = gap + icon_side + pad_l + pad_r;
         let width = layout::capped_width(ui, self.width.unwrap_or(fit + chrome), chrome);
-        // No height: CSS's initial `auto`, one line of text in the padding box.
+        // No height: CSS's initial `auto`, one line box in the padding box.
         let height = pick(&trig, |r| &r.height, g).unwrap_or_else(|| {
-            line_box(&t, &trig, g, text_size)
-                .max(galley.size().y)
-                .max(icon_h)
+            look.line_height().max(icon_h)
                 + get(|r| &r.pad_top)
                 + get(|r| &r.pad_bottom)
                 + border_w * 2.0
@@ -328,9 +320,7 @@ impl Widget for Select<'_> {
                 egui::pos2(icon_rect.left() - gap, rect.bottom()),
             );
             let at = egui::pos2(text_area.left(), rect.center().y - galley.size().y / 2.0);
-            painter
-                .with_clip_rect(text_area)
-                .galley(at, galley, text_color);
+            galley.paint(&painter.with_clip_rect(text_area), at, text_color);
         }
         // The shown text is the combobox's value; its name comes from
         // `labelled_by(label.id)`, which an own label would override.
@@ -366,22 +356,11 @@ impl Widget for Select<'_> {
             let viewport = [&*t.style.select_viewport];
             let panel = RecipeBox::resolve(t, &l, gs).faded(alpha);
             let frame = panel.frame([gpt, gpr, gpb, gpl]);
-            let item_font = egui::FontId::new(
-                t.text_px(pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm)),
-                family_for(
-                    &ctx,
-                    pick(&item, |r| &r.weight, ist).unwrap_or(Weight::Normal),
-                ),
-            );
-            let item_size = pick(&item, |r| &r.text_size, ist).unwrap_or(TextSize::Sm);
-            let line = pick(&item, |r| &r.line_height, ist)
-                .map_or_else(|| t.line_px(item_size), |k| k * t.text_px(item_size));
+            let item_look = TextLook::resolve(ui, &item, ist);
             let mut galleys: Vec<_> = self
                 .options
                 .iter()
-                .map(|o| {
-                    painter.layout_no_wrap((*o).to_owned(), item_font.clone(), Color32::PLACEHOLDER)
-                })
+                .map(|o| item_look.layout(ui, *o, egui::TextWrapMode::Extend, f32::INFINITY))
                 .collect();
             let (ipl, ipr) = (px(&item, |r| &r.pad_left), px(&item, |r| &r.pad_right));
             let (ipt, ipb) = (px(&item, |r| &r.pad_top), px(&item, |r| &r.pad_bottom));
@@ -401,12 +380,7 @@ impl Widget for Select<'_> {
             let text_w = inner_w - ipl - ipr;
             for (galley, o) in galleys.iter_mut().zip(self.options) {
                 if galley.size().x > text_w {
-                    *galley = painter.layout(
-                        (*o).to_owned(),
-                        item_font.clone(),
-                        Color32::PLACEHOLDER,
-                        text_w,
-                    );
+                    *galley = item_look.layout(ui, *o, egui::TextWrapMode::Wrap, text_w);
                 }
             }
             let screen = ctx.content_rect();
@@ -442,7 +416,7 @@ impl Widget for Select<'_> {
                                 for (i, galley) in galleys.iter().enumerate() {
                                     let (_, row) = ui.allocate_space(vec2(
                                         inner_w,
-                                        (galley.size().y.max(line) + ipt + ipb).max(min_row),
+                                        (galley.size().y + ipt + ipb).max(min_row),
                                     ));
                                     let r =
                                         ui.interact(row, resp.id.with(("item", i)), Sense::click());
@@ -474,12 +448,12 @@ impl Widget for Select<'_> {
                                             &[&[&*t.style.select_item_text][..], &item[..]],
                                             s,
                                         );
-                                        text_painter.galley(
+                                        galley.paint(
+                                            &text_painter,
                                             egui::pos2(
                                                 row.left() + ipl,
                                                 row.center().y - galley.size().y / 2.0,
                                             ),
-                                            galley.clone(),
                                             color,
                                         );
                                         if i == current {

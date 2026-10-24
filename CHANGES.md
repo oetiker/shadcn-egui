@@ -25,8 +25,10 @@ are recorded here. The format is based on
 - A mouse or touch press now focuses buttons, checkboxes, switches, slider thumbs, tab triggers and the select trigger without showing a focus ring, as the browser does; the ring shows only after the focus moved by keyboard, while an input shows it on any focus.
 - Keys act as on shadcn's elements: Space clicks a button when released, Enter no longer toggles a checkbox, Enter and Space no longer move a focused slider to the mouse pointer, and pressing a tab selects it on the press.
 - `Input::id_source` is removed; use `Input::id_salt`, which takes the same string.
+- `components::shared::line_box` is removed. `components::text::TextLook` resolves a part's text from its recipes and lays it out and paints it as the crate's own widgets do; `TextLook::line_height` is the height of one line.
 
 ### Fixed
+- Text sits on the pixel row Chrome puts it on: the text in buttons, badges, inputs (typed and placeholder), select triggers and lists, tab triggers and tooltips moved 1 px up, card titles 2 px down, card, dialog and popover descriptions and help text 1 px down, and labels and dialog titles set in `leading-none` 1 to 2 px up. A card footer's text now takes the card's text size, not only its colour.
 - Shadows now match the browser: popovers, select lists, dialogs, cards, tabs and controls draw every layer of their Tailwind shadow with its negative spread and the browser's soft blur. Before, a maia popover's shadow stuck out 12 px too far on each side, and the other styles' overlay shadows had a hard, short edge and lacked their second layer.
 - The shadow and focus ring of a popover, select list or dialog now lie under the panel and its content, as in the browser, instead of over the panel's outer edge and over content that runs past it.
 - A tooltip now shows the border, ring, shadow and per-corner radii that a style or an app sets on `theme.style.tooltip_content`, and a slider range and the tabs line indicator follow their own recipe's radius and border; a slider range's end is square under the thumb, as in the browser, instead of taking the track's rounding.

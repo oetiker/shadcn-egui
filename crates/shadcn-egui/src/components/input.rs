@@ -3,13 +3,11 @@
 //! recipe. A frameless egui `TextEdit` sits inside a box this widget
 //! paints.
 
-use crate::components::shared::{
-    line_box, part_opacity, part_painter, text_entry_state, RecipeBox,
-};
-use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::components::shared::{part_opacity, part_painter, text_entry_state, RecipeBox};
+use crate::components::text::{Leading, TextLook};
+use crate::style::{pick, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
-use egui::{Frame, Margin, RichText, Sense, Shape, TextEdit, Ui, Vec2, Widget};
+use egui::{Frame, Margin, Sense, Shape, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget};
 
 pub struct Input<'a> {
     text: &'a mut String,
@@ -85,20 +83,13 @@ impl<'a> Widget for Input<'a> {
             top: inset(get(|r| &r.pad_top)),
             bottom: inset(get(|r| &r.pad_bottom)),
         };
-        let text_size = pick(&l, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-        let text_px = t.text_px(text_size);
-        let font = egui::FontId::new(
-            text_px,
-            family_for(
-                ui.ctx(),
-                pick(&l, |r| &r.weight, g).unwrap_or(Weight::Normal),
-            ),
-        );
-        // No height: CSS's initial `auto`, one line of text in the padding box.
+        // The field's text sits in its line box as in a browser's
+        // text-entry field: the leading's half above rounds up.
+        let look = TextLook::resolve(ui, &l, g).leading(Leading::Field);
+        let font = look.font_id(ui.ctx());
+        // No height: CSS's initial `auto`, one line box in the padding box.
         let height = pick(&l, |r| &r.height, g).unwrap_or_else(|| {
-            line_box(&t, &l, g, text_size).max(ui.ctx().fonts_mut(|f| f.row_height(&font)))
-                + f32::from(margin.top)
-                + f32::from(margin.bottom)
+            look.line_height() + f32::from(margin.top) + f32::from(margin.bottom)
         });
 
         // The `TextEdit` is the field's own text: it paints at the part's opacity.
@@ -106,19 +97,18 @@ impl<'a> Widget for Input<'a> {
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
-        let mut edit = TextEdit::singleline(self.text);
-        if !self.hint.is_empty() {
-            // The placeholder takes the field's font: egui lays a plain
-            // string hint out in the `Ui`'s body style.
-            edit = edit.hint_text(RichText::new(self.hint).font(font.clone()));
-        }
-        let edit = edit
-            .password(self.password)
-            .interactive(enabled)
-            .frame(Frame::NONE.inner_margin(margin))
-            .font(font.clone())
-            .vertical_align(egui::Align::Center)
-            .text_color(typed);
+        let password = self.password;
+        let mut layouter = |ui: &Ui, text: &dyn TextBuffer, _wrap_width: f32| {
+            let text = if password {
+                let n = text.as_str().chars().count();
+                std::iter::repeat_n(egui::epaint::text::PASSWORD_REPLACEMENT_CHAR, n).collect()
+            } else {
+                text.as_str().to_owned()
+            };
+            look.layout(ui, text, TextWrapMode::Extend, f32::INFINITY)
+                .galley()
+                .clone()
+        };
         let max_width = self.max_width.unwrap_or(t.metrics.field_max_width);
         // The content minimum: the padding box around one glyph.
         let content_min = f32::from(margin.left)
@@ -129,9 +119,6 @@ impl<'a> Widget for Input<'a> {
         let slot = ui.painter().add(Shape::Noop);
         let resp = ui
             .scope(|ui| {
-                if let Some(c) = placeholder {
-                    ui.visuals_mut().weak_text_color = Some(c);
-                }
                 ui.set_opacity(fade);
                 // As `add_sized`, with the id made in the `Ui` that shows
                 // the field: `TextEdit::id_salt` would hash the stored `Id`
@@ -139,6 +126,29 @@ impl<'a> Widget for Input<'a> {
                 // its room without widening the parent (conformance 3.6).
                 let size = Vec2::new(layout::capped_width(ui, max_width, content_min), height);
                 let (rect, _) = layout::allocate_overflowing(ui, size, Sense::hover());
+                let mut edit = TextEdit::singleline(self.text);
+                if !self.hint.is_empty() {
+                    // The placeholder is laid out in the field's look, cut
+                    // to the content box as egui cuts its hint text.
+                    let color = placeholder.unwrap_or_else(|| ui.visuals().weak_text_color());
+                    let width = rect.width() - f32::from(margin.left) - f32::from(margin.right);
+                    let hint = look.layout_colored(
+                        ui,
+                        self.hint.as_str(),
+                        TextWrapMode::Truncate,
+                        width,
+                        color,
+                    );
+                    edit = edit.hint_text(hint);
+                }
+                let edit = edit
+                    .layouter(&mut layouter)
+                    .password(password)
+                    .interactive(enabled)
+                    .frame(Frame::NONE.inner_margin(margin))
+                    .font(font.clone())
+                    .vertical_align(egui::Align::Center)
+                    .text_color(typed);
                 let mut field = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(rect)

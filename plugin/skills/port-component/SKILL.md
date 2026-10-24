@@ -184,13 +184,13 @@ back, Right and Down forward) whatever its orientation.
   with egui's disabled fade taken out once, times the part's own value, with
   `DISABLED` added in a disabled `Ui` (`shared::part_opacity` is the bare
   value). So a part fades by its style's `disabled:` rule, not by egui's
-  fade. A crate part drawn through egui (a title through `ui.label`) runs
+  fade. A crate part drawn through egui (a title through `TextLook::label`) runs
   in `shared::part_ui(ui, chain, state, |ui| ..)`; a container hands the
   caller's content `shared::content_ui(ui, chain, state, |ui| ..)`, which
   keeps egui's fade for plain egui widgets. A box an egui container paints
   outside that `Ui` (a popup frame) takes `RecipeBox::faded(opacity)`.
 - An empty size `Prop` is CSS's initial value: `width` and `height` fall
-  back to the content size (`shared::line_box` for a line of text), never
+  back to the content size (`TextLook::line_height` for a line of text), never
   to 0, so an app that replaces a recipe whole keeps a usable widget.
 - Geometry is resolved without interaction states.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`;

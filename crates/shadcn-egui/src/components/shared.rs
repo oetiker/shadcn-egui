@@ -1,7 +1,7 @@
 //! Shared painting helpers for shadcn-style components.
 
 use crate::box_shadow::clamp_radii;
-use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, TextSize};
+use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State};
 use crate::{ShadowLayer, Theme};
 use egui::{
     Color32, Context, CornerRadius, Id, Key, Painter, PointerButton, Rect, Response, Shape, Stroke,
@@ -116,14 +116,6 @@ pub fn content_ui<R>(
             ),
         );
     with_opacity(ui, opacity, add)
-}
-
-/// The height of one line of a part's text: its `leading-*` times the font
-/// size or, without one, Tailwind's line height of the text size (`text-*`
-/// sets both). This is the content height an `auto` height starts from.
-pub fn line_box(theme: &Theme, layers: &[&Recipe], s: State, size: TextSize) -> f32 {
-    pick(layers, |r| &r.line_height, s)
-        .map_or_else(|| theme.line_px(size), |k| k * theme.text_px(size))
 }
 
 /// A part's box resolved from its recipe stack under one [`State`]: fill,

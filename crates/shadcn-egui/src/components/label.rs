@@ -9,10 +9,10 @@
 //! it reads the `card_description` recipe.
 
 use crate::components::shared::part_painter;
-use crate::style::{pick, Prop, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
+use crate::components::text::TextLook;
+use crate::style::{pick, Role, State};
 use crate::Theme;
-use egui::{Response, RichText, Sense, Ui, Vec2, Widget};
+use egui::{Response, Sense, TextWrapMode, Ui, Widget};
 
 pub struct Label {
     text: String,
@@ -43,27 +43,20 @@ impl Widget for Label {
         let l = [&*t.style.label];
         let enabled = self.enabled && ui.is_enabled();
         let st = t.state(ui.ctx(), State::NONE.with(State::DISABLED, !enabled));
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, st);
-        let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
-        let text_px = t.text_px(size);
-        let weight = pick(&l, |r| &r.weight, st).unwrap_or(Weight::Normal);
-        let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
+        let look = TextLook::resolve(ui, &l, st);
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
         let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
         let painter = part_painter(ui, &[&l[..]], st);
 
-        let galley = painter.layout_no_wrap(self.text.clone(), font, fg);
-        // `leading-none`: the line box is `line_height` times the font size;
-        // without one, Tailwind's line height of the text size.
-        let height = get(|r| &r.line_height).map_or_else(|| t.line_px(size), |k| k * text_px);
-        let (rect, resp) =
-            ui.allocate_exact_size(Vec2::new(galley.size().x, height), Sense::hover());
+        // The label is as tall as its line box (`leading-none`: the font
+        // size).
+        let block = look.layout(ui, self.text.as_str(), TextWrapMode::Extend, f32::INFINITY);
+        let (rect, resp) = ui.allocate_exact_size(block.size(), Sense::hover());
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });
         if ui.is_rect_visible(rect) {
-            let pos = egui::pos2(rect.min.x, rect.center().y - galley.size().y / 2.0);
-            painter.galley(pos, galley, fg);
+            block.paint(&painter, rect.min, fg);
         }
         resp
     }
@@ -74,18 +67,13 @@ pub fn description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let l = [&*t.style.card_description];
     let st = t.state(ui.ctx(), State::NONE);
-    let size = pick(&l, |r| &r.text_size, st).unwrap_or(TextSize::Sm);
-    let px = t.text_px(size);
-    // Tailwind's `text-*` sets a line height too; `leading-*` overrides it.
-    let line = pick(&l, |r| &r.line_height, st).map_or_else(|| t.line_px(size), |k| k * px);
+    let look = TextLook::resolve(ui, &l, st);
     let muted = t.role(Role::MutedForeground); // behaviour-ok: inherits; reads card_description first
-    let color = pick(&l, |r| &r.text, st).map_or(muted, |p| t.paint(p));
-    ui.label(
-        RichText::new(text)
-            .size(px)
-            .line_height(Some(line))
-            .color(color),
-    )
+    let look = match look.recipe_color() {
+        Some(_) => look,
+        None => look.with_color(muted),
+    };
+    look.label(ui, text, TextWrapMode::Wrap)
 }
 
 #[cfg(test)]

@@ -20,8 +20,14 @@ the crate.
   `RecipeBox` for a part's fill, border, shadow, ring and outline,
   `opacity`, `part_opacity` and `part_painter` for a part's fade, `part_ui`
   and `content_ui` for a crate part or caller content drawn through egui,
-  `line_box` for the height of a line of text, `widget_info_with_role` for
-  an accessible role egui's `WidgetType` lacks.
+  `widget_info_with_role` for an accessible role egui's `WidgetType` lacks.
+- `shadcn_egui::components::text::{TextLook, content_scope, Leading}` for
+  every piece of text a widget lays out or paints:
+  `TextLook::resolve(ui, &recipes, state)` resolves size, weight, colour
+  and line height, `.layout(..)` returns a `TextBlock` as tall as its line
+  boxes with each baseline where the browser puts it, `.label(..)` shows it
+  as an egui label, and `content_scope` hands a container's `text-*` and
+  text colour to its content.
 - `shadcn_egui::layout::{capped_width, overlay_width, allocate_overflowing}`
   for a widget's width and its allocation.
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
