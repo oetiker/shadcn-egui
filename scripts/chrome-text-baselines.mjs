@@ -6,6 +6,16 @@
 // font in tools/fontgen/FONTS.tsv, at device scale 1, 1.5 and 2, and writes
 // crates/shadcn-egui/tests/text_placement/chrome-baselines.tsv.
 //
+// A second column holds cases whose line boxes are fractional:
+// - nova-button-sm: the nova small button, `text-sm` then `text-[0.8rem]`
+//   (12.8px text on a 12.8 x 20/14 px line, centred in 28px less its border);
+// - nova-input: the nova input at phone width (16px text, 24px line, in a
+//   22px content box), measured like the vega input;
+// - frac-block-1 to frac-block-3: the rows of a block wrapped into three
+//   19.5px rows below one 19.5px row, so its top is fractional;
+// - frac-line: a `text-sm` line (14px text, 20px line) below one 19.5px row.
+// Their line_top is "-"; their baselines are device px from the case's top.
+//
 // Per row: line_top = device px from the element's border-box top to the top
 // of the line box the text sits in; baseline = device px from the border-box
 // top to the bottom edge of the baseline row (the row just below the H ink).
@@ -93,6 +103,18 @@ button, input { font: inherit; color: inherit; background: transparent; letter-s
   background: transparent; padding: 4px 10px; font-size: 14px; line-height: 20px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   caret-color: rgb(255 0 0); }
 .input::selection { background: rgb(0 0 255); color: #fff; }
+.col2 { position: absolute; left: 260px; top: 8px; }
+.nova-button-sm { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; white-space: nowrap;
+  border-radius: 8px; border: 1px solid transparent; background-clip: padding-box;
+  font-size: 0.875rem; line-height: calc(1.25 / 0.875); font-weight: 500; height: 28px; gap: 4px; padding: 0 10px;
+  background-color: var(--primary); color: var(--primary-foreground); }
+.nova-button-sm { font-size: 0.8rem; }
+.nova-input { width: 200px; min-width: 0; outline: none; height: 32px; border-radius: 8px; border: 1px solid var(--input);
+  background: transparent; padding: 4px 10px; font-size: 16px; line-height: 24px; caret-color: rgb(255 0 0); }
+.nova-input::selection { background: rgb(0 0 255); color: #fff; }
+.frac { display: block; }
+.fb { display: block; width: min-content; font-size: 12px; line-height: 19.5px; }
+.fs { display: block; font-size: 14px; line-height: 20px; }
 `;
 
 const ITEMS = {
@@ -103,6 +125,14 @@ const ITEMS = {
 };
 const BLOCK_ROWS = 3;
 const BLOCK_LINE = 19.5;
+// The second column; each frac case has one 19.5px row above its text.
+const ITEMS2 = {
+  'nova-button-sm': `<button class="m nova-button-sm">${TEXT}</button>`,
+  'nova-input': `<input class="m nova-input" value="${TEXT}">`,
+  'frac-block': `<div class="m frac"><div class=fb>${TEXT}</div><div class=fb>${TEXT} ${TEXT} ${TEXT}<i class=probe></i></div></div>`,
+  'frac-line': `<div class="m frac"><div class=fb>${TEXT}</div><div class=fs>${TEXT}<i class=probe></i></div></div>`,
+};
+const FRAC_ROWS = { 'frac-block': 3, 'frac-line': 1 };
 
 function page(fontUrl, weight) {
   const rows = [];
@@ -110,9 +140,10 @@ function page(fontUrl, weight) {
     rows.push(`<div class=row data-item=${item} data-kind=m>${el}<i class=probe></i></div>`);
     if (twin) rows.push(`<div class=row data-item=${item} data-kind=t>${twin}<i class=probe></i></div>`);
   }
+  const rows2 = Object.entries(ITEMS2).map(([item, el]) => `<div class=row data-item=${item} data-kind=m>${el}<i class=probe></i></div>`);
   return `<!doctype html><html><head><meta charset=utf-8><style>
 @font-face { font-family: F; src: url('${fontUrl}') format('truetype'); font-weight: ${weight}; font-display: block; }
-${CSS}</style></head><body><div class=col>${rows.join('')}</div></body></html>`;
+${CSS}</style></head><body><div class=col>${rows.join('')}</div><div class="col col2">${rows2.join('')}</div></body></html>`;
 }
 
 function fonts() {
@@ -159,7 +190,7 @@ class Cdp {
 
 async function launch(tmp, s) {
   const profile = path.join(tmp, `profile-${s}`);
-  const proc = spawn(CHROME, ['--headless=new', `--force-device-scale-factor=${s}`, '--window-size=400,400', '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
+  const proc = spawn(CHROME, ['--headless=new', `--force-device-scale-factor=${s}`, '--window-size=600,400', '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
     '--disable-gpu', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
   const portFile = path.join(profile, 'DevToolsActivePort');
   for (let i = 0; i < 300 && !fs.existsSync(portFile); i++) await new Promise((r) => setTimeout(r, 100));
@@ -250,11 +281,11 @@ async function measure(cdp, sid, font, s, tmp) {
     awaitPromise: true, returnByValue: true, expression: `document.fonts.ready.then(() => {
       const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
       const rows = [...document.querySelectorAll('.row')].map((row) => {
-        const el = row.firstElementChild, inner = el.querySelector('.inner');
+        const el = row.firstElementChild, inner = el.querySelector('.inner'), last = el.querySelector('.probe');
         let text = null;
         if (el.tagName !== 'INPUT') { const g = document.createRange(); g.selectNodeContents(inner || el); text = r(g); }
         return { item: row.dataset.item, kind: row.dataset.kind, el: r(el), probe: r(row.lastElementChild),
-                 inner: inner ? r(inner) : null, text };
+                 inner: inner ? r(inner) : null, text, last: last ? r(last) : null };
       });
       return { rows, status: [...document.fonts].map((f) => f.status), check: document.fonts.check('14px F') };
     })` }, sid);
@@ -263,16 +294,19 @@ async function measure(cdp, sid, font, s, tmp) {
 
   // The input's inner editor, from the user-agent shadow root.
   const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true }, sid);
-  let input = null;
+  const inputs = [];
   const walk = (n) => {
-    if (n.nodeName === 'INPUT') input = n;
+    if (n.nodeName === 'INPUT') inputs.push(n);
     for (const c of [...(n.children || []), ...(n.shadowRoots || [])]) walk(c);
   };
   walk(root);
-  const editor = input.shadowRoots[0].children.find((c) => c.nodeName === 'DIV');
-  const { model } = await cdp.send('DOM.getBoxModel', { nodeId: editor.nodeId }, sid);
-  const editorTop = model.border[1];
-  const editorHeight = model.border[5] - model.border[1];
+  // Per input item, in document order: the inner editor's top and height.
+  const editors = {};
+  for (const [k, item] of ['input', 'nova-input'].entries()) {
+    const editor = inputs[k].shadowRoots[0].children.find((c) => c.nodeName === 'DIV');
+    const { model } = await cdp.send('DOM.getBoxModel', { nodeId: editor.nodeId }, sid);
+    editors[item] = { top: model.border[1], height: model.border[5] - model.border[1] };
+  }
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' }, sid);
   const img = decodePng(Buffer.from(shot.data, 'base64'));
@@ -280,37 +314,49 @@ async function measure(cdp, sid, font, s, tmp) {
   // The input focused: all text selected, then the caret after the text
   // (it blinks: take the first screenshot that shows it).
   const ev = (expression) => cdp.send('Runtime.evaluate', { expression, returnByValue: true }, sid);
-  const inputRow = v.rows.find((r) => r.item === 'input');
-  const [ix0, ix1] = [Math.floor(inputRow.el.x * s), Math.ceil((inputRow.el.x + inputRow.el.w) * s)];
-  const [iy0, iy1] = [Math.floor(inputRow.el.y * s), Math.ceil((inputRow.el.y + inputRow.el.h) * s)];
   const shoot = async () => decodePng(Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' }, sid)).data, 'base64'));
-  await ev(`(() => { const i = document.querySelector('input'); i.focus(); i.select(); return 1; })()`);
-  await new Promise((r) => setTimeout(r, 100));
-  const sel = pixelBox(await shoot(), ix0, ix1, iy0, iy1, (r, g, b) => b > 200 && r < 60 && g < 60);
-  await ev(`(() => { const i = document.querySelector('input'); i.setSelectionRange(${TEXT.length}, ${TEXT.length}); return 1; })()`);
-  let caret = null;
-  for (let k = 0; k < 20 && !caret; k++) {
+  const fields = {};
+  for (const item of ['input', 'nova-input']) {
+    const row = v.rows.find((r) => r.item === item);
+    const [ix0, ix1] = [Math.floor(row.el.x * s), Math.ceil((row.el.x + row.el.w) * s)];
+    const [iy0, iy1] = [Math.floor(row.el.y * s), Math.ceil((row.el.y + row.el.h) * s)];
+    const q = `document.querySelector('.row[data-item=${item}] input')`;
+    await ev(`(() => { const i = ${q}; i.focus(); i.select(); return 1; })()`);
     await new Promise((r) => setTimeout(r, 100));
-    caret = pixelBox(await shoot(), ix0, ix1, iy0, iy1, (r, g, b) => r > 200 && g < 80 && b < 80);
+    const sel = pixelBox(await shoot(), ix0, ix1, iy0, iy1, (r, g, b) => b > 200 && r < 60 && g < 60);
+    await ev(`(() => { const i = ${q}; i.setSelectionRange(${TEXT.length}, ${TEXT.length}); return 1; })()`);
+    let caret = null;
+    for (let k = 0; k < 20 && !caret; k++) {
+      await new Promise((r) => setTimeout(r, 100));
+      caret = pixelBox(await shoot(), ix0, ix1, iy0, iy1, (r, g, b) => r > 200 && g < 80 && b < 80);
+    }
+    await ev(`(() => { ${q}.blur(); return 1; })()`);
+    if (!sel || !caret) throw new Error(`${font.id} ${s}x: no selection or caret in ${item}`);
+    const top = toDev(row.el.y, s, `${font.id} ${s}x ${item} top`);
+    fields[item] = [sel.top - top, sel.bottom - top, caret.top - top, caret.bottom - top, caret.right - caret.left];
   }
-  await ev(`(() => { document.querySelector('input').blur(); return 1; })()`);
-  if (!sel || !caret) throw new Error(`${font.id} ${s}x: no selection or caret in the input`);
 
   const out = [];
-  for (const item of Object.keys(ITEMS).filter((i) => i !== 'block')) {
+  for (const item of ['button', 'badge', 'input', 'nova-button-sm', 'nova-input']) {
     const m = v.rows.find((r) => r.item === item && r.kind === 'm');
     const t = v.rows.find((r) => r.item === item && r.kind === 't');
     const tag = `${font.id} ${s}x ${item}`;
     const top = toDev(m.el.y, s, `${tag} top`);
     const half = !t;
-    const layout = toDev(m.probe.y + m.probe.h, s, `${tag} probe`, half) - top;
+    // The nova button's line box is fractional; Blink paints its baseline
+    // on the nearest row.
+    const layout = item === 'nova-button-sm'
+      ? Math.round((m.probe.y + m.probe.h) * s) - top
+      : toDev(m.probe.y + m.probe.h, s, `${tag} probe`, half) - top;
     let lineTop;
     if (t) {
       const tl = toDev(t.probe.y + t.probe.h, s, `${tag} twin probe`) - toDev(t.el.y, s, `${tag} twin top`);
       if (tl !== layout) throw new Error(`${tag}: twin baseline ${tl} != ${layout}`);
       lineTop = toDev(t.inner.y - t.el.y, s, `${tag} line top`);
+    } else if (editors[item]) {
+      lineTop = toDev(editors[item].top - m.el.y, s, `${tag} editor top`, half);
     } else {
-      lineTop = toDev(editorTop - m.el.y, s, `${tag} editor top`, half);
+      lineTop = '-';
     }
     // Ink columns: the text run (for the input: its content box, 10px + 1px border in).
     const ex = m.el.x * s, ew = m.el.w * s, eh = m.el.h * s;
@@ -318,10 +364,8 @@ async function measure(cdp, sid, font, s, tmp) {
     const bg = img.at(Math.floor(ex + 4 * s), Math.floor(top + eh / 2));
     const ink = inkBottom(img, Math.floor(tx0), Math.ceil(tx1), top + 2 * s, Math.round(top + eh - 2 * s), bg) - top;
     if (ink !== layout) throw new Error(`${tag}: ink baseline ${ink} != layout baseline ${layout}`);
-    if (globalThis.debugRows) console.log([font.id, s, item, lineTop, ink, t ? '' : editorHeight * s, ...inkBottom.margin.map((x) => x.toFixed(2))].join('\t'));
-    const field = item === 'input'
-      ? [sel.top - top, sel.bottom - top, caret.top - top, caret.bottom - top, caret.right - caret.left]
-      : ['-', '-', '-', '-', '-'];
+    if (globalThis.debugRows) console.log([font.id, s, item, lineTop, ink, editors[item] ? editors[item].height * s : '', ...inkBottom.margin.map((x) => x.toFixed(2))].join('\t'));
+    const field = fields[item] || ['-', '-', '-', '-', '-'];
     out.push([font.id, s, item, lineTop, ink, ...field]);
   }
   // Block rows: the ink bottom in each line's band; the last row also
@@ -340,6 +384,23 @@ async function measure(cdp, sid, font, s, tmp) {
       if (ink !== layout) throw new Error(`${font.id} ${s}x block: ink baseline ${ink} != layout baseline ${layout}`);
     }
     out.push([font.id, s, `block-${k + 1}`, '-', ink, '-', '-', '-', '-', '-']);
+  }
+  // Frac cases: the rows below the first 19.5px row, each line's ink in its
+  // band; the last against the probe after the text.
+  for (const [item, n] of Object.entries(FRAC_ROWS)) {
+    const f = v.rows.find((r) => r.item === item);
+    const ftop = toDev(f.el.y, s, `${font.id} ${s}x ${item} top`);
+    const line = item === 'frac-line' ? 20 : BLOCK_LINE;
+    if (Math.abs(f.el.h - BLOCK_LINE - n * line) > 1 / 64) throw new Error(`${font.id}: ${item} is ${f.el.h} px tall`);
+    for (let k = 0; k < n; k++) {
+      const y0 = Math.ceil(ftop + (BLOCK_LINE + k * line) * s), y1 = Math.floor(ftop + (BLOCK_LINE + (k + 1) * line) * s);
+      const ink = inkBottom(img, Math.floor(f.el.x * s), Math.ceil((f.el.x + f.el.w) * s), y0, y1, img.at(2, 2)) - ftop;
+      if (k === n - 1) {
+        const layout = Math.round((f.last.y + f.last.h) * s) - ftop;
+        if (ink !== layout) throw new Error(`${font.id} ${s}x ${item}: ink baseline ${ink} != layout baseline ${layout}`);
+      }
+      out.push([font.id, s, n > 1 ? `${item}-${k + 1}` : item, '-', ink, '-', '-', '-', '-', '-']);
+    }
   }
   return out;
 }
