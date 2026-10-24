@@ -11,6 +11,6 @@ pub static FONT: FontFiles = FontFiles {
         data: include_bytes!("../fonts/playfair-display.ttf"),
         wght: 400.0..=900.0,
     },
-    y_offset_factor: -0.14,
+    y_offset_factor: 0.0,
     license: include_str!("../LICENSE-FONT.txt"),
 };

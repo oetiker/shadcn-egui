@@ -1,6 +1,6 @@
 //! One Button snapshot per font crate (`font_<id>.png`, vega light): each
 //! font installs, its medium label is heavier than the body text, and the
-//! capitals sit centred in the button (`y_offset_factor`).
+//! text sits on the baseline the text path gives it (`y_offset_factor` 0).
 #![cfg(feature = "fonts-all")]
 
 mod common;

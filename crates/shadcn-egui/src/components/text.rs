@@ -13,8 +13,9 @@
 //! descent D, read from the font's own tables, each rounded to whole
 //! device pixels, the baseline `floor((line height - (A + D)) / 2) + A`
 //! below the line top, the font's line gap unused. A text-entry field
-//! rounds that half up (see [`Leading`]). Every row of wrapped text follows
-//! the same rule, and the laid-out text is as tall as its line boxes.
+//! places it as Blink places its editor (see [`Leading`]). Every row of
+//! wrapped text follows the same rule, and the laid-out text is as tall as
+//! its line boxes.
 //!
 //! ```
 //! use shadcn_egui::components::text::TextLook;
@@ -55,8 +56,15 @@ pub enum Leading {
     /// rounded down to a device pixel.
     #[default]
     Inline,
-    /// The inner editor of a text `<input>` or `<textarea>`: the half
-    /// above rounds up.
+    /// The inner editor of a text `<input>`: Blink lays it out as one line
+    /// of `line-height: normal` (ascent, descent and the font's line gap,
+    /// each rounded to device pixels) centred in the content box, an odd
+    /// pixel of slack below the editor's top half, the baseline half the
+    /// line gap (rounded down) plus the ascent below that top. Placed in a
+    /// line box centred in the same content box (the content box minus
+    /// the line box an even number of device pixels), the half above is
+    /// `ceil((line height - (A + D + gap)) / 2) + floor(gap / 2)`; without a
+    /// line gap that is the inline half rounded up.
     Field,
 }
 
@@ -371,13 +379,15 @@ fn placeholder_style(ctx: &egui::Context) -> Arc<egui::Style> {
     style
 }
 
-/// A face's ascent and descent in em, as Skia picks them: OS/2 typo
-/// metrics when `USE_TYPO_METRICS` is set, else hhea. The line gap is
-/// left out, as CSS leaves it out of a line box with a set line height.
+/// A face's ascent, descent and line gap in em, as Skia picks them: OS/2
+/// typo metrics when `USE_TYPO_METRICS` is set, else hhea. A line box with
+/// a set line height leaves the line gap out; only a field's editor, a
+/// `line-height: normal` line, uses it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct VMetrics {
     ascent: f32,
     descent: f32,
+    line_gap: f32,
 }
 
 /// The [`VMetrics`] of face `index` in the font file `data` (TrueType,
@@ -405,17 +415,20 @@ fn vmetrics(data: &[u8], index: u32) -> Option<VMetrics> {
     };
     let upem = f32::from(u16_at(table(b"head")? + 18)?);
     let hhea = table(b"hhea")?;
-    let (mut ascent, mut descent) = (i16_at(hhea + 4)?, -i16_at(hhea + 6)?);
+    let (mut ascent, mut descent, mut gap) =
+        (i16_at(hhea + 4)?, -i16_at(hhea + 6)?, i16_at(hhea + 8)?);
     if let Some(os2) = table(b"OS/2") {
         // fsSelection bit 7, USE_TYPO_METRICS.
         if u16_at(os2 + 62).is_some_and(|sel| sel & 0x80 != 0) {
             ascent = i16_at(os2 + 68)?;
             descent = -i16_at(os2 + 70)?;
+            gap = i16_at(os2 + 72)?;
         }
     }
     (upem > 0.0).then_some(VMetrics {
         ascent: ascent / upem,
         descent: descent / upem,
+        line_gap: gap.max(0.0) / upem,
     })
 }
 
@@ -476,13 +489,16 @@ pub(crate) fn place_rows(
         let em = family_vmetrics(ctx, &format.font_id.family).unwrap_or(VMetrics {
             ascent: glyph.font_face_ascent / size,
             descent: (glyph.font_face_height - glyph.font_face_ascent) / size,
+            line_gap: 0.0,
         });
         let ascent = (em.ascent * size * ppp).round();
         let descent = (em.descent * size * ppp).round();
-        let half = (line * ppp - ascent - descent) / 2.0;
         let half = match leading {
-            Leading::Inline => half.floor(),
-            Leading::Field => half.ceil(),
+            Leading::Inline => ((line * ppp - ascent - descent) / 2.0).floor(),
+            Leading::Field => {
+                let gap = (em.line_gap * size * ppp).round();
+                ((line * ppp - ascent - descent - gap) / 2.0).ceil() + (gap / 2.0).floor()
+            }
         };
         let shift = (half + ascent - (glyph.pos.y * ppp).round()) / ppp;
         placed.pos.y += shift;
@@ -613,7 +629,9 @@ mod tests {
                 assert_eq!(baselines(block.galley(), ppp), [first, first + 30.0 * ppp]);
                 let field = look.clone().leading(Leading::Field);
                 let block = field.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
-                let up = ((30.0 * ppp - a - d) / 2.0).ceil() + a;
+                // The field adds the line gap of egui's default font.
+                let g = (em.line_gap * 10.0 * ppp).round();
+                let up = ((30.0 * ppp - a - d - g) / 2.0).ceil() + (g / 2.0).floor() + a;
                 assert_eq!(baselines(block.galley(), ppp), [up]);
             });
         }
@@ -627,6 +645,7 @@ mod tests {
         let m = vmetrics(inter.data, 0).expect("tables");
         assert_eq!(m.ascent, 1984.0 / 2048.0);
         assert_eq!(m.descent, 494.0 / 2048.0);
+        assert_eq!(m.line_gap, 0.0);
     }
 
     #[test]

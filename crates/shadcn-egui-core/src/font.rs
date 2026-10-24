@@ -40,8 +40,10 @@ pub struct FontFiles {
     pub name: &'static str,
     pub kind: FontKind,
     pub source: FontSource,
-    /// egui `FontTweak::y_offset_factor` that centres capitals in a button,
-    /// measured per font.
+    /// egui `FontTweak::y_offset_factor`: a correction, in em, on top of the
+    /// browser's baseline placement that the crate's text path gives every
+    /// font. 0 by default; a font gets a value only where its glyphs, on
+    /// that baseline, still sit visibly off Chrome's.
     pub y_offset_factor: f32,
     /// The font's licence text (OFL-1.1 or Apache-2.0).
     pub license: &'static str,
