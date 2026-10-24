@@ -37,6 +37,7 @@ use crate::style::{pick, Recipe, State, TextSize, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
 use egui::text::{LayoutJob, TextWrapping};
+use egui::FontData;
 use egui::{
     Align, Color32, FontFamily, FontId, FontSelection, Galley, Painter, Pos2, Response, Stroke,
     TextWrapMode, Ui, Vec2, WidgetText,
@@ -433,7 +434,9 @@ fn vmetrics(data: &[u8], index: u32) -> Option<VMetrics> {
 }
 
 /// The metrics of the first face of `family`, read from the context's
-/// font definitions once and cached under the face's key.
+/// font definitions once per face. The cache keeps the face's data with
+/// the metrics: a theme that switches fonts reuses the key names for
+/// other faces.
 fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics> {
     let (id, data) = ctx.fonts(|f| {
         let defs = f.definitions();
@@ -441,11 +444,12 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
         let id = egui::Id::new("shadcn_egui::text::vmetrics").with(key);
         Some((id, defs.font_data.get(key)?.clone()))
     })?;
-    if let Some(m) = ctx.data(|d| d.get_temp::<Option<VMetrics>>(id)) {
+    let cached = ctx.data(|d| d.get_temp::<(Arc<FontData>, Option<VMetrics>)>(id));
+    if let Some((_, m)) = cached.filter(|(src, _)| Arc::ptr_eq(src, &data)) {
         return m;
     }
     let m = vmetrics(&data.font, data.index);
-    ctx.data_mut(|d| d.insert_temp(id, m));
+    ctx.data_mut(|d| d.insert_temp(id, (data, m)));
     m
 }
 
@@ -635,6 +639,36 @@ mod tests {
                 assert_eq!(baselines(block.galley(), ppp), [up]);
             });
         }
+    }
+
+    #[test]
+    fn metrics_follow_a_font_switch_under_the_same_key() {
+        // A theme that switches fonts keeps its key names: the metrics
+        // must come from the face now under the key.
+        let ctx = egui::Context::default();
+        let defs = |data: egui::FontData| {
+            let mut d = egui::FontDefinitions::empty();
+            d.font_data.insert("k".into(), Arc::new(data));
+            d.families.insert(FontFamily::Proportional, vec!["k".into()]);
+            d
+        };
+        let measure = |ctx: &egui::Context| {
+            let mut m = None;
+            let _ = ctx.run_ui(Default::default(), |ui| {
+                m = family_vmetrics(ui.ctx(), &FontFamily::Proportional);
+            });
+            m.expect("font tables")
+        };
+        let other = egui::FontDefinitions::default();
+        let ubuntu = other.font_data["Ubuntu-Light"].as_ref().clone();
+        let inter = shadcn_egui_font_inter::FONT.face(400);
+        ctx.set_fonts(defs(ubuntu.clone()));
+        let before = measure(&ctx);
+        ctx.set_fonts(defs(egui::FontData::from_static(inter.data)));
+        let after = measure(&ctx);
+        assert_ne!(before, after);
+        assert_eq!(after, vmetrics(inter.data, 0).expect("tables"));
+        assert_eq!(before, vmetrics(&ubuntu.font, 0).expect("tables"));
     }
 
     #[test]
