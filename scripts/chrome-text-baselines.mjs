@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Measures where headless Chrome puts the text baseline of "HHHH" in three
-// vega-style shadcn elements (default button, badge, text input) for every
-// font in tools/fontgen/FONTS.tsv, at device scale 1 and 2, and writes
+// vega-style shadcn elements (default button, badge, text input) and of
+// each row of a block wrapped into three rows on fractional lines
+// (`text-xs/relaxed`: 12px text, 19.5px lines; items block-1 to block-3) for every
+// font in tools/fontgen/FONTS.tsv, at device scale 1, 1.5 and 2, and writes
 // crates/shadcn-egui/tests/text_placement/chrome-baselines.tsv.
 //
 // Per row: line_top = device px from the element's border-box top to the top
@@ -13,6 +15,11 @@
 // fails when the two disagree. line_top comes from the layout: a block span
 // around the text for button and badge, the input's inner editor (CDP DOM
 // with user-agent shadow roots) for the input.
+//
+// For the input only, from the screenshot pixels: sel_top and sel_bottom,
+// the rows of the selection highlight with all text selected; caret_top,
+// caret_bottom and caret_w, the caret's rows and width with the caret after
+// the text (device px; "-" for button and badge).
 //
 // Input: Chrome's inner editor ignores line-height. It is one line of
 // line-height normal (ascent + descent + line gap, each rounded to device
@@ -35,7 +42,8 @@
 //
 // Usage (Node 22+, no packages):
 //   node scripts/chrome-text-baselines.mjs <chrome-binary> [<output.tsv>]
-// or set CHROME and OUT. The output defaults to the committed TSV.
+// or set CHROME and OUT; SCALES=1,2 measures other device scales (each must
+// put the elements on whole device pixels). The output defaults to the committed TSV.
 // DEBUG_ROWS=1 also prints per row the editor height and the ink ratios of
 // the last row and the row below. Chrome's profiles and the generated pages
 // go to a fresh directory under os.tmpdir() (set TMPDIR to move it),
@@ -56,7 +64,7 @@ if (!CHROME) {
   console.error('usage: node scripts/chrome-text-baselines.mjs <chrome-binary> [<output.tsv>]');
   process.exit(2);
 }
-const SCALES = [1, 2];
+const SCALES = (process.env.SCALES || '1,1.5,2').split(',').map(Number);
 const TEXT = 'HHHH';
 
 // Vega style classes (shadcn-ui registry style-vega, Tailwind v4 defaults
@@ -72,6 +80,7 @@ button, input { font: inherit; color: inherit; background: transparent; letter-s
 .row { display: block; font-size: 0; line-height: 0; }
 .probe { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
 .inner { display: block; }
+.block { display: block; width: min-content; font-size: 12px; line-height: 19.5px; }
 .button { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; white-space: nowrap;
   border-radius: 8px; border: 1px solid transparent; background-clip: padding-box;
   font-size: 14px; line-height: 20px; font-weight: 500; height: 36px; gap: 6px; padding: 0 10px;
@@ -81,14 +90,19 @@ button, input { font: inherit; color: inherit; background: transparent; letter-s
   padding: 2px 8px; font-size: 12px; line-height: 16px; font-weight: 500;
   background-color: var(--primary); color: var(--primary-foreground); }
 .input { width: 200px; min-width: 0; outline: none; height: 36px; border-radius: 8px; border: 1px solid var(--input);
-  background: transparent; padding: 4px 10px; font-size: 14px; line-height: 20px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+  background: transparent; padding: 4px 10px; font-size: 14px; line-height: 20px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  caret-color: rgb(255 0 0); }
+.input::selection { background: rgb(0 0 255); color: #fff; }
 `;
 
 const ITEMS = {
   button: { el: `<button class="m button">${TEXT}</button>`, twin: `<button class="t button"><span class=inner>${TEXT}</span></button>` },
   badge: { el: `<span class="m badge">${TEXT}</span>`, twin: `<span class="t badge"><span class=inner>${TEXT}</span></span>` },
   input: { el: `<input class="m input" value="${TEXT}">` },
+  block: { el: `<div class="m block">${TEXT} ${TEXT} ${TEXT}<i class=probe></i></div>` },
 };
+const BLOCK_ROWS = 3;
+const BLOCK_LINE = 19.5;
 
 function page(fontUrl, weight) {
   const rows = [];
@@ -181,7 +195,22 @@ function decodePng(buf) {
       px[y * stride + x] = p & 255;
     }
   }
-  return { width, height, at: (x, y) => { const i = y * stride + x * bpp; return (px[i] + px[i + 1] + px[i + 2]) / 3; } };
+  const rgb = (x, y) => { const i = y * stride + x * bpp; return [px[i], px[i + 1], px[i + 2]]; };
+  return { width, height, rgb, at: (x, y) => rgb(x, y).reduce((a, b) => a + b) / 3 };
+}
+
+// The box of the pixels in [x0, x1) x [y0, y1) where pred(r, g, b) holds,
+// in device px; null when there are none.
+function pixelBox(img, x0, x1, y0, y1, pred) {
+  let b = null;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      if (!pred(...img.rgb(x, y))) continue;
+      b = b ? { top: Math.min(b.top, y), bottom: Math.max(b.bottom, y + 1), left: Math.min(b.left, x), right: Math.max(b.right, x + 1) }
+        : { top: y, bottom: y + 1, left: x, right: x + 1 };
+    }
+  }
+  return b;
 }
 
 // Bottom edge of the ink inside [x0, x1) x [y0, y1) in device px, against bg.
@@ -248,8 +277,27 @@ async function measure(cdp, sid, font, s, tmp) {
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' }, sid);
   const img = decodePng(Buffer.from(shot.data, 'base64'));
 
+  // The input focused: all text selected, then the caret after the text
+  // (it blinks: take the first screenshot that shows it).
+  const ev = (expression) => cdp.send('Runtime.evaluate', { expression, returnByValue: true }, sid);
+  const inputRow = v.rows.find((r) => r.item === 'input');
+  const [ix0, ix1] = [Math.floor(inputRow.el.x * s), Math.ceil((inputRow.el.x + inputRow.el.w) * s)];
+  const [iy0, iy1] = [Math.floor(inputRow.el.y * s), Math.ceil((inputRow.el.y + inputRow.el.h) * s)];
+  const shoot = async () => decodePng(Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' }, sid)).data, 'base64'));
+  await ev(`(() => { const i = document.querySelector('input'); i.focus(); i.select(); return 1; })()`);
+  await new Promise((r) => setTimeout(r, 100));
+  const sel = pixelBox(await shoot(), ix0, ix1, iy0, iy1, (r, g, b) => b > 200 && r < 60 && g < 60);
+  await ev(`(() => { const i = document.querySelector('input'); i.setSelectionRange(${TEXT.length}, ${TEXT.length}); return 1; })()`);
+  let caret = null;
+  for (let k = 0; k < 20 && !caret; k++) {
+    await new Promise((r) => setTimeout(r, 100));
+    caret = pixelBox(await shoot(), ix0, ix1, iy0, iy1, (r, g, b) => r > 200 && g < 80 && b < 80);
+  }
+  await ev(`(() => { document.querySelector('input').blur(); return 1; })()`);
+  if (!sel || !caret) throw new Error(`${font.id} ${s}x: no selection or caret in the input`);
+
   const out = [];
-  for (const item of Object.keys(ITEMS)) {
+  for (const item of Object.keys(ITEMS).filter((i) => i !== 'block')) {
     const m = v.rows.find((r) => r.item === item && r.kind === 'm');
     const t = v.rows.find((r) => r.item === item && r.kind === 't');
     const tag = `${font.id} ${s}x ${item}`;
@@ -271,7 +319,27 @@ async function measure(cdp, sid, font, s, tmp) {
     const ink = inkBottom(img, Math.floor(tx0), Math.ceil(tx1), top + 2 * s, Math.round(top + eh - 2 * s), bg) - top;
     if (ink !== layout) throw new Error(`${tag}: ink baseline ${ink} != layout baseline ${layout}`);
     if (globalThis.debugRows) console.log([font.id, s, item, lineTop, ink, t ? '' : editorHeight * s, ...inkBottom.margin.map((x) => x.toFixed(2))].join('\t'));
-    out.push([font.id, s, item, lineTop, ink]);
+    const field = item === 'input'
+      ? [sel.top - top, sel.bottom - top, caret.top - top, caret.bottom - top, caret.right - caret.left]
+      : ['-', '-', '-', '-', '-'];
+    out.push([font.id, s, item, lineTop, ink, ...field]);
+  }
+  // Block rows: the ink bottom in each line's band; the last row also
+  // against its layout probe (the probe after the text).
+  const b = v.rows.find((r) => r.item === 'block');
+  const btop = toDev(b.el.y, s, `${font.id} ${s}x block top`);
+  if (Math.abs(b.el.h - BLOCK_ROWS * BLOCK_LINE) > 1 / 64) throw new Error(`${font.id}: block is ${b.el.h} px tall`);
+  const bl = await cdp.send('Runtime.evaluate', { returnByValue: true, expression:
+    `(() => { const p = document.querySelector('.block .probe').getBoundingClientRect(); return p.y + p.height; })()` }, sid);
+  for (let k = 0; k < BLOCK_ROWS; k++) {
+    const y0 = Math.ceil(btop + k * BLOCK_LINE * s), y1 = Math.floor(btop + (k + 1) * BLOCK_LINE * s);
+    const ink = inkBottom(img, Math.floor(b.el.x * s), Math.ceil((b.el.x + b.el.w) * s), y0, y1, img.at(2, 2)) - btop;
+    if (k === BLOCK_ROWS - 1) {
+      // The layout baseline may be fractional; Blink paints it on the nearest row.
+      const layout = Math.round(bl.result.value * s) - btop;
+      if (ink !== layout) throw new Error(`${font.id} ${s}x block: ink baseline ${ink} != layout baseline ${layout}`);
+    }
+    out.push([font.id, s, `block-${k + 1}`, '-', ink, '-', '-', '-', '-', '-']);
   }
   return out;
 }
@@ -283,6 +351,7 @@ async function run(s, tmp) {
     const { sessionId: sid } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     await cdp.send('Page.enable', {}, sid);
     await cdp.send('DOM.enable', {}, sid);
+    await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sid);
     const { result } = await cdp.send('Runtime.evaluate', { expression: 'devicePixelRatio', returnByValue: true }, sid);
     if (result.value !== s) throw new Error(`devicePixelRatio ${result.value}, wanted ${s}`);
     const rows = [];
@@ -305,7 +374,7 @@ try {
   for (const s of SCALES) rows.push(...await run(s, tmp));
   rows.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0)));
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, ['font\tscale\titem\tline_top\tbaseline', ...rows.map((r) => r.join('\t'))].join('\n') + '\n');
+  fs.writeFileSync(OUT, ['font\tscale\titem\tline_top\tbaseline\tsel_top\tsel_bottom\tcaret_top\tcaret_bottom\tcaret_w', ...rows.map((r) => r.join('\t'))].join('\n') + '\n');
   console.error(`wrote ${rows.length} rows to ${OUT}`);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

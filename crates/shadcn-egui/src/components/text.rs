@@ -59,13 +59,12 @@ pub enum Leading {
     Inline,
     /// The inner editor of a text `<input>`: Blink lays it out as one line
     /// of `line-height: normal` (ascent, descent and the font's line gap,
-    /// each rounded to device pixels) centred in the content box, an odd
-    /// pixel of slack below the editor's top half, the baseline half the
-    /// line gap (rounded down) plus the ascent below that top. Placed in a
-    /// line box centred in the same content box (the content box minus
-    /// the line box an even number of device pixels), the half above is
-    /// `ceil((line height - (A + D + gap)) / 2) + floor(gap / 2)`; without a
-    /// line gap that is the inline half rounded up.
+    /// each rounded to device pixels), the baseline half the line gap
+    /// (rounded down) plus the ascent below its top. Each row is that
+    /// line, not the line box, so a field's caret and selection span it;
+    /// the field centres it in its content box (egui's
+    /// `Align::Center`), and the painter rounds its top to the device
+    /// pixel as Blink snaps the editor.
     Field,
 }
 
@@ -169,6 +168,19 @@ impl TextLook {
             family_for(ctx, self.weight)
         };
         FontId::new(self.size, family)
+    }
+
+    /// Where Blink paints a field's caret in its editor line, in points
+    /// below the line's top: the font's ascent and descent (each rounded
+    /// to device pixels) around the baseline, which sits half the line
+    /// gap plus the ascent below that top.
+    pub(crate) fn caret_span(&self, ctx: &egui::Context) -> Option<std::ops::Range<f32>> {
+        let ppp = ctx.pixels_per_point();
+        let em = family_vmetrics(ctx, &self.font_id(ctx).family)?;
+        let [a, d, gap] =
+            [em.ascent, em.descent, em.line_gap].map(|v| (v * self.size * ppp).round());
+        let top = (gap / 2.0).floor();
+        Some(top / ppp..(top + a + d) / ppp)
     }
 
     /// The colour of text without an explicit colour: the recipe's, else
@@ -576,34 +588,41 @@ fn place_galley_rows(
             .iter()
             .find(|s| s.byte_range.contains(&start))
             .or(job.sections.last());
+        // The row's ascent, descent and line gap in device px, each
+        // rounded: from its first font's tables, else egui's metrics.
+        let glyph = placed.row.glyphs.first();
+        let dev = section.and_then(|s| {
+            let size = s.format.font_id.size;
+            let em = family_vmetrics(ctx, &s.format.font_id.family).or_else(|| {
+                glyph.map(|g| VMetrics {
+                    ascent: g.font_face_ascent / size,
+                    descent: (g.font_face_height - g.font_face_ascent) / size,
+                    line_gap: 0.0,
+                })
+            })?;
+            Some([em.ascent, em.descent, em.line_gap].map(|v| (v * size * ppp).round()))
+        });
         // The row's line box: its tallest line height, as egui takes it
-        // before rounding; an empty row has its section's.
-        let line = placed
-            .row
-            .glyphs
-            .iter()
-            .map(|g| g.line_height)
-            .reduce(f32::max)
-            .or_else(|| section.and_then(|s| s.format.line_height))
-            .unwrap_or(placed.row.size.y);
+        // before rounding; an empty row has its section's. A field's row
+        // is its editor line.
+        let line = match (leading, dev) {
+            (Leading::Field, Some([a, d, gap])) => (a + d + gap) / ppp,
+            _ => placed
+                .row
+                .glyphs
+                .iter()
+                .map(|g| g.line_height)
+                .reduce(f32::max)
+                .or_else(|| section.and_then(|s| s.format.line_height))
+                .unwrap_or(placed.row.size.y),
+        };
         placed.pos.y = top;
         let row = Arc::make_mut(&mut placed.row);
         row.size.y = line;
-        if let (Some(glyph), Some(section)) = (row.glyphs.first(), section) {
-            let size = section.format.font_id.size;
-            let em = family_vmetrics(ctx, &section.format.font_id.family).unwrap_or(VMetrics {
-                ascent: glyph.font_face_ascent / size,
-                descent: (glyph.font_face_height - glyph.font_face_ascent) / size,
-                line_gap: 0.0,
-            });
-            let ascent = (em.ascent * size * ppp).round();
-            let descent = (em.descent * size * ppp).round();
+        if let (Some(glyph), Some([ascent, descent, gap])) = (row.glyphs.first(), dev) {
             let half = match leading {
                 Leading::Inline => ((line * ppp - ascent - descent) / 2.0).floor(),
-                Leading::Field => {
-                    let gap = (em.line_gap * size * ppp).round();
-                    ((line * ppp - ascent - descent - gap) / 2.0).ceil() + (gap / 2.0).floor()
-                }
+                Leading::Field => (gap / 2.0).floor(),
             };
             let baseline = (top * ppp + half + ascent).round() / ppp - top;
             let shift = egui::vec2(0.0, baseline - glyph.pos.y);
@@ -736,10 +755,11 @@ mod tests {
                 assert_eq!(baselines(block.galley(), ppp), [first, first + 30.0 * ppp]);
                 let field = look.clone().leading(Leading::Field);
                 let block = field.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
-                // The field adds the line gap of egui's default font.
+                // The field's row is its editor line, with the line gap of
+                // egui's default font, the baseline half the gap below.
                 let g = (em.line_gap * 10.0 * ppp).round();
-                let up = ((30.0 * ppp - a - d - g) / 2.0).ceil() + (g / 2.0).floor() + a;
-                assert_eq!(baselines(block.galley(), ppp), [up]);
+                assert_eq!(block.size().y * ppp, a + d + g);
+                assert_eq!(baselines(block.galley(), ppp), [(g / 2.0).floor() + a]);
             });
         }
     }

@@ -1,157 +1,469 @@
-font	scale	item	line_top	baseline
-dm-sans	1	badge	2	14
-dm-sans	1	button	8	23
-dm-sans	1	input	9	23
-dm-sans	2	badge	4	28
-dm-sans	2	button	16	45
-dm-sans	2	input	18	46
-eb-garamond	1	badge	2	14
-eb-garamond	1	button	8	23
-eb-garamond	1	input	9	23
-eb-garamond	2	badge	4	28
-eb-garamond	2	button	16	46
-eb-garamond	2	input	18	46
-figtree	1	badge	2	14
-figtree	1	button	8	22
-figtree	1	input	10	23
-figtree	2	badge	4	28
-figtree	2	button	16	46
-figtree	2	input	19	46
-geist	1	badge	2	14
-geist	1	button	8	23
-geist	1	input	9	23
-geist	2	badge	4	28
-geist	2	button	16	46
-geist	2	input	18	46
-geist-mono	1	badge	2	14
-geist-mono	1	button	8	23
-geist-mono	1	input	9	23
-geist-mono	2	badge	4	28
-geist-mono	2	button	16	46
-geist-mono	2	input	18	46
-ibm-plex-sans	1	badge	2	14
-ibm-plex-sans	1	button	8	23
-ibm-plex-sans	1	input	9	23
-ibm-plex-sans	2	badge	4	29
-ibm-plex-sans	2	button	16	46
-ibm-plex-sans	2	input	18	47
-instrument-sans	1	badge	2	14
-instrument-sans	1	button	8	23
-instrument-sans	1	input	9	23
-instrument-sans	2	badge	4	28
-instrument-sans	2	button	16	46
-instrument-sans	2	input	19	46
-instrument-serif	1	badge	2	14
-instrument-serif	1	button	8	23
-instrument-serif	1	input	9	23
-instrument-serif	2	badge	4	28
-instrument-serif	2	button	16	45
-instrument-serif	2	input	18	46
-inter	1	badge	2	14
-inter	1	button	8	23
-inter	1	input	10	24
-inter	2	badge	4	28
-inter	2	button	16	46
-inter	2	input	19	46
-jetbrains-mono	1	badge	2	14
-jetbrains-mono	1	button	8	23
-jetbrains-mono	1	input	9	23
-jetbrains-mono	2	badge	4	28
-jetbrains-mono	2	button	16	46
-jetbrains-mono	2	input	18	47
-lora	1	badge	2	14
-lora	1	button	8	23
-lora	1	input	9	23
-lora	2	badge	4	28
-lora	2	button	16	46
-lora	2	input	18	46
-manrope	1	badge	2	14
-manrope	1	button	8	23
-manrope	1	input	9	24
-manrope	2	badge	4	29
-manrope	2	button	16	47
-manrope	2	input	17	47
-merriweather	1	badge	2	14
-merriweather	1	button	8	23
-merriweather	1	input	9	23
-merriweather	2	badge	4	28
-merriweather	2	button	16	46
-merriweather	2	input	18	46
-montserrat	1	badge	2	14
-montserrat	1	button	8	23
-montserrat	1	input	9	23
-montserrat	2	badge	4	28
-montserrat	2	button	16	46
-montserrat	2	input	19	46
-noto-sans	1	badge	2	14
-noto-sans	1	button	8	23
-noto-sans	1	input	9	24
-noto-sans	2	badge	4	29
-noto-sans	2	button	16	47
-noto-sans	2	input	17	47
-noto-serif	1	badge	2	14
-noto-serif	1	button	8	23
-noto-serif	1	input	9	24
-noto-serif	2	badge	4	29
-noto-serif	2	button	16	47
-noto-serif	2	input	17	47
-nunito-sans	1	badge	2	14
-nunito-sans	1	button	8	22
-nunito-sans	1	input	9	23
-nunito-sans	2	badge	4	28
-nunito-sans	2	button	16	45
-nunito-sans	2	input	17	45
-outfit	1	badge	2	14
-outfit	1	button	8	23
-outfit	1	input	9	23
-outfit	2	badge	4	29
-outfit	2	button	16	46
-outfit	2	input	19	47
-oxanium	1	badge	2	13
-oxanium	1	button	8	22
-oxanium	1	input	9	22
-oxanium	2	badge	4	27
-oxanium	2	button	16	44
-oxanium	2	input	19	44
-playfair-display	1	badge	2	15
-playfair-display	1	button	8	23
-playfair-display	1	input	9	24
-playfair-display	2	badge	4	30
-playfair-display	2	button	16	47
-playfair-display	2	input	18	48
-public-sans	1	badge	2	14
-public-sans	1	button	8	23
-public-sans	1	input	10	23
-public-sans	2	badge	4	29
-public-sans	2	button	16	46
-public-sans	2	input	20	47
-raleway	1	badge	2	14
-raleway	1	button	8	23
-raleway	1	input	10	23
-raleway	2	badge	4	28
-raleway	2	button	16	45
-raleway	2	input	20	46
-roboto	1	badge	2	14
-roboto	1	button	8	23
-roboto	1	input	10	23
-roboto	2	badge	4	28
-roboto	2	button	16	45
-roboto	2	input	20	46
-roboto-slab	1	badge	2	15
-roboto-slab	1	button	8	23
-roboto-slab	1	input	9	24
-roboto-slab	2	badge	4	29
-roboto-slab	2	button	16	46
-roboto-slab	2	input	18	47
-source-sans-3	1	badge	2	13
-source-sans-3	1	button	8	22
-source-sans-3	1	input	8	22
-source-sans-3	2	badge	4	27
-source-sans-3	2	button	16	45
-source-sans-3	2	input	16	45
-space-grotesk	1	badge	2	14
-space-grotesk	1	button	8	23
-space-grotesk	1	input	9	23
-space-grotesk	2	badge	4	28
-space-grotesk	2	button	16	46
-space-grotesk	2	input	18	46
+font	scale	item	line_top	baseline	sel_top	sel_bottom	caret_top	caret_bottom	caret_w
+dm-sans	1	badge	2	14	-	-	-	-	-
+dm-sans	1	block-1	-	13	-	-	-	-	-
+dm-sans	1	block-2	-	33	-	-	-	-	-
+dm-sans	1	block-3	-	52	-	-	-	-	-
+dm-sans	1	button	8	23	-	-	-	-	-
+dm-sans	1	input	9	23	9	27	9	27	1
+dm-sans	1.5	badge	3	21	-	-	-	-	-
+dm-sans	1.5	block-1	-	20	-	-	-	-	-
+dm-sans	1.5	block-2	-	49	-	-	-	-	-
+dm-sans	1.5	block-3	-	79	-	-	-	-	-
+dm-sans	1.5	button	12	34	-	-	-	-	-
+dm-sans	1.5	input	13	34	13	41	13	41	2
+dm-sans	2	badge	4	28	-	-	-	-	-
+dm-sans	2	block-1	-	28	-	-	-	-	-
+dm-sans	2	block-2	-	67	-	-	-	-	-
+dm-sans	2	block-3	-	106	-	-	-	-	-
+dm-sans	2	button	16	45	-	-	-	-	-
+dm-sans	2	input	18	46	18	55	18	55	2
+eb-garamond	1	badge	2	14	-	-	-	-	-
+eb-garamond	1	block-1	-	13	-	-	-	-	-
+eb-garamond	1	block-2	-	33	-	-	-	-	-
+eb-garamond	1	block-3	-	52	-	-	-	-	-
+eb-garamond	1	button	8	23	-	-	-	-	-
+eb-garamond	1	input	9	23	9	27	9	27	1
+eb-garamond	1.5	badge	3	21	-	-	-	-	-
+eb-garamond	1.5	block-1	-	21	-	-	-	-	-
+eb-garamond	1.5	block-2	-	50	-	-	-	-	-
+eb-garamond	1.5	block-3	-	80	-	-	-	-	-
+eb-garamond	1.5	button	12	34	-	-	-	-	-
+eb-garamond	1.5	input	14	35	14	41	14	41	2
+eb-garamond	2	badge	4	28	-	-	-	-	-
+eb-garamond	2	block-1	-	28	-	-	-	-	-
+eb-garamond	2	block-2	-	67	-	-	-	-	-
+eb-garamond	2	block-3	-	106	-	-	-	-	-
+eb-garamond	2	button	16	46	-	-	-	-	-
+eb-garamond	2	input	18	46	18	54	18	54	2
+figtree	1	badge	2	14	-	-	-	-	-
+figtree	1	block-1	-	13	-	-	-	-	-
+figtree	1	block-2	-	33	-	-	-	-	-
+figtree	1	block-3	-	52	-	-	-	-	-
+figtree	1	button	8	22	-	-	-	-	-
+figtree	1	input	10	23	10	27	10	27	1
+figtree	1.5	badge	3	21	-	-	-	-	-
+figtree	1.5	block-1	-	20	-	-	-	-	-
+figtree	1.5	block-2	-	49	-	-	-	-	-
+figtree	1.5	block-3	-	79	-	-	-	-	-
+figtree	1.5	button	12	34	-	-	-	-	-
+figtree	1.5	input	15	35	15	40	15	40	2
+figtree	2	badge	4	28	-	-	-	-	-
+figtree	2	block-1	-	28	-	-	-	-	-
+figtree	2	block-2	-	67	-	-	-	-	-
+figtree	2	block-3	-	106	-	-	-	-	-
+figtree	2	button	16	46	-	-	-	-	-
+figtree	2	input	19	46	19	53	19	53	2
+geist	1	badge	2	14	-	-	-	-	-
+geist	1	block-1	-	13	-	-	-	-	-
+geist	1	block-2	-	33	-	-	-	-	-
+geist	1	block-3	-	52	-	-	-	-	-
+geist	1	button	8	23	-	-	-	-	-
+geist	1	input	9	23	9	27	9	27	1
+geist	1.5	badge	3	21	-	-	-	-	-
+geist	1.5	block-1	-	21	-	-	-	-	-
+geist	1.5	block-2	-	50	-	-	-	-	-
+geist	1.5	block-3	-	80	-	-	-	-	-
+geist	1.5	button	12	34	-	-	-	-	-
+geist	1.5	input	14	35	14	41	14	41	2
+geist	2	badge	4	28	-	-	-	-	-
+geist	2	block-1	-	28	-	-	-	-	-
+geist	2	block-2	-	67	-	-	-	-	-
+geist	2	block-3	-	106	-	-	-	-	-
+geist	2	button	16	46	-	-	-	-	-
+geist	2	input	18	46	18	54	18	54	2
+geist-mono	1	badge	2	14	-	-	-	-	-
+geist-mono	1	block-1	-	13	-	-	-	-	-
+geist-mono	1	block-2	-	33	-	-	-	-	-
+geist-mono	1	block-3	-	52	-	-	-	-	-
+geist-mono	1	button	8	23	-	-	-	-	-
+geist-mono	1	input	9	23	9	27	9	27	1
+geist-mono	1.5	badge	3	21	-	-	-	-	-
+geist-mono	1.5	block-1	-	21	-	-	-	-	-
+geist-mono	1.5	block-2	-	50	-	-	-	-	-
+geist-mono	1.5	block-3	-	80	-	-	-	-	-
+geist-mono	1.5	button	12	34	-	-	-	-	-
+geist-mono	1.5	input	14	35	14	41	14	41	2
+geist-mono	2	badge	4	28	-	-	-	-	-
+geist-mono	2	block-1	-	28	-	-	-	-	-
+geist-mono	2	block-2	-	67	-	-	-	-	-
+geist-mono	2	block-3	-	106	-	-	-	-	-
+geist-mono	2	button	16	46	-	-	-	-	-
+geist-mono	2	input	18	46	18	54	18	54	2
+ibm-plex-sans	1	badge	2	14	-	-	-	-	-
+ibm-plex-sans	1	block-1	-	14	-	-	-	-	-
+ibm-plex-sans	1	block-2	-	34	-	-	-	-	-
+ibm-plex-sans	1	block-3	-	53	-	-	-	-	-
+ibm-plex-sans	1	button	8	23	-	-	-	-	-
+ibm-plex-sans	1	input	9	23	9	27	9	27	1
+ibm-plex-sans	1.5	badge	3	21	-	-	-	-	-
+ibm-plex-sans	1.5	block-1	-	21	-	-	-	-	-
+ibm-plex-sans	1.5	block-2	-	50	-	-	-	-	-
+ibm-plex-sans	1.5	block-3	-	80	-	-	-	-	-
+ibm-plex-sans	1.5	button	12	35	-	-	-	-	-
+ibm-plex-sans	1.5	input	13	35	13	41	13	41	2
+ibm-plex-sans	2	badge	4	29	-	-	-	-	-
+ibm-plex-sans	2	block-1	-	28	-	-	-	-	-
+ibm-plex-sans	2	block-2	-	67	-	-	-	-	-
+ibm-plex-sans	2	block-3	-	106	-	-	-	-	-
+ibm-plex-sans	2	button	16	46	-	-	-	-	-
+ibm-plex-sans	2	input	18	47	18	55	18	55	2
+instrument-sans	1	badge	2	14	-	-	-	-	-
+instrument-sans	1	block-1	-	14	-	-	-	-	-
+instrument-sans	1	block-2	-	34	-	-	-	-	-
+instrument-sans	1	block-3	-	53	-	-	-	-	-
+instrument-sans	1	button	8	23	-	-	-	-	-
+instrument-sans	1	input	9	23	9	27	9	27	1
+instrument-sans	1.5	badge	3	21	-	-	-	-	-
+instrument-sans	1.5	block-1	-	20	-	-	-	-	-
+instrument-sans	1.5	block-2	-	49	-	-	-	-	-
+instrument-sans	1.5	block-3	-	79	-	-	-	-	-
+instrument-sans	1.5	button	12	34	-	-	-	-	-
+instrument-sans	1.5	input	15	35	15	40	15	40	2
+instrument-sans	2	badge	4	28	-	-	-	-	-
+instrument-sans	2	block-1	-	28	-	-	-	-	-
+instrument-sans	2	block-2	-	67	-	-	-	-	-
+instrument-sans	2	block-3	-	106	-	-	-	-	-
+instrument-sans	2	button	16	46	-	-	-	-	-
+instrument-sans	2	input	19	46	19	53	19	53	2
+instrument-serif	1	badge	2	14	-	-	-	-	-
+instrument-serif	1	block-1	-	13	-	-	-	-	-
+instrument-serif	1	block-2	-	33	-	-	-	-	-
+instrument-serif	1	block-3	-	52	-	-	-	-	-
+instrument-serif	1	button	8	23	-	-	-	-	-
+instrument-serif	1	input	9	23	9	27	9	27	1
+instrument-serif	1.5	badge	3	21	-	-	-	-	-
+instrument-serif	1.5	block-1	-	20	-	-	-	-	-
+instrument-serif	1.5	block-2	-	49	-	-	-	-	-
+instrument-serif	1.5	block-3	-	79	-	-	-	-	-
+instrument-serif	1.5	button	12	34	-	-	-	-	-
+instrument-serif	1.5	input	13	34	13	41	13	41	2
+instrument-serif	2	badge	4	28	-	-	-	-	-
+instrument-serif	2	block-1	-	28	-	-	-	-	-
+instrument-serif	2	block-2	-	67	-	-	-	-	-
+instrument-serif	2	block-3	-	106	-	-	-	-	-
+instrument-serif	2	button	16	45	-	-	-	-	-
+instrument-serif	2	input	18	46	18	55	18	55	2
+inter	1	badge	2	14	-	-	-	-	-
+inter	1	block-1	-	14	-	-	-	-	-
+inter	1	block-2	-	34	-	-	-	-	-
+inter	1	block-3	-	53	-	-	-	-	-
+inter	1	button	8	23	-	-	-	-	-
+inter	1	input	10	24	10	27	10	27	1
+inter	1.5	badge	3	21	-	-	-	-	-
+inter	1.5	block-1	-	21	-	-	-	-	-
+inter	1.5	block-2	-	50	-	-	-	-	-
+inter	1.5	block-3	-	80	-	-	-	-	-
+inter	1.5	button	12	34	-	-	-	-	-
+inter	1.5	input	15	35	15	40	15	40	2
+inter	2	badge	4	28	-	-	-	-	-
+inter	2	block-1	-	28	-	-	-	-	-
+inter	2	block-2	-	67	-	-	-	-	-
+inter	2	block-3	-	106	-	-	-	-	-
+inter	2	button	16	46	-	-	-	-	-
+inter	2	input	19	46	19	53	19	53	2
+jetbrains-mono	1	badge	2	14	-	-	-	-	-
+jetbrains-mono	1	block-1	-	13	-	-	-	-	-
+jetbrains-mono	1	block-2	-	33	-	-	-	-	-
+jetbrains-mono	1	block-3	-	52	-	-	-	-	-
+jetbrains-mono	1	button	8	23	-	-	-	-	-
+jetbrains-mono	1	input	9	23	9	27	9	27	1
+jetbrains-mono	1.5	badge	3	21	-	-	-	-	-
+jetbrains-mono	1.5	block-1	-	21	-	-	-	-	-
+jetbrains-mono	1.5	block-2	-	50	-	-	-	-	-
+jetbrains-mono	1.5	block-3	-	80	-	-	-	-	-
+jetbrains-mono	1.5	button	12	34	-	-	-	-	-
+jetbrains-mono	1.5	input	14	35	14	41	14	41	2
+jetbrains-mono	2	badge	4	28	-	-	-	-	-
+jetbrains-mono	2	block-1	-	28	-	-	-	-	-
+jetbrains-mono	2	block-2	-	67	-	-	-	-	-
+jetbrains-mono	2	block-3	-	106	-	-	-	-	-
+jetbrains-mono	2	button	16	46	-	-	-	-	-
+jetbrains-mono	2	input	18	47	18	55	18	55	2
+lora	1	badge	2	14	-	-	-	-	-
+lora	1	block-1	-	14	-	-	-	-	-
+lora	1	block-2	-	34	-	-	-	-	-
+lora	1	block-3	-	53	-	-	-	-	-
+lora	1	button	8	23	-	-	-	-	-
+lora	1	input	9	23	9	27	9	27	1
+lora	1.5	badge	3	21	-	-	-	-	-
+lora	1.5	block-1	-	21	-	-	-	-	-
+lora	1.5	block-2	-	50	-	-	-	-	-
+lora	1.5	block-3	-	80	-	-	-	-	-
+lora	1.5	button	12	34	-	-	-	-	-
+lora	1.5	input	14	35	14	41	14	41	2
+lora	2	badge	4	28	-	-	-	-	-
+lora	2	block-1	-	28	-	-	-	-	-
+lora	2	block-2	-	67	-	-	-	-	-
+lora	2	block-3	-	106	-	-	-	-	-
+lora	2	button	16	46	-	-	-	-	-
+lora	2	input	18	46	18	54	18	54	2
+manrope	1	badge	2	14	-	-	-	-	-
+manrope	1	block-1	-	14	-	-	-	-	-
+manrope	1	block-2	-	34	-	-	-	-	-
+manrope	1	block-3	-	53	-	-	-	-	-
+manrope	1	button	8	23	-	-	-	-	-
+manrope	1	input	9	24	9	28	9	28	1
+manrope	1.5	badge	3	22	-	-	-	-	-
+manrope	1.5	block-1	-	21	-	-	-	-	-
+manrope	1.5	block-2	-	50	-	-	-	-	-
+manrope	1.5	block-3	-	80	-	-	-	-	-
+manrope	1.5	button	12	35	-	-	-	-	-
+manrope	1.5	input	13	35	13	41	13	41	2
+manrope	2	badge	4	29	-	-	-	-	-
+manrope	2	block-1	-	29	-	-	-	-	-
+manrope	2	block-2	-	68	-	-	-	-	-
+manrope	2	block-3	-	107	-	-	-	-	-
+manrope	2	button	16	47	-	-	-	-	-
+manrope	2	input	17	47	17	55	17	55	2
+merriweather	1	badge	2	14	-	-	-	-	-
+merriweather	1	block-1	-	14	-	-	-	-	-
+merriweather	1	block-2	-	34	-	-	-	-	-
+merriweather	1	block-3	-	53	-	-	-	-	-
+merriweather	1	button	8	23	-	-	-	-	-
+merriweather	1	input	9	23	9	27	9	27	1
+merriweather	1.5	badge	3	21	-	-	-	-	-
+merriweather	1.5	block-1	-	21	-	-	-	-	-
+merriweather	1.5	block-2	-	50	-	-	-	-	-
+merriweather	1.5	block-3	-	80	-	-	-	-	-
+merriweather	1.5	button	12	34	-	-	-	-	-
+merriweather	1.5	input	14	35	14	41	14	41	2
+merriweather	2	badge	4	28	-	-	-	-	-
+merriweather	2	block-1	-	28	-	-	-	-	-
+merriweather	2	block-2	-	67	-	-	-	-	-
+merriweather	2	block-3	-	106	-	-	-	-	-
+merriweather	2	button	16	46	-	-	-	-	-
+merriweather	2	input	18	46	18	54	18	54	2
+montserrat	1	badge	2	14	-	-	-	-	-
+montserrat	1	block-1	-	14	-	-	-	-	-
+montserrat	1	block-2	-	34	-	-	-	-	-
+montserrat	1	block-3	-	53	-	-	-	-	-
+montserrat	1	button	8	23	-	-	-	-	-
+montserrat	1	input	9	23	9	27	9	27	1
+montserrat	1.5	badge	3	21	-	-	-	-	-
+montserrat	1.5	block-1	-	20	-	-	-	-	-
+montserrat	1.5	block-2	-	49	-	-	-	-	-
+montserrat	1.5	block-3	-	79	-	-	-	-	-
+montserrat	1.5	button	12	34	-	-	-	-	-
+montserrat	1.5	input	15	35	15	40	15	40	2
+montserrat	2	badge	4	28	-	-	-	-	-
+montserrat	2	block-1	-	28	-	-	-	-	-
+montserrat	2	block-2	-	67	-	-	-	-	-
+montserrat	2	block-3	-	106	-	-	-	-	-
+montserrat	2	button	16	46	-	-	-	-	-
+montserrat	2	input	19	46	19	53	19	53	2
+noto-sans	1	badge	2	14	-	-	-	-	-
+noto-sans	1	block-1	-	14	-	-	-	-	-
+noto-sans	1	block-2	-	34	-	-	-	-	-
+noto-sans	1	block-3	-	53	-	-	-	-	-
+noto-sans	1	button	8	23	-	-	-	-	-
+noto-sans	1	input	9	24	9	28	9	28	1
+noto-sans	1.5	badge	3	22	-	-	-	-	-
+noto-sans	1.5	block-1	-	21	-	-	-	-	-
+noto-sans	1.5	block-2	-	50	-	-	-	-	-
+noto-sans	1.5	block-3	-	80	-	-	-	-	-
+noto-sans	1.5	button	12	35	-	-	-	-	-
+noto-sans	1.5	input	13	35	13	41	13	41	2
+noto-sans	2	badge	4	29	-	-	-	-	-
+noto-sans	2	block-1	-	29	-	-	-	-	-
+noto-sans	2	block-2	-	68	-	-	-	-	-
+noto-sans	2	block-3	-	107	-	-	-	-	-
+noto-sans	2	button	16	47	-	-	-	-	-
+noto-sans	2	input	17	47	17	55	17	55	2
+noto-serif	1	badge	2	14	-	-	-	-	-
+noto-serif	1	block-1	-	14	-	-	-	-	-
+noto-serif	1	block-2	-	34	-	-	-	-	-
+noto-serif	1	block-3	-	53	-	-	-	-	-
+noto-serif	1	button	8	23	-	-	-	-	-
+noto-serif	1	input	9	24	9	28	9	28	1
+noto-serif	1.5	badge	3	22	-	-	-	-	-
+noto-serif	1.5	block-1	-	21	-	-	-	-	-
+noto-serif	1.5	block-2	-	50	-	-	-	-	-
+noto-serif	1.5	block-3	-	80	-	-	-	-	-
+noto-serif	1.5	button	12	35	-	-	-	-	-
+noto-serif	1.5	input	13	35	13	41	13	41	2
+noto-serif	2	badge	4	29	-	-	-	-	-
+noto-serif	2	block-1	-	29	-	-	-	-	-
+noto-serif	2	block-2	-	68	-	-	-	-	-
+noto-serif	2	block-3	-	107	-	-	-	-	-
+noto-serif	2	button	16	47	-	-	-	-	-
+noto-serif	2	input	17	47	17	55	17	55	2
+nunito-sans	1	badge	2	14	-	-	-	-	-
+nunito-sans	1	block-1	-	13	-	-	-	-	-
+nunito-sans	1	block-2	-	33	-	-	-	-	-
+nunito-sans	1	block-3	-	52	-	-	-	-	-
+nunito-sans	1	button	8	22	-	-	-	-	-
+nunito-sans	1	input	9	23	9	28	9	28	1
+nunito-sans	1.5	badge	3	21	-	-	-	-	-
+nunito-sans	1.5	block-1	-	20	-	-	-	-	-
+nunito-sans	1.5	block-2	-	49	-	-	-	-	-
+nunito-sans	1.5	block-3	-	79	-	-	-	-	-
+nunito-sans	1.5	button	12	34	-	-	-	-	-
+nunito-sans	1.5	input	13	34	13	41	13	41	2
+nunito-sans	2	badge	4	28	-	-	-	-	-
+nunito-sans	2	block-1	-	27	-	-	-	-	-
+nunito-sans	2	block-2	-	66	-	-	-	-	-
+nunito-sans	2	block-3	-	105	-	-	-	-	-
+nunito-sans	2	button	16	45	-	-	-	-	-
+nunito-sans	2	input	17	45	17	55	17	55	2
+outfit	1	badge	2	14	-	-	-	-	-
+outfit	1	block-1	-	14	-	-	-	-	-
+outfit	1	block-2	-	34	-	-	-	-	-
+outfit	1	block-3	-	53	-	-	-	-	-
+outfit	1	button	8	23	-	-	-	-	-
+outfit	1	input	9	23	9	27	9	27	1
+outfit	1.5	badge	3	21	-	-	-	-	-
+outfit	1.5	block-1	-	21	-	-	-	-	-
+outfit	1.5	block-2	-	50	-	-	-	-	-
+outfit	1.5	block-3	-	80	-	-	-	-	-
+outfit	1.5	button	12	35	-	-	-	-	-
+outfit	1.5	input	14	35	14	40	14	40	2
+outfit	2	badge	4	29	-	-	-	-	-
+outfit	2	block-1	-	28	-	-	-	-	-
+outfit	2	block-2	-	67	-	-	-	-	-
+outfit	2	block-3	-	106	-	-	-	-	-
+outfit	2	button	16	46	-	-	-	-	-
+outfit	2	input	19	47	19	54	19	54	2
+oxanium	1	badge	2	13	-	-	-	-	-
+oxanium	1	block-1	-	12	-	-	-	-	-
+oxanium	1	block-2	-	32	-	-	-	-	-
+oxanium	1	block-3	-	51	-	-	-	-	-
+oxanium	1	button	8	22	-	-	-	-	-
+oxanium	1	input	9	22	9	27	11	25	1
+oxanium	1.5	badge	3	20	-	-	-	-	-
+oxanium	1.5	block-1	-	19	-	-	-	-	-
+oxanium	1.5	block-2	-	48	-	-	-	-	-
+oxanium	1.5	block-3	-	78	-	-	-	-	-
+oxanium	1.5	button	12	33	-	-	-	-	-
+oxanium	1.5	input	14	33	14	40	16	37	2
+oxanium	2	badge	4	27	-	-	-	-	-
+oxanium	2	block-1	-	26	-	-	-	-	-
+oxanium	2	block-2	-	65	-	-	-	-	-
+oxanium	2	block-3	-	104	-	-	-	-	-
+oxanium	2	button	16	44	-	-	-	-	-
+oxanium	2	input	19	44	19	54	22	50	2
+playfair-display	1	badge	2	15	-	-	-	-	-
+playfair-display	1	block-1	-	14	-	-	-	-	-
+playfair-display	1	block-2	-	34	-	-	-	-	-
+playfair-display	1	block-3	-	53	-	-	-	-	-
+playfair-display	1	button	8	23	-	-	-	-	-
+playfair-display	1	input	9	24	9	28	9	28	1
+playfair-display	1.5	badge	3	22	-	-	-	-	-
+playfair-display	1.5	block-1	-	21	-	-	-	-	-
+playfair-display	1.5	block-2	-	50	-	-	-	-	-
+playfair-display	1.5	block-3	-	80	-	-	-	-	-
+playfair-display	1.5	button	12	36	-	-	-	-	-
+playfair-display	1.5	input	13	36	13	41	13	41	2
+playfair-display	2	badge	4	30	-	-	-	-	-
+playfair-display	2	block-1	-	29	-	-	-	-	-
+playfair-display	2	block-2	-	68	-	-	-	-	-
+playfair-display	2	block-3	-	107	-	-	-	-	-
+playfair-display	2	button	16	47	-	-	-	-	-
+playfair-display	2	input	18	48	18	55	18	55	2
+public-sans	1	badge	2	14	-	-	-	-	-
+public-sans	1	block-1	-	13	-	-	-	-	-
+public-sans	1	block-2	-	33	-	-	-	-	-
+public-sans	1	block-3	-	52	-	-	-	-	-
+public-sans	1	button	8	23	-	-	-	-	-
+public-sans	1	input	10	23	10	26	10	26	1
+public-sans	1.5	badge	3	21	-	-	-	-	-
+public-sans	1.5	block-1	-	21	-	-	-	-	-
+public-sans	1.5	block-2	-	50	-	-	-	-	-
+public-sans	1.5	block-3	-	80	-	-	-	-	-
+public-sans	1.5	button	12	34	-	-	-	-	-
+public-sans	1.5	input	15	35	15	40	15	40	2
+public-sans	2	badge	4	29	-	-	-	-	-
+public-sans	2	block-1	-	28	-	-	-	-	-
+public-sans	2	block-2	-	67	-	-	-	-	-
+public-sans	2	block-3	-	106	-	-	-	-	-
+public-sans	2	button	16	46	-	-	-	-	-
+public-sans	2	input	20	47	20	53	20	53	2
+raleway	1	badge	2	14	-	-	-	-	-
+raleway	1	block-1	-	13	-	-	-	-	-
+raleway	1	block-2	-	33	-	-	-	-	-
+raleway	1	block-3	-	52	-	-	-	-	-
+raleway	1	button	8	23	-	-	-	-	-
+raleway	1	input	10	23	10	26	10	26	1
+raleway	1.5	badge	3	21	-	-	-	-	-
+raleway	1.5	block-1	-	21	-	-	-	-	-
+raleway	1.5	block-2	-	50	-	-	-	-	-
+raleway	1.5	block-3	-	80	-	-	-	-	-
+raleway	1.5	button	12	34	-	-	-	-	-
+raleway	1.5	input	15	35	15	40	15	40	2
+raleway	2	badge	4	28	-	-	-	-	-
+raleway	2	block-1	-	28	-	-	-	-	-
+raleway	2	block-2	-	67	-	-	-	-	-
+raleway	2	block-3	-	106	-	-	-	-	-
+raleway	2	button	16	45	-	-	-	-	-
+raleway	2	input	20	46	20	53	20	53	2
+roboto	1	badge	2	14	-	-	-	-	-
+roboto	1	block-1	-	13	-	-	-	-	-
+roboto	1	block-2	-	33	-	-	-	-	-
+roboto	1	block-3	-	52	-	-	-	-	-
+roboto	1	button	8	23	-	-	-	-	-
+roboto	1	input	10	23	10	26	10	26	1
+roboto	1.5	badge	3	21	-	-	-	-	-
+roboto	1.5	block-1	-	21	-	-	-	-	-
+roboto	1.5	block-2	-	50	-	-	-	-	-
+roboto	1.5	block-3	-	80	-	-	-	-	-
+roboto	1.5	button	12	34	-	-	-	-	-
+roboto	1.5	input	15	34	15	39	15	39	2
+roboto	2	badge	4	28	-	-	-	-	-
+roboto	2	block-1	-	27	-	-	-	-	-
+roboto	2	block-2	-	66	-	-	-	-	-
+roboto	2	block-3	-	105	-	-	-	-	-
+roboto	2	button	16	45	-	-	-	-	-
+roboto	2	input	20	46	20	53	20	53	2
+roboto-slab	1	badge	2	15	-	-	-	-	-
+roboto-slab	1	block-1	-	14	-	-	-	-	-
+roboto-slab	1	block-2	-	34	-	-	-	-	-
+roboto-slab	1	block-3	-	53	-	-	-	-	-
+roboto-slab	1	button	8	23	-	-	-	-	-
+roboto-slab	1	input	9	24	9	28	9	28	1
+roboto-slab	1.5	badge	3	22	-	-	-	-	-
+roboto-slab	1.5	block-1	-	21	-	-	-	-	-
+roboto-slab	1.5	block-2	-	50	-	-	-	-	-
+roboto-slab	1.5	block-3	-	80	-	-	-	-	-
+roboto-slab	1.5	button	12	35	-	-	-	-	-
+roboto-slab	1.5	input	13	35	13	41	13	41	2
+roboto-slab	2	badge	4	29	-	-	-	-	-
+roboto-slab	2	block-1	-	28	-	-	-	-	-
+roboto-slab	2	block-2	-	67	-	-	-	-	-
+roboto-slab	2	block-3	-	106	-	-	-	-	-
+roboto-slab	2	button	16	46	-	-	-	-	-
+roboto-slab	2	input	18	47	18	55	18	55	2
+source-sans-3	1	badge	2	13	-	-	-	-	-
+source-sans-3	1	block-1	-	13	-	-	-	-	-
+source-sans-3	1	block-2	-	33	-	-	-	-	-
+source-sans-3	1	block-3	-	52	-	-	-	-	-
+source-sans-3	1	button	8	22	-	-	-	-	-
+source-sans-3	1	input	8	22	8	28	8	28	1
+source-sans-3	1.5	badge	3	20	-	-	-	-	-
+source-sans-3	1.5	block-1	-	20	-	-	-	-	-
+source-sans-3	1.5	block-2	-	49	-	-	-	-	-
+source-sans-3	1.5	block-3	-	79	-	-	-	-	-
+source-sans-3	1.5	button	12	34	-	-	-	-	-
+source-sans-3	1.5	input	12	34	12	42	12	42	2
+source-sans-3	2	badge	4	27	-	-	-	-	-
+source-sans-3	2	block-1	-	27	-	-	-	-	-
+source-sans-3	2	block-2	-	66	-	-	-	-	-
+source-sans-3	2	block-3	-	105	-	-	-	-	-
+source-sans-3	2	button	16	45	-	-	-	-	-
+source-sans-3	2	input	16	45	16	56	16	56	2
+space-grotesk	1	badge	2	14	-	-	-	-	-
+space-grotesk	1	block-1	-	13	-	-	-	-	-
+space-grotesk	1	block-2	-	33	-	-	-	-	-
+space-grotesk	1	block-3	-	52	-	-	-	-	-
+space-grotesk	1	button	8	23	-	-	-	-	-
+space-grotesk	1	input	9	23	9	27	9	27	1
+space-grotesk	1.5	badge	3	21	-	-	-	-	-
+space-grotesk	1.5	block-1	-	21	-	-	-	-	-
+space-grotesk	1.5	block-2	-	50	-	-	-	-	-
+space-grotesk	1.5	block-3	-	80	-	-	-	-	-
+space-grotesk	1.5	button	12	34	-	-	-	-	-
+space-grotesk	1.5	input	14	35	14	41	14	41	2
+space-grotesk	2	badge	4	28	-	-	-	-	-
+space-grotesk	2	block-1	-	28	-	-	-	-	-
+space-grotesk	2	block-2	-	67	-	-	-	-	-
+space-grotesk	2	block-3	-	106	-	-	-	-	-
+space-grotesk	2	button	16	46	-	-	-	-	-
+space-grotesk	2	input	18	46	18	54	18	54	2

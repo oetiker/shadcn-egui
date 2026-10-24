@@ -154,10 +154,20 @@ impl<'a> Widget for Input<'a> {
                         .max_rect(rect)
                         .layout(egui::Layout::centered_and_justified(ui.layout().main_dir())),
                 );
-                match self.id_salt {
-                    Some(salt) => field.add(edit.id(field.make_persistent_id(salt))),
-                    None => field.add(edit),
+                let edit = match self.id_salt {
+                    Some(salt) => edit.id(field.make_persistent_id(salt)),
+                    None => edit,
+                };
+                // egui's caret spans the row and 1.5 pt beyond it; the
+                // field paints Chrome's instead.
+                let blink = field.visuals().text_cursor.clone();
+                field.visuals_mut().text_cursor.stroke = egui::Stroke::NONE;
+                field.visuals_mut().text_cursor.blink = false;
+                let out = edit.show(&mut field);
+                if enabled {
+                    paint_caret(&field, &out, &blink, look.caret_span(field.ctx()), typed);
                 }
+                out.response.response
             })
             .inner;
 
@@ -166,4 +176,66 @@ impl<'a> Widget for Input<'a> {
         part_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
     }
+}
+
+/// The caret as Blink paints it in a text field: 1 css px wide, from the
+/// font's ascent above the baseline to its descent below (`span`, below the
+/// top of the galley's row, the editor line), in the text colour
+/// (`caret-color: auto`), snapped to device pixels where the painter puts
+/// the galley. Blinks as egui's caret does, from the last edit or cursor
+/// move.
+fn paint_caret(
+    ui: &Ui,
+    out: &egui::text_edit::TextEditOutput,
+    cursor: &egui::style::TextCursorStyle,
+    span: Option<std::ops::Range<f32>>,
+    color: egui::Color32,
+) {
+    let Some(range) = out.cursor_range else {
+        return;
+    };
+    let focused = out.response.response.has_focus() && ui.input(|i| i.focused);
+    if !focused {
+        return;
+    }
+    let now = ui.input(|i| i.time);
+    let id = out.response.response.id.with("shadcn_egui::input::caret");
+    let since = ui.ctx().data_mut(|d| {
+        let last = d.get_temp_mut_or_insert_with(id, || (range, now));
+        if out.response.response.changed() || last.0 != range {
+            *last = (range, now);
+        }
+        now - last.1
+    });
+    if cursor.blink {
+        let total = cursor.on_duration + cursor.off_duration;
+        let phase = (since % f64::from(total)) as f32;
+        let (shown, wake) = if phase < cursor.on_duration {
+            (true, cursor.on_duration - phase)
+        } else {
+            (false, total - phase)
+        };
+        ui.ctx().request_repaint_after_secs(wake);
+        if !shown {
+            return;
+        }
+    }
+    let ppp = ui.ctx().pixels_per_point();
+    let origin = out.galley_pos - egui::vec2(out.galley.rect.left(), 0.0);
+    let row = out.galley.pos_from_cursor(range.primary);
+    let span = span.unwrap_or(0.0..row.height());
+    // The painter rounds the galley origin to the device pixel; the row
+    // is whole device pixels tall.
+    let top = (origin.y * ppp).round();
+    let left = ((origin.x + row.min.x) * ppp).round();
+    // Blink's caret: 1 css px wide, at least one device pixel.
+    let width = ppp.round().max(1.0); // behaviour-ok: the browser's caret width
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(left, top + (row.min.y + span.start) * ppp),
+        egui::pos2(left + width, top + (row.min.y + span.end) * ppp),
+    );
+    let rect = egui::Rect::from_min_max(rect.min / ppp, rect.max / ppp);
+    // As egui's TextEdit: the clip grows a point so a caret at the edge shows.
+    let clip = out.text_clip_rect.expand(1.0); // behaviour-ok: egui's caret clip
+    ui.painter_at(clip).rect_filled(rect, 0.0, color);
 }
