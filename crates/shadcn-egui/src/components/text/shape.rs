@@ -35,6 +35,20 @@ pub(super) fn family_face(ctx: &egui::Context, family: &FontFamily) -> Option<Ar
     })
 }
 
+/// Whether egui must be told the optical size: `data` has an `opsz` axis
+/// and neither the face's tweak nor `coords` set it. Chrome then draws at
+/// `opsz` = the font size (`font-optical-sizing: auto`); egui draws the
+/// outlines at the tweak's and the section's coordinates only.
+pub(super) fn needs_opsz(data: &FontData, coords: &[(Tag, f32)]) -> bool {
+    let opsz = Tag::new(b"opsz");
+    let set = data.tweak.coords.as_ref().iter().chain(coords);
+    if set.into_iter().any(|(t, _)| *t == opsz) {
+        return false;
+    }
+    FontRef::from_index(&data.font, data.index)
+        .is_ok_and(|f| f.axes().iter().any(|a| a.tag() == opsz))
+}
+
 /// One face, ready to measure: its tables at the location Chrome uses.
 struct Face<'a> {
     font: FontRef<'a>,

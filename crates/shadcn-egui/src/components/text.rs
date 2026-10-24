@@ -462,6 +462,16 @@ impl TextLook {
         // One section per char, each moved by the gap that puts it where
         // Chrome puts it: egui advances the char before by its own width,
         // the section's leading space adds the rest and the kerning.
+        // egui draws outlines at the coordinates it is given; Chrome at
+        // `opsz` = the font size where the face has the axis.
+        let opsz: Vec<bool> = job
+            .sections
+            .iter()
+            .map(|s| {
+                shape::family_face(ctx, &s.format.font_id.family)
+                    .is_some_and(|d| shape::needs_opsz(&d, s.format.coords.as_ref()))
+            })
+            .collect();
         let mut section_of = Vec::with_capacity(n);
         for (si, s) in job.sections.iter().enumerate() {
             section_of.extend(std::iter::repeat_n(
@@ -520,6 +530,9 @@ impl TextLook {
             }
             let mut format = section.format.clone();
             format.extra_letter_spacing = 0.0;
+            if opsz[si] {
+                format.coords.push(b"opsz", format.font_id.size);
+            }
             let at = out.text.len();
             out.text.push(c);
             out.sections.push(egui::text::LayoutSection {
