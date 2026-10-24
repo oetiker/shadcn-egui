@@ -393,38 +393,62 @@ struct VMetrics {
 
 /// The [`VMetrics`] of face `index` in the font file `data` (TrueType,
 /// OpenType or a collection), from its `head`, `hhea` and `OS/2` tables.
+/// `None` for a file that is not a font or is cut short. Each read stays
+/// inside its table: a short `OS/2` table without the typo fields counts
+/// as none. A font whose `hhea` ascender and descender are both 0 takes
+/// the typo metrics, else the win metrics, as FreeType does.
 fn vmetrics(data: &[u8], index: u32) -> Option<VMetrics> {
-    let u16_at = |o: usize| data.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
-    let i16_at = |o: usize| u16_at(o).map(|v| f32::from(v as i16));
-    let u32_at = |o: usize| {
-        data.get(o..o + 4)
-            .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
-    };
-    let base = if data.get(0..4)? == b"ttcf" {
-        u32_at(12 + 4 * index as usize)? as usize
+    let bytes = |o: usize, n: usize| data.get(o..o.checked_add(n)?);
+    let u16_at = |o: usize| bytes(o, 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
+    let u32_at = |o: usize| bytes(o, 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    let base = if bytes(0, 4)? == b"ttcf" {
+        // numFonts at 8, the offset table of each face from 12.
+        if index >= u32_at(8)? {
+            return None;
+        }
+        let rec = usize::try_from(index)
+            .ok()?
+            .checked_mul(4)?
+            .checked_add(12)?;
+        usize::try_from(u32_at(rec)?).ok()?
     } else {
         0
     };
-    let tables = usize::from(u16_at(base + 4)?);
+    let tables = usize::from(u16_at(base.checked_add(4)?)?);
+    // A table as its bytes, from its record: tag, checksum, offset, length.
     let table = |tag: &[u8; 4]| {
         (0..tables).find_map(|i| {
-            let rec = base + 12 + 16 * i;
-            (data.get(rec..rec + 4)? == tag)
-                .then(|| u32_at(rec + 8).map(|o| o as usize))
-                .flatten()
+            let rec = base.checked_add(12 + 16 * i)?;
+            if bytes(rec, 4)? != tag {
+                return None;
+            }
+            let offset = usize::try_from(u32_at(rec.checked_add(8)?)?).ok()?;
+            bytes(offset, usize::try_from(u32_at(rec.checked_add(12)?)?).ok()?)
         })
     };
-    let upem = f32::from(u16_at(table(b"head")? + 18)?);
+    let be16 = |t: &[u8], o: usize| t.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
+    let i16_in = |t: &[u8], o: usize| be16(t, o).map(|v| f32::from(v as i16));
+    let upem = f32::from(be16(table(b"head")?, 18)?);
     let hhea = table(b"hhea")?;
     let (mut ascent, mut descent, mut gap) =
-        (i16_at(hhea + 4)?, -i16_at(hhea + 6)?, i16_at(hhea + 8)?);
-    if let Some(os2) = table(b"OS/2") {
-        // fsSelection bit 7, USE_TYPO_METRICS.
-        if u16_at(os2 + 62).is_some_and(|sel| sel & 0x80 != 0) {
-            ascent = i16_at(os2 + 68)?;
-            descent = -i16_at(os2 + 70)?;
-            gap = i16_at(os2 + 72)?;
+        (i16_in(hhea, 4)?, -i16_in(hhea, 6)?, i16_in(hhea, 8)?);
+    // sTypoAscender, sTypoDescender, sTypoLineGap; a short table lacks them.
+    let os2 = table(b"OS/2");
+    let typo = os2.and_then(|t| Some((i16_in(t, 68)?, -i16_in(t, 70)?, i16_in(t, 72)?)));
+    if ascent == 0.0 && descent == 0.0 {
+        let win = os2.and_then(|t| Some((f32::from(be16(t, 74)?), f32::from(be16(t, 76)?))));
+        match (typo, win) {
+            (Some((a, d, g)), _) if a != 0.0 || d != 0.0 => (ascent, descent, gap) = (a, d, g),
+            (_, Some((a, d))) => (ascent, descent, gap) = (a, d, 0.0),
+            _ => {}
         }
+    }
+    // fsSelection bit 7, USE_TYPO_METRICS.
+    let use_typo = os2
+        .and_then(|t| be16(t, 62))
+        .is_some_and(|sel| sel & 0x80 != 0);
+    if let (true, Some(t)) = (use_typo, typo) {
+        (ascent, descent, gap) = t;
     }
     (upem > 0.0).then_some(VMetrics {
         ascent: ascent / upem,
@@ -832,6 +856,121 @@ mod tests {
         assert_eq!(m.ascent, 1984.0 / 2048.0);
         assert_eq!(m.descent, 494.0 / 2048.0);
         assert_eq!(m.line_gap, 0.0);
+    }
+
+    /// The `OS/2` fields the metrics read, in a table of `len` bytes.
+    struct Os2 {
+        len: usize,
+        sel: u16,
+        typo: (i16, i16, i16),
+        win: (u16, u16),
+    }
+
+    /// A minimal font file: `head`, `hhea` and, if given, an `OS/2`
+    /// table, all values big-endian at their offsets.
+    fn font(hhea: (i16, i16, i16), os2: Option<Os2>) -> Vec<u8> {
+        let mut head = vec![0u8; 54];
+        head[18..20].copy_from_slice(&1000u16.to_be_bytes());
+        let mut hh = vec![0u8; 36];
+        for (o, v) in [(4, hhea.0), (6, hhea.1), (8, hhea.2)] {
+            hh[o..o + 2].copy_from_slice(&v.to_be_bytes());
+        }
+        let mut tables: Vec<(&[u8; 4], Vec<u8>)> = vec![(b"head", head), (b"hhea", hh)];
+        if let Some(Os2 {
+            len,
+            sel,
+            typo,
+            win,
+        }) = os2
+        {
+            let mut t = vec![0u8; 78];
+            t[62..64].copy_from_slice(&sel.to_be_bytes());
+            for (o, v) in [(68, typo.0), (70, typo.1), (72, typo.2)] {
+                t[o..o + 2].copy_from_slice(&v.to_be_bytes());
+            }
+            t[74..76].copy_from_slice(&win.0.to_be_bytes());
+            t[76..78].copy_from_slice(&win.1.to_be_bytes());
+            t.truncate(len);
+            tables.push((b"OS/2", t));
+        }
+        let mut out = vec![0u8; 12 + 16 * tables.len()];
+        out[4..6].copy_from_slice(&(tables.len() as u16).to_be_bytes());
+        for (i, (tag, t)) in tables.iter().enumerate() {
+            let rec = 12 + 16 * i;
+            out[rec..rec + 4].copy_from_slice(*tag);
+            let offset = out.len() as u32;
+            out[rec + 8..rec + 12].copy_from_slice(&offset.to_be_bytes());
+            out[rec + 12..rec + 16].copy_from_slice(&(t.len() as u32).to_be_bytes());
+            out.extend_from_slice(t);
+        }
+        out
+    }
+
+    #[test]
+    fn metrics_survive_broken_and_unusual_tables() {
+        let m = |a: f32, d: f32, g: f32| VMetrics {
+            ascent: a / 1000.0,
+            descent: d / 1000.0,
+            line_gap: g / 1000.0,
+        };
+        // hhea, typo metrics when USE_TYPO_METRICS is set.
+        let typo = Some(Os2 {
+            len: 78,
+            sel: 0x80,
+            typo: (900, -300, 50),
+            win: (1100, 400),
+        });
+        assert_eq!(
+            vmetrics(&font((800, -200, 10), None), 0),
+            Some(m(800.0, 200.0, 10.0))
+        );
+        assert_eq!(
+            vmetrics(&font((800, -200, 10), typo), 0),
+            Some(m(900.0, 300.0, 50.0))
+        );
+        // A version-0 OS/2 cut before the typo fields: hhea.
+        let short = Some(Os2 {
+            len: 68,
+            sel: 0x80,
+            typo: (900, -300, 50),
+            win: (1100, 400),
+        });
+        assert_eq!(
+            vmetrics(&font((800, -200, 10), short), 0),
+            Some(m(800.0, 200.0, 10.0))
+        );
+        // hhea all zero: typo metrics, else win metrics (FreeType).
+        let no_flag = Some(Os2 {
+            len: 78,
+            sel: 0,
+            typo: (900, -300, 50),
+            win: (1100, 400),
+        });
+        assert_eq!(
+            vmetrics(&font((0, 0, 0), no_flag), 0),
+            Some(m(900.0, 300.0, 50.0))
+        );
+        let win_only = Some(Os2 {
+            len: 78,
+            sel: 0,
+            typo: (0, 0, 0),
+            win: (1100, 400),
+        });
+        assert_eq!(
+            vmetrics(&font((0, 0, 0), win_only), 0),
+            Some(m(1100.0, 400.0, 0.0))
+        );
+        // A table record pointing past the end, a face index past the
+        // collection, offsets near the address limit: no metrics, no panic.
+        let mut bad = font((800, -200, 10), None);
+        bad[12 + 16 + 8..12 + 16 + 12].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(vmetrics(&bad, 0), None);
+        let mut ttc = b"ttcf".to_vec();
+        ttc.extend_from_slice(&[0, 1, 0, 0, 0, 0, 0, 1]);
+        ttc.extend_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(vmetrics(&ttc, 1), None);
+        assert_eq!(vmetrics(&ttc, 0), None);
+        assert_eq!(vmetrics(b"tt", 0), None);
     }
 
     #[test]
