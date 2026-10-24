@@ -5,7 +5,7 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::shared::{
-    interaction_state, part_painter, pressable, shift, ActivationKeys, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style};
@@ -182,7 +182,7 @@ impl Widget for Button {
             get(|r| &r.pad_left),
             get(|r| &r.pad_right),
             get(|r| &r.gap),
-            get(|r| &r.border_width),
+            line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point()),
         );
         let icon_px = pick(l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
         // The text colour depends on the state, known only after allocating:
@@ -243,7 +243,7 @@ impl Widget for Button {
             pick(l, |r| &r.shift_x, st),
             pick(l, |r| &r.shift_y, st),
         );
-        RecipeBox::resolve(&t, l, st).paint(&painter, rect);
+        RecipeBox::resolve(ui.ctx(), &t, l, st).paint(&painter, rect);
 
         // Content is centred; unequal icon-side padding shifts it.
         let mut x = rect.center().x - content_w / 2.0 + (pad_l - pad_r) / 2.0;

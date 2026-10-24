@@ -118,13 +118,52 @@ pub fn content_ui<R>(
     with_opacity(ui, opacity, add)
 }
 
+/// A `border-*` or `outline-*` width of `px` as the browser lays it out on
+/// a screen of `ppp` device pixels per point: floored to whole device
+/// pixels, and one device pixel where it is above 0 but thinner (Blink's
+/// `StyleBuilderConverter::ClampLineWidth`). A 1 px border is 1 device px
+/// at a scale of 1.5, a 2 px border 3.
+pub fn line_width(px: f32, ppp: f32) -> f32 {
+    let device = px * ppp;
+    if device <= 0.0 {
+        0.0
+    } else if device < 1.0 {
+        1.0 / ppp
+    } else {
+        // A width that is a whole number of device pixels stays whole
+        // through the float product.
+        (device + 1.0e-4).floor() / ppp // behaviour-ok: float tolerance
+    }
+}
+
+/// An egui `Frame` that paints nothing and insets its content by `insets`
+/// (top, right, bottom, left, in points). egui's inner margin takes whole
+/// points only; the fraction the sides share goes into a transparent
+/// stroke, which egui adds to every side, so an inset such as 12 px padding
+/// plus a border of 1 device px at a scale of 1.5 stays exact. A side whose
+/// fraction differs from the left side's is rounded to whole points.
+pub fn inset_frame(insets: [f32; 4]) -> egui::Frame {
+    let shared = insets[3].max(0.0).fract();
+    let [t, r, b, l] = insets.map(|v| (v - shared).round().clamp(0.0, 127.0) as i8); // behaviour-ok: egui's i8 margin
+    egui::Frame::NONE
+        .inner_margin(egui::Margin {
+            left: l,
+            right: r,
+            top: t,
+            bottom: b,
+        })
+        .stroke(Stroke::new(shared, Color32::TRANSPARENT))
+}
+
 /// A part's box resolved from its recipe stack under one [`State`]: fill,
 /// border, shadow, focus or invalid ring (`ring-*`) and outline. Every crate
 /// widget and panel paints its box through it.
 ///
 /// Resolve geometry (padding, size) with the state without interaction
 /// flags, and the box with the [`interaction_state`] of the paint, so the
-/// colours follow hover and focus while the size does not.
+/// colours follow hover and focus while the size does not. Border and
+/// outline widths come out on whole device pixels as the browser lays them
+/// out ([`line_width`]).
 ///
 /// ```
 /// use shadcn_egui::components::shared::RecipeBox;
@@ -135,7 +174,7 @@ pub fn content_ui<R>(
 ///     let theme = Theme::current(ui.ctx());
 ///     let card = [&*theme.style.card];
 ///     let state = theme.state(ui.ctx(), State::NONE);
-///     RecipeBox::resolve(&theme, &card, state).paint(ui.painter(), rect);
+///     RecipeBox::resolve(ui.ctx(), &theme, &card, state).paint(ui.painter(), rect);
 /// }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -145,7 +184,7 @@ pub struct RecipeBox {
     radii: [f32; 4],
     fill: Option<Color32>,
     border_color: Color32,
-    /// Border widths in px: top, right, bottom, left.
+    /// Border widths in px on whole device pixels: top, right, bottom, left.
     borders: [f32; 4],
     clip_padding: bool,
     /// `box-shadow` layers, first on top, and their fade.
@@ -161,7 +200,8 @@ const FULL_RADIUS: f32 = 1.0e9; // behaviour-ok: stands in for CSS's infinite ra
 
 impl RecipeBox {
     /// The box of the part whose recipes are `layers` (in upstream's class
-    /// order, as for [`pick`]) under `state`.
+    /// order, as for [`pick`]) under `state`, its border and outline widths
+    /// on the device pixels of `ctx`.
     ///
     /// A side's border width (`border-t-*`, `border-l-*`) and a corner's
     /// radius (`rounded-t-*`, `rounded-b-*`, `rounded-l-*`, `rounded-r-*`)
@@ -170,7 +210,8 @@ impl RecipeBox {
     /// and within one layer the side wins (Tailwind sorts the shorthand
     /// first). A border without a colour of its own takes shadcn's base
     /// `border-border`.
-    pub fn resolve(theme: &Theme, layers: &[&Recipe], state: State) -> Self {
+    pub fn resolve(ctx: &egui::Context, theme: &Theme, layers: &[&Recipe], state: State) -> Self {
+        let ppp = ctx.pixels_per_point();
         // Candidates in Tailwind's property order: a later one wins a tie.
         fn side<T: Copy>(cands: &[Option<((u128, usize), T)>]) -> Option<T> {
             let mut best: Option<((u128, usize), T)> = None;
@@ -187,11 +228,12 @@ impl RecipeBox {
         let top = width(|r| &r.border_top_width);
         let left = width(|r| &r.border_left_width);
         let borders = [
-            side(&[all, top]).unwrap_or(0.0),
-            side(&[all]).unwrap_or(0.0),
-            side(&[all]).unwrap_or(0.0),
-            side(&[all, left]).unwrap_or(0.0),
-        ];
+            side(&[all, top]),
+            side(&[all]),
+            side(&[all]),
+            side(&[all, left]),
+        ]
+        .map(|w| line_width(w.unwrap_or(0.0), ppp));
         let radius = |f: fn(&Recipe) -> &Prop<Radius>| {
             pick_ranked(layers, f, state).map(|(k, r)| {
                 let px = match r {
@@ -211,7 +253,10 @@ impl RecipeBox {
         // Tailwind's order: rounded, rounded-t, -r, -b, -l.
         let corner = |a, b| side(&[base, a, b]).unwrap_or(0.0);
         let ring_w = pick(layers, |r| &r.ring_width, state).unwrap_or(0.0);
-        let outline_w = pick(layers, |r| &r.outline_width, state).unwrap_or(0.0);
+        let outline_w = line_width(
+            pick(layers, |r| &r.outline_width, state).unwrap_or(0.0),
+            ppp,
+        );
         let stroke = |w: f32, c: Option<Color32>| {
             c.filter(|c| w > 0.0 && c.a() > 0)
                 .map(|c| Stroke::new(w, c))
@@ -363,7 +408,7 @@ impl RecipeBox {
     ///     let theme = Theme::current(ctx);
     ///     let popover = [&*theme.style.popover_content];
     ///     let state = theme.state(ctx, State::NONE);
-    ///     let panel = RecipeBox::resolve(&theme, &popover, state);
+    ///     let panel = RecipeBox::resolve(ctx, &theme, &popover, state);
     ///     let shown = egui::Area::new(egui::Id::new("panel")).show(ctx, |ui| {
     ///         panel
     ///             .frame([16.0; 4])
@@ -378,13 +423,7 @@ impl RecipeBox {
     /// }
     /// ```
     pub fn frame(&self, padding: [f32; 4]) -> egui::Frame {
-        let [t, r, b, l] = std::array::from_fn(|i| (padding[i] + self.borders[i]).round() as i8);
-        egui::Frame::NONE.inner_margin(egui::Margin {
-            left: l,
-            right: r,
-            top: t,
-            bottom: b,
-        })
+        inset_frame(std::array::from_fn(|i| padding[i] + self.borders[i]))
     }
 
     /// Hold the box's place in `ui`'s layer, under everything the panel's
@@ -855,8 +894,13 @@ mod tests {
         let theme = Theme::vega_light();
         let mut full = Recipe::default();
         full.radius.base = Some(Radius::Rung(Rung::Full));
-        let outer = RecipeBox::resolve(&theme, &[&full], State::NONE);
-        let inner = RecipeBox::resolve(&theme, &[&Recipe::default()], State::NONE);
+        let outer = RecipeBox::resolve(&egui::Context::default(), &theme, &[&full], State::NONE);
+        let inner = RecipeBox::resolve(
+            &egui::Context::default(),
+            &theme,
+            &[&Recipe::default()],
+            State::NONE,
+        );
         let track = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 6.0));
         let range = Rect::from_min_max(track.min, egui::pos2(40.0, 6.0));
         let r = inner.clipped_by(&outer, track, range).radius_on(range);
@@ -874,7 +918,7 @@ mod tests {
             });
         }
         let theme = Theme::vega_light();
-        RecipeBox::resolve(&theme, &[&r], State::NONE)
+        RecipeBox::resolve(&egui::Context::default(), &theme, &[&r], State::NONE)
     }
 
     #[test]
@@ -907,7 +951,12 @@ mod tests {
             rank: 1,
             value: Radius::Rung(Rung::None),
         });
-        let b = RecipeBox::resolve(&Theme::vega_light(), &[&base], State::NONE);
+        let b = RecipeBox::resolve(
+            &egui::Context::default(),
+            &Theme::vega_light(),
+            &[&base],
+            State::NONE,
+        );
         assert_eq!(b.radius_on(rect), CornerRadius::same(md));
     }
 
@@ -916,7 +965,12 @@ mod tests {
         let mut r = Recipe::default();
         r.border_width.base = Some(1.0);
         r.border_left_width.base = Some(0.0);
-        let b = RecipeBox::resolve(&Theme::vega_light(), &[&r], State::NONE);
+        let b = RecipeBox::resolve(
+            &egui::Context::default(),
+            &Theme::vega_light(),
+            &[&r],
+            State::NONE,
+        );
         assert_eq!(b.border_widths(), [1.0, 1.0, 1.0, 0.0]);
         let ctx = egui::Context::default();
         let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(20.0, 10.0));

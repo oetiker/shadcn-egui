@@ -5,7 +5,7 @@
 //! slides between its two positions with `animate_bool`.
 
 use crate::components::shared::{
-    interaction_state, part_painter, pressable, shift, ActivationKeys, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
@@ -73,7 +73,7 @@ impl Widget for Switch<'_> {
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&track, f, g).unwrap_or(0.0);
 
         // No size: CSS's initial `auto`, the thumb inside the border.
-        let border = get(|r| &r.border_width) * 2.0;
+        let border = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point()) * 2.0;
         let thumb_side = |f: fn(&Recipe) -> &Prop<f32>| pick(&thumb, f, g).unwrap_or(0.0);
         let size = vec2(
             pick(&track, |r| &r.width, g).unwrap_or_else(|| thumb_side(|r| &r.width) + border),
@@ -106,8 +106,12 @@ impl Widget for Switch<'_> {
         let how_on = ui.ctx().animate_bool(base.id, on);
 
         if ui.is_rect_visible(rect) {
-            let border_w = pick(&track, |r| &r.border_width, st).unwrap_or(0.0);
-            RecipeBox::resolve(&t, &track, st).paint(&part_painter(ui, &[&track[..]], st), rect);
+            let border_w = line_width(
+                pick(&track, |r| &r.border_width, st).unwrap_or(0.0),
+                ui.ctx().pixels_per_point(),
+            );
+            RecipeBox::resolve(ui.ctx(), &t, &track, st)
+                .paint(&part_painter(ui, &[&track[..]], st), rect);
 
             // The thumb lies inside the border, vertically centred; its
             // translate differs per value, so the animation blends both.
@@ -131,7 +135,7 @@ impl Widget for Switch<'_> {
                 ),
                 size,
             );
-            RecipeBox::resolve(&t, &thumb, st)
+            RecipeBox::resolve(ui.ctx(), &t, &thumb, st)
                 .paint(&part_painter(ui, &[&thumb[..], &track[..]], st), thumb_rect);
         }
         // No label of its own: name it with `labelled_by(label.id)`, which

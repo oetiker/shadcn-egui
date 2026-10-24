@@ -94,7 +94,7 @@ impl<'a> Dialog<'a> {
             layout::overlay_width(ctx, max_width, px(|r| &r.max_width_inset), pad_l + pad_r);
         let inner_width = width - pad_l - pad_r;
 
-        let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
+        let panel = RecipeBox::resolve(ctx, &t, &l, g).faded(alpha);
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         let overlay_l = [&*t.style.dialog_overlay];
         let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
@@ -234,7 +234,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
     let painter = part_painter(ui, &[&l[..]], g);
-    let shapes = RecipeBox::resolve(&t, &l, g).shapes(ui.ctx(), strip);
+    let shapes = RecipeBox::resolve(ui.ctx(), &t, &l, g).shapes(ui.ctx(), strip);
     painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.
     ui.allocate_rect(

@@ -126,10 +126,17 @@ fn small_button(ui: &mut egui::Ui) -> egui::Response {
     let (rect, mut resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
     pressable(&mut resp, ActivationKeys::Button);
     let st = interaction_state(&theme, &resp, State::NONE);
-    RecipeBox::resolve(&theme, &layers, st).paint(&part_painter(ui, &[&layers[..]], st), rect);
+    RecipeBox::resolve(ui.ctx(), &theme, &layers, st).paint(&part_painter(ui, &[&layers[..]], st), rect);
     resp
 }
 ```
+
+`RecipeBox` puts border and outline widths on whole device pixels, as
+Blink does. Where a border width becomes geometry in the port (padding
+plus border, a size), take it through
+`shared::line_width(px, ui.ctx().pixels_per_point())`, and inset content
+with `shared::inset_frame` (or `RecipeBox::frame`), which keeps a fraction
+of a point that egui's `Margin` would round away.
 
 ## Behaviour, not just looks
 

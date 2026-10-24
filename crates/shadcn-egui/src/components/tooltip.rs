@@ -36,7 +36,7 @@ pub fn tooltip(resp: Response, text: &str) -> Response {
     // colours here. The arrow sits in the content.
     let alpha = opacity(&[&content[..]], g);
     let arrow_alpha = opacity(&[&arrow[..], &content[..]], g);
-    let panel = RecipeBox::resolve(&t, &content, g).faded(alpha);
+    let panel = RecipeBox::resolve(&resp.ctx, &t, &content, g).faded(alpha);
     let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(arrow_alpha));
     let mut tip = egui::Tooltip::for_enabled(&resp);
     let max_w = pick(&content, |r| &r.max_width, g).unwrap_or(f32::INFINITY);

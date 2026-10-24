@@ -7,7 +7,7 @@
 //! trigger (roving focus).
 
 use crate::components::shared::{
-    interaction_state, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
+    interaction_state, line_width, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
 use crate::style::{pick, Paint, Prop, Recipe, Role, State};
@@ -123,7 +123,10 @@ impl Widget for Tabs<'_> {
         let (tpad_l, tpad_r, border_w) = (
             geo(&trigger, |r| &r.pad_left),
             geo(&trigger, |r| &r.pad_right),
-            geo(&trigger, |r| &r.border_width),
+            line_width(
+                geo(&trigger, |r| &r.border_width),
+                ui.ctx().pixels_per_point(),
+            ),
         );
         let gap = geo(&list, |r| &r.gap);
         // The text colour depends on the state: lay out in egui's placeholder
@@ -266,7 +269,7 @@ impl Widget for Tabs<'_> {
         }
         if ui.is_rect_visible(list_rect.expand(reach)) {
             // The list sits in the tabs root; a trigger in the list.
-            RecipeBox::resolve(&t, &list, g)
+            RecipeBox::resolve(ui.ctx(), &t, &list, g)
                 .paint(&part_painter(ui, &[&list[..], &root[..]], g), list_rect);
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
@@ -286,7 +289,8 @@ impl Widget for Tabs<'_> {
                 let fg = paint(&trigger, |r| &r.text)
                     .or(list_text)
                     .unwrap_or(inherited);
-                let mut shapes = RecipeBox::resolve(&t, &trigger, st).shapes(ui.ctx(), *rect);
+                let mut shapes =
+                    RecipeBox::resolve(ui.ctx(), &t, &trigger, st).shapes(ui.ctx(), *rect);
                 // The `after:` line indicator, placed against the padding box.
                 // The painter already carries the trigger's chain.
                 let bar_alpha = opacity(&[&after[..]], st);
@@ -301,7 +305,7 @@ impl Widget for Tabs<'_> {
                         pos2(inner.right() - px(&after, |r| &r.inset_right), bottom),
                     );
                     shapes.extend(
-                        RecipeBox::resolve(&t, &after, st)
+                        RecipeBox::resolve(ui.ctx(), &t, &after, st)
                             .faded(bar_alpha)
                             .shapes(ui.ctx(), bar),
                     );

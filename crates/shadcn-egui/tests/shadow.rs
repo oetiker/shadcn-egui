@@ -33,7 +33,7 @@ fn render() -> image::RgbaImage {
                 recipe.shadow.base = Some(level);
                 recipe.radius.base = Some(Radius::Px(r));
                 let rect = Rect::from_min_max(pos2(x0, y0), pos2(x1, y1));
-                RecipeBox::resolve(&theme, &[&recipe], State::NONE).paint(p, rect);
+                RecipeBox::resolve(ui.ctx(), &theme, &[&recipe], State::NONE).paint(p, rect);
             }
         });
     h.step();

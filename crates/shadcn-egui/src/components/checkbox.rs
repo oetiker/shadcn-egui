@@ -9,7 +9,7 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
@@ -60,7 +60,7 @@ impl Widget for Checkbox<'_> {
         // border. The box keeps that size unticked too, so it does not jump.
         let ind = [&*t.style.checkbox_indicator];
         let side = pick(&ind, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
-        let auto = side + get(|r| &r.border_width) * 2.0;
+        let auto = side + line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point()) * 2.0;
         let size = vec2(
             pick(&l, |r| &r.width, g).unwrap_or(auto),
             pick(&l, |r| &r.height, g).unwrap_or(auto),
@@ -89,7 +89,7 @@ impl Widget for Checkbox<'_> {
 
         if ui.is_rect_visible(rect) {
             let painter = part_painter(ui, &[&l[..]], st);
-            RecipeBox::resolve(&t, &l, st).paint(&painter, rect);
+            RecipeBox::resolve(ui.ctx(), &t, &l, st).paint(&painter, rect);
             if checked {
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
                 // `text-current`: the tick inherits the box's text colour.

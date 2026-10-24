@@ -194,7 +194,7 @@ impl<'a> Card<'a> {
         // Paint behind the sections: the card's box, then the footer strip.
         painter.set(
             back,
-            Shape::Vec(RecipeBox::resolve(&t, &card, st).shapes(ui.ctx(), outer)),
+            Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &card, st).shapes(ui.ctx(), outer)),
         );
         if let Some((idx, top, bottom)) = footer_shapes {
             let strip = Rect::from_min_max(
@@ -203,7 +203,7 @@ impl<'a> Card<'a> {
             );
             part_painter(ui, &[&foot[..], &card[..]], st).set(
                 idx,
-                Shape::Vec(RecipeBox::resolve(&t, &foot, st).shapes(ui.ctx(), strip)),
+                Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &foot, st).shapes(ui.ctx(), strip)),
             );
         }
 

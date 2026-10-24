@@ -266,7 +266,7 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_center_size(rect.center(), vec2(rect.width(), thickness))
             };
-            let track_box = RecipeBox::resolve(&t, &track, st);
+            let track_box = RecipeBox::resolve(ui.ctx(), &t, &track, st);
             track_box.paint(&track_painter, track_rect);
 
             let c = centre_of(frac_of(value));
@@ -276,11 +276,11 @@ impl Widget for Slider<'_> {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
             // The track's `overflow-hidden` rounds the range where they meet.
-            RecipeBox::resolve(&t, &range, st)
+            RecipeBox::resolve(ui.ctx(), &t, &range, st)
                 .clipped_by(&track_box, track_rect, range_rect)
                 .paint(&range_painter, range_rect);
 
-            RecipeBox::resolve(&t, &thumb, st).paint(&thumb_painter, thumb_rect);
+            RecipeBox::resolve(ui.ctx(), &t, &thumb, st).paint(&thumb_painter, thumb_rect);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));

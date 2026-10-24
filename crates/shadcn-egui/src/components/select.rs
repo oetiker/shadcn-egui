@@ -29,8 +29,8 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    content_ui, interaction_state, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
-    DEFAULT_SIDE_OFFSET,
+    content_ui, interaction_state, line_width, opacity, part_painter, pressable, ActivationKeys,
+    RecipeBox, DEFAULT_SIDE_OFFSET,
 };
 use crate::components::text::TextLook;
 use crate::style::{pick, Paint, Prop, Recipe, Role, State};
@@ -123,7 +123,7 @@ impl Widget for Select<'_> {
         // Geometry depends on neither interaction nor the open state.
         let g = t.state(ui.ctx(), context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&trig, f, g).unwrap_or(0.0);
-        let border_w = get(|r| &r.border_width);
+        let border_w = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point());
         let (pad_l, pad_r) = (
             get(|r| &r.pad_left) + border_w,
             get(|r| &r.pad_right) + border_w,
@@ -296,7 +296,7 @@ impl Widget for Select<'_> {
         if ui.is_rect_visible(rect) {
             let painter = part_painter(ui, &[&trig[..]], st);
             let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
-            RecipeBox::resolve(&t, &trig, st).paint(&painter, rect);
+            RecipeBox::resolve(ui.ctx(), &t, &trig, st).paint(&painter, rect);
 
             let icon_rect = Rect::from_center_size(
                 egui::pos2(rect.right() - pad_r - icon_side / 2.0, rect.center().y),
@@ -354,7 +354,7 @@ impl Widget for Select<'_> {
             // viewport; neither paints anything of its own.
             let alpha = opacity(&[&l[..]], gs);
             let viewport = [&*t.style.select_viewport];
-            let panel = RecipeBox::resolve(t, &l, gs).faded(alpha);
+            let panel = RecipeBox::resolve(ui.ctx(), t, &l, gs).faded(alpha);
             let frame = panel.frame([gpt, gpr, gpb, gpl]);
             let item_look = TextLook::resolve(ui, &item, ist);
             let mut galleys: Vec<_> = self
@@ -437,7 +437,8 @@ impl Widget for Select<'_> {
                                     if ui.is_rect_visible(row) {
                                         // The row's text and indicator sit in the row.
                                         let painter = part_painter(ui, &[&item[..]], s);
-                                        RecipeBox::resolve(t, &item, s).paint(&painter, row);
+                                        RecipeBox::resolve(ui.ctx(), t, &item, s)
+                                            .paint(&painter, row);
                                         // The row's own text colour serves tick and text alike.
                                         let inherited = t.role(Role::PopoverForeground); // behaviour-ok: inherits PopoverForeground from the content
                                         let color = pick(&item, |r| &r.text, s)

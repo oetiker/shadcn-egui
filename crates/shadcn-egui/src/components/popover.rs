@@ -60,7 +60,7 @@ impl<'a> Popover<'a> {
         let gap = px(|r| &r.gap);
         // The frame paints outside the content's `Ui`: fade its colours here.
         let alpha = opacity(&[&l[..]], g);
-        let panel = RecipeBox::resolve(&t, &l, g).faded(alpha);
+        let panel = RecipeBox::resolve(&self.trigger.ctx, &t, &l, g).faded(alpha);
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         // No width from the builder or the recipe: CSS's initial `auto`,
         // the content's width.

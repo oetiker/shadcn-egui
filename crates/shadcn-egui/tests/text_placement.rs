@@ -459,11 +459,6 @@ const GLYPH_TEXT: &str = "To AVAY, Wave 7.5x Ky";
 /// off its default differs from HarfBuzz's by up to 2 font units (0.07 px
 /// at 2x: outfit, space-grotesk), less than egui's quarter-pixel bins.
 const GLYPH_SLACK: f32 = 0.1;
-/// Text origins not on Chrome's x yet: (font, scale). At 1.5x Chrome
-/// draws the input's 1px border one device pixel wide (Blink floors
-/// border widths to device pixels), the crate 1.5, so the text starts half
-/// a device pixel further right and rounds to the next pixel.
-const KNOWN_ORIGINS: [f32; 1] = [1.5];
 
 /// The input's text as drawn, in device px from the input's left: per
 /// char its x (where the caret and the selection stop) and the left edge
@@ -569,7 +564,7 @@ fn input_glyphs_sit_on_chromes_x() {
                 let got = drawn_glyphs(&ctx, screen, name.id(), scale);
                 assert_eq!(want.len(), got.xs.len(), "{tag}");
                 compared += 1;
-                if want[0] != got.xs[0] && !KNOWN_ORIGINS.contains(&scale) {
+                if want[0] != got.xs[0] {
                     wrong.push(format!(
                         "{tag} origin: crate {}, Chrome {}",
                         got.xs[0], want[0]

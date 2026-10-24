@@ -3,7 +3,7 @@
 //! recipes: `cn-badge` and `cn-badge-variant-*`, stacked in that order.
 
 use crate::components::icon::{paint_icon, Icon};
-use crate::components::shared::{interaction_state, part_painter, RecipeBox};
+use crate::components::shared::{interaction_state, line_width, part_painter, RecipeBox};
 use crate::components::text::TextLook;
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style};
 use crate::Theme;
@@ -86,7 +86,7 @@ impl Widget for Badge {
             get(|r| &r.pad_left),
             get(|r| &r.pad_right),
             get(|r| &r.gap),
-            get(|r| &r.border_width),
+            line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point()),
         );
         let icon_px = pick(&l, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
         // The text colour depends on the state, known only after allocating:
@@ -123,7 +123,7 @@ impl Widget for Badge {
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
         let fg = paint(|r| &r.text).unwrap_or(inherited);
-        RecipeBox::resolve(&t, &l, st).paint(&painter, rect);
+        RecipeBox::resolve(ui.ctx(), &t, &l, st).paint(&painter, rect);
 
         // Content is centred; unequal icon-side padding shifts it.
         let mut x = rect.center().x - content_w / 2.0 + (pad_l - pad_r) / 2.0;
