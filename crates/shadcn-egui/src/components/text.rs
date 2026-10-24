@@ -180,6 +180,17 @@ impl TextLook {
         FontId::new(self.size, family)
     }
 
+    /// The height of a field's editor line in points: one line of
+    /// `line-height: normal`, the font's ascent, descent and line gap,
+    /// each rounded to device pixels.
+    pub(crate) fn editor_height(&self, ctx: &egui::Context) -> Option<f32> {
+        let ppp = ctx.pixels_per_point();
+        let em = family_vmetrics(ctx, &self.font_id(ctx).family)?;
+        let [a, d, gap] =
+            [em.ascent, em.descent, em.line_gap].map(|v| (v * self.size * ppp).round());
+        Some((a + d + gap) / ppp)
+    }
+
     /// Where Blink paints a field's caret in its editor line, in points
     /// below the line's top: the font's ascent and descent (each rounded
     /// to device pixels) around the baseline, which sits half the line

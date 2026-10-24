@@ -77,7 +77,7 @@ impl<'a> Widget for Input<'a> {
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let border_w = get(|r| &r.border_width);
         let inset = |pad: f32| (pad + border_w).round() as i8;
-        let margin = Margin {
+        let mut margin = Margin {
             left: inset(get(|r| &r.pad_left)),
             right: inset(get(|r| &r.pad_right)),
             top: inset(get(|r| &r.pad_top)),
@@ -91,6 +91,16 @@ impl<'a> Widget for Input<'a> {
         let height = pick(&l, |r| &r.height, g).unwrap_or_else(|| {
             look.line_height() + f32::from(margin.top) + f32::from(margin.bottom)
         });
+        // Blink centres the editor line in the content box even when it is
+        // taller; egui would clamp it to the content top. Equal cuts from
+        // both margins keep the centre and give it the room.
+        let content = height - f32::from(margin.top) - f32::from(margin.bottom);
+        if let Some(editor) = look.editor_height(ui.ctx()) {
+            let cut = ((editor - content) / 2.0).ceil().max(0.0) as i8;
+            let cut = cut.min(margin.top).min(margin.bottom);
+            margin.top -= cut;
+            margin.bottom -= cut;
+        }
 
         // The `TextEdit` is the field's own text: it paints at the part's opacity.
         let fade = part_opacity(ui, &[&l[..]], g.with(State::DISABLED, !enabled));
