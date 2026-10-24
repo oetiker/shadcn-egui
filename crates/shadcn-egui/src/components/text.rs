@@ -261,9 +261,11 @@ impl TextLook {
     ) -> TextBlock {
         let mut job = self.job(ui, text.into());
         job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
-        let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
+        let source = ui.ctx().fonts_mut(|f| f.layout_job(job));
         TextBlock {
-            galley: place_rows(ui.ctx(), galley, self.leading),
+            galley: place_rows(ui.ctx(), source.clone(), self.leading, 0.0),
+            source,
+            leading: self.leading,
         }
     }
 
@@ -277,9 +279,45 @@ impl TextLook {
         job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, ui.available_width());
         job.halign = ui.layout().horizontal_placement();
         job.justify = ui.layout().horizontal_justify();
-        let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
-        let galley = place_rows(ui.ctx(), galley, self.leading);
-        ui.add(egui::Label::new(galley))
+        let source = ui.ctx().fonts_mut(|f| f.layout_job(job));
+        let galley = place_rows(ui.ctx(), source.clone(), self.leading, 0.0);
+        // `egui::Label`'s own `ui`, with the rows placed for the origin the
+        // label gets (the placement moves glyphs only, not the size).
+        let (pos, galley, mut response) = egui::Label::new(galley).layout_in_ui(ui);
+        let galley = if galley.elided {
+            galley
+        } else {
+            place_rows(ui.ctx(), source, self.leading, pos.y)
+        };
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, ui.is_enabled(), galley.text())
+        });
+        if ui.is_rect_visible(response.rect) {
+            if galley.elided {
+                let job = LayoutJob {
+                    sections: galley.job.sections.clone(),
+                    text: galley.job.text.clone(),
+                    ..LayoutJob::default()
+                };
+                response = response.on_hover_text(job);
+            }
+            let color = ui.style().visuals.text_color();
+            let underline = if response.has_focus() || response.highlighted() {
+                Stroke::new(1.0_f32, color) // behaviour-ok: egui Label's focus underline
+            } else {
+                Stroke::NONE
+            };
+            if ui.style().interaction.selectable_labels {
+                egui::text_selection::LabelSelectionState::label_text_selection(
+                    ui, &response, pos, galley, color, underline,
+                );
+            } else {
+                ui.painter().add(
+                    egui::epaint::TextShape::new(pos, galley, color).with_underline(underline),
+                );
+            }
+        }
+        response
     }
 }
 
@@ -299,7 +337,7 @@ impl TextLook {
         fill_color(&mut job, color);
         job.wrap = TextWrapping::from_wrap_mode_and_width(wrap, width);
         let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
-        place_rows(ui.ctx(), galley, self.leading)
+        place_rows(ui.ctx(), galley, self.leading, 0.0)
     }
 }
 
@@ -318,6 +356,9 @@ fn fill_color(job: &mut LayoutJob, color: Color32) {
 /// Text laid out by [`TextLook::layout`].
 #[derive(Clone, Debug)]
 pub struct TextBlock {
+    /// The galley as egui laid it out, before [`place_rows`].
+    source: Arc<Galley>,
+    leading: Leading,
     galley: Arc<Galley>,
 }
 
@@ -328,16 +369,19 @@ impl TextBlock {
         self.galley.size()
     }
 
-    /// The laid-out galley, its rows placed in their line boxes.
+    /// The laid-out galley, its rows placed in their line boxes for an
+    /// origin on a whole device pixel ([`TextBlock::paint`] places them for
+    /// its own origin).
     pub fn galley(&self) -> &Arc<Galley> {
         &self.galley
     }
 
     /// Paint the text with its first line box's top left at `pos`. `color`
     /// replaces every colour the caller did not set (see
-    /// [`TextLook::color`]).
+    /// [`TextLook::resolved_color`]).
     pub fn paint(&self, painter: &Painter, pos: Pos2, color: Color32) {
-        painter.galley(pos, self.galley.clone(), color);
+        let galley = place_rows(painter.ctx(), self.source.clone(), self.leading, pos.y);
+        painter.galley(pos, galley, color);
     }
 }
 
@@ -509,6 +553,10 @@ struct Placed {
     frame: u64,
 }
 
+/// A [`PlacedCache`] key: the source galley's address and the device-pixel
+/// fraction of the origin it is painted at.
+type PlacedKey = (usize, u32);
+
 /// The galleys [`place_rows`] placed in this frame and the one before, by
 /// the address of the galley egui laid out. egui's galley cache hands out
 /// the same galley while the text stays the same, so an idle widget's text
@@ -516,19 +564,26 @@ struct Placed {
 #[derive(Clone, Default)]
 struct PlacedCache {
     frame: u64,
-    entries: std::collections::HashMap<usize, Placed>,
+    entries: std::collections::HashMap<PlacedKey, Placed>,
 }
 
-/// [`place_galley_rows`], cached per galley egui laid out (notes §1: an
-/// idle widget allocates nothing beyond egui's own).
+/// [`place_galley_rows`] for a galley painted with its top at `origin_y`
+/// (points; 0 where the origin is not known yet), cached per galley egui
+/// laid out and origin fraction (notes §1: an idle widget allocates
+/// nothing beyond egui's own).
 pub(crate) fn place_rows(
     ctx: &egui::Context,
     galley: Arc<Galley>,
     leading: Leading,
+    origin_y: f32,
 ) -> Arc<Galley> {
     let id = egui::Id::new("shadcn_egui::text::placed");
     let (ppp, frame) = (ctx.pixels_per_point(), ctx.cumulative_frame_nr());
-    let key = Arc::as_ptr(&galley) as usize;
+    // The tessellator rounds the galley origin to the pixel; Blink rounds
+    // origin and baseline together. The fraction it drops goes into the
+    // baselines.
+    let frac = origin_y * ppp - (origin_y * ppp).round();
+    let key = (Arc::as_ptr(&galley) as usize, frac.to_bits());
     let hit = ctx.data_mut(|d| {
         let cache = d.get_temp_mut_or_default::<PlacedCache>(id);
         if cache.frame != frame {
@@ -548,7 +603,7 @@ pub(crate) fn place_rows(
     }
     // Placing reads the font tables through `ctx.data`: not inside the
     // `data_mut` above.
-    let placed = place_galley_rows(ctx, galley.clone(), leading);
+    let placed = place_galley_rows(ctx, galley.clone(), leading, frac);
     ctx.data_mut(|d| {
         let entry = Placed {
             source: galley,
@@ -572,11 +627,15 @@ pub(crate) fn place_rows(
 /// rounded to the pixel. egui rounds every row's height and top to the
 /// pixel and puts the baseline at the font's ascent; here each row keeps
 /// its line box as its rect (selection and cursor span it) and its glyphs
-/// move inside it. The galley is as tall as its line boxes.
+/// move inside it. The galley is as tall as its line boxes. `frac` is the
+/// device-pixel fraction of the paint origin that the tessellator rounds
+/// away: each baseline is rounded with it, as Blink rounds the origin and
+/// the baseline once.
 fn place_galley_rows(
     ctx: &egui::Context,
     mut galley: Arc<Galley>,
     leading: Leading,
+    frac: f32,
 ) -> Arc<Galley> {
     let ppp = ctx.pixels_per_point();
     let g = Arc::make_mut(&mut galley);
@@ -634,7 +693,7 @@ fn place_galley_rows(
                 Leading::Inline => ((line * ppp - ascent - descent) / 2.0).floor(),
                 Leading::Field => (gap / 2.0).floor(),
             };
-            let baseline = (top * ppp + half + ascent).round() / ppp - top;
+            let baseline = (frac + top * ppp + half + ascent).round() / ppp - top;
             let shift = egui::vec2(0.0, baseline - glyph.pos.y);
             for glyph in &mut row.glyphs {
                 glyph.pos.y += shift.y;

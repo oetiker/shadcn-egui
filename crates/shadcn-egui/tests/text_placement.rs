@@ -24,11 +24,11 @@
 use egui::epaint::TextShape;
 use egui::{pos2, Color32, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 use shadcn_egui::components::badge::Badge;
-use shadcn_egui::components::button::Button;
+use shadcn_egui::components::button::{Button, ButtonSize};
 use shadcn_egui::components::input::Input;
 use shadcn_egui::components::text::TextLook;
-use shadcn_egui::style::{Recipe, State, TextSize};
-use shadcn_egui::{fonts, FontFiles, FontName, Theme};
+use shadcn_egui::style::{Recipe, State, Style, TextSize};
+use shadcn_egui::{fonts, FontFiles, FontName, Palette, Theme};
 
 const CHROME: &str = include_str!("text_placement/chrome-baselines.tsv");
 const SCALES: [f32; 3] = [1.0, 1.5, 2.0];
@@ -312,4 +312,202 @@ fn text_sits_on_chromes_pixels() {
         "text off Chrome's pixels:\n{}",
         wrong.join("\n")
     );
+}
+
+/// A scale, then Chrome's rows for the button, input, block and line, and
+/// the input's selection top and bottom, caret top, bottom and width.
+type NovaRows = (f32, [f32; 1], [f32; 1], [f32; 3], [f32; 1], [f32; 5]);
+
+/// Chrome 156's rows (device px below each item's top, Inter) for three
+/// cases the vega table does not have, measured with
+/// `--force-device-scale-factor` at 1x, 1.5x and 2x:
+/// - a nova small button (`text-sm` then `text-[0.8rem]`: 12.8 px text on
+///   a 12.8 x 20/14 px line, centred in 28 px less its border);
+/// - a nova input at phone width (16 px text, 24 px line, in a 22 px
+///   content box): baseline, selection rows and caret rows and width;
+/// - a block of three 19.5 px rows (`text-xs/relaxed`) below one such
+///   row, so its origin is fractional, and a `text-sm` line below one.
+const NOVA_FRAC: [NovaRows; 3] = [
+    (
+        1.0,
+        [18.0],
+        [22.0],
+        [34.0, 53.0, 73.0],
+        [35.0],
+        [6.0, 26.0, 6.0, 26.0, 1.0],
+    ),
+    (
+        1.5,
+        [27.0],
+        [33.0],
+        [50.0, 80.0, 109.0],
+        [51.0],
+        [10.0, 39.0, 10.0, 39.0, 2.0],
+    ),
+    (
+        2.0,
+        [37.0],
+        [44.0],
+        [67.0, 106.0, 145.0],
+        [69.0],
+        [13.0, 52.0, 13.0, 52.0, 2.0],
+    ),
+];
+
+#[test]
+fn nova_and_fractional_origins_sit_on_chromes_pixels() {
+    for (ppp, button, input, block, line, field) in NOVA_FRAC {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(ppp);
+        Theme::new(Style::nova(), Palette::light(), 10.0)
+            .fonts(fonts::files(FontName::Inter).unwrap(), None)
+            .apply(&ctx);
+        let mut b = Recipe::default();
+        b.text_size.base = Some(TextSize::Px(12.0));
+        b.line_height.base = Some(1.625);
+        let mut s = Recipe::default();
+        s.text_size.base = Some(TextSize::Sm);
+        let mut value = String::from("HHHH");
+        let mut run = |events: Vec<Event>| {
+            let mut items = [Rect::NOTHING; 4];
+            let input = RawInput {
+                events,
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(390.0, 800.0))),
+                ..Default::default()
+            };
+            let out = ctx.run_ui(input, |ui| {
+                for (i, item) in items.iter_mut().enumerate() {
+                    let area = egui::Area::new(egui::Id::new(i))
+                        .fixed_pos(pos2(8.0, 8.0 + 80.0 * i as f32));
+                    *item = area
+                        .show(ui.ctx(), |ui| match i {
+                            0 => ui.add(Button::new("HHHH").size(ButtonSize::Sm)),
+                            1 => ui.add(Input::new(&mut value).max_width(200.0)),
+                            _ => {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.vertical(|ui| {
+                                    let wrap = egui::TextWrapMode::Wrap;
+                                    let lb = TextLook::resolve(ui, &[&b], State::NONE);
+                                    let word = lb.layout(ui, "HHHH", wrap, f32::INFINITY).size().x;
+                                    let first = lb.layout(ui, "HHHH", wrap, f32::INFINITY);
+                                    let (r, _) =
+                                        ui.allocate_exact_size(first.size(), egui::Sense::hover());
+                                    first.paint(ui.painter(), r.min, lb.resolved_color(ui));
+                                    let (look, text) = if i == 2 {
+                                        (lb, "HHHH HHHH HHHH")
+                                    } else {
+                                        (TextLook::resolve(ui, &[&s], State::NONE), "HHHH")
+                                    };
+                                    let t = look.layout(ui, text, wrap, word * 1.5);
+                                    let (r, _) =
+                                        ui.allocate_exact_size(t.size(), egui::Sense::hover());
+                                    t.paint(ui.painter(), r.min, look.resolved_color(ui));
+                                })
+                                .response
+                            }
+                        })
+                        .inner
+                        .rect;
+                }
+            });
+            let mut f = Frame {
+                texts: Vec::new(),
+                rects: Vec::new(),
+                items,
+            };
+            for s in &out.shapes {
+                walk(&s.shape, &mut f.texts, &mut f.rects);
+            }
+            f
+        };
+        let mut plain = run(Vec::new());
+        for _ in 0..2 {
+            plain = run(Vec::new());
+        }
+        let atlas = ctx.fonts(|f| f.image());
+        for i in 0..4 {
+            let top = (plain.items[i].top() * ppp).round();
+            let rows: Vec<Vec<f32>> = plain
+                .texts
+                .iter()
+                .filter(|t| {
+                    plain.items[i].contains(t.pos + egui::vec2(1.0, 1.0))
+                        && !t.galley.text().is_empty()
+                })
+                .map(|t| {
+                    row_baselines(t, ppp, &atlas)
+                        .into_iter()
+                        .map(|b| b - top)
+                        .collect()
+                })
+                .collect();
+            let want: &[f32] = [&button[..], &input, &block, &line][i];
+            assert_eq!(
+                rows.last().map(Vec::as_slice),
+                Some(want),
+                "{ppp}x item {i}"
+            );
+        }
+        let at = plain.items[1].center();
+        let press = |pressed| Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        let key = |key, modifiers| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        run(vec![Event::PointerMoved(at), press(true)]);
+        run(vec![press(false)]);
+        let selected = run(vec![key(Key::A, Modifiers::COMMAND)]);
+        let caret = run(vec![key(Key::End, Modifiers::NONE)]);
+        let itop = (selected.items[1].top() * ppp).round();
+        let fill = ctx.global_style().visuals.selection.bg_fill;
+        let t = selected
+            .texts
+            .iter()
+            .find(|t| {
+                selected.items[1].contains(t.pos + egui::vec2(1.0, 1.0))
+                    && !t.galley.text().is_empty()
+            })
+            .unwrap();
+        let row = &t.galley.rows[0];
+        let ys: Vec<f32> = row
+            .visuals
+            .mesh
+            .vertices
+            .iter()
+            .filter(|v| {
+                v.color
+                    .to_array()
+                    .iter()
+                    .zip(fill.to_array())
+                    .all(|(x, y)| x.abs_diff(y) <= 1)
+            })
+            .map(|v| dev(t, row.pos.y + v.pos.y, ppp))
+            .collect();
+        let (cr, _) = caret
+            .rects
+            .iter()
+            .find(|(r, _)| caret.items[1].contains(r.center()) && r.width() * ppp < 2.5)
+            .unwrap();
+        let got = [
+            ys.iter().copied().fold(f32::MAX, f32::min) - itop,
+            ys.iter().copied().fold(f32::MIN, f32::max) - itop,
+            cr.top() * ppp - itop,
+            cr.bottom() * ppp - itop,
+            cr.width() * ppp,
+        ];
+        assert_eq!(
+            got.map(|v| v.round()),
+            field,
+            "{ppp}x input selection and caret"
+        );
+        assert!(got.iter().all(|v| (v - v.round()).abs() < 1e-3), "{got:?}");
+    }
 }
