@@ -95,6 +95,11 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   visibly from Chrome's render on the path above gets a value.
 - The test that measures text placement compares against a Chrome
   reference render, not against centred capitals.
+- Crate text draws one glyph per character, with Chrome's advances and
+  kerning. Ligatures (`liga`) and contextual alternates (`calt`,
+  `ccmp`) that Chrome substitutes are not drawn: egui reaches a glyph
+  only through a character. This is an accepted difference; the build-ui
+  skill names it, and the text tests use texts without such pairs.
 
 ### 2.5 Boxes
 
