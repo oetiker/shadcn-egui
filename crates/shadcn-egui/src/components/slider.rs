@@ -11,6 +11,7 @@
 use crate::components::shared::{
     interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
 };
+use crate::style::app::default_variant;
 use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
@@ -22,6 +23,23 @@ pub enum SliderOrientation {
     Horizontal,
     Vertical,
 }
+
+default_variant!(
+    /// The slider's variant: upstream has none, so only app variants
+    /// ([`SliderVariant::app`]) differ from `Default`.
+    SliderVariant,
+    /// The slider's recipes an app variant's edit changes.
+    SliderRecipes {
+        /// `data-slot="slider"`: the root.
+        slider,
+        /// `data-slot="slider-track"`.
+        slider_track,
+        /// `data-slot="slider-range"`: the filled part of the track.
+        slider_range,
+        /// `data-slot="slider-thumb"`.
+        slider_thumb,
+    }
+);
 
 /// A slider with one thumb (bits-ui also supports several; this port does
 /// not). The value is clamped to the range on every frame and snapped to
@@ -39,6 +57,7 @@ pub struct Slider<'a> {
     orientation: SliderOrientation,
     enabled: bool,
     label: String,
+    variant: SliderVariant,
 }
 
 impl<'a> Slider<'a> {
@@ -50,6 +69,7 @@ impl<'a> Slider<'a> {
             orientation: SliderOrientation::Horizontal,
             enabled: true,
             label: String::new(),
+            variant: SliderVariant::Default,
         }
     }
     /// Snap to multiples of `step` from the range start; 0 = continuous.
@@ -71,6 +91,11 @@ impl<'a> Slider<'a> {
         self.label = text.into();
         self
     }
+    /// An app variant ([`SliderVariant::app`]).
+    pub fn variant(mut self, v: impl Into<SliderVariant>) -> Self {
+        self.variant = v.into();
+        self
+    }
 }
 
 /// Snap `v` to the step grid starting at `lo`, then clamp into `lo..=hi`.
@@ -87,17 +112,19 @@ fn snap(v: f32, lo: f32, hi: f32, step: f32) -> f32 {
 impl Widget for Slider<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let root = [&*t.style.slider];
-        let track = [&*t.style.slider_track];
-        let range = [&*t.style.slider_range];
-        let thumb = [&*t.style.slider_thumb];
+        let v = t.resolve(self.variant);
+        let root = [v.part(&t.style, |_, s| &s.slider, |r| &r.slider)];
+        let track = [v.part(&t.style, |_, s| &s.slider_track, |r| &r.slider_track)];
+        let range = [v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range)];
+        let thumb = [v.part(&t.style, |_, s| &s.slider_thumb, |r| &r.slider_thumb)];
         let enabled = self.enabled && ui.is_enabled();
         let vertical = self.orientation == SliderOrientation::Vertical;
         let orient = if vertical {
             State::VERTICAL
         } else {
             State::HORIZONTAL
-        };
+        }
+        .or(v.bits());
 
         // A degenerate range is a slider that cannot move.
         let lo = if self.range.start().is_finite() {
@@ -286,5 +313,31 @@ impl Widget for Slider<'_> {
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));
         resp.rect = rect;
         resp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role};
+
+    /// An app variant's edit gets `SliderRecipes` and changes only what it
+    /// names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const DANGER: AppVariant<SliderVariant> = SliderVariant::app("danger");
+        let t = Theme::vega().variant(
+            DANGER,
+            SliderVariant::Default,
+            |r: &mut SliderRecipes, _| r.slider_range.recolor(Role::Primary, Role::Destructive),
+        );
+        let v = t.resolve(SliderVariant::from(DANGER));
+        let range = v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range);
+        assert_eq!(
+            range.bg.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        let track = v.part(&t.style, |_, s| &s.slider_track, |r| &r.slider_track);
+        assert_eq!(track, &*t.style.slider_track);
     }
 }
