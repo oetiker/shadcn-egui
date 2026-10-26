@@ -153,7 +153,8 @@ fn lines_break_where_chrome_breaks_them() {
             let scale: f32 = scale_id.parse().unwrap();
             let ctx = egui::Context::default();
             ctx.set_pixels_per_point(scale);
-            Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
+            Theme::vega().fonts(files, None).apply(&ctx);
+            ctx.set_theme(egui::Theme::Light);
             let _ = ctx.run_ui(RawInput::default(), |_| {});
             let _ = ctx.run_ui(RawInput::default(), |ui| {
                 for f in rows

@@ -137,7 +137,8 @@ fn crate_case(scale: f32, width: f32, build: impl Fn(&mut Ui, &Items) + 'static)
                 *r = r.translate(-max.min.to_vec2());
             }
         });
-    Theme::vega().in_mode(egui::Theme::Light).apply(&h.ctx);
+    Theme::vega().apply(&h.ctx);
+    h.ctx.set_theme(egui::Theme::Light);
     for _ in 0..8 {
         h.step();
     }
@@ -238,7 +239,8 @@ fn relearn_case(first: &'static str) -> (egui::Vec2, egui::Vec2) {
                 *r = r.translate(-max.min.to_vec2());
             }
         });
-    Theme::vega().in_mode(egui::Theme::Light).apply(&h.ctx);
+    Theme::vega().apply(&h.ctx);
+    h.ctx.set_theme(egui::Theme::Light);
     for _ in 0..4 {
         h.step();
     }
@@ -309,7 +311,10 @@ fn button_case(case: &str) -> (Theme, Button) {
         "both" => b.icon(icon).icon_end(icon),
         _ => panic!("{content}"),
     };
-    (Theme::new(style, Palette::light(), 10.0), b)
+    (
+        Theme::new(style, Palette::light(), Palette::dark(), 10.0),
+        b,
+    )
 }
 
 /// Button boxes (text only, icon and text, icon text icon, icon only) of

@@ -11,30 +11,39 @@ use egui_kittest::{Harness, SnapshotResults};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
 
-pub fn themes() -> Vec<(&'static str, Theme)> {
+/// A test theme: its name suffix, the theme, and the mode it renders in.
+/// The mode travels beside the theme: an app picks it with
+/// `ctx.set_theme(..)`, and the helpers below do the same.
+pub type Themed = (&'static str, Theme, egui::Theme);
+
+pub fn themes() -> Vec<Themed> {
     vec![
         (
             "vega_dark",
             Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0),
+            egui::Theme::Dark,
         ),
         (
             "vega_light",
-            Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).in_mode(egui::Theme::Light),
+            Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0),
+            egui::Theme::Light,
         ),
         (
             "nova_dark",
             Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0),
+            egui::Theme::Dark,
         ),
         (
             "nova_light",
-            Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0).in_mode(egui::Theme::Light),
+            Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0),
+            egui::Theme::Light,
         ),
     ]
 }
 
 /// The seven exported styles, dark and light: what every component snapshot
 /// covers. Measurement tests use [`themes`] (vega and nova) instead.
-pub fn snapshot_themes() -> Vec<(&'static str, Theme)> {
+pub fn snapshot_themes() -> Vec<Themed> {
     type Make = fn() -> Style;
     const STYLES: [(&str, &str, Make); 7] = [
         ("vega_dark", "vega_light", Style::vega),
@@ -49,8 +58,16 @@ pub fn snapshot_themes() -> Vec<(&'static str, Theme)> {
         .iter()
         .flat_map(|(dark, light, make)| {
             [
-                (*dark, Theme::new(make(), Palette::light(), Palette::dark(), 10.0)),
-                (*light, Theme::new(make(), Palette::light(), Palette::dark(), 10.0).in_mode(egui::Theme::Light)),
+                (
+                    *dark,
+                    Theme::new(make(), Palette::light(), Palette::dark(), 10.0),
+                    egui::Theme::Dark,
+                ),
+                (
+                    *light,
+                    Theme::new(make(), Palette::light(), Palette::dark(), 10.0),
+                    egui::Theme::Light,
+                ),
             ]
         })
         .collect()
@@ -72,29 +89,30 @@ pub fn snapshot_all_with(
     snapshot_with_themes(name, size, snapshot_themes(), ui_fn, prepare);
 }
 
-/// `ui_fn` on a page of `theme`'s background colour, after one run.
+/// `ui_fn` on a page of `theme`'s background colour in `mode`, after one run.
 pub fn page_harness<'a>(
     size: egui::Vec2,
     theme: Theme,
+    mode: egui::Theme,
     mut ui_fn: impl FnMut(&mut egui::Ui) + 'a,
 ) -> Harness<'a> {
-    let bg = theme.palette().background;
+    let bg = theme.palette_of(mode).background;
     let mut h = Harness::builder()
         .with_size(size)
-        .with_theme(theme.mode())
+        .with_theme(mode)
         .build_ui(move |ui| {
-        theme.apply(ui.ctx());
-        // kittest wraps the ui in an 8px outer margin; paint the page
-        // colour under all of it, so no band of another colour shows.
-        let page = ui.ctx().viewport_rect();
-        ui.ctx()
-            .layer_painter(egui::LayerId::background())
-            .rect_filled(page, 0.0, bg);
-        egui::Frame::new().fill(bg).inner_margin(16).show(ui, |ui| {
-            ui.set_min_size(ui.available_size());
-            ui_fn(ui);
+            theme.apply(ui.ctx());
+            // kittest wraps the ui in an 8px outer margin; paint the page
+            // colour under all of it, so no band of another colour shows.
+            let page = ui.ctx().viewport_rect();
+            ui.ctx()
+                .layer_painter(egui::LayerId::background())
+                .rect_filled(page, 0.0, bg);
+            egui::Frame::new().fill(bg).inner_margin(16).show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                ui_fn(ui);
+            });
         });
-    });
     h.run();
     h
 }
@@ -103,39 +121,45 @@ pub fn page_harness<'a>(
 pub fn snapshot_with_themes(
     name: &str,
     size: egui::Vec2,
-    themes: Vec<(&'static str, Theme)>,
+    themes: Vec<Themed>,
     mut ui_fn: impl FnMut(&mut egui::Ui),
     mut prepare: impl FnMut(&mut Harness<'_>),
 ) {
     // One result set for all harnesses, so a failing style does not abort the rest.
     let mut results = SnapshotResults::new();
-    for (suffix, theme) in themes {
-        let mut h = page_harness(size, theme, &mut ui_fn);
+    for (suffix, theme, mode) in themes {
+        let mut h = page_harness(size, theme, mode, &mut ui_fn);
         prepare(&mut h);
         results.add(try_snapshot(&mut h, format!("{name}_{suffix}")));
     }
 }
 
-/// The rect of the widget `add` places, under `theme`, and the output of
+/// The rect of the widget `add` places, under `theme` in `mode`, and the output of
 /// the frame that painted it. Runs two frames: the fonts `Theme::apply`
 /// installs reach the atlas only on the second, and focus requested in the
 /// first frame shows in the second.
 pub fn measure_output(
     theme: &Theme,
+    mode: egui::Theme,
     mut add: impl FnMut(&mut egui::Ui) -> egui::Response,
 ) -> (egui::Rect, egui::FullOutput) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
-    ctx.set_theme(theme.mode());
+    ctx.set_theme(mode);
     let mut rect = egui::Rect::NOTHING;
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
     let out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
     (rect, out)
 }
 
-/// The rect of the widget `add` places, under `theme` (see [`measure_output`]).
-pub fn measure(theme: &Theme, add: impl FnMut(&mut egui::Ui) -> egui::Response) -> egui::Rect {
-    measure_output(theme, add).0
+/// The rect of the widget `add` places, under `theme` in `mode` (see
+/// [`measure_output`]).
+pub fn measure(
+    theme: &Theme,
+    mode: egui::Theme,
+    add: impl FnMut(&mut egui::Ui) -> egui::Response,
+) -> egui::Rect {
+    measure_output(theme, mode, add).0
 }
 
 /// Every rect shape a frame painted, in paint order.
@@ -216,6 +240,15 @@ pub fn text_colour(out: &egui::FullOutput) -> egui::Color32 {
         .expect("a text shape")
 }
 
+/// `theme` as the crate's components see it in a context set to `mode`
+/// (`Theme::current`): its colours and `dark:` rules resolve in `mode`.
+pub fn resolved(theme: &Theme, mode: egui::Theme) -> Theme {
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    ctx.set_theme(mode);
+    Theme::current(&ctx)
+}
+
 /// `theme` with `f` applied to its style: what an app does in its setup.
 pub fn restyled(mut theme: Theme, f: impl FnOnce(&mut Style)) -> Theme {
     f(std::sync::Arc::make_mut(&mut theme.style));
@@ -234,14 +267,14 @@ pub const DESKTOP: f32 = 1280.0;
 pub fn snapshot_widths(
     name: &str,
     height: f32,
-    themes: Vec<(&'static str, Theme)>,
+    themes: Vec<Themed>,
     mut ui_fn: impl FnMut(&mut egui::Ui),
 ) {
     // One result set for all harnesses, as in `snapshot_with_themes`.
     let mut results = SnapshotResults::new();
     for width in [PHONE, DESKTOP] {
-        for (suffix, theme) in &themes {
-            let mut h = page_harness(egui::vec2(width, height), theme.clone(), &mut ui_fn);
+        for (suffix, theme, mode) in &themes {
+            let mut h = page_harness(egui::vec2(width, height), theme.clone(), *mode, &mut ui_fn);
             results.add(try_snapshot(&mut h, format!("{name}_{width}_{suffix}")));
         }
     }

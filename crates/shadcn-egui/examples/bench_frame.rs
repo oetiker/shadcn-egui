@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use shadcn_egui::reference::{gallery_ui, GalleryState};
-use shadcn_egui::{Mode, Preset, StyleName};
+use shadcn_egui::{Preset, StyleName};
 
 /// Counts every allocation and reallocation; frees are not counted.
 struct Counting;
@@ -64,7 +64,7 @@ fn main() {
     println!("| style | median µs | allocs/frame |  ({frames} frames)");
     for (name, style) in STYLES {
         let ctx = egui::Context::default();
-        let mut state = GalleryState::new(Preset::default().style(style), Mode::Light);
+        let mut state = GalleryState::new(Preset::default().style(style), egui::Theme::Light);
         for _ in 0..WARMUP {
             let _ = ctx.run_ui(input(), |ui| gallery_ui(ui, &mut state));
         }

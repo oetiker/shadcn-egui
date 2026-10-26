@@ -10,7 +10,7 @@ use shadcn_egui::components::popover::{popover_header, Popover};
 use shadcn_egui::components::select::{Select, SelectSize};
 use shadcn_egui::components::tooltip::tooltip;
 use shadcn_egui::Theme;
-use shadcn_egui::{MenuColor, Mode, Palette, Preset, StyleName};
+use shadcn_egui::{MenuColor, Palette, Preset, StyleName};
 
 /// A dialog harness: `open` starts true; the body has a button that counts clicks.
 fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
@@ -99,7 +99,7 @@ fn dialog_inner_width(theme: &Theme, screen: f32) -> f32 {
 
 #[test]
 fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let pad = theme
             .style
             .dialog_content
@@ -120,7 +120,7 @@ fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
     }
     let nova = common::themes()
         .into_iter()
-        .find(|(n, _)| *n == "nova_dark")
+        .find(|(n, _, _)| *n == "nova_dark")
         .expect("nova")
         .1;
     assert_eq!(
@@ -151,13 +151,20 @@ fn dialog_close_button_can_be_hidden() {
 #[test]
 fn a_disabled_dialog_footer_keeps_its_strip_colour() {
     use shadcn_egui::style::{pick, State};
-    let theme = Theme::new(shadcn_egui::Style::nova(), Palette::light(), 10.0);
+    let mode = egui::Theme::Light;
+    let theme = Theme::new(
+        shadcn_egui::Style::nova(),
+        Palette::light(),
+        Palette::dark(),
+        10.0,
+    );
     let strip = pick(&[&*theme.style.dialog_footer], |r| &r.bg, State::NONE)
         .map(|p| theme.paint(p))
         .expect("nova's footer has a strip");
     let fills = |disabled: bool| {
         let ctx = egui::Context::default();
         theme.apply(&ctx);
+        ctx.set_theme(mode);
         // No fade-in of the modal's area.
         ctx.global_style_mut(|s| s.animation_time = 0.0);
         let mut out = None;
@@ -266,12 +273,13 @@ fn popover_closes_on_escape_and_toggles_on_trigger() {
 
 #[test]
 fn popover_box_is_w_72_and_content_gets_the_padding() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let inner = std::cell::Cell::new(0.0_f32);
         let mut h = Harness::builder()
             .with_size(vec2(420.0, 240.0))
             .build_ui(|ui| {
                 theme.apply(ui.ctx());
+                ui.ctx().set_theme(mode);
                 let trigger = ui.add(Button::new("Dimensions"));
                 Popover::new(&trigger).show(|ui| inner.set(ui.available_width()));
             });
@@ -331,11 +339,12 @@ fn tooltip_shows_on_hover() {
 
 #[test]
 fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut h = Harness::builder()
             .with_size(vec2(240.0, 120.0))
             .build_ui(|ui| {
                 theme.apply(ui.ctx());
+                ui.ctx().set_theme(mode);
                 tooltip_trigger(ui);
             });
         h.run();
@@ -349,7 +358,7 @@ fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
             egui::Color32::from_rgb(c[0], c[1], c[2])
         };
         // bg-foreground behind the text; the arrow reaches into the trigger below.
-        let fg = theme.palette.foreground;
+        let fg = theme.palette_of(mode).foreground;
         let corner = egui::pos2(text.left() - 4.0, text.center().y);
         assert_eq!(px(corner), fg, "{name}: fill is foreground");
         let tip = egui::pos2(text.center().x, trigger.top() - 2.0);
@@ -362,15 +371,17 @@ fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
 #[test]
 fn tooltip_box_takes_the_styles_border() {
     use shadcn_egui::style::{Paint, Prop, Role};
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.tooltip_content.border_width = Prop::fixed(4.0);
         s.tooltip_content.border_color = Prop::fixed(Paint::Role(Role::Destructive, 1.0));
     });
-    let red = theme.palette.destructive;
+    let red = theme.palette_of(mode).destructive;
     let mut h = Harness::builder()
         .with_size(vec2(240.0, 120.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             tooltip_trigger(ui);
         });
     h.run();
@@ -554,7 +565,7 @@ fn select_disabled_does_not_open() {
 
 #[test]
 fn select_trigger_height_follows_style_and_size() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let (default_h, sm_h) = if name.starts_with("nova") {
             (32.0, 28.0)
         } else {
@@ -562,7 +573,7 @@ fn select_trigger_height_follows_style_and_size() {
         };
         let mut v = 0usize;
         let mut h = |size| {
-            common::measure(&theme, |ui| {
+            common::measure(&theme, mode, |ui| {
                 ui.add(Select::new("s", &mut v, &FRUITS).size(size))
             })
             .height()
@@ -617,12 +628,13 @@ fn select_open_snapshot() {
 
 #[test]
 fn select_item_rows_have_the_text_sm_line_plus_padding() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut h = Harness::builder()
             .with_size(vec2(320.0, 260.0))
             .build_ui_state(
                 |ui, value: &mut usize| {
                     theme.apply(ui.ctx());
+                    ui.ctx().set_theme(mode);
                     ui.add(Select::new("fruit", value, &FRUITS));
                 },
                 0usize,
@@ -647,7 +659,8 @@ fn select_list_is_capped_to_the_window() {
         .with_size(vec2(200.0, 300.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
                 ui.add(Select::new("long", value, &LONG).width(150.0));
             },
             0usize,
@@ -679,7 +692,8 @@ fn select_trigger_is_capped_to_the_room() {
             .with_size(vec2(200.0, 300.0))
             .build_ui_state(
                 move |ui, value: &mut usize| {
-                    Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
+                    Theme::vega().apply(ui.ctx());
+                    ui.ctx().set_theme(egui::Theme::Light);
                     let select = Select::new("long", value, &LONG);
                     match width {
                         Some(w) => ui.add(select.width(w)),
@@ -704,7 +718,8 @@ fn select_trigger_is_capped_to_the_room() {
 #[test]
 fn select_trigger_in_no_room_takes_its_content_minimum() {
     let ctx = egui::Context::default();
-    Theme::vega().in_mode(egui::Theme::Light).apply(&ctx);
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
     let mut v = 0usize;
     let mut rects = (egui::Rect::NOTHING, egui::Rect::NOTHING);
     for _ in 0..2 {
@@ -723,11 +738,13 @@ fn select_trigger_in_no_room_takes_its_content_minimum() {
 
 /// Pixels darker than (60, 60, 60) once the list of a light-mode Select is open.
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
-    let bg = theme.palette.background;
+    let mode = egui::Theme::Light;
+    let bg = theme.palette_of(mode).background;
     let mut h = Harness::builder()
         .with_size(vec2(260.0, 260.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             ui.ctx()
                 .layer_painter(egui::LayerId::background())
                 .rect_filled(ui.ctx().viewport_rect(), 0.0, bg);
@@ -748,14 +765,13 @@ fn an_inverted_menu_is_dark_in_light_mode() {
     let inverted = Preset::default()
         .style(StyleName::Vega)
         .menu_color(MenuColor::Inverted)
-        .theme(Mode::Light);
+        .theme();
     let mt = inverted.menu_theme();
     assert!(
-        mt.dark && mt.palette == Palette::dark(),
+        mt.is_dark() && mt.palette() == &Palette::dark(),
         "the menu resolves as dark mode"
     );
-    let plain =
-        dark_pixels_of_open_list(Preset::default().style(StyleName::Vega).theme(Mode::Light));
+    let plain = dark_pixels_of_open_list(Preset::default().style(StyleName::Vega).theme());
     let dark = dark_pixels_of_open_list(inverted);
     // The open list is ~180 x 140 px: filled dark it adds well over 10 000
     // dark pixels; a light list only has its text.
@@ -774,14 +790,16 @@ fn select_open_in(name: &str, color: MenuColor) {
             Preset::default()
                 .style(StyleName::Vega)
                 .menu_color(color)
-                .theme(Mode::Light),
+                .theme(),
+            egui::Theme::Light,
         ),
         (
             "vega_dark",
             Preset::default()
                 .style(StyleName::Vega)
                 .menu_color(color)
-                .theme(Mode::Dark),
+                .theme(),
+            egui::Theme::Dark,
         ),
     ];
     common::snapshot_with_themes(

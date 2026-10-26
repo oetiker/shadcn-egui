@@ -3,7 +3,7 @@ mod common;
 
 use common::logcap::warnings;
 use shadcn_egui::icons::lucide::SLOTS as LUCIDE_SLOTS;
-use shadcn_egui::{FontHeading, FontName, IconLibrary, Mode, Preset, StyleName};
+use shadcn_egui::{FontHeading, FontName, IconLibrary, Preset, StyleName};
 
 /// The font and icon library these tests ask for, unless a feature bundles
 /// them (then the fallback cannot happen and the test has nothing to check).
@@ -28,7 +28,7 @@ const GEIST: &str = "shadcn-egui: font \"geist\" needs the \"font-geist\" featur
 
 #[test]
 fn sera_falls_back_to_nova_with_square_corners() {
-    let (t, lines) = warnings(|| Preset::default().style(StyleName::Sera).theme(Mode::Dark));
+    let (t, lines) = warnings(|| Preset::default().style(StyleName::Sera).theme());
     assert_eq!((t.style.name, t.radius), ("nova", 0.0));
     assert_eq!(lines, [SERA]);
 }
@@ -38,7 +38,7 @@ fn a_font_without_its_feature_falls_back_to_inter() {
     if !geist_missing() {
         return;
     }
-    let (t, lines) = warnings(|| Preset::default().font(FontName::Geist).theme(Mode::Light));
+    let (t, lines) = warnings(|| Preset::default().font(FontName::Geist).theme());
     assert_eq!(t.fonts.body.name, "inter");
     assert_eq!(lines, [GEIST]);
 }
@@ -51,7 +51,7 @@ fn a_heading_font_without_its_feature_falls_back_to_inter() {
     let (t, lines) = warnings(|| {
         Preset::default()
             .font_heading(FontHeading::Font(FontName::Geist))
-            .theme(Mode::Light)
+            .theme()
     });
     assert_eq!(t.fonts.heading.name, "inter");
     assert_eq!(
@@ -65,11 +65,7 @@ fn an_icon_library_without_its_feature_falls_back_to_lucide() {
     if !tabler_missing() {
         return;
     }
-    let (t, lines) = warnings(|| {
-        Preset::default()
-            .icons(IconLibrary::Tabler)
-            .theme(Mode::Light)
-    });
+    let (t, lines) = warnings(|| Preset::default().icons(IconLibrary::Tabler).theme());
     assert_eq!(t.icons, LUCIDE_SLOTS);
     assert_eq!(
         lines,
@@ -85,11 +81,11 @@ fn two_unsupported_values_log_two_lines_and_every_call_repeats_them() {
     let p = Preset::default()
         .style(StyleName::Sera)
         .font(FontName::Geist);
-    let (_, first) = warnings(|| p.theme(Mode::Light));
+    let (_, first) = warnings(|| p.theme());
     assert_eq!(first, [SERA, GEIST]);
     let (_, toggled) = warnings(|| {
-        let _ = p.theme(Mode::Light);
-        p.theme(Mode::Dark)
+        let _ = p.theme();
+        p.theme()
     });
     // theme() builds the palette twice when the menu is inverted; here it is not.
     assert_eq!(
@@ -103,11 +99,7 @@ fn two_unsupported_values_log_two_lines_and_every_call_repeats_them() {
 #[test]
 fn gray_falls_back_to_neutral_and_the_base() {
     use shadcn_egui::{BaseColor, Palette, ThemeColor};
-    let (t, lines) = warnings(|| {
-        Preset::default()
-            .base_color(BaseColor::Gray)
-            .theme(Mode::Light)
-    });
+    let (t, lines) = warnings(|| Preset::default().base_color(BaseColor::Gray).theme());
     assert_eq!(t.palette, Palette::light());
     assert_eq!(t.radius, 10.0);
     assert_eq!(
@@ -119,7 +111,7 @@ fn gray_falls_back_to_neutral_and_the_base() {
             .base_color(BaseColor::Stone)
             .theme_color(ThemeColor::Gray)
             .chart_color(ThemeColor::Gray)
-            .theme(Mode::Dark)
+            .theme()
     });
     assert_eq!(
         Some(t.palette),
@@ -144,8 +136,8 @@ fn translucent_menu_colours_draw_opaque() {
         (MenuColor::InvertedTranslucent, MenuColor::Inverted),
     ] {
         let p = Preset::default().menu_color(translucent);
-        let (t, lines) = warnings(|| p.theme(Mode::Light));
-        let o = Preset::default().menu_color(opaque).theme(Mode::Light);
+        let (t, lines) = warnings(|| p.theme());
+        let o = Preset::default().menu_color(opaque).theme();
         assert_eq!((t.palette, t.menu), (o.palette, o.menu), "{translucent:?}");
         assert_eq!(
             lines,
@@ -161,6 +153,6 @@ fn translucent_menu_colours_draw_opaque() {
 
 #[test]
 fn a_supported_preset_logs_nothing() {
-    let (_, lines) = warnings(|| Preset::default().theme(Mode::Dark));
+    let (_, lines) = warnings(|| Preset::default().theme());
     assert!(lines.is_empty(), "{lines:?}");
 }

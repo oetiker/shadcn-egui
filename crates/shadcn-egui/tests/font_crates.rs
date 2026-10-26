@@ -6,7 +6,7 @@
 mod common;
 
 use shadcn_egui::components::button::Button;
-use shadcn_egui::{fonts, FontName, Mode, Preset, StyleName, Theme};
+use shadcn_egui::{fonts, FontName, Preset, StyleName, Theme};
 
 #[test]
 fn every_font_crate_renders_a_button() {
@@ -17,10 +17,7 @@ fn every_font_crate_renders_a_button() {
         .map(|n| {
             (
                 n.id(),
-                Preset::default()
-                    .style(StyleName::Vega)
-                    .font(n)
-                    .theme(Mode::Light),
+                Preset::default().style(StyleName::Vega).font(n).theme(),
             )
         })
         .collect();

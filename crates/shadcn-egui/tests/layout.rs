@@ -6,6 +6,7 @@ use shadcn_egui::{layout, Theme};
 /// `vstack` puts its gap between rows, `row` between items.
 #[test]
 fn row_and_vstack_compose() {
+    let mode = egui::Theme::Dark;
     let theme = Theme::vega();
     let (mut top, mut a, mut b) = (
         egui::Rect::NOTHING,
@@ -13,7 +14,7 @@ fn row_and_vstack_compose() {
         egui::Rect::NOTHING,
     );
     let mut row_top = 0.0;
-    common::measure(&theme, |ui| {
+    common::measure(&theme, mode, |ui| {
         layout::vstack(ui, 12.0, |ui| {
             top = ui.label("top").rect;
             layout::row(ui, 8.0, |ui| {
@@ -32,13 +33,14 @@ fn row_and_vstack_compose() {
 /// `space_between`: the left part hugs the start, the right part the end.
 #[test]
 fn space_between_composes() {
+    let mode = egui::Theme::Dark;
     let theme = Theme::vega();
     let (mut left, mut right, mut row) = (
         egui::Rect::NOTHING,
         egui::Rect::NOTHING,
         egui::Rect::NOTHING,
     );
-    common::measure(&theme, |ui| {
+    common::measure(&theme, mode, |ui| {
         ui.set_width(300.0);
         row = ui.max_rect();
         layout::space_between(
@@ -57,10 +59,11 @@ fn space_between_composes() {
 /// least a text-sm line high.
 #[test]
 fn form_row_puts_the_control_after_the_label_column() {
+    let mode = egui::Theme::Dark;
     let theme = Theme::vega();
     let mut control = egui::Rect::NOTHING;
     let mut gap = 0.0;
-    let row = common::measure(&theme, |ui| {
+    let row = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             gap = ui.spacing().item_spacing.x;
             ui.set_max_width(380.0);
@@ -77,9 +80,10 @@ fn form_row_puts_the_control_after_the_label_column() {
 #[test]
 fn form_row_label_is_the_crate_label() {
     use shadcn_egui::components::label::Label;
+    let mode = egui::Theme::Dark;
     let theme = Theme::vega();
-    let alone = common::measure_output(&theme, |ui| ui.add(Label::new("Name"))).1;
-    let in_row = common::measure_output(&theme, |ui| {
+    let alone = common::measure_output(&theme, mode, |ui| ui.add(Label::new("Name"))).1;
+    let in_row = common::measure_output(&theme, mode, |ui| {
         ui.scope(|ui| layout::form_row(ui, 100.0, "Name", |_| {}))
             .response
     })
@@ -100,8 +104,9 @@ fn form_row_label_is_the_crate_label() {
 #[test]
 fn layout_card_matches_the_default_card() {
     use shadcn_egui::components::card::Card;
+    let mode = egui::Theme::Dark;
     let theme = Theme::vega();
-    let a = common::measure(&theme, |ui| {
+    let a = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             layout::card(ui, |ui| {
                 ui.label("x");
@@ -109,7 +114,7 @@ fn layout_card_matches_the_default_card() {
         })
         .response
     });
-    let b = common::measure(&theme, |ui| {
+    let b = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             Card::new().show(ui, |ui| {
                 ui.label("x");
@@ -125,8 +130,9 @@ fn layout_card_matches_the_default_card() {
 #[test]
 fn a_card_in_unbounded_room_takes_its_padding() {
     use shadcn_egui::components::card::Card;
+    let mode = egui::Theme::Dark;
     let theme = Theme::vega();
-    let rect = common::measure(&theme, |ui| {
+    let rect = common::measure(&theme, mode, |ui| {
         ui.allocate_ui(egui::vec2(f32::INFINITY, 400.0), |ui| {
             ui.scope(|ui| Card::new().show(ui, |_| ())).response
         })
@@ -253,9 +259,10 @@ enum Wrap {
 #[test]
 fn row_centres_children_of_mixed_height() {
     for wrap in [Wrap::None, Wrap::EnabledUi, Wrap::Scope] {
-        for (name, theme) in common::themes() {
+        for (name, theme, mode) in common::themes() {
             let ctx = egui::Context::default();
             theme.apply(&ctx);
+            ctx.set_theme(mode);
             let (row, a, b) = row_centres(&ctx, true, wrap);
             assert_eq!(
                 (a, b),
@@ -283,9 +290,10 @@ fn row_centres_children_of_mixed_height() {
 #[test]
 fn row_with_a_nested_stack_settles() {
     use shadcn_egui::components::slider::{Slider, SliderOrientation};
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let ctx = egui::Context::default();
         theme.apply(&ctx);
+        ctx.set_theme(mode);
         let (mut a, mut b) = (30.0, 50.0);
         let mut run = || {
             let mut row = egui::Rect::NOTHING;

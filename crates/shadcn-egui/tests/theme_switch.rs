@@ -13,12 +13,12 @@ fn applying_nova_after_vega_restyles_the_context() {
     let ctx = egui::Context::default();
     let mut state = SettingsState::default();
 
-    Theme::new(Style::vega(), Palette::dark(), 10.0).apply(&ctx);
+    Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).apply(&ctx);
     render(&ctx, &mut state);
     assert_eq!(Theme::current(&ctx).style.name, "vega");
     let vega_h = ctx.global_style().spacing.interact_size.y;
 
-    Theme::new(Style::nova(), Palette::dark(), 10.0).apply(&ctx);
+    Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0).apply(&ctx);
     render(&ctx, &mut state);
     assert_eq!(Theme::current(&ctx).style.name, "nova");
     let nova_h = ctx.global_style().spacing.interact_size.y;
@@ -46,7 +46,7 @@ fn every_style_sets_interact_height_itself() {
         let style = make();
         ctx.global_style_mut(|s| s.spacing.interact_size.y = 12345.0);
         let name = style.name;
-        Theme::new(style, Palette::light(), 10.0).apply(&ctx);
+        Theme::new(style, Palette::light(), Palette::dark(), 10.0).apply(&ctx);
         assert_ne!(
             ctx.global_style().spacing.interact_size.y,
             12345.0,
@@ -60,11 +60,11 @@ fn every_style_sets_interact_height_itself() {
 #[test]
 fn style_without_button_height_resets_interact_height() {
     let ctx = egui::Context::default();
-    Theme::new(Style::vega(), Palette::dark(), 10.0).apply(&ctx);
+    Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).apply(&ctx);
     assert_eq!(ctx.global_style().spacing.interact_size.y, 36.0);
     let mut bare = Style::nova();
     bare.button_size_default.height = Default::default();
-    Theme::new(bare, Palette::dark(), 10.0).apply(&ctx);
+    Theme::new(bare, Palette::light(), Palette::dark(), 10.0).apply(&ctx);
     assert_eq!(
         ctx.global_style().spacing.interact_size.y,
         egui::style::Spacing::default().interact_size.y
@@ -87,7 +87,7 @@ fn native_button_height_is_the_default_button_height() {
         let style = make();
         let name = style.name;
         let ctx = egui::Context::default();
-        Theme::new(style, Palette::dark(), 10.0).apply(&ctx);
+        Theme::new(style, Palette::light(), Palette::dark(), 10.0).apply(&ctx);
         let mut height = 0.0;
         // The second frame lays out with the installed fonts.
         for _ in 0..2 {

@@ -52,10 +52,11 @@ fn settings_components_tab() {
 /// them.
 #[test]
 fn readme_settings_screen() {
-    let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
     let mut state = state(0);
     let mut render = |width: f32| {
-        let mut h = common::page_harness(egui::vec2(width, HEIGHT), theme.clone(), |ui| {
+        let mut h = common::page_harness(egui::vec2(width, HEIGHT), theme.clone(), mode, |ui| {
             settings_ui(ui, &mut state)
         });
         h.render().expect("render")
@@ -85,12 +86,14 @@ fn settings_default_slider_is_50() {
 
 /// Render one tab and hand the harness to `check`.
 fn with_tab(tab: usize, check: impl FnOnce(&Harness<'_>)) {
-    let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
     let mut state = state(tab);
     let mut h = Harness::builder()
         .with_size(egui::vec2(common::DESKTOP, HEIGHT))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             settings_ui(ui, &mut state);
         });
     h.run();

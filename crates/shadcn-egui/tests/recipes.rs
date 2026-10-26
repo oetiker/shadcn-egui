@@ -42,11 +42,11 @@ fn focused_tabs(ui: &mut egui::Ui) -> egui::Response {
 
 #[test]
 fn issue6_tab_trigger_restyled_through_theme_style() {
-    for theme in [Theme::vega().in_mode(egui::Theme::Light), Theme::vega()] {
-        let theme = issue6(theme);
-        let (_, out) = common::measure_output(&theme, focused_tabs);
+    for mode in [egui::Theme::Light, egui::Theme::Dark] {
+        let theme = issue6(Theme::vega());
+        let (_, out) = common::measure_output(&theme, mode, focused_tabs);
         let shapes = common::rect_shapes(&out);
-        let p = &theme.palette;
+        let p = theme.palette_of(mode);
         assert!(
             shapes.iter().any(|r| r.fill == p.primary),
             "active fill: {shapes:?}"
@@ -69,8 +69,8 @@ fn issue6_tab_trigger_restyled_through_theme_style() {
         "tabs_issue6",
         vec2(320.0, 90.0),
         vec![
-            ("vega_light", issue6(Theme::vega().in_mode(egui::Theme::Light))),
-            ("vega_dark", issue6(Theme::vega())),
+            ("vega_light", issue6(Theme::vega()), egui::Theme::Light),
+            ("vega_dark", issue6(Theme::vega()), egui::Theme::Dark),
         ],
         |ui| {
             focused_tabs(ui);
@@ -87,19 +87,22 @@ fn important_app_border_wins_on_active_trigger() {
     let luma = Theme::new(
         shadcn_egui::Style::luma(),
         shadcn_egui::Palette::light(),
+        shadcn_egui::Palette::dark(),
         10.0,
     );
+    let mode = egui::Theme::Light;
     let theme = common::restyled(luma, |s| {
         s.tabs_trigger.border_color.rules.push(Rule::important(
             When::all(State::SELECTED),
             Paint::Role(Role::Primary, 1.0),
         ));
     });
-    let (_, out) = common::measure_output(&theme, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
+    let (_, out) =
+        common::measure_output(&theme, mode, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
     assert!(
         common::rect_shapes(&out)
             .iter()
-            .any(|r| r.stroke.color == theme.palette.primary
+            .any(|r| r.stroke.color == theme.palette_of(mode).primary
                 && r.stroke_kind == egui::StrokeKind::Inside),
         "primary border on the active trigger"
     );
@@ -110,15 +113,20 @@ fn important_app_border_wins_on_active_trigger() {
 /// trigger (`dark:data-active:border-input`).
 #[test]
 fn important_app_border_wins_on_focused_and_dark_active_trigger() {
-    for palette in [shadcn_egui::Palette::light(), shadcn_egui::Palette::dark()] {
-        let luma = Theme::new(shadcn_egui::Style::luma(), palette, 10.0);
+    for mode in [egui::Theme::Light, egui::Theme::Dark] {
+        let luma = Theme::new(
+            shadcn_egui::Style::luma(),
+            shadcn_egui::Palette::light(),
+            shadcn_egui::Palette::dark(),
+            10.0,
+        );
         let theme = common::restyled(luma, |s| {
             s.tabs_trigger.border_color.rules.push(Rule::important(
                 When::ALWAYS,
                 Paint::Role(Role::Primary, 1.0),
             ));
         });
-        let (_, out) = common::measure_output(&theme, focused_tabs);
+        let (_, out) = common::measure_output(&theme, mode, focused_tabs);
         let borders: Vec<_> = common::rect_shapes(&out)
             .into_iter()
             .filter(|r| r.stroke_kind == egui::StrokeKind::Inside && r.stroke.width > 0.0)
@@ -126,7 +134,7 @@ fn important_app_border_wins_on_focused_and_dark_active_trigger() {
         assert!(
             borders
                 .iter()
-                .all(|r| r.stroke.color == theme.palette.primary),
+                .all(|r| r.stroke.color == theme.palette_of(mode).primary),
             "every trigger border is the app's primary: {borders:?}"
         );
         assert_eq!(borders.len(), 2, "{borders:?}");
@@ -142,17 +150,19 @@ fn important_app_rule_beats_generated_important() {
     let luma = Theme::new(
         shadcn_egui::Style::luma(),
         shadcn_egui::Palette::light(),
+        shadcn_egui::Palette::dark(),
         10.0,
     );
+    let mode = egui::Theme::Light;
     let badge = |ui: &mut egui::Ui| ui.add(Badge::new("Badge").icon(&X));
-    let before = common::measure(&luma, badge);
+    let before = common::measure(&luma, mode, badge);
     let theme = common::restyled(luma, |s| {
         s.badge
             .icon_size
             .rules
             .push(Rule::important(When::ALWAYS, 20.0));
     });
-    let after = common::measure(&theme, badge);
+    let after = common::measure(&theme, mode, badge);
     assert_eq!(after.width() - before.width(), 20.0 - 12.0);
 }
 
@@ -160,7 +170,8 @@ fn important_app_rule_beats_generated_important() {
 /// ring on a focused line trigger still wins.
 #[test]
 fn important_app_ring_beats_line_focus_correction() {
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         let tr = &mut s.tabs_trigger;
         tr.ring_width
             .rules
@@ -170,7 +181,7 @@ fn important_app_ring_beats_line_focus_correction() {
             Paint::Role(Role::Primary, 1.0),
         ));
     });
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         let resp = ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line));
         ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 1))));
         resp
@@ -181,14 +192,15 @@ fn important_app_ring_beats_line_focus_correction() {
             .iter()
             .any(|r| r.stroke_kind == egui::StrokeKind::Outside
                 && r.stroke.width == 2.0
-                && r.stroke.color == theme.palette.primary),
+                && r.stroke.color == theme.palette_of(mode).primary),
         "app ring: {shapes:?}"
     );
 }
 
 #[test]
 fn tabs_track_and_line_bar_come_from_the_style() {
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.tabs_list_variant_default.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.tabs_trigger_after.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
         s.tabs_trigger_after
@@ -196,20 +208,21 @@ fn tabs_track_and_line_bar_come_from_the_style() {
             .rules
             .push(Rule::important(When::ALWAYS, 4.0));
     });
-    let (rect, out) = common::measure_output(&theme, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
+    let (rect, out) =
+        common::measure_output(&theme, mode, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
     let shapes = common::rect_shapes(&out);
     assert!(
         shapes
             .iter()
-            .any(|r| r.fill == theme.palette.primary && r.rect == rect),
+            .any(|r| r.fill == theme.palette_of(mode).primary && r.rect == rect),
         "track: {shapes:?}"
     );
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line))
     });
     let bar = common::rect_shapes(&out)
         .into_iter()
-        .find(|r| r.fill == theme.palette.destructive)
+        .find(|r| r.fill == theme.palette_of(mode).destructive)
         .expect("line bar");
     assert_eq!(bar.rect.height(), 4.0);
 }
@@ -217,15 +230,16 @@ fn tabs_track_and_line_bar_come_from_the_style() {
 /// Review Focus 5: the bar of a disabled line list fades with its trigger.
 #[test]
 fn disabled_line_bar_is_faded_with_its_trigger() {
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.add(
             Tabs::new(&mut 0, &["A", "B"])
                 .variant(TabsVariant::Line)
                 .enabled(false),
         )
     });
-    let fg = theme.palette.foreground;
+    let fg = theme.palette_of(mode).foreground;
     let bars: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.rect.height() == 2.0)
@@ -244,8 +258,17 @@ fn luma_and_rhea_keep_the_dark_active_and_focus_border() {
         ("rhea", shadcn_egui::Style::rhea),
     ];
     for (name, make) in styles {
-        let dark = Theme::new(make(), shadcn_egui::Palette::dark(), 10.0);
-        let (_, out) = common::measure_output(&dark, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
+        let mode = egui::Theme::Dark;
+        let theme = Theme::new(
+            make(),
+            shadcn_egui::Palette::light(),
+            Palette::light(),
+            Palette::dark(),
+            10.0,
+        );
+        let dark = egui::Theme::Dark;
+        let (_, out) =
+            common::measure_output(&theme, dark, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
         let inside = |out: &egui::FullOutput, c: egui::Color32| {
             common::rect_shapes(out).iter().any(|r| {
                 r.stroke.width > 0.0
@@ -254,13 +277,13 @@ fn luma_and_rhea_keep_the_dark_active_and_focus_border() {
             })
         };
         assert!(
-            inside(&out, dark.palette.input),
+            inside(&out, theme.palette_of(dark).input),
             "{name}: dark active Input border"
         );
-        let light = Theme::new(make(), shadcn_egui::Palette::light(), 10.0);
-        let (_, out) = common::measure_output(&light, focused_tabs);
+        let light = egui::Theme::Light;
+        let (_, out) = common::measure_output(&theme, light, focused_tabs);
         assert!(
-            inside(&out, light.palette.ring),
+            inside(&out, theme.palette_of(light).ring),
             "{name}: focus Ring border"
         );
     }
@@ -304,15 +327,18 @@ fn text_colours(out: &egui::FullOutput) -> Vec<egui::Color32> {
 /// trigger: it keeps upstream's 2 px `Foreground` underline and no `Ring`.
 #[test]
 fn focused_line_trigger_shows_its_underline() {
-    for (name, theme) in common::snapshot_themes() {
+    for (name, theme, mode) in common::snapshot_themes() {
         for focused in [0, 1] {
-            let (_, out) = common::measure_output(&theme, |ui| {
+            let (_, out) = common::measure_output(&theme, mode, |ui| {
                 let resp = ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line));
                 ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", focused))));
                 resp
             });
             let shapes = common::rect_shapes(&out);
-            let (ring, fg) = (theme.palette.ring, theme.palette.foreground);
+            let (ring, fg) = (
+                theme.palette_of(mode).ring,
+                theme.palette_of(mode).foreground,
+            );
             assert!(
                 !shapes
                     .iter()
@@ -361,18 +387,20 @@ fn tooltip_colours_come_from_the_style() {
     use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::button::{Button, ButtonVariant};
     use shadcn_egui::components::tooltip::tooltip;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.tooltip_content.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.tooltip_content.text.base = Some(Paint::Role(Role::Destructive, 1.0));
         s.tooltip_content.max_width.base = Some(80.0);
         s.tooltip_arrow.bg.base = Some(Paint::Role(Role::Ring, 1.0));
     });
-    let p = &theme.palette;
+    let p = theme.palette_of(mode);
     let (primary, destructive, ring) = (p.primary, p.destructive, p.ring);
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(240.0, 160.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             ui.style_mut().interaction.tooltip_delay = 0.0;
             ui.add_space(72.0);
             ui.horizontal(|ui| {
@@ -417,18 +445,19 @@ fn tooltip_colours_come_from_the_style() {
 fn separator_line_comes_from_the_style() {
     use shadcn_egui::components::separator::{separator, separator_vertical};
     use shadcn_egui::style::Prop;
+    let mode = egui::Theme::Light;
     let line = |theme: &Theme| {
-        let (_, out) = common::measure_output(theme, |ui| {
+        let (_, out) = common::measure_output(theme, mode, |ui| {
             ui.allocate_response(vec2(200.0, 0.0), egui::Sense::hover());
             separator(ui);
             ui.allocate_response(vec2(0.0, 0.0), egui::Sense::hover())
         });
         common::rect_shapes(&out)
             .into_iter()
-            .find(|r| r.fill == theme.palette.primary)
+            .find(|r| r.fill == theme.palette_of(mode).primary)
             .map(|r| r.rect.height())
     };
-    let thick = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let thick = common::restyled(Theme::vega(), |s| {
         s.separator.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.separator
             .height
@@ -437,7 +466,7 @@ fn separator_line_comes_from_the_style() {
     });
     assert_eq!(line(&thick), Some(3.0));
     // Review Focus 4: without a thickness rule, `metrics.border`.
-    let mut fallback = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mut fallback = common::restyled(Theme::vega(), |s| {
         s.separator.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.separator.height = Prop::default();
     });
@@ -450,7 +479,7 @@ fn separator_line_comes_from_the_style() {
             .rules
             .push(Rule::important(When::all(State::VERTICAL), 4.0));
     });
-    let (_, out) = common::measure_output(&vertical, |ui| {
+    let (_, out) = common::measure_output(&vertical, mode, |ui| {
         ui.horizontal(|ui| {
             ui.allocate_response(vec2(0.0, 40.0), egui::Sense::hover());
             separator_vertical(ui);
@@ -459,7 +488,7 @@ fn separator_line_comes_from_the_style() {
     });
     let bar = common::rect_shapes(&out)
         .into_iter()
-        .find(|r| r.fill == vertical.palette.primary)
+        .find(|r| r.fill == vertical.palette_of(mode).primary)
         .expect("vertical line");
     assert_eq!(bar.rect.width(), 4.0);
 }
@@ -467,14 +496,17 @@ fn separator_line_comes_from_the_style() {
 #[test]
 fn button_disabled_opacity_comes_from_the_style() {
     use shadcn_egui::components::button::Button;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.button
             .opacity
             .rules
             .push(Rule::important(When::all(State::DISABLED), 0.25));
     });
-    let (_, on) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
-    let (_, off) = common::measure_output(&theme, |ui| ui.add(Button::new("Save").enabled(false)));
+    let (_, on) = common::measure_output(&theme, mode, |ui| ui.add(Button::new("Save")));
+    let (_, off) = common::measure_output(&theme, mode, |ui| {
+        ui.add(Button::new("Save").enabled(false))
+    });
     assert_eq!(
         common::text_colour(&off),
         common::text_colour(&on).gamma_multiply(0.25)
@@ -515,7 +547,7 @@ fn link_underline_takes_its_offset_from_the_style() {
     use shadcn_egui::components::button::{Button, ButtonVariant};
     // Upstream underlines on hover; an always-on underline needs no pointer.
     let underlined = |offset: Option<f32>| {
-        common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+        common::restyled(Theme::vega(), |s| {
             s.button_variant_link.underline.base = Some(true);
             s.badge_variant_link.underline.base = Some(true);
             if let Some(o) = offset {
@@ -528,25 +560,26 @@ fn link_underline_takes_its_offset_from_the_style() {
     let badge = |ui: &mut egui::Ui| ui.add(Badge::new("New").variant(BadgeVariant::Link));
     // `underline-offset-4`; Blink's `auto` thickness is a tenth of the
     // 14 px and 12 px text, painted on whole device pixels: 1 px.
+    let mode = egui::Theme::Light;
     let theme = underlined(None);
     assert_eq!(
-        underlines(&common::measure_output(&theme, button).1),
+        underlines(&common::measure_output(&theme, mode, button).1),
         [(4.0, 1.0)],
         "button"
     );
     assert_eq!(
-        underlines(&common::measure_output(&theme, badge).1),
+        underlines(&common::measure_output(&theme, mode, badge).1),
         [(4.0, 1.0)],
         "badge"
     );
     let theme = underlined(Some(2.0));
     assert_eq!(
-        underlines(&common::measure_output(&theme, button).1),
+        underlines(&common::measure_output(&theme, mode, button).1),
         [(2.0, 1.0)],
         "button"
     );
     assert_eq!(
-        underlines(&common::measure_output(&theme, badge).1),
+        underlines(&common::measure_output(&theme, mode, badge).1),
         [(2.0, 1.0)],
         "badge"
     );
@@ -555,7 +588,8 @@ fn link_underline_takes_its_offset_from_the_style() {
 #[test]
 fn input_placeholder_and_fade_come_from_the_style() {
     use shadcn_egui::components::input::Input;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.input.text.rules.push(Rule::important(
             When::all(State::PLACEHOLDER),
             Paint::Role(Role::Primary, 1.0),
@@ -565,16 +599,16 @@ fn input_placeholder_and_fade_come_from_the_style() {
             .rules
             .push(Rule::important(When::all(State::DISABLED), 0.25));
     });
-    let (_, on) = common::measure_output(&theme, |ui| {
+    let (_, on) = common::measure_output(&theme, mode, |ui| {
         ui.add(Input::new(&mut String::new()).hint("Email"))
     });
-    assert_eq!(common::text_colour(&on), theme.palette.primary);
-    let (_, off) = common::measure_output(&theme, |ui| {
+    assert_eq!(common::text_colour(&on), theme.palette_of(mode).primary);
+    let (_, off) = common::measure_output(&theme, mode, |ui| {
         ui.add(Input::new(&mut String::new()).hint("Email").enabled(false))
     });
     assert_eq!(
         common::text_colour(&off),
-        theme.palette.primary.gamma_multiply(0.25)
+        theme.palette_of(mode).primary.gamma_multiply(0.25)
     );
     // The box fades with the text: vega's border has no disabled rule.
     let border = |out: &egui::FullOutput| {
@@ -592,14 +626,17 @@ fn input_placeholder_and_fade_come_from_the_style() {
 fn select_fade_and_offset() {
     use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::select::Select;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.select_trigger
             .opacity
             .rules
             .push(Rule::important(When::all(State::DISABLED), 0.25));
     });
-    let (_, on) = common::measure_output(&theme, |ui| ui.add(Select::new("s", &mut 0, &["Apple"])));
-    let (_, off) = common::measure_output(&theme, |ui| {
+    let (_, on) = common::measure_output(&theme, mode, |ui| {
+        ui.add(Select::new("s", &mut 0, &["Apple"]))
+    });
+    let (_, off) = common::measure_output(&theme, mode, |ui| {
         ui.add(Select::new("s", &mut 0, &["Apple"]).enabled(false))
     });
     assert_eq!(
@@ -621,7 +658,8 @@ fn select_fade_and_offset() {
         let mut h = egui_kittest::Harness::builder()
             .with_size(vec2(320.0, 260.0))
             .build_ui(move |ui| {
-                Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
                 let mut none = usize::MAX;
                 ui.add(
                     Select::new("fruit", &mut none, &["Apple", "Banana"])
@@ -646,6 +684,7 @@ fn click_flips(
 ) -> bool {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
+    ctx.set_theme(mode);
     let mut value = false;
     let press = |pressed| egui::Event::PointerButton {
         pos,
@@ -687,7 +726,7 @@ fn hit_area_comes_from_the_style() {
     ];
     // Each inset gets its own value, so reading the other one fails.
     let insets = |x: f32, y: f32| {
-        common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+        common::restyled(Theme::vega(), |s| {
             for r in [&mut s.checkbox, &mut s.switch] {
                 r.hit_inset_x.rules.push(Rule::important(When::ALWAYS, x));
                 r.hit_inset_y.rules.push(Rule::important(When::ALWAYS, y));
@@ -695,8 +734,9 @@ fn hit_area_comes_from_the_style() {
         })
     };
     for (name, add) in widgets {
-        let theme = Theme::vega().in_mode(egui::Theme::Light);
-        let rect = common::measure(&theme, |ui| add(ui, &mut false));
+        let mode = egui::Theme::Light;
+        let theme = Theme::vega();
+        let rect = common::measure(&theme, mode, |ui| add(ui, &mut false));
         // 7 px out: inside the default 12 by 8 px reach, outside egui's
         // 5 px pointer tolerance.
         let beside = egui::pos2(rect.right() + 7.0, rect.center().y);
@@ -716,15 +756,17 @@ fn hit_area_comes_from_the_style() {
 #[test]
 fn switch_fade_comes_from_the_style() {
     use shadcn_egui::components::switch::Switch;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.switch
             .opacity
             .rules
             .push(Rule::important(When::all(State::DISABLED), 0.25));
     });
     let fills = |enabled: bool| {
-        let (_, out) =
-            common::measure_output(&theme, |ui| ui.add(Switch::new(&mut true).enabled(enabled)));
+        let (_, out) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Switch::new(&mut true).enabled(enabled))
+        });
         let rects = common::rect_shapes(&out);
         (rects[0].fill, rects.last().expect("thumb").fill)
     };
@@ -737,14 +779,15 @@ fn switch_fade_comes_from_the_style() {
 #[test]
 fn checkbox_fade_comes_from_the_style() {
     use shadcn_egui::components::checkbox::Checkbox;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.checkbox
             .opacity
             .rules
             .push(Rule::important(When::all(State::DISABLED), 0.25));
     });
     let fill = |enabled: bool| {
-        let (_, out) = common::measure_output(&theme, |ui| {
+        let (_, out) = common::measure_output(&theme, mode, |ui| {
             ui.add(Checkbox::new(&mut true).enabled(enabled))
         });
         common::rect_shapes(&out)
@@ -762,7 +805,8 @@ fn slider_fade_multiplies_down_the_parts() {
     // Each part its own factor, so a part that reads another's opacity
     // (or skips its parent's) lands on the wrong product.
     let (root, track, range, thumb) = (0.25, 0.5, 0.75, 0.625);
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         for (recipe, v) in [
             (&mut s.slider, root),
             (&mut s.slider_track, track),
@@ -776,7 +820,7 @@ fn slider_fade_multiplies_down_the_parts() {
         }
     });
     let rects = |enabled: bool| {
-        let (_, out) = common::measure_output(&theme, |ui| {
+        let (_, out) = common::measure_output(&theme, mode, |ui| {
             ui.add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(enabled))
         });
         common::rect_shapes(&out)
@@ -812,6 +856,7 @@ fn popover_probe(theme: Theme, offset: Option<f32>) -> (egui::Rect, f32) {
         .with_size(vec2(520.0, 320.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             let resp = ui.add(Button::new("Open"));
             let mut p = Popover::new(&resp);
             if let Some(o) = offset {
@@ -830,13 +875,16 @@ fn popover_probe(theme: Theme, offset: Option<f32>) -> (egui::Rect, f32) {
 
 #[test]
 fn popover_width_and_offset() {
-    let wide = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let wide = common::restyled(Theme::vega(), |s| {
         s.popover_content.width.base = Some(400.0);
     });
-    let (near, w288) = popover_probe(Theme::vega().in_mode(egui::Theme::Light), None);
+    let mode = egui::Theme::Light;
+    let (near, w288) = popover_probe(Theme::vega(), None);
     let (_, w400) = popover_probe(wide, None);
     assert_eq!(w400 - w288, 112.0);
-    let (far, _) = popover_probe(Theme::vega().in_mode(egui::Theme::Light), Some(20.0));
+    let mode = egui::Theme::Light;
+    let (far, _) = popover_probe(Theme::vega(), Some(20.0));
     assert_eq!(far.top() - near.top(), 16.0);
 }
 
@@ -849,6 +897,7 @@ fn footer_gap(theme: Theme) -> f32 {
         .with_size(vec2(640.0, 360.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             Dialog::new("gap", "Title").show(ui.ctx(), &mut true, |ui| {
                 dialog::footer(ui, |ui| {
                     ui.add(Button::new("Right"));
@@ -863,12 +912,14 @@ fn footer_gap(theme: Theme) -> f32 {
 
 #[test]
 fn dialog_footer_gap_comes_from_the_style() {
-    let wide = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let wide = common::restyled(Theme::vega(), |s| {
         s.dialog_footer.gap.base = Some(20.0);
     });
     assert_eq!(footer_gap(wide), 20.0);
     // No code fallback: a cleared gap is no gap.
-    let none = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let none = common::restyled(Theme::vega(), |s| {
         s.dialog_footer.gap = shadcn_egui::style::Prop::default();
     });
     assert_eq!(footer_gap(none), 0.0);
@@ -880,13 +931,15 @@ fn dialog_footer_gap_comes_from_the_style() {
 fn dialog_close_recipe_paints_the_close_button() {
     use shadcn_egui::components::dialog::Dialog;
     // Both layers set a base fill: the later `dialog_close` must win.
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.button_variant_ghost.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.dialog_close.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
     let red = theme.role(Role::Destructive);
     let ctx = egui::Context::default();
     theme.apply(&ctx);
+    ctx.set_theme(mode);
     let frame = |ui: &mut egui::Ui| {
         Dialog::new("close", "Title").show(ui.ctx(), &mut true, |ui| ui.label("Body"));
     };
@@ -914,22 +967,26 @@ fn dialog_close_recipe_paints_the_close_button() {
 #[test]
 fn label_text_colour_comes_from_the_style() {
     use shadcn_egui::components::label::Label;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.label.text.base = Some(Paint::Role(Role::Primary, 1.0));
     });
-    let (_, out) = common::measure_output(&theme, |ui| ui.add(Label::new("Email")));
-    assert_eq!(common::text_colour(&out), theme.palette.primary);
+    let (_, out) = common::measure_output(&theme, mode, |ui| ui.add(Label::new("Email")));
+    assert_eq!(common::text_colour(&out), theme.palette_of(mode).primary);
 }
 
 /// Kind 2: typed text inherits `Foreground`, but reads `input.text` first.
 #[test]
 fn input_text_colour_comes_from_the_style() {
     use shadcn_egui::components::input::Input;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.input.text.base = Some(Paint::Role(Role::Primary, 1.0));
     });
-    let (_, out) = common::measure_output(&theme, |ui| ui.add(Input::new(&mut "typed".to_owned())));
-    assert_eq!(common::text_colour(&out), theme.palette.primary);
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
+        ui.add(Input::new(&mut "typed".to_owned()))
+    });
+    assert_eq!(common::text_colour(&out), theme.palette_of(mode).primary);
 }
 
 /// The tick inherits the box's text colour, but reads
@@ -937,10 +994,11 @@ fn input_text_colour_comes_from_the_style() {
 #[test]
 fn checkbox_tick_colour_comes_from_the_indicator() {
     use shadcn_egui::components::checkbox::Checkbox;
-    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
         s.checkbox_indicator.text.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
-    let (_, out) = common::measure_output(&theme, |ui| ui.add(Checkbox::new(&mut true)));
+    let (_, out) = common::measure_output(&theme, mode, |ui| ui.add(Checkbox::new(&mut true)));
     let tick = out
         .shapes
         .iter()
@@ -951,7 +1009,7 @@ fn checkbox_tick_colour_comes_from_the_indicator() {
             _ => None,
         })
         .expect("a tick");
-    assert_eq!(tick, theme.palette.destructive);
+    assert_eq!(tick, theme.palette_of(mode).destructive);
 }
 
 /// Issue #6, M1: an empty size `Prop` is CSS's initial `auto`, the content
@@ -965,8 +1023,10 @@ fn replaced_recipe_sizes_fall_back_to_the_content() {
     use shadcn_egui::components::select::Select;
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::Recipe;
-    let base = Theme::vega().in_mode(egui::Theme::Light);
-    let cleared = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let base = Theme::vega();
+    let mode = egui::Theme::Light;
+    let cleared = common::restyled(Theme::vega(), |s| {
         for r in [
             &mut s.button,
             &mut s.button_variant_default,
@@ -991,7 +1051,7 @@ fn replaced_recipe_sizes_fall_back_to_the_content() {
         }
     };
     let h = |add: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
-        common::measure(&cleared, |ui| add(ui)).height()
+        common::measure(&cleared, egui::Theme::Light, |ui| add(ui)).height()
     };
     check(
         h(&mut |ui| ui.add(Button::new("Save"))) >= text_h,
@@ -1020,7 +1080,9 @@ fn replaced_recipe_sizes_fall_back_to_the_content() {
         .icon_size
         .base
         .expect("size-3.5");
-    let b = common::measure(&cleared, |ui| ui.add(Checkbox::new(&mut false)));
+    let b = common::measure(&cleared, egui::Theme::Light, |ui| {
+        ui.add(Checkbox::new(&mut false))
+    });
     check(
         b.size() == vec2(tick, tick),
         format!("checkbox {:?}", b.size()),
@@ -1029,7 +1091,9 @@ fn replaced_recipe_sizes_fall_back_to_the_content() {
     let side = |f: fn(&Recipe) -> &shadcn_egui::style::Prop<f32>| {
         shadcn_egui::style::pick(&thumb, f, State::SIZE_DEFAULT).expect("thumb size")
     };
-    let track = common::measure(&cleared, |ui| ui.add(Switch::new(&mut false)));
+    let track = common::measure(&cleared, egui::Theme::Light, |ui| {
+        ui.add(Switch::new(&mut false))
+    });
     let thumb_size = vec2(side(|r| &r.width), side(|r| &r.height));
     check(
         track.size() == thumb_size,
@@ -1051,6 +1115,7 @@ fn replaced_popover_recipe_keeps_its_content_width() {
             .with_size(vec2(520.0, 320.0))
             .build_ui(move |ui| {
                 theme.apply(ui.ctx());
+                ui.ctx().set_theme(mode);
                 let resp = ui.add(Button::new("Open"));
                 Popover::new(&resp).show(|ui| ui.label("Two words"));
             });
@@ -1059,8 +1124,10 @@ fn replaced_popover_recipe_keeps_its_content_width() {
         h.run();
         h.get_by_label("Two words").rect()
     };
-    let one_line = probe(Theme::vega().in_mode(egui::Theme::Light)).height();
-    let cleared = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let one_line = probe(Theme::vega()).height();
+    let mode = egui::Theme::Light;
+    let cleared = common::restyled(Theme::vega(), |s| {
         *s.popover_content = Recipe::default();
     });
     let r = probe(cleared);
@@ -1094,13 +1161,16 @@ fn replaced_recipes_keep_their_icons() {
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::components::select::Select;
     use shadcn_egui::style::Recipe;
-    let cleared = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
+    let mode = egui::Theme::Light;
+    let cleared = common::restyled(Theme::vega(), |s| {
         *s.checkbox_indicator = Recipe::default();
         *s.select_trigger = Recipe::default();
         *s.select_item_indicator = Recipe::default();
     });
     let icon = cleared.metrics.icon;
-    let (_, out) = common::measure_output(&cleared, |ui| ui.add(Checkbox::new(&mut true)));
+    let (_, out) = common::measure_output(&cleared, egui::Theme::Light, |ui| {
+        ui.add(Checkbox::new(&mut true))
+    });
     let ticks = icon_rects(&out);
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(320.0, 260.0))
@@ -1224,6 +1294,7 @@ fn overlay_output(
         .with_size(vec2(520.0, 420.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             ui.style_mut().interaction.tooltip_delay = 0.0;
             ui_fn(ui);
         });
@@ -1471,8 +1542,10 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
     ];
     let mut fails = Vec::new();
     for (name, restyle, render, required, allowed) in cases {
-        let plain = render(&Theme::vega().in_mode(egui::Theme::Light));
-        let faded = render(&common::restyled(Theme::vega().in_mode(egui::Theme::Light), restyle));
+        let mode = egui::Theme::Light;
+        let plain = render(&Theme::vega());
+        let mode = egui::Theme::Light;
+        let faded = render(&common::restyled(Theme::vega(), restyle));
         fails.extend(assert_fades(name, &plain, &faded, required, allowed));
     }
     assert!(fails.is_empty(), "{fails:#?}");
@@ -1559,8 +1632,10 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
         let render = |theme: &Theme| {
             common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
         };
-        let plain = render(&Theme::vega().in_mode(egui::Theme::Light));
-        let faded = render(&common::restyled(Theme::vega().in_mode(egui::Theme::Light), restyle));
+        let mode = egui::Theme::Light;
+        let plain = render(&Theme::vega());
+        let mode = egui::Theme::Light;
+        let faded = render(&common::restyled(Theme::vega(), restyle));
         fails.extend(assert_fades(name, &plain, &faded, &[0.5], &[]));
     }
     assert!(fails.is_empty(), "{fails:#?}");
@@ -1627,8 +1702,10 @@ fn disabled_rule_replaces_a_parts_base_opacity_in_a_disabled_ui() {
         let render = |theme: &Theme| {
             common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
         };
-        let plain = render(&Theme::vega().in_mode(egui::Theme::Light));
-        let based = render(&common::restyled(Theme::vega().in_mode(egui::Theme::Light), restyle));
+        let mode = egui::Theme::Light;
+        let plain = render(&Theme::vega());
+        let mode = egui::Theme::Light;
+        let based = render(&common::restyled(Theme::vega(), restyle));
         fails.extend(assert_fades(name, &plain, &based, &[], &[]));
     }
     assert!(fails.is_empty(), "{fails:#?}");

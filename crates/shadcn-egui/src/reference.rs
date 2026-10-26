@@ -20,8 +20,8 @@ use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
 use crate::components::tooltip::tooltip;
 use crate::preset::{
-    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset,
-    RadiusChoice, StyleName, ThemeColor,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, RadiusChoice,
+    StyleName, ThemeColor,
 };
 use crate::{layout, Theme};
 

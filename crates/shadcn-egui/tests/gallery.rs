@@ -6,7 +6,7 @@ use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::{Harness, SnapshotOptions, SnapshotResults};
 use shadcn_egui::reference::{gallery_ui, GalleryState};
-use shadcn_egui::{Mode, Preset, Theme};
+use shadcn_egui::{Preset, Theme};
 
 /// Tall enough that nothing needs scrolling.
 const FULL: egui::Vec2 = egui::vec2(1280.0, 1420.0);

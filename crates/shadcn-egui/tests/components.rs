@@ -30,9 +30,9 @@ fn button_click_sets_flag() {
 #[test]
 fn button_height_follows_style() {
     use shadcn_egui::components::button::Button;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let want = if name.starts_with("nova") { 32.0 } else { 36.0 };
-        let h = common::measure(&theme, |ui| ui.add(Button::new("Save"))).height();
+        let h = common::measure(&theme, mode, |ui| ui.add(Button::new("Save"))).height();
         assert_eq!(h, want, "{name}");
     }
 }
@@ -46,8 +46,9 @@ fn button_override_from_theme_setup() {
     use shadcn_egui::{Palette, Theme};
     let mut s = Style::nova();
     s.button_size_default.height.base = Some(40.0);
-    let theme = Theme::new(s, Palette::dark(), 10.0);
-    let h = common::measure(&theme, |ui| ui.add(Button::new("Save"))).height();
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(s, Palette::light(), Palette::light(), Palette::dark(), 10.0);
+    let h = common::measure(&theme, egui::Theme::Dark, |ui| ui.add(Button::new("Save"))).height();
     assert_eq!(h, 40.0);
 }
 
@@ -143,9 +144,10 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
 fn button_fill_stops_inside_transparent_border() {
     use shadcn_egui::components::button::Button;
     use shadcn_egui::Theme;
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
-    let (rect, out) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
-    let fill = theme.palette.primary;
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let (rect, out) = common::measure_output(&theme, mode, |ui| ui.add(Button::new("Save")));
+    let fill = theme.palette_of(mode).primary;
     let fills: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == fill)
@@ -160,13 +162,14 @@ fn button_fill_stops_inside_transparent_border() {
 fn focused_button_shows_ring_and_ring_border() {
     use shadcn_egui::components::button::Button;
     use shadcn_egui::Theme;
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
-    let (rect, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let (rect, out) = common::measure_output(&theme, mode, |ui| {
         let resp = ui.add(Button::new("Save"));
         resp.request_focus();
         resp
     });
-    let ring = theme.palette.ring;
+    let ring = theme.palette_of(mode).ring;
     let shapes = common::rect_shapes(&out);
     let ring_shape = shapes.iter().find(|r| r.stroke.width == 3.0);
     let ring_shape = ring_shape.unwrap_or_else(|| panic!("no 3px ring in {shapes:?}"));
@@ -235,7 +238,8 @@ fn disabled_input_ignores_typing() {
 fn input_overflows_a_narrow_column_without_widening_it() {
     use shadcn_egui::components::input::Input;
     let ctx = egui::Context::default();
-    Theme::vega().in_mode(egui::Theme::Light).apply(&ctx);
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
     let mut text = String::new();
     let mut widths = (0.0, 0.0);
     for events in [vec![], vec![], vec![egui::Event::Text("ab".into())]] {
@@ -262,10 +266,10 @@ fn input_overflows_a_narrow_column_without_widening_it() {
 #[test]
 fn input_height_follows_style() {
     use shadcn_egui::components::input::Input;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let want = if name.starts_with("nova") { 32.0 } else { 36.0 };
         let mut text = String::new();
-        let h = common::measure(&theme, |ui| ui.add(Input::new(&mut text))).height();
+        let h = common::measure(&theme, mode, |ui| ui.add(Input::new(&mut text))).height();
         assert_eq!(h, want, "{name}");
     }
 }
@@ -432,9 +436,9 @@ fn tabs_report_the_selected_trigger() {
 #[test]
 fn tabs_are_as_wide_as_their_labels() {
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
-    for (name, theme) in common::themes() {
-        let short = common::measure(&theme, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
-        let long = common::measure(&theme, |ui| {
+    for (name, theme, mode) in common::themes() {
+        let short = common::measure(&theme, mode, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
+        let long = common::measure(&theme, mode, |ui| {
             ui.add(Tabs::new(&mut 0, &["Account", "Notifications"]))
         });
         assert!(
@@ -444,19 +448,20 @@ fn tabs_are_as_wide_as_their_labels() {
             short.width()
         );
         // Line triggers are 4px apart (gap-1); the default ones touch.
-        let line = common::measure(&theme, |ui| {
+        let line = common::measure(&theme, mode, |ui| {
             ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line))
         });
         assert_eq!(line.width() - short.width(), 4.0, "{name}");
     }
     let vega = &common::themes()[0].1;
     let nova = &common::themes()[2].1;
+    let dark = egui::Theme::Dark;
     assert_eq!(
-        common::measure(vega, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
+        common::measure(vega, dark, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
         36.0
     );
     assert_eq!(
-        common::measure(nova, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
+        common::measure(nova, dark, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
         32.0
     );
 }
@@ -465,6 +470,7 @@ fn tabs_are_as_wide_as_their_labels() {
 /// each trigger, of a tab list `add` places on a page `page_w` wide.
 fn tabs_layout(
     theme: &shadcn_egui::Theme,
+    mode: egui::Theme,
     page_w: f32,
     labels: &[&str],
     add: impl Fn(&mut egui::Ui) -> egui::Response + 'static,
@@ -474,7 +480,7 @@ fn tabs_layout(
     use std::rc::Rc;
     let out = Rc::new(Cell::new((egui::Rect::NOTHING, 0.0)));
     let sink = out.clone();
-    let h = common::page_harness(egui::vec2(page_w, 120.0), theme.clone(), move |ui| {
+    let h = common::page_harness(egui::vec2(page_w, 120.0), theme.clone(), mode, move |ui| {
         let avail = ui.available_width();
         sink.set((add(ui).rect, avail));
     });
@@ -487,9 +493,9 @@ fn tabs_layout(
 fn tabs_width_infinity_fills_the_row_and_shares_it_equally() {
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
     let labels = ["Display", "Audio", "Camera", "Folders"];
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         for variant in [TabsVariant::Default, TabsVariant::Line] {
-            let (list, avail, triggers) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            let (list, avail, triggers) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
                 ui.add(
                     Tabs::new(&mut 0, &labels)
                         .variant(variant)
@@ -521,11 +527,11 @@ fn tabs_width_infinity_fills_the_row_and_shares_it_equally() {
 fn tabs_width_keeps_a_long_label_at_its_own_width() {
     use shadcn_egui::components::tabs::Tabs;
     let labels = ["A", "B", "A rather long tab label"];
-    for (name, theme) in common::themes() {
-        let (_, _, hug) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+    for (name, theme, mode) in common::themes() {
+        let (_, _, hug) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels))
         });
-        let (list, avail, wide) = tabs_layout(&theme, 360.0, &labels, move |ui| {
+        let (list, avail, wide) = tabs_layout(&theme, mode, 360.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels).width(f32::INFINITY))
         });
         assert_eq!(list.width(), avail, "{name}");
@@ -542,21 +548,21 @@ fn tabs_width_keeps_a_long_label_at_its_own_width() {
 fn tabs_width_is_at_least_the_content_and_at_most_the_row() {
     use shadcn_egui::components::tabs::Tabs;
     let labels = ["Account", "Notifications"];
-    for (name, theme) in common::themes() {
-        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+    for (name, theme, mode) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels))
         });
-        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+        let (fixed, _, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels).width(400.0))
         });
         assert_eq!(fixed.width(), 400.0, "{name}");
         for w in [10.0, 0.0, -5.0, f32::NAN] {
-            let (small, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            let (small, _, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
                 ui.add(Tabs::new(&mut 0, &labels).width(w))
             });
             assert_eq!(small.width(), hug.width(), "{name} {w}");
         }
-        let (capped, avail, _) = tabs_layout(&theme, 300.0, &["A", "B"], move |ui| {
+        let (capped, avail, _) = tabs_layout(&theme, mode, 300.0, &["A", "B"], move |ui| {
             ui.add(Tabs::new(&mut 0, &["A", "B"]).width(5000.0))
         });
         assert_eq!(capped.width(), avail, "{name}");
@@ -577,8 +583,8 @@ fn add_tabs(ui: &mut egui::Ui, labels: &[&str], w: Option<f32>) -> egui::Respons
 #[test]
 fn tabs_width_infinity_in_a_scroll_area_fills_the_visible_width() {
     let labels = ["Account", "Notifications"];
-    for (name, theme) in common::themes() {
-        let (list, avail, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+    for (name, theme, mode) in common::themes() {
+        let (list, avail, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             egui::ScrollArea::horizontal()
                 .show(ui, |ui| add_tabs(ui, &labels, Some(f32::INFINITY)))
                 .inner
@@ -600,11 +606,11 @@ fn tabs_width_in_an_unbounded_ui_hugs_or_keeps_a_finite_width() {
             .inner
         }
     };
-    for (name, theme) in common::themes() {
-        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(None));
-        let (inf, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(f32::INFINITY)));
+    for (name, theme, mode) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, mode, 600.0, &labels, unbounded(None));
+        let (inf, _, _) = tabs_layout(&theme, mode, 600.0, &labels, unbounded(Some(f32::INFINITY)));
         assert_eq!(inf.width(), hug.width(), "{name}");
-        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(400.0)));
+        let (fixed, _, _) = tabs_layout(&theme, mode, 600.0, &labels, unbounded(Some(400.0)));
         assert_eq!(fixed.width(), 400.0, "{name}");
     }
 }
@@ -794,10 +800,10 @@ fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) 
     let size = egui::vec2(520.0, page_h as f32);
 
     let mut results = egui_kittest::SnapshotResults::new();
-    for (suffix, theme) in common::snapshot_themes() {
+    for (suffix, theme, mode) in common::snapshot_themes() {
         let mut stacked = None;
         for (i, r) in rows.iter().enumerate() {
-            let mut h = common::page_harness(size, theme.clone(), |ui| {
+            let mut h = common::page_harness(size, theme.clone(), mode, |ui| {
                 ui.add_space((i * ROW_H) as f32);
                 let mut sel = r.selected;
                 let resp = ui.add(
@@ -852,8 +858,9 @@ fn tabs_states_line_snapshot() {
 #[test]
 fn badge_is_h5_in_both_styles() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
-    for (name, theme) in common::themes() {
-        let h = common::measure(&theme, |ui| badge(ui, "New", BadgeVariant::Default)).height();
+    for (name, theme, mode) in common::themes() {
+        let h =
+            common::measure(&theme, mode, |ui| badge(ui, "New", BadgeVariant::Default)).height();
         assert_eq!(h, 20.0, "{name}");
     }
 }
@@ -883,11 +890,12 @@ fn badge_snapshot() {
 fn disabled_label_paints_half_alpha_text() {
     use shadcn_egui::components::label::Label;
     use shadcn_egui::style::{pick, State};
-    for (name, theme) in common::themes() {
-        let (rect, on) = common::measure_output(&theme, |ui| ui.add(Label::new("Email")));
-        let (_, off) =
-            common::measure_output(&theme, |ui| ui.add(Label::new("Email").enabled(false)));
-        let fg = theme.palette.foreground;
+    for (name, theme, mode) in common::themes() {
+        let (rect, on) = common::measure_output(&theme, mode, |ui| ui.add(Label::new("Email")));
+        let (_, off) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Label::new("Email").enabled(false))
+        });
+        let fg = theme.palette_of(mode).foreground;
         assert_eq!(common::text_colour(&on), fg, "{name}");
         assert_eq!(common::text_colour(&off), fg.gamma_multiply(0.5), "{name}");
         assert_eq!(rect.height(), 14.0, "{name}");
@@ -904,20 +912,21 @@ fn disabled_label_paints_half_alpha_text() {
 #[test]
 fn separators_are_one_pixel_border_lines() {
     use shadcn_egui::components::separator::{separator, separator_vertical};
-    let theme = shadcn_egui::Theme::vega().in_mode(egui::Theme::Light);
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Light;
+    let theme = shadcn_egui::Theme::vega();
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.allocate_response(egui::vec2(200.0, 0.0), egui::Sense::hover());
         separator(ui);
         ui.allocate_response(egui::vec2(0.0, 0.0), egui::Sense::hover())
     });
     let lines: Vec<_> = common::rect_shapes(&out)
         .into_iter()
-        .filter(|r| r.fill == theme.palette.border)
+        .filter(|r| r.fill == theme.palette_of(mode).border)
         .collect();
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert_eq!(lines[0].rect.height(), 1.0);
     assert!(lines[0].rect.width() >= 200.0);
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.horizontal(|ui| {
             ui.set_height(24.0);
             separator_vertical(ui);
@@ -926,7 +935,7 @@ fn separators_are_one_pixel_border_lines() {
     });
     let v: Vec<_> = common::rect_shapes(&out)
         .into_iter()
-        .filter(|r| r.fill == theme.palette.border)
+        .filter(|r| r.fill == theme.palette_of(mode).border)
         .collect();
     assert_eq!(v.len(), 1, "{v:?}");
     assert_eq!(v[0].rect.width(), 1.0);
@@ -1037,8 +1046,9 @@ fn card_action_snapshot() {
 /// edge: the card adds no padding below it.
 #[test]
 fn nova_footer_strip_reaches_card_bottom() {
-    let theme = Theme::new(Style::nova(), Palette::dark(), 10.0);
-    let (card, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0);
+    let (card, out) = common::measure_output(&theme, mode, |ui| {
         ui.scope(|ui| demo_card(ui, CardSize::Default, true))
             .response
     });
@@ -1061,9 +1071,10 @@ fn nova_footer_strip_reaches_card_bottom() {
 /// vega has no footer strip: the card's own bottom padding stays below the footer.
 #[test]
 fn vega_footer_keeps_card_padding_below() {
-    let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
     let mut button = egui::Rect::NOTHING;
-    let card = common::measure(&theme, |ui| {
+    let card = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new()
@@ -1083,10 +1094,11 @@ fn card_side_padding_follows_size() {
         (Style::nova as fn() -> Style, 16.0, 12.0),
         (Style::vega, 24.0, 16.0),
     ] {
-        let theme = Theme::new(style(), Palette::dark(), 10.0);
+        let mode = egui::Theme::Dark;
+        let theme = Theme::new(style(), Palette::light(), Palette::dark(), 10.0);
         for (size, want) in [(CardSize::Default, default), (CardSize::Sm, sm)] {
             let mut label = egui::Rect::NOTHING;
-            let card = common::measure(&theme, |ui| {
+            let card = common::measure(&theme, mode, |ui| {
                 ui.scope(|ui| {
                     ui.set_max_width(320.0);
                     Card::new()
@@ -1104,7 +1116,7 @@ fn card_side_padding_follows_size() {
 #[test]
 fn card_fills_available_width() {
     let theme = Theme::vega();
-    let card = common::measure(&theme, |ui| {
+    let card = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new().show(ui, |ui| {
@@ -1124,10 +1136,11 @@ fn card_title_row_height_follows_style_and_size() {
         (Style::vega as fn() -> Style, 24.0, 21.0),
         (Style::nova, 22.0, 19.25),
     ] {
-        let theme = Theme::new(style(), Palette::dark(), 10.0);
+        let mode = egui::Theme::Dark;
+        let theme = Theme::new(style(), Palette::light(), Palette::dark(), 10.0);
         for (size, want) in [(CardSize::Default, default), (CardSize::Sm, sm)] {
             let mut title = egui::Rect::NOTHING;
-            common::measure(&theme, |ui| {
+            common::measure(&theme, mode, |ui| {
                 ui.scope(|ui| {
                     Card::new()
                         .size(size)
@@ -1150,7 +1163,7 @@ fn card_action_is_right_aligned() {
     let theme = Theme::vega();
     let mut action = egui::Rect::NOTHING;
     let mut title = egui::Rect::NOTHING;
-    let card = common::measure(&theme, |ui| {
+    let card = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new().show(ui, |ui| {
@@ -1189,10 +1202,10 @@ fn card_header_and_content_share_side_padding() {
 #[test]
 fn only_vega_sets_a_card_content_gap() {
     use shadcn_egui::style::State;
-    use shadcn_egui::{Mode, Preset, StyleName};
+    use shadcn_egui::{Preset, StyleName};
     // Sera is not exported: a preset naming it falls back to nova.
     for name in StyleName::ALL.iter().filter(|s| **s != StyleName::Sera) {
-        let theme = Preset::default().style(*name).theme(Mode::Light);
+        let theme = Preset::default().style(*name).theme();
         let (name, style) = (name.id(), &theme.style);
         assert_eq!(style.name, name, "the preset builds its own style");
         for st in [State::SIZE_DEFAULT, State::SIZE_SM] {
@@ -1268,11 +1281,11 @@ fn disabled_button_ignores_clicks() {
 fn focused_input_border_turns_ring_colored() {
     use shadcn_egui::components::input::Input;
 
-    for (name, theme) in common::themes() {
-        let p = &theme.palette;
+    for (name, theme, mode) in common::themes() {
+        let p = theme.palette_of(mode);
         let shapes = |focus: bool| {
             let mut text = String::new();
-            let (rect, out) = common::measure_output(&theme, |ui| {
+            let (rect, out) = common::measure_output(&theme, mode, |ui| {
                 let resp = ui.add(Input::new(&mut text).id_salt("field"));
                 if focus {
                     resp.request_focus();
@@ -1313,12 +1326,13 @@ fn focused_input_border_turns_ring_colored() {
 #[test]
 fn invalid_input_border_is_destructive() {
     use shadcn_egui::components::input::Input;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut text = String::new();
-        let (_, out) =
-            common::measure_output(&theme, |ui| ui.add(Input::new(&mut text).invalid(true)));
+        let (_, out) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Input::new(&mut text).invalid(true))
+        });
         let shapes = common::rect_shapes(&out);
-        let d = theme.palette.destructive;
+        let d = theme.palette_of(mode).destructive;
         let (border, ring) = if name.ends_with("dark") {
             (d.gamma_multiply(0.5), d.gamma_multiply(0.4))
         } else {
@@ -1540,9 +1554,9 @@ fn checkbox_reports_toggled_state() {
 #[test]
 fn checkbox_box_follows_style() {
     use shadcn_egui::components::checkbox::Checkbox;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut on = true;
-        let r = common::measure(&theme, |ui| ui.add(Checkbox::new(&mut on)));
+        let r = common::measure(&theme, mode, |ui| ui.add(Checkbox::new(&mut on)));
         assert_eq!(r.size(), egui::vec2(16.0, 16.0), "{name}");
     }
 }
@@ -1614,15 +1628,15 @@ fn click_switch(h: &mut egui_kittest::Harness<'_, SwitchState>, pos: egui::Pos2)
 fn switch_track_size_and_hit_area() {
     use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::switch::{Switch, SwitchSize};
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut on = false;
-        let r = common::measure(&theme, |ui| ui.add(Switch::new(&mut on)));
+        let r = common::measure(&theme, mode, |ui| ui.add(Switch::new(&mut on)));
         assert!(
             (r.size() - egui::vec2(32.0, 18.4)).abs().max_elem() < 0.5,
             "{name} default {:?}",
             r.size()
         );
-        let r = common::measure(&theme, |ui| {
+        let r = common::measure(&theme, mode, |ui| {
             ui.add(Switch::new(&mut on).size(SwitchSize::Sm))
         });
         assert!(
@@ -1652,9 +1666,11 @@ fn thumb_rect(
     size: shadcn_egui::components::switch::SwitchSize,
 ) -> (egui::Rect, egui::Rect) {
     use shadcn_egui::components::switch::Switch;
-    let theme = shadcn_egui::Theme::vega().in_mode(egui::Theme::Light);
+    let mode = egui::Theme::Light;
+    let theme = shadcn_egui::Theme::vega();
     let ctx = egui::Context::default();
     theme.apply(&ctx);
+    ctx.set_theme(mode);
     let mut value = on;
     let mut track = egui::Rect::NOTHING;
     let mut out = None;
@@ -1666,7 +1682,7 @@ fn thumb_rect(
     let mut thumb = None;
     for clipped in out.unwrap().shapes {
         if let egui::Shape::Rect(r) = clipped.shape {
-            if r.fill == theme.palette.background {
+            if r.fill == theme.palette_of(mode).background {
                 thumb = Some(r.rect);
             }
         }
@@ -2058,13 +2074,14 @@ fn disabled_widgets_fade_once() {
             )
         }),
     ];
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
     for (name, add) in widgets {
-        let (_, own) = common::measure_output(&theme, |ui| add(ui, false));
-        let (_, by_ui) = common::measure_output(&theme, |ui| {
+        let (_, own) = common::measure_output(&theme, mode, |ui| add(ui, false));
+        let (_, by_ui) = common::measure_output(&theme, mode, |ui| {
             ui.add_enabled_ui(false, |ui| add(ui, true)).inner
         });
-        let (_, both) = common::measure_output(&theme, |ui| {
+        let (_, both) = common::measure_output(&theme, mode, |ui| {
             ui.add_enabled_ui(false, |ui| add(ui, false)).inner
         });
         assert_eq!(
@@ -2089,14 +2106,15 @@ fn disabled_widgets_fade_once() {
         );
     }
     // And the fade is a half: a solid button's fill.
-    let (rect, out) =
-        common::measure_output(&theme, |ui| ui.add_enabled(false, Button::new("Save")));
+    let (rect, out) = common::measure_output(&theme, mode, |ui| {
+        ui.add_enabled(false, Button::new("Save"))
+    });
     let fill = common::rect_shapes(&out)
         .into_iter()
         .find(|r| r.rect == rect.shrink(1.0))
         .expect("button fill")
         .fill;
-    assert_eq!(fill, theme.palette.primary.gamma_multiply(0.5));
+    assert_eq!(fill, theme.palette_of(mode).primary.gamma_multiply(0.5));
 }
 
 /// A click selects a tab without the keyboard focus ring; the arrow keys
@@ -2134,10 +2152,10 @@ fn tab_click_shows_no_focus_ring() {
 #[test]
 fn description_lines_are_text_sm_line_height() {
     use shadcn_egui::components::label::description;
-    for (name, theme) in common::themes() {
-        let one = common::measure(&theme, |ui| description(ui, "Short."));
+    for (name, theme, mode) in common::themes() {
+        let one = common::measure(&theme, mode, |ui| description(ui, "Short."));
         assert_eq!(one.height(), 20.0, "{name}");
-        let wrapped = common::measure(&theme, |ui| {
+        let wrapped = common::measure(&theme, mode, |ui| {
             ui.set_max_width(120.0);
             description(
                 ui,
@@ -2155,9 +2173,10 @@ fn description_lines_are_text_sm_line_height() {
 fn switch_paints_its_style_shadow() {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::{pick, State};
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
     assert!(pick(&[&*theme.style.switch], |r| &r.shadow, State::NONE).is_some());
-    let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
+    let (_, out) = common::measure_output(&theme, mode, |ui| ui.add(Switch::new(&mut false)));
     // The shadow is egui's blurred rect, cut to a mesh outside the box.
     assert!(
         common::mesh_shapes(&out)
@@ -2172,9 +2191,10 @@ fn switch_paints_its_style_shadow() {
 /// part of the shadow lies under it.
 #[test]
 fn shadow_paints_only_outside_the_border_box() {
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
     let mut text = String::new();
-    let (rect, out) = common::measure_output(&theme, |ui| {
+    let (rect, out) = common::measure_output(&theme, mode, |ui| {
         ui.add(shadcn_egui::components::input::Input::new(&mut text))
     });
     let meshes = common::mesh_shapes(&out);
@@ -2267,9 +2287,10 @@ fn part_opacity_takes_one_egui_fade_out() {
 #[test]
 fn theme_sets_disabled_alpha_from_the_style() {
     use shadcn_egui::style::{pick, State};
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let ctx = egui::Context::default();
         theme.apply(&ctx);
+        ctx.set_theme(mode);
         let want = pick(&[&*theme.style.button], |r| &r.opacity, State::DISABLED).unwrap();
         assert_eq!(ctx.global_style().visuals.disabled_alpha, want, "{name}");
     }
@@ -2280,10 +2301,12 @@ fn theme_sets_disabled_alpha_from_the_style() {
 #[test]
 fn input_text_follows_md_breakpoint() {
     use shadcn_egui::components::input::Input;
-    let theme = Theme::vega().in_mode(egui::Theme::Light);
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
     let text_px = |width: f32| {
         let ctx = egui::Context::default();
         theme.apply(&ctx);
+        ctx.set_theme(mode);
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,

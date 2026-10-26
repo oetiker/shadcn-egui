@@ -7,7 +7,7 @@ use shadcn_egui::components::icon::IconView;
 use shadcn_egui::components::select::Select;
 use shadcn_egui::style::Style;
 use shadcn_egui::{
-    icons, layout, Icon, IconLayer, IconLibrary, IconSlots, Mode, Palette, Preset, Seg, Theme,
+    icons, layout, Icon, IconLayer, IconLibrary, IconSlots, Palette, Preset, Seg, Theme,
 };
 
 /// Every icon of a set decodes to something drawable with in-range indices,
@@ -50,7 +50,7 @@ fn fill(icon: &Icon) -> Option<shadcn_egui::FillMesh> {
 #[test]
 fn lucide_is_the_default_icon_set() {
     assert_eq!(
-        Theme::new(Style::vega(), Palette::light(), 10.0).icons,
+        Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).icons,
         icons::lucide::SLOTS
     );
     assert_eq!(
@@ -128,12 +128,12 @@ fn slot_snapshot(lib: IconLibrary, name: &str) {
     let theme = Preset::default()
         .style(shadcn_egui::StyleName::Vega)
         .icons(lib)
-        .theme(Mode::Light);
+        .theme();
     let slots = theme.icons;
     common::snapshot_with_themes(
         name,
         vec2(360.0, 160.0),
-        vec![("vega_light", theme)],
+        vec![("vega_light", theme, egui::Theme::Light)],
         move |ui| {
             layout::vstack(ui, 12.0, |ui| {
                 layout::row(ui, 16.0, |ui| {
@@ -297,11 +297,11 @@ fn hugeicons_faded_layers() {
     let theme = Preset::default()
         .style(shadcn_egui::StyleName::Vega)
         .icons(IconLibrary::Hugeicons)
-        .theme(Mode::Light);
+        .theme();
     common::snapshot_with_themes(
         "icon_hugeicons_faded",
         vec2(240.0, 64.0),
-        vec![("vega_light", theme)],
+        vec![("vega_light", theme, egui::Theme::Light)],
         move |ui| {
             layout::row(ui, 16.0, |ui| {
                 ui.add(IconView::new(&HAMBURGER_01).size(48.0));

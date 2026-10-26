@@ -18,7 +18,7 @@ fn snapshot_widths_renders_phone_and_desktop() {
     common::snapshot_widths(
         "harness_widths",
         80.0,
-        vec![("vega_light", Theme::vega().in_mode(egui::Theme::Light))],
+        vec![("vega_light", Theme::vega(), egui::Theme::Light)],
         |ui| {
             ui.add(Input::new(&mut text));
         },
@@ -34,7 +34,8 @@ fn click_in_one_pass_under_both_loops() {
         let (rect, clicks) = (Cell::new(egui::Rect::NOTHING), Cell::new(0));
         let run = |events| {
             common::pass(app_loop, &ctx, events, |ui| {
-                Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
                 let resp = ui.add(Button::new("Save"));
                 rect.set(resp.rect);
                 clicks.set(clicks.get() + usize::from(resp.clicked()));
@@ -143,7 +144,8 @@ fn pointer_path_hovers() {
 #[test]
 fn focused_label_follows_tab() {
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
+        ui.ctx().set_theme(egui::Theme::Light);
         ui.add(Button::new("One"));
         ui.add(Button::new("Two"));
     });

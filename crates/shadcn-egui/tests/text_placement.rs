@@ -300,7 +300,8 @@ fn drawn(
 fn drawn_vega(files: &'static FontFiles, ppp: f32) -> Rows {
     let ctx = egui::Context::default();
     ctx.set_pixels_per_point(ppp);
-    Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
+    Theme::vega().fonts(files, None).apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
     let mut block = Recipe::default();
     block.text_size.base = Some(TextSize::Px(12.0));
     block.line_height.base = Some(1.625);
@@ -332,9 +333,10 @@ fn drawn_vega(files: &'static FontFiles, ppp: f32) -> Rows {
 fn drawn_nova(files: &'static FontFiles, ppp: f32) -> Rows {
     let ctx = egui::Context::default();
     ctx.set_pixels_per_point(ppp);
-    Theme::new(Style::nova(), Palette::light(), 10.0)
+    Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0)
         .fonts(files, None)
         .apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
     let mut b = Recipe::default();
     b.text_size.base = Some(TextSize::Px(12.0));
     b.line_height.base = Some(1.625);
@@ -557,12 +559,14 @@ fn input_glyphs_sit_on_chromes_x() {
                 let ctx = egui::Context::default();
                 ctx.set_pixels_per_point(scale);
                 let screen = if item == "input" {
-                    Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
+                    Theme::vega().fonts(files, None).apply(&ctx);
+                    ctx.set_theme(egui::Theme::Light);
                     None
                 } else {
-                    Theme::new(Style::nova(), Palette::light(), 10.0)
+                    Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0)
                         .fonts(files, None)
                         .apply(&ctx);
+                    ctx.set_theme(egui::Theme::Light);
                     Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(390.0, 800.0)))
                 };
                 let got = drawn_glyphs(&ctx, screen, name.id(), scale);
@@ -641,7 +645,8 @@ fn underlines_sit_on_chromes_pixels() {
         for scale in SCALES {
             let ctx = egui::Context::default();
             ctx.set_pixels_per_point(scale);
-            Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
+            Theme::vega().fonts(files, None).apply(&ctx);
+            ctx.set_theme(egui::Theme::Light);
             for l in UNDERLINES.lines().skip(1) {
                 let c: Vec<&str> = l.split('\t').collect();
                 if c[0] != name.id() || c[1].parse::<f32>().ok() != Some(scale) {

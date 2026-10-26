@@ -232,7 +232,7 @@ impl Theme {
     /// [`Theme::current`] already resolves in the context's mode, and
     /// [`Theme::apply`] installs both modes whatever this says: switch
     /// modes with `ctx.set_theme(..)`.
-    pub fn in_mode(mut self, mode: egui::Theme) -> Self {
+    pub(crate) fn in_mode(mut self, mode: egui::Theme) -> Self {
         self.mode = mode;
         self
     }
@@ -1004,8 +1004,7 @@ impl Theme {
         // Set once, not per pass: no window breakpoint applies.
         let none = State::NONE.with(State::DARK, dark);
         let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
-        let pad_x =
-            pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
+        let pad_x = pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
         let height = pick(&button, |r| &r.height, none);
         // egui's button is its text row plus twice `button_padding.y`, and
         // at least `interact_size.y`: keep the padding within the height.

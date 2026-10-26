@@ -926,7 +926,10 @@ mod tests {
         let full = rounded(Some(Rung::Full), None, 0).radius_on(rect);
         assert_eq!(full, CornerRadius::same(10));
         // `rounded-l-none` beside `rounded-md` squares the left corners only.
-        let md = Theme::vega().in_mode(egui::Theme::Light).rung(Rung::Md).round() as u8;
+        let md = Theme::vega()
+            .in_mode(egui::Theme::Light)
+            .rung(Rung::Md)
+            .round() as u8;
         let left_none = rounded(Some(Rung::Md), Some(Rung::None), 0).radius_on(rect);
         assert_eq!(
             left_none,

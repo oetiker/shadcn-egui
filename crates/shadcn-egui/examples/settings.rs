@@ -32,12 +32,18 @@ struct SettingsApp {
 
 impl SettingsApp {
     fn apply(&mut self, ctx: &egui::Context) {
-        let palette = if self.light == 1 {
-            Palette::light()
+        Theme::new(
+            STYLES[self.style].1(),
+            Palette::light(),
+            Palette::dark(),
+            self.radius,
+        )
+        .apply(ctx);
+        ctx.set_theme(if self.light == 1 {
+            egui::Theme::Light
         } else {
-            Palette::dark()
-        };
-        Theme::new(STYLES[self.style].1(), palette, self.radius).apply(ctx);
+            egui::Theme::Dark
+        });
         self.applied = (self.style, self.light, self.radius);
     }
 
@@ -48,7 +54,7 @@ impl SettingsApp {
         egui::Panel::top("theme_toolbar")
             .frame(
                 egui::Frame::new()
-                    .fill(t.palette.background)
+                    .fill(t.palette().background)
                     .inner_margin(egui::Margin::symmetric(32, 12)),
             )
             .show_inside(ui, |ui| {
