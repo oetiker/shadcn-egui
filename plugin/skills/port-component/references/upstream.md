@@ -4,6 +4,13 @@ The component goes into `crates/shadcn-egui/src/components/<name>.rs` of a
 shadcn-egui checkout and follows the standard in `SKILL.md`. This file lists
 the repository tooling the port uses and what "done" means there.
 
+A part that lays out one row of content between icon slots (button,
+badge, kbd, toggle, toggle-group item, tab trigger) draws it through the
+crate-internal `components::atom_row::AtomRow`, as `Button` and `Badge`
+do: it lays out text atoms through `TextLook`, paints the typed icon
+slots and untinted `IconAtom`s in the part's state colour, and leaves out
+an empty text as the browser does.
+
 ## Checkouts
 
 The generators read upstream source from two checkouts, kept in a scratch

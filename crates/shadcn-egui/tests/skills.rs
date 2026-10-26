@@ -142,7 +142,7 @@ fn component_map_has_every_component() {
         let Some(module) = f.strip_suffix(".rs") else {
             continue;
         };
-        if ["mod", "shared", "icon_raster"].contains(&module) {
+        if ["mod", "shared", "icon_raster", "atom_row"].contains(&module) {
             continue;
         }
         let path = format!("shadcn_egui::components::{module}::");

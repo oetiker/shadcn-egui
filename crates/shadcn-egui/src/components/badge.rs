@@ -2,12 +2,13 @@
 //! `tools/stylegen/PIN`. Every value comes from the style's badge
 //! recipes: `cn-badge` and `cn-badge-variant-*`, stacked in that order.
 
-use crate::components::icon::{paint_icon, Icon};
+use crate::components::atom_row::AtomRow;
+use crate::components::icon::Icon;
 use crate::components::shared::{interaction_state, line_width, part_painter, RecipeBox};
 use crate::components::text::TextLook;
 use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style};
 use crate::Theme;
-use egui::{Response, Sense, TextWrapMode, Ui, Vec2, Widget};
+use egui::{Response, Sense, Ui, Vec2, Widget};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BadgeVariant {
@@ -92,19 +93,19 @@ impl Widget for Badge {
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
         let look = TextLook::resolve(ui, &l, g);
-        let layout = |ui: &Ui, look: &TextLook| {
-            look.layout(ui, self.text.as_str(), TextWrapMode::Extend, f32::INFINITY)
-        };
-        let galley = layout(ui, &look);
-        let icons = u8::from(self.icon.is_some()) + u8::from(self.icon_end.is_some());
+        let row = AtomRow::new(ui, self.text.as_str())
+            .icons(self.icon, self.icon_end, icon_px)
+            .gap(gap)
+            .inset(
+                pad_l + border_w,
+                pad_r + border_w,
+                get(|r| &r.pad_top) + border_w,
+                get(|r| &r.pad_bottom) + border_w,
+            )
+            .lay_out(ui, &look);
         // No height: CSS's initial `auto`, the content's height.
-        let line = galley.size().y;
-        let content_h = if icons > 0 { line.max(icon_px) } else { line };
-        let height = pick(&l, |r| &r.height, g).unwrap_or_else(|| {
-            content_h + get(|r| &r.pad_top) + get(|r| &r.pad_bottom) + border_w * 2.0
-        });
-        let content_w = galley.size().x + f32::from(icons) * (icon_px + gap);
-        let width = content_w + pad_l + pad_r + border_w * 2.0;
+        let height = pick(&l, |r| &r.height, g).unwrap_or(row.size().y);
+        let width = row.size().x;
         let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
@@ -125,35 +126,8 @@ impl Widget for Badge {
         let fg = paint(|r| &r.text).unwrap_or(inherited);
         RecipeBox::resolve(ui.ctx(), &t, &l, st).paint(&painter, rect);
 
-        // Content is centred; unequal icon-side padding shifts it.
-        let mut x = rect.center().x - content_w / 2.0 + (pad_l - pad_r) / 2.0;
-        let draw_icon = |icon: &Icon, x: f32| {
-            let r = egui::Rect::from_min_size(
-                egui::pos2(x, rect.center().y - icon_px / 2.0),
-                Vec2::splat(icon_px),
-            );
-            paint_icon(&painter, r, icon, fg, t.metrics.icon_stroke);
-        };
-        if let Some(icon) = &self.icon {
-            draw_icon(icon, x);
-            x += icon_px + gap;
-        }
         // A state's `underline` (the link variant on hover) lays out again.
-        let paint_look = TextLook::resolve(ui, &l, st);
-        let galley = if paint_look.underlined() == look.underlined() {
-            galley
-        } else {
-            layout(ui, &paint_look)
-        };
-        let text_w = galley.size().x;
-        galley.paint(
-            &painter,
-            egui::pos2(x, rect.center().y - galley.size().y / 2.0),
-            fg,
-        );
-        if let Some(icon) = &self.icon_end {
-            draw_icon(icon, x + text_w + gap);
-        }
+        row.paint(ui, &painter, rect, &TextLook::resolve(ui, &l, st), fg);
         resp
     }
 }

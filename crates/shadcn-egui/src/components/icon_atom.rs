@@ -151,10 +151,6 @@ impl From<IconAtom> for egui::Atom<'_> {
 
 /// `image` in `color`, a crate widget's state colour, if it is an icon
 /// atom without a caller colour; any other image unchanged.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "first caller: atom_row's users")
-)]
 pub(crate) fn retint(img: Image<'_>, color: Color32) -> Image<'_> {
     match img.uri().and_then(lookup) {
         Some(e) if !e.tinted => image(Entry { tinted: true, ..e }, Some(color)),
