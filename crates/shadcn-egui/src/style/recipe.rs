@@ -784,11 +784,13 @@ impl Recipe {
     /// always draws with its base's bits, so after this its `Prop::set`
     /// acts as for a size with a layer of its own and `Prop::on` adds rules
     /// as before (notes §18). Per property, the rule of exactly `state`
-    /// that wins becomes the unconditional value, and every rule it beats
-    /// goes, as none of them can win while `state` holds: the other rules
-    /// of exactly `state`, and those of any condition ranked below it or
-    /// of its rank earlier in the list. Rules that beat it
-    /// (`data-[size=sm]:hover:` of a higher rank) stay.
+    /// that wins becomes a [`When::ALWAYS`] rule of its rank, and `base`
+    /// and every rule it beats go, as none of them can win while `state`
+    /// holds: the other rules of exactly `state`, and those of any
+    /// condition ranked below it or of its rank earlier in the list. Rules
+    /// that beat it (`data-[size=sm]:hover:` of a higher rank) stay. Its
+    /// rank keeps it above the rules it beat in the other layers of a
+    /// stack too.
     pub(crate) fn fold_state(&mut self, state: State) {
         fn fold<T: Copy>(p: &mut Prop<T>, when: When) {
             // The pick order: the higher rank, on a tie the later rule.
@@ -816,89 +818,35 @@ impl Recipe {
                 i += 1;
                 beats_top(i - 1, r)
             });
-            p.set(top.value);
+            // Ahead of the rules that stay, at its own rank, so it beats in
+            // every stack what it beat before, and `Prop::set` replaces it.
+            p.rules.insert(
+                0,
+                Rule {
+                    when: When::ALWAYS,
+                    rank: top.rank,
+                    value: top.value,
+                },
+            );
+            p.base = None;
         }
         let when = When::all(state);
-        // Destructured so a new field does not compile until it folds too.
-        let Recipe {
-            height,
-            width,
-            min_height,
-            min_width,
-            max_width,
-            max_width_inset,
-            height_inset,
-            pad_top,
-            pad_right,
-            pad_bottom,
-            pad_left,
-            margin_top,
-            margin_right,
-            margin_bottom,
-            margin_left,
-            gap,
-            gap_x,
-            space_x,
-            inset_top,
-            inset_right,
-            inset_bottom,
-            inset_left,
-            icon_size,
-            icon_shift_y,
-            icon_hidden,
-            text_size,
-            line_height,
-            tracking,
-            weight,
-            uppercase,
-            underline,
-            underline_offset,
-            text_wrap,
-            text_align,
-            radius,
-            radius_top,
-            radius_bottom,
-            radius_left,
-            radius_right,
-            bg,
-            bg_clip_padding,
-            text,
-            border_width,
-            border_top_width,
-            border_left_width,
-            border_color,
-            ring_width,
-            ring_color,
-            outline_width,
-            outline_color,
-            shadow,
-            opacity,
-            blend,
-            shift_x,
-            shift_y,
-            hit_inset_x,
-            hit_inset_y,
-            backdrop_blur,
-            hidden,
-            aspect_ratio,
-            object_cover,
-            field_sizing_content,
-            resizable,
-            transition,
-            duration,
-            animate_in,
-            animate_out,
-            enter_opacity,
-            enter_scale,
-            enter_x,
-            enter_y,
-            exit_opacity,
-            exit_scale,
-        } = self;
+        let this = self;
         macro_rules! fold_all {
-            ($($f:ident),*) => { $(fold($f, when);)* };
+            ($($f:ident),*) => {
+                // Destructured so a new field does not compile until it folds too.
+                let Recipe { $($f),* } = this;
+                $(fold($f, when);)*
+            };
         }
-        fold_all!(
+        recipe_props!(fold_all);
+    }
+}
+
+/// `$m!(field, ..)` with every field of [`Recipe`].
+macro_rules! recipe_props {
+    ($m:ident) => {
+        $m!(
             height,
             width,
             min_height,
@@ -972,8 +920,51 @@ impl Recipe {
             enter_y,
             exit_opacity,
             exit_scale
-        );
+        )
+    };
+}
+use recipe_props;
+
+/// The fields in which two recipe stacks resolve differently under `s`:
+/// the winner's value, rank and layer as [`pick_ranked`] finds them, and
+/// the named `text-*` size [`pick_where`] finds.
+#[cfg(test)]
+pub(crate) fn pick_diff(a: &[&Recipe], b: &[&Recipe], s: State) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    macro_rules! diff {
+        ($($f:ident),*) => {
+            $(if pick_ranked(a, |r| &r.$f, s) != pick_ranked(b, |r| &r.$f, s) {
+                out.push(stringify!($f));
+            })*
+        };
     }
+    recipe_props!(diff);
+    let named =
+        |l: &[&Recipe]| pick_where(l, |r| &r.text_size, |t| !matches!(t, TextSize::Px(_)), s);
+    if named(a) != named(b) {
+        out.push("text_size (named)");
+    }
+    out
+}
+
+/// Every single state flag a rule of `recipes` names.
+#[cfg(test)]
+pub(crate) fn flags_used(recipes: &[&Recipe]) -> Vec<State> {
+    let mut bits = 0u128;
+    macro_rules! collect {
+        ($($f:ident),*) => {
+            for r in recipes {
+                $(for rule in &r.$f.rules {
+                    bits |= rule.when.all.0 | rule.when.none.0;
+                })*
+            }
+        };
+    }
+    recipe_props!(collect);
+    (0..128)
+        .filter(|i| bits >> i & 1 == 1)
+        .map(|i| State(1 << i))
+        .collect()
 }
 
 #[cfg(test)]
@@ -1038,9 +1029,11 @@ mod tests {
         };
         let before = r.clone();
         r.fold_state(State::SIZE_SM);
-        assert_eq!(r.height.base, Some(20.0));
+        assert_eq!(r.height.base, None);
         let values: Vec<_> = r.height.rules.iter().map(|r| r.value).collect();
-        assert_eq!(values, [35.0, 50.0]);
+        assert_eq!(values, [20.0, 35.0, 50.0]);
+        assert_eq!(r.height.rules[0].when, When::ALWAYS);
+        assert_eq!(r.height.rules[0].rank, class | (1 << 30));
         for s in [State::NONE, State::HOVER, State::FOCUS] {
             assert_eq!(
                 r.height.get(s | State::SIZE_SM),
@@ -1054,6 +1047,27 @@ mod tests {
         q.fold_state(State::SIZE_SM);
         assert_eq!(q.height.get(State::HOVER), Some(20.0));
         assert_eq!(q.height.get(State::HOVER | State::SIZE_SM), Some(50.0));
+        // In a stack, a lower-ranked rule of another layer still loses.
+        let other = Recipe {
+            height: Prop {
+                base: None,
+                rules: vec![rule(State::HOVER, class | (1 << 10), 30.0)],
+            },
+            ..Recipe::default()
+        };
+        let unfolded = {
+            let mut u = before.clone();
+            u.height.rules.remove(3);
+            u
+        };
+        let s = State::HOVER | State::SIZE_SM;
+        assert_eq!(pick(&[&q, &other], |r| &r.height, s), Some(50.0));
+        assert_eq!(pick(&[&q, &other], |r| &r.height, State::HOVER), Some(20.0));
+        assert!(pick_diff(&[&q, &other], &[&unfolded, &other], s).is_empty());
+        // An app's `set` replaces the size value at the size rule's rank.
+        q.height.set(70.0);
+        assert_eq!(q.height.rules[0].rank, class | (1 << 30));
+        assert_eq!(pick(&[&q, &other], |r| &r.height, State::HOVER), Some(70.0));
         // An unconditional rule that beats it leaves the property as it is.
         let mut a = before;
         a.height

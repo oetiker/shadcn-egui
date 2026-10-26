@@ -550,6 +550,106 @@ mod tests {
 
     const P: fn(Role) -> Paint = |r| Paint::Role(r, 1.0);
 
+    /// The states to compare a folded size under: every combination of up
+    /// to two of `flags` (of all of them when there are ten or fewer), in
+    /// both modes, each with the size's `bits`.
+    fn states_with(flags: &[State], bits: State) -> Vec<State> {
+        let n = flags.len();
+        let combos: Vec<State> = if n <= 10 {
+            (0..1u32 << n)
+                .map(|m| {
+                    (0..n)
+                        .filter(|i| m >> i & 1 == 1)
+                        .fold(State::NONE, |s, i| s | flags[i])
+                })
+                .collect()
+        } else {
+            let mut v = vec![State::NONE];
+            for i in 0..n {
+                v.push(flags[i]);
+                for j in i + 1..n {
+                    v.push(flags[i] | flags[j]);
+                }
+            }
+            v
+        };
+        combos
+            .into_iter()
+            .flat_map(|s| [s | bits, s | bits | State::DARK])
+            .collect()
+    }
+
+    /// Every built-in state-bit size, folded, resolves every property of
+    /// each part alone and of all parts stacked (both orders) as the
+    /// unfolded parts do under the size's bits: value, rank and layer.
+    #[test]
+    fn a_folded_size_resolves_as_its_bits_do() {
+        use crate::components::card::{CardSize, CardVariant};
+        use crate::components::select::{SelectSize, SelectVariant};
+        use crate::components::switch::{SwitchSize, SwitchVariant};
+        use crate::style::{flags_used, pick_diff};
+        let styles = [
+            Style::vega(),
+            Style::nova(),
+            Style::maia(),
+            Style::lyra(),
+            Style::mira(),
+            Style::luma(),
+            Style::rhea(),
+        ];
+        let mut diffs = Vec::new();
+        let mut checked = 0usize;
+        for style in &styles {
+            macro_rules! check {
+                ($z:ident, $x:ident) => {
+                    for z in [$z::Default, $z::Sm] {
+                        let (mut unfolded, mut folded) = (Vec::new(), Vec::new());
+                        $x::Default
+                            .recipes(style)
+                            .each_mut(|p| unfolded.push(p.clone()));
+                        z.recipes(style).each_mut(|p| folded.push(p.clone()));
+                        let bits = z.bits();
+                        let u: Vec<&Recipe> = unfolded.iter().collect();
+                        let f: Vec<&Recipe> = folded.iter().collect();
+                        let sizes = State::SIZE_SM | State::SIZE_DEFAULT | State::DARK;
+                        let flags: Vec<State> = flags_used(&u)
+                            .into_iter()
+                            .filter(|s| !sizes.contains(*s))
+                            .collect();
+                        let mut stacks: Vec<Vec<usize>> = (0..u.len()).map(|i| vec![i]).collect();
+                        stacks.push((0..u.len()).collect());
+                        stacks.push((0..u.len()).rev().collect());
+                        for st in states_with(&flags, bits) {
+                            for idx in &stacks {
+                                let a: Vec<&Recipe> = idx.iter().map(|&i| u[i]).collect();
+                                let b: Vec<&Recipe> = idx.iter().map(|&i| f[i]).collect();
+                                checked += 1;
+                                for field in pick_diff(&b, &a, st) {
+                                    diffs.push(format!(
+                                        "{} {}::{:?} parts {idx:?} {st:?}: {field}",
+                                        style.name,
+                                        stringify!($z),
+                                        z
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                };
+            }
+            check!(CardSize, CardVariant);
+            check!(SelectSize, SelectVariant);
+            check!(SwitchSize, SwitchVariant);
+        }
+        assert!(checked > 0);
+        assert!(
+            diffs.is_empty(),
+            "{} differences, first:\n{}",
+            diffs.len(),
+            diffs[..diffs.len().min(40)].join("\n")
+        );
+    }
+
     #[test]
     fn app_variant_is_a_name() {
         assert_eq!(DANGER_GHOST, ButtonVariant::app("danger-ghost"));
