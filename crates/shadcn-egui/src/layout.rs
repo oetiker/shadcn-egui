@@ -579,7 +579,11 @@ pub(crate) fn shrink_stacks<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> (R, f32
         .data_mut(|d| d.remove_temp::<Vec<FlexItem>>(flex_items_id(row)))
         .unwrap_or_default();
     let stacks: f32 = items.iter().map(|i| i.width).sum();
-    let plan = shrink(room - (content - stacks), &items);
+    // A stack that filled the unbounded room (egui's `Separator`) took an
+    // infinite width and pushed the rest of the row out of reach; its plan
+    // gives it a finite one, and the next pass measures the rest.
+    let others = Some(content - stacks).filter(|w| w.is_finite());
+    let plan = shrink(room - others.unwrap_or(0.0), &items);
     let stored = ui.data(|d| d.get_temp::<Vec<Option<f32>>>(flex_plan_id(row)));
     let same = stored.as_ref().is_some_and(|old| {
         old.len() == plan.len()
@@ -603,7 +607,34 @@ pub(crate) fn shrink_stacks<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> (R, f32
 /// all when their bases fit, else each base less its share of the
 /// shortfall in proportion to its base, an item held at its min-content
 /// leaving the rest to the others.
+///
+/// An item whose base is infinite (it holds a widget that fills whatever
+/// room it gets, as egui's `Separator`) takes the room the others leave,
+/// as that widget fills a plain egui row, at least its min-content.
 fn shrink(room: f32, items: &[FlexItem]) -> Vec<Option<f32>> {
+    let fills = items.iter().filter(|i| i.basis.is_infinite()).count();
+    if fills > 0 {
+        let (fill, rest): (Vec<_>, Vec<_>) = items.iter().partition(|i| i.basis.is_infinite());
+        let rest: Vec<FlexItem> = rest.into_iter().copied().collect();
+        let held: f32 = fill.iter().map(|i| i.min).sum();
+        let mut plan = shrink(room - held, &rest).into_iter();
+        let used: f32 = rest
+            .iter()
+            .zip(plan.clone())
+            .map(|(i, w)| w.unwrap_or(i.basis))
+            .sum();
+        let share = ((room - used) / fills as f32).max(0.0);
+        return items
+            .iter()
+            .map(|i| {
+                if i.basis.is_infinite() {
+                    Some(share.max(i.min))
+                } else {
+                    plan.next().flatten()
+                }
+            })
+            .collect();
+    }
     let bases: f32 = items.iter().map(|i| i.basis).sum();
     if bases <= room + ROW_HEIGHT_EPSILON {
         return vec![None; items.len()];

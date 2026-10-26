@@ -41,6 +41,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- A horizontal separator in a `layout::vstack` inside a `layout::row` no longer stops the app with "Negative size: [NaN 0.0]", for the crate's `separator(ui)` as for egui's `ui.separator()`. The crate's separator there has no length, so it does not widen the stack; egui's makes the stack take the room the row's other items leave, as it fills a plain egui row.
 - A `layout::row`, a `layout::wrap_row` or a `layout::vstack` in either, shown in an `egui::Area` that measures its size again (`Area::sizing_pass(true)`), no longer lays out the measuring frame twice and the frame after it twice. Before, each such measurement cost two extra layout passes.
 - A card title, description or content in the footer of a small card (`CardSize::Sm`) now takes the small card's look, as in its body, for example its smaller title text; before, the footer drew them at the default size.
 - Text inside popover, tooltip, dialog and card content now takes the container's font weight, letter spacing and upper case, as in shadcn, as it already took its size and colour; text that sets its own keeps it.

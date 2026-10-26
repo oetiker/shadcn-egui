@@ -4,6 +4,7 @@
 //! thick, or `metrics.border` thick where the recipe sets no thickness.
 
 use crate::components::shared::part_painter;
+use crate::layout::capped_width;
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::Theme;
@@ -12,7 +13,9 @@ use egui::{Response, Sense, Ui, Vec2, Widget};
 /// shadcn `orientation` of the separator.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SeparatorOrientation {
-    /// A rule across the available width.
+    /// A rule across the available width; in an unbounded room (a
+    /// horizontal `ScrollArea`, a [`vstack`](crate::layout::vstack) that
+    /// fits its row) it has no length.
     #[default]
     Horizontal,
     /// A rule as tall as the row it sits in.
@@ -72,7 +75,8 @@ impl Widget for Separator {
             Vec2::new(w, ui.available_height())
         } else {
             let h = pick(&l, |r| &r.height, st).unwrap_or(t.metrics.border);
-            Vec2::new(ui.available_width(), h)
+            // `w-full`; a rule has no content width (conformance 3.1).
+            Vec2::new(capped_width(ui, f32::INFINITY, 0.0), h)
         };
         let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
         if ui.is_rect_visible(rect) {

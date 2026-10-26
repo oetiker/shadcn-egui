@@ -680,3 +680,61 @@ fn stretch_height_is_none_outside_a_row() {
     }
     assert_eq!(seen, vec![None; 3]);
 }
+
+/// A horizontal separator in a `vstack` in a `row`, the crate's and
+/// egui's own, neither panics. The crate's has no content width
+/// (conformance 3.1), so the stack stays as wide as its label; egui's
+/// fills the room it gets, so the stack takes the room the row's other
+/// items leave. Both settle: a still frame takes one pass.
+#[test]
+fn a_separator_in_a_stack_in_a_row_settles() {
+    for egui_own in [false, true] {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        let mut rects = [egui::Rect::NOTHING; 5];
+        let mut passes = 0;
+        for _ in 0..3 {
+            let before = ctx.cumulative_pass_nr();
+            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.set_max_width(300.0);
+                rects[0] = ui.max_rect();
+                layout::row(ui, 8.0, |ui| {
+                    rects[3] = layout::vstack(ui, 4.0, |ui| {
+                        rects[1] = ui.label("Account").rect;
+                        rects[2] = if egui_own {
+                            ui.separator().rect
+                        } else {
+                            ui.add(shadcn_egui::components::separator::Separator::new())
+                                .rect
+                        };
+                        ui.min_rect()
+                    });
+                    rects[4] = ui.button("Go").rect;
+                });
+            });
+            passes = ctx.cumulative_pass_nr() - before;
+        }
+        let [room, label, rule, stack, go] = rects;
+        assert_eq!(passes, 1, "egui {egui_own}: a still frame");
+        if egui_own {
+            assert_eq!(rule.width(), stack.width(), "{rects:?}");
+            assert!(stack.width() > label.width(), "{rects:?}");
+            assert_eq!(go.right(), room.right(), "{rects:?}");
+        } else {
+            assert_eq!(rule.width(), 0.0, "{rects:?}");
+            assert_eq!(stack.width(), label.width(), "{rects:?}");
+            assert_eq!(go.left(), stack.right() + 8.0, "{rects:?}");
+        }
+    }
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    let mut outside = (0.0, egui::Rect::NOTHING);
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        outside = (
+            ui.available_width(),
+            ui.add(shadcn_egui::components::separator::Separator::new())
+                .rect,
+        );
+    });
+    assert_eq!(outside.1.width(), outside.0, "outside a row it spans");
+}
