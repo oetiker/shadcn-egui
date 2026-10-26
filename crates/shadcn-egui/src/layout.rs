@@ -225,9 +225,9 @@ fn overflow_row<R>(
 /// stacks in one row share the shortfall in proportion to their unwrapped
 /// widths, none below its narrowest (its longest word or widest child).
 /// The widths come from the previous pass, and a pass that changes them
-/// is redone. When the stack's content takes another size at the same
-/// width (its text, font or scale changed), the next frame measures it
-/// unwrapped again in a pass that is not shown.
+/// is redone. When the stack's content takes another size or paints
+/// another text at the same width (its text, font or scale changed), the
+/// next frame measures it unwrapped again in a pass that is not shown.
 ///
 /// In a `StripBuilder` or table cell (directly, or through scopes that
 /// keep the cell's layout) the stack takes the cell's width, as a block in
@@ -341,12 +341,46 @@ struct Intrinsic {
     /// The width it overflowed to when made narrower (exact), or lowered
     /// to the width it wrapped to (an upper bound).
     min: Option<f32>,
-    /// The last pass at a planned width: that width, the scale and the
-    /// content's size. The same width and scale giving another size means
-    /// the content or its font changed, and `max` and `min` with it.
-    seen: Option<[f32; 4]>,
+    /// The last pass at a planned width: that width, the scale, the
+    /// content's size and the hash of the text it painted
+    /// ([`text_hash`]). The same width and scale giving another size or
+    /// text means the content or its font changed, and `max` and `min`
+    /// with it, also where the wrapped block kept its size.
+    seen: Option<([f32; 4], u64)>,
     /// Set when `seen` changed: the next pass measures the content again.
     stale: bool,
+}
+
+/// A hash of what decides the width of the text painted on `layer` from
+/// shape `first` on: each galley's text and per section its byte range,
+/// font and letter spacing (not its colour, which a hover changes).
+fn text_hash(ctx: &egui::Context, layer: egui::LayerId, first: usize) -> u64 {
+    use std::hash::{Hash, Hasher};
+    fn add(shape: &egui::Shape, h: &mut impl Hasher) {
+        match shape {
+            egui::Shape::Text(text) => {
+                let job = &text.galley.job;
+                job.text.hash(h);
+                for section in &job.sections {
+                    section.byte_range.hash(h);
+                    section.leading_space.to_bits().hash(h);
+                    section.format.font_id.hash(h);
+                    section.format.extra_letter_spacing.to_bits().hash(h);
+                }
+            }
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| add(s, h)),
+            _ => {}
+        }
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    ctx.graphics(|g| {
+        if let Some(list) = g.get(layer) {
+            list.all_entries()
+                .skip(first)
+                .for_each(|c| add(&c.shape, &mut h));
+        }
+    });
+    h.finish()
 }
 
 fn flex_items_id(row: egui::Id) -> egui::Id {
@@ -461,6 +495,10 @@ fn flex_item<R>(
         known = Intrinsic::default();
     }
     let mut content = egui::Vec2::ZERO;
+    let layer = ui.layer_id();
+    let first = ui
+        .ctx()
+        .graphics(|g| g.get(layer).map_or(0, |l| l.next_idx().0));
     let response = ui.scope_builder(column, |ui| {
         // Unbounded, text does not wrap and a filling widget takes its
         // content minimum (`capped_width`): the stack's max-content.
@@ -475,8 +513,14 @@ fn flex_item<R>(
         inner
     });
     if let Some(w) = target {
-        let seen = [w, ui.ctx().pixels_per_point(), content.x, content.y];
-        if known.seen.is_some_and(|s| s[..2] == seen[..2] && s != seen) {
+        let seen = (
+            [w, ui.ctx().pixels_per_point(), content.x, content.y],
+            text_hash(ui.ctx(), layer, first),
+        );
+        if known
+            .seen
+            .is_some_and(|s| s.0[..2] == seen.0[..2] && s != seen)
+        {
             // Measured next frame, so this one keeps a valid layout.
             known.stale = true;
             ui.ctx().request_repaint();

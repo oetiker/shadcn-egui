@@ -214,12 +214,10 @@ fn flex_columns_shrink_as_chromes() {
     assert!(bad.is_empty(), "{} differ:\n{}", bad.len(), bad.join("\n"));
 }
 
-/// A stack measures its unwrapped width again when its text changes: the
-/// first text, one word, is replaced by `row-two`'s, and the row ends as
-/// Chrome's `row-two`. (Every case above also starts with egui's own font
-/// before the theme's, the same relearning.)
-#[test]
-fn a_stack_relearns_its_width_when_its_text_changes() {
+/// `first` in the first stack of `row-two` for a few frames, then `ASK`:
+/// the row ends as Chrome's `row-two`. Returns the text's size before the
+/// change and in the frame of the change.
+fn relearn_case(first: &'static str) -> (egui::Vec2, egui::Vec2) {
     let want = &chrome()[&("row-two".to_string(), "1".to_string())];
     let items: Items = Rc::default();
     let long = Rc::new(std::cell::Cell::new(false));
@@ -231,7 +229,7 @@ fn a_stack_relearns_its_width_when_its_text_changes() {
             let max = Rect::from_min_size(ui.cursor().min, vec2(300.0, 280.0));
             let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(max));
             row(&mut ui, 8.0, |ui| {
-                para(ui, &out, "-1", if flag.get() { ASK } else { WORD });
+                para(ui, &out, "-1", if flag.get() { ASK } else { first });
                 para(ui, &out, "-2", MAIL);
                 boxed(ui, &out);
             });
@@ -244,7 +242,10 @@ fn a_stack_relearns_its_width_when_its_text_changes() {
     for _ in 0..4 {
         h.step();
     }
+    let before = items.borrow()["text-1"].size();
     long.set(true);
+    h.step();
+    let switched = items.borrow()["text-1"].size();
     for _ in 0..4 {
         h.step();
     }
@@ -252,11 +253,31 @@ fn a_stack_relearns_its_width_when_its_text_changes() {
         let (g, [x, _, w, _]) = (items.borrow()[item], want[item]);
         assert!(
             close(g.left(), x) && close(g.width(), w),
-            "{item}: crate x {} w {}, chrome x {x} w {w}",
+            "{first:?} -> {item}: crate x {} w {}, chrome x {x} w {w} \
+             (text {before:?}, then {switched:?} at the old width)",
             g.left(),
             g.width()
         );
     }
+    (before, switched)
+}
+
+/// A stack measures its unwrapped width again when its text changes: the
+/// first text, one word, is replaced by `row-two`'s, and the row ends as
+/// Chrome's `row-two`. (Every case above also starts with egui's own font
+/// before the theme's, the same relearning.)
+#[test]
+fn a_stack_relearns_its_width_when_its_text_changes() {
+    relearn_case(WORD);
+}
+
+/// The same where the new text wraps to the very size of the old one at
+/// the old width (87 x 60: the widest line is kept, a word on the last
+/// line changes), so only the painted text tells the stack it changed.
+#[test]
+fn a_stack_relearns_its_width_when_its_text_keeps_its_wrapped_size() {
+    let (before, switched) = relearn_case("Choose what you want to hear it.");
+    assert_eq!(before, switched, "the case needs an equal wrapped size");
 }
 
 fn button_case(case: &str) -> (Theme, Button) {
