@@ -780,30 +780,42 @@ impl Recipe {
     }
 
     /// Make the values this part takes under exactly `state` its
-    /// unconditional ones and drop those rules. The copy an app size of a
-    /// state-bit size edits always draws with its base's bits, so after
-    /// this its `Prop::set` acts as for a size with a layer of its own and
-    /// `Prop::on` adds rules as before (notes §18). Rules of more states
-    /// (`data-[size=sm]:hover:`) stay.
+    /// unconditional ones. The copy an app size of a state-bit size edits
+    /// always draws with its base's bits, so after this its `Prop::set`
+    /// acts as for a size with a layer of its own and `Prop::on` adds rules
+    /// as before (notes §18). Per property, the rule of exactly `state`
+    /// that wins becomes the unconditional value, and every rule it beats
+    /// goes, as none of them can win while `state` holds: the other rules
+    /// of exactly `state`, and those of any condition ranked below it or
+    /// of its rank earlier in the list. Rules that beat it
+    /// (`data-[size=sm]:hover:` of a higher rank) stay.
     pub(crate) fn fold_state(&mut self, state: State) {
         fn fold<T: Copy>(p: &mut Prop<T>, when: When) {
-            let Some(top) = p
+            // The pick order: the higher rank, on a tie the later rule.
+            let Some((ti, top)) = p
                 .rules
                 .iter()
-                .filter(|r| r.when == when)
-                .max_by_key(|r| r.rank)
-                .copied()
+                .enumerate()
+                .filter(|(_, r)| r.when == when)
+                .max_by_key(|(i, r)| (r.rank, *i))
+                .map(|(i, r)| (i, *r))
             else {
                 return;
             };
-            // An unconditional rule that outranks it wins under `state` too.
+            let beats_top = |i: usize, r: &Rule<T>| (r.rank, i) > (top.rank, ti);
+            // An unconditional rule that beats it wins under `state` too.
             if p.rules
                 .iter()
-                .any(|r| r.when == When::ALWAYS && r.rank > top.rank)
+                .enumerate()
+                .any(|(i, r)| r.when == When::ALWAYS && beats_top(i, r))
             {
                 return;
             }
-            p.rules.retain(|r| r.when != when);
+            let mut i = 0;
+            p.rules.retain(|r| {
+                i += 1;
+                beats_top(i - 1, r)
+            });
             p.set(top.value);
         }
         let when = When::all(state);
@@ -1000,6 +1012,56 @@ mod tests {
         q.rules.push(Rule::important(When::all(State::SELECTED), 2));
         assert_eq!(q.get(State::SELECTED), Some(2));
         assert_eq!(q.get(State::NONE), Some(1));
+    }
+
+    #[test]
+    fn fold_state_drops_every_rule_the_folded_one_beats() {
+        let class = 1u128 << 122;
+        let height = Prop {
+            base: Some(10.0),
+            rules: vec![
+                // An unconditional rule ranked below the size rule.
+                rule(State::NONE, 1 << 5, 40.0),
+                // A hover rule ranked below it.
+                rule(State::HOVER, class | (1 << 10), 30.0),
+                // `data-[size=sm]:`, the rule that folds.
+                rule(State::SIZE_SM, class | (1 << 30), 20.0),
+                // A hover rule of its rank later in the list beats it.
+                rule(State::HOVER, class | (1 << 30), 35.0),
+                // `data-[size=sm]:hover:` beats it.
+                rule(State::SIZE_SM | State::HOVER, (2 * class) | (1 << 30), 50.0),
+            ],
+        };
+        let mut r = Recipe {
+            height,
+            ..Recipe::default()
+        };
+        let before = r.clone();
+        r.fold_state(State::SIZE_SM);
+        assert_eq!(r.height.base, Some(20.0));
+        let values: Vec<_> = r.height.rules.iter().map(|r| r.value).collect();
+        assert_eq!(values, [35.0, 50.0]);
+        for s in [State::NONE, State::HOVER, State::FOCUS] {
+            assert_eq!(
+                r.height.get(s | State::SIZE_SM),
+                before.height.get(s | State::SIZE_SM),
+                "{s:?}"
+            );
+        }
+        // Without the later hover rule the folded value draws under hover.
+        let mut q = before.clone();
+        q.height.rules.remove(3);
+        q.fold_state(State::SIZE_SM);
+        assert_eq!(q.height.get(State::HOVER), Some(20.0));
+        assert_eq!(q.height.get(State::HOVER | State::SIZE_SM), Some(50.0));
+        // An unconditional rule that beats it leaves the property as it is.
+        let mut a = before;
+        a.height
+            .rules
+            .push(rule(State::NONE, class | (1 << 30), 60.0));
+        let kept = a.clone();
+        a.fold_state(State::SIZE_SM);
+        assert_eq!(a.height, kept.height);
     }
 
     #[test]
