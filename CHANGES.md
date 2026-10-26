@@ -37,7 +37,7 @@ are recorded here. The format is based on
 - `Input::id_source` is removed; use `Input::id_salt`, which takes the same string.
 - `components::shared::line_box` is removed. `components::text::TextLook` resolves a part's text from its recipes and lays it out and paints it as the crate's own widgets do: `.label(..)` adds it as an egui label, `.layout(..)` returns a `TextBlock` to paint, `.color(..)` sets its colour, `.resolved_color(ui)` reads it and `.leading(Leading::Field)` places it as in a text field; `TextLook::line_height` is the height of one line.
 - `theme.style` recipes carry `underline_offset`, the `underline-offset-*` distance of a part's underline below the baseline.
-- `components::text::content_scope` hands a container's text size, line height and colour to the crate text inside it.
+- `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
 - A card title, description or content in the footer of a small card (`CardSize::Sm`) now takes the small card's look, as in its body, for example its smaller title text; before, the footer drew them at the default size.
