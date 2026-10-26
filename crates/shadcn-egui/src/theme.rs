@@ -1108,6 +1108,15 @@ impl Theme {
         let v = &mut s.visuals;
         v.disabled_alpha = disabled_alpha.unwrap_or(v.disabled_alpha);
         v.dark_mode = dark;
+        // The ink of Chrome's grayscale anti-aliasing: light text on dark
+        // takes `coverage^0.81`, dark text on light the plain coverage
+        // (tests/text_coverage.rs). egui's dark default (`2c - c²`) draws
+        // 3 to 25 % more.
+        v.text_options.alpha_from_coverage = if dark {
+            egui::epaint::AlphaFromCoverage::Gamma(0.81)
+        } else {
+            egui::epaint::AlphaFromCoverage::Linear
+        };
         v.panel_fill = p.background;
         v.window_fill = p.card;
         v.window_stroke = Stroke::new(hairline, p.border);
