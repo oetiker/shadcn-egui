@@ -10,7 +10,7 @@
 //! use shadcn_egui::Theme;
 //!
 //! fn setup(ctx: &egui::Context) {
-//!     Theme::vega_dark().apply(ctx);
+//!     Theme::vega().apply(ctx);
 //! }
 //!
 //! fn ui(ui: &mut egui::Ui) {
@@ -41,12 +41,12 @@ pub mod style;
 pub mod theme;
 
 pub use preset::{
-    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Mode, Preset,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset,
     PresetCodeError, RadiusChoice, StyleName, ThemeColor,
 };
 pub use shadcn_egui_core::*;
 pub use style::Style;
-pub use theme::{theme, MenuColors, Metrics, Palette, ShadowLayer, Theme, ThemeFonts};
+pub use theme::{theme, Metrics, Palette, ShadowLayer, Theme, ThemeFonts};
 
 // The Claude Code skills under plugin/skills/ name this crate's API. Compiling
 // their rust fences as doctests makes an API change fail `cargo test` until

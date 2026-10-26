@@ -114,32 +114,31 @@ impl Palette {
     }
 }
 
-/// How menu content is coloured (upstream `menuColor`): today the Select
-/// list. `None` keeps the theme's own palette or dark flag.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct MenuColors {
-    /// The menu's palette; an inverted menu passes the dark palette.
-    pub palette: Option<Palette>,
-    /// The menu's dark flag; `Some(true)` for an inverted menu, so `dark:`
-    /// rules resolve as in dark mode.
-    pub dark: Option<bool>,
-}
-
+/// A shadcn theme: a style, the light and the dark palette, the radius,
+/// fonts and icons. [`Theme::apply`] installs both modes; the crate follows
+/// egui's light/dark choice (`ctx.set_theme(ThemePreference::Light)`, or the
+/// system's), and [`Theme::current`] resolves in the context's mode.
+/// Cloning is cheap: the style sits behind an `Arc`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     /// The shadcn style (vega, nova, …): every component part's recipe.
     pub style: Arc<Style>,
-    pub palette: Palette,
+    /// The light mode's colours.
+    pub light: Palette,
+    /// The dark mode's colours.
+    pub dark: Palette,
     /// shadcn `--radius`; the radius scale multiplies from it.
     pub radius: f32,
     pub metrics: Metrics,
-    pub dark: bool,
     /// Body and heading font; [`Theme::apply`] installs them.
     pub fonts: ThemeFonts,
     /// The icons components draw (default: built-in Lucide).
     pub icons: IconSlots,
-    /// Menu content colours (default: the theme's own).
-    pub menu: MenuColors,
+    /// Menu content draws in dark mode in both modes (upstream
+    /// `menuColor: "inverted"`; today the Select list).
+    pub menu_inverted: bool,
+    /// The mode colours and `dark:` rules resolve in.
+    mode: egui::Theme,
 }
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the
@@ -149,7 +148,7 @@ pub struct Theme {
 /// a single widget's drawing (a checkmark path, a knob inset) stays local.
 ///
 /// Override with struct update syntax:
-/// `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega_dark() }`.
+/// `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega() }`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Metrics {
     /// `text-xs`: badges, captions (`TextStyle::Small`).
@@ -204,29 +203,61 @@ impl Default for Metrics {
 }
 
 impl Theme {
-    /// `dark` follows the palette's background (OKLCH lightness below 0.5);
-    /// set `theme.dark` afterwards to override.
-    pub fn new(style: Style, palette: Palette, radius: f32) -> Self {
-        let dark = crate::color::srgb_to_oklch(palette.background).0 < 0.5;
+    /// A theme from a style, the light and the dark palette and the radius
+    /// (`--radius` in px). It resolves in dark mode, egui's fallback, until
+    /// [`Theme::current`] or [`Theme::in_mode`] gives it another.
+    pub fn new(style: Style, light: Palette, dark: Palette, radius: f32) -> Self {
         // `Arc::new` copies the large `Style` through two stack frames in a
         // debug build; a box moves it to the heap once.
         let style = Arc::from(Box::new(style));
         Self {
             style,
-            palette,
+            light,
+            dark,
             radius,
             metrics: Metrics::default(),
-            dark,
             fonts: ThemeFonts::inherit(&shadcn_egui_font_inter::FONT),
             icons: crate::icons::lucide::SLOTS,
-            menu: MenuColors::default(),
+            menu_inverted: false,
+            mode: egui::Theme::Dark,
         }
     }
-    pub fn vega_dark() -> Self {
-        Self::new(Style::vega(), Palette::dark(), 10.0)
+    /// The vega style with the neutral palettes and a 10 px radius.
+    pub fn vega() -> Self {
+        Self::new(Style::vega(), Palette::light(), Palette::dark(), 10.0)
     }
-    pub fn vega_light() -> Self {
-        Self::new(Style::vega(), Palette::light(), 10.0)
+
+    /// This theme resolving colours and `dark:` rules in `mode`, for code
+    /// that draws without a context's mode (tests, offscreen renders).
+    /// [`Theme::current`] already resolves in the context's mode, and
+    /// [`Theme::apply`] installs both modes whatever this says: switch
+    /// modes with `ctx.set_theme(..)`.
+    pub fn in_mode(mut self, mode: egui::Theme) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// The mode this theme resolves in.
+    pub fn mode(&self) -> egui::Theme {
+        self.mode
+    }
+
+    /// Whether this theme resolves in dark mode.
+    pub fn is_dark(&self) -> bool {
+        self.mode == egui::Theme::Dark
+    }
+
+    /// The palette of the mode this theme resolves in.
+    pub fn palette(&self) -> &Palette {
+        self.palette_of(self.mode)
+    }
+
+    /// The palette of `mode`.
+    pub fn palette_of(&self, mode: egui::Theme) -> &Palette {
+        match mode {
+            egui::Theme::Dark => &self.dark,
+            egui::Theme::Light => &self.light,
+        }
     }
 
     /// Body font and heading font (`None`: headings use the body font,
@@ -245,22 +276,19 @@ impl Theme {
         self
     }
 
-    /// Menu content colours (upstream `menuColor`). An inverted menu needs
-    /// the dark palette: `MenuColors { palette: Some(dark), dark: Some(true), .. }`.
-    pub fn menu(mut self, menu: MenuColors) -> Self {
-        self.menu = menu;
+    /// Menu content in dark mode in both modes (upstream
+    /// `menuColor: "inverted"`).
+    pub fn menu_inverted(mut self, inverted: bool) -> Self {
+        self.menu_inverted = inverted;
         self
     }
 
-    /// The theme menu content draws with: this one, with palette and dark
-    /// flag replaced by the menu's where set.
+    /// The theme menu content draws with: this one, in dark mode when the
+    /// menu is inverted.
     pub fn menu_theme(&self) -> Theme {
         let mut t = self.clone();
-        if let Some(p) = self.menu.palette {
-            t.palette = p;
-        }
-        if let Some(d) = self.menu.dark {
-            t.dark = d;
+        if self.menu_inverted {
+            t.mode = egui::Theme::Dark;
         }
         t
     }
@@ -269,7 +297,7 @@ impl Theme {
     /// `sm:` flag (the window is at least 640 points wide) and `md:` flag
     /// (768 points), as [`crate::layout::window_at_least`] tests them.
     pub fn state(&self, ctx: &egui::Context, s: State) -> State {
-        s.with(State::DARK, self.dark)
+        s.with(State::DARK, self.is_dark())
             .or(crate::layout::breakpoints(ctx))
     }
 
@@ -313,7 +341,7 @@ impl Theme {
 
     /// The palette colour of a style role.
     pub fn role(&self, r: Role) -> Color32 {
-        let p = &self.palette;
+        let p = self.palette();
         match r {
             Role::Background => p.background,
             Role::Foreground => p.foreground,
@@ -868,8 +896,9 @@ fn bind_heading(ctx: &egui::Context) -> Option<FontId> {
 }
 
 impl Theme {
-    /// Read the active theme stored by [`Theme::apply`]. Falls back to vega
-    /// dark, shared so the fallback does not build a [`Style`] per call.
+    /// Read the active theme stored by [`Theme::apply`], resolving in the
+    /// context's mode (`ctx.theme()`). Falls back to [`Theme::vega`],
+    /// shared so the fallback does not build a [`Style`] per call.
     ///
     /// Also binds a heading that still waits for its fonts, and lets one
     /// whose family the app's own fonts dropped fall back, for apps whose
@@ -879,16 +908,20 @@ impl Theme {
     /// component of the pass can still panic after an app's own
     /// `ctx.set_fonts`; use [`Theme::apply_with_fonts`].
     pub fn current(ctx: &egui::Context) -> Theme {
-        static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
+        static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
         if ctx.cumulative_pass_nr() > 0 {
             let _ = check_heading(ctx);
         }
         ctx.data(|d| d.get_temp::<Theme>(theme_id()))
             .unwrap_or_else(|| FALLBACK.clone())
+            .in_mode(ctx.theme())
     }
 
-    /// Push this theme into the egui context: fonts, type scale, spacing, colors.
+    /// Push this theme into the egui context: fonts, type scale, spacing,
+    /// and the colors of both modes (egui's dark and light style). The
+    /// crate's widgets and plain egui widgets then follow
+    /// `ctx.set_theme(..)` and the system's mode.
     ///
     /// Call once, right after the context is created, and again only when the
     /// theme changes. Not every frame: that would silently undo any other
@@ -917,7 +950,6 @@ impl Theme {
         install_fonts(ctx, self.fonts, base);
         crate::components::icon_atom::install(ctx);
         crate::components::shared::install_focus_modality(ctx);
-        let p = &self.palette;
         let m = &self.metrics;
         let hairline = crate::components::shared::line_width(m.border, ctx.pixels_per_point());
         let heading = FontId::new(m.text_heading, heading_family_now(ctx));
@@ -927,88 +959,103 @@ impl Theme {
             });
         }
 
-        ctx.all_styles_mut(|s| {
-            use FontFamily::Proportional;
-            s.text_styles = [
-                (TextStyle::Small, FontId::new(m.text_xs, Proportional)),
-                (TextStyle::Body, FontId::new(m.text_sm, Proportional)),
-                (TextStyle::Button, FontId::new(m.text_sm, Proportional)),
-                (
-                    TextStyle::Monospace,
-                    FontId::new(m.text_mono, FontFamily::Monospace),
-                ),
-                (TextStyle::Heading, heading.clone()),
-            ]
-            .into();
-
-            // egui-native widgets follow the style's default button: its
-            // height and horizontal padding, and the tabs gap between items.
-            // A style without a value gets egui's default, also when an
-            // earlier theme had set one.
-            let egui_default = egui::style::Spacing::default();
-            let button = [&*self.style.button_size_default];
-            // Set once, not per pass: no window breakpoint applies.
-            let none = State::NONE.with(State::DARK, self.dark);
-            let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
-            let pad_x =
-                pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
-            let height = pick(&button, |r| &r.height, none);
-            // egui's button is its text row plus twice `button_padding.y`, and
-            // at least `interact_size.y`: keep the padding within the height.
-            let pad_y = height.map_or(egui_default.button_padding.y, |h| {
-                ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0)
-            });
-            s.spacing.item_spacing = egui::vec2(gap, gap);
-            s.spacing.button_padding = egui::vec2(pad_x, pad_y);
-            s.spacing.window_margin = egui::Margin::same(0);
-            s.spacing.interact_size.y = height.unwrap_or(egui_default.interact_size.y);
-
-            // Plain egui widgets fade as the style's controls do
-            // (`disabled:opacity-50` on the button).
-            let control = State::NONE.with(State::DARK, self.dark).or(State::DISABLED);
-            let disabled_alpha = pick(&[&*self.style.button], |r| &r.opacity, control);
-            let v = &mut s.visuals;
-            v.disabled_alpha = disabled_alpha.unwrap_or(v.disabled_alpha);
-            v.dark_mode = self.dark;
-            v.panel_fill = p.background;
-            v.window_fill = p.card;
-            v.window_stroke = Stroke::new(hairline, p.border);
-            v.extreme_bg_color = p.input;
-            v.faint_bg_color = p.muted;
-            v.override_text_color = Some(p.foreground);
-            v.hyperlink_color = p.primary;
-            v.selection.bg_fill = p.primary.gamma_multiply(0.35);
-            v.selection.stroke = Stroke::new(hairline, p.ring);
-            // Chrome's caret: 1 css px of the text colour (`caret-color: auto`).
-            v.text_cursor.stroke = Stroke::new(1.0_f32, p.foreground);
-            v.widgets.noninteractive.bg_fill = p.background;
-            v.widgets.noninteractive.bg_stroke = Stroke::new(hairline, p.border);
-            v.widgets.noninteractive.fg_stroke = Stroke::new(hairline, p.foreground);
-            for w in [
-                &mut v.widgets.inactive,
-                &mut v.widgets.hovered,
-                &mut v.widgets.active,
-                &mut v.widgets.open,
-            ] {
-                w.bg_fill = p.secondary;
-                w.weak_bg_fill = p.secondary;
-                w.bg_stroke = Stroke::new(hairline, p.border);
-                w.fg_stroke = Stroke::new(hairline, p.foreground);
-                w.corner_radius = egui::CornerRadius::same(self.radius_md() as u8);
-            }
-            // shadcn uses the `accent` token for hover/active feedback so
-            // native widgets (e.g. ComboBox dropdown items) don't look inert.
-            for w in [&mut v.widgets.hovered, &mut v.widgets.active] {
-                w.bg_fill = p.accent;
-                w.weak_bg_fill = p.accent;
-            }
-        });
+        for mode in [egui::Theme::Dark, egui::Theme::Light] {
+            let dark = mode == egui::Theme::Dark;
+            let p = self.palette_of(mode);
+            ctx.style_mut_of(mode, |s| self.style_egui(s, p, dark, hairline, &heading));
+        }
 
         ctx.data_mut(|d| {
             d.insert_temp(theme_id(), self.clone());
             d.insert_temp(hairline_id(), hairline);
         });
         install_hairline_hook(ctx);
+    }
+
+    /// One mode's egui style: type scale, spacing and colours.
+    fn style_egui(
+        &self,
+        s: &mut egui::Style,
+        p: &Palette,
+        dark: bool,
+        hairline: f32,
+        heading: &FontId,
+    ) {
+        let m = &self.metrics;
+        use FontFamily::Proportional;
+        s.text_styles = [
+            (TextStyle::Small, FontId::new(m.text_xs, Proportional)),
+            (TextStyle::Body, FontId::new(m.text_sm, Proportional)),
+            (TextStyle::Button, FontId::new(m.text_sm, Proportional)),
+            (
+                TextStyle::Monospace,
+                FontId::new(m.text_mono, FontFamily::Monospace),
+            ),
+            (TextStyle::Heading, heading.clone()),
+        ]
+        .into();
+
+        // egui-native widgets follow the style's default button: its
+        // height and horizontal padding, and the tabs gap between items.
+        // A style without a value gets egui's default, also when an
+        // earlier theme had set one.
+        let egui_default = egui::style::Spacing::default();
+        let button = [&*self.style.button_size_default];
+        // Set once, not per pass: no window breakpoint applies.
+        let none = State::NONE.with(State::DARK, dark);
+        let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
+        let pad_x =
+            pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
+        let height = pick(&button, |r| &r.height, none);
+        // egui's button is its text row plus twice `button_padding.y`, and
+        // at least `interact_size.y`: keep the padding within the height.
+        let pad_y = height.map_or(egui_default.button_padding.y, |h| {
+            ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0)
+        });
+        s.spacing.item_spacing = egui::vec2(gap, gap);
+        s.spacing.button_padding = egui::vec2(pad_x, pad_y);
+        s.spacing.window_margin = egui::Margin::same(0);
+        s.spacing.interact_size.y = height.unwrap_or(egui_default.interact_size.y);
+
+        // Plain egui widgets fade as the style's controls do
+        // (`disabled:opacity-50` on the button).
+        let control = State::NONE.with(State::DARK, dark).or(State::DISABLED);
+        let disabled_alpha = pick(&[&*self.style.button], |r| &r.opacity, control);
+        let v = &mut s.visuals;
+        v.disabled_alpha = disabled_alpha.unwrap_or(v.disabled_alpha);
+        v.dark_mode = dark;
+        v.panel_fill = p.background;
+        v.window_fill = p.card;
+        v.window_stroke = Stroke::new(hairline, p.border);
+        v.extreme_bg_color = p.input;
+        v.faint_bg_color = p.muted;
+        v.override_text_color = Some(p.foreground);
+        v.hyperlink_color = p.primary;
+        v.selection.bg_fill = p.primary.gamma_multiply(0.35);
+        v.selection.stroke = Stroke::new(hairline, p.ring);
+        // Chrome's caret: 1 css px of the text colour (`caret-color: auto`).
+        v.text_cursor.stroke = Stroke::new(1.0_f32, p.foreground);
+        v.widgets.noninteractive.bg_fill = p.background;
+        v.widgets.noninteractive.bg_stroke = Stroke::new(hairline, p.border);
+        v.widgets.noninteractive.fg_stroke = Stroke::new(hairline, p.foreground);
+        for w in [
+            &mut v.widgets.inactive,
+            &mut v.widgets.hovered,
+            &mut v.widgets.active,
+            &mut v.widgets.open,
+        ] {
+            w.bg_fill = p.secondary;
+            w.weak_bg_fill = p.secondary;
+            w.bg_stroke = Stroke::new(hairline, p.border);
+            w.fg_stroke = Stroke::new(hairline, p.foreground);
+            w.corner_radius = egui::CornerRadius::same(self.radius_md() as u8);
+        }
+        // shadcn uses the `accent` token for hover/active feedback so
+        // native widgets (e.g. ComboBox dropdown items) don't look inert.
+        for w in [&mut v.widgets.hovered, &mut v.widgets.active] {
+            w.bg_fill = p.accent;
+            w.weak_bg_fill = p.accent;
+        }
     }
 }
 

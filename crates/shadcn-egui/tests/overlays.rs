@@ -18,7 +18,7 @@ fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
         .with_size(vec2(640.0, 360.0))
         .build_ui_state(
             |ui, (open, clicks): &mut (bool, u32)| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.label("page beneath");
                 Dialog::new("confirm", "Delete session?")
                     .description("The session and its files are removed.")
@@ -135,7 +135,7 @@ fn dialog_close_button_can_be_hidden() {
     let mut h = Harness::builder()
         .with_size(vec2(640.0, 360.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             Dialog::new("nc", "Title")
                 .show_close_button(false)
                 .show(ui.ctx(), &mut true, |_| {});
@@ -214,7 +214,7 @@ fn popover_harness() -> Harness<'static> {
     Harness::builder()
         .with_size(vec2(420.0, 240.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             popover_trigger(ui);
         })
 }
@@ -319,7 +319,7 @@ fn tooltip_shows_on_hover() {
     let mut h = Harness::builder()
         .with_size(vec2(240.0, 120.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             tooltip_trigger(ui);
         });
     h.run();
@@ -362,7 +362,7 @@ fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
 #[test]
 fn tooltip_box_takes_the_styles_border() {
     use shadcn_egui::style::{Paint, Prop, Role};
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.tooltip_content.border_width = Prop::fixed(4.0);
         s.tooltip_content.border_color = Prop::fixed(Paint::Role(Role::Destructive, 1.0));
     });
@@ -401,7 +401,7 @@ fn select_harness(start: usize) -> Harness<'static, usize> {
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS).placeholder("Pick a fruit"));
                 ui.label("elsewhere");
             },
@@ -477,7 +477,7 @@ fn open_select_ignores_keys_once_focus_moves_elsewhere() {
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS));
                 ui.add(shadcn_egui::components::button::Button::new("Other"));
             },
@@ -541,7 +541,7 @@ fn select_disabled_does_not_open() {
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
             },
             0usize,
@@ -647,7 +647,7 @@ fn select_list_is_capped_to_the_window() {
         .with_size(vec2(200.0, 300.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_light().apply(ui.ctx());
+                Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
                 ui.add(Select::new("long", value, &LONG).width(150.0));
             },
             0usize,
@@ -679,7 +679,7 @@ fn select_trigger_is_capped_to_the_room() {
             .with_size(vec2(200.0, 300.0))
             .build_ui_state(
                 move |ui, value: &mut usize| {
-                    Theme::vega_light().apply(ui.ctx());
+                    Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
                     let select = Select::new("long", value, &LONG);
                     match width {
                         Some(w) => ui.add(select.width(w)),
@@ -704,7 +704,7 @@ fn select_trigger_is_capped_to_the_room() {
 #[test]
 fn select_trigger_in_no_room_takes_its_content_minimum() {
     let ctx = egui::Context::default();
-    Theme::vega_light().apply(&ctx);
+    Theme::vega().in_mode(egui::Theme::Light).apply(&ctx);
     let mut v = 0usize;
     let mut rects = (egui::Rect::NOTHING, egui::Rect::NOTHING);
     for _ in 0..2 {

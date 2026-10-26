@@ -1352,7 +1352,8 @@ mod tests {
         let context = |ppp: f32| {
             let ctx = egui::Context::default();
             ctx.set_pixels_per_point(ppp);
-            crate::Theme::vega_light().apply(&ctx);
+            crate::Theme::vega().apply(&ctx);
+            ctx.set_theme(egui::Theme::Light);
             let _ = ctx.run_ui(Default::default(), |_| {});
             ctx
         };

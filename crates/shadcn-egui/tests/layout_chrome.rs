@@ -137,7 +137,7 @@ fn crate_case(scale: f32, width: f32, build: impl Fn(&mut Ui, &Items) + 'static)
                 *r = r.translate(-max.min.to_vec2());
             }
         });
-    Theme::vega_light().apply(&h.ctx);
+    Theme::vega().in_mode(egui::Theme::Light).apply(&h.ctx);
     for _ in 0..8 {
         h.step();
     }
@@ -238,7 +238,7 @@ fn relearn_case(first: &'static str) -> (egui::Vec2, egui::Vec2) {
                 *r = r.translate(-max.min.to_vec2());
             }
         });
-    Theme::vega_light().apply(&h.ctx);
+    Theme::vega().in_mode(egui::Theme::Light).apply(&h.ctx);
     for _ in 0..4 {
         h.step();
     }

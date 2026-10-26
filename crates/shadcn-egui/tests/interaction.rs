@@ -21,7 +21,7 @@ use std::cell::Cell;
 fn two_targets(ctx: &egui::Context, events: Vec<egui::Event>) -> [State; 2] {
     let mut st = [State::NONE; 2];
     common::pass(Loop::RunUi, ctx, events, |ui| {
-        let theme = Theme::vega_light();
+        let theme = Theme::vega().in_mode(egui::Theme::Light);
         for (i, x) in [0.0, 100.0].into_iter().enumerate() {
             let rect = Rect::from_min_size(egui::pos2(x, 0.0), egui::vec2(80.0, 30.0));
             let mut resp = ui.interact(rect, egui::Id::new(("target", i)), egui::Sense::click());
@@ -95,11 +95,11 @@ fn the_modality_sees_passes_without_crate_widgets() {
     let run = |events, ask: bool| {
         let mut st = State::NONE;
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             let mut resp = ui.interact(rect, egui::Id::new("t"), egui::Sense::click());
             if ask {
                 pressable(&mut resp, ActivationKeys::Button);
-                st = interaction_state(&Theme::vega_light(), &resp, State::NONE);
+                st = interaction_state(&Theme::vega().in_mode(egui::Theme::Light), &resp, State::NONE);
             }
         });
         st
@@ -121,12 +121,12 @@ fn button_clicks_on_enter_press_and_space_release() {
     let (rect, clicks, active) = (Cell::new(Rect::NOTHING), Cell::new(0), Cell::new(false));
     let run = |events| {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             let resp = ui.add(Button::new("Save"));
             rect.set(resp.rect);
             clicks.set(clicks.get() + usize::from(resp.clicked()));
             active.set(
-                interaction_state(&Theme::vega_light(), &resp, State::NONE).contains(State::ACTIVE),
+                interaction_state(&Theme::vega().in_mode(egui::Theme::Light), &resp, State::NONE).contains(State::ACTIVE),
             );
             ui.add(Button::new("Other"));
         });
@@ -159,7 +159,7 @@ fn checkbox_toggles_on_space_only() {
     let (rect, checked) = (Cell::new(Rect::NOTHING), Cell::new(false));
     let run = |events| {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             let mut c = checked.get();
             rect.set(ui.add(Checkbox::new(&mut c)).rect);
             checked.set(c);
@@ -182,7 +182,7 @@ fn slider_focuses_on_press_and_ignores_space() {
     let (rect, value, focused) = (Cell::new(Rect::NOTHING), Cell::new(50.0), Cell::new(false));
     let run = |events| {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             ui.set_width(200.0);
             let mut v = value.get();
             let resp = ui.add(Slider::new(&mut v, 0.0..=100.0));
@@ -211,7 +211,7 @@ fn tab_trigger_selects_on_press() {
     let active = Cell::new(0);
     let run = |events| {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             let mut a = active.get();
             ui.add(Tabs::new(&mut a, &["Account", "Password"]));
             active.set(a);
@@ -232,7 +232,7 @@ fn switch_toggles_on_enter_and_space_presses_with_repeats() {
     let (rect, on) = (Cell::new(Rect::NOTHING), Cell::new(false));
     let run = |events| {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             let mut v = on.get();
             rect.set(ui.add(Switch::new(&mut v)).rect);
             on.set(v);
@@ -267,7 +267,7 @@ fn closed_select_opens_on_enter_space_and_arrow_down() {
     let (open, value) = (Cell::new(false), Cell::new(0usize));
     let run = |events| {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
-            Theme::vega_light().apply(ui.ctx());
+            Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
             let mut v = value.get();
             let resp = ui.add(Select::new("fruit", &mut v, &FRUITS));
             open.set(egui::Popup::is_id_open(

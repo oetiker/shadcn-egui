@@ -17,7 +17,7 @@ fn button_click_sets_flag() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         if ui.add(Button::new("Save")).clicked() {
             clicked.set(true);
         }
@@ -103,7 +103,7 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     use shadcn_egui::components::shared::interaction_state;
     use shadcn_egui::style::State;
     use shadcn_egui::Theme;
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let target = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(80.0, 30.0));
     let ctx = egui::Context::default();
     let (mut live, mut disabled) = (State::NONE, State::NONE);
@@ -143,7 +143,7 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
 fn button_fill_stops_inside_transparent_border() {
     use shadcn_egui::components::button::Button;
     use shadcn_egui::Theme;
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     let (rect, out) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
     let fill = theme.palette.primary;
     let fills: Vec<_> = common::rect_shapes(&out)
@@ -160,7 +160,7 @@ fn button_fill_stops_inside_transparent_border() {
 fn focused_button_shows_ring_and_ring_border() {
     use shadcn_egui::components::button::Button;
     use shadcn_egui::Theme;
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     let (rect, out) = common::measure_output(&theme, |ui| {
         let resp = ui.add(Button::new("Save"));
         resp.request_focus();
@@ -190,7 +190,7 @@ fn input_accepts_text() {
     let mut text = String::new();
     let mut h = Harness::new_ui_state(
         |ui, text: &mut String| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add(Input::new(text).hint("Email"));
         },
         std::mem::take(&mut text),
@@ -213,7 +213,7 @@ fn disabled_input_ignores_typing() {
     use shadcn_egui::Theme;
     let mut h = Harness::new_ui_state(
         |ui, text: &mut String| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add(Input::new(text).enabled(false));
         },
         String::new(),
@@ -235,7 +235,7 @@ fn disabled_input_ignores_typing() {
 fn input_overflows_a_narrow_column_without_widening_it() {
     use shadcn_egui::components::input::Input;
     let ctx = egui::Context::default();
-    Theme::vega_light().apply(&ctx);
+    Theme::vega().in_mode(egui::Theme::Light).apply(&ctx);
     let mut text = String::new();
     let mut widths = (0.0, 0.0);
     for events in [vec![], vec![], vec![egui::Event::Text("ab".into())]] {
@@ -311,7 +311,7 @@ fn tabs_harness(
     let active = std::rc::Rc::new(std::cell::Cell::new(start));
     let seen = active.clone();
     let h = egui_kittest::Harness::new_ui(move |ui| {
-        shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+        shadcn_egui::Theme::vega().apply(ui.ctx());
         let mut sel = seen.get();
         ui.add(Tabs::new(&mut sel, labels));
         seen.set(sel);
@@ -365,7 +365,7 @@ fn focused_label(h: &egui_kittest::Harness<'_>) -> Option<String> {
 fn tabs_are_one_tab_stop() {
     use shadcn_egui::components::tabs::Tabs;
     let mut h = egui_kittest::Harness::new_ui(|ui| {
-        shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+        shadcn_egui::Theme::vega().apply(ui.ctx());
         ui.add(egui::Button::new("Before"));
         let mut sel = 1;
         ui.add(Tabs::new(
@@ -904,7 +904,7 @@ fn disabled_label_paints_half_alpha_text() {
 #[test]
 fn separators_are_one_pixel_border_lines() {
     use shadcn_egui::components::separator::{separator, separator_vertical};
-    let theme = shadcn_egui::Theme::vega_light();
+    let theme = shadcn_egui::Theme::vega().in_mode(egui::Theme::Light);
     let (_, out) = common::measure_output(&theme, |ui| {
         ui.allocate_response(egui::vec2(200.0, 0.0), egui::Sense::hover());
         separator(ui);
@@ -962,7 +962,7 @@ fn select_and_badge_shorthands_do_not_panic() {
     use shadcn_egui::components::select::select;
     use shadcn_egui::Theme;
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         let mut choice = 0usize;
         select(ui, "lang", &mut choice, &["English", "German"]);
         badge(ui, "New", BadgeVariant::Default);
@@ -1103,7 +1103,7 @@ fn card_side_padding_follows_size() {
 /// A card fills the available width, like a block element.
 #[test]
 fn card_fills_available_width() {
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let card = common::measure(&theme, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
@@ -1147,7 +1147,7 @@ fn card_title_row_height_follows_style_and_size() {
 /// The action sits at the right edge of the header, the text to its left.
 #[test]
 fn card_action_is_right_aligned() {
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let mut action = egui::Rect::NOTHING;
     let mut title = egui::Rect::NOTHING;
     let card = common::measure(&theme, |ui| {
@@ -1214,7 +1214,7 @@ fn disabled_button_ignores_clicks() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         if ui.add(Button::new("Save").enabled(false)).clicked() {
             clicked.set(true);
         }
@@ -1239,7 +1239,7 @@ fn disabled_button_ignores_clicks() {
                     ..Default::default()
                 },
                 |ui| {
-                    Theme::vega_dark().apply(ui.ctx());
+                    Theme::vega().apply(ui.ctx());
                     rect = ui.add(Button::new("Save").enabled(enabled)).rect;
                 },
             );
@@ -1443,7 +1443,7 @@ fn checkbox_harness(enabled: bool, checked: bool) -> egui_kittest::Harness<'stat
     use shadcn_egui::Theme;
     let mut h = egui_kittest::Harness::new_ui_state(
         move |ui, s: &mut CheckboxState| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add_space(20.0);
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
@@ -1582,7 +1582,7 @@ fn switch_harness(enabled: bool, on: bool) -> egui_kittest::Harness<'static, Swi
     use shadcn_egui::Theme;
     let mut h = egui_kittest::Harness::new_ui_state(
         move |ui, s: &mut SwitchState| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add_space(20.0);
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
@@ -1652,7 +1652,7 @@ fn thumb_rect(
     size: shadcn_egui::components::switch::SwitchSize,
 ) -> (egui::Rect, egui::Rect) {
     use shadcn_egui::components::switch::Switch;
-    let theme = shadcn_egui::Theme::vega_light();
+    let theme = shadcn_egui::Theme::vega().in_mode(egui::Theme::Light);
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     let mut value = on;
@@ -1789,7 +1789,7 @@ fn run_slider(
         let mut h = egui_kittest::Harness::builder()
             .with_size(egui::vec2(240.0, 40.0))
             .build_ui(|ui| {
-                shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+                shadcn_egui::Theme::vega().apply(ui.ctx());
                 let mut value = cell.get();
                 rect.set(
                     ui.add(
@@ -1886,7 +1886,7 @@ fn slider_vertical_has_minimum_at_the_bottom() {
     use shadcn_egui::components::slider::{Slider, SliderOrientation};
     let mut h = egui_kittest::Harness::new_ui_state(
         |ui, s: &mut (f32, egui::Rect)| {
-            shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+            shadcn_egui::Theme::vega().apply(ui.ctx());
             s.1 = ui
                 .add(
                     Slider::new(&mut s.0, 0.0..=100.0)
@@ -2058,7 +2058,7 @@ fn disabled_widgets_fade_once() {
             )
         }),
     ];
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     for (name, add) in widgets {
         let (_, own) = common::measure_output(&theme, |ui| add(ui, false));
         let (_, by_ui) = common::measure_output(&theme, |ui| {
@@ -2155,7 +2155,7 @@ fn description_lines_are_text_sm_line_height() {
 fn switch_paints_its_style_shadow() {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::{pick, State};
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     assert!(pick(&[&*theme.style.switch], |r| &r.shadow, State::NONE).is_some());
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
     // The shadow is egui's blurred rect, cut to a mesh outside the box.
@@ -2172,7 +2172,7 @@ fn switch_paints_its_style_shadow() {
 /// part of the shadow lies under it.
 #[test]
 fn shadow_paints_only_outside_the_border_box() {
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     let mut text = String::new();
     let (rect, out) = common::measure_output(&theme, |ui| {
         ui.add(shadcn_egui::components::input::Input::new(&mut text))
@@ -2280,7 +2280,7 @@ fn theme_sets_disabled_alpha_from_the_style() {
 #[test]
 fn input_text_follows_md_breakpoint() {
     use shadcn_egui::components::input::Input;
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     let text_px = |width: f32| {
         let ctx = egui::Context::default();
         theme.apply(&ctx);

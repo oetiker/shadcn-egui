@@ -20,7 +20,7 @@ use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
 use crate::components::tooltip::tooltip;
 use crate::preset::{
-    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Mode, Preset,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset,
     RadiusChoice, StyleName, ThemeColor,
 };
 use crate::{layout, Theme};
@@ -66,7 +66,7 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(t.palette.background)
+                .fill(t.palette().background)
                 .inner_margin(egui::Margin::same(32)),
         )
         .show_inside(ui, |ui| {
@@ -251,13 +251,14 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 /// code field, and the demo widgets' values.
 pub struct GalleryState {
     pub preset: Preset,
-    pub mode: Mode,
+    /// Light or dark; the gallery passes it to `ctx.set_theme`.
+    pub mode: egui::Theme,
     /// The preset code field; the pickers rewrite it when they change.
     pub code: String,
     /// The last Apply's error, shown under the code field.
     code_error: Option<String>,
     /// What the context shows; `None` until the first pass applies it.
-    applied: Option<(Preset, Mode)>,
+    applied: Option<(Preset, egui::Theme)>,
     tab: usize,
     name: String,
     email: String,
@@ -270,7 +271,7 @@ pub struct GalleryState {
 
 impl GalleryState {
     /// Pickers set to `preset` in `mode`; the first [`gallery_ui`] pass applies it.
-    pub fn new(preset: Preset, mode: Mode) -> Self {
+    pub fn new(preset: Preset, mode: egui::Theme) -> Self {
         Self {
             preset,
             mode,
@@ -288,14 +289,18 @@ impl GalleryState {
         }
     }
 
-    /// Apply the preset when it or the mode changed since the last apply,
-    /// never every frame (a preset logs its fallback warnings per apply).
+    /// Apply the preset when it changed since the last apply, never every
+    /// frame (a preset logs its fallback warnings per apply), and switch
+    /// the context's mode when the mode changed.
     fn apply_if_changed(&mut self, ctx: &egui::Context) {
-        let wanted = Some((self.preset, self.mode));
-        if self.applied != wanted {
-            self.preset.apply(ctx, self.mode);
-            self.applied = wanted;
+        let last = self.applied;
+        if last.map(|(p, _)| p) != Some(self.preset) {
+            self.preset.apply(ctx);
         }
+        if last.map(|(_, m)| m) != Some(self.mode) {
+            ctx.set_theme(self.mode);
+        }
+        self.applied = Some((self.preset, self.mode));
     }
 
     /// Decode the code field into the pickers, or keep everything and show
@@ -314,7 +319,7 @@ impl GalleryState {
 impl Default for GalleryState {
     /// ui.shadcn.com's default preset, light.
     fn default() -> Self {
-        Self::new(Preset::default(), Mode::Light)
+        Self::new(Preset::default(), egui::Theme::Light)
     }
 }
 
@@ -337,7 +342,7 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     }
     let t = Theme::current(ui.ctx());
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(t.palette.background))
+        .frame(egui::Frame::new().fill(t.palette().background))
         .show_inside(ui, |ui| {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
@@ -410,7 +415,7 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
     egui::Panel::top("gallery_preset_bar")
         .frame(
             egui::Frame::new()
-                .fill(t.palette.background)
+                .fill(t.palette().background)
                 .inner_margin(egui::Margin::symmetric(32, 16)),
         )
         .show_inside(ui, |ui| {
@@ -432,13 +437,17 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
                         state.apply_code();
                     }
                     ui.add_space(16.0);
-                    let mut dark = usize::from(state.mode == Mode::Dark);
+                    let mut dark = usize::from(state.mode == egui::Theme::Dark);
                     if ui.add(Tabs::new(&mut dark, &["Light", "Dark"])).changed() {
-                        state.mode = if dark == 1 { Mode::Dark } else { Mode::Light };
+                        state.mode = if dark == 1 {
+                            egui::Theme::Dark
+                        } else {
+                            egui::Theme::Light
+                        };
                     }
                 });
                 if let Some(err) = &state.code_error {
-                    ui.label(egui::RichText::new(err).color(t.palette.destructive));
+                    ui.label(egui::RichText::new(err).color(t.palette().destructive));
                 }
                 preset_selects(ui, &mut state.preset);
             });

@@ -300,7 +300,7 @@ fn drawn(
 fn drawn_vega(files: &'static FontFiles, ppp: f32) -> Rows {
     let ctx = egui::Context::default();
     ctx.set_pixels_per_point(ppp);
-    Theme::vega_light().fonts(files, None).apply(&ctx);
+    Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
     let mut block = Recipe::default();
     block.text_size.base = Some(TextSize::Px(12.0));
     block.line_height.base = Some(1.625);
@@ -557,7 +557,7 @@ fn input_glyphs_sit_on_chromes_x() {
                 let ctx = egui::Context::default();
                 ctx.set_pixels_per_point(scale);
                 let screen = if item == "input" {
-                    Theme::vega_light().fonts(files, None).apply(&ctx);
+                    Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
                     None
                 } else {
                     Theme::new(Style::nova(), Palette::light(), 10.0)
@@ -641,7 +641,7 @@ fn underlines_sit_on_chromes_pixels() {
         for scale in SCALES {
             let ctx = egui::Context::default();
             ctx.set_pixels_per_point(scale);
-            Theme::vega_light().fonts(files, None).apply(&ctx);
+            Theme::vega().in_mode(egui::Theme::Light).fonts(files, None).apply(&ctx);
             for l in UNDERLINES.lines().skip(1) {
                 let c: Vec<&str> = l.split('\t').collect();
                 if c[0] != name.id() || c[1].parse::<f32>().ok() != Some(scale) {

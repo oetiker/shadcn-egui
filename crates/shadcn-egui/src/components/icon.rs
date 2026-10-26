@@ -82,7 +82,7 @@ impl Widget for IconView<'_> {
             ..egui::WidgetInfo::new(egui::WidgetType::Image)
         });
         if ui.is_rect_visible(rect) {
-            let color = self.color.unwrap_or(t.palette.foreground);
+            let color = self.color.unwrap_or(t.palette().foreground);
             paint_icon(ui.painter(), rect, self.icon, color, t.metrics.icon_stroke);
         }
         resp

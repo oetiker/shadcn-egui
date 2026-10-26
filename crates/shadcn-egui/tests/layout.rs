@@ -6,7 +6,7 @@ use shadcn_egui::{layout, Theme};
 /// `vstack` puts its gap between rows, `row` between items.
 #[test]
 fn row_and_vstack_compose() {
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let (mut top, mut a, mut b) = (
         egui::Rect::NOTHING,
         egui::Rect::NOTHING,
@@ -32,7 +32,7 @@ fn row_and_vstack_compose() {
 /// `space_between`: the left part hugs the start, the right part the end.
 #[test]
 fn space_between_composes() {
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let (mut left, mut right, mut row) = (
         egui::Rect::NOTHING,
         egui::Rect::NOTHING,
@@ -57,7 +57,7 @@ fn space_between_composes() {
 /// least a text-sm line high.
 #[test]
 fn form_row_puts_the_control_after_the_label_column() {
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let mut control = egui::Rect::NOTHING;
     let mut gap = 0.0;
     let row = common::measure(&theme, |ui| {
@@ -77,7 +77,7 @@ fn form_row_puts_the_control_after_the_label_column() {
 #[test]
 fn form_row_label_is_the_crate_label() {
     use shadcn_egui::components::label::Label;
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let alone = common::measure_output(&theme, |ui| ui.add(Label::new("Name"))).1;
     let in_row = common::measure_output(&theme, |ui| {
         ui.scope(|ui| layout::form_row(ui, 100.0, "Name", |_| {}))
@@ -100,7 +100,7 @@ fn form_row_label_is_the_crate_label() {
 #[test]
 fn layout_card_matches_the_default_card() {
     use shadcn_egui::components::card::Card;
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let a = common::measure(&theme, |ui| {
         ui.scope(|ui| {
             layout::card(ui, |ui| {
@@ -125,7 +125,7 @@ fn layout_card_matches_the_default_card() {
 #[test]
 fn a_card_in_unbounded_room_takes_its_padding() {
     use shadcn_egui::components::card::Card;
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let rect = common::measure(&theme, |ui| {
         ui.allocate_ui(egui::vec2(f32::INFINITY, 400.0), |ui| {
             ui.scope(|ui| Card::new().show(ui, |_| ())).response
@@ -143,7 +143,7 @@ fn wrap_row_wraps_when_out_of_width() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(200.0, 200.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             rects.borrow_mut().clear();
             layout::wrap_row(ui, 8.0, |ui| {
                 for _ in 0..4 {
@@ -324,7 +324,7 @@ fn row_with_a_nested_stack_settles() {
 fn row_centres_a_widget_beside_a_nested_stack() {
     use shadcn_egui::components::button::Button;
     let ctx = egui::Context::default();
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     let (mut stack, mut button) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
     for _ in 0..3 {
         let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
@@ -380,7 +380,7 @@ fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
         ctx.load_texture(name, pixels, Default::default())
     };
     let ctx = egui::Context::default();
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     let (small, large) = (texture(&ctx, "small", 120), texture(&ctx, "large", 240));
     let mut before = [egui::Rect::NOTHING; 3];
     for _ in 0..4 {
@@ -397,7 +397,7 @@ fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
         after = frame(&ctx, &large);
     }
     let fresh_ctx = egui::Context::default();
-    Theme::vega_dark().apply(&fresh_ctx);
+    Theme::vega().apply(&fresh_ctx);
     let fresh_large = texture(&fresh_ctx, "large", 240);
     let mut fresh = [egui::Rect::NOTHING; 3];
     for _ in 0..5 {

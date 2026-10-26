@@ -15,19 +15,19 @@ pub fn themes() -> Vec<(&'static str, Theme)> {
     vec![
         (
             "vega_dark",
-            Theme::new(Style::vega(), Palette::dark(), 10.0),
+            Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0),
         ),
         (
             "vega_light",
-            Theme::new(Style::vega(), Palette::light(), 10.0),
+            Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).in_mode(egui::Theme::Light),
         ),
         (
             "nova_dark",
-            Theme::new(Style::nova(), Palette::dark(), 10.0),
+            Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0),
         ),
         (
             "nova_light",
-            Theme::new(Style::nova(), Palette::light(), 10.0),
+            Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0).in_mode(egui::Theme::Light),
         ),
     ]
 }
@@ -49,8 +49,8 @@ pub fn snapshot_themes() -> Vec<(&'static str, Theme)> {
         .iter()
         .flat_map(|(dark, light, make)| {
             [
-                (*dark, Theme::new(make(), Palette::dark(), 10.0)),
-                (*light, Theme::new(make(), Palette::light(), 10.0)),
+                (*dark, Theme::new(make(), Palette::light(), Palette::dark(), 10.0)),
+                (*light, Theme::new(make(), Palette::light(), Palette::dark(), 10.0).in_mode(egui::Theme::Light)),
             ]
         })
         .collect()
@@ -78,8 +78,11 @@ pub fn page_harness<'a>(
     theme: Theme,
     mut ui_fn: impl FnMut(&mut egui::Ui) + 'a,
 ) -> Harness<'a> {
-    let bg = theme.palette.background;
-    let mut h = Harness::builder().with_size(size).build_ui(move |ui| {
+    let bg = theme.palette().background;
+    let mut h = Harness::builder()
+        .with_size(size)
+        .with_theme(theme.mode())
+        .build_ui(move |ui| {
         theme.apply(ui.ctx());
         // kittest wraps the ui in an 8px outer margin; paint the page
         // colour under all of it, so no band of another colour shows.
@@ -123,6 +126,7 @@ pub fn measure_output(
 ) -> (egui::Rect, egui::FullOutput) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
+    ctx.set_theme(theme.mode());
     let mut rect = egui::Rect::NOTHING;
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
     let out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);

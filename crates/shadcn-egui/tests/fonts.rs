@@ -67,7 +67,7 @@ fn ink(theme: &Theme, family: fn(&egui::Context) -> FontFamily) -> u64 {
 
 #[test]
 fn each_weight_has_more_ink_than_the_one_below() {
-    let t = Theme::vega_light();
+    let t = Theme::vega().in_mode(egui::Theme::Light);
     let inks = [
         ink(&t, |c| family_for(c, Weight::Normal)),
         ink(&t, |c| family_for(c, Weight::Medium)),
@@ -89,7 +89,7 @@ fn definitions_after_apply(theme: &Theme) -> FontDefinitions {
 
 #[test]
 fn every_named_family_falls_back_to_egui_fonts() {
-    let defs = definitions_after_apply(&Theme::vega_dark());
+    let defs = definitions_after_apply(&Theme::vega());
     let egui_proportional = FontDefinitions::default().families[&FontFamily::Proportional].clone();
     for name in [
         FAMILY_MEDIUM,
@@ -119,7 +119,7 @@ fn every_named_family_falls_back_to_egui_fonts() {
 
 #[test]
 fn inherit_maps_heading_families_to_the_body_font() {
-    let defs = definitions_after_apply(&Theme::vega_dark());
+    let defs = definitions_after_apply(&Theme::vega());
     assert_eq!(
         defs.families[&FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into())][0],
         "shadcn-body-600"
@@ -133,7 +133,7 @@ fn inherit_maps_heading_families_to_the_body_font() {
 #[test]
 fn a_heading_font_gets_its_own_faces() {
     let defs = definitions_after_apply(
-        &Theme::vega_dark().fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM)),
+        &Theme::vega().fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM)),
     );
     assert_eq!(
         defs.families[&FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into())][0],
@@ -147,7 +147,7 @@ fn a_heading_font_gets_its_own_faces() {
 
 #[test]
 fn monospace_takes_the_body_font_only_when_it_is_mono() {
-    let defs = definitions_after_apply(&Theme::vega_dark());
+    let defs = definitions_after_apply(&Theme::vega());
     assert_eq!(
         defs.families[&FontFamily::Monospace][0],
         "Hack",
@@ -158,14 +158,14 @@ fn monospace_takes_the_body_font_only_when_it_is_mono() {
         kind: FontKind::Mono,
         ..shadcn_egui_font_inter::FONT.clone()
     }));
-    let defs = definitions_after_apply(&Theme::vega_dark().fonts(mono, None));
+    let defs = definitions_after_apply(&Theme::vega().fonts(mono, None));
     assert_eq!(defs.families[&FontFamily::Monospace][0], "shadcn-body-400");
 }
 
 #[test]
 fn heading_text_style_uses_the_heading_semibold_family() {
     let ctx = egui::Context::default();
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     let id = &ctx.global_style().text_styles[&egui::TextStyle::Heading];
     assert_eq!(id.family, FontFamily::Name(FAMILY_HEADING_SEMIBOLD.into()));
@@ -190,12 +190,12 @@ fn has_marker(ctx: &egui::Context) -> bool {
 #[test]
 fn a_mode_toggle_does_not_reinstall_fonts() {
     let ctx = egui::Context::default();
-    Theme::vega_light().apply(&ctx);
+    Theme::vega().in_mode(egui::Theme::Light).apply(&ctx);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     mark(&ctx);
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     assert!(has_marker(&ctx), "same fonts: the atlas is not rebuilt");
-    Theme::vega_dark()
+    Theme::vega()
         .fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM))
         .apply(&ctx);
     assert!(!has_marker(&ctx), "new heading font: fonts are reinstalled");
@@ -211,7 +211,7 @@ fn apply_with_fonts_keeps_the_apps_fonts() {
     );
     base.families
         .insert(FontFamily::Name("app".into()), vec!["app-font".into()]);
-    Theme::vega_light().apply_with_fonts(&ctx, base);
+    Theme::vega().in_mode(egui::Theme::Light).apply_with_fonts(&ctx, base);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     let defs = ctx.fonts(|f| f.definitions().clone());
     assert!(defs.families.contains_key(&FontFamily::Name("app".into())));
@@ -229,9 +229,9 @@ fn app_fonts_survive_a_mode_toggle() {
         "app-font".into(),
         Arc::new(FontData::from_static(OXANIUM.face(400).data)),
     );
-    Theme::vega_light().apply_with_fonts(&ctx, base);
+    Theme::vega().in_mode(egui::Theme::Light).apply_with_fonts(&ctx, base);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     assert!(ctx.fonts(|f| f.definitions().font_data.contains_key("app-font")));
 }
@@ -246,10 +246,10 @@ fn switching_fonts_on_a_live_context_does_not_panic() {
         .build_ui(|ui| {
             let n = frame.get();
             if n == 0 {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
             }
             if n == 2 {
-                Theme::vega_dark()
+                Theme::vega()
                     .fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM))
                     .apply(ui.ctx());
             }
@@ -275,7 +275,7 @@ fn a_heading_in_the_pass_of_the_first_apply_does_not_panic() {
     let mut h = Harness::builder()
         .with_size(vec2(360.0, 160.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             egui::Window::new("w").show(ui.ctx(), |ui| ui.heading("egui heading"));
         });
     h.step();
@@ -296,7 +296,7 @@ fn a_loop_without_pass_hooks_binds_the_heading_on_the_next_pass() {
         egui::Area::new("a".into()).show(ctx, |ui| ui.heading("egui heading"));
     };
     ctx.begin_pass(egui::RawInput::default());
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     heading(&ctx);
     let _ = ctx.end_pass();
     ctx.begin_pass(egui::RawInput::default());
@@ -343,9 +343,9 @@ fn apply_after_the_app_replaced_the_fonts_does_not_panic() {
         .build_ui(|ui| {
             let n = frame.get();
             match n {
-                0 => Theme::vega_dark().apply(ui.ctx()),
+                0 => Theme::vega().apply(ui.ctx()),
                 2 => ui.ctx().set_fonts(app_fonts()),
-                3 => Theme::vega_light().apply(ui.ctx()),
+                3 => Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx()),
                 _ => {}
             }
             frame.set(n + 1);
@@ -377,10 +377,10 @@ fn apply_in_the_pass_that_replaces_the_fonts_does_not_panic() {
         .build_ui(|ui| {
             let n = frame.get();
             match n {
-                0 => Theme::vega_dark().apply(ui.ctx()),
+                0 => Theme::vega().apply(ui.ctx()),
                 2 => {
                     ui.ctx().set_fonts(app_fonts());
-                    Theme::vega_light().apply(ui.ctx());
+                    Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
                 }
                 _ => {}
             }
@@ -405,11 +405,11 @@ fn a_loop_without_pass_hooks_survives_replaced_fonts() {
         egui::Area::new("a".into()).show(ctx, every_family);
         let _ = ctx.end_pass();
     };
-    pass(&ctx, &|ctx| Theme::vega_dark().apply(ctx));
+    pass(&ctx, &|ctx| Theme::vega().apply(ctx));
     pass(&ctx, &|_| {});
     pass(&ctx, &|ctx| {
         ctx.set_fonts(app_fonts());
-        Theme::vega_light().apply(ctx);
+        Theme::vega().in_mode(egui::Theme::Light).apply(ctx);
     });
     pass(&ctx, &|_| {});
     pass(&ctx, &|_| {});
@@ -497,7 +497,7 @@ fn reapply_over_current(ctx: &egui::Context, theme: &Theme) -> FontDefinitions {
 #[test]
 fn apply_with_current_fonts_adds_no_duplicates() {
     let ctx = egui::Context::default();
-    let t = Theme::vega_light();
+    let t = Theme::vega().in_mode(egui::Theme::Light);
     t.apply(&ctx);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     let first = ctx.fonts(|f| f.definitions().clone());
@@ -520,9 +520,9 @@ fn a_sans_body_after_a_mono_body_leaves_monospace_alone() {
     }));
     let ctx = egui::Context::default();
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
-    let defs = reapply_over_current(&ctx, &Theme::vega_light().fonts(mono, None));
+    let defs = reapply_over_current(&ctx, &Theme::vega().in_mode(egui::Theme::Light).fonts(mono, None));
     assert_eq!(defs.families[&FontFamily::Monospace][0], "shadcn-body-400");
-    let defs = reapply_over_current(&ctx, &Theme::vega_light());
+    let defs = reapply_over_current(&ctx, &Theme::vega().in_mode(egui::Theme::Light));
     let monospace = &defs.families[&FontFamily::Monospace];
     assert!(
         !monospace.iter().any(|k| k.starts_with("shadcn-")),
@@ -546,7 +546,7 @@ fn apply_with_fonts_keeps_app_entries_named_like_the_theme() {
         FontFamily::Name("app".into()),
         vec!["shadcn-body-400".into(), "Hack".into()],
     );
-    for theme in [Theme::vega_light(), Theme::vega_dark()] {
+    for theme in [Theme::vega().in_mode(egui::Theme::Light), Theme::vega()] {
         let defs = if ctx.cumulative_pass_nr() == 0 {
             theme.apply_with_fonts(&ctx, base.clone());
             let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -575,7 +575,7 @@ fn a_dropped_theme_face_leaves_the_apps_families() {
     let mut base = FontDefinitions::default();
     base.families
         .insert(FontFamily::Name("app".into()), vec!["Hack".into()]);
-    Theme::vega_light()
+    Theme::vega().in_mode(egui::Theme::Light)
         .fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM))
         .apply_with_fonts(&ctx, base);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -586,7 +586,7 @@ fn a_dropped_theme_face_leaves_the_apps_families() {
         .insert(0, "shadcn-heading-600".into());
     ctx.set_fonts(defs);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
-    let defs = reapply_over_current(&ctx, &Theme::vega_light());
+    let defs = reapply_over_current(&ctx, &Theme::vega().in_mode(egui::Theme::Light));
     assert!(!defs.font_data.contains_key("shadcn-heading-600"));
     assert_eq!(
         defs.families[&FontFamily::Name("app".into())],
@@ -614,7 +614,7 @@ fn dark_and_light_headings_rebind_at_their_own_sizes() {
             match n {
                 0 => {
                     ctx.set_theme(egui::Theme::Dark);
-                    Theme::vega_dark().apply(&ctx);
+                    Theme::vega().apply(&ctx);
                 }
                 2 => {
                     let light = ctx.style_of(egui::Theme::Light);
@@ -677,11 +677,11 @@ fn an_apps_own_leading_body_face_in_monospace_survives() {
         .unwrap()
         .insert(0, "shadcn-body-400".into());
     let want = base.families[&FontFamily::Monospace].clone();
-    Theme::vega_light().apply_with_fonts(&ctx, base);
+    Theme::vega().in_mode(egui::Theme::Light).apply_with_fonts(&ctx, base);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     let defs = ctx.fonts(|f| f.definitions().clone());
     assert_eq!(defs.families[&FontFamily::Monospace], want, "first install");
-    let defs = reapply_over_current(&ctx, &Theme::vega_light());
+    let defs = reapply_over_current(&ctx, &Theme::vega().in_mode(egui::Theme::Light));
     assert_eq!(defs.families[&FontFamily::Monospace], want, "reinstall");
 }
 
@@ -695,7 +695,7 @@ fn a_mono_body_lists_its_face_once_in_monospace() {
         .get_mut(&FontFamily::Monospace)
         .unwrap()
         .push("shadcn-body-400".into());
-    let mono = Theme::vega_light().fonts(fake_mono(), None);
+    let mono = Theme::vega().in_mode(egui::Theme::Light).fonts(fake_mono(), None);
     mono.apply_with_fonts(&ctx, base);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
     for _ in 0..2 {

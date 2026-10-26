@@ -42,7 +42,7 @@ fn focused_tabs(ui: &mut egui::Ui) -> egui::Response {
 
 #[test]
 fn issue6_tab_trigger_restyled_through_theme_style() {
-    for theme in [Theme::vega_light(), Theme::vega_dark()] {
+    for theme in [Theme::vega().in_mode(egui::Theme::Light), Theme::vega()] {
         let theme = issue6(theme);
         let (_, out) = common::measure_output(&theme, focused_tabs);
         let shapes = common::rect_shapes(&out);
@@ -69,8 +69,8 @@ fn issue6_tab_trigger_restyled_through_theme_style() {
         "tabs_issue6",
         vec2(320.0, 90.0),
         vec![
-            ("vega_light", issue6(Theme::vega_light())),
-            ("vega_dark", issue6(Theme::vega_dark())),
+            ("vega_light", issue6(Theme::vega().in_mode(egui::Theme::Light))),
+            ("vega_dark", issue6(Theme::vega())),
         ],
         |ui| {
             focused_tabs(ui);
@@ -160,7 +160,7 @@ fn important_app_rule_beats_generated_important() {
 /// ring on a focused line trigger still wins.
 #[test]
 fn important_app_ring_beats_line_focus_correction() {
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         let tr = &mut s.tabs_trigger;
         tr.ring_width
             .rules
@@ -188,7 +188,7 @@ fn important_app_ring_beats_line_focus_correction() {
 
 #[test]
 fn tabs_track_and_line_bar_come_from_the_style() {
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.tabs_list_variant_default.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.tabs_trigger_after.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
         s.tabs_trigger_after
@@ -217,7 +217,7 @@ fn tabs_track_and_line_bar_come_from_the_style() {
 /// Review Focus 5: the bar of a disabled line list fades with its trigger.
 #[test]
 fn disabled_line_bar_is_faded_with_its_trigger() {
-    let theme = Theme::vega_light();
+    let theme = Theme::vega().in_mode(egui::Theme::Light);
     let (_, out) = common::measure_output(&theme, |ui| {
         ui.add(
             Tabs::new(&mut 0, &["A", "B"])
@@ -361,7 +361,7 @@ fn tooltip_colours_come_from_the_style() {
     use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::button::{Button, ButtonVariant};
     use shadcn_egui::components::tooltip::tooltip;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.tooltip_content.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.tooltip_content.text.base = Some(Paint::Role(Role::Destructive, 1.0));
         s.tooltip_content.max_width.base = Some(80.0);
@@ -428,7 +428,7 @@ fn separator_line_comes_from_the_style() {
             .find(|r| r.fill == theme.palette.primary)
             .map(|r| r.rect.height())
     };
-    let thick = common::restyled(Theme::vega_light(), |s| {
+    let thick = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.separator.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.separator
             .height
@@ -437,7 +437,7 @@ fn separator_line_comes_from_the_style() {
     });
     assert_eq!(line(&thick), Some(3.0));
     // Review Focus 4: without a thickness rule, `metrics.border`.
-    let mut fallback = common::restyled(Theme::vega_light(), |s| {
+    let mut fallback = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.separator.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.separator.height = Prop::default();
     });
@@ -467,7 +467,7 @@ fn separator_line_comes_from_the_style() {
 #[test]
 fn button_disabled_opacity_comes_from_the_style() {
     use shadcn_egui::components::button::Button;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.button
             .opacity
             .rules
@@ -515,7 +515,7 @@ fn link_underline_takes_its_offset_from_the_style() {
     use shadcn_egui::components::button::{Button, ButtonVariant};
     // Upstream underlines on hover; an always-on underline needs no pointer.
     let underlined = |offset: Option<f32>| {
-        common::restyled(Theme::vega_light(), |s| {
+        common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
             s.button_variant_link.underline.base = Some(true);
             s.badge_variant_link.underline.base = Some(true);
             if let Some(o) = offset {
@@ -555,7 +555,7 @@ fn link_underline_takes_its_offset_from_the_style() {
 #[test]
 fn input_placeholder_and_fade_come_from_the_style() {
     use shadcn_egui::components::input::Input;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.input.text.rules.push(Rule::important(
             When::all(State::PLACEHOLDER),
             Paint::Role(Role::Primary, 1.0),
@@ -592,7 +592,7 @@ fn input_placeholder_and_fade_come_from_the_style() {
 fn select_fade_and_offset() {
     use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::select::Select;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.select_trigger
             .opacity
             .rules
@@ -621,7 +621,7 @@ fn select_fade_and_offset() {
         let mut h = egui_kittest::Harness::builder()
             .with_size(vec2(320.0, 260.0))
             .build_ui(move |ui| {
-                Theme::vega_light().apply(ui.ctx());
+                Theme::vega().in_mode(egui::Theme::Light).apply(ui.ctx());
                 let mut none = usize::MAX;
                 ui.add(
                     Select::new("fruit", &mut none, &["Apple", "Banana"])
@@ -687,7 +687,7 @@ fn hit_area_comes_from_the_style() {
     ];
     // Each inset gets its own value, so reading the other one fails.
     let insets = |x: f32, y: f32| {
-        common::restyled(Theme::vega_light(), |s| {
+        common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
             for r in [&mut s.checkbox, &mut s.switch] {
                 r.hit_inset_x.rules.push(Rule::important(When::ALWAYS, x));
                 r.hit_inset_y.rules.push(Rule::important(When::ALWAYS, y));
@@ -695,7 +695,7 @@ fn hit_area_comes_from_the_style() {
         })
     };
     for (name, add) in widgets {
-        let theme = Theme::vega_light();
+        let theme = Theme::vega().in_mode(egui::Theme::Light);
         let rect = common::measure(&theme, |ui| add(ui, &mut false));
         // 7 px out: inside the default 12 by 8 px reach, outside egui's
         // 5 px pointer tolerance.
@@ -716,7 +716,7 @@ fn hit_area_comes_from_the_style() {
 #[test]
 fn switch_fade_comes_from_the_style() {
     use shadcn_egui::components::switch::Switch;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.switch
             .opacity
             .rules
@@ -737,7 +737,7 @@ fn switch_fade_comes_from_the_style() {
 #[test]
 fn checkbox_fade_comes_from_the_style() {
     use shadcn_egui::components::checkbox::Checkbox;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.checkbox
             .opacity
             .rules
@@ -762,7 +762,7 @@ fn slider_fade_multiplies_down_the_parts() {
     // Each part its own factor, so a part that reads another's opacity
     // (or skips its parent's) lands on the wrong product.
     let (root, track, range, thumb) = (0.25, 0.5, 0.75, 0.625);
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         for (recipe, v) in [
             (&mut s.slider, root),
             (&mut s.slider_track, track),
@@ -830,13 +830,13 @@ fn popover_probe(theme: Theme, offset: Option<f32>) -> (egui::Rect, f32) {
 
 #[test]
 fn popover_width_and_offset() {
-    let wide = common::restyled(Theme::vega_light(), |s| {
+    let wide = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.popover_content.width.base = Some(400.0);
     });
-    let (near, w288) = popover_probe(Theme::vega_light(), None);
+    let (near, w288) = popover_probe(Theme::vega().in_mode(egui::Theme::Light), None);
     let (_, w400) = popover_probe(wide, None);
     assert_eq!(w400 - w288, 112.0);
-    let (far, _) = popover_probe(Theme::vega_light(), Some(20.0));
+    let (far, _) = popover_probe(Theme::vega().in_mode(egui::Theme::Light), Some(20.0));
     assert_eq!(far.top() - near.top(), 16.0);
 }
 
@@ -863,12 +863,12 @@ fn footer_gap(theme: Theme) -> f32 {
 
 #[test]
 fn dialog_footer_gap_comes_from_the_style() {
-    let wide = common::restyled(Theme::vega_light(), |s| {
+    let wide = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.dialog_footer.gap.base = Some(20.0);
     });
     assert_eq!(footer_gap(wide), 20.0);
     // No code fallback: a cleared gap is no gap.
-    let none = common::restyled(Theme::vega_light(), |s| {
+    let none = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.dialog_footer.gap = shadcn_egui::style::Prop::default();
     });
     assert_eq!(footer_gap(none), 0.0);
@@ -880,7 +880,7 @@ fn dialog_footer_gap_comes_from_the_style() {
 fn dialog_close_recipe_paints_the_close_button() {
     use shadcn_egui::components::dialog::Dialog;
     // Both layers set a base fill: the later `dialog_close` must win.
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.button_variant_ghost.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.dialog_close.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
@@ -914,7 +914,7 @@ fn dialog_close_recipe_paints_the_close_button() {
 #[test]
 fn label_text_colour_comes_from_the_style() {
     use shadcn_egui::components::label::Label;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.label.text.base = Some(Paint::Role(Role::Primary, 1.0));
     });
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Label::new("Email")));
@@ -925,7 +925,7 @@ fn label_text_colour_comes_from_the_style() {
 #[test]
 fn input_text_colour_comes_from_the_style() {
     use shadcn_egui::components::input::Input;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.input.text.base = Some(Paint::Role(Role::Primary, 1.0));
     });
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Input::new(&mut "typed".to_owned())));
@@ -937,7 +937,7 @@ fn input_text_colour_comes_from_the_style() {
 #[test]
 fn checkbox_tick_colour_comes_from_the_indicator() {
     use shadcn_egui::components::checkbox::Checkbox;
-    let theme = common::restyled(Theme::vega_light(), |s| {
+    let theme = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         s.checkbox_indicator.text.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
     let (_, out) = common::measure_output(&theme, |ui| ui.add(Checkbox::new(&mut true)));
@@ -965,8 +965,8 @@ fn replaced_recipe_sizes_fall_back_to_the_content() {
     use shadcn_egui::components::select::Select;
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::Recipe;
-    let base = Theme::vega_light();
-    let cleared = common::restyled(Theme::vega_light(), |s| {
+    let base = Theme::vega().in_mode(egui::Theme::Light);
+    let cleared = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         for r in [
             &mut s.button,
             &mut s.button_variant_default,
@@ -1059,8 +1059,8 @@ fn replaced_popover_recipe_keeps_its_content_width() {
         h.run();
         h.get_by_label("Two words").rect()
     };
-    let one_line = probe(Theme::vega_light()).height();
-    let cleared = common::restyled(Theme::vega_light(), |s| {
+    let one_line = probe(Theme::vega().in_mode(egui::Theme::Light)).height();
+    let cleared = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         *s.popover_content = Recipe::default();
     });
     let r = probe(cleared);
@@ -1094,7 +1094,7 @@ fn replaced_recipes_keep_their_icons() {
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::components::select::Select;
     use shadcn_egui::style::Recipe;
-    let cleared = common::restyled(Theme::vega_light(), |s| {
+    let cleared = common::restyled(Theme::vega().in_mode(egui::Theme::Light), |s| {
         *s.checkbox_indicator = Recipe::default();
         *s.select_trigger = Recipe::default();
         *s.select_item_indicator = Recipe::default();
@@ -1471,8 +1471,8 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
     ];
     let mut fails = Vec::new();
     for (name, restyle, render, required, allowed) in cases {
-        let plain = render(&Theme::vega_light());
-        let faded = render(&common::restyled(Theme::vega_light(), restyle));
+        let plain = render(&Theme::vega().in_mode(egui::Theme::Light));
+        let faded = render(&common::restyled(Theme::vega().in_mode(egui::Theme::Light), restyle));
         fails.extend(assert_fades(name, &plain, &faded, required, allowed));
     }
     assert!(fails.is_empty(), "{fails:#?}");
@@ -1559,8 +1559,8 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
         let render = |theme: &Theme| {
             common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
         };
-        let plain = render(&Theme::vega_light());
-        let faded = render(&common::restyled(Theme::vega_light(), restyle));
+        let plain = render(&Theme::vega().in_mode(egui::Theme::Light));
+        let faded = render(&common::restyled(Theme::vega().in_mode(egui::Theme::Light), restyle));
         fails.extend(assert_fades(name, &plain, &faded, &[0.5], &[]));
     }
     assert!(fails.is_empty(), "{fails:#?}");
@@ -1627,8 +1627,8 @@ fn disabled_rule_replaces_a_parts_base_opacity_in_a_disabled_ui() {
         let render = |theme: &Theme| {
             common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
         };
-        let plain = render(&Theme::vega_light());
-        let based = render(&common::restyled(Theme::vega_light(), restyle));
+        let plain = render(&Theme::vega().in_mode(egui::Theme::Light));
+        let based = render(&common::restyled(Theme::vega().in_mode(egui::Theme::Light), restyle));
         fails.extend(assert_fades(name, &plain, &based, &[], &[]));
     }
     assert!(fails.is_empty(), "{fails:#?}");
