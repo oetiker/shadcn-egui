@@ -414,3 +414,185 @@ fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
     assert_ne!(before, fresh, "the case needs another split");
     assert_eq!(after, fresh, "the row relearns the image's width");
 }
+
+/// Content for the sizing-pass tests: it pushes the rects to compare. The
+/// flag says whether its probe widget measures smaller in a sizing pass.
+type Content<'a> = &'a dyn Fn(&mut egui::Ui, bool, &mut Vec<egui::Rect>);
+
+/// Where [`frame_in`] lays out the content.
+#[derive(Clone, Copy)]
+enum Host {
+    /// The screen's `Ui`.
+    Screen,
+    /// A raw `egui::Area`, forced into a sizing pass when `true`.
+    Area(bool),
+}
+
+/// One frame of `content` in `host`: how many passes it took, and the
+/// rects `content` pushed in its last pass, relative to the content's
+/// top-left corner.
+fn frame_in(
+    ctx: &egui::Context,
+    host: Host,
+    sensitive: bool,
+    content: Content,
+) -> (u64, Vec<egui::Rect>) {
+    let before = ctx.cumulative_pass_nr();
+    let mut rects = Vec::new();
+    let mut run = |ui: &mut egui::Ui| {
+        rects.clear();
+        content(ui, sensitive, &mut rects);
+        let origin = ui.max_rect().min.to_vec2();
+        rects.iter_mut().for_each(|r| *r = r.translate(-origin));
+    };
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| match host {
+        Host::Screen => {
+            ui.scope(&mut run);
+        }
+        Host::Area(force) => {
+            egui::Area::new(egui::Id::new("popover"))
+                .sizing_pass(force)
+                .show(ui.ctx(), &mut run);
+        }
+    });
+    (ctx.cumulative_pass_nr() - before, rects)
+}
+
+/// `content` in an `egui::Area`, checked against egui's sizing pass.
+///
+/// The Area's first frame starts with a sizing pass. Where the content
+/// measures the same in it, the frame draws what the content draws on the
+/// screen and the next frame takes one pass. Where the content measures
+/// smaller there, the next frame may redo its pass (the sizing pass knew
+/// no better), and the frame after takes one.
+///
+/// A sizing pass the app forces on the settled Area keeps nothing the
+/// next frame has to undo: both take one pass, and that frame draws what
+/// the settled one drew.
+fn settles_in_an_area(name: &str, content: Content) {
+    let fresh = || {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        ctx
+    };
+    let screen = fresh();
+    let mut outside = Vec::new();
+    for _ in 0..3 {
+        outside = frame_in(&screen, Host::Screen, false, content).1;
+    }
+    let ctx = fresh();
+    let (_, first) = frame_in(&ctx, Host::Area(false), false, content);
+    let (passes, second) = frame_in(&ctx, Host::Area(false), false, content);
+    assert_eq!(
+        first, outside,
+        "{name}: the sizing frame draws as the screen"
+    );
+    assert_eq!(passes, 1, "{name}: the frame after the sizing frame");
+    assert_eq!(
+        second, outside,
+        "{name}: the next frame draws as the screen"
+    );
+
+    let ctx = fresh();
+    let _ = frame_in(&ctx, Host::Area(false), true, content);
+    let (_, second) = frame_in(&ctx, Host::Area(false), true, content);
+    let (passes, third) = frame_in(&ctx, Host::Area(false), true, content);
+    assert_eq!(second, outside, "{name}: a smaller sizing pass, next frame");
+    assert_eq!(passes, 1, "{name}: a smaller sizing pass, a still frame");
+    assert_eq!(
+        third, outside,
+        "{name}: a smaller sizing pass, a still frame"
+    );
+
+    let (passes, _) = frame_in(&ctx, Host::Area(true), true, content);
+    assert_eq!(passes, 1, "{name}: a forced sizing pass");
+    let (passes, after) = frame_in(&ctx, Host::Area(false), true, content);
+    assert_eq!(passes, 1, "{name}: the frame after a forced sizing pass");
+    assert_eq!(
+        after, outside,
+        "{name}: a forced sizing pass changes nothing"
+    );
+}
+
+/// A widget that measures smaller in a sizing pass when `sensitive`, as
+/// egui's `Separator` (no length) and `Sides` do.
+fn probe(ui: &mut egui::Ui, sensitive: bool, size: egui::Vec2) -> egui::Rect {
+    let size = if sensitive && ui.is_sizing_pass() {
+        size / 2.0
+    } else {
+        size
+    };
+    ui.allocate_exact_size(size, egui::Sense::hover()).0
+}
+
+/// The row's height (`request_discard` "layout::row content height
+/// changed") in an `egui::Area`.
+#[test]
+fn row_height_settles_in_an_area() {
+    settles_in_an_area("row", &|ui, sensitive, out| {
+        layout::row(ui, 8.0, |ui| {
+            out.push(ui.button("a").rect);
+            out.push(probe(ui, sensitive, egui::vec2(20.0, 60.0)));
+            out.push(ui.label("b").rect);
+        });
+    });
+}
+
+/// A `vstack`'s width in a `wrap_row` (`request_discard` "layout::vstack
+/// width changed in a wrap_row") in an `egui::Area`.
+#[test]
+fn wrap_row_stack_settles_in_an_area() {
+    settles_in_an_area("wrap_row", &|ui, sensitive, out| {
+        ui.set_max_width(200.0);
+        layout::wrap_row(ui, 8.0, |ui| {
+            out.push(ui.label("one").rect);
+            let stack = layout::vstack(ui, 4.0, |ui| {
+                ui.label("top");
+                out.push(probe(ui, sensitive, egui::vec2(120.0, 10.0)));
+                ui.min_rect()
+            });
+            out.push(stack);
+            out.push(ui.label("two").rect);
+        });
+    });
+}
+
+/// The widths a row plans for its `vstack` items (`request_discard`
+/// "layout: a vstack's width in a row changed") in an `egui::Area`, where
+/// the stacks fit and where they shrink.
+#[test]
+fn row_stack_plan_settles_in_an_area() {
+    for room in [400.0, 160.0] {
+        settles_in_an_area(&format!("row plan in {room}"), &|ui, sensitive, out| {
+            ui.set_max_width(room);
+            layout::row(ui, 8.0, |ui| {
+                let stack = layout::vstack(ui, 4.0, |ui| {
+                    ui.label("Receive emails about new products.");
+                    out.push(probe(ui, sensitive, egui::vec2(120.0, 10.0)));
+                    ui.min_rect()
+                });
+                out.push(stack);
+                out.push(ui.button("Go").rect);
+            });
+        });
+    }
+}
+
+/// A shrunk `vstack` whose content measures another size at its planned
+/// width (`request_discard` "layout: a vstack in a row measures its
+/// content") in an `egui::Area`.
+#[test]
+fn row_stack_measure_settles_in_an_area() {
+    settles_in_an_area("row measure", &|ui, sensitive, out| {
+        ui.set_max_width(160.0);
+        layout::row(ui, 8.0, |ui| {
+            let stack = layout::vstack(ui, 4.0, |ui| {
+                ui.label("Receive emails about new products.");
+                out.push(probe(ui, sensitive, egui::vec2(60.0, 10.0)));
+                ui.min_rect()
+            });
+            out.push(stack);
+            out.push(ui.button("Go").rect);
+        });
+    });
+}

@@ -11,6 +11,17 @@ use egui_extras::{Size, StripBuilder};
 /// reason to redo a pass.
 const ROW_HEIGHT_EPSILON: f32 = 0.01; // behaviour-ok: float tolerance, not a design token
 
+/// Whether a pass of `ui` may replace what a layout helper stored from
+/// an earlier pass (`stored`). A sizing pass (the first frame of an
+/// `egui::Area` or a `Grid`, or one the app forces) lays out in a room and
+/// an alignment of its own, invisibly: it fills a slot nothing filled
+/// yet, so that the visible pass it discards into starts from it, but it
+/// never replaces what a visible pass measured, nor redoes a pass that is
+/// not shown.
+fn may_store(ui: &Ui, stored: bool) -> bool {
+    !(stored && ui.is_sizing_pass())
+}
+
 /// Horizontal stack with an explicit gap (flex-direction: row; gap: N;
 /// align-items: center).
 ///
@@ -97,7 +108,9 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         children.iter().map(|r| r.height()).fold(0.0, f32::max)
     });
     let measured = content.max(floor);
-    if stored.is_none_or(|h| (h - measured).abs() > ROW_HEIGHT_EPSILON) {
+    if may_store(ui, stored.is_some())
+        && stored.is_none_or(|h| (h - measured).abs() > ROW_HEIGHT_EPSILON)
+    {
         ui.data_mut(|d| d.insert_temp(id, measured));
         if (height - measured).abs() > ROW_HEIGHT_EPSILON {
             ui.ctx()
@@ -276,7 +289,10 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     });
     // Only an unwrapped pass measures the stack's own width.
     let width = response.response.rect.width();
-    if fits && stored.is_none_or(|w| (w - width).abs() > ROW_HEIGHT_EPSILON) {
+    if fits
+        && may_store(ui, stored.is_some())
+        && stored.is_none_or(|w| (w - width).abs() > ROW_HEIGHT_EPSILON)
+    {
         ui.data_mut(|d| d.insert_temp(id, width));
         ui.ctx()
             .request_discard("layout::vstack width changed in a wrap_row");
@@ -468,7 +484,7 @@ pub(crate) fn shrink_stacks<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> (R, f32
                 (a, b) => a.is_none() && b.is_none(),
             })
     });
-    if !same {
+    if !same && may_store(ui, stored.is_some()) {
         ui.data_mut(|d| d.insert_temp(flex_plan_id(row), plan));
         if !items.is_empty() {
             ui.ctx()
@@ -537,12 +553,14 @@ fn flex_item<R>(
         items.push(FlexItem::default());
         items.len() - 1
     });
-    let mut known = ui.data(|d| d.get_temp::<Intrinsic>(id)).unwrap_or_default();
+    let stored = ui.data(|d| d.get_temp::<Intrinsic>(id));
+    let store = may_store(ui, stored.is_some());
+    let mut known = stored.unwrap_or_default();
     let target = ui
         .data(|d| d.get_temp::<Vec<Option<f32>>>(flex_plan_id(row)))
         .and_then(|plan| plan.get(index).copied().flatten())
         .filter(|_| !known.stale);
-    if known.stale {
+    if known.stale && store {
         // A measuring pass: never shown.
         ui.ctx()
             .request_discard("layout: a vstack in a row measures its content");
@@ -566,7 +584,7 @@ fn flex_item<R>(
         }
         inner
     });
-    if let Some(w) = target {
+    if let Some(w) = target.filter(|_| store) {
         let seen = (
             [w, ui.ctx().pixels_per_point(), content.x, content.y],
             content_hash(ui.ctx(), layer, first),
@@ -593,7 +611,9 @@ fn flex_item<R>(
     }
     let width = response.response.rect.width();
     ui.data_mut(|d| {
-        d.insert_temp(id, known);
+        if store {
+            d.insert_temp(id, known);
+        }
         if let Some(item) = d
             .get_temp_mut_or_default::<Vec<FlexItem>>(flex_items_id(row))
             .get_mut(index)
