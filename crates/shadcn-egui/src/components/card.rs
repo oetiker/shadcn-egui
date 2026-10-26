@@ -379,8 +379,30 @@ mod tests {
         );
         let card = v.part(&t.style, |s| &s.card, |r| &r.card);
         assert_eq!(pick(&[card], |r| &r.gap, State::SIZE_SM), Some(40.0));
+        // An unedited part is `Sm`'s, with `Sm`'s values unconditional.
         let footer = v.part(&t.style, |s| &s.card_footer, |r| &r.card_footer);
-        assert_eq!(footer, &*t.style.card_footer);
+        let mut sm = (*t.style.card_footer).clone();
+        sm.fold_state(State::SIZE_SM);
+        assert_eq!(footer, &sm);
+    }
+
+    /// An app size on `Sm` draws `Sm`'s values, and its `set` replaces
+    /// them, though `Sm` gives them through `data-[size=sm]:` rules.
+    #[test]
+    fn app_size_set_replaces_its_base_size_value() {
+        const BRAND: AppVariant<CardVariant> = CardVariant::app("brand");
+        const TIGHT: AppVariant<CardSize> = CardSize::app("tight");
+        let t = Theme::vega()
+            .variant(BRAND, CardVariant::Default, |_, _| {})
+            .size(TIGHT, CardSize::Sm, |r, _| r.card.gap.set(8.0));
+        let sm =
+            |p: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&[&*t.style.card], p, State::SIZE_SM);
+        for v in [CardVariant::Default, CardVariant::from(BRAND)] {
+            let r = t.resolve_pair(v, CardSize::from(TIGHT));
+            let card = r.part(&t.style, |s| &s.card, |r| &r.card);
+            assert_eq!(pick(&[card], |r| &r.gap, r.bits()), Some(8.0));
+            assert_eq!(pick(&[card], |r| &r.pad_top, r.bits()), sm(|r| &r.pad_top));
+        }
     }
 
     /// The card's parts take its variant from the context.

@@ -778,6 +778,190 @@ impl Recipe {
             }
         }
     }
+
+    /// Make the values this part takes under exactly `state` its
+    /// unconditional ones and drop those rules. The copy an app size of a
+    /// state-bit size edits always draws with its base's bits, so after
+    /// this its `Prop::set` acts as for a size with a layer of its own and
+    /// `Prop::on` adds rules as before (notes §18). Rules of more states
+    /// (`data-[size=sm]:hover:`) stay.
+    pub(crate) fn fold_state(&mut self, state: State) {
+        fn fold<T: Copy>(p: &mut Prop<T>, when: When) {
+            let Some(top) = p
+                .rules
+                .iter()
+                .filter(|r| r.when == when)
+                .max_by_key(|r| r.rank)
+                .copied()
+            else {
+                return;
+            };
+            // An unconditional rule that outranks it wins under `state` too.
+            if p.rules
+                .iter()
+                .any(|r| r.when == When::ALWAYS && r.rank > top.rank)
+            {
+                return;
+            }
+            p.rules.retain(|r| r.when != when);
+            p.set(top.value);
+        }
+        let when = When::all(state);
+        // Destructured so a new field does not compile until it folds too.
+        let Recipe {
+            height,
+            width,
+            min_height,
+            min_width,
+            max_width,
+            max_width_inset,
+            height_inset,
+            pad_top,
+            pad_right,
+            pad_bottom,
+            pad_left,
+            margin_top,
+            margin_right,
+            margin_bottom,
+            margin_left,
+            gap,
+            gap_x,
+            space_x,
+            inset_top,
+            inset_right,
+            inset_bottom,
+            inset_left,
+            icon_size,
+            icon_shift_y,
+            icon_hidden,
+            text_size,
+            line_height,
+            tracking,
+            weight,
+            uppercase,
+            underline,
+            underline_offset,
+            text_wrap,
+            text_align,
+            radius,
+            radius_top,
+            radius_bottom,
+            radius_left,
+            radius_right,
+            bg,
+            bg_clip_padding,
+            text,
+            border_width,
+            border_top_width,
+            border_left_width,
+            border_color,
+            ring_width,
+            ring_color,
+            outline_width,
+            outline_color,
+            shadow,
+            opacity,
+            blend,
+            shift_x,
+            shift_y,
+            hit_inset_x,
+            hit_inset_y,
+            backdrop_blur,
+            hidden,
+            aspect_ratio,
+            object_cover,
+            field_sizing_content,
+            resizable,
+            transition,
+            duration,
+            animate_in,
+            animate_out,
+            enter_opacity,
+            enter_scale,
+            enter_x,
+            enter_y,
+            exit_opacity,
+            exit_scale,
+        } = self;
+        macro_rules! fold_all {
+            ($($f:ident),*) => { $(fold($f, when);)* };
+        }
+        fold_all!(
+            height,
+            width,
+            min_height,
+            min_width,
+            max_width,
+            max_width_inset,
+            height_inset,
+            pad_top,
+            pad_right,
+            pad_bottom,
+            pad_left,
+            margin_top,
+            margin_right,
+            margin_bottom,
+            margin_left,
+            gap,
+            gap_x,
+            space_x,
+            inset_top,
+            inset_right,
+            inset_bottom,
+            inset_left,
+            icon_size,
+            icon_shift_y,
+            icon_hidden,
+            text_size,
+            line_height,
+            tracking,
+            weight,
+            uppercase,
+            underline,
+            underline_offset,
+            text_wrap,
+            text_align,
+            radius,
+            radius_top,
+            radius_bottom,
+            radius_left,
+            radius_right,
+            bg,
+            bg_clip_padding,
+            text,
+            border_width,
+            border_top_width,
+            border_left_width,
+            border_color,
+            ring_width,
+            ring_color,
+            outline_width,
+            outline_color,
+            shadow,
+            opacity,
+            blend,
+            shift_x,
+            shift_y,
+            hit_inset_x,
+            hit_inset_y,
+            backdrop_blur,
+            hidden,
+            aspect_ratio,
+            object_cover,
+            field_sizing_content,
+            resizable,
+            transition,
+            duration,
+            animate_in,
+            animate_out,
+            enter_opacity,
+            enter_scale,
+            enter_x,
+            enter_y,
+            exit_opacity,
+            exit_scale
+        );
+    }
 }
 
 #[cfg(test)]

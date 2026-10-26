@@ -210,10 +210,22 @@ mod tests {
             thumb.bg.get(State::NONE),
             Some(Paint::Role(Role::Destructive, 1.0))
         );
+        // The width is drawn under the base's bits, where `sm`'s own rule
+        // gave it before the edit.
         let track = v.part(&t.style, |s| &s.switch, |r| &r.switch);
-        assert_eq!(track.width.get(State::NONE), Some(60.0));
+        assert_eq!(track.width.get(v.bits()), Some(60.0));
         let only_size = t.resolve_pair(SwitchVariant::Default, SwitchSize::from(WIDE));
         let thumb = only_size.part(&t.style, |s| &s.switch_thumb, |r| &r.switch_thumb);
-        assert_eq!(thumb, &*t.style.switch_thumb);
+        assert_eq!(
+            thumb.bg.get(only_size.bits()),
+            t.style.switch_thumb.bg.get(State::SIZE_SM)
+        );
+        let track = only_size.part(&t.style, |s| &s.switch, |r| &r.switch);
+        assert_eq!(track.width.get(only_size.bits()), Some(60.0));
+        // The parts it does not edit draw as `sm` does.
+        assert_eq!(
+            track.height.get(only_size.bits()),
+            t.style.switch.height.get(State::SIZE_SM)
+        );
     }
 }

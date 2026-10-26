@@ -77,6 +77,12 @@ pub trait AppEnum: Sealed + Copy + Eq + Default + std::fmt::Debug + Send + Sync 
     fn bits(self) -> State {
         State::NONE
     }
+    /// Turn a copy of the parts this built-in case shares with the
+    /// component's variant into its own: a state-bit size makes its state
+    /// rules unconditional (`Recipe::fold_state`), so an app size's
+    /// `Prop::set` takes effect. Nothing for an enum with its own layer.
+    #[doc(hidden)]
+    fn fold(self, _recipes: &mut Self::Recipes) {}
 }
 
 /// A variant enum: what [`crate::Theme::variant`] takes.
@@ -287,6 +293,7 @@ impl AppMap {
                     Some(r) => r,
                     None => {
                         let mut r = (*a).clone();
+                        rz.base.fold(&mut r);
                         let edit = self
                             .entries
                             .iter()
@@ -389,6 +396,14 @@ macro_rules! default_variant {
             }
         }
         impl $crate::style::VariantEnum for $x {}
+
+        impl $recipes {
+            /// Every part, for an edit of all of them.
+            #[allow(dead_code)]
+            pub(crate) fn each_mut(&mut self, mut f: impl FnMut(&mut $crate::style::Recipe)) {
+                $(f(&mut self.$field);)+
+            }
+        }
     };
 }
 pub(crate) use default_variant;
@@ -422,7 +437,13 @@ macro_rules! state_size {
                 }
             }
             fn recipes(self, style: &$crate::style::Style) -> Self::Recipes {
-                <$x as $crate::style::AppEnum>::recipes($x::Default, style)
+                let mut r = <$x as $crate::style::AppEnum>::recipes($x::Default, style);
+                self.fold(&mut r);
+                r
+            }
+            fn fold(self, recipes: &mut Self::Recipes) {
+                let bits = $crate::style::AppEnum::bits(self);
+                recipes.each_mut(|r| r.fold_state(bits));
             }
             fn bits(self) -> $crate::style::State {
                 match self {
