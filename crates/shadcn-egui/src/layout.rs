@@ -40,10 +40,14 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// whole width, and the row takes no more than its room in the parent, so
 /// the overflow does not widen the parent: the browser's flex row. A plain
 /// `ui.horizontal` cannot do that (see [`allocate_overflowing`]).
+///
+/// A child that is as high as the row's other children (`self-stretch`)
+/// takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let floor = ui.spacing().interact_size.y;
     let stored = ui.data(|d| d.get_temp::<f32>(id));
+    let stored_other = ui.data(|d| d.get_temp::<f32>(stretch_id(id)));
     let height = stored.unwrap_or(floor);
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(egui::Align::Center)
@@ -66,47 +70,89 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // The entries the row's two Uis register, and the `id` the row's
     // children name as parent.
     let (mut own, mut row_ui) = ([id; 2], id);
+    let mut marks = Vec::new();
     let inner = overflow_row(ui, size, layout, |room, ui| {
         (own, row_ui) = ([room.unique_id(), ui.unique_id()], ui.id());
+        let pass = stretch_pass_id(ui.unique_id());
+        ui.data_mut(|d| {
+            d.insert_temp(
+                pass,
+                Stretch {
+                    height: stored_other,
+                    marks: Vec::new(),
+                },
+            )
+        });
         ui.spacing_mut().item_spacing.x = gap;
-        shrink_stacks(ui, |ui| {
+        let inner = shrink_stacks(ui, |ui| {
             let inner = add(ui);
             (inner, ui.min_rect().width())
-        })
+        });
+        marks = ui
+            .data_mut(|d| d.remove_temp::<Stretch>(pass))
+            .map(|s| s.marks)
+            .unwrap_or_default();
+        inner
     });
-    let content = ui.ctx().viewport(|v| {
-        let added: Vec<egui::WidgetRect> = v
+    let (content, other) = ui.ctx().viewport(|v| {
+        // Each entry with its place on the layer, which a stretch item's
+        // mark names.
+        let added: Vec<(usize, egui::WidgetRect)> = v
             .this_pass
             .widgets
             .get_layer(layer)
+            .enumerate()
             .skip(before)
-            .filter(|w| !own.contains(&w.id))
-            .copied()
+            .filter(|(_, w)| !own.contains(&w.id))
+            .map(|(i, w)| (i, *w))
             .collect();
         // Rebuild the tree from the creation order: a Ui registers before
         // what it holds, and an entry names its Ui's `id` as parent, not
         // the `unique_id` the Ui registered under. So an entry whose next
         // entry names a parent not on the stack opens a Ui.
         let mut stack = vec![row_ui];
-        let mut children: Vec<egui::Rect> = Vec::new();
-        for (i, w) in added.iter().enumerate() {
+        // Each child's first place on the layer and its rect.
+        let mut children: Vec<(usize, egui::Rect)> = Vec::new();
+        for (i, (at, w)) in added.iter().enumerate() {
             while stack.len() > 1 && stack.last() != Some(&w.parent_id) {
                 stack.pop();
             }
             if stack.len() == 1 {
-                children.push(egui::Rect::NOTHING);
+                children.push((*at, egui::Rect::NOTHING));
             }
-            match added.get(i + 1).map(|n| n.parent_id) {
+            match added.get(i + 1).map(|(_, n)| n.parent_id) {
                 Some(p) if !stack.contains(&p) => stack.push(p),
                 _ => {
-                    if let Some(c) = children.last_mut() {
+                    if let Some((_, c)) = children.last_mut() {
                         *c = c.union(w.rect);
                     }
                 }
             }
         }
-        children.iter().map(|r| r.height()).fold(0.0, f32::max)
+        // A stretch item is the child that holds the first entry
+        // registered after its mark.
+        let stretches = |i: usize| {
+            let start = children[i].0;
+            let end = children.get(i + 1).map_or(usize::MAX, |c| c.0);
+            marks.iter().any(|m| (start..end).contains(m))
+        };
+        let tallest = |skip: &dyn Fn(usize) -> bool| {
+            (0..children.len())
+                .filter(|&i| !skip(i))
+                .map(|i| children[i].1.height())
+                .fold(0.0, f32::max)
+        };
+        (tallest(&|_| false), tallest(&stretches))
     });
+    if may_store(ui, stored_other.is_some())
+        && stored_other.is_none_or(|h| (h - other).abs() > ROW_HEIGHT_EPSILON)
+    {
+        ui.data_mut(|d| d.insert_temp(stretch_id(id), other));
+        if !marks.is_empty() {
+            ui.ctx()
+                .request_discard("layout::row stretch height changed");
+        }
+    }
     let measured = content.max(floor);
     if may_store(ui, stored.is_some())
         && stored.is_none_or(|h| (h - measured).abs() > ROW_HEIGHT_EPSILON)
@@ -118,6 +164,64 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         }
     }
     inner
+}
+
+fn stretch_id(row: egui::Id) -> egui::Id {
+    row.with("shadcn_egui::layout::stretch")
+}
+
+fn stretch_pass_id(row: egui::Id) -> egui::Id {
+    row.with("shadcn_egui::layout::stretch_pass")
+}
+
+/// What a [`row`] gives its stretch items in a pass: the height of its
+/// tallest other child from the previous pass, and the place on the layer
+/// of the next entry after each [`stretch_height`] call, which marks the
+/// child that asked.
+#[derive(Clone, Debug, Default)]
+struct Stretch {
+    height: Option<f32>,
+    marks: Vec<usize>,
+}
+
+/// The height of a `self-stretch` flex item: in a [`row`], the height of
+/// the row's tallest other child in the previous pass, without the row's
+/// `interact_size` floor (a vertical rule beside small text is as high as
+/// the text). The child that calls this before it draws counts as a
+/// stretch item, and stretch items do not count as other children; where
+/// the row's other children change height, the row redoes the pass.
+///
+/// `None` where the item gives no height: in a column (a [`vstack`], a
+/// vertical `Ui`), in a box of its own on the way to the row (a frame, a
+/// scroll area, a `StripBuilder` or table cell), outside a [`row`]
+/// ([`wrap_row`], [`space_between`] and card footers included), and in the
+/// row's first pass. The item then takes its own minimum.
+///
+/// ```
+/// # egui::__run_test_ui(|ui| {
+/// shadcn_egui::layout::row(ui, 8.0, |ui| {
+///     ui.label("Ctrl");
+///     let height = shadcn_egui::layout::stretch_height(ui).unwrap_or(0.0);
+///     ui.allocate_exact_size(egui::vec2(1.0, height), egui::Sense::hover());
+///     ui.label("K");
+/// });
+/// # });
+/// ```
+#[doc(alias = "self-stretch")]
+#[must_use]
+pub fn stretch_height(ui: &Ui) -> Option<f32> {
+    let row = flex_row_of(ui)?;
+    let layer = ui.layer_id();
+    let at = ui
+        .ctx()
+        .viewport(|v| v.this_pass.widgets.get_layer(layer).count());
+    ui.data_mut(|d| {
+        let mut stretch = d.get_temp::<Stretch>(stretch_pass_id(row))?;
+        stretch.marks.push(at);
+        let height = stretch.height;
+        d.insert_temp(stretch_pass_id(row), stretch);
+        height
+    })
 }
 
 /// Horizontal stack that wraps onto further lines when it runs out of width

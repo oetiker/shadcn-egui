@@ -596,3 +596,87 @@ fn row_stack_measure_settles_in_an_area() {
         });
     });
 }
+
+/// A row of a text label, a box of `tall` points and a stretch item, in
+/// `host`: the passes of the frame, what `stretch_height` gave, and the
+/// rects of the label, the box and the stretch item.
+fn stretch_frame(
+    ctx: &egui::Context,
+    host: Host,
+    tall: f32,
+) -> (u64, Option<f32>, Vec<egui::Rect>) {
+    let given = std::cell::Cell::new(None);
+    let (passes, rects) = frame_in(ctx, host, false, &|ui, _, out| {
+        layout::row(ui, 8.0, |ui| {
+            out.push(ui.label("Ctrl").rect);
+            if tall > 0.0 {
+                out.push(
+                    ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover())
+                        .0,
+                );
+            }
+            let height = layout::stretch_height(ui);
+            given.set(height);
+            let size = egui::vec2(1.0, height.unwrap_or(0.0));
+            out.push(ui.allocate_exact_size(size, egui::Sense::hover()).0);
+        });
+    });
+    (passes, given.get(), rects)
+}
+
+/// `stretch_height` in a row is the height of the row's tallest other
+/// item, below the row's `interact_size` floor too, follows it down when
+/// it shrinks, and settles: a still frame redoes no pass. In an
+/// `egui::Area` it gives the same.
+#[test]
+fn stretch_height_is_the_tallest_other_item() {
+    for host in [Host::Screen, Host::Area(false)] {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        let floor = ctx.global_style().spacing.interact_size.y;
+        let mut label = 0.0;
+        for tall in [60.0, 0.0] {
+            for _ in 0..2 {
+                let _ = stretch_frame(&ctx, host, tall);
+            }
+            let (passes, height, rects) = stretch_frame(&ctx, host, tall);
+            label = rects[0].height();
+            let expected = if tall > 0.0 { tall } else { label };
+            assert_eq!(height, Some(expected), "tall {tall}");
+            let stretch = rects.last().copied().unwrap();
+            assert_eq!(stretch.height(), expected, "tall {tall}");
+            let tallest = rects[usize::from(tall > 0.0)];
+            assert_eq!(
+                stretch.y_range(),
+                tallest.y_range(),
+                "spans the tallest: {rects:?}"
+            );
+            assert_eq!(passes, 1, "tall {tall}: a still frame");
+        }
+        assert!(label < floor, "the case needs text below the floor");
+    }
+}
+
+/// In a column, a `wrap_row` or outside any row, `stretch_height` gives
+/// no height.
+#[test]
+fn stretch_height_is_none_outside_a_row() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    let mut seen = Vec::new();
+    for _ in 0..2 {
+        seen.clear();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            seen.push(layout::stretch_height(ui));
+            layout::row(ui, 8.0, |ui| {
+                ui.label("a");
+                layout::vstack(ui, 4.0, |ui| seen.push(layout::stretch_height(ui)));
+            });
+            layout::wrap_row(ui, 8.0, |ui| {
+                ui.label("a");
+                seen.push(layout::stretch_height(ui));
+            });
+        });
+    }
+    assert_eq!(seen, vec![None; 3]);
+}

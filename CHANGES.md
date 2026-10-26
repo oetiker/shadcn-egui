@@ -16,6 +16,7 @@ are recorded here. The format is based on
 - `IconAtom::new(icon)` puts a crate icon wherever egui takes atoms, such as an `egui::Button`'s content. Without `.tint(..)` it draws in the theme's text colour, and a crate widget draws it in its own state colour; a text colour that a host `Ui` overrides does not reach it, so tint it there.
 - `layout::capped_width`, `layout::overlay_width` and `layout::allocate_overflowing` give an app's own widget the crate's width rules: a width capped to the room or the window and raised to the content's minimum, and a widget wider than its room that overflows instead of widening its column.
 - `components::shared::widget_info_with_role` gives an app's own widget a screen-reader role that egui's widget types lack, such as alert, alertdialog, navigation or group.
+- `layout::stretch_height(ui)` gives a widget in a `layout::row` the height of the row's tallest other widget, as `self-stretch` does in shadcn, for example for a divider between keys. It gives no height in a column or outside a `layout::row`.
 
 ### Changed
 - A theme holds a light and a dark palette and follows egui's mode: apply it once and switch with `ctx.set_theme(egui::Theme::Light)`, or follow the system with `egui::ThemePreference::System`; crate widgets and plain egui widgets change without a second `apply`. `Theme::vega_dark()` and `Theme::vega_light()` are now one `Theme::vega()`, `Preset::theme(mode)` and `Preset::apply(ctx, mode)` lose the mode argument, and `preset::Mode` is gone.
