@@ -753,7 +753,7 @@ pub fn content_scope<R>(
     look: &TextLook,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let builder = egui::UiBuilder::new().ui_stack_info(context::info(
+    let builder = egui::UiBuilder::new().ui_stack_info(context::inherited_info(
         egui::UiStackInfo::default(),
         Inherited {
             line_factor: look.line_height / look.size,

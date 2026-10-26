@@ -219,10 +219,21 @@ fn differs(old: &Snapshot, new: &Snapshot, uses: u8, presence: State) -> bool {
             != new.presence.without(new.presence.without(presence))
 }
 
-/// Join the nearest group around `ui` with `item`: its position, or `None`
-/// outside a group.
+/// Join the group `ui` belongs to with `item`: its position, or `None`
+/// when `ui` is no direct child of a group. A crate element between the
+/// group and `ui` (a card, a crate row) makes `ui` that element's child, as
+/// upstream's `:first-child` counts direct children only; plain egui
+/// scopes in between are layout and pass the group through.
 pub(crate) fn join(ui: &Ui, item: Item) -> Option<Position> {
-    let Members(group) = context::find::<Members>(ui)?;
+    let Members(group) = ui
+        .stack()
+        .iter()
+        .find_map(|f| {
+            context::on_frame::<Members>(f)
+                .map(|m| Some(*m))
+                .or_else(|| context::is_element(f).then_some(None))
+        })
+        .flatten()?;
     let pass = ui.ctx().cumulative_pass_nr();
     Some(ui.data_mut(|d| {
         let r = d.get_temp_mut_or_default::<Record>(key(group));
@@ -438,6 +449,44 @@ mod tests {
 
         // Then still.
         assert_eq!(popup(&mut seen, &mut sizing), 1);
+    }
+
+    #[test]
+    fn only_a_direct_child_joins_its_group() {
+        let ctx = Context::default();
+        let _ = ctx.run_ui(RawInput::default(), |ui| {
+            let group = Group::begin(ui, Id::new("direct"));
+            let item = |i: u8| Item {
+                id: Id::new(i),
+                size: Vec2::ZERO,
+                enabled: true,
+            };
+            ui.scope_builder(group.push(UiBuilder::new()), |ui| {
+                assert!(join(ui, item(0)).is_some());
+                // Plain egui scopes are layout, not elements.
+                ui.horizontal(|ui| assert!(join(ui, item(1)).is_some()));
+                ui.scope(|ui| ui.vertical(|ui| assert!(join(ui, item(2)).is_some())));
+                // Text a container hands down is no element either.
+                let look = crate::components::text::TextLook::resolve(ui, &[], State::NONE);
+                crate::components::text::content_scope(ui, &look, |ui| {
+                    assert!(join(ui, item(3)).is_some());
+                });
+                // A crate element in between makes the item its child.
+                crate::layout::vstack(ui, 0.0, |ui| {
+                    assert_eq!(join(ui, item(4)), None);
+                    ui.horizontal(|ui| assert_eq!(join(ui, item(5)), None));
+                });
+                // A group inside the element is the item's group again.
+                crate::layout::vstack(ui, 0.0, |ui| {
+                    let inner = Group::begin(ui, Id::new("inner"));
+                    ui.scope_builder(inner.push(UiBuilder::new()), |ui| {
+                        assert_eq!(join(ui, item(6)).map(|p| p.index), Some(0));
+                    });
+                    assert_eq!(inner.end(ui.ctx()).items.len(), 1);
+                });
+            });
+            assert_eq!(group.end(ui.ctx()).items.len(), 4);
+        });
     }
 
     #[test]

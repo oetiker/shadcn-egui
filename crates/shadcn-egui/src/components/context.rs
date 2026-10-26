@@ -3,6 +3,12 @@
 //! widget inside reads the nearest one from `ui.stack()`. The value's type is
 //! the key, so two parents never read each other's context; the tag lives as
 //! long as the parent's `Ui`, one pass.
+//!
+//! A `Ui` tagged with [`push`] or [`info`] is an element of its own, as the
+//! upstream element it stands for: a group's child is a direct child only
+//! when no element sits between them ([`is_element`]). Plain egui scopes
+//! carry no tag and stay transparent, as does the text a container hands
+//! down ([`inherited_info`]).
 
 use egui::{Ui, UiBuilder, UiStack, UiStackInfo};
 use std::any::{type_name, Any};
@@ -19,10 +25,26 @@ pub(crate) fn push<T: Any + Send + Sync>(mut builder: UiBuilder, value: T) -> Ui
     builder
 }
 
-/// `info` with `value` as the context of type `T`.
-pub(crate) fn info<T: Any + Send + Sync>(mut info: UiStackInfo, value: T) -> UiStackInfo {
+/// The tag that marks a `Ui` as a crate element.
+const ELEMENT: &str = "shadcn_egui::element";
+
+/// `info` with `value` as the context of type `T`, marked as an element.
+pub(crate) fn info<T: Any + Send + Sync>(info: UiStackInfo, value: T) -> UiStackInfo {
+    let mut info = inherited_info(info, value);
+    info.tags.insert(ELEMENT, None);
+    info
+}
+
+/// `info` with `value` as the context of type `T`, for a `Ui` that only
+/// passes on what its element set (inherited text): no element of its own.
+pub(crate) fn inherited_info<T: Any + Send + Sync>(mut info: UiStackInfo, value: T) -> UiStackInfo {
     info.tags.insert(key::<T>(), Some(Arc::new(value)));
     info
+}
+
+/// Whether this one frame of the stack is a crate element.
+pub(crate) fn is_element(frame: &UiStack) -> bool {
+    frame.tags().contains(ELEMENT)
 }
 
 /// The context of type `T` on this one frame of the stack, not its parents'.
