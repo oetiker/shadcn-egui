@@ -442,16 +442,33 @@ impl TextLook {
             });
             let mut first = 0;
             for (p, para) in chars.split(|c| *c == '\n').enumerate() {
-                // Each char's left and right edge on the paragraph's line.
-                let mut x = 0.0;
-                let edges: Vec<(char, f32, f32)> = para
+                // Each char's left and right edge on the paragraph's line in
+                // device px, as Blink's `ShapeResult` holds them: glyph
+                // advances (with the kerning against the next glyph) summed
+                // in 16.16 fixed point, a char's position rounded up to a
+                // `LayoutUnit`. A right edge before a kerned pair is the
+                // glyph shaped alone: its rounded left plus its own advance.
+                let step = |at: usize| i64::from(adv.fixed[at]) + shape::to_fixed(adv.spacing[at]);
+                let lu = shape::ceil_to_layout_unit;
+                let mut x: i64 = 0;
+                let edges: Vec<wrap::Glyph> = para
                     .iter()
                     .enumerate()
                     .map(|(i, &c)| {
-                        x += if i == 0 { 0.0 } else { adv.kern[first + i] };
-                        let left = x;
-                        x += adv.chrome[first + i];
-                        (c, left, x)
+                        let at = first + i;
+                        let next_kern = if i + 1 < para.len() {
+                            adv.fixed_kern[at + 1]
+                        } else {
+                            0
+                        };
+                        let left = lu(x);
+                        let right = if next_kern == 0 {
+                            lu(x + step(at))
+                        } else {
+                            left + step(at) as f32 / shape::FIXED_ONE
+                        };
+                        x += step(at) + i64::from(next_kern);
+                        wrap::Glyph { c, left, right }
                     })
                     .collect();
                 let cands = wrap::candidates(&edges);
@@ -461,8 +478,10 @@ impl TextLook {
                     _ => None,
                 };
                 let found = style
-                    .and_then(|s| wrap::breaks(&cands, s, width, size, ppp, space, n))
-                    .unwrap_or_else(|| wrap::normal(&cands, width, ppp));
+                    .and_then(|s| {
+                        wrap::breaks(&cands, s, width * ppp, size * ppp, ppp, space * ppp, n)
+                    })
+                    .unwrap_or_else(|| wrap::normal(&cands, width * ppp));
                 for s in found {
                     starts[first + s] = true;
                 }

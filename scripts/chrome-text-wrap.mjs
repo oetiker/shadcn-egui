@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Measures where headless Chrome breaks the lines of two description texts
-// (the alert-dialog and alert demo descriptions; 14px text on 20px lines,
-// shadcn's `text-sm`) under `text-wrap: wrap`, `balance` and `pretty`, at
-// several box widths, for every font in tools/fontgen/FONTS.tsv, at device
-// scale 1, 1.5 and 2, and writes
-// crates/shadcn-egui/tests/text_placement/chrome-wraps.tsv.
+// Measures where headless Chrome breaks the lines of description texts
+// (the alert-dialog and alert demo descriptions, and texts whose breaks
+// depend on kerning; 14px text on 20px lines, shadcn's `text-sm`) under
+// `text-wrap: wrap`, `balance` and `pretty`, at several box widths, for
+// every font in tools/fontgen/FONTS.tsv, at the device scales in SCALES,
+// and writes crates/shadcn-egui/tests/text_placement/chrome-wraps.tsv.
+// The texts have no ligature pairs (fi, ff, tt, ...): the crate draws no
+// ligatures (an accepted difference).
 //
 // Per row (font, scale, text, width): for each mode the char indices where
 // a line after the first starts, comma-separated ("-" for one line). A line
@@ -36,16 +38,22 @@ if (!CHROME) {
 const SCALES = [1, 1.5, 2];
 const MODES = ['wrap', 'balance', 'pretty'];
 const WIDTHS = [140, 180, 220, 260, 300, 340];
+// Widths off the CSS pixel grid, where a fraction of a pixel decides.
+const FRACTIONAL = [96, 113.7, 121, 127.4, 141.1, 150.5, 177, 203];
 // Keep in step with TEXTS in crates/shadcn-egui/tests/text_wrap.rs.
 const TEXTS = {
-  'alert-dialog': 'This action cannot be undone. This will permanently delete your account and remove your data from our servers.',
-  alert: 'Please verify your billing information and try again.',
+  'alert-dialog': ['This action cannot be undone. This will permanently delete your account and remove your data from our servers.', WIDTHS],
+  alert: ['Please verify your billing information and try again.', WIDTHS],
+  // A word end kerned against the space after it (playfair-display "w ").
+  form: ['Use the form below to tell us what went wrong with your order so we can sort it out', FRACTIONAL],
+  // Kerning that widens a word end (lora).
+  code: ['We have sent you a code by email. Please enter it below to continue with your sign up.', FRACTIONAL],
 };
 
 function page(fontUrl, weight) {
   const boxes = [];
-  for (const [id, text] of Object.entries(TEXTS)) {
-    for (const w of WIDTHS) {
+  for (const [id, [text, widths]] of Object.entries(TEXTS)) {
+    for (const w of widths) {
       for (const m of MODES) {
         boxes.push(`<div data-text=${id} data-width=${w} data-mode=${m} style="width:${w}px;text-wrap:${m}">${text}</div>`);
       }
