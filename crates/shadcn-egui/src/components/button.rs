@@ -9,19 +9,78 @@ use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style};
+use crate::style::app::Sealed;
+use crate::style::{
+    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+};
 use crate::Theme;
 use egui::{Response, Sense, Ui, Vec2, Widget};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ButtonVariant {
+    #[default]
     Default,
     Outline,
     Secondary,
     Ghost,
     Destructive,
     Link,
+    /// An app variant: [`ButtonVariant::app`].
+    #[doc(hidden)]
+    App(AppVariant<ButtonVariant>),
 }
+
+impl ButtonVariant {
+    /// An app variant, defined in the theme ([`Theme::variant`]).
+    pub const fn app(name: &'static str) -> AppVariant<ButtonVariant> {
+        AppVariant::new(name)
+    }
+
+    /// The variant layer (`cn-button-variant-*`) of a built-in variant.
+    pub(crate) fn layer(self, s: &Style) -> &Recipe {
+        match self {
+            ButtonVariant::Default | ButtonVariant::App(_) => &s.button_variant_default,
+            ButtonVariant::Outline => &s.button_variant_outline,
+            ButtonVariant::Secondary => &s.button_variant_secondary,
+            ButtonVariant::Ghost => &s.button_variant_ghost,
+            ButtonVariant::Destructive => &s.button_variant_destructive,
+            ButtonVariant::Link => &s.button_variant_link,
+        }
+    }
+}
+
+impl From<AppVariant<ButtonVariant>> for ButtonVariant {
+    fn from(app: AppVariant<ButtonVariant>) -> Self {
+        ButtonVariant::App(app)
+    }
+}
+
+/// The button's recipes an app variant's edit changes: copies of the
+/// base's, in the base's place in the stack.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ButtonRecipes {
+    /// `data-slot="button"`: the variant's (or size's) layer.
+    pub button: Recipe,
+}
+
+impl Sealed for ButtonVariant {}
+impl AppEnum for ButtonVariant {
+    type Recipes = ButtonRecipes;
+    fn app_name(self) -> Option<&'static str> {
+        match self {
+            ButtonVariant::App(a) => Some(a.name()),
+            _ => None,
+        }
+    }
+    fn recipes(self, style: &Style) -> ButtonRecipes {
+        ButtonRecipes {
+            button: self.layer(style).clone(),
+        }
+    }
+}
+impl VariantEnum for ButtonVariant {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonSize {
@@ -64,8 +123,8 @@ impl Button {
             extra: None,
         }
     }
-    pub fn variant(mut self, v: ButtonVariant) -> Self {
-        self.variant = v;
+    pub fn variant(mut self, v: impl Into<ButtonVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     pub fn size(mut self, s: ButtonSize) -> Self {
@@ -115,16 +174,9 @@ impl Button {
         self
     }
 
-    /// The recipe stack and how many of its layers are in use.
-    fn layers<'s>(&self, s: &'s Style) -> ([&'s Recipe; 4], usize) {
-        let v = match self.variant {
-            ButtonVariant::Default => &s.button_variant_default,
-            ButtonVariant::Outline => &s.button_variant_outline,
-            ButtonVariant::Secondary => &s.button_variant_secondary,
-            ButtonVariant::Ghost => &s.button_variant_ghost,
-            ButtonVariant::Destructive => &s.button_variant_destructive,
-            ButtonVariant::Link => &s.button_variant_link,
-        };
+    /// The recipe stack, with the variant layer `v`, and how many of its
+    /// layers are in use.
+    fn layers<'s>(&self, s: &'s Style, v: &'s Recipe) -> ([&'s Recipe; 4], usize) {
         let z = match self.size {
             ButtonSize::Xs => &s.button_size_xs,
             ButtonSize::Sm => &s.button_size_sm,
@@ -167,7 +219,9 @@ impl Button {
 impl Widget for Button {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
-        let (layers, n) = self.layers(&t.style);
+        let variant = t.resolve(self.variant);
+        let v = variant.part(&t.style, ButtonVariant::layer, |r| &r.button);
+        let (layers, n) = self.layers(&t.style, v);
         let l = &layers[..n];
         let enabled = self.enabled && ui.is_enabled();
         let context = State::NONE
@@ -248,7 +302,7 @@ mod tests {
     use crate::style::{Paint, Role, State, Style};
 
     fn layers(s: &Style, v: ButtonVariant, z: ButtonSize) -> Vec<&Recipe> {
-        let (l, n) = Button::new("x").variant(v).size(z).layers(s);
+        let (l, n) = Button::new("x").size(z).layers(s, v.layer(s));
         l[..n].to_vec()
     }
 

@@ -1,7 +1,11 @@
 //! shadcn v4 (OKLCH) design tokens and the `Theme` (style x palette x radius), materialized for egui.
 
 use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
-use crate::style::{pick, Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};
+use crate::style::app::{AppMap, Resolved};
+use crate::style::{
+    pick, AppEnum, AppVariant, Edit, Paint, Radius, Role, Rung, ShadowLevel, SizeEnum, State,
+    Style, TextSize, VariantEnum, Weight,
+};
 use egui::Color32;
 use shadcn_egui_core::IconSlots;
 
@@ -139,6 +143,8 @@ pub struct Theme {
     pub menu_inverted: bool,
     /// The mode colours and `dark:` rules resolve in.
     mode: egui::Theme,
+    /// App variants, app sizes and app colours, shared by every clone.
+    apps: Arc<AppMap>,
 }
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the
@@ -220,6 +226,7 @@ impl Theme {
             icons: crate::icons::lucide::SLOTS,
             menu_inverted: false,
             mode: egui::Theme::Dark,
+            apps: Arc::default(),
         }
     }
     /// The vega style with the neutral palettes and a 10 px radius.
@@ -291,6 +298,66 @@ impl Theme {
             t.mode = egui::Theme::Dark;
         }
         t
+    }
+
+    /// Define the app variant `app` from the built-in variant `base`: the
+    /// edit gets copies of `base`'s recipes and the style the theme builds
+    /// for, and changes what it names; the rest stays `base`'s, in every
+    /// state, mode and style. Both modes share it; a later definition of
+    /// the same name replaces it.
+    ///
+    /// ```
+    /// use shadcn_egui::components::button::{Button, ButtonVariant};
+    /// use shadcn_egui::style::{AppVariant, Paint, Role};
+    /// use shadcn_egui::Theme;
+    /// # fn f(ui: &mut egui::Ui) {
+    /// const DANGER_GHOST: AppVariant<ButtonVariant> = ButtonVariant::app("danger-ghost");
+    /// const DANGER_OUTLINE: AppVariant<ButtonVariant> = ButtonVariant::app("danger-outline");
+    /// let theme = Theme::vega()
+    ///     .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
+    ///         r.button.text.set(Paint::Role(Role::Destructive, 1.0)); // Ghost's hover colours stay
+    ///     })
+    ///     .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| r.button.recolor(Role::Foreground, Role::Destructive));
+    /// ui.add(Button::new("Delete").variant(DANGER_GHOST));
+    /// # }
+    /// ```
+    ///
+    /// A size is no variant:
+    ///
+    /// ```compile_fail,E0277
+    /// use shadcn_egui::components::button::ButtonVariant;
+    /// const WIDE: shadcn_egui::style::AppVariant<ButtonVariant> = ButtonVariant::app("wide");
+    /// let _ = shadcn_egui::Theme::vega().size(WIDE, ButtonVariant::Default, |_, _| {});
+    /// ```
+    pub fn variant<V: VariantEnum>(mut self, app: AppVariant<V>, base: V, edit: Edit<V>) -> Self {
+        Arc::make_mut(&mut self.apps).insert(app, base, edit);
+        self
+    }
+
+    /// Define the app size `app` from the built-in size `base`, as
+    /// [`Theme::variant`] does for a variant.
+    pub fn size<Z: SizeEnum>(mut self, app: AppVariant<Z>, base: Z, edit: Edit<Z>) -> Self {
+        Arc::make_mut(&mut self.apps).insert(app, base, edit);
+        self
+    }
+
+    /// Define the app colour `role` ([`Role::custom`]) as `light` in light
+    /// mode and `dark` in dark mode.
+    pub fn color(mut self, role: Role, light: Color32, dark: Color32) -> Self {
+        match role {
+            Role::Custom(name) => Arc::make_mut(&mut self.apps).set_color(name.name(), light, dark),
+            _ => debug_assert!(
+                false,
+                "Theme::color({role:?}): a palette role, not Role::custom"
+            ),
+        }
+        self
+    }
+
+    /// What a component draws a variant or size with: the recipes and state
+    /// bits of the built-in case, or of the app case's edited copies.
+    pub(crate) fn resolve<X: AppEnum>(&self, x: X) -> Resolved<X> {
+        self.apps.resolve(&self.style, x)
     }
 
     /// The component state `s` plus this theme's [`State::DARK`], and the
@@ -365,6 +432,14 @@ impl Theme {
             Role::White => Color32::WHITE,
             Role::Black => Color32::BLACK,
             Role::Transparent => Color32::TRANSPARENT,
+            Role::Custom(name) => {
+                let c = self.apps.color(name.name(), self.is_dark());
+                debug_assert!(
+                    c.is_some(),
+                    "app colour {name:?} is not defined in the theme"
+                );
+                c.unwrap_or(p.foreground)
+            }
         }
     }
     /// A style colour as egui paints it. Alpha scales the premultiplied colour,

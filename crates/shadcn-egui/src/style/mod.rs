@@ -2,6 +2,7 @@
 //! style values (`generated.rs`, `<name>.rs`, by `tools/stylegen`).
 //! See `references/styles.md` in the skill.
 
+pub mod app;
 #[rustfmt::skip]
 mod generated;
 #[rustfmt::skip]
@@ -20,6 +21,7 @@ mod rhea;
 #[rustfmt::skip]
 mod vega;
 
+pub use app::{AppEnum, AppVariant, Edit, SizeEnum, VariantEnum};
 pub use generated::Style;
 pub use recipe::*;
 

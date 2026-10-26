@@ -292,6 +292,53 @@ impl<T: Copy> Prop<T> {
     pub fn get(&self, s: State) -> Option<T> {
         pick_props([self], s)
     }
+
+    /// Replace the unconditional value where this property keeps it, in
+    /// `base` or in [`When::ALWAYS`] rules, and keep the state rules, as a
+    /// class without variants does in a class list.
+    pub fn set(&mut self, value: T) {
+        let mut always = false;
+        for r in self.rules.iter_mut().filter(|r| r.when == When::ALWAYS) {
+            r.value = value;
+            always = true;
+        }
+        if !always || self.base.is_some() {
+            self.base = Some(value);
+        }
+    }
+
+    /// Replace the rules whose condition is exactly `state` with one rule
+    /// of that state's rank, as tailwind-merge merges `hover:` classes. A
+    /// rule of more states (`dark:hover:`) stays and still beats it where
+    /// it matches.
+    pub fn on(&mut self, state: State, value: T) {
+        debug_assert!(
+            state != State::NONE,
+            "Prop::on(State::NONE, ..): use Prop::set"
+        );
+        let when = When::all(state);
+        let same = self
+            .rules
+            .iter()
+            .filter(|r| r.when == when)
+            .map(|r| r.rank)
+            .max();
+        self.rules.retain(|r| r.when != when);
+        self.rules.push(Rule {
+            when,
+            rank: same.unwrap_or_else(|| state_rank(state)),
+            value,
+        });
+    }
+}
+
+/// The rank of a rule under `state` that no generated rule of the property
+/// gives: one specificity step per flag, `sm:` and `md:` none. It carries
+/// no Tailwind variant-order bits, so it loses a tie of equal specificity
+/// to a generated rule of another state.
+fn state_rank(state: State) -> u128 {
+    let steps = state.without(State::SM.or(State::MD)).0.count_ones();
+    u128::from(steps) << 122
 }
 
 /// Resolve one property across stacked recipes, in the order upstream joins
@@ -397,6 +444,31 @@ pub enum Role {
     White,
     Black,
     Transparent,
+    /// An app colour: [`Role::custom`].
+    #[doc(hidden)]
+    Custom(AppColor),
+}
+
+impl Role {
+    /// An app colour, defined as a light and dark pair on the theme
+    /// ([`crate::Theme::color`]). Name it through a constant
+    /// (`const BRAND: Role = Role::custom("brand");`), so a misspelling
+    /// does not compile; a name the theme does not define fails a
+    /// `debug_assert!` and draws as [`Role::Foreground`].
+    pub const fn custom(name: &'static str) -> Role {
+        Role::Custom(AppColor(name))
+    }
+}
+
+/// The name of an app colour; made by [`Role::custom`].
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AppColor(&'static str);
+
+impl AppColor {
+    pub(crate) fn name(self) -> &'static str {
+        self.0
+    }
 }
 
 /// A colour as a style states it.
@@ -661,6 +733,37 @@ pub struct Recipe {
     pub exit_opacity: Prop<f32>,
     /// `zoom-out-N`: the scale the exit animation ends at.
     pub exit_scale: Prop<f32>,
+}
+
+impl Recipe {
+    /// Swap the colour role `from` for `to` in every colour of this part,
+    /// unconditional and under every state, opacity and mix share kept.
+    pub fn recolor(&mut self, from: Role, to: Role) {
+        let swap = |r: &mut Role| {
+            if *r == from {
+                *r = to;
+            }
+        };
+        let paints = [
+            &mut self.bg,
+            &mut self.text,
+            &mut self.border_color,
+            &mut self.ring_color,
+            &mut self.outline_color,
+        ];
+        for p in paints {
+            let rules = p.rules.iter_mut().map(|r| &mut r.value);
+            for v in p.base.iter_mut().chain(rules) {
+                match v {
+                    Paint::Role(r, _) => swap(r),
+                    Paint::Mix(a, b, _) => {
+                        swap(a);
+                        swap(b);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
