@@ -65,6 +65,8 @@ fn starts(galley: &egui::Galley) -> String {
 fn lines_break_where_chrome_breaks_them() {
     let mut wrong = Vec::new();
     let mut compared = 0;
+    // Per font the build has: its TSV rows, and the results compared.
+    let mut fonts_compared: Vec<(&str, usize, usize)> = Vec::new();
     let rows: Vec<Vec<&str>> = CHROME
         .lines()
         .skip(1)
@@ -74,6 +76,8 @@ fn lines_break_where_chrome_breaks_them() {
         let Some(files) = fonts::files(name) else {
             continue;
         };
+        let font_rows = rows.iter().filter(|f| f[0] == name.id()).count();
+        let before = compared;
         let mut scales: Vec<&str> = rows
             .iter()
             .filter(|f| f[0] == name.id())
@@ -126,8 +130,21 @@ fn lines_break_where_chrome_breaks_them() {
                 }
             });
         }
+        fonts_compared.push((name.id(), font_rows, compared - before));
     }
-    assert!(compared > 0);
+    // Every row of every font the build has is compared in all modes.
+    for (id, font_rows, n) in &fonts_compared {
+        assert!(*font_rows > 0, "{id}: no Chrome rows");
+        assert_eq!(*n, font_rows * MODES.len(), "{id}: results compared");
+    }
+    let mut tsv_fonts: Vec<&str> = rows.iter().map(|f| f[0]).collect();
+    tsv_fonts.sort_unstable();
+    tsv_fonts.dedup();
+    if cfg!(feature = "fonts-all") {
+        assert_eq!(fonts_compared.len(), tsv_fonts.len(), "fonts compared");
+    } else {
+        assert!(!fonts_compared.is_empty());
+    }
     assert!(
         wrong.is_empty(),
         "{} of {compared} differ:\n{}",
