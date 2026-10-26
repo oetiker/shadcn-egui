@@ -24,6 +24,13 @@ N×4 px); see the hard rules in SKILL.md. `StripBuilder` comes from
 `egui_extras`; an app that uses it directly adds
 `egui_extras = { version = "0.34", default-features = false }`.
 
+`StripBuilder` puts `ui.spacing().item_spacing.x` between its cells
+(`.y` in a vertical strip), 8 px by default, where a grid or flex row
+without `gap` has none. Set it to the design's gap in a scope around the
+strip: `gap-N` is N×4 px, no gap is `0.0`. A `layout::vstack` in a strip
+cell takes the cell's width, as a grid item does, and its text wraps
+there.
+
 ```rust
 use shadcn_egui::components::button::{Button, ButtonVariant};
 use shadcn_egui::layout;

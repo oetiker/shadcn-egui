@@ -170,11 +170,6 @@ fn close(a: f32, b: f32) -> bool {
     (a - b).abs() <= TOLERANCE
 }
 
-/// Cases still open (hand-back "A2b2 fix 2 part 2" in A2B-FIX-NOTES.md):
-/// `cell-text`, `strip-text`: open check B, a vstack in a `StripBuilder`
-/// cell takes its content's width, not the cell's.
-const KNOWN: &[&str] = &["cell-text", "strip-text"];
-
 /// A vstack in a crate row shrinks as Chrome's flex item and its text
 /// wraps where Chrome's does; a vstack in a `StripBuilder` cell keeps to
 /// the cell.
@@ -183,7 +178,7 @@ fn flex_columns_shrink_as_chromes() {
     let mut bad = Vec::new();
     let mut compared = 0;
     for ((case, scale), want) in chrome() {
-        if case.starts_with("button-") || KNOWN.contains(&case.as_str()) {
+        if case.starts_with("button-") {
             continue;
         }
         let s: f32 = scale.parse().expect("scale");

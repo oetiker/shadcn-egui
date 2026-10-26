@@ -228,6 +228,10 @@ fn overflow_row<R>(
 /// is redone. When the stack's content takes another size at the same
 /// width (its text, font or scale changed), the next frame measures it
 /// unwrapped again in a pass that is not shown.
+///
+/// In a `StripBuilder` or table cell (directly, or through scopes that
+/// keep the cell's layout) the stack takes the cell's width, as a block in
+/// a grid track or a sized flex item fills it, and its text wraps there.
 pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // `ui.vertical`, tagged as a flex column.
     let column = egui::UiBuilder::new()
@@ -236,8 +240,12 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::vstack");
     if !ui.layout().main_wrap() {
         let Some(row) = flex_row_of(ui) else {
+            let fill = in_cell(ui);
             return ui
                 .scope_builder(column, |ui| {
+                    if fill {
+                        ui.set_min_width(ui.available_width());
+                    }
                     ui.spacing_mut().item_spacing.y = gap;
                     add(ui)
                 })
@@ -290,6 +298,27 @@ fn flex_row_of(ui: &Ui) -> Option<egui::Id> {
         }
     }
     None
+}
+
+/// Whether a [`vstack`] started in `ui` is the content of a `StripBuilder`
+/// or table cell: `ui` is the cell, or reaches it through scopes that keep
+/// their parent's layout and are no crate row or stack.
+fn in_cell(ui: &Ui) -> bool {
+    let mut s = ui.stack();
+    loop {
+        match s.kind() {
+            Some(egui::UiKind::TableCell) => return true,
+            Some(_) => return false,
+            None => {}
+        }
+        let Some(parent) = s.parent.as_ref() else {
+            return false;
+        };
+        if !s.tags().0.is_empty() || s.layout_direction != parent.layout_direction {
+            return false;
+        }
+        s = parent;
+    }
 }
 
 /// What a row learns about one of its [`vstack`] items in a pass.
