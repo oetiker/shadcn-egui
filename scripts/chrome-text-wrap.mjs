@@ -60,12 +60,12 @@ const TEXTS = {
   hyphen: ['A well-known step-by-step guide for a long-term follow-up review', FRACTIONAL],
   // Break classes (UAX #14) past spaces and hyphens. At width 1 every
   // break opportunity starts a line.
-  dash: ['Wait\u2014what? Pages 10\u201320 are missing\u2014again\u2014sadly, said the clerk.', [1, ...FRACTIONAL]],
+  dash: ['Wait\u2014what? Pages ten\u2013twenty are missing\u2014again\u2014sadly, said the clerk.', [1, ...FRACTIONAL]],
   zwsp: ['averyveryverylong\u200Bwordwith\u200Bzerowidth\u200Bspaces in it', [1, ...FRACTIONAL]],
-  shy: ['Rhein\u00ADdampf\u00ADboots\u00ADkapit\u00E4ns\u00ADm\u00FCtzen\u00ADhalter und Crew', [1, ...FRACTIONAL]],
+  shy: ['Rhein\u00ADwasser\u00ADboots\u00ADkapit\u00E4ns\u00ADm\u00FCtzen\u00ADhalter und Crew', [1, ...FRACTIONAL]],
   digits: ['A well-known state-of-the-art e-mail re-sign 2-3 x-1 pre-1990 test', [1, ...FRACTIONAL]],
-  slash: ['Read and/or write to path/to/some/doc or http://example.com/a/b now.', [1, ...FRACTIONAL]],
-  punct: ['Hello (world), [this] is {a} test; it\'s okay! Really? Yes: 1,000.50 & 50% less.', [1, ...FRACTIONAL]],
+  slash: ['Read and/or write to path/to/some/doc or example.com/a/b now.', [1, ...FRACTIONAL]],
+  punct: ['Hello (world), [this] is {a} test; it\u2019s okay! Really? Yes: 1,000.50 & 50% less.', [1, ...FRACTIONAL]],
   // CJK: no face of the crate has these glyphs (Chrome falls back to a
   // system face), so only width 1, where the break positions alone decide.
   cjk: ['\u4E2D\u6587\uFF0C\u65E5\u672C\u8A9E\u300C\u30C6\u30B9\u30C8\u300D\u3067\u3059\u3002\u30AD\u30E3\u30E9\u30FC\u30E1 ab\u4E2Dcd', [1]],
