@@ -181,8 +181,11 @@ impl<'a> Card<'a> {
                 Layout::left_to_right(Align::Center),
             ));
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
-            content_scope(&mut row, &look, |ui| {
-                content_ui(ui, &[&foot[..], &card[..]], st, footer)
+            crate::layout::shrink_stacks(&mut row, |ui| {
+                content_scope(ui, &look, |ui| {
+                    content_ui(ui, &[&foot[..], &card[..]], st, footer)
+                });
+                ((), ui.min_rect().width())
             });
             let strip_bottom = row.min_rect().bottom().max(inner.top()) + f_bottom;
             footer_shapes = Some((strip_bg, strip_top, strip_bottom));

@@ -57,7 +57,10 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let inner = overflow_row(ui, size, layout, |room, ui| {
         (own, row_ui) = ([room.unique_id(), ui.unique_id()], ui.id());
         ui.spacing_mut().item_spacing.x = gap;
-        add(ui)
+        shrink_stacks(ui, |ui| {
+            let inner = add(ui);
+            (inner, ui.min_rect().width())
+        })
     });
     let content = ui.ctx().viewport(|v| {
         let added: Vec<egui::WidgetRect> = v
@@ -209,20 +212,35 @@ fn overflow_row<R>(
 /// raised past the room ([`allocate_overflowing`]) widens the stack and
 /// pushes the row's next children, and the row keeps the overflow from
 /// its own parent. Outside a crate row the child overflows the stack.
+///
+/// In a [`row`], [`space_between`] or a card footer the stack shrinks as a
+/// flex item (`flex-shrink: 1`, `min-width: auto`): its text keeps its
+/// widest, unwrapped width while the row has room for it, and wraps at the
+/// width the row leaves after its other children when it has not. Several
+/// stacks in one row share the shortfall in proportion to their unwrapped
+/// widths, none below its narrowest (its longest word or widest child).
+/// The widths come from the previous pass, and a pass that changes them
+/// is redone.
 pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // `ui.vertical`, tagged as a flex column.
     let column = egui::UiBuilder::new()
         .layout(egui::Layout::top_down(egui::Align::Min))
         .ui_stack_info(egui::UiStackInfo::default().with_tag(VSTACK_TAG));
-    if !ui.layout().main_wrap() {
-        return ui
-            .scope_builder(column, |ui| {
-                ui.spacing_mut().item_spacing.y = gap;
-                add(ui)
-            })
-            .inner;
-    }
     let id = ui.next_auto_id().with("shadcn_egui::layout::vstack");
+    if !ui.layout().main_wrap() {
+        let Some(row) = flex_row_of(ui) else {
+            return ui
+                .scope_builder(column, |ui| {
+                    ui.spacing_mut().item_spacing.y = gap;
+                    add(ui)
+                })
+                .inner;
+        };
+        return flex_item(ui, row, id, column, |ui| {
+            ui.spacing_mut().item_spacing.y = gap;
+            add(ui)
+        });
+    }
     let stored = ui.data(|d| d.get_temp::<f32>(id));
     let line_start = ui.cursor().min.x <= ui.max_rect().min.x;
     if !line_start && stored.is_some_and(|w| w > ui.available_size_before_wrap().x) {
@@ -243,6 +261,193 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         ui.ctx()
             .request_discard("layout::vstack width changed in a wrap_row");
     }
+    response.inner
+}
+
+/// The crate row whose flex item a [`vstack`] started in `ui` is: the
+/// row's `Ui` unique id, reached through horizontal `Ui`s (a scope, an enabled
+/// scope, `space_between`'s right side), not through a [`vstack`], a
+/// vertical `Ui` or a box of its own (a `StripBuilder` or table cell, a
+/// frame, a scroll area: any `Ui` of a [`egui::UiKind`]), whose children
+/// are not the row's items.
+fn flex_row_of(ui: &Ui) -> Option<egui::Id> {
+    for s in ui.stack().iter() {
+        if s.tags().contains(ROW_TAG) {
+            return Some(s.id);
+        }
+        if s.kind().is_some()
+            || !s.layout_direction.is_horizontal()
+            || s.tags().contains(VSTACK_TAG)
+        {
+            return None;
+        }
+    }
+    None
+}
+
+/// What a row learns about one of its [`vstack`] items in a pass.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct FlexItem {
+    /// The width it took.
+    width: f32,
+    /// Its unwrapped width (CSS max-content), the flex base size.
+    basis: f32,
+    /// Its narrowest width (CSS min-content), as far as known: what it
+    /// overflowed to at a smaller width, else 0.
+    min: f32,
+}
+
+/// What a [`vstack`] keeps of its own content between passes.
+#[derive(Clone, Copy, Debug, Default)]
+struct Intrinsic {
+    /// The width it took unwrapped.
+    max: Option<f32>,
+    /// The width it overflowed to when made narrower (exact), or lowered
+    /// to the width it wrapped to (an upper bound).
+    min: Option<f32>,
+}
+
+fn flex_items_id(row: egui::Id) -> egui::Id {
+    row.with("shadcn_egui::layout::flex_items")
+}
+
+fn flex_plan_id(row: egui::Id) -> egui::Id {
+    row.with("shadcn_egui::layout::flex_plan")
+}
+
+/// Runs `add` in a crate row's `ui` and resolves the widths of its
+/// [`vstack`] items for the next pass as the browser shrinks flex items.
+/// `add` returns its result and the row's content width: the sum of its
+/// items and the gaps between them, without free space.
+pub(crate) fn shrink_stacks<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> (R, f32)) -> R {
+    // The id a `UiStack` entry carries, which `flex_row_of` finds.
+    let row = ui.unique_id();
+    ui.data_mut(|d| d.insert_temp(flex_items_id(row), Vec::<FlexItem>::new()));
+    let room = ui.max_rect().width();
+    let (inner, content) = add(ui);
+    let items = ui
+        .data_mut(|d| d.remove_temp::<Vec<FlexItem>>(flex_items_id(row)))
+        .unwrap_or_default();
+    let stacks: f32 = items.iter().map(|i| i.width).sum();
+    let plan = shrink(room - (content - stacks), &items);
+    let stored = ui.data(|d| d.get_temp::<Vec<Option<f32>>>(flex_plan_id(row)));
+    let same = stored.as_ref().is_some_and(|old| {
+        old.len() == plan.len()
+            && old.iter().zip(&plan).all(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => (a - b).abs() <= ROW_HEIGHT_EPSILON,
+                (a, b) => a.is_none() && b.is_none(),
+            })
+    });
+    if !same {
+        ui.data_mut(|d| d.insert_temp(flex_plan_id(row), plan));
+        if !items.is_empty() {
+            ui.ctx()
+                .request_discard("layout: a vstack's width in a row changed");
+        }
+    }
+    inner
+}
+
+/// The widths of flex items that share `room`, by CSS's "resolve flexible
+/// lengths" for a shrinking line (`flex-shrink: 1`, no grow): `None` for
+/// all when their bases fit, else each base less its share of the
+/// shortfall in proportion to its base, an item held at its min-content
+/// leaving the rest to the others.
+fn shrink(room: f32, items: &[FlexItem]) -> Vec<Option<f32>> {
+    let bases: f32 = items.iter().map(|i| i.basis).sum();
+    if bases <= room + ROW_HEIGHT_EPSILON {
+        return vec![None; items.len()];
+    }
+    let mut frozen = vec![false; items.len()];
+    let mut width: Vec<f32> = items.iter().map(|i| i.basis).collect();
+    loop {
+        let held: f32 = (0..items.len())
+            .filter(|&i| frozen[i])
+            .map(|i| width[i])
+            .sum();
+        let open: f32 = (0..items.len())
+            .filter(|&i| !frozen[i])
+            .map(|i| items[i].basis)
+            .sum();
+        if open <= 0.0 {
+            break;
+        }
+        let free = room - held;
+        let mut clamped = false;
+        for (i, item) in items.iter().enumerate() {
+            if frozen[i] {
+                continue;
+            }
+            width[i] = item.basis * free / open;
+            if width[i] < item.min {
+                width[i] = item.min;
+                frozen[i] = true;
+                clamped = true;
+            }
+        }
+        if !clamped {
+            break;
+        }
+    }
+    width.into_iter().map(Some).collect()
+}
+
+/// A [`vstack`] as an item of the crate row `row`: laid out unwrapped
+/// when the row's last plan gives it no width, else at that width, and
+/// reported to the row.
+fn flex_item<R>(
+    ui: &mut Ui,
+    row: egui::Id,
+    id: egui::Id,
+    column: egui::UiBuilder,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let index = ui.data_mut(|d| {
+        let items = d.get_temp_mut_or_default::<Vec<FlexItem>>(flex_items_id(row));
+        items.push(FlexItem::default());
+        items.len() - 1
+    });
+    let target = ui
+        .data(|d| d.get_temp::<Vec<Option<f32>>>(flex_plan_id(row)))
+        .and_then(|plan| plan.get(index).copied().flatten());
+    let mut content = 0.0;
+    let response = ui.scope_builder(column, |ui| {
+        // Unbounded, text does not wrap and a filling widget takes its
+        // content minimum (`capped_width`): the stack's max-content.
+        ui.set_max_width(target.unwrap_or(f32::INFINITY));
+        let inner = add(ui);
+        content = ui.min_rect().width();
+        // A flex item is as wide as the row made it, also where its
+        // content wraps narrower.
+        if let Some(w) = target {
+            ui.set_min_width(w);
+        }
+        inner
+    });
+    let mut known = ui.data(|d| d.get_temp::<Intrinsic>(id)).unwrap_or_default();
+    match target {
+        None => known.max = Some(content),
+        Some(w) if content > w + ROW_HEIGHT_EPSILON => known.min = Some(content),
+        Some(_) => {
+            if known.min.is_some_and(|m| content < m - ROW_HEIGHT_EPSILON) {
+                known.min = Some(content);
+            }
+        }
+    }
+    let width = response.response.rect.width();
+    ui.data_mut(|d| {
+        d.insert_temp(id, known);
+        if let Some(item) = d
+            .get_temp_mut_or_default::<Vec<FlexItem>>(flex_items_id(row))
+            .get_mut(index)
+        {
+            *item = FlexItem {
+                width,
+                basis: known.max.unwrap_or(width),
+                min: known.min.unwrap_or(0.0),
+            };
+        }
+    });
     response.inner
 }
 
@@ -374,9 +579,23 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
     );
     let layout = egui::Layout::left_to_right(egui::Align::Center);
     overflow_row(ui, size, layout, |_, ui| {
-        left(ui);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            right(ui);
+        shrink_stacks(ui, |ui| {
+            left(ui);
+            let start = ui.min_rect().width();
+            let end = ui
+                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    right(ui);
+                })
+                .response
+                .rect
+                .width();
+            // The free space between the two sides is not content.
+            let gap = if end > 0.0 {
+                ui.spacing().item_spacing.x
+            } else {
+                0.0
+            };
+            ((), start + gap + end)
         });
     });
 }
