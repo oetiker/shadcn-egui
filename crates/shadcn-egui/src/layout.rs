@@ -148,13 +148,18 @@ const VSTACK_TAG: &str = "shadcn_egui::layout::vstack";
 
 /// Whether `ui` is a crate row, or sits inside one through horizontal
 /// `Ui`s (a scope, an enabled scope) and [`vstack`]s: a flex item of the
-/// row, which the browser grows to its content's minimum width.
+/// row, which the browser grows to its content's minimum width. A
+/// `StripBuilder` or table cell on the way keeps its width, as a sized box
+/// does in a flex row; a frame (a card) grows with its content, as a flex
+/// item does.
 fn in_row(ui: &Ui) -> bool {
     for s in ui.stack().iter() {
         if s.tags().contains(ROW_TAG) {
             return true;
         }
-        if !s.layout_direction.is_horizontal() && !s.tags().contains(VSTACK_TAG) {
+        if s.kind() == Some(egui::UiKind::TableCell)
+            || (!s.layout_direction.is_horizontal() && !s.tags().contains(VSTACK_TAG))
+        {
             return false;
         }
     }
@@ -510,7 +515,9 @@ pub fn overlay_width(ctx: &egui::Context, requested: f32, inset: f32, content_mi
 /// In a crate row ([`row`], [`wrap_row`], [`space_between`], a card
 /// footer), or a horizontal scope or a [`vstack`] inside one, the widget
 /// takes its whole width and the next widget starts after it, as in the
-/// browser; the row keeps the overflow from its own parent. In a plain `ui.horizontal` the
+/// browser; the row keeps the overflow from its own parent. A
+/// `StripBuilder` or table cell in the row keeps its width: the widget
+/// overflows the cell, and the row's next widget stays after the cell. In a plain `ui.horizontal` the
 /// next widget starts after the room the parent gave, so it covers the
 /// overflowing part: egui can move a row's cursor only by growing the row,
 /// and that would widen the row's parent.

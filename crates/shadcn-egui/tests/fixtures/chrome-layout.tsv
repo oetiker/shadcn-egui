@@ -19,6 +19,9 @@ cell-text	1	cell	0	0	100	60
 cell-text	1	stack	0	0	100	60
 cell-text	1	text	0	0	100	60
 cell-text	1	box	108	20	60	20
+cell-overflow	1	cell	0	0	100	20
+cell-overflow	1	wide	0	0	150	20
+cell-overflow	1	box	108	0	60	20
 max-content	1	text-1	0	0	247.3594	20
 max-content	1	text-2	0	24	238.5313	20
 max-content	1	text-3	0	48	83.4531	20
@@ -70,6 +73,9 @@ cell-text	1.5	cell	0	0	100	60
 cell-text	1.5	stack	0	0	100	60
 cell-text	1.5	text	0	0	100	60
 cell-text	1.5	box	108	20	60	20
+cell-overflow	1.5	cell	0	0	100	20
+cell-overflow	1.5	wide	0	0	150	20
+cell-overflow	1.5	box	108	0	60	20
 max-content	1.5	text-1	0	0	247.3542	20
 max-content	1.5	text-2	0	24	238.5313	20
 max-content	1.5	text-3	0	48	83.4583	20
@@ -121,6 +127,9 @@ cell-text	2	cell	0	0	100	60
 cell-text	2	stack	0	0	100	60
 cell-text	2	text	0	0	100	60
 cell-text	2	box	108	20	60	20
+cell-overflow	2	cell	0	0	100	20
+cell-overflow	2	wide	0	0	150	20
+cell-overflow	2	box	108	0	60	20
 max-content	2	text-1	0	0	247.3516	20
 max-content	2	text-2	0	24	238.5313	20
 max-content	2	text-3	0	48	83.4531	20

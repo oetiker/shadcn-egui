@@ -9,7 +9,7 @@ use egui_extras::{Size, StripBuilder};
 use egui_kittest::Harness;
 use shadcn_egui::components::button::{Button, ButtonSize};
 use shadcn_egui::components::label::description;
-use shadcn_egui::layout::{row, space_between, vstack};
+use shadcn_egui::layout::{allocate_overflowing, row, space_between, vstack};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
 use std::cell::RefCell;
@@ -87,8 +87,25 @@ fn build(case: &str, ui: &mut Ui, items: &Items) {
                 boxed(ui, items);
             });
         }
+        "cell-overflow" => {
+            row(ui, 8.0, |ui| {
+                StripBuilder::new(ui)
+                    .size(Size::exact(100.0))
+                    .horizontal(|mut strip| {
+                        strip.cell(|ui| {
+                            items.borrow_mut().insert("cell".into(), ui.max_rect());
+                            let wide = allocate_overflowing(ui, vec2(150.0, 20.0), Sense::hover());
+                            items.borrow_mut().insert("wide".into(), wide.0);
+                        });
+                    });
+                boxed(ui, items);
+            });
+        }
         "strip-text" => {
             ui.allocate_ui(vec2(ui.available_width(), 60.0), |ui| {
+                // The grid has no gap (build-ui layout map: `gap-N` is the
+                // strip's item spacing, none is 0).
+                ui.spacing_mut().item_spacing.x = 0.0;
                 StripBuilder::new(ui)
                     .size(Size::exact(100.0))
                     .size(Size::remainder())
@@ -155,8 +172,7 @@ fn close(a: f32, b: f32) -> bool {
 
 /// Cases still open (hand-back "A2b2 fix 2 part 2" in A2B-FIX-NOTES.md):
 /// `cell-text`, `strip-text`: open check B, a vstack in a `StripBuilder`
-/// cell takes its content's width, not the cell's, and the strip puts
-/// `item_spacing` between cells.
+/// cell takes its content's width, not the cell's.
 const KNOWN: &[&str] = &["cell-text", "strip-text"];
 
 /// A vstack in a crate row shrinks as Chrome's flex item and its text
@@ -178,13 +194,14 @@ fn flex_columns_shrink_as_chromes() {
             let g = got.get(&item).unwrap_or_else(|| panic!("{case} {item}"));
             // A text's own box is its wrapped lines, not the column's width.
             let (gx, gw) = (g.left(), g.width());
-            // A stack's own height is the row's in egui (a centred child);
-            // its text's height counts the lines.
+            // A stack's own height is the row's in egui (a centred child),
+            // and a strip cell's the strip's, which fills the row (at least
+            // `interact_size.y`); a text's height counts the lines.
             let ok = if case == "max-content" {
                 close(gx, x) && close(gw, w) && close(g.height(), h)
             } else if item.starts_with("text") {
                 close(gx, x) && close(g.height(), h)
-            } else if item.starts_with("stack") {
+            } else if item.starts_with("stack") || item == "cell" {
                 close(gx, x) && close(gw, w)
             } else {
                 close(gx, x) && close(gw, w) && close(g.height(), h)

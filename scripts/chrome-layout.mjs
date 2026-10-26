@@ -20,6 +20,9 @@
 // - cell-text: a flex row of a 100px box that does not shrink (a
 //   StripBuilder `Size::exact` cell) holding a flex column with a
 //   paragraph, then the 60x20 box: the text wraps at the cell's width.
+// - cell-overflow: as cell-text, the cell holding a 150x20 box (an input
+//   raised to its content minimum): it overflows the cell, which keeps its
+//   width, and the 60x20 box stays after the cell.
 // - max-content: the three texts unwrapped (the flex base sizes above).
 // - strip-text: a 300px grid of a 100px track and a 1fr track (a
 //   StripBuilder `exact` cell and a `remainder` cell), a flex column with
@@ -73,6 +76,7 @@ const CASES = {
   'row-two': [300, `<div class=r>${stack('stack-1', p('text-1', ASK))}${stack('stack-2', p('text-2', MAIL))}${box}</div>`],
   'row-min': [180, `<div class=r>${stack('stack-1', p('text-1', WORD))}${stack('stack-2', p('text-2', MAIL))}${box}</div>`],
   'cell-text': [220, `<div class=r><div class=cell data-item=cell>${stack('stack', p('text', ASK))}</div>${box}</div>`],
+  'cell-overflow': [220, `<div class=r><div class=cell data-item=cell><div class=wide data-item=wide></div></div>${box}</div>`],
   'max-content': [400, `<div class=s style="align-items:flex-start">${p('text-1', ASK)}${p('text-2', MAIL)}${p('text-3', WORD)}</div>`],
   'strip-text': [300, `<div class=grid>${stack('stack-1', p('text-1', ASK))}${stack('stack-2', p('text-2', MAIL))}</div>`],
 };
@@ -112,6 +116,7 @@ body { background: #fff; }
 .s { display: flex; flex-direction: column; gap: 4px; }
 .box { min-width: 60px; height: 20px; background: #000; }
 .cell { width: 100px; flex-shrink: 0; }
+.wide { width: 150px; height: 20px; }
 .grid { display: grid; grid-template-columns: 100px 1fr; }
 button { font: inherit; letter-spacing: inherit; background: transparent; color: inherit; }
 .button { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; white-space: nowrap;
