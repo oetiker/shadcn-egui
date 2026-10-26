@@ -11,9 +11,23 @@ use crate::components::icon::paint_icon;
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, ActivationKeys, RecipeBox,
 };
+use crate::style::app::default_variant;
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Ui, Vec2, Widget};
+
+default_variant!(
+    /// The checkbox's variant: upstream has none, so only app variants
+    /// ([`CheckboxVariant::app`]) differ from `Default`.
+    CheckboxVariant,
+    /// The checkbox's recipes an app variant's edit changes.
+    CheckboxRecipes {
+        /// `data-slot="checkbox"`: the box.
+        checkbox,
+        /// `data-slot="checkbox-indicator"`: the tick.
+        checkbox_indicator,
+    }
+);
 
 /// A checkbox. `checkbox(ui, &mut on)` is shorthand for
 /// `ui.add(Checkbox::new(&mut on))`.
@@ -25,6 +39,7 @@ pub struct Checkbox<'a> {
     checked: &'a mut bool,
     enabled: bool,
     invalid: bool,
+    variant: CheckboxVariant,
 }
 
 impl<'a> Checkbox<'a> {
@@ -33,6 +48,7 @@ impl<'a> Checkbox<'a> {
             checked,
             enabled: true,
             invalid: false,
+            variant: CheckboxVariant::Default,
         }
     }
     /// `false` draws the box disabled: no hover, no focus, no toggling.
@@ -45,20 +61,30 @@ impl<'a> Checkbox<'a> {
         self.invalid = yes;
         self
     }
+    /// An app variant ([`CheckboxVariant::app`]).
+    pub fn variant(mut self, v: impl Into<CheckboxVariant>) -> Self {
+        self.variant = v.into();
+        self
+    }
 }
 
 impl Widget for Checkbox<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let l = [&*t.style.checkbox];
+        let v = t.resolve(self.variant);
+        let l = [v.part(&t.style, |_, s| &s.checkbox, |r| &r.checkbox)];
         let enabled = self.enabled && ui.is_enabled();
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(ui.ctx(), State::NONE.with(State::INVALID, self.invalid));
+        let g = t.state(ui.ctx(), v.bits().with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
 
         // No size: CSS's initial `auto`, the indicator's tick inside the
         // border. The box keeps that size unticked too, so it does not jump.
-        let ind = [&*t.style.checkbox_indicator];
+        let ind = [v.part(
+            &t.style,
+            |_, s| &s.checkbox_indicator,
+            |r| &r.checkbox_indicator,
+        )];
         let side = pick(&ind, |r| &r.icon_size, g).unwrap_or(t.metrics.icon);
         let auto = side + line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point()) * 2.0;
         let size = vec2(
@@ -84,7 +110,8 @@ impl Widget for Checkbox<'_> {
         } else {
             State::UNCHECKED
         })
-        .with(State::INVALID, self.invalid);
+        .with(State::INVALID, self.invalid)
+        .or(v.bits());
         let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
 
         if ui.is_rect_visible(rect) {
@@ -122,4 +149,38 @@ impl Widget for Checkbox<'_> {
 /// Shorthand for `ui.add(Checkbox::new(checked))`.
 pub fn checkbox(ui: &mut Ui, checked: &mut bool) -> egui::Response {
     ui.add(Checkbox::new(checked))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role};
+
+    /// An app variant's edit gets `CheckboxRecipes` and changes only what
+    /// it names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const DANGER: AppVariant<CheckboxVariant> = CheckboxVariant::app("danger");
+        let t = Theme::vega().variant(
+            DANGER,
+            CheckboxVariant::Default,
+            |r: &mut CheckboxRecipes, _style| {
+                r.checkbox_indicator
+                    .text
+                    .set(Paint::Role(Role::Destructive, 1.0))
+            },
+        );
+        let v = t.resolve(CheckboxVariant::from(DANGER));
+        let ind = v.part(
+            &t.style,
+            |_, s| &s.checkbox_indicator,
+            |r| &r.checkbox_indicator,
+        );
+        assert_eq!(
+            ind.text.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        let b = v.part(&t.style, |_, s| &s.checkbox, |r| &r.checkbox);
+        assert_eq!(b, &*t.style.checkbox);
+    }
 }

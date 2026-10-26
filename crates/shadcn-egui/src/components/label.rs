@@ -10,13 +10,26 @@
 
 use crate::components::shared::part_painter;
 use crate::components::text::TextLook;
+use crate::style::app::default_variant;
 use crate::style::{pick, Role, State};
 use crate::Theme;
 use egui::{Response, Sense, TextWrapMode, Ui, Widget};
 
+default_variant!(
+    /// The label's variant: upstream has none, so only app variants
+    /// ([`LabelVariant::app`]) differ from `Default`.
+    LabelVariant,
+    /// The label's recipes an app variant's edit changes.
+    LabelRecipes {
+        /// `data-slot="label"`: the label.
+        label,
+    }
+);
+
 pub struct Label {
     text: String,
     enabled: bool,
+    variant: LabelVariant,
 }
 
 impl Label {
@@ -24,11 +37,17 @@ impl Label {
         Self {
             text: text.into(),
             enabled: true,
+            variant: LabelVariant::Default,
         }
     }
     /// `false` draws the label as the label of a disabled peer control.
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
+        self
+    }
+    /// An app variant ([`LabelVariant::app`]).
+    pub fn variant(mut self, v: impl Into<LabelVariant>) -> Self {
+        self.variant = v.into();
         self
     }
 }
@@ -40,9 +59,10 @@ pub fn label(ui: &mut Ui, text: &str) -> Response {
 impl Widget for Label {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
-        let l = [&*t.style.label];
+        let v = t.resolve(self.variant);
+        let l = [v.part(&t.style, |_, s| &s.label, |r| &r.label)];
         let enabled = self.enabled && ui.is_enabled();
-        let st = t.state(ui.ctx(), State::NONE.with(State::DISABLED, !enabled));
+        let st = t.state(ui.ctx(), v.bits().with(State::DISABLED, !enabled));
         let look = TextLook::resolve(ui, &l, st);
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
         let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
@@ -79,7 +99,7 @@ pub fn description(ui: &mut Ui, text: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::style::{pick, Style};
+    use crate::style::{pick, AppVariant, Paint, Role, Style};
 
     #[test]
     fn disabled_label_recipe_is_half_opacity() {
@@ -89,5 +109,24 @@ mod tests {
             assert_eq!(pick(&l, |r| &r.opacity, State::DISABLED), Some(0.5));
             assert_eq!(pick(&l, |r| &r.opacity, State::NONE), None);
         }
+    }
+
+    /// An app variant's edit gets `LabelRecipes` and changes only what it
+    /// names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const DANGER: AppVariant<LabelVariant> = LabelVariant::app("danger");
+        let t = Theme::vega().variant(
+            DANGER,
+            LabelVariant::Default,
+            |r: &mut LabelRecipes, _style| r.label.text.set(Paint::Role(Role::Destructive, 1.0)),
+        );
+        let v = t.resolve(LabelVariant::from(DANGER));
+        let l = v.part(&t.style, |_, s| &s.label, |r| &r.label);
+        assert_eq!(
+            l.text.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        assert_eq!(l.bg, t.style.label.bg);
     }
 }

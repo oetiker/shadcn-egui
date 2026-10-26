@@ -268,6 +268,69 @@ impl AppMap {
     }
 }
 
+/// The variant enum of a component without upstream variants: `$x` with
+/// the one built-in case `Default` and the hidden app case, and `$recipes`
+/// with one field per part, each named after its `data-slot` and copied
+/// from the style's recipe of that name (rules, App variants).
+macro_rules! default_variant {
+    (
+        $(#[$m:meta])*
+        $x:ident,
+        $(#[$rm:meta])*
+        $recipes:ident { $($(#[$fm:meta])* $field:ident),+ $(,)? }
+    ) => {
+        $(#[$m])*
+        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum $x {
+            /// The component as upstream draws it.
+            #[default]
+            Default,
+            /// An app variant: [`Self::app`].
+            #[doc(hidden)]
+            App($crate::style::AppVariant<$x>),
+        }
+
+        impl $x {
+            /// An app variant, defined in the theme ([`crate::Theme::variant`]).
+            pub const fn app(name: &'static str) -> $crate::style::AppVariant<$x> {
+                $crate::style::AppVariant::new(name)
+            }
+        }
+
+        impl From<$crate::style::AppVariant<$x>> for $x {
+            fn from(app: $crate::style::AppVariant<$x>) -> Self {
+                $x::App(app)
+            }
+        }
+
+        $(#[$rm])*
+        #[derive(Clone, Debug, PartialEq)]
+        #[non_exhaustive]
+        pub struct $recipes {
+            $($(#[$fm])* pub $field: $crate::style::Recipe,)+
+        }
+
+        impl $crate::style::app::Sealed for $x {}
+        impl $crate::style::AppEnum for $x {
+            type Recipes = $recipes;
+            fn app_name(self) -> Option<&'static str> {
+                match self {
+                    $x::App(a) => Some(a.name()),
+                    $x::Default => None,
+                }
+            }
+            fn recipes(self, style: &$crate::style::Style) -> $recipes {
+                $recipes {
+                    $($field: (*style.$field).clone(),)+
+                }
+            }
+        }
+        impl $crate::style::VariantEnum for $x {}
+    };
+}
+pub(crate) use default_variant;
+
 /// What a component draws an enum value with ([`AppMap::resolve`]).
 pub(crate) struct Resolved<X: AppEnum> {
     base: X,

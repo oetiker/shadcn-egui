@@ -7,9 +7,21 @@ use crate::components::shared::{
     inset_frame, line_width, part_opacity, part_painter, text_entry_state, RecipeBox,
 };
 use crate::components::text::{Leading, TextLook};
+use crate::style::app::default_variant;
 use crate::style::{pick, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::{Sense, Shape, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget};
+
+default_variant!(
+    /// The input's variant: upstream has none, so only app variants
+    /// ([`InputVariant::app`]) differ from `Default`.
+    InputVariant,
+    /// The input's recipes an app variant's edit changes.
+    InputRecipes {
+        /// `data-slot="input"`: the field.
+        input,
+    }
+);
 
 pub struct Input<'a> {
     text: &'a mut String,
@@ -19,6 +31,7 @@ pub struct Input<'a> {
     id_salt: Option<egui::Id>,
     enabled: bool,
     invalid: bool,
+    variant: InputVariant,
 }
 
 impl<'a> Input<'a> {
@@ -31,6 +44,7 @@ impl<'a> Input<'a> {
             id_salt: None,
             enabled: true,
             invalid: false,
+            variant: InputVariant::Default,
         }
     }
     pub fn hint(mut self, h: impl Into<String>) -> Self {
@@ -66,14 +80,20 @@ impl<'a> Input<'a> {
         self.invalid = yes;
         self
     }
+    /// An app variant ([`InputVariant::app`]).
+    pub fn variant(mut self, v: impl Into<InputVariant>) -> Self {
+        self.variant = v.into();
+        self
+    }
 }
 
 impl<'a> Widget for Input<'a> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let l = [&*t.style.input];
+        let v = t.resolve(self.variant);
+        let l = [v.part(&t.style, |_, s| &s.input, |r| &r.input)];
         let enabled = self.enabled && ui.is_enabled();
-        let context = State::NONE.with(State::INVALID, self.invalid);
+        let context = v.bits().with(State::INVALID, self.invalid);
         // Geometry never depends on focus: resolve it before allocating.
         let g = t.state(ui.ctx(), context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
@@ -248,4 +268,29 @@ fn paint_caret(
     // As egui's TextEdit: the clip grows a point so a caret at the edge shows.
     let clip = out.text_clip_rect.expand(1.0); // behaviour-ok: egui's caret clip
     ui.painter_at(clip).rect_filled(rect, 0.0, color);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role};
+
+    /// An app variant's edit gets `InputRecipes` and changes only what it
+    /// names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const DANGER: AppVariant<InputVariant> = InputVariant::app("danger");
+        let t = Theme::vega().variant(
+            DANGER,
+            InputVariant::Default,
+            |r: &mut InputRecipes, _style| r.input.text.set(Paint::Role(Role::Destructive, 1.0)),
+        );
+        let v = t.resolve(InputVariant::from(DANGER));
+        let l = v.part(&t.style, |_, s| &s.input, |r| &r.input);
+        assert_eq!(
+            l.text.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        assert_eq!(l.bg, t.style.input.bg);
+    }
 }
