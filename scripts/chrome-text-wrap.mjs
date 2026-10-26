@@ -56,6 +56,8 @@ const TEXTS = {
   avatar: ['Select View avatar', [80, 81.2]],
   email: ['Open messages email', [101.9, 103.3, 105.1, 107.3]],
   reset: ['Reset billing email', [62.7, 64.3, 79.6, 80.6, 81.8, 83]],
+  // Lines that end after a hyphen inside a word.
+  hyphen: ['A well-known step-by-step guide for a long-term follow-up review', FRACTIONAL],
 };
 
 function page(fontUrl, weight) {

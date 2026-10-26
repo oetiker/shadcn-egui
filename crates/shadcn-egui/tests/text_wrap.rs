@@ -1,7 +1,8 @@
 //! Line breaks against Chrome (conformance 2.5, 3.4): for every font the
 //! build has, at every scale the reference has, `text-sm` text breaks its
 //! lines where Chrome breaks them under `text-wrap: wrap`, `balance` and
-//! `pretty`, for description texts at several widths.
+//! `pretty`, for description texts at several widths, and the galley's
+//! text stays the caller's.
 //!
 //! The reference rows are in `text_placement/chrome-wraps.tsv`: per font,
 //! scale, text and width, the char indices where each line after the first
@@ -36,6 +37,10 @@ const TEXTS: &[(&str, &str)] = &[
     ("avatar", "Select View avatar"),
     ("email", "Open messages email"),
     ("reset", "Reset billing email"),
+    (
+        "hyphen",
+        "A well-known step-by-step guide for a long-term follow-up review",
+    ),
 ];
 const MODES: [Option<TextWrap>; 3] = [None, Some(TextWrap::Balance), Some(TextWrap::Pretty)];
 
@@ -101,6 +106,16 @@ fn lines_break_where_chrome_breaks_them() {
                         let block = look.layout(ui, text, TextWrapMode::Wrap, width);
                         let got = starts(block.galley());
                         compared += 1;
+                        // A break adds no char: the galley's text, its
+                        // indices and a copy are the caller's.
+                        if block.galley().text() != text {
+                            wrong.push(format!(
+                                "{} {scale}x {} {width} {mode:?}: galley text {:?}",
+                                f[0],
+                                f[2],
+                                block.galley().text()
+                            ));
+                        }
                         if got != *want {
                             wrong.push(format!(
                                 "{} {scale}x {} {width} {mode:?}: Chrome {want}, crate {got}",

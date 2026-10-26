@@ -522,7 +522,6 @@ impl TextLook {
         } else {
             TextWrapping::from_wrap_mode_and_width(wrap, width)
         };
-        let mut inserted = false;
         // The original char behind each char of `out`, for the row widths,
         // and the exact x of its pen on its line, in points.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);
@@ -534,7 +533,7 @@ impl TextLook {
             let si = section_of.get(i).copied().unwrap_or(0);
             let section = &job.sections[si];
             if starts[i] && !(i > 0 && chars[i - 1] == ' ') {
-                // After a hyphen: a forced break goes in, the text grows.
+                // After a hyphen: a forced break goes into egui's job only.
                 let at = out.text.len();
                 out.text.push('\n');
                 out.sections.push(egui::text::LayoutSection {
@@ -544,7 +543,6 @@ impl TextLook {
                 });
                 origin.push(None);
                 pens.push(0.0);
-                inserted = true;
                 line_start = true;
             }
             let c = if c == ' ' && starts[i + 1] { '\n' } else { c };
@@ -609,13 +607,18 @@ impl TextLook {
             }
             right = right.max(placed.pos.x + placed.row.size.x);
             at += glyphs + usize::from(placed.ends_with_newline);
+            // A row ended by an inserted `\n` ends as egui's own wrapped
+            // rows do: the caller's text has no char there.
+            if placed.ends_with_newline && origin.get(at - 1) == Some(&None) {
+                placed.ends_with_newline = false;
+            }
         }
         if job.halign == Align::LEFT && right.is_finite() {
             g.rect.max.x = g.rect.min.x + right;
         }
-        if !inserted {
-            g.job = Arc::new(job);
-        }
+        // The galley's text, char indices, selection and copied text are
+        // the caller's.
+        g.job = Arc::new(job);
         galley
     }
 }
