@@ -81,7 +81,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
       let mut s = Style::vega();
       s.button_size_default.height.base = Some(40.0);
       s.button.icon_size = Prop::fixed(20.0);
-      Theme::new(s, Palette::dark(), 10.0)
+      Theme::new(s, Palette::light(), Palette::dark(), 10.0)
   }
 
   let theme = tall_buttons();
@@ -261,7 +261,7 @@ web project's `--radius` in px:
 use shadcn_egui::{Palette, Style, Theme};
 
 fn setup(ctx: &egui::Context) {
-    Theme::new(Style::nova(), Palette::dark(), 10.0).apply(ctx);
+    Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0).apply(ctx);
 }
 ```
 

@@ -224,7 +224,7 @@ impl<T> Rule<T> {
     /// ```
     /// use std::sync::Arc;
     /// use shadcn_egui::style::{pick, Paint, Role, Rule, State, When};
-    /// let mut theme = shadcn_egui::Theme::vega().in_mode(egui::Theme::Light);
+    /// let mut theme = shadcn_egui::Theme::vega();
     /// let style = Arc::make_mut(&mut theme.style);
     /// let primary = Paint::Role(Role::Primary, 1.0);
     /// let selected_hover = State::SELECTED | State::HOVER;

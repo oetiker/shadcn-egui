@@ -1,3 +1,5 @@
+mod common;
+
 use shadcn_egui::theme::Theme;
 
 #[test]
@@ -8,10 +10,10 @@ fn apply_sets_panel_fill_and_stores_theme() {
     // run one frame so style takes effect
     let _ = ctx.run_ui(Default::default(), |_ui| {});
     let got = theme(&ctx);
-    assert!(got.dark);
+    assert!(got.is_dark());
     assert_eq!(
         ctx.global_style().visuals.panel_fill,
-        Theme::vega().palette.background
+        Theme::vega().dark.background
     );
 }
 
@@ -27,27 +29,49 @@ fn radius_scale_is_derived() {
 
 #[test]
 fn light_and_dark_differ() {
-    let mode = egui::Theme::Light;
-    let l = Theme::vega();
-    let d = Theme::vega();
-    assert!(!l.dark && d.dark);
-    assert_ne!(l.palette.background, d.palette.background);
+    let l = common::resolved(&Theme::vega(), egui::Theme::Light);
+    let d = common::resolved(&Theme::vega(), egui::Theme::Dark);
+    assert!(!l.is_dark() && d.is_dark());
+    assert_ne!(l.palette().background, d.palette().background);
+}
+
+/// One `apply` installs both modes: `ctx.set_theme` alone flips the
+/// palette components read and egui's own visuals.
+#[test]
+fn set_theme_flips_the_palette_after_one_apply() {
+    let ctx = egui::Context::default();
+    let t = Theme::vega();
+    t.apply(&ctx);
+    for mode in [egui::Theme::Light, egui::Theme::Dark, egui::Theme::Light] {
+        ctx.set_theme(mode);
+        let _ = ctx.run_ui(Default::default(), |_ui| {});
+        assert_eq!(
+            Theme::current(&ctx).palette(),
+            t.palette_of(mode),
+            "{mode:?}"
+        );
+        assert_eq!(
+            ctx.global_style().visuals.dark_mode,
+            mode == egui::Theme::Dark,
+            "{mode:?}"
+        );
+    }
 }
 
 #[test]
 fn dark_border_is_low_alpha_white() {
     let d = Theme::vega();
     // dark --border is oklch(1 0 0 / 10%) -> white at ~26 alpha
-    assert_eq!(d.palette.border.a(), 26);
+    assert_eq!(d.dark.border.a(), 26);
 }
 
 use shadcn_egui::style::{Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize};
 use shadcn_egui::Palette;
 
 #[test]
-fn new_detects_dark_from_palette() {
-    assert!(Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).dark);
-    assert!(!Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).dark);
+fn new_holds_both_palettes() {
+    let t = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
+    assert_eq!((t.light, t.dark), (Palette::light(), Palette::dark()));
     assert_eq!(Theme::vega().style.name, "vega");
 }
 
@@ -56,8 +80,7 @@ fn state_adds_dark() {
     assert!(Theme::vega()
         .state(&egui::Context::default(), State::HOVER)
         .contains(State::DARK));
-    assert!(!Theme::vega()
-        .in_mode(egui::Theme::Light)
+    assert!(!common::resolved(&Theme::vega(), egui::Theme::Light)
         .state(&egui::Context::default(), State::HOVER)
         .contains(State::DARK));
 }
@@ -86,19 +109,18 @@ fn radius_clamps() {
 
 #[test]
 fn paint_alpha_and_mix() {
-    let mode = egui::Theme::Light;
-    let t = Theme::vega();
+    let t = common::resolved(&Theme::vega(), egui::Theme::Light);
     let p = t.paint(Paint::Role(Role::Primary, 1.0));
-    assert_eq!(p, t.palette.primary);
+    assert_eq!(p, t.palette().primary);
     let half = t.paint(Paint::Role(Role::Primary, 0.5));
     assert!((half.a() as i32 - 128).abs() <= 1, "{half:?}");
-    assert_eq!(half, t.palette.primary.gamma_multiply(0.5));
+    assert_eq!(half, t.palette().primary.gamma_multiply(0.5));
     assert_eq!(
         t.paint(Paint::Role(Role::Transparent, 1.0)),
         egui::Color32::TRANSPARENT
     );
     let mix = t.paint(Paint::Mix(Role::Secondary, Role::Foreground, 0.05));
-    assert_ne!(mix, t.palette.secondary);
+    assert_ne!(mix, t.palette().secondary);
 }
 
 #[test]
@@ -154,7 +176,7 @@ fn current_without_apply_is_vega_dark_and_cheap() {
     let ctx = egui::Context::default();
     let a = Theme::current(&ctx);
     let b = Theme::current(&ctx);
-    assert!(a.dark);
+    assert!(a.is_dark());
     assert_eq!(a.style.name, "vega");
     // The fallback shares one Style instead of building one per call.
     assert!(std::sync::Arc::ptr_eq(&a.style, &b.style));
@@ -164,7 +186,6 @@ fn current_without_apply_is_vega_dark_and_cheap() {
 fn consumer_override_takes_effect() {
     let mut s = Style::nova();
     s.button_size_default.height.base = Some(40.0);
-    let mode = egui::Theme::Dark;
     let t = Theme::new(s, Palette::light(), Palette::dark(), 10.0);
     assert_eq!(
         t.style
@@ -176,30 +197,26 @@ fn consumer_override_takes_effect() {
 }
 
 #[test]
-fn consumer_set_dark_is_honoured() {
-    let mode = egui::Theme::Dark;
-    let mut t = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
-    t.dark = false;
-    assert!(!t
-        .state(&egui::Context::default(), State::HOVER)
-        .contains(State::DARK));
-    let mode = egui::Theme::Light;
-    let mut t = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
-    t.dark = true;
-    assert!(t
-        .state(&egui::Context::default(), State::HOVER)
-        .contains(State::DARK));
+fn context_mode_sets_the_dark_state() {
+    let ctx = egui::Context::default();
+    Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).apply(&ctx);
+    for mode in [egui::Theme::Light, egui::Theme::Dark] {
+        ctx.set_theme(mode);
+        let dark = Theme::current(&ctx)
+            .state(&ctx, State::HOVER)
+            .contains(State::DARK);
+        assert_eq!(dark, mode == egui::Theme::Dark, "{mode:?}");
+    }
 }
 
 use shadcn_egui::icons::lucide::{
     CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, MORE_HORIZONTAL,
     SLOTS as LUCIDE_SLOTS, X as CLOSE,
 };
-use shadcn_egui::{FontName, IconLibrary, IconSlots, MenuColors};
+use shadcn_egui::{FontName, IconLibrary, IconSlots};
 
 #[test]
 fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
-    let mode = egui::Theme::Light;
     let t = Theme::vega();
     let mut lucide = IconSlots::all(CLOSE);
     lucide.check = CHECK;
@@ -211,7 +228,7 @@ fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
     lucide.more_horizontal = MORE_HORIZONTAL;
     assert_eq!(t.icons, lucide);
     assert_eq!(t.icons, LUCIDE_SLOTS);
-    assert_eq!(t.menu, MenuColors::default());
+    assert!(!t.menu_inverted);
     assert_eq!(
         t.menu_theme(),
         t,
@@ -222,29 +239,18 @@ fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
 #[test]
 fn icon_and_menu_builders() {
     let crosses = IconSlots::all(CLOSE);
-    assert_eq!(
-        Theme::vega()
-            .in_mode(egui::Theme::Light)
-            .icons(crosses)
-            .icons,
-        crosses
-    );
-    let menu = MenuColors {
-        palette: Some(Palette::dark()),
-        dark: Some(true),
-    };
-    let mode = egui::Theme::Light;
-    let t = Theme::vega().menu(menu);
-    assert_eq!(t.menu, menu);
+    assert_eq!(Theme::vega().icons(crosses).icons, crosses);
+    let t = common::resolved(&Theme::vega().menu_inverted(true), egui::Theme::Light);
+    assert!(t.menu_inverted);
     let mt = t.menu_theme();
-    assert_eq!((mt.palette, mt.dark), (Palette::dark(), true));
+    assert_eq!((mt.palette(), mt.is_dark()), (&Palette::dark(), true));
     assert!(
         std::sync::Arc::ptr_eq(&mt.style, &t.style),
         "the menu theme shares the style"
     );
     assert_eq!(
-        (t.palette, t.dark),
-        (Palette::light(), false),
+        (t.palette(), t.is_dark()),
+        (&Palette::light(), false),
         "the theme itself is unchanged"
     );
 }
@@ -283,7 +289,11 @@ fn theme_stays_small() {
 fn assert_both_styles(ctx: &egui::Context, t: &Theme) {
     for which in [egui::Theme::Dark, egui::Theme::Light] {
         let s = ctx.style_of(which);
-        assert_eq!(s.visuals.panel_fill, t.palette.background, "{which:?}");
+        assert_eq!(
+            s.visuals.panel_fill,
+            t.palette_of(which).background,
+            "{which:?}"
+        );
         assert_eq!(
             s.text_styles[&egui::TextStyle::Body].size,
             t.metrics.text_sm,
@@ -304,14 +314,13 @@ fn apply_reaches_both_styles_on_a_light_context() {
     let t = Theme::vega();
     t.apply(&ctx);
     let _ = ctx.run_ui(Default::default(), |_ui| {});
-    assert_eq!(ctx.global_style().visuals.panel_fill, t.palette.background);
+    assert_eq!(ctx.global_style().visuals.panel_fill, t.light.background);
     assert_both_styles(&ctx, &t);
 }
 
 #[test]
 fn apply_survives_a_system_theme_switch() {
     let ctx = egui::Context::default();
-    let mode = egui::Theme::Light;
     let t = Theme::vega();
     t.apply(&ctx);
     for sys in [egui::Theme::Light, egui::Theme::Dark] {
@@ -322,7 +331,7 @@ fn apply_survives_a_system_theme_switch() {
         let _ = ctx.run_ui(input, |_ui| {});
         assert_eq!(
             ctx.global_style().visuals.panel_fill,
-            t.palette.background,
+            t.palette_of(sys).background,
             "{sys:?}"
         );
         assert_both_styles(&ctx, &t);

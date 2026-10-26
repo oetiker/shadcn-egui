@@ -419,10 +419,10 @@ fn a_loop_without_pass_hooks_survives_replaced_fonts() {
     pass(&ctx, &|_| {});
 }
 
-fn heading_themes() -> Vec<(&'static str, Theme)> {
+fn heading_themes() -> Vec<common::Themed> {
     common::themes()
         .into_iter()
-        .map(|(n, t)| (n, t.fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM))))
+        .map(|(n, t, m)| (n, t.fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM)), m))
         .collect()
 }
 
@@ -591,7 +591,6 @@ fn a_dropped_theme_face_leaves_the_apps_families() {
         .insert(0, "shadcn-heading-600".into());
     ctx.set_fonts(defs);
     let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
-    let mode = egui::Theme::Light;
     let defs = reapply_over_current(&ctx, &Theme::vega());
     assert!(!defs.font_data.contains_key("shadcn-heading-600"));
     assert_eq!(

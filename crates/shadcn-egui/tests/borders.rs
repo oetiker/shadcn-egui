@@ -39,13 +39,12 @@ fn runs(n: u32, pred: impl Fn(u32) -> bool) -> Vec<(u32, u32)> {
 /// Per border width: left, right, top, bottom border and the content's x
 /// and y, in device px from the box's outer edge.
 fn crate_rows(scale: f32) -> Vec<[u32; 6]> {
-    let mode = egui::Theme::Light;
-    let theme = Theme::vega();
     let mut h = Harness::builder()
         .with_size(vec2(240.0, 80.0))
         .with_pixels_per_point(scale)
-        .with_theme(mode)
+        .with_theme(egui::Theme::Light)
         .build_ui(|ui| {
+            let theme = Theme::current(ui.ctx());
             ui.painter()
                 .rect_filled(ui.ctx().content_rect(), 0.0, Color32::WHITE);
             for (i, w) in WIDTHS.into_iter().enumerate() {

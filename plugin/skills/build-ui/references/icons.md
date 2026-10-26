@@ -48,7 +48,7 @@ use shadcn_egui::Theme;
 
 fn icons(ui: &mut egui::Ui) {
     let t = Theme::current(ui.ctx());
-    ui.add(IconView::new(&lucide::MIC).size(24.0).color(t.palette.destructive));
+    ui.add(IconView::new(&lucide::MIC).size(24.0).color(t.palette().destructive));
     ui.add(Button::new("Mute").icon(&lucide::MIC));
     ui.add(Button::new("Close").icon(&lucide::X).size(ButtonSize::Icon));
     ui.add(Badge::new("Live").icon_end(&lucide::RADIO));

@@ -47,8 +47,8 @@ fn button_override_from_theme_setup() {
     let mut s = Style::nova();
     s.button_size_default.height.base = Some(40.0);
     let mode = egui::Theme::Dark;
-    let theme = Theme::new(s, Palette::light(), Palette::light(), Palette::dark(), 10.0);
-    let h = common::measure(&theme, egui::Theme::Dark, |ui| ui.add(Button::new("Save"))).height();
+    let theme = Theme::new(s, Palette::light(), Palette::dark(), 10.0);
+    let h = common::measure(&theme, mode, |ui| ui.add(Button::new("Save"))).height();
     assert_eq!(h, 40.0);
 }
 
@@ -1116,7 +1116,7 @@ fn card_side_padding_follows_size() {
 #[test]
 fn card_fills_available_width() {
     let theme = Theme::vega();
-    let card = common::measure(&theme, mode, |ui| {
+    let card = common::measure(&theme, egui::Theme::Dark, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new().show(ui, |ui| {
@@ -1163,7 +1163,7 @@ fn card_action_is_right_aligned() {
     let theme = Theme::vega();
     let mut action = egui::Rect::NOTHING;
     let mut title = egui::Rect::NOTHING;
-    let card = common::measure(&theme, mode, |ui| {
+    let card = common::measure(&theme, egui::Theme::Dark, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new().show(ui, |ui| {

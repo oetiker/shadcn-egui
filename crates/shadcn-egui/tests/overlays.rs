@@ -99,7 +99,7 @@ fn dialog_inner_width(theme: &Theme, screen: f32) -> f32 {
 
 #[test]
 fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
-    for (name, theme, mode) in common::themes() {
+    for (name, theme, _) in common::themes() {
         let pad = theme
             .style
             .dialog_content
@@ -159,7 +159,7 @@ fn a_disabled_dialog_footer_keeps_its_strip_colour() {
         10.0,
     );
     let strip = pick(&[&*theme.style.dialog_footer], |r| &r.bg, State::NONE)
-        .map(|p| theme.paint(p))
+        .map(|p| common::resolved(&theme, mode).paint(p))
         .expect("nova's footer has a strip");
     let fills = |disabled: bool| {
         let ctx = egui::Context::default();

@@ -11,11 +11,12 @@ The create page shows a code such as `b2D0wqNxT` for every preset.
 `Preset::from_code` decodes it and `to_code` writes it:
 
 ```rust
-use shadcn_egui::{Mode, Preset, PresetCodeError};
+use shadcn_egui::{Preset, PresetCodeError};
 
 fn setup(ctx: &egui::Context) -> Result<(), PresetCodeError> {
     let preset = Preset::from_code("b2D0wqNxT")?;
-    preset.apply(ctx, Mode::Dark);
+    preset.apply(ctx);
+    ctx.set_theme(egui::Theme::Dark);
     Ok(())
 }
 ```
@@ -54,7 +55,7 @@ has a builder method:
   `InvertedTranslucent`; `.menu_accent(MenuAccent::…)`: `Subtle`, `Bold`.
 
 ```rust
-use shadcn_egui::{BaseColor, Mode, Preset, RadiusChoice, StyleName, ThemeColor};
+use shadcn_egui::{BaseColor, Preset, RadiusChoice, StyleName, ThemeColor};
 
 fn setup(ctx: &egui::Context) {
     Preset::default()
@@ -62,7 +63,8 @@ fn setup(ctx: &egui::Context) {
         .base_color(BaseColor::Zinc)
         .theme_color(ThemeColor::Blue)
         .radius(RadiusChoice::Px(6.0))
-        .apply(ctx, Mode::Light);
+        .apply(ctx);
+    ctx.set_theme(egui::Theme::Light);
 }
 ```
 
@@ -113,10 +115,10 @@ the theme's fonts on top. A plain `ctx.set_fonts` after `apply` drops the
 theme's font families, and headings fall back to the default font.
 
 ```rust
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 fn setup(ctx: &egui::Context, my_fonts: egui::FontDefinitions) {
-    let theme = Preset::default().theme(Mode::Dark);
+    let theme = Preset::default().theme();
     theme.apply_with_fonts(ctx, my_fonts);
 }
 ```

@@ -55,10 +55,11 @@ gives:
 - A preset code from ui.shadcn.com (the create page):
 
   ```rust
-  use shadcn_egui::{Mode, Preset, PresetCodeError};
+  use shadcn_egui::{Preset, PresetCodeError};
 
   fn setup(ctx: &egui::Context) -> Result<(), PresetCodeError> {
-      Preset::from_code("b2D0wqNxT")?.apply(ctx, Mode::Dark);
+      Preset::from_code("b2D0wqNxT")?.apply(ctx);
+      ctx.set_theme(egui::Theme::Dark);
       Ok(())
   }
   ```
@@ -74,7 +75,7 @@ gives:
   and `iconLibrary`:
 
   ```rust
-  use shadcn_egui::{BaseColor, IconLibrary, Mode, Preset, RadiusChoice, StyleName};
+  use shadcn_egui::{BaseColor, IconLibrary, Preset, RadiusChoice, StyleName};
 
   /// components.json: "style": "nova", "tailwind.baseColor": "neutral",
   /// "iconLibrary": "lucide"; no --radius in the CSS.
@@ -84,7 +85,8 @@ gives:
           .base_color(BaseColor::Neutral)
           .icons(IconLibrary::Lucide)
           .radius(RadiusChoice::Default)
-          .apply(ctx, Mode::Light);
+          .apply(ctx);
+      ctx.set_theme(egui::Theme::Light);
   }
   ```
 
@@ -97,7 +99,7 @@ gives:
 
   ```rust
   fn setup(ctx: &egui::Context) {
-      shadcn_egui::Theme::vega_dark().apply(ctx);
+      shadcn_egui::Theme::vega().apply(ctx);
   }
   ```
 
@@ -123,10 +125,10 @@ later.
 ```rust
 use std::sync::Arc;
 use shadcn_egui::style::{Paint, Role, Rule, State, When};
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 fn setup(ctx: &egui::Context) {
-    let mut theme = Preset::default().theme(Mode::Light);
+    let mut theme = Preset::default().theme();
     let style = Arc::make_mut(&mut theme.style);
     style.tabs_trigger.bg.rules.push(Rule::important(
         When::all(State::SELECTED),
@@ -201,7 +203,7 @@ fn settings_screen_dark() {
         .with_size(egui::vec2(800.0, 600.0))
         .build_ui(|ui| my_app::ui::settings(ui));
     // Once, on the harness's context, like an app right after startup.
-    shadcn_egui::Theme::vega_dark().apply(&h.ctx);
+    shadcn_egui::Theme::vega().apply(&h.ctx);
     h.run();
     h.snapshot("settings_dark");
 }

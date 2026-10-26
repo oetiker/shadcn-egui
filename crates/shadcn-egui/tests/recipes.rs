@@ -258,12 +258,10 @@ fn luma_and_rhea_keep_the_dark_active_and_focus_border() {
         ("rhea", shadcn_egui::Style::rhea),
     ];
     for (name, make) in styles {
-        let mode = egui::Theme::Dark;
         let theme = Theme::new(
             make(),
             shadcn_egui::Palette::light(),
-            Palette::light(),
-            Palette::dark(),
+            shadcn_egui::Palette::dark(),
             10.0,
         );
         let dark = egui::Theme::Dark;
@@ -684,7 +682,6 @@ fn click_flips(
 ) -> bool {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
-    ctx.set_theme(mode);
     let mut value = false;
     let press = |pressed| egui::Event::PointerButton {
         pos,
@@ -856,7 +853,6 @@ fn popover_probe(theme: Theme, offset: Option<f32>) -> (egui::Rect, f32) {
         .with_size(vec2(520.0, 320.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
-            ui.ctx().set_theme(mode);
             let resp = ui.add(Button::new("Open"));
             let mut p = Popover::new(&resp);
             if let Some(o) = offset {
@@ -875,15 +871,12 @@ fn popover_probe(theme: Theme, offset: Option<f32>) -> (egui::Rect, f32) {
 
 #[test]
 fn popover_width_and_offset() {
-    let mode = egui::Theme::Light;
     let wide = common::restyled(Theme::vega(), |s| {
         s.popover_content.width.base = Some(400.0);
     });
-    let mode = egui::Theme::Light;
     let (near, w288) = popover_probe(Theme::vega(), None);
     let (_, w400) = popover_probe(wide, None);
     assert_eq!(w400 - w288, 112.0);
-    let mode = egui::Theme::Light;
     let (far, _) = popover_probe(Theme::vega(), Some(20.0));
     assert_eq!(far.top() - near.top(), 16.0);
 }
@@ -897,7 +890,6 @@ fn footer_gap(theme: Theme) -> f32 {
         .with_size(vec2(640.0, 360.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
-            ui.ctx().set_theme(mode);
             Dialog::new("gap", "Title").show(ui.ctx(), &mut true, |ui| {
                 dialog::footer(ui, |ui| {
                     ui.add(Button::new("Right"));
@@ -912,13 +904,11 @@ fn footer_gap(theme: Theme) -> f32 {
 
 #[test]
 fn dialog_footer_gap_comes_from_the_style() {
-    let mode = egui::Theme::Light;
     let wide = common::restyled(Theme::vega(), |s| {
         s.dialog_footer.gap.base = Some(20.0);
     });
     assert_eq!(footer_gap(wide), 20.0);
     // No code fallback: a cleared gap is no gap.
-    let mode = egui::Theme::Light;
     let none = common::restyled(Theme::vega(), |s| {
         s.dialog_footer.gap = shadcn_egui::style::Prop::default();
     });
@@ -936,7 +926,7 @@ fn dialog_close_recipe_paints_the_close_button() {
         s.button_variant_ghost.bg.base = Some(Paint::Role(Role::Primary, 1.0));
         s.dialog_close.bg.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
-    let red = theme.role(Role::Destructive);
+    let red = common::resolved(&theme, mode).role(Role::Destructive);
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     ctx.set_theme(mode);
@@ -1023,9 +1013,7 @@ fn replaced_recipe_sizes_fall_back_to_the_content() {
     use shadcn_egui::components::select::Select;
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::Recipe;
-    let mode = egui::Theme::Light;
     let base = Theme::vega();
-    let mode = egui::Theme::Light;
     let cleared = common::restyled(Theme::vega(), |s| {
         for r in [
             &mut s.button,
@@ -1115,7 +1103,6 @@ fn replaced_popover_recipe_keeps_its_content_width() {
             .with_size(vec2(520.0, 320.0))
             .build_ui(move |ui| {
                 theme.apply(ui.ctx());
-                ui.ctx().set_theme(mode);
                 let resp = ui.add(Button::new("Open"));
                 Popover::new(&resp).show(|ui| ui.label("Two words"));
             });
@@ -1124,9 +1111,7 @@ fn replaced_popover_recipe_keeps_its_content_width() {
         h.run();
         h.get_by_label("Two words").rect()
     };
-    let mode = egui::Theme::Light;
     let one_line = probe(Theme::vega()).height();
-    let mode = egui::Theme::Light;
     let cleared = common::restyled(Theme::vega(), |s| {
         *s.popover_content = Recipe::default();
     });
@@ -1161,7 +1146,6 @@ fn replaced_recipes_keep_their_icons() {
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::components::select::Select;
     use shadcn_egui::style::Recipe;
-    let mode = egui::Theme::Light;
     let cleared = common::restyled(Theme::vega(), |s| {
         *s.checkbox_indicator = Recipe::default();
         *s.select_trigger = Recipe::default();
@@ -1284,7 +1268,8 @@ fn assert_fades(
 }
 
 /// The output of the last frame of a harness that ran `ui_fn` under
-/// `theme`, after `act` (a click or a hover that opens an overlay).
+/// `theme` in light mode, after `act` (a click or a hover that opens an
+/// overlay).
 fn overlay_output(
     theme: Theme,
     ui_fn: fn(&mut egui::Ui),
@@ -1292,9 +1277,9 @@ fn overlay_output(
 ) -> egui::FullOutput {
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(520.0, 420.0))
+        .with_theme(egui::Theme::Light)
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
-            ui.ctx().set_theme(mode);
             ui.style_mut().interaction.tooltip_delay = 0.0;
             ui_fn(ui);
         });
@@ -1333,7 +1318,7 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
         r.opacity.base = Some(v);
     }
     fn leaf(theme: &Theme, f: fn(&mut egui::Ui) -> egui::Response) -> egui::FullOutput {
-        common::measure_output(theme, f).1
+        common::measure_output(theme, egui::Theme::Light, f).1
     }
     fn click_open(h: &mut egui_kittest::Harness<'static>) {
         h.get_by_label("Open").click();
@@ -1542,9 +1527,7 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
     ];
     let mut fails = Vec::new();
     for (name, restyle, render, required, allowed) in cases {
-        let mode = egui::Theme::Light;
         let plain = render(&Theme::vega());
-        let mode = egui::Theme::Light;
         let faded = render(&common::restyled(Theme::vega(), restyle));
         fails.extend(assert_fades(name, &plain, &faded, required, allowed));
     }
@@ -1629,12 +1612,11 @@ fn disabled_ui_keeps_a_parts_own_opacity() {
     ];
     let mut fails = Vec::new();
     for (name, restyle, add) in cases {
+        let mode = egui::Theme::Light;
         let render = |theme: &Theme| {
-            common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
+            common::measure_output(theme, mode, |ui| ui.add_enabled_ui(false, add).inner).1
         };
-        let mode = egui::Theme::Light;
         let plain = render(&Theme::vega());
-        let mode = egui::Theme::Light;
         let faded = render(&common::restyled(Theme::vega(), restyle));
         fails.extend(assert_fades(name, &plain, &faded, &[0.5], &[]));
     }
@@ -1699,12 +1681,11 @@ fn disabled_rule_replaces_a_parts_base_opacity_in_a_disabled_ui() {
     ];
     let mut fails = Vec::new();
     for (name, restyle, add) in cases {
+        let mode = egui::Theme::Light;
         let render = |theme: &Theme| {
-            common::measure_output(theme, |ui| ui.add_enabled_ui(false, add).inner).1
+            common::measure_output(theme, mode, |ui| ui.add_enabled_ui(false, add).inner).1
         };
-        let mode = egui::Theme::Light;
         let plain = render(&Theme::vega());
-        let mode = egui::Theme::Light;
         let based = render(&common::restyled(Theme::vega(), restyle));
         fails.extend(assert_fades(name, &plain, &based, &[], &[]));
     }

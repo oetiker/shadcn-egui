@@ -21,8 +21,7 @@ use std::cell::Cell;
 fn two_targets(ctx: &egui::Context, events: Vec<egui::Event>) -> [State; 2] {
     let mut st = [State::NONE; 2];
     common::pass(Loop::RunUi, ctx, events, |ui| {
-        let mode = egui::Theme::Light;
-        let theme = Theme::vega();
+        let theme = common::resolved(&Theme::vega(), egui::Theme::Light);
         for (i, x) in [0.0, 100.0].into_iter().enumerate() {
             let rect = Rect::from_min_size(egui::pos2(x, 0.0), egui::vec2(80.0, 30.0));
             let mut resp = ui.interact(rect, egui::Id::new(("target", i)), egui::Sense::click());
@@ -101,11 +100,7 @@ fn the_modality_sees_passes_without_crate_widgets() {
             let mut resp = ui.interact(rect, egui::Id::new("t"), egui::Sense::click());
             if ask {
                 pressable(&mut resp, ActivationKeys::Button);
-                st = interaction_state(
-                    &Theme::vega().in_mode(egui::Theme::Light),
-                    &resp,
-                    State::NONE,
-                );
+                st = interaction_state(&Theme::current(ui.ctx()), &resp, State::NONE);
             }
         });
         st
@@ -133,12 +128,8 @@ fn button_clicks_on_enter_press_and_space_release() {
             rect.set(resp.rect);
             clicks.set(clicks.get() + usize::from(resp.clicked()));
             active.set(
-                interaction_state(
-                    &Theme::vega().in_mode(egui::Theme::Light),
-                    &resp,
-                    State::NONE,
-                )
-                .contains(State::ACTIVE),
+                interaction_state(&Theme::current(ui.ctx()), &resp, State::NONE)
+                    .contains(State::ACTIVE),
             );
             ui.add(Button::new("Other"));
         });

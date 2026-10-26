@@ -21,7 +21,6 @@ const BOXES: [(ShadowLevel, [f32; 4], f32); 4] = [
 ];
 
 fn render() -> image::RgbaImage {
-    let mode = egui::Theme::Light;
     let theme = Theme::vega();
     let mut h = Harness::builder()
         .with_size(vec2(900.0, 600.0))

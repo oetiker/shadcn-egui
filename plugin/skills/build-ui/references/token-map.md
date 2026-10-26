@@ -39,7 +39,9 @@ use shadcn_egui::Theme;
 /// A brand primary on top of whatever preset is active.
 fn brand(ctx: &egui::Context) {
     let mut t = Theme::current(ctx);
-    t.palette.primary = oklch_to_srgb(0.55, 0.2, 260.0);
+    let brand = oklch_to_srgb(0.55, 0.2, 260.0);
+    t.light.primary = brand;
+    t.dark.primary = brand;
     t.metrics.icon = 20.0;
     t.apply(ctx);
 }

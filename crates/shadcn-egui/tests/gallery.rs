@@ -16,7 +16,7 @@ const FULL: egui::Vec2 = egui::vec2(1280.0, 1420.0);
 fn page(ui: &mut egui::Ui, state: &mut GalleryState) {
     // Painted first, under the panels, in the colour of the theme the last
     // pass applied (`gallery_ui` applies its preset on the first pass).
-    let bg = Theme::current(ui.ctx()).palette.background;
+    let bg = Theme::current(ui.ctx()).palette().background;
     let page = ui.ctx().viewport_rect();
     ui.ctx()
         .layer_painter(egui::LayerId::background())
@@ -36,7 +36,7 @@ fn harness(state: GalleryState, size: egui::Vec2) -> Harness<'static, GallerySta
 #[test]
 fn gallery_default_preset() {
     let mut results = SnapshotResults::new();
-    for (suffix, mode) in [("light", Mode::Light), ("dark", Mode::Dark)] {
+    for (suffix, mode) in [("light", egui::Theme::Light), ("dark", egui::Theme::Dark)] {
         let mut h = harness(GalleryState::new(Preset::default(), mode), FULL);
         results.add(common::try_snapshot(&mut h, format!("gallery_{suffix}")));
     }

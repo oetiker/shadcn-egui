@@ -6,11 +6,11 @@
 mod common;
 
 use shadcn_egui::components::button::Button;
-use shadcn_egui::{fonts, FontName, Preset, StyleName, Theme};
+use shadcn_egui::{fonts, FontName, Preset, StyleName};
 
 #[test]
 fn every_font_crate_renders_a_button() {
-    let themes: Vec<(&'static str, Theme)> = FontName::ALL
+    let themes: Vec<common::Themed> = FontName::ALL
         .iter()
         .copied()
         .filter(|n| fonts::files(*n).is_some())
@@ -18,6 +18,7 @@ fn every_font_crate_renders_a_button() {
             (
                 n.id(),
                 Preset::default().style(StyleName::Vega).font(n).theme(),
+                egui::Theme::Light,
             )
         })
         .collect();

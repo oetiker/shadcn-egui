@@ -100,7 +100,7 @@ fn two_unsupported_values_log_two_lines_and_every_call_repeats_them() {
 fn gray_falls_back_to_neutral_and_the_base() {
     use shadcn_egui::{BaseColor, Palette, ThemeColor};
     let (t, lines) = warnings(|| Preset::default().base_color(BaseColor::Gray).theme());
-    assert_eq!(t.palette, Palette::light());
+    assert_eq!(t.light, Palette::light());
     assert_eq!(t.radius, 10.0);
     assert_eq!(
         lines,
@@ -114,7 +114,7 @@ fn gray_falls_back_to_neutral_and_the_base() {
             .theme()
     });
     assert_eq!(
-        Some(t.palette),
+        Some(t.dark),
         Palette::from_upstream("stone", "stone", "stone", true)
     );
     assert_eq!(
@@ -138,7 +138,11 @@ fn translucent_menu_colours_draw_opaque() {
         let p = Preset::default().menu_color(translucent);
         let (t, lines) = warnings(|| p.theme());
         let o = Preset::default().menu_color(opaque).theme();
-        assert_eq!((t.palette, t.menu), (o.palette, o.menu), "{translucent:?}");
+        assert_eq!(
+            (t.light, t.dark, t.menu_inverted),
+            (o.light, o.dark, o.menu_inverted),
+            "{translucent:?}"
+        );
         assert_eq!(
             lines,
             [format!(

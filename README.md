@@ -30,10 +30,11 @@ and apply it. Codes from shadcn-svelte.com number colours differently and
 are not supported.
 
 ```rust
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 fn setup(ctx: &egui::Context) -> Result<(), shadcn_egui::PresetCodeError> {
-    Preset::from_code("b2D0wqNxT")?.apply(ctx, Mode::Dark);
+    Preset::from_code("b2D0wqNxT")?.apply(ctx);
+    ctx.set_theme(egui::Theme::Dark);
     Ok(())
 }
 ```
