@@ -7,17 +7,37 @@
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
+use crate::style::app::{default_variant, state_size};
 use crate::style::{pick, Prop, Recipe, State};
 use crate::Theme;
 use egui::{lerp, vec2, Rect, Sense, Ui, Widget};
 
 /// shadcn `data-size` of the switch.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SwitchSize {
     #[default]
     Default,
     Sm,
+    /// An app size: [`SwitchSize::app`].
+    #[doc(hidden)]
+    App(crate::style::AppVariant<SwitchSize>),
 }
+
+state_size!(SwitchSize, SwitchVariant);
+
+default_variant!(
+    /// The switch's variant: upstream has none, so only app variants
+    /// ([`SwitchVariant::app`]) differ from `Default`.
+    SwitchVariant,
+    /// The switch's recipes an app variant's or app size's edit changes.
+    SwitchRecipes {
+        /// `data-slot="switch"`: the track.
+        switch,
+        /// `data-slot="switch-thumb"`: the thumb.
+        switch_thumb,
+    }
+);
 
 /// A switch. `toggle(ui, &mut on)` is shorthand for
 /// `ui.add(Switch::new(&mut on))`.
@@ -31,6 +51,7 @@ pub struct Switch<'a> {
     size: SwitchSize,
     enabled: bool,
     invalid: bool,
+    variant: SwitchVariant,
 }
 
 impl<'a> Switch<'a> {
@@ -40,10 +61,17 @@ impl<'a> Switch<'a> {
             size: SwitchSize::Default,
             enabled: true,
             invalid: false,
+            variant: SwitchVariant::Default,
         }
     }
-    pub fn size(mut self, size: SwitchSize) -> Self {
-        self.size = size;
+    /// shadcn `size`, or an app size ([`SwitchSize::app`]).
+    pub fn size(mut self, size: impl Into<SwitchSize>) -> Self {
+        self.size = size.into();
+        self
+    }
+    /// An app variant ([`SwitchVariant::app`]).
+    pub fn variant(mut self, v: impl Into<SwitchVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     /// `false` draws the switch disabled: no hover, no focus, no toggling.
@@ -61,13 +89,11 @@ impl<'a> Switch<'a> {
 impl Widget for Switch<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let track = [&*t.style.switch];
-        let thumb = [&*t.style.switch_thumb];
+        let v = t.resolve_pair(self.variant, self.size);
+        let track = [v.part(&t.style, |s| &s.switch, |r| &r.switch)];
+        let thumb = [v.part(&t.style, |s| &s.switch_thumb, |r| &r.switch_thumb)];
         let enabled = self.enabled && ui.is_enabled();
-        let size_bit = match self.size {
-            SwitchSize::Default => State::SIZE_DEFAULT,
-            SwitchSize::Sm => State::SIZE_SM,
-        };
+        let size_bit = v.bits();
         // Geometry depends on neither the value nor interaction.
         let g = t.state(ui.ctx(), size_bit.with(State::INVALID, self.invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&track, f, g).unwrap_or(0.0);
@@ -153,4 +179,41 @@ impl Widget for Switch<'_> {
 /// Shorthand for `ui.add(Switch::new(on))`.
 pub fn toggle(ui: &mut Ui, on: &mut bool) -> egui::Response {
     ui.add(Switch::new(on))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role};
+
+    const DANGER: AppVariant<SwitchVariant> = SwitchVariant::app("danger");
+    const WIDE: AppVariant<SwitchSize> = SwitchSize::app("wide");
+
+    fn danger(r: &mut SwitchRecipes, _: crate::StyleName) {
+        r.switch_thumb.bg.set(Paint::Role(Role::Destructive, 1.0));
+    }
+    fn wide(r: &mut SwitchRecipes, _: crate::StyleName) {
+        r.switch.width.set(60.0);
+    }
+
+    /// An app variant's and an app size's edits get `SwitchRecipes`; named
+    /// together, both hold, and the app size keeps its base's bits.
+    #[test]
+    fn edit_compiles_and_variant_and_size_combine() {
+        let t = Theme::vega()
+            .variant(DANGER, SwitchVariant::Default, danger)
+            .size(WIDE, SwitchSize::Sm, wide);
+        let v = t.resolve_pair(SwitchVariant::from(DANGER), SwitchSize::from(WIDE));
+        assert_eq!(v.bits(), State::SIZE_SM);
+        let thumb = v.part(&t.style, |s| &s.switch_thumb, |r| &r.switch_thumb);
+        assert_eq!(
+            thumb.bg.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        let track = v.part(&t.style, |s| &s.switch, |r| &r.switch);
+        assert_eq!(track.width.get(State::NONE), Some(60.0));
+        let only_size = t.resolve_pair(SwitchVariant::Default, SwitchSize::from(WIDE));
+        let thumb = only_size.part(&t.style, |s| &s.switch_thumb, |r| &r.switch_thumb);
+        assert_eq!(thumb, &*t.style.switch_thumb);
+    }
 }

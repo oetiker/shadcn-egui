@@ -1,7 +1,7 @@
 //! shadcn v4 (OKLCH) design tokens and the `Theme` (style x palette x radius), materialized for egui.
 
 use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
-use crate::style::app::{AppMap, Resolved};
+use crate::style::app::{AppMap, Resolved, ResolvedPair};
 use crate::style::{
     pick, AppEnum, AppVariant, Edit, Paint, Radius, Role, Rung, ShadowLevel, SizeEnum, State,
     Style, TextSize, VariantEnum, Weight,
@@ -358,6 +358,16 @@ impl Theme {
     /// bits of the built-in case, or of the app case's edited copies.
     pub(crate) fn resolve<X: AppEnum>(&self, x: X) -> Resolved<X> {
         self.apps.resolve(&self.style, x)
+    }
+
+    /// The recipes and state bits of a variant and a size that edit the
+    /// same parts ([`crate::style::app::AppMap::resolve_pair`]).
+    pub(crate) fn resolve_pair<V: AppEnum, Z: AppEnum<Recipes = V::Recipes>>(
+        &self,
+        v: V,
+        z: Z,
+    ) -> ResolvedPair<V, Z> {
+        self.apps.resolve_pair(&self.style, v, z)
     }
 
     /// The component state `s` plus this theme's [`State::DARK`], and the

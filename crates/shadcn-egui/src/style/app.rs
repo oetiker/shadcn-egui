@@ -131,7 +131,12 @@ struct Built {
     /// the pointer comparison sees the change.
     style: Arc<Style>,
     recipes: Vec<Arc<dyn Any + Send + Sync>>,
+    /// An app variant and an app size that edit the same parts, built
+    /// together on first use ([`AppMap::resolve_pair`]).
+    pairs: Vec<(PairKey, Arc<dyn Any + Send + Sync>)>,
 }
+
+type PairKey = (TypeId, &'static str, &'static str);
 
 /// A theme's app variants and app colours. Shared behind an `Arc`; the
 /// edited recipes are built on the first lookup for a style and kept until
@@ -253,6 +258,62 @@ impl AppMap {
         Resolved { base, app: recipes }
     }
 
+    /// The recipes of a component whose variant `v` and size `z` edit the
+    /// same parts (a size that works through state bits, card `data-size`):
+    /// an app variant's copies, an app size's, or both edits in stack order
+    /// (variant, then size) on one copy. Built once per style.
+    pub(crate) fn resolve_pair<V: AppEnum, Z: AppEnum<Recipes = V::Recipes>>(
+        &self,
+        style: &Arc<Style>,
+        v: V,
+        z: Z,
+    ) -> ResolvedPair<V, Z> {
+        let rv = self.resolve(style, v);
+        let rz = self.resolve(style, z);
+        let app = match (rv.app, rz.app) {
+            (None, None) => None,
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (Some(a), Some(_)) => {
+                let key = (
+                    TypeId::of::<(V, Z)>(),
+                    v.app_name().unwrap_or_default(),
+                    z.app_name().unwrap_or_default(),
+                );
+                let mut built = self.built.lock().unwrap_or_else(|e| e.into_inner());
+                let b = built.as_mut().expect("resolve built the recipes");
+                let found = b.pairs.iter().find(|(k, _)| *k == key).map(|(_, r)| r);
+                let r = match found.and_then(|r| r.clone().downcast::<V::Recipes>().ok()) {
+                    Some(r) => r,
+                    None => {
+                        let mut r = (*a).clone();
+                        let edit = self
+                            .entries
+                            .iter()
+                            .find(|e| e.key() == (TypeId::of::<Z>(), key.2))
+                            .and_then(|e| e.as_any().downcast_ref::<Typed<Z>>())
+                            .map(|t| t.edit);
+                        if let Some(edit) = edit {
+                            edit(
+                                &mut r,
+                                StyleName::from_id(style.name).unwrap_or(StyleName::Vega),
+                            );
+                        }
+                        let r = Arc::new(r);
+                        b.pairs.push((key, r.clone()));
+                        r
+                    }
+                };
+                Some(r)
+            }
+        };
+        ResolvedPair {
+            variant: rv.base,
+            size: rz.base,
+            app,
+        }
+    }
+
     fn build(&self, style: &Arc<Style>) -> Built {
         let name = StyleName::from_id(style.name);
         debug_assert!(
@@ -264,6 +325,7 @@ impl AppMap {
         Built {
             style: Arc::clone(style),
             recipes: self.entries.iter().map(|e| e.build(style, name)).collect(),
+            pairs: Vec::new(),
         }
     }
 }
@@ -331,6 +393,49 @@ macro_rules! default_variant {
 }
 pub(crate) use default_variant;
 
+/// The app plumbing of a `data-size` enum `$z { Default, Sm, App }` whose
+/// size works through state bits (`data-[size=sm]:` rules in the parts'
+/// own recipes): an app size edits copies of the same parts as the
+/// component's variant `$x` (`Recipes` shared), from its base's bits.
+macro_rules! state_size {
+    ($z:ident, $x:ident) => {
+        impl $z {
+            /// An app size, defined in the theme ([`crate::Theme::size`]).
+            pub const fn app(name: &'static str) -> $crate::style::AppVariant<$z> {
+                $crate::style::AppVariant::new(name)
+            }
+        }
+
+        impl From<$crate::style::AppVariant<$z>> for $z {
+            fn from(app: $crate::style::AppVariant<$z>) -> Self {
+                $z::App(app)
+            }
+        }
+
+        impl $crate::style::app::Sealed for $z {}
+        impl $crate::style::AppEnum for $z {
+            type Recipes = <$x as $crate::style::AppEnum>::Recipes;
+            fn app_name(self) -> Option<&'static str> {
+                match self {
+                    $z::App(a) => Some(a.name()),
+                    _ => None,
+                }
+            }
+            fn recipes(self, style: &$crate::style::Style) -> Self::Recipes {
+                <$x as $crate::style::AppEnum>::recipes($x::Default, style)
+            }
+            fn bits(self) -> $crate::style::State {
+                match self {
+                    $z::Sm => $crate::style::State::SIZE_SM,
+                    _ => $crate::style::State::SIZE_DEFAULT,
+                }
+            }
+        }
+        impl $crate::style::SizeEnum for $z {}
+    };
+}
+pub(crate) use state_size;
+
 /// What a component draws an enum value with ([`AppMap::resolve`]).
 pub(crate) struct Resolved<X: AppEnum> {
     base: X,
@@ -359,6 +464,35 @@ impl<X: AppEnum> Resolved<X> {
         match &self.app {
             Some(r) => app(r),
             None => builtin(self.base, style),
+        }
+    }
+}
+
+/// What a component whose variant and size edit the same parts draws
+/// with ([`AppMap::resolve_pair`]).
+pub(crate) struct ResolvedPair<V: AppEnum, Z: AppEnum<Recipes = V::Recipes>> {
+    variant: V,
+    size: Z,
+    app: Option<Arc<V::Recipes>>,
+}
+
+impl<V: AppEnum, Z: AppEnum<Recipes = V::Recipes>> ResolvedPair<V, Z> {
+    /// The state bits of the built-in variant and size (the app cases' bases).
+    pub(crate) fn bits(&self) -> State {
+        self.variant.bits().or(self.size.bits())
+    }
+
+    /// One part's recipe: the edited copy (`app`) when either is an app
+    /// case, else the style's (`builtin`).
+    pub(crate) fn part<'a>(
+        &'a self,
+        style: &'a Style,
+        builtin: fn(&Style) -> &Recipe,
+        app: fn(&V::Recipes) -> &Recipe,
+    ) -> &'a Recipe {
+        match &self.app {
+            Some(r) => app(r),
+            None => builtin(style),
         }
     }
 }

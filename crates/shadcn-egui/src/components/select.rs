@@ -33,23 +33,59 @@ use crate::components::shared::{
     RecipeBox, DEFAULT_SIDE_OFFSET,
 };
 use crate::components::text::TextLook;
+use crate::style::app::{default_variant, state_size};
 use crate::style::{pick, Paint, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::{vec2, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
 
 /// Trigger height variant: shadcn `size="default" | "sm"`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SelectSize {
     #[default]
     Default,
     Sm,
+    /// An app size: [`SelectSize::app`].
+    #[doc(hidden)]
+    App(crate::style::AppVariant<SelectSize>),
 }
+
+state_size!(SelectSize, SelectVariant);
+
+default_variant!(
+    /// The select's variant: upstream has none, so only app variants
+    /// ([`SelectVariant::app`]) differ from `Default`.
+    SelectVariant,
+    /// The select's recipes an app variant's or app size's edit changes.
+    /// Parts without a `data-slot` are named after their `cn-*` class.
+    SelectRecipes {
+        /// `data-slot="select-trigger"`.
+        select_trigger,
+        /// `cn-select-trigger-icon`: the chevron.
+        select_trigger_icon,
+        /// `data-slot="select-content"`: the popup.
+        select_content,
+        /// `cn-select-viewport`.
+        select_viewport,
+        /// `data-slot="select-group"`.
+        select_group,
+        /// `data-slot="select-item"`: a row.
+        select_item,
+        /// `cn-select-item-text`.
+        select_item_text,
+        /// `cn-select-item-indicator`.
+        select_item_indicator,
+        /// `cn-select-item-indicator-icon`: the tick.
+        select_item_indicator_icon,
+    }
+);
 
 pub struct Select<'a> {
     id: &'a str,
     selected: &'a mut usize,
     options: &'a [&'a str],
     size: SelectSize,
+    variant: SelectVariant,
     placeholder: String,
     enabled: bool,
     invalid: bool,
@@ -65,6 +101,7 @@ impl<'a> Select<'a> {
             selected,
             options,
             size: SelectSize::Default,
+            variant: SelectVariant::Default,
             placeholder: String::new(),
             enabled: true,
             invalid: false,
@@ -72,8 +109,14 @@ impl<'a> Select<'a> {
             side_offset: DEFAULT_SIDE_OFFSET,
         }
     }
-    pub fn size(mut self, size: SelectSize) -> Self {
-        self.size = size;
+    /// shadcn `size`, or an app size ([`SelectSize::app`]).
+    pub fn size(mut self, size: impl Into<SelectSize>) -> Self {
+        self.size = size.into();
+        self
+    }
+    /// An app variant ([`SelectVariant::app`]).
+    pub fn variant(mut self, v: impl Into<SelectVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     /// Text shown while `selected` is past the end of the options.
@@ -108,16 +151,13 @@ impl Widget for Select<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
         let ctx = ui.ctx().clone();
-        let trig = [&*t.style.select_trigger];
+        let v = t.resolve_pair(self.variant, self.size);
+        let trig = [v.part(&t.style, |s| &s.select_trigger, |r| &r.select_trigger)];
         let enabled = self.enabled && ui.is_enabled();
         let n = self.options.len();
         let has_value = *self.selected < n;
-        let size_state = if self.size == SelectSize::Sm {
-            State::SIZE_SM
-        } else {
-            State::SIZE_DEFAULT
-        };
-        let context = size_state
+        let context = v
+            .bits()
             .with(State::INVALID, self.invalid)
             .with(State::PLACEHOLDER, !has_value);
         // Geometry depends on neither interaction nor the open state.
@@ -131,7 +171,11 @@ impl Widget for Select<'_> {
         let gap = get(|r| &r.gap);
         // The chevron's own `size-*`, else the trigger's `[&_svg]:size-*`,
         // else the theme's icon size, as a button's.
-        let icon = [&*t.style.select_trigger_icon];
+        let icon = [v.part(
+            &t.style,
+            |s| &s.select_trigger_icon,
+            |r| &r.select_trigger_icon,
+        )];
         let icon_side = pick(&icon, |r| &r.width, g)
             .or_else(|| pick(&trig, |r| &r.icon_size, g))
             .unwrap_or(t.metrics.icon);
@@ -337,9 +381,9 @@ impl Widget for Select<'_> {
             // also in light mode. The trigger above keeps the page theme.
             let menu = t.menu_theme();
             let t = &menu;
-            let l = [&*t.style.select_content];
-            let item = [&*t.style.select_item];
-            let group = [&*t.style.select_group];
+            let l = [v.part(&t.style, |s| &s.select_content, |r| &r.select_content)];
+            let item = [v.part(&t.style, |s| &s.select_item, |r| &r.select_item)];
+            let group = [v.part(&t.style, |s| &s.select_group, |r| &r.select_group)];
             let gs = t.state(ui.ctx(), State::NONE);
             let ist = t.state(ui.ctx(), State::FOCUS.with(State::SELECTED, false));
             let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, gs).unwrap_or(0.0);
@@ -353,7 +397,13 @@ impl Widget for Select<'_> {
             // Inside, the viewport sits in the content and the group in the
             // viewport; neither paints anything of its own.
             let alpha = opacity(&[&l[..]], gs);
-            let viewport = [&*t.style.select_viewport];
+            let viewport = [v.part(&t.style, |s| &s.select_viewport, |r| &r.select_viewport)];
+            let item_text = v.part(&t.style, |s| &s.select_item_text, |r| &r.select_item_text);
+            let ind_icon = v.part(
+                &t.style,
+                |s| &s.select_item_indicator_icon,
+                |r| &r.select_item_indicator_icon,
+            );
             let panel = RecipeBox::resolve(ui.ctx(), t, &l, gs).faded(alpha);
             let frame = panel.frame([gpt, gpr, gpb, gpl]);
             let item_look = TextLook::resolve(ui, &item, ist);
@@ -444,11 +494,8 @@ impl Widget for Select<'_> {
                                         let color = pick(&item, |r| &r.text, s)
                                             .or(pick(&l, |r| &r.text, s))
                                             .map_or(inherited, |p| t.paint(p));
-                                        let text_painter = part_painter(
-                                            ui,
-                                            &[&[&*t.style.select_item_text][..], &item[..]],
-                                            s,
-                                        );
+                                        let text_painter =
+                                            part_painter(ui, &[&[item_text][..], &item[..]], s);
                                         galley.paint(
                                             &text_painter,
                                             egui::pos2(
@@ -458,7 +505,11 @@ impl Widget for Select<'_> {
                                             color,
                                         );
                                         if i == current {
-                                            let ind = [&*t.style.select_item_indicator];
+                                            let ind = [v.part(
+                                                &t.style,
+                                                |s| &s.select_item_indicator,
+                                                |r| &r.select_item_indicator,
+                                            )];
                                             // No size: CSS's initial `auto`, the
                                             // tick at the row's `[&_svg]:size-*`.
                                             let tick_side = pick(&item, |r| &r.icon_size, s)
@@ -479,11 +530,7 @@ impl Widget for Select<'_> {
                                             // The icon sits in the indicator.
                                             let tick_painter = part_painter(
                                                 ui,
-                                                &[
-                                                    &[&*t.style.select_item_indicator_icon][..],
-                                                    &ind[..],
-                                                    &item[..],
-                                                ],
+                                                &[&[ind_icon][..], &ind[..], &item[..]],
                                                 s,
                                             );
                                             paint_icon(
@@ -533,4 +580,26 @@ impl Widget for Select<'_> {
 /// Renders a select. `selected` is the chosen index. Returns true if it changed.
 pub fn select(ui: &mut Ui, id: &str, selected: &mut usize, options: &[&str]) -> bool {
     ui.add(Select::new(id, selected, options)).changed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::AppVariant;
+
+    const TALL: AppVariant<SelectSize> = SelectSize::app("tall");
+
+    /// An app size's edit gets `SelectRecipes` and keeps its base's bits.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        let t = Theme::vega().size(TALL, SelectSize::Sm, |r: &mut SelectRecipes, _| {
+            r.select_trigger.height.set(40.0)
+        });
+        let v = t.resolve_pair(SelectVariant::Default, SelectSize::from(TALL));
+        assert_eq!(v.bits(), State::SIZE_SM);
+        let trig = v.part(&t.style, |s| &s.select_trigger, |r| &r.select_trigger);
+        assert_eq!(trig.height.get(State::NONE), Some(40.0));
+        let item = v.part(&t.style, |s| &s.select_item, |r| &r.select_item);
+        assert_eq!(item, &*t.style.select_item);
+    }
 }
