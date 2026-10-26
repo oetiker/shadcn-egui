@@ -11,14 +11,47 @@
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
+use crate::components::context;
 use crate::components::shared::{content_ui, opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::components::text::{content_scope, TextLook};
-use crate::style::{pick, State};
+use crate::style::app::{default_variant, Resolved};
+use crate::style::pick;
 use crate::Theme;
-use egui::{PopupCloseBehavior, Response, TextWrapMode, Ui};
+use egui::{PopupCloseBehavior, Response, TextWrapMode, Ui, UiBuilder};
+
+default_variant!(
+    /// The popover's variant: upstream has none, so only app variants
+    /// ([`PopoverVariant::app`]) differ from `Default`.
+    PopoverVariant,
+    /// The popover's recipes an app variant's edit changes.
+    PopoverRecipes {
+        /// `data-slot="popover-content"`: the panel.
+        popover_content,
+        /// `data-slot="popover-header"`.
+        popover_header,
+        /// `data-slot="popover-title"`.
+        popover_title,
+        /// `data-slot="popover-description"`.
+        popover_description,
+    }
+);
+
+/// The context a popover gives its parts: its variant.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct PopoverContext {
+    variant: PopoverVariant,
+}
+
+/// The recipes of the popover around `ui`; outside a popover, the
+/// default's.
+fn popover_recipes(ui: &Ui, t: &Theme) -> Resolved<PopoverVariant> {
+    let cx = context::find::<PopoverContext>(ui).unwrap_or_default();
+    t.resolve(cx.variant)
+}
 
 pub struct Popover<'a> {
     trigger: &'a Response,
+    variant: PopoverVariant,
     width: Option<f32>,
     side_offset: f32,
 }
@@ -28,9 +61,16 @@ impl<'a> Popover<'a> {
     pub fn new(trigger: &'a Response) -> Self {
         Self {
             trigger,
+            variant: PopoverVariant::Default,
             width: None,
             side_offset: DEFAULT_SIDE_OFFSET,
         }
+    }
+    /// An app variant ([`PopoverVariant::app`]). The popover's parts inside
+    /// take it.
+    pub fn variant(mut self, v: impl Into<PopoverVariant>) -> Self {
+        self.variant = v.into();
+        self
     }
     /// Width of the popover box, padding included; default the style's
     /// `w-72`.
@@ -46,8 +86,9 @@ impl<'a> Popover<'a> {
     /// Show the content while open. Returns its value while open.
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<R> {
         let t = Theme::current(&self.trigger.ctx);
-        let g = t.state(&self.trigger.ctx, State::NONE);
-        let l = [&*t.style.popover_content];
+        let v = t.resolve(self.variant);
+        let g = t.state(&self.trigger.ctx, v.bits());
+        let l = [v.part(&t.style, |_, s| &s.popover_content, |r| &r.popover_content)];
         let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
             pick(&l, f, g).unwrap_or(0.0)
         };
@@ -78,9 +119,14 @@ impl<'a> Popover<'a> {
                     ui.set_width(w);
                 }
                 ui.spacing_mut().item_spacing.y = gap;
-                // The content's `text-*` and text colour reach what it holds.
-                let look = TextLook::resolve(ui, &l, g);
-                let inner = content_scope(ui, &look, |ui| content_ui(ui, &[&l[..]], g, content));
+                let parts = PopoverContext {
+                    variant: self.variant,
+                };
+                let inner = ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
+                    // The content's `text-*` and text colour reach what it holds.
+                    let look = TextLook::resolve(ui, &l, g);
+                    content_scope(ui, &look, |ui| content_ui(ui, &[&l[..]], g, content)).inner
+                });
                 (inner.inner, slot)
             })?;
         let (inner, slot) = shown.inner;
@@ -99,24 +145,28 @@ impl<'a> Popover<'a> {
 /// header's.
 pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
-    let g = t.state(ui.ctx(), State::NONE);
-    let header = &*t.style.popover_header;
-    let title_l = [header, &*t.style.popover_title];
-    let desc_l = [header, &*t.style.popover_description];
+    let v = popover_recipes(ui, &t);
+    let g = t.state(ui.ctx(), v.bits());
+    let header = v.part(&t.style, |_, s| &s.popover_header, |r| &r.popover_header);
+    let title_r = v.part(&t.style, |_, s| &s.popover_title, |r| &r.popover_title);
+    let desc_r = v.part(
+        &t.style,
+        |_, s| &s.popover_description,
+        |r| &r.popover_description,
+    );
+    let content = v.part(&t.style, |_, s| &s.popover_content, |r| &r.popover_content);
+    let title_l = [header, title_r];
+    let desc_l = [header, desc_r];
     let gap = pick(&[header], |r| &r.gap, g).unwrap_or(0.0);
     let title_look = TextLook::resolve(ui, &title_l, g);
-    let content_color = pick(&[&*t.style.popover_content], |r| &r.text, g).map(|p| t.paint(p));
+    let content_color = pick(&[content], |r| &r.text, g).map(|p| t.paint(p));
     let title_look = match (title_look.recipe_color(), content_color) {
         (None, Some(c)) => title_look.color(c),
         _ => title_look,
     };
     let desc_look = TextLook::resolve(ui, &desc_l, g);
     // The title and the description sit in the header.
-    let (title_l, desc_l2, header_l) = (
-        [&*t.style.popover_title],
-        [&*t.style.popover_description],
-        [header],
-    );
+    let (title_l, desc_l2, header_l) = ([title_r], [desc_r], [header]);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(ui, &[&header_l[..]], g, |ui| {
@@ -132,7 +182,8 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
 
 #[cfg(test)]
 mod tests {
-    use crate::style::{pick, State, Style, TextSize};
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role, State, Style, TextSize};
 
     /// The title and description sizes come from their own recipes, which
     /// differ from the header's in lyra and maia.
@@ -168,5 +219,25 @@ mod tests {
             ),
             Some(TextSize::Base)
         );
+    }
+
+    /// An app variant's edit gets `PopoverRecipes` and changes only what it
+    /// names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const BRAND: AppVariant<PopoverVariant> = PopoverVariant::app("brand");
+        let t = Theme::vega().variant(
+            BRAND,
+            PopoverVariant::Default,
+            |r: &mut PopoverRecipes, _| r.popover_title.text.set(Paint::Role(Role::Primary, 1.0)),
+        );
+        let v = t.resolve(PopoverVariant::from(BRAND));
+        let title = v.part(&t.style, |_, s| &s.popover_title, |r| &r.popover_title);
+        assert_eq!(
+            title.text.get(State::NONE),
+            Some(Paint::Role(Role::Primary, 1.0))
+        );
+        let header = v.part(&t.style, |_, s| &s.popover_header, |r| &r.popover_header);
+        assert_eq!(header, &*t.style.popover_header);
     }
 }

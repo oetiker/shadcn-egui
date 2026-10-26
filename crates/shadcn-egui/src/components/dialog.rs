@@ -11,14 +11,53 @@
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
+use crate::components::context;
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
-use crate::style::{pick, Recipe, State};
+use crate::style::app::{default_variant, Resolved};
+use crate::style::{pick, Recipe};
 use crate::{layout, Theme};
 use egui::{Align, Color32, Id, Layout, Rect, Shape, TextWrapMode, Ui, UiBuilder};
 
+default_variant!(
+    /// The dialog's variant: upstream has none, so only app variants
+    /// ([`DialogVariant::app`]) differ from `Default`.
+    DialogVariant,
+    /// The dialog's recipes an app variant's edit changes.
+    DialogRecipes {
+        /// `data-slot="dialog-overlay"`: the backdrop.
+        dialog_overlay,
+        /// `data-slot="dialog-content"`: the panel.
+        dialog_content,
+        /// `data-slot="dialog-close"`: the close button, over its button
+        /// recipes.
+        dialog_close,
+        /// `data-slot="dialog-header"`.
+        dialog_header,
+        /// `data-slot="dialog-footer"`.
+        dialog_footer,
+        /// `data-slot="dialog-title"`.
+        dialog_title,
+        /// `data-slot="dialog-description"`.
+        dialog_description,
+    }
+);
+
+/// The context a dialog gives its parts: its variant.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct DialogContext {
+    variant: DialogVariant,
+}
+
+/// The recipes of the dialog around `ui`; outside a dialog, the default's.
+fn dialog_recipes(ui: &Ui, t: &Theme) -> Resolved<DialogVariant> {
+    let cx = context::find::<DialogContext>(ui).unwrap_or_default();
+    t.resolve(cx.variant)
+}
+
 pub struct Dialog<'a> {
     id: Id,
+    variant: DialogVariant,
     title: &'a str,
     description: Option<&'a str>,
     width: Option<f32>,
@@ -30,12 +69,19 @@ impl<'a> Dialog<'a> {
     pub fn new(id_salt: impl std::hash::Hash, title: &'a str) -> Self {
         Self {
             id: Id::new(id_salt),
+            variant: DialogVariant::Default,
             title,
             description: None,
             width: None,
             backdrop: None,
             show_close_button: true,
         }
+    }
+    /// An app variant ([`DialogVariant::app`]). The dialog's parts inside
+    /// take it.
+    pub fn variant(mut self, v: impl Into<DialogVariant>) -> Self {
+        self.variant = v.into();
+        self
     }
     pub fn description(mut self, text: &'a str) -> Self {
         self.description = Some(text);
@@ -73,8 +119,9 @@ impl<'a> Dialog<'a> {
             return None;
         }
         let t = Theme::current(ctx);
-        let g = t.state(ctx, State::NONE);
-        let l = [&*t.style.dialog_content];
+        let v = t.resolve(self.variant);
+        let g = t.state(ctx, v.bits());
+        let l = [v.part(&t.style, |_, s| &s.dialog_content, |r| &r.dialog_content)];
         let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
         let (pad_t, pad_r, pad_b, pad_l) = (
             px(|r| &r.pad_top),
@@ -96,7 +143,7 @@ impl<'a> Dialog<'a> {
 
         let panel = RecipeBox::resolve(ctx, &t, &l, g).faded(alpha);
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
-        let overlay_l = [&*t.style.dialog_overlay];
+        let overlay_l = [v.part(&t.style, |_, s| &s.dialog_overlay, |r| &r.dialog_overlay)];
         let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
         // The overlay's opacity fades the backdrop, the app's colour too.
         let backdrop = self
@@ -111,15 +158,22 @@ impl<'a> Dialog<'a> {
                 let slot = RecipeBox::reserve(ui);
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
-                // The panel's `text-*` and text colour reach its content.
-                let look = TextLook::resolve(ui, &l, g);
-                content_scope(ui, &look, |ui| {
-                    content_ui(ui, &[&l[..]], g, |ui| {
-                        header(ui, self.title, self.description);
-                        let inner = body(ui);
-                        let close = self.show_close_button && close_button(ui, &t, (pad_t, pad_r));
-                        (inner, close, slot)
+                let parts = DialogContext {
+                    variant: self.variant,
+                };
+                ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
+                    // The panel's `text-*` and text colour reach its content.
+                    let look = TextLook::resolve(ui, &l, g);
+                    content_scope(ui, &look, |ui| {
+                        content_ui(ui, &[&l[..]], g, |ui| {
+                            header(ui, &t, &v, self.title, self.description);
+                            let inner = body(ui);
+                            let close =
+                                self.show_close_button && close_button(ui, &t, &v, (pad_t, pad_r));
+                            (inner, close, slot)
+                        })
                     })
+                    .inner
                 })
                 .inner
             });
@@ -134,18 +188,27 @@ impl<'a> Dialog<'a> {
 }
 
 /// `dialog-header` with its title and description.
-fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
-    let t = Theme::current(ui.ctx());
-    let g = t.state(ui.ctx(), State::NONE);
-    let gap = pick(&[&*t.style.dialog_header], |r| &r.gap, g).unwrap_or(0.0);
-    let heading = [&*t.style.dialog_title];
+fn header(
+    ui: &mut Ui,
+    t: &Theme,
+    v: &Resolved<DialogVariant>,
+    title: &str,
+    description: Option<&str>,
+) {
+    let g = t.state(ui.ctx(), v.bits());
+    let header_l = [v.part(&t.style, |_, s| &s.dialog_header, |r| &r.dialog_header)];
+    let gap = pick(&header_l, |r| &r.gap, g).unwrap_or(0.0);
+    let heading = [v.part(&t.style, |_, s| &s.dialog_title, |r| &r.dialog_title)];
     // upstream: dialog-title carries `cn-font-heading`; without a `text-*`
     // it takes the panel's, which the content scope passes.
     let title_look = TextLook::resolve(ui, &heading, g).heading(true);
-    let desc = [&*t.style.dialog_description];
+    let desc = [v.part(
+        &t.style,
+        |_, s| &s.dialog_description,
+        |r| &r.dialog_description,
+    )];
     let desc_look = TextLook::resolve(ui, &desc, g);
     // The title and the description sit in the header.
-    let header_l = [&*t.style.dialog_header];
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(ui, &[&header_l[..]], g, |ui| {
@@ -165,9 +228,10 @@ fn header(ui: &mut Ui, title: &str, description: Option<&str>) {
 /// edges, painted with `cn-dialog-close` over its button recipes. Returns
 /// true when clicked. It is placed without moving the cursor,
 /// so it does not grow the panel.
-fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
-    let g = t.state(ui.ctx(), State::NONE);
-    let at = [&*t.style.dialog_close];
+fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, f32)) -> bool {
+    let g = t.state(ui.ctx(), v.bits());
+    let close = v.part(&t.style, |_, s| &s.dialog_close, |r| &r.dialog_close);
+    let at = [close];
     let (top, right) = (
         pick(&at, |r| &r.inset_top, g).unwrap_or(0.0),
         pick(&at, |r| &r.inset_right, g).unwrap_or(0.0),
@@ -189,7 +253,7 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
                 .icon(&t.icons.close)
                 .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::IconSm)
-                .extra_layer(|s| &s.dialog_close),
+                .extra_layer(close.clone()),
         )
         .clicked()
 }
@@ -199,8 +263,9 @@ fn close_button(ui: &mut Ui, t: &Theme, pad: (f32, f32)) -> bool {
 /// strip bleeds to the dialog's edges and bottom.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let t = Theme::current(ui.ctx());
-    let g = t.state(ui.ctx(), State::NONE);
-    let l = [&*t.style.dialog_footer];
+    let v = dialog_recipes(ui, &t);
+    let g = t.state(ui.ctx(), v.bits());
+    let l = [v.part(&t.style, |_, s| &s.dialog_footer, |r| &r.dialog_footer)];
     let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
     let (pad_t, pad_r, pad_b, pad_l) = (
         px(|r| &r.pad_top),
@@ -244,4 +309,54 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         ),
         egui::Sense::hover(),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role, State};
+
+    const BRAND: AppVariant<DialogVariant> = DialogVariant::app("brand");
+
+    fn brand(r: &mut DialogRecipes, _: crate::StyleName) {
+        r.dialog_footer.bg.set(Paint::Role(Role::Primary, 1.0));
+    }
+
+    /// An app variant's edit gets `DialogRecipes` and changes only what it
+    /// names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        let t = Theme::vega().variant(BRAND, DialogVariant::Default, brand);
+        let v = t.resolve(DialogVariant::from(BRAND));
+        let footer = v.part(&t.style, |_, s| &s.dialog_footer, |r| &r.dialog_footer);
+        assert_eq!(
+            footer.bg.get(State::NONE),
+            Some(Paint::Role(Role::Primary, 1.0))
+        );
+        let content = v.part(&t.style, |_, s| &s.dialog_content, |r| &r.dialog_content);
+        assert_eq!(content, &*t.style.dialog_content);
+    }
+
+    /// The footer inside the dialog's body takes the dialog's variant.
+    #[test]
+    fn parts_read_the_dialogs_variant() {
+        let ctx = egui::Context::default();
+        let t = Theme::vega().variant(BRAND, DialogVariant::Default, brand);
+        t.apply(&ctx);
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut open = true;
+            let seen = Dialog::new("d", "Title")
+                .variant(BRAND)
+                .show(ui.ctx(), &mut open, |ui| {
+                    let t = Theme::current(ui.ctx());
+                    let v = dialog_recipes(ui, &t);
+                    v.part(&t.style, |_, s| &s.dialog_footer, |r| &r.dialog_footer)
+                        .bg
+                        .get(State::NONE)
+                });
+            assert_eq!(seen, Some(Some(Paint::Role(Role::Primary, 1.0))));
+            let t = Theme::current(ui.ctx());
+            assert_eq!(dialog_recipes(ui, &t).base(), DialogVariant::Default);
+        });
+    }
 }

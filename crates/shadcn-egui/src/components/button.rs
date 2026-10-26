@@ -162,7 +162,7 @@ pub struct Button {
     expanded: bool,
     invalid: bool,
     has_popup: bool,
-    extra: Option<fn(&Style) -> &Recipe>,
+    extra: Option<Recipe>,
 }
 
 impl Button {
@@ -226,16 +226,21 @@ impl Button {
     /// A recipe stacked over the button's own, for a part that puts its
     /// class on a button (`cn-dialog-close`): it wins ties of equal rank,
     /// so its base value still loses to a button rule for a matching state.
-    pub(crate) fn extra_layer(mut self, layer: fn(&Style) -> &Recipe) -> Self {
+    pub(crate) fn extra_layer(mut self, layer: Recipe) -> Self {
         self.extra = Some(layer);
         self
     }
 
-    /// The recipe stack, with the variant layer `v` and the size layer `z`,
-    /// and how many of its layers are in use.
-    fn layers<'s>(&self, s: &'s Style, v: &'s Recipe, z: &'s Recipe) -> ([&'s Recipe; 4], usize) {
-        match self.extra {
-            Some(extra) => ([&*s.button, v, z, extra(s)], 4),
+    /// The recipe stack, with the variant layer `v`, the size layer `z`
+    /// and the extra layer, and how many of its layers are in use.
+    fn layers<'s>(
+        s: &'s Style,
+        v: &'s Recipe,
+        z: &'s Recipe,
+        extra: Option<&'s Recipe>,
+    ) -> ([&'s Recipe; 4], usize) {
+        match extra {
+            Some(extra) => ([&*s.button, v, z, extra], 4),
             None => ([&*s.button, v, z, z], 3),
         }
     }
@@ -269,7 +274,7 @@ impl Widget for Button {
         let size = t.resolve(self.size);
         let v = variant.part(&t.style, ButtonVariant::layer, |r| &r.button);
         let z = size.part(&t.style, ButtonSize::layer, |r| &r.button);
-        let (layers, n) = self.layers(&t.style, v, z);
+        let (layers, n) = Self::layers(&t.style, v, z, self.extra.as_ref());
         let l = &layers[..n];
         let enabled = self.enabled && ui.is_enabled();
         let context = (variant.bits() | size.bits())
@@ -350,7 +355,7 @@ mod tests {
     use crate::style::{Paint, Role, State, Style};
 
     fn layers(s: &Style, v: ButtonVariant, z: ButtonSize) -> Vec<&Recipe> {
-        let (l, n) = Button::new("x").layers(s, v.layer(s), z.layer(s));
+        let (l, n) = Button::layers(s, v.layer(s), z.layer(s), None);
         l[..n].to_vec()
     }
 
