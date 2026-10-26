@@ -21,7 +21,12 @@ use std::sync::Arc;
 /// advance. A `\n` has 0 for all of them. `fixed` and `fixed_kern` hold
 /// the advance (without letter spacing) and the kerning as Chrome holds
 /// them on the device: HarfBuzz positions, 1/65536 device px; `spacing`
-/// is the letter spacing in device px.
+/// is the letter spacing in device px. A default ignorable char (a soft
+/// hyphen, a zero-width space, ...) has 0 for all of them, and the
+/// kerning reaches across it, as HarfBuzz hides it. `hyphen` holds, for a
+/// soft hyphen, the hyphen Blink draws where it ends a line (U+2010 where
+/// the face has it, else `-`, as `HyphenString` picks) and its advance in
+/// HarfBuzz positions; `None` for every other char.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Advances {
     pub chrome: Vec<f32>,
@@ -30,6 +35,32 @@ pub(super) struct Advances {
     pub fixed: Vec<i32>,
     pub fixed_kern: Vec<i32>,
     pub spacing: Vec<f32>,
+    pub hyphen: Vec<Option<(char, i32)>>,
+}
+
+/// Unicode's `Default_Ignorable_Code_Point`: chars a shaper draws as
+/// nothing.
+pub(super) fn ignorable(c: char) -> bool {
+    matches!(
+        c,
+        '\u{AD}'
+            | '\u{34F}'
+            | '\u{61C}'
+            | '\u{115F}'..='\u{1160}'
+            | '\u{17B4}'..='\u{17B5}'
+            | '\u{180B}'..='\u{180F}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{206F}'
+            | '\u{3164}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{FFA0}'
+            | '\u{FFF0}'..='\u{FFF8}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0000}'..='\u{E0FFF}'
+    )
 }
 
 /// One device px in HarfBuzz positions (16.16 fixed point).
@@ -279,17 +310,35 @@ pub(super) fn advances(ctx: &egui::Context, job: &LayoutJob) -> Advances {
         let context = ValueContext::new()
             .with_coords(coords)
             .with_var_store(store);
+        let fixed_of = |c: char| {
+            let glyph = charmap.as_ref()?.map(c).filter(|g| *g != GlyphId::NOTDEF)?;
+            Some(fixed_scale?.advance(metrics.as_ref()?.advance_width(glyph)?))
+        };
         // The glyph before, where it is this face's and in this paragraph.
         let mut before: Option<GlyphId> = None;
         for (c, egui_adv) in text.chars().zip(egui) {
-            if c == '\n' {
+            if c == '\n' || ignorable(c) {
                 out.chrome.push(0.0);
                 out.kern.push(0.0);
                 out.egui.push(0.0);
                 out.fixed.push(0);
                 out.fixed_kern.push(0);
                 out.spacing.push(0.0);
-                before = None;
+                out.hyphen.push((c == '\u{AD}').then(|| {
+                    fixed_of('\u{2010}').map_or_else(
+                        || {
+                            let w = fixed_of('-').unwrap_or_else(|| {
+                                let w = ctx.fonts_mut(|f| f.glyph_width(&format.font_id, '-'));
+                                (w * ppp * FIXED_ONE).round() as i32
+                            });
+                            ('-', w)
+                        },
+                        |w| ('\u{2010}', w),
+                    )
+                }));
+                if c == '\n' {
+                    before = None;
+                }
                 continue;
             }
             let glyph = (c == ' ' || !c.is_whitespace())
@@ -310,6 +359,7 @@ pub(super) fn advances(ctx: &egui::Context, job: &LayoutJob) -> Advances {
             out.fixed.push(fixed);
             out.fixed_kern.push(kern);
             out.spacing.push(format.extra_letter_spacing * ppp);
+            out.hyphen.push(None);
             before = glyph;
         }
     }

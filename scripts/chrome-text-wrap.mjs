@@ -58,6 +58,17 @@ const TEXTS = {
   reset: ['Reset billing email', [62.7, 64.3, 79.6, 80.6, 81.8, 83]],
   // Lines that end after a hyphen inside a word.
   hyphen: ['A well-known step-by-step guide for a long-term follow-up review', FRACTIONAL],
+  // Break classes (UAX #14) past spaces and hyphens. At width 1 every
+  // break opportunity starts a line.
+  dash: ['Wait\u2014what? Pages 10\u201320 are missing\u2014again\u2014sadly, said the clerk.', [1, ...FRACTIONAL]],
+  zwsp: ['averyveryverylong\u200Bwordwith\u200Bzerowidth\u200Bspaces in it', [1, ...FRACTIONAL]],
+  shy: ['Rhein\u00ADdampf\u00ADboots\u00ADkapit\u00E4ns\u00ADm\u00FCtzen\u00ADhalter und Crew', [1, ...FRACTIONAL]],
+  digits: ['A well-known state-of-the-art e-mail re-sign 2-3 x-1 pre-1990 test', [1, ...FRACTIONAL]],
+  slash: ['Read and/or write to path/to/some/doc or http://example.com/a/b now.', [1, ...FRACTIONAL]],
+  punct: ['Hello (world), [this] is {a} test; it\'s okay! Really? Yes: 1,000.50 & 50% less.', [1, ...FRACTIONAL]],
+  // CJK: no face of the crate has these glyphs (Chrome falls back to a
+  // system face), so only width 1, where the break positions alone decide.
+  cjk: ['\u4E2D\u6587\uFF0C\u65E5\u672C\u8A9E\u300C\u30C6\u30B9\u30C8\u300D\u3067\u3059\u3002\u30AD\u30E3\u30E9\u30FC\u30E1 ab\u4E2Dcd', [1]],
 };
 
 function page(fontUrl, weight) {
@@ -137,7 +148,10 @@ const MEASURE = `document.fonts.ready.then(() => {
     let top = null;
     for (let i = 0; i < t.length; i++) {
       r.setStart(t, i); r.setEnd(t, i + 1);
-      const rect = r.getClientRects()[0];
+      // After a soft hyphen, the range over the next char also holds the
+      // hyphen drawn at a break, first: the char's own rect is the last.
+      const rects = r.getClientRects();
+      const rect = t.data[i - 1] === '\u00AD' ? rects[rects.length - 1] : rects[0];
       if (!rect) continue;
       if (top !== null && rect.top > top + 1) starts.push(i);
       top = rect.top;

@@ -48,6 +48,7 @@ use egui::{
 };
 use std::sync::Arc;
 
+mod line_break;
 mod shape;
 mod wrap;
 
@@ -371,8 +372,8 @@ impl TextLook {
     /// under `text-balance` or `text-pretty` the lines follow those
     /// breakers. Balance applies to the first paragraph only (Blink
     /// balances from the block's first line), pretty to each. The breaks
-    /// become forced ones for egui; the galley keeps the caller's text
-    /// where no hyphen break added a line feed. Results are cached per
+    /// become forced ones for egui; the galley keeps the caller's text.
+    /// Results are cached per
     /// job, width, mode and scale (notes §1).
     fn lay_out(
         &self,
@@ -425,7 +426,7 @@ impl TextLook {
         wrap: TextWrapMode,
         width: f32,
     ) -> Arc<Galley> {
-        let adv = shape::advances(ctx, &job);
+        let mut adv = shape::advances(ctx, &job);
         let chars: Vec<char> = job.text.chars().collect();
         let n = chars.len();
         let breaking = wrap == TextWrapMode::Wrap && width.is_finite();
@@ -468,7 +469,13 @@ impl TextLook {
                             left + step(at) as f32 / shape::FIXED_ONE
                         };
                         x += step(at) + i64::from(next_kern);
-                        wrap::Glyph { c, left, right }
+                        let hyphen = adv.hyphen[at].map_or(0.0, |(_, w)| lu(i64::from(w)));
+                        wrap::Glyph {
+                            c,
+                            left,
+                            right,
+                            hyphen,
+                        }
                     })
                     .collect();
                 let cands = wrap::candidates(&edges);
@@ -486,6 +493,12 @@ impl TextLook {
                     starts[first + s] = true;
                 }
                 first += para.len() + 1;
+            }
+        }
+        // A soft hyphen that ends a line is its hyphen there.
+        for i in 0..n {
+            if let (Some((_, w)), true) = (adv.hyphen[i], starts[i + 1]) {
+                adv.chrome[i] = w as f32 / shape::FIXED_ONE / ctx.pixels_per_point();
             }
         }
         // One section per char, each moved by the gap that puts it where
@@ -545,7 +558,16 @@ impl TextLook {
                 pens.push(0.0);
                 line_start = true;
             }
-            let c = if c == ' ' && starts[i + 1] { '\n' } else { c };
+            // egui's job draws a soft hyphen as its hyphen where it ends a
+            // line, and every char Chrome draws as nothing (a soft hyphen
+            // elsewhere too) as a zero-width space, which egui hides: one
+            // char each, so the indices stay the caller's.
+            let c = match adv.hyphen[i] {
+                Some((hyphen, _)) if starts[i + 1] => hyphen,
+                _ if c == ' ' && starts[i + 1] => '\n',
+                _ if shape::ignorable(c) => '\u{200B}',
+                _ => c,
+            };
             let mut gap = if line_start {
                 0.0
             } else {

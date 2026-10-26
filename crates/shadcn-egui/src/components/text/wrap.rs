@@ -7,6 +7,12 @@
 //! `LayoutUnit` snapping fall as in Blink; `zoom` is the device pixels per
 //! point.
 
+use super::line_break;
+
+/// U+00AD: a break opportunity that draws a hyphen where it ends a line
+/// (`hyphens: manual`, the CSS default), and nothing elsewhere.
+pub(super) const SOFT_HYPHEN: char = '\u{AD}';
+
 /// A break opportunity: the next line starts at char `start` at
 /// `pos_no_break` (after the spaces). The line before it ends at
 /// `pos_if_break` for the score breaker: its last glyph shaped alone, as
@@ -14,7 +20,8 @@
 /// break, trailing spaces hanging; and at `pos_greedy` for the greedy
 /// breaker, which breaks after a run of spaces and keeps the kerning
 /// against the first space inside the line (elsewhere it reshapes the end
-/// too). Blink's `LineBreakCandidate`.
+/// too). A soft-hyphen break (`hyphenated`) adds the hyphen to both ends.
+/// Blink's `LineBreakCandidate`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Candidate {
     pub start: usize,
@@ -28,12 +35,14 @@ pub(super) struct Candidate {
 /// glyph's left edge (after the kerning against the char before), its
 /// right edge (before the kerning against the next), as Blink's
 /// `ShapeResult` gives them (`LayoutUnit`s, a kerned right edge shaped
-/// alone).
+/// alone), and the width of the hyphen Blink draws where a soft hyphen
+/// ends a line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Glyph {
     pub c: char,
     pub left: f32,
     pub right: f32,
+    pub hyphen: f32,
 }
 
 /// `kMaxLinesForBalance`, `kMaxLinesForOptimal`.
@@ -85,7 +94,7 @@ fn is_space(c: char) -> bool {
 
 /// The break candidates of one paragraph (no forced break inside): a
 /// sentinel at the start, one after each run of spaces followed by text,
-/// one after a hyphen between a non-space and a non-digit (UAX #14 HY),
+/// one between two other chars where [`line_break::can_break`] allows it,
 /// and a sentinel at the end of the last char that is not a space.
 pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
     let x0 = chars.first().map_or(0.0, |c| c.left);
@@ -118,17 +127,19 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
             continue;
         }
         end = g.right;
-        let next = chars
-            .get(i + 1)
-            .filter(|n| !is_space(n.c) && !n.c.is_ascii_digit());
-        if let Some(next) = next.filter(|_| g.c == '-' && i > 0 && !is_space(chars[i - 1].c)) {
-            out.push(Candidate {
-                start: i + 1,
-                pos_no_break: next.left,
-                pos_if_break: g.right,
-                pos_greedy: g.right,
-                hyphenated: false,
-            });
+        let before2 = i.checked_sub(1).map(|k| chars[k].c);
+        if let Some(next) = chars.get(i + 1).filter(|n| !is_space(n.c)) {
+            if line_break::can_break(before2, g.c, next.c) {
+                let hyphenated = g.c == SOFT_HYPHEN;
+                let pos = g.right + if hyphenated { g.hyphen } else { 0.0 };
+                out.push(Candidate {
+                    start: i + 1,
+                    pos_no_break: next.left,
+                    pos_if_break: pos,
+                    pos_greedy: pos,
+                    hyphenated,
+                });
+            }
         }
         i += 1;
     }
@@ -406,6 +417,7 @@ mod tests {
                 c,
                 left: i as f32,
                 right: i as f32 + 1.0,
+                hyphen: 1.0,
             })
             .collect()
     }
@@ -432,12 +444,22 @@ mod tests {
 
     #[test]
     fn candidates_sit_at_spaces_and_hyphens() {
-        let c = candidates(&mono("ab cd-ef  g-1 "));
+        let c = candidates(&mono("ab cd-ef  g-1 -2"));
         let starts: Vec<usize> = c.iter().map(|c| c.start).collect();
-        assert_eq!(starts, [0, 3, 6, 10, 14]);
+        assert_eq!(starts, [0, 3, 6, 10, 12, 14, 16]);
         assert_eq!((c[1].pos_if_break, c[1].pos_no_break), (2.0, 3.0));
         assert_eq!((c[2].pos_if_break, c[2].pos_no_break), (6.0, 6.0));
-        assert_eq!(c[4].pos_if_break, 13.0);
+        assert_eq!(c[6].pos_if_break, 16.0);
+    }
+
+    #[test]
+    fn a_soft_hyphen_break_ends_its_line_after_the_hyphen() {
+        let c = candidates(&mono("ab\u{AD}cd"));
+        let starts: Vec<usize> = c.iter().map(|c| c.start).collect();
+        assert_eq!(starts, [0, 3, 5]);
+        assert!(c[1].hyphenated);
+        assert_eq!((c[1].pos_if_break, c[1].pos_greedy), (4.0, 4.0));
+        assert_eq!(c[1].pos_no_break, 3.0);
     }
 
     #[test]

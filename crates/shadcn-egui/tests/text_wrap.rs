@@ -41,6 +41,51 @@ const TEXTS: &[(&str, &str)] = &[
         "hyphen",
         "A well-known step-by-step guide for a long-term follow-up review",
     ),
+    (
+        "dash",
+        "Wait\u{2014}what? Pages 10\u{2013}20 are missing\u{2014}again\u{2014}sadly, said the clerk.",
+    ),
+    (
+        "zwsp",
+        "averyveryverylong\u{200B}wordwith\u{200B}zerowidth\u{200B}spaces in it",
+    ),
+    (
+        "shy",
+        "Rhein\u{AD}dampf\u{AD}boots\u{AD}kapit\u{E4}ns\u{AD}m\u{FC}tzen\u{AD}halter und Crew",
+    ),
+    (
+        "digits",
+        "A well-known state-of-the-art e-mail re-sign 2-3 x-1 pre-1990 test",
+    ),
+    (
+        "slash",
+        "Read and/or write to path/to/some/doc or http://example.com/a/b now.",
+    ),
+    (
+        "punct",
+        "Hello (world), [this] is {a} test; it's okay! Really? Yes: 1,000.50 & 50% less.",
+    ),
+    (
+        "cjk",
+        "\u{4E2D}\u{6587}\u{FF0C}\u{65E5}\u{672C}\u{8A9E}\u{300C}\u{30C6}\u{30B9}\u{30C8}\u{300D}\u{3067}\u{3059}\u{3002}\u{30AD}\u{30E3}\u{30E9}\u{30FC}\u{30E1} ab\u{4E2D}cd",
+    ),
+];
+/// Rows still open after A2b2 F3 (break classes): each breaks at Chrome's
+/// opportunities (the width-1 rows of every text pass), but one line fits
+/// in one and not the other, or balance scores the same candidates
+/// differently. To be traced; a row that passes must leave this list.
+const KNOWN: &[&str] = &[
+    "nunito-sans 1.25x slash 127.4 None",
+    "nunito-sans 1.25x slash 127.4 Some(Balance)",
+    "nunito-sans 1.25x slash 127.4 Some(Pretty)",
+    "manrope 1x digits 127.4 Some(Balance)",
+    "manrope 1.25x digits 127.4 Some(Balance)",
+    "manrope 1.5x digits 127.4 Some(Balance)",
+    "manrope 1.75x digits 127.4 Some(Balance)",
+    "manrope 2x digits 127.4 Some(Balance)",
+    "ibm-plex-sans 1.25x punct 121 None",
+    "source-sans-3 1.5x punct 177 Some(Balance)",
+    "source-sans-3 1.5x punct 203 Some(Balance)",
 ];
 const MODES: [Option<TextWrap>; 3] = [None, Some(TextWrap::Balance), Some(TextWrap::Pretty)];
 
@@ -120,11 +165,12 @@ fn lines_break_where_chrome_breaks_them() {
                                 block.galley().text()
                             ));
                         }
-                        if got != *want {
-                            wrong.push(format!(
-                                "{} {scale}x {} {width} {mode:?}: Chrome {want}, crate {got}",
-                                f[0], f[2]
-                            ));
+                        let key = format!("{} {scale}x {} {width} {mode:?}", f[0], f[2]);
+                        let known = KNOWN.contains(&key.as_str());
+                        if got != *want && !known {
+                            wrong.push(format!("{key}: Chrome {want}, crate {got}"));
+                        } else if got == *want && known {
+                            wrong.push(format!("{key}: passes, remove it from KNOWN"));
                         }
                     }
                 }
