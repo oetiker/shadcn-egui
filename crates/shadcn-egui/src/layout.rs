@@ -1,6 +1,7 @@
 //! Flexbox substitutes for egui's single-pass layout.
 //! `gap` maps to item_spacing; space-between right-aligns via a nested layout.
 
+use crate::components::context;
 use crate::style::TextSize;
 use crate::Theme;
 use egui::Ui;
@@ -126,10 +127,11 @@ pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     })
 }
 
-/// The tag on the `Ui` of a crate row ([`row`], [`wrap_row`],
+/// The context on the `Ui` of a crate row ([`row`], [`wrap_row`],
 /// [`space_between`], a card footer), where [`allocate_overflowing`]
 /// allocates a widget's whole width.
-const ROW_TAG: &str = "shadcn_egui::layout::row";
+#[derive(Clone, Copy)]
+struct RowContext;
 
 /// The `UiBuilder` of a crate row's `Ui`: `max_rect` and `layout`, tagged
 /// as a row. The caller allocates only the part of the row's `min_rect`
@@ -139,12 +141,13 @@ pub(crate) fn row_builder(max_rect: egui::Rect, layout: egui::Layout) -> egui::U
     egui::UiBuilder::new()
         .max_rect(max_rect)
         .layout(layout)
-        .ui_stack_info(egui::UiStackInfo::default().with_tag(ROW_TAG))
+        .ui_stack_info(context::info(egui::UiStackInfo::default(), RowContext))
 }
 
-/// The tag on the `Ui` of a [`vstack`]: a flex column, which grows to the
-/// width of its widest child inside a crate row.
-const VSTACK_TAG: &str = "shadcn_egui::layout::vstack";
+/// The context on the `Ui` of a [`vstack`]: a flex column, which grows to
+/// the width of its widest child inside a crate row.
+#[derive(Clone, Copy)]
+struct VstackContext;
 
 /// Whether `ui` is a crate row, or sits inside one through horizontal
 /// `Ui`s (a scope, an enabled scope) and [`vstack`]s: a flex item of the
@@ -154,11 +157,12 @@ const VSTACK_TAG: &str = "shadcn_egui::layout::vstack";
 /// item does.
 fn in_row(ui: &Ui) -> bool {
     for s in ui.stack().iter() {
-        if s.tags().contains(ROW_TAG) {
+        if context::on_frame::<RowContext>(s).is_some() {
             return true;
         }
         if s.kind() == Some(egui::UiKind::TableCell)
-            || (!s.layout_direction.is_horizontal() && !s.tags().contains(VSTACK_TAG))
+            || (!s.layout_direction.is_horizontal()
+                && !context::on_frame::<VstackContext>(s).is_some())
         {
             return false;
         }
@@ -237,7 +241,7 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // `ui.vertical`, tagged as a flex column.
     let column = egui::UiBuilder::new()
         .layout(egui::Layout::top_down(egui::Align::Min))
-        .ui_stack_info(egui::UiStackInfo::default().with_tag(VSTACK_TAG));
+        .ui_stack_info(context::info(egui::UiStackInfo::default(), VstackContext));
     let id = ui.next_auto_id().with("shadcn_egui::layout::vstack");
     if !ui.layout().main_wrap() {
         let Some(row) = flex_row_of(ui) else {
@@ -288,12 +292,12 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// are not the row's items.
 fn flex_row_of(ui: &Ui) -> Option<egui::Id> {
     for s in ui.stack().iter() {
-        if s.tags().contains(ROW_TAG) {
+        if context::on_frame::<RowContext>(s).is_some() {
             return Some(s.id);
         }
         if s.kind().is_some()
             || !s.layout_direction.is_horizontal()
-            || s.tags().contains(VSTACK_TAG)
+            || context::on_frame::<VstackContext>(s).is_some()
         {
             return None;
         }

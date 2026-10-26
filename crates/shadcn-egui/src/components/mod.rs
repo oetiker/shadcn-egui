@@ -3,6 +3,7 @@ pub mod badge;
 pub mod button;
 pub mod card;
 pub mod checkbox;
+pub(crate) mod context;
 pub mod dialog;
 pub mod icon;
 pub mod icon_atom;

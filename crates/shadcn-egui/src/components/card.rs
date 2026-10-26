@@ -18,12 +18,13 @@
 //! is not read: the header paints no fill or border in any style, so its
 //! corners have nothing to shape.
 
+use crate::components::context;
 use crate::components::shared::{content_ui, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
 use egui::{
-    Align, Id, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder, WidgetInfo,
+    Align, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder, WidgetInfo,
     WidgetType,
 };
 
@@ -44,16 +45,19 @@ impl CardSize {
     }
 }
 
-/// The size of the card being laid out; `card_title` reads it
-/// (`group-data-[size=sm]/card`).
-fn size_key() -> Id {
-    Id::new("shadcn_egui::card::size")
+/// The context a card gives its parts (`group-data-[size=sm]/card`).
+#[derive(Clone, Copy, Debug, Default)]
+struct CardContext {
+    size: CardSize,
+}
+
+/// The context of the card around `ui`; outside a card, the default.
+fn card_context(ui: &Ui) -> CardContext {
+    context::find::<CardContext>(ui).unwrap_or_default()
 }
 
 fn current_size(ui: &Ui) -> CardSize {
-    ui.ctx()
-        .data(|d| d.get_temp::<CardSize>(size_key()))
-        .unwrap_or_default()
+    card_context(ui).size
 }
 
 fn len(layers: &[&Recipe], f: fn(&Recipe) -> &crate::style::Prop<f32>, st: State) -> f32 {
@@ -138,23 +142,16 @@ impl<'a> Card<'a> {
                 origin.y + pad_top + ui.available_height().max(0.0),
             ),
         );
-        let mut body = ui.new_child(
+        let parts = CardContext { size: self.size };
+        let mut body = ui.new_child(context::push(
             UiBuilder::new()
                 .max_rect(body_rect)
                 .layout(Layout::top_down(Align::Min)),
-        );
+            parts,
+        ));
         body.spacing_mut().item_spacing.y = gap;
-        let previous = body.ctx().data(|d| d.get_temp::<CardSize>(size_key()));
-        body.ctx()
-            .data_mut(|d| d.insert_temp(size_key(), self.size));
         let result =
             content_scope(&mut body, &look, |ui| content_ui(ui, &[&card[..]], st, add)).inner;
-        body.ctx().data_mut(|d| match previous {
-            Some(p) => {
-                d.insert_temp(size_key(), p);
-            }
-            None => d.remove::<CardSize>(size_key()),
-        });
         let mut bottom = body.min_rect().bottom().max(body_rect.top());
 
         // Footer.
@@ -176,9 +173,9 @@ impl<'a> Card<'a> {
                 ),
             );
             // A row as high as a control, like `ui.horizontal`.
-            let mut row = ui.new_child(crate::layout::row_builder(
-                inner,
-                Layout::left_to_right(Align::Center),
+            let mut row = ui.new_child(context::push(
+                crate::layout::row_builder(inner, Layout::left_to_right(Align::Center)),
+                parts,
             ));
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
             crate::layout::shrink_stacks(&mut row, |ui| {
@@ -310,4 +307,33 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     part_ui(ui, &[&l[..]], st, |ui| {
         look.label(ui, text, TextWrapMode::Wrap)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each card part reads the size of its nearest card; outside a card
+    /// it reads the default.
+    #[test]
+    fn parts_read_the_nearest_cards_size() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            assert_eq!(current_size(ui), CardSize::Default);
+            Card::new()
+                .size(CardSize::Sm)
+                .footer(|ui| assert_eq!(current_size(ui), CardSize::Sm))
+                .show(ui, |ui| {
+                    assert_eq!(current_size(ui), CardSize::Sm);
+                    Card::new().show(ui, |ui| {
+                        assert_eq!(current_size(ui), CardSize::Default);
+                        Card::new()
+                            .size(CardSize::Sm)
+                            .show(ui, |ui| assert_eq!(current_size(ui), CardSize::Sm));
+                    });
+                    assert_eq!(current_size(ui), CardSize::Sm);
+                });
+            assert_eq!(current_size(ui), CardSize::Default);
+        });
+    }
 }

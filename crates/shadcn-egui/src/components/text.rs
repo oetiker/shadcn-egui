@@ -37,6 +37,7 @@
 //! }
 //! ```
 
+use crate::components::context;
 use crate::style::{pick, pick_where, Recipe, State, TextSize, TextWrap, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
@@ -52,10 +53,11 @@ mod line_break;
 mod shape;
 mod wrap;
 
-/// The UiStack tag a crate container puts on its content `Ui` to pass the
+/// The context a crate container puts on its content `Ui` to pass the
 /// line-height factor (`leading-*`) to crate text inside, which egui
 /// widgets cannot take.
-const LINE_FACTOR_TAG: &str = "shadcn_egui::text::line_factor";
+#[derive(Clone, Copy)]
+struct LineFactor(f32);
 
 /// How a line box's leading (its height minus the font's rounded ascent
 /// and descent) splits above and below the text.
@@ -735,8 +737,10 @@ pub fn content_scope<R>(
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
     let factor = look.line_height / look.size;
-    let builder = egui::UiBuilder::new()
-        .ui_stack_info(egui::UiStackInfo::default().with_tag_value(LINE_FACTOR_TAG, factor));
+    let builder = egui::UiBuilder::new().ui_stack_info(context::info(
+        egui::UiStackInfo::default(),
+        LineFactor(factor),
+    ));
     ui.scope_builder(builder, |ui| {
         if let Some(c) = look.color {
             ui.visuals_mut().override_text_color = Some(c);
@@ -752,9 +756,7 @@ pub fn content_scope<R>(
 
 /// The line-height factor of the nearest enclosing [`content_scope`].
 fn inherited_line_factor(ui: &Ui) -> Option<f32> {
-    ui.stack()
-        .iter()
-        .find_map(|frame| frame.tags().get_downcast::<f32>(LINE_FACTOR_TAG).copied())
+    context::find::<LineFactor>(ui).map(|f| f.0)
 }
 
 fn body_size(ui: &Ui) -> f32 {
