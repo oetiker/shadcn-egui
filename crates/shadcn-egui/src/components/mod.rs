@@ -11,6 +11,7 @@ mod icon_raster;
 pub mod input;
 pub mod label;
 pub mod popover;
+pub(crate) mod registry;
 pub mod select;
 pub mod separator;
 pub mod shared;
