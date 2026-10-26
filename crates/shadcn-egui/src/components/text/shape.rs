@@ -8,7 +8,7 @@
 //! path moves egui's glyphs there and breaks lines on these widths.
 
 use egui::text::LayoutJob;
-use egui::{FontData, FontFamily};
+use egui::FontData;
 use skrifa::instance::{Location, Size};
 use skrifa::raw::tables::gpos::{PairPos, PositionLookup, PositionSubtables, ValueRecord};
 use skrifa::raw::tables::layout::DeviceOrVariationIndex;
@@ -17,7 +17,9 @@ use skrifa::raw::types::{F2Dot14, FWord};
 use skrifa::raw::FontData as RawData;
 use skrifa::raw::{FontRef, TableProvider};
 use skrifa::{GlyphId, MetadataProvider, Tag};
-use std::sync::Arc;
+use std::cell::OnceCell;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// Per char of a job's text: Chrome's advance in points (letter spacing
 /// included), the kerning between the char before and it (0 at a
@@ -132,12 +134,18 @@ impl FixedScale {
     }
 }
 
-/// The first face of `family` in the context's font definitions.
-pub(super) fn family_face(ctx: &egui::Context, family: &FontFamily) -> Option<Arc<FontData>> {
+/// Per section of `job`: the first face of its family in the context's
+/// font definitions, all under one lock.
+pub(super) fn section_faces(ctx: &egui::Context, job: &LayoutJob) -> Vec<Option<Arc<FontData>>> {
     ctx.fonts(|f| {
         let defs = f.definitions();
-        let key = defs.families.get(family)?.first()?;
-        defs.font_data.get(key).cloned()
+        job.sections
+            .iter()
+            .map(|s| {
+                let key = defs.families.get(&s.format.font_id.family)?.first()?;
+                defs.font_data.get(key).cloned()
+            })
+            .collect()
     })
 }
 
@@ -155,16 +163,20 @@ pub(super) fn needs_opsz(data: &FontData, coords: &[(Tag, f32)]) -> bool {
         .is_ok_and(|f| f.axes().iter().any(|a| a.tag() == opsz))
 }
 
-/// One face, ready to measure: its tables at the location Chrome uses.
+/// One face, ready to measure: its tables at the location Chrome uses,
+/// and its scale at the device font size.
 struct Face<'a> {
     font: FontRef<'a>,
     location: Location,
-    upem: f32,
+    scale: FixedScale,
+    charmap: skrifa::charmap::Charmap<'a>,
+    store: Option<ItemVariationStore<'a>>,
     kern: Vec<PositionLookup<'a>>,
 }
 
 impl<'a> Face<'a> {
-    fn new(data: &'a FontData, coords: &[(Tag, f32)], size: f32) -> Option<Self> {
+    /// `data` at the font size `size` (points) on a `ppp` device.
+    fn new(data: &'a FontData, coords: &[(Tag, f32)], size: f32, ppp: f32) -> Option<Self> {
         let font = FontRef::from_index(&data.font, data.index).ok()?;
         let axes = font.axes();
         let opsz = Tag::new(b"opsz");
@@ -179,24 +191,48 @@ impl<'a> Face<'a> {
         let upem = f32::from(font.head().ok()?.units_per_em());
         Some(Self {
             kern: kern_lookups(&font).unwrap_or_default(),
+            store: font
+                .gdef()
+                .ok()
+                .and_then(|g| g.item_var_store())
+                .and_then(Result::ok),
+            charmap: font.charmap(),
+            scale: FixedScale::new(size * ppp, upem),
             font,
             location,
-            upem,
         })
     }
 
-    /// The pair kerning of `a` followed by `b`, in font units: every
-    /// `kern` lookup in order, each applying its first subtable that
+    /// The glyph Chrome draws for `c` (none for whitespace other than a
+    /// space, and none the face lacks) and its advance.
+    fn glyph(&self, c: char) -> Option<(GlyphId, Option<i32>)> {
+        let glyph = (c == ' ' || !c.is_whitespace())
+            .then(|| self.charmap.map(c))
+            .flatten()
+            .filter(|g| *g != GlyphId::NOTDEF)?;
+        let units = self
+            .font
+            .glyph_metrics(Size::unscaled(), &self.location)
+            .advance_width(glyph);
+        Some((glyph, units.map(|u| self.scale.advance(u))))
+    }
+
+    /// The pair kerning of `a` followed by `b`, in HarfBuzz positions:
+    /// every `kern` lookup in order, each applying its first subtable that
     /// covers the pair, as HarfBuzz does.
-    fn kerning(&self, a: GlyphId, b: GlyphId, deltas: &Deltas, scale: FixedScale) -> i32 {
+    fn kerning(&self, a: GlyphId, b: GlyphId) -> i32 {
+        let deltas = Deltas {
+            store: self.store.clone(),
+            coords: self.location.coords(),
+        };
         let mut total = 0;
         for lookup in &self.kern {
             let Ok(PositionSubtables::Pair(subtables)) = lookup.subtables() else {
                 continue;
             };
             for sub in subtables.iter().flatten() {
-                if let Some((base, delta)) = pair_value(&sub, a, b, deltas) {
-                    total += scale.gpos(base, delta);
+                if let Some((base, delta)) = pair_value(&sub, a, b, &deltas) {
+                    total += self.scale.gpos(base, delta);
                     break;
                 }
             }
@@ -205,9 +241,6 @@ impl<'a> Face<'a> {
     }
 }
 
-/// The x advance adjustment of the first glyph for the pair `a`, `b` in
-/// one pair subtable, in units and its variation delta, `None` where the
-/// subtable does not apply.
 /// A face's variation deltas at its location: GDEF's item variation
 /// store and the normalized coordinates.
 struct Deltas<'a> {
@@ -237,17 +270,32 @@ impl Deltas<'_> {
     }
 }
 
+/// The x advance adjustment of the first glyph for the pair `a`, `b` in
+/// one pair subtable, in units and its variation delta, `None` where the
+/// subtable does not apply. A format 1 pair set is sorted by its second
+/// glyph and searched by bisection, as HarfBuzz does.
 fn pair_value(sub: &PairPos, a: GlyphId, b: GlyphId, deltas: &Deltas) -> Option<(i16, f32)> {
     match sub {
         PairPos::Format1(t) => {
             let index = t.coverage().ok()?.get(a)?;
             let set = t.pair_sets().get(usize::from(index)).ok()?;
             let records = set.pair_value_records();
-            let record = records
-                .iter()
-                .flatten()
-                .find(|r| GlyphId::from(r.second_glyph()) == b)?;
-            Some(deltas.x_advance(record.value_record1(), set.offset_data()))
+            let (mut lo, mut hi) = (0, records.len());
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2;
+                let record = records.get(mid).ok()?;
+                match GlyphId::from(record.second_glyph())
+                    .to_u32()
+                    .cmp(&b.to_u32())
+                {
+                    std::cmp::Ordering::Less => lo = mid + 1,
+                    std::cmp::Ordering::Greater => hi = mid,
+                    std::cmp::Ordering::Equal => {
+                        return Some(deltas.x_advance(record.value_record1(), set.offset_data()));
+                    }
+                }
+            }
+            None
         }
         PairPos::Format2(t) => {
             t.coverage().ok()?.get(a)?;
@@ -299,47 +347,234 @@ fn kern_lookups<'a>(font: &FontRef<'a>) -> Option<Vec<PositionLookup<'a>>> {
     )
 }
 
-/// `job` measured as Chrome measures it, per char of its text. A section
-/// whose family has no face data, and a char its first face lacks, keep
-/// egui's advance.
-pub(super) fn advances(ctx: &egui::Context, job: &LayoutJob) -> Advances {
+/// What [`advances`] measured of one face at one location, font size and
+/// scale: per char its glyph and advance, per glyph pair its kerning
+/// (HarfBuzz positions). The next job in that face, the same text at a
+/// new width too, parses the face's tables only for what is not here yet.
+#[derive(Default)]
+struct Measures {
+    chars: HashMap<char, CharMeasure, BuildMix>,
+    pairs: HashMap<(GlyphId, GlyphId), i32, BuildMix>,
+}
+
+/// One char in one face: the glyph Chrome draws and its advance (`None`
+/// where the face lacks it), and egui's advance where the face has the
+/// glyph (egui then takes it from this face too; a char the face lacks
+/// comes from a fallback face, which the key does not name).
+#[derive(Clone, Copy)]
+struct CharMeasure {
+    glyph: Option<(GlyphId, Option<i32>)>,
+    egui: Option<f32>,
+}
+
+/// The hasher of [`Measures`]: its keys are a char or two glyph ids, which
+/// a multiply-rotate mix spreads well enough at a fraction of SipHash's
+/// cost (a text measures every char and pair through these maps).
+type BuildMix = std::hash::BuildHasherDefault<Mix>;
+
+#[derive(Default)]
+struct Mix(u64);
+
+impl std::hash::Hasher for Mix {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.write_u64(u64::from(*b));
+        }
+    }
+
+    fn write_u32(&mut self, v: u32) {
+        self.write_u64(u64::from(v));
+    }
+
+    fn write_u64(&mut self, v: u64) {
+        // The odd multiplier of FxHash (rustc's hasher).
+        self.0 = (self.0.rotate_left(5) ^ v).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+
+/// A [`MeasureCache`] key: the face data's address (the entry keeps the
+/// data, so no other face takes the address while the entry lives), the
+/// section's variation coordinates, its font size and the device pixels
+/// per point.
+type MeasureKey = (usize, Vec<(Tag, u32)>, u32, u32);
+
+/// A [`MeasureCache`] entry: the face data, its [`Measures`] and the
+/// frame it was last used.
+type MeasureEntry = (Arc<FontData>, Arc<Mutex<Measures>>, u64);
+
+/// The [`Measures`] of the faces jobs used in this frame and the one
+/// before.
+#[derive(Clone, Default)]
+struct MeasureCache {
+    frame: u64,
+    entries: HashMap<MeasureKey, MeasureEntry>,
+}
+
+/// Per section of `job` with face data in `faces`: its [`Measures`], all
+/// under one lock.
+fn measures(
+    ctx: &egui::Context,
+    job: &LayoutJob,
+    faces: &[Option<Arc<FontData>>],
+) -> Vec<Option<Arc<Mutex<Measures>>>> {
+    let ppp = ctx.pixels_per_point();
+    let frame = ctx.cumulative_frame_nr();
+    let id = egui::Id::new("shadcn_egui::text::measures");
+    ctx.data_mut(|d| {
+        let cache = d.get_temp_mut_or_default::<MeasureCache>(id);
+        if cache.frame != frame {
+            cache.entries.retain(|_, e| e.2 + 1 >= frame);
+            cache.frame = frame;
+        }
+        job.sections
+            .iter()
+            .zip(faces)
+            .map(|(s, data)| {
+                let data = data.as_ref()?;
+                let coords = s.format.coords.as_ref();
+                let key = (
+                    Arc::as_ptr(data) as usize,
+                    coords.iter().map(|(t, v)| (*t, v.to_bits())).collect(),
+                    s.format.font_id.size.to_bits(),
+                    ppp.to_bits(),
+                );
+                let e = cache
+                    .entries
+                    .entry(key)
+                    .or_insert_with(|| (data.clone(), Arc::default(), frame));
+                e.2 = frame;
+                Some(e.1.clone())
+            })
+            .collect()
+    })
+}
+
+fn lock(m: &Mutex<Measures>) -> std::sync::MutexGuard<'_, Measures> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// `job` measured as Chrome measures it, per char of its text; `faces`
+/// holds each section's face data ([`section_faces`]). A section whose
+/// family has no face data, and a char its first face lacks, keep egui's
+/// advance.
+pub(super) fn advances(
+    ctx: &egui::Context,
+    job: &LayoutJob,
+    faces: &[Option<Arc<FontData>>],
+) -> Advances {
     let mut out = Advances::default();
     let ppp = ctx.pixels_per_point();
-    for section in &job.sections {
-        let format = &section.format;
-        let size = format.font_id.size;
+    let measures = measures(ctx, job, faces);
+    let handle = |si: usize| measures.get(si).and_then(Option::as_deref);
+    // Per section: each char's measure as far as the cache knows it; the
+    // face's tables are parsed only for what it lacks.
+    let mut known: Vec<Vec<CharMeasure>> = Vec::with_capacity(job.sections.len());
+    for (si, section) in job.sections.iter().enumerate() {
         let text = &job.text[section.byte_range.clone()];
-        let egui: Vec<f32> = ctx.fonts_mut(|f| {
-            text.chars()
-                .map(|c| {
-                    if c == '\n' {
-                        0.0
-                    } else {
-                        f.glyph_width(&format.font_id, c)
-                    }
-                })
-                .collect()
-        });
-        let data = family_face(ctx, &format.font_id.family);
-        let face = data
-            .as_deref()
-            .and_then(|d| Face::new(d, format.coords.as_ref(), size));
-        let fixed_scale = face.as_ref().map(|f| FixedScale::new(size * ppp, f.upem));
-        let metrics = face
+        let data = faces.get(si).and_then(Option::as_deref);
+        let format = &section.format;
+        let face = OnceCell::new();
+        let face = || {
+            face.get_or_init(|| {
+                data.and_then(|d| Face::new(d, format.coords.as_ref(), format.font_id.size, ppp))
+            })
             .as_ref()
-            .map(|f| f.font.glyph_metrics(Size::unscaled(), &f.location));
-        let charmap = face.as_ref().map(|f| f.font.charmap());
-        let gdef = face.as_ref().and_then(|f| f.font.gdef().ok());
-        let store = gdef.and_then(|g| g.item_var_store()).and_then(Result::ok);
-        let coords = face.as_ref().map_or(&[][..], |f| f.location.coords());
-        let deltas = Deltas { store, coords };
-        let fixed_of = |c: char| {
-            let glyph = charmap.as_ref()?.map(c).filter(|g| *g != GlyphId::NOTDEF)?;
-            Some(fixed_scale?.advance(metrics.as_ref()?.advance_width(glyph)?))
         };
+        let mut m = handle(si).map(lock);
+        let mut measure = |c: char| match m.as_deref_mut() {
+            Some(m) => *m.chars.entry(c).or_insert_with(|| CharMeasure {
+                glyph: face().and_then(|f| f.glyph(c)),
+                egui: None,
+            }),
+            None => CharMeasure {
+                glyph: None,
+                egui: None,
+            },
+        };
+        let mut row: Vec<CharMeasure> = text
+            .chars()
+            .map(|c| {
+                if c == '\n' || ignorable(c) {
+                    CharMeasure {
+                        glyph: None,
+                        egui: Some(0.0),
+                    }
+                } else {
+                    measure(c)
+                }
+            })
+            .collect();
+        // A soft hyphen's hyphen: U+2010, else `-`, in the char after the
+        // section's text.
+        if text.contains('\u{AD}') {
+            row.push(measure('\u{2010}'));
+            row.push(measure('-'));
+        }
+        known.push(row);
+    }
+    // egui's advances the cache lacks, under one lock; `asked` marks them.
+    let asked: Vec<Vec<bool>> = ctx.fonts_mut(|f| {
+        let hyphens = ['\u{2010}', '-'];
+        job.sections
+            .iter()
+            .zip(&mut known)
+            .map(|(section, row)| {
+                let text = &job.text[section.byte_range.clone()];
+                let font = &section.format.font_id;
+                text.chars()
+                    .chain(hyphens)
+                    .zip(row.iter_mut())
+                    .map(|(c, m)| {
+                        let ask = m.egui.is_none();
+                        if ask {
+                            m.egui = Some(f.glyph_width(font, c));
+                        }
+                        ask
+                    })
+                    .collect()
+            })
+            .collect()
+    });
+    for (si, ((section, row), asked)) in job.sections.iter().zip(&known).zip(&asked).enumerate() {
+        let format = &section.format;
+        let text = &job.text[section.byte_range.clone()];
+        let n = text.chars().count();
+        let data = faces.get(si).and_then(Option::as_deref);
+        let face = OnceCell::new();
+        let face = || {
+            face.get_or_init(|| {
+                data.and_then(|d| Face::new(d, format.coords.as_ref(), format.font_id.size, ppp))
+            })
+            .as_ref()
+        };
+        let mut m = handle(si).map(lock);
+        if let Some(m) = m.as_deref_mut() {
+            for ((c, k), _) in text.chars().zip(row).zip(asked).filter(|(_, a)| **a) {
+                if let (Some(_), Some(e)) = (k.glyph, m.chars.get_mut(&c)) {
+                    e.egui = k.egui;
+                }
+            }
+        }
+        let fixed_of = |k: &CharMeasure| k.glyph?.1;
+        let hyphen = row.get(n..).filter(|h| h.len() == 2).map(|h| {
+            fixed_of(&h[0]).map_or_else(
+                || {
+                    let w = fixed_of(&h[1]).unwrap_or_else(|| {
+                        (h[1].egui.unwrap_or_default() * ppp * FIXED_ONE).round() as i32
+                    });
+                    ('-', w)
+                },
+                |w| ('\u{2010}', w),
+            )
+        });
         // The glyph before, where it is this face's and in this paragraph.
         let mut before: Option<GlyphId> = None;
-        for (c, egui_adv) in text.chars().zip(egui) {
+        for (c, k) in text.chars().zip(row) {
+            let egui_adv = k.egui.unwrap_or_default();
             if c == '\n' || ignorable(c) {
                 out.chrome.push(0.0);
                 out.kern.push(0.0);
@@ -347,37 +582,24 @@ pub(super) fn advances(ctx: &egui::Context, job: &LayoutJob) -> Advances {
                 out.fixed.push(0);
                 out.fixed_kern.push(0);
                 out.spacing.push(0.0);
-                out.hyphen.push((c == '\u{AD}').then(|| {
-                    fixed_of('\u{2010}').map_or_else(
-                        || {
-                            let w = fixed_of('-').unwrap_or_else(|| {
-                                let w = ctx.fonts_mut(|f| f.glyph_width(&format.font_id, '-'));
-                                (w * ppp * FIXED_ONE).round() as i32
-                            });
-                            ('-', w)
-                        },
-                        |w| ('\u{2010}', w),
-                    )
-                }));
+                out.hyphen.push(if c == '\u{AD}' { hyphen } else { None });
                 if c == '\n' {
                     before = None;
                 }
                 continue;
             }
-            let glyph = (c == ' ' || !c.is_whitespace())
-                .then(|| charmap.as_ref()?.map(c))
-                .flatten()
-                .filter(|g| *g != GlyphId::NOTDEF);
-            let fixed = glyph
-                .and_then(|g| Some(fixed_scale?.advance(metrics.as_ref()?.advance_width(g)?)))
-                .unwrap_or_else(|| (egui_adv * ppp * FIXED_ONE).round() as i32);
-            let kern = match (face.as_ref(), fixed_scale, before, glyph) {
-                (Some(f), Some(s), Some(a), Some(b)) => f.kerning(a, b, &deltas, s),
+            let glyph = k.glyph.map(|g| g.0);
+            let fixed = fixed_of(k).unwrap_or_else(|| (egui_adv * ppp * FIXED_ONE).round() as i32);
+            let kern = match (m.as_deref_mut(), before, glyph) {
+                (Some(m), Some(a), Some(b)) => *m
+                    .pairs
+                    .entry((a, b))
+                    .or_insert_with(|| face().map_or(0, |f| f.kerning(a, b))),
                 _ => 0,
             };
-            let points = |v: i32| v as f32 / FIXED_ONE / ppp;
-            out.chrome.push(points(fixed) + format.extra_letter_spacing);
-            out.kern.push(points(kern));
+            out.chrome
+                .push(fixed as f32 / FIXED_ONE / ppp + format.extra_letter_spacing);
+            out.kern.push(kern as f32 / FIXED_ONE / ppp);
             out.egui.push(egui_adv);
             out.fixed.push(fixed);
             out.fixed_kern.push(kern);

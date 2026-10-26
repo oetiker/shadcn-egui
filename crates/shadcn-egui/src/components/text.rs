@@ -374,7 +374,8 @@ impl TextLook {
     /// balances from the block's first line), pretty to each. The breaks
     /// become forced ones for egui; the galley keeps the caller's text.
     /// Results are cached per
-    /// job, width, mode and scale (notes §1).
+    /// job, width, mode and scale (notes §1), the measured advances per job
+    /// and scale: a new width breaks the lines again without measuring.
     fn lay_out(
         &self,
         ctx: &egui::Context,
@@ -386,13 +387,17 @@ impl TextLook {
         let ppp = ctx.pixels_per_point();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         job.hash(&mut hasher);
-        let style = self.wrap_style.map(|s| s as u8);
-        (wrap as u8, width.to_bits(), ppp.to_bits(), style).hash(&mut hasher);
+        ppp.to_bits().hash(&mut hasher);
         // A theme switch keeps the family names for other faces.
-        for section in &job.sections {
-            let face = shape::family_face(ctx, &section.format.font_id.family);
-            face.map(|f| Arc::as_ptr(&f) as usize).hash(&mut hasher);
+        let faces = shape::section_faces(ctx, &job);
+        for face in &faces {
+            face.as_ref()
+                .map(|f| Arc::as_ptr(f) as usize)
+                .hash(&mut hasher);
         }
+        let measured_key = hasher.finish();
+        let style = self.wrap_style.map(|s| s as u8);
+        (wrap as u8, width.to_bits(), style).hash(&mut hasher);
         let key = hasher.finish();
         let id = egui::Id::new("shadcn_egui::text::laid_out");
         let frame = ctx.cumulative_frame_nr();
@@ -400,33 +405,45 @@ impl TextLook {
             let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
             if cache.frame != frame {
                 cache.entries.retain(|_, e| e.1 + 1 >= frame);
+                cache.measured.retain(|_, e| e.1 + 1 >= frame);
                 cache.frame = frame;
             }
-            let e = cache.entries.get_mut(&key)?;
-            e.1 = frame;
-            Some(e.0.clone())
+            if let Some(e) = cache.entries.get_mut(&key) {
+                e.1 = frame;
+                return Ok(e.0.clone());
+            }
+            Err(cache.measured.get_mut(&measured_key).map(|e| {
+                e.1 = frame;
+                e.0.clone()
+            }))
         });
-        if let Some(galley) = hit {
-            return galley;
-        }
-        let out = self.shape_and_lay_out(ctx, job, wrap, width);
+        let measured = match hit {
+            Ok(galley) => return galley,
+            Err(measured) => measured,
+        };
+        let adv = measured.unwrap_or_else(|| Arc::new(shape::advances(ctx, &job, &faces)));
+        let out = self.shape_and_lay_out(ctx, job, &faces, &adv, wrap, width);
         ctx.data_mut(|d| {
-            d.get_temp_mut_or_default::<LayoutCache>(id)
-                .entries
-                .insert(key, (out.clone(), frame));
+            let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
+            cache.entries.insert(key, (out.clone(), frame));
+            cache.measured.insert(measured_key, (adv, frame));
         });
         out
     }
 
-    /// [`TextLook::lay_out`] past its cache.
+    /// [`TextLook::lay_out`] past its cache: `job` with its advances
+    /// `adv` ([`shape::advances`]); `faces` holds each section's face data
+    /// ([`shape::section_faces`]).
     fn shape_and_lay_out(
         &self,
         ctx: &egui::Context,
         job: LayoutJob,
+        faces: &[Option<Arc<egui::FontData>>],
+        adv: &shape::Advances,
         wrap: TextWrapMode,
         width: f32,
     ) -> Arc<Galley> {
-        let mut adv = shape::advances(ctx, &job);
+        let mut adv = adv.clone();
         let chars: Vec<char> = job.text.chars().collect();
         let n = chars.len();
         let breaking = wrap == TextWrapMode::Wrap && width.is_finite();
@@ -514,9 +531,10 @@ impl TextLook {
         let opsz: Vec<bool> = job
             .sections
             .iter()
-            .map(|s| {
-                shape::family_face(ctx, &s.format.font_id.family)
-                    .is_some_and(|d| shape::needs_opsz(&d, s.format.coords.as_ref()))
+            .zip(faces)
+            .map(|(s, face)| {
+                face.as_deref()
+                    .is_some_and(|d| shape::needs_opsz(d, s.format.coords.as_ref()))
             })
             .collect();
         let mut section_of = Vec::with_capacity(n);
@@ -652,11 +670,13 @@ impl TextLook {
 
 /// The galleys [`TextLook::lay_out`] laid out in this frame and the one
 /// before: by the hash of the job, width, mode, scale and faces, the galley
-/// and the frame it was last used.
+/// and the frame it was last used; by the hash of the job, scale and faces,
+/// the job's advances and the frame they were last used.
 #[derive(Clone, Default)]
 struct LayoutCache {
     frame: u64,
     entries: std::collections::HashMap<u64, (Arc<Galley>, u64)>,
+    measured: std::collections::HashMap<u64, (Arc<shape::Advances>, u64)>,
 }
 
 /// Every placeholder colour of `job` (text and underline) set to `color`.
@@ -1321,6 +1341,37 @@ mod tests {
                 }
             });
         }
+    }
+
+    #[test]
+    fn cached_measures_equal_a_fresh_measure() {
+        // Kerned pairs, a soft hyphen and a char Inter lacks (egui's
+        // fallback face).
+        let text = "AVAST! To Wa\u{AD}ter, Tokyo \u{4E2D} yo";
+        let context = |ppp: f32| {
+            let ctx = egui::Context::default();
+            ctx.set_pixels_per_point(ppp);
+            crate::Theme::vega_light().apply(&ctx);
+            let _ = ctx.run_ui(Default::default(), |_| {});
+            ctx
+        };
+        let measure = |ctx: &egui::Context, text: &str| {
+            let format = egui::TextFormat::simple(FontId::proportional(14.0), Color32::WHITE);
+            let job = LayoutJob::simple_format(text.into(), format);
+            shape::advances(ctx, &job, &shape::section_faces(ctx, &job))
+        };
+        let ctx = context(1.5);
+        let first = measure(&ctx, text);
+        assert!(first.fixed_kern.iter().any(|k| *k != 0));
+        assert!(first.hyphen.iter().any(Option::is_some));
+        // Another text fills the cache with more chars and pairs.
+        measure(&ctx, "Yay AVA Ty Te");
+        assert_eq!(measure(&ctx, text), first);
+        assert_eq!(measure(&context(1.5), text), first);
+        assert_ne!(
+            measure(&ctx, "AVAST").fixed,
+            measure(&context(1.0), "AVAST").fixed
+        );
     }
 
     #[test]
