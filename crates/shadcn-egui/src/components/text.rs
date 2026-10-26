@@ -54,10 +54,16 @@ mod shape;
 mod wrap;
 
 /// The context a crate container puts on its content `Ui` to pass the
-/// line-height factor (`leading-*`) to crate text inside, which egui
-/// widgets cannot take.
+/// text attributes egui widgets cannot take to crate text inside: the
+/// line-height factor (`leading-*`), the weight, the tracking and
+/// `uppercase`, which inherit in CSS.
 #[derive(Clone, Copy)]
-struct LineFactor(f32);
+struct Inherited {
+    line_factor: f32,
+    weight: Weight,
+    tracking: f32,
+    uppercase: bool,
+}
 
 /// How a line box's leading (its height minus the font's rounded ascent
 /// and descent) splits above and below the text.
@@ -103,9 +109,11 @@ impl TextLook {
     /// `ui`: the size from its `TextStyle::Body`, the line height from the
     /// ratio of the recipes' named `text-*` size, else from the factor of an
     /// enclosing [`content_scope`] (else CSS's 1.5 of the base size), the
-    /// colour from its text colour at paint time.
+    /// weight, tracking and `uppercase` from an enclosing [`content_scope`],
+    /// the colour from its text colour at paint time.
     pub fn resolve(ui: &Ui, layers: &[&Recipe], state: State) -> Self {
         let theme = Theme::current(ui.ctx());
+        let inherited = context::find::<Inherited>(ui);
         let recipe_size = pick(layers, |r| &r.text_size, state);
         let size = recipe_size.map_or_else(|| body_size(ui), |s| theme.text_px(s));
         // A named `text-*` sets a line height too, as a ratio of its own
@@ -121,17 +129,25 @@ impl TextLook {
             (Some(k), _) => k * size,
             (None, Some(n)) if Some(n) == recipe_size => theme.line_px(n),
             (None, Some(n)) => theme.line_px(n) / theme.text_px(n) * size,
-            (None, None) => inherited_line_factor(ui)
-                .map_or_else(|| theme.line_px(TextSize::Px(size)), |k| k * size),
+            (None, None) => inherited.map_or_else(
+                || theme.line_px(TextSize::Px(size)),
+                |i| i.line_factor * size,
+            ),
         };
         Self {
             size,
             line_height,
-            weight: pick(layers, |r| &r.weight, state).unwrap_or(Weight::Normal),
+            weight: pick(layers, |r| &r.weight, state)
+                .or(inherited.map(|i| i.weight))
+                .unwrap_or(Weight::Normal),
             heading: false,
             color: pick(layers, |r| &r.text, state).map(|p| theme.paint(p)),
-            tracking: pick(layers, |r| &r.tracking, state).unwrap_or(0.0),
-            uppercase: pick(layers, |r| &r.uppercase, state) == Some(true),
+            tracking: pick(layers, |r| &r.tracking, state)
+                .or(inherited.map(|i| i.tracking))
+                .unwrap_or(0.0),
+            uppercase: pick(layers, |r| &r.uppercase, state)
+                .or(inherited.map(|i| i.uppercase))
+                .unwrap_or(false),
             underline: pick(layers, |r| &r.underline, state) == Some(true),
             underline_offset: pick(layers, |r| &r.underline_offset, state),
             leading: Leading::Inline,
@@ -727,19 +743,24 @@ impl TextBlock {
 }
 
 /// Run `add` in a child `Ui` whose text a crate container's recipe sets
-/// (upstream's text colour, `text-*` and `leading-*` on the container):
-/// plain egui widgets inside take the colour and the size, crate text
-/// inside takes all three through [`TextLook::resolve`]. What the recipe
+/// (upstream's text colour, `text-*`, `leading-*`, `font-*`, `tracking-*`
+/// and `uppercase` on the container): plain egui widgets inside take the
+/// colour and the size, crate text inside takes them all through
+/// [`TextLook::resolve`], below its own recipe's values. What the recipe
 /// leaves out stays as `ui` has it.
 pub fn content_scope<R>(
     ui: &mut Ui,
     look: &TextLook,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let factor = look.line_height / look.size;
     let builder = egui::UiBuilder::new().ui_stack_info(context::info(
         egui::UiStackInfo::default(),
-        LineFactor(factor),
+        Inherited {
+            line_factor: look.line_height / look.size,
+            weight: look.weight,
+            tracking: look.tracking,
+            uppercase: look.uppercase,
+        },
     ));
     ui.scope_builder(builder, |ui| {
         if let Some(c) = look.color {
@@ -752,11 +773,6 @@ pub fn content_scope<R>(
         }
         add(ui)
     })
-}
-
-/// The line-height factor of the nearest enclosing [`content_scope`].
-fn inherited_line_factor(ui: &Ui) -> Option<f32> {
-    context::find::<LineFactor>(ui).map(|f| f.0)
 }
 
 fn body_size(ui: &Ui) -> f32 {
@@ -1255,6 +1271,43 @@ mod tests {
                 let inner = TextLook::resolve(ui, &[], State::NONE);
                 assert_eq!(inner.size(), 10.0);
                 assert_eq!(inner.line_height(), 20.0);
+            });
+        });
+    }
+
+    #[test]
+    fn content_scope_passes_weight_tracking_and_uppercase() {
+        with_ui(1.0, |ui| {
+            let mut r = Recipe::default();
+            r.weight.base = Some(Weight::Semibold);
+            r.tracking.base = Some(0.1);
+            r.uppercase.base = Some(true);
+            let outer = TextLook::resolve(ui, &[&r], State::NONE);
+            content_scope(ui, &outer, |ui| {
+                let inner = TextLook::resolve(ui, &[], State::NONE);
+                assert_eq!(inner.weight, Weight::Semibold);
+                assert_eq!(inner.tracking, 0.1);
+                assert!(inner.uppercase);
+                let job = inner.job(ui, "ab".into());
+                assert_eq!(job.text, "AB");
+                assert_eq!(
+                    job.sections[0].format.extra_letter_spacing,
+                    0.1 * inner.size()
+                );
+                // The text's own recipe wins over the scope's.
+                let mut own = Recipe::default();
+                own.weight.base = Some(Weight::Normal);
+                own.tracking.base = Some(0.0);
+                own.uppercase.base = Some(false);
+                let inner = TextLook::resolve(ui, &[&own], State::NONE);
+                assert_eq!(inner.weight, Weight::Normal);
+                assert_eq!(inner.tracking, 0.0);
+                assert!(!inner.uppercase);
+                // An explicit caller attribute wins over both.
+                let inner = TextLook::resolve(ui, &[], State::NONE);
+                let rich = egui::RichText::new("ab").extra_letter_spacing(2.0);
+                let job = inner.job(ui, rich.into());
+                assert_eq!(job.sections[0].format.extra_letter_spacing, 2.0);
             });
         });
     }
