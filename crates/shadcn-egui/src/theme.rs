@@ -919,7 +919,7 @@ impl Theme {
         crate::components::shared::install_focus_modality(ctx);
         let p = &self.palette;
         let m = &self.metrics;
-        let hairline = m.border;
+        let hairline = crate::components::shared::line_width(m.border, ctx.pixels_per_point());
         let heading = FontId::new(m.text_heading, heading_family_now(ctx));
         if heading.family == FontFamily::Proportional {
             ctx.data_mut(|d| {
@@ -1004,8 +1004,71 @@ impl Theme {
             }
         });
 
-        ctx.data_mut(|d| d.insert_temp(theme_id(), self.clone()));
+        ctx.data_mut(|d| {
+            d.insert_temp(theme_id(), self.clone());
+            d.insert_temp(hairline_id(), hairline);
+        });
+        install_hairline_hook(ctx);
     }
+}
+
+fn hairline_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::hairline")
+}
+
+/// Every stroke [`Theme::apply`] gives the theme's hairline (`border`).
+fn set_hairline(v: &mut egui::Visuals, width: f32) {
+    v.window_stroke.width = width;
+    v.selection.stroke.width = width;
+    v.widgets.noninteractive.bg_stroke.width = width;
+    v.widgets.noninteractive.fg_stroke.width = width;
+    for w in [
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
+    ] {
+        w.bg_stroke.width = width;
+        w.fg_stroke.width = width;
+    }
+}
+
+/// Keep the hairline of plain egui widgets on whole device pixels, as the
+/// crate's own borders: `Theme::apply` runs once, often before the window's
+/// scale is known, and the scale can change later (zoom, another monitor).
+/// Each pass checks the scale and rewrites the stroke widths only when the
+/// snapped width changes, so style writes of the app's own stay.
+fn install_hairline_hook(ctx: &egui::Context) {
+    let hook_id = egui::Id::new("shadcn_egui::hairline_hook");
+    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(hook_id, true));
+    ctx.on_begin_pass(
+        "shadcn_egui::hairline",
+        Arc::new(|ui: &mut egui::Ui| {
+            if let Some(width) = snap_hairline(ui.ctx()) {
+                // The root ui was built before this hook ran.
+                set_hairline(&mut ui.style_mut().visuals, width);
+            }
+        }),
+    );
+}
+
+/// The hairline for the context's current scale, written to both styles
+/// when it differs from the last one written. Returns the new width then.
+fn snap_hairline(ctx: &egui::Context) -> Option<f32> {
+    let border = ctx
+        .data(|d| d.get_temp::<Theme>(theme_id()))?
+        .metrics
+        .border;
+    let width = crate::components::shared::line_width(border, ctx.pixels_per_point());
+    if ctx.data(|d| d.get_temp::<f32>(hairline_id())) == Some(width) {
+        return None;
+    }
+    ctx.data_mut(|d| d.insert_temp(hairline_id(), width));
+    ctx.all_styles_mut(|s| set_hairline(&mut s.visuals, width));
+    Some(width)
 }
 
 /// Convenience accessor for components.

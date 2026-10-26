@@ -313,3 +313,48 @@ fn apply_survives_a_system_theme_switch() {
         assert_both_styles(&ctx, &t);
     }
 }
+
+/// The hairline of plain egui widgets at a scale, read from both styles and
+/// from the root ui the pass hands out.
+fn hairlines(ctx: &egui::Context, ppp: f32) -> Vec<f32> {
+    let input = egui::RawInput {
+        viewports: std::iter::once((
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo {
+                native_pixels_per_point: Some(ppp),
+                ..Default::default()
+            },
+        ))
+        .collect(),
+        ..Default::default()
+    };
+    let mut root = 0.0;
+    let _ = ctx.run_ui(input, |ui| {
+        root = ui.visuals().widgets.inactive.bg_stroke.width
+    });
+    let mut out = vec![root];
+    for which in [egui::Theme::Dark, egui::Theme::Light] {
+        let v = &ctx.style_of(which).visuals;
+        out.extend([
+            v.window_stroke.width,
+            v.selection.stroke.width,
+            v.widgets.noninteractive.bg_stroke.width,
+            v.widgets.inactive.bg_stroke.width,
+            v.widgets.open.fg_stroke.width,
+        ]);
+    }
+    out
+}
+
+#[test]
+fn plain_widget_hairlines_sit_on_device_pixels() {
+    // Blink floors a border to whole device px (one at least): 1 px is
+    // 1 device px at 1.5x, as the crate's own borders.
+    let ctx = egui::Context::default();
+    Theme::vega_light().apply(&ctx);
+    for (ppp, device) in [(1.5, 1.0), (1.0, 1.0), (2.0, 2.0), (1.75, 1.0), (1.5, 1.0)] {
+        for w in hairlines(&ctx, ppp) {
+            assert_eq!(w * ppp, device, "{ppp}");
+        }
+    }
+}
