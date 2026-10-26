@@ -127,12 +127,10 @@ pub fn line_width(px: f32, ppp: f32) -> f32 {
     let device = px * ppp;
     if device <= 0.0 {
         0.0
-    } else if device < 1.0 {
-        1.0 / ppp
     } else {
         // A width that is a whole number of device pixels stays whole
-        // through the float product.
-        (device + 1.0e-4).floor() / ppp // behaviour-ok: float tolerance
+        // through the float product; a thinner one becomes one device pixel.
+        (device + 1.0e-4).floor().max(1.0) / ppp // behaviour-ok: float tolerance, one device px
     }
 }
 

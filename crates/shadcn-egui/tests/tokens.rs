@@ -59,14 +59,37 @@ fn scanner_catches_literals() {
     assert_eq!(violations(tests).len(), 1);
 }
 
+/// The sources the lints cover: every `.rs` file under `src/components`,
+/// subdirectories included, and `src/layout.rs`.
+fn scanned_sources(dir: &str) -> Vec<std::path::PathBuf> {
+    fn walk(at: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(at).expect("components dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                out.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    walk(
+        std::path::Path::new(&format!("{dir}/components")),
+        &mut files,
+    );
+    files.sort();
+    files.push(format!("{dir}/layout.rs").into());
+    assert!(
+        files.iter().any(|f| f.ends_with("text/wrap.rs")),
+        "subdirectories not scanned: {files:?}"
+    );
+    files
+}
+
 #[test]
 fn components_use_theme_tokens() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
-    let mut files: Vec<_> = std::fs::read_dir(format!("{dir}/components"))
-        .expect("components dir")
-        .map(|e| e.expect("dir entry").path())
-        .collect();
-    files.push(format!("{dir}/layout.rs").into());
+    let files = scanned_sources(dir);
     assert!(files.len() > 5, "scanned too few files: {files:?}");
     let mut found = Vec::new();
     for f in files {
@@ -487,11 +510,7 @@ fn non_test_code_cuts_only_the_trailing_test_module() {
 #[test]
 fn ported_components_take_values_from_the_style() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src");
-    let mut files: Vec<_> = std::fs::read_dir(format!("{dir}/components"))
-        .expect("components dir")
-        .map(|e| e.expect("dir entry").path())
-        .collect();
-    files.push(format!("{dir}/layout.rs").into());
+    let files = scanned_sources(dir);
     assert!(files.len() > 5, "scanned too few files: {files:?}");
     let mut found = Vec::new();
     for path in files {

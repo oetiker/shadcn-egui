@@ -23,8 +23,19 @@ const MAX_LINES_BALANCE: usize = 6;
 const MAX_LINES_PRETTY: usize = 4;
 const SCORE_INFINITY: f32 = f32::MAX;
 const SCORE_OVERFULL: f32 = 1e12;
-const LAST_LINE_PENALTY_MULTIPLIER: f32 = 4.0;
-const ORPHANS_PENALTY: f32 = 10000.0;
+const LAST_LINE_PENALTY_MULTIPLIER: f32 = 4.0; // behaviour-ok: kLastLinePenaltyMultiplier
+const ORPHANS_PENALTY: f32 = 10000.0; // behaviour-ok: kOrphansPenalty
+/// `ShouldOptimize`: a last line under a third of the width is short.
+const SHORT_LINE_DENOMINATOR: f32 = 3.0; // behaviour-ok: kShortLineDenominator
+/// `AttemptParagraphBalancing` starts bisecting at 80% of the average line
+/// width ("20% buffer for potential edge cases").
+const BALANCE_START: f32 = 0.8; // behaviour-ok: Blink's bisection start
+
+/// One `LayoutUnit` (1/64 CSS px) in points on a screen of `ppp` device
+/// pixels per point.
+fn layout_unit(ppp: f32) -> f32 {
+    1.0 / (64.0 * ppp) // behaviour-ok: LayoutUnit::kFixedPointDenominator
+}
 
 /// The break candidates of one paragraph (no forced break inside) from
 /// each char and its glyph's left edge (after the kerning against the char
@@ -123,7 +134,7 @@ fn greedy(
 /// word overflowing (`overflow-wrap: normal`). The char index where each
 /// line after the first starts. `ppp` gives Blink's `LayoutUnit`.
 pub(super) fn normal(cands: &[Candidate], width: f32, ppp: f32) -> Vec<usize> {
-    let eps = 1.0 / (64.0 * ppp);
+    let eps = layout_unit(ppp);
     let mut out = Vec::new();
     let mut s = 0;
     while s + 1 < cands.len() {
@@ -239,7 +250,7 @@ fn bisect(
     }
     let sum: f32 = line_widths(cands, 0, &normal).sum();
     let snap = |v: f32| (v / eps).floor() * eps;
-    let mut lower = ((sum / lines as f32 * 0.8) / eps).round() * eps;
+    let mut lower = ((sum / lines as f32 * BALANCE_START) / eps).round() * eps;
     let mut upper = width;
     while lower + epsilon < upper {
         let middle = snap((upper + lower) / 2.0);
@@ -286,7 +297,7 @@ pub(super) fn breaks(
     space_width: f32,
     text_len: usize,
 ) -> Option<Vec<usize>> {
-    let eps = 1.0 / (64.0 * ppp);
+    let eps = layout_unit(ppp);
     let starts = |ends: Vec<usize>, from: usize| {
         let n = ends.len();
         ends[..n - 1]
@@ -328,7 +339,7 @@ pub(super) fn breaks(
             let last_start = normal.get(n.wrapping_sub(2)).copied().unwrap_or(0);
             let last_width = line_widths(cands, from, &normal[k..]).last()?;
             // `ShouldOptimize`: a short last line holding one word.
-            if !(last_width < width / 3.0 && last_start == cands.len() - 2) {
+            if !(last_width < width / SHORT_LINE_DENOMINATOR && last_start == cands.len() - 2) {
                 return None;
             }
             let window = &cands[from..];
