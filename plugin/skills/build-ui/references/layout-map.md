@@ -64,7 +64,11 @@ fn footer(ui: &mut egui::Ui) {
   label) pushes the children after it past its whole width, and the row
   does not widen its parent, as a flex row in the browser. A
   `layout::vstack` in such a row grows to its widest child, as a flex
-  column does, and pushes the row's next children too. A plain
+  column does, and pushes the row's next children too. A vstack of
+  wrapping text in `row`, `space_between` or a card footer shrinks to the
+  room the other children leave, never below its longest word, and its
+  text wraps there; several such stacks share the room in proportion to
+  their unwrapped widths, as flex items with `flex-shrink: 1`. A plain
   `ui.horizontal` cannot: the next child covers the overflow, and a child
   that runs past the room widens the parent. Use the crate rows for rows of
   controls.
