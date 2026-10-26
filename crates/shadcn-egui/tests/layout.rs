@@ -342,3 +342,67 @@ fn row_centres_a_widget_beside_a_nested_stack() {
     assert!(stack.height() > button.height(), "{stack:?} {button:?}");
     assert_eq!(button.center().y, stack.center().y, "{stack:?} {button:?}");
 }
+
+/// A stack relearns its unwrapped width when its image is swapped for one
+/// of another intrinsic size that draws at the same size (both shrink to
+/// the stack's width, same aspect): the row ends as one that held the new
+/// image from the start.
+#[test]
+fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
+    fn frame(ctx: &egui::Context, image: &egui::TextureHandle) -> [egui::Rect; 3] {
+        let mut out = [egui::Rect::NOTHING; 3];
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.scope(|ui| {
+                ui.set_max_width(200.0);
+                layout::row(ui, 8.0, |ui| {
+                    out[0] = layout::vstack(ui, 4.0, |ui| {
+                        let max = ui.available_width();
+                        ui.add(
+                            egui::Image::from_texture(image)
+                                .fit_to_original_size(1.0)
+                                .max_width(max),
+                        )
+                        .rect
+                    });
+                    out[1] = layout::vstack(ui, 4.0, |ui| {
+                        ui.label("Receive emails about new products.").rect
+                    });
+                    out[2] = ui
+                        .allocate_exact_size(egui::vec2(60.0, 20.0), egui::Sense::hover())
+                        .0;
+                });
+            });
+        });
+        out
+    }
+    let texture = |ctx: &egui::Context, name: &str, w: usize| {
+        let pixels = egui::ColorImage::new([w, w / 3], vec![egui::Color32::GRAY; w * (w / 3)]);
+        ctx.load_texture(name, pixels, Default::default())
+    };
+    let ctx = egui::Context::default();
+    Theme::vega_dark().apply(&ctx);
+    let (small, large) = (texture(&ctx, "small", 120), texture(&ctx, "large", 240));
+    let mut before = [egui::Rect::NOTHING; 3];
+    for _ in 0..4 {
+        before = frame(&ctx, &small);
+    }
+    let switched = frame(&ctx, &large);
+    assert_eq!(
+        before[0].size(),
+        switched[0].size(),
+        "the case needs an equal drawn size"
+    );
+    let mut after = switched;
+    for _ in 0..4 {
+        after = frame(&ctx, &large);
+    }
+    let fresh_ctx = egui::Context::default();
+    Theme::vega_dark().apply(&fresh_ctx);
+    let fresh_large = texture(&fresh_ctx, "large", 240);
+    let mut fresh = [egui::Rect::NOTHING; 3];
+    for _ in 0..5 {
+        fresh = frame(&fresh_ctx, &fresh_large);
+    }
+    assert_ne!(before, fresh, "the case needs another split");
+    assert_eq!(after, fresh, "the row relearns the image's width");
+}

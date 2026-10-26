@@ -226,8 +226,9 @@ fn overflow_row<R>(
 /// widths, none below its narrowest (its longest word or widest child).
 /// The widths come from the previous pass, and a pass that changes them
 /// is redone. When the stack's content takes another size or paints
-/// another text at the same width (its text, font or scale changed), the
-/// next frame measures it unwrapped again in a pass that is not shown.
+/// another text or image at the same width (its text, image, font or
+/// scale changed), the next frame measures it unwrapped again in a pass
+/// that is not shown.
 ///
 /// In a `StripBuilder` or table cell (directly, or through scopes that
 /// keep the cell's layout) the stack takes the cell's width, as a block in
@@ -342,21 +343,44 @@ struct Intrinsic {
     /// to the width it wrapped to (an upper bound).
     min: Option<f32>,
     /// The last pass at a planned width: that width, the scale, the
-    /// content's size and the hash of the text it painted
-    /// ([`text_hash`]). The same width and scale giving another size or
-    /// text means the content or its font changed, and `max` and `min`
+    /// content's size and the hash of the text and images it painted
+    /// ([`content_hash`]). The same width and scale giving another size or
+    /// hash means the content or its font changed, and `max` and `min`
     /// with it, also where the wrapped block kept its size.
     seen: Option<([f32; 4], u64)>,
     /// Set when `seen` changed: the next pass measures the content again.
     stale: bool,
 }
 
-/// A hash of what decides the width of the text painted on `layer` from
-/// shape `first` on: each galley's text and per section its byte range,
-/// font and letter spacing (not its colour, which a hover changes).
-fn text_hash(ctx: &egui::Context, layer: egui::LayerId, first: usize) -> u64 {
+/// A hash of what decides the unwrapped width of the content painted on
+/// `layer` from shape `first` on: each galley's text and per section its
+/// byte range, font and letter spacing (not its colour, which a hover
+/// changes), and each image's texture, its size and the part (uv) drawn.
+/// A shrunk image of another intrinsic size, or an icon atom (an image
+/// per icon) swapped for another, can draw at the same size.
+///
+/// Only `layer` counts: what the stack shows on another layer (a popup,
+/// a tooltip) is out of flow, as an absolutely positioned box is in CSS,
+/// and never sizes the stack. Shapes without a texture (an icon a crate
+/// widget paints as paths, a frame) draw at a size their widget fixes,
+/// so the content's size already tells a change.
+fn content_hash(ctx: &egui::Context, layer: egui::LayerId, first: usize) -> u64 {
     use std::hash::{Hash, Hasher};
-    fn add(shape: &egui::Shape, h: &mut impl Hasher) {
+    fn image(
+        id: egui::TextureId,
+        uv: impl Iterator<Item = egui::Pos2>,
+        h: &mut impl Hasher,
+        images: &mut Vec<egui::TextureId>,
+    ) {
+        // The font atlas (the default texture) grows as glyphs are added;
+        // text is hashed by its galley.
+        if id != egui::TextureId::default() {
+            id.hash(h);
+            uv.for_each(|p| [p.x.to_bits(), p.y.to_bits()].hash(h));
+            images.push(id);
+        }
+    }
+    fn add(shape: &egui::Shape, h: &mut impl Hasher, images: &mut Vec<egui::TextureId>) {
         match shape {
             egui::Shape::Text(text) => {
                 let job = &text.galley.job;
@@ -368,18 +392,44 @@ fn text_hash(ctx: &egui::Context, layer: egui::LayerId, first: usize) -> u64 {
                     section.format.extra_letter_spacing.to_bits().hash(h);
                 }
             }
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| add(s, h)),
+            egui::Shape::Rect(rect) => {
+                if let Some(brush) = &rect.brush {
+                    let uv = brush.uv;
+                    image(
+                        brush.fill_texture_id,
+                        [uv.min, uv.max].into_iter(),
+                        h,
+                        images,
+                    );
+                }
+            }
+            egui::Shape::Mesh(mesh) => {
+                image(
+                    mesh.texture_id,
+                    mesh.vertices.iter().map(|v| v.uv),
+                    h,
+                    images,
+                );
+            }
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| add(s, h, images)),
             _ => {}
         }
     }
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut images = Vec::new();
     ctx.graphics(|g| {
         if let Some(list) = g.get(layer) {
             list.all_entries()
                 .skip(first)
-                .for_each(|c| add(&c.shape, &mut h));
+                .for_each(|c| add(&c.shape, &mut h, &mut images));
         }
     });
+    // The texture's own size: the same id can be given another image.
+    let textures = ctx.tex_manager();
+    let textures = textures.read();
+    for id in images {
+        textures.meta(id).map(|m| m.size).hash(&mut h);
+    }
     h.finish()
 }
 
@@ -515,7 +565,7 @@ fn flex_item<R>(
     if let Some(w) = target {
         let seen = (
             [w, ui.ctx().pixels_per_point(), content.x, content.y],
-            text_hash(ui.ctx(), layer, first),
+            content_hash(ui.ctx(), layer, first),
         );
         if known
             .seen
