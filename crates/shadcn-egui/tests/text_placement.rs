@@ -14,6 +14,10 @@
 //! - the x of every char of a kerned text in the vega and nova Input (the
 //!   caret and selection stops) and where its glyph is drawn
 //!   (`text_placement/chrome-input-glyphs.tsv`, from the same script).
+//! - the underline of a line of text (`underline`, with
+//!   `underline-offset-4` and without), its top and thickness, at 12, 14
+//!   and 16 px (`text_placement/chrome-underlines.tsv`, from
+//!   `scripts/chrome-underlines.mjs`).
 //!
 //! The reference rows are in `text_placement/chrome-baselines.tsv`
 //! (device px from the element's border-box top), measured from headless
@@ -34,7 +38,7 @@ use shadcn_egui::components::badge::Badge;
 use shadcn_egui::components::button::{Button, ButtonSize};
 use shadcn_egui::components::input::Input;
 use shadcn_egui::components::text::TextLook;
-use shadcn_egui::style::{Recipe, State, Style, TextSize};
+use shadcn_egui::style::{Recipe, State, Style, TextSize, Weight};
 use shadcn_egui::{fonts, FontFiles, FontName, Palette, Theme};
 
 const CHROME: &str = include_str!("text_placement/chrome-baselines.tsv");
@@ -600,6 +604,97 @@ fn input_glyphs_sit_on_chromes_x() {
         wrong.is_empty(),
         "{} of {compared} glyphs off Chrome's x:\n{}",
         wrong.len(),
+        wrong.join("\n")
+    );
+}
+
+const UNDERLINES: &str = include_str!("text_placement/chrome-underlines.tsv");
+
+/// The underlines drawn in `t`, as (top, thickness) in device px below the
+/// galley origin: its quads whose four vertices sit on the white texel.
+fn underlines(t: &TextShape, ppp: f32) -> Vec<(f32, f32)> {
+    let mut out = Vec::new();
+    for r in &t.galley.rows {
+        for quad in r.row.visuals.mesh.vertices.chunks(4) {
+            if quad.iter().all(|v| v.uv == egui::epaint::WHITE_UV) {
+                let top = quad.iter().map(|v| v.pos.y).fold(f32::INFINITY, f32::min);
+                let bottom = quad
+                    .iter()
+                    .map(|v| v.pos.y)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                let origin = (t.pos.y * ppp).round();
+                out.push((dev(t, r.pos.y + top, ppp) - origin, (bottom - top) * ppp));
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn underlines_sit_on_chromes_pixels() {
+    let mut wrong = Vec::new();
+    let mut compared = 0;
+    for name in FontName::ALL.iter().copied() {
+        let Some(files) = fonts::files(name) else {
+            continue;
+        };
+        for scale in SCALES {
+            let ctx = egui::Context::default();
+            ctx.set_pixels_per_point(scale);
+            Theme::vega_light().fonts(files, None).apply(&ctx);
+            for l in UNDERLINES.lines().skip(1) {
+                let c: Vec<&str> = l.split('\t').collect();
+                if c[0] != name.id() || c[1].parse::<f32>().ok() != Some(scale) {
+                    continue;
+                }
+                let tag = format!("{} {scale}x {}px/{} offset {}", c[0], c[2], c[3], c[4]);
+                let (size, line): (f32, f32) = (c[2].parse().unwrap(), c[3].parse().unwrap());
+                let mut recipe = Recipe::default();
+                recipe.text_size.base = Some(TextSize::Px(size));
+                recipe.line_height.base = Some(line / size);
+                recipe.weight.base = Some(Weight::Medium);
+                recipe.underline.base = Some(true);
+                recipe.underline_offset.base = c[4].strip_suffix("px").map(|v| v.parse().unwrap());
+                let want = (c[6].parse::<f32>().unwrap(), c[7].split(',').count() as f32);
+                // A new area shows from its second frame.
+                let run = |ui: &mut egui::Ui| {
+                    egui::Area::new(egui::Id::new("u"))
+                        .fixed_pos(pos2(8.0, 8.0))
+                        .show(ui.ctx(), |ui| {
+                            let look = TextLook::resolve(ui, &[&recipe], State::NONE);
+                            let text = look.layout(
+                                ui,
+                                "HHHHHHHH",
+                                egui::TextWrapMode::Extend,
+                                f32::INFINITY,
+                            );
+                            let (rect, _) =
+                                ui.allocate_exact_size(text.size(), egui::Sense::hover());
+                            text.paint(ui.painter(), rect.min, look.resolved_color(ui));
+                        });
+                };
+                let _ = ctx.run_ui(RawInput::default(), run);
+                let out = ctx.run_ui(RawInput::default(), run);
+                let (mut texts, mut rects) = (Vec::new(), Vec::new());
+                for s in &out.shapes {
+                    walk(&s.shape, &mut texts, &mut rects);
+                }
+                let [t] = &texts[..] else {
+                    panic!("{tag}: {} texts", texts.len());
+                };
+                let got = underlines(t, scale);
+                compared += 1;
+                let on = |g: f32, w: f32| (g - w).abs() < 1e-3;
+                if !matches!(got[..], [(top, h)] if on(top, want.0) && on(h, want.1)) {
+                    wrong.push(format!("{tag}: drawn {got:?}, Chrome {want:?}"));
+                }
+            }
+        }
+    }
+    assert!(compared >= SCALES.len() * 6, "{compared}");
+    assert!(
+        wrong.is_empty(),
+        "underlines off Chrome's pixels:\n{}",
         wrong.join("\n")
     );
 }

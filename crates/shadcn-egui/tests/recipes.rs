@@ -481,14 +481,27 @@ fn button_disabled_opacity_comes_from_the_style() {
     );
 }
 
-/// The underline width of the first text a frame painted.
-fn underline_width(out: &egui::FullOutput) -> f32 {
-    fn walk(s: &egui::Shape) -> Option<f32> {
-        match s {
-            egui::Shape::Text(t) => Some(t.galley.job.sections[0].format.underline.width),
-            egui::Shape::Vec(v) => v.iter().find_map(walk),
-            _ => None,
+/// The underlines of the first text a frame painted, as (top below the
+/// row's baseline, thickness) in points: the row quads on the white texel.
+fn underlines(out: &egui::FullOutput) -> Vec<(f32, f32)> {
+    fn walk(s: &egui::Shape) -> Option<Vec<(f32, f32)>> {
+        let egui::Shape::Text(t) = s else {
+            let egui::Shape::Vec(v) = s else {
+                return None;
+            };
+            return v.iter().find_map(walk);
+        };
+        let mut found = Vec::new();
+        for r in &t.galley.rows {
+            let baseline = r.row.glyphs.first()?.pos.y;
+            for q in r.row.visuals.mesh.vertices.chunks(4) {
+                if q.iter().all(|v| v.uv == egui::epaint::WHITE_UV) {
+                    let (top, bottom) = (q[0].pos.y.min(q[2].pos.y), q[0].pos.y.max(q[2].pos.y));
+                    found.push((top - baseline, bottom - top));
+                }
+            }
         }
+        Some(found)
     }
     out.shapes
         .iter()
@@ -497,23 +510,46 @@ fn underline_width(out: &egui::FullOutput) -> f32 {
 }
 
 #[test]
-fn link_underline_is_metrics_border_wide() {
+fn link_underline_takes_its_offset_from_the_style() {
     use shadcn_egui::components::badge::{Badge, BadgeVariant};
     use shadcn_egui::components::button::{Button, ButtonVariant};
     // Upstream underlines on hover; an always-on underline needs no pointer.
-    let mut theme = common::restyled(Theme::vega_light(), |s| {
-        s.button_variant_link.underline.base = Some(true);
-        s.badge_variant_link.underline.base = Some(true);
-    });
-    theme.metrics.border = 3.0;
-    let (_, out) = common::measure_output(&theme, |ui| {
-        ui.add(Button::new("Save").variant(ButtonVariant::Link))
-    });
-    assert_eq!(underline_width(&out), 3.0, "button");
-    let (_, out) = common::measure_output(&theme, |ui| {
-        ui.add(Badge::new("New").variant(BadgeVariant::Link))
-    });
-    assert_eq!(underline_width(&out), 3.0, "badge");
+    let underlined = |offset: Option<f32>| {
+        common::restyled(Theme::vega_light(), |s| {
+            s.button_variant_link.underline.base = Some(true);
+            s.badge_variant_link.underline.base = Some(true);
+            if let Some(o) = offset {
+                s.button_variant_link.underline_offset.base = Some(o);
+                s.badge_variant_link.underline_offset.base = Some(o);
+            }
+        })
+    };
+    let button = |ui: &mut egui::Ui| ui.add(Button::new("Save").variant(ButtonVariant::Link));
+    let badge = |ui: &mut egui::Ui| ui.add(Badge::new("New").variant(BadgeVariant::Link));
+    // `underline-offset-4`; Blink's `auto` thickness is a tenth of the
+    // 14 px and 12 px text, painted on whole device pixels: 1 px.
+    let theme = underlined(None);
+    assert_eq!(
+        underlines(&common::measure_output(&theme, button).1),
+        [(4.0, 1.0)],
+        "button"
+    );
+    assert_eq!(
+        underlines(&common::measure_output(&theme, badge).1),
+        [(4.0, 1.0)],
+        "badge"
+    );
+    let theme = underlined(Some(2.0));
+    assert_eq!(
+        underlines(&common::measure_output(&theme, button).1),
+        [(2.0, 1.0)],
+        "button"
+    );
+    assert_eq!(
+        underlines(&common::measure_output(&theme, badge).1),
+        [(2.0, 1.0)],
+        "badge"
+    );
 }
 
 #[test]

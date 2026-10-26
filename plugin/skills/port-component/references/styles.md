@@ -111,6 +111,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `tracking` | `tracking-*` |
 | `weight` | `font-normal`, `font-medium`, `font-semibold`, `font-bold` |
 | `uppercase`, `underline` | `uppercase`, `underline` |
+| `underline_offset` | `underline-offset-*` (px); the text path draws the underline as Chrome does, its thickness a tenth of the font size |
 | `radius`, `radius_top`, `radius_right`, `radius_bottom`, `radius_left` | `rounded-*`, `rounded-t-*`, `rounded-r-*`, `rounded-b-*`, `rounded-l-*` |
 | `bg`, `text` | `bg-*`, `text-*` (with `/alpha` and `color-mix`) |
 | `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::RecipeBox`) |

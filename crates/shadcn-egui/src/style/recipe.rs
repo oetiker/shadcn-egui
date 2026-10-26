@@ -586,6 +586,9 @@ pub struct Recipe {
     pub weight: Prop<Weight>,
     pub uppercase: Prop<bool>,
     pub underline: Prop<bool>,
+    /// `underline-offset-*` in px: the underline's distance below the
+    /// baseline (`text-underline-offset`).
+    pub underline_offset: Prop<f32>,
     /// `text-balance`, `text-pretty`: how the part breaks its text.
     pub text_wrap: Prop<TextWrap>,
     /// `text-left`, `text-center`, `text-right`: where the part's lines sit.

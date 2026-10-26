@@ -27,10 +27,6 @@ Unsupported classes in shipped markers: **30** (not exportable)
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `inline-flex`: structure: egui layout is done by the component
 
-## `cn-button-variant-link`
-
-- ignored `underline-offset-4`: egui draws text underlines at a fixed offset
-
 ## `cn-badge`
 
 - ignored `group/badge`: browser behaviour the component handles itself
@@ -58,10 +54,6 @@ Unsupported classes in shipped markers: **30** (not exportable)
 ## `cn-badge-variant-outline`
 
 - ignored `[a]:hover:text-foreground/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
-
-## `cn-badge-variant-link`
-
-- ignored `underline-offset-4`: egui draws text underlines at a fixed offset
 
 ## `cn-card`
 

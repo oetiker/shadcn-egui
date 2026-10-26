@@ -87,10 +87,6 @@ const INHERIT_TEXT: &str = "inherits the parent's text colour: the recipe leaves
 const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("z-", BROWSER),
     ("scroll-my-", BROWSER),
-    (
-        "underline-offset-",
-        "egui draws text underlines at a fixed offset",
-    ),
     ("items-", STRUCTURE),
     ("justify-", STRUCTURE),
     ("self-", STRUCTURE),
@@ -408,6 +404,13 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             _ => return U::Unsupported("tracking"),
         };
         return U::Set(vec![(Tracking, Value::Factor(em))]);
+    }
+    if let Some(v) = u.strip_prefix("underline-offset-") {
+        // `underline-offset-N` is N px, not the spacing scale.
+        return match v.parse::<f32>() {
+            Ok(n) => px(&[UnderlineOffset], n),
+            Err(_) => U::Unsupported("underline-offset other than a number"),
+        };
     }
     if let Some(v) = u.strip_prefix("font-") {
         let w = match v {

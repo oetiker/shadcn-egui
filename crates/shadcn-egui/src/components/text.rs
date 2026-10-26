@@ -17,6 +17,10 @@
 //! wrapped text follows the same rule, and the laid-out text is as tall as
 //! its line boxes.
 //!
+//! A recipe's `underline` is drawn as Blink draws it: its offset below
+//! the baseline (the recipe's `underline_offset`, else Blink's `auto` gap)
+//! and a tenth of the font size thick, both on whole device pixels.
+//!
 //! ```
 //! use shadcn_egui::components::text::TextLook;
 //! use shadcn_egui::style::State;
@@ -54,7 +58,7 @@ const LINE_FACTOR_TAG: &str = "shadcn_egui::text::line_factor";
 
 /// How a line box's leading (its height minus the font's rounded ascent
 /// and descent) splits above and below the text.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Leading {
     /// Inline text, as Blink's `CalculateLeadingSpace`: the half above is
     /// rounded down to a device pixel.
@@ -85,7 +89,7 @@ pub struct TextLook {
     tracking: f32,
     uppercase: bool,
     underline: bool,
-    underline_width: f32,
+    underline_offset: Option<f32>,
     leading: Leading,
     wrap_style: Option<TextWrap>,
 }
@@ -126,7 +130,7 @@ impl TextLook {
             tracking: pick(layers, |r| &r.tracking, state).unwrap_or(0.0),
             uppercase: pick(layers, |r| &r.uppercase, state) == Some(true),
             underline: pick(layers, |r| &r.underline, state) == Some(true),
-            underline_width: theme.metrics.border,
+            underline_offset: pick(layers, |r| &r.underline_offset, state),
             leading: Leading::Inline,
             wrap_style: pick(layers, |r| &r.text_wrap, state),
         }
@@ -161,6 +165,16 @@ impl TextLook {
     #[inline]
     pub fn underlined(&self) -> bool {
         self.underline
+    }
+
+    /// How [`place_rows`] places and decorates this look's rows.
+    fn place(&self) -> Place {
+        Place {
+            leading: self.leading,
+            underline: self.underline.then_some(Underline {
+                offset: self.underline_offset,
+            }),
+        }
     }
 
     /// The font size in px.
@@ -255,10 +269,6 @@ impl TextLook {
             if f.extra_letter_spacing == 0.0 {
                 f.extra_letter_spacing = self.tracking * f.font_id.size;
             }
-            if self.underline && f.underline == Stroke::NONE {
-                // The underline takes the colour of its own run.
-                f.underline = Stroke::new(self.underline_width, f.color);
-            }
         }
         job
     }
@@ -278,9 +288,9 @@ impl TextLook {
         let job = self.job(ui, text.into());
         let source = self.lay_out(ui.ctx(), job, wrap, width);
         TextBlock {
-            galley: place_rows(ui.ctx(), source.clone(), self.leading, 0.0),
+            galley: place_rows(ui.ctx(), source.clone(), self.place(), 0.0),
             source,
-            leading: self.leading,
+            place: self.place(),
         }
     }
 
@@ -294,14 +304,14 @@ impl TextLook {
         job.halign = ui.layout().horizontal_placement();
         job.justify = ui.layout().horizontal_justify();
         let source = self.lay_out(ui.ctx(), job, wrap, ui.available_width());
-        let galley = place_rows(ui.ctx(), source.clone(), self.leading, 0.0);
+        let galley = place_rows(ui.ctx(), source.clone(), self.place(), 0.0);
         // `egui::Label`'s own `ui`, with the rows placed for the origin the
         // label gets (the placement moves glyphs only, not the size).
         let (pos, galley, mut response) = egui::Label::new(galley).layout_in_ui(ui);
         let galley = if galley.elided {
             galley
         } else {
-            place_rows(ui.ctx(), source, self.leading, pos.y)
+            place_rows(ui.ctx(), source, self.place(), pos.y)
         };
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, ui.is_enabled(), galley.text())
@@ -350,7 +360,7 @@ impl TextLook {
         let mut job = self.job(ui, text.into());
         fill_color(&mut job, color);
         let galley = self.lay_out(ui.ctx(), job, wrap, width);
-        place_rows(ui.ctx(), galley, self.leading, 0.0)
+        place_rows(ui.ctx(), galley, self.place(), 0.0)
     }
 }
 
@@ -617,7 +627,7 @@ fn fill_color(job: &mut LayoutJob, color: Color32) {
 pub struct TextBlock {
     /// The galley as egui laid it out, before [`place_rows`].
     source: Arc<Galley>,
-    leading: Leading,
+    place: Place,
     galley: Arc<Galley>,
 }
 
@@ -639,7 +649,7 @@ impl TextBlock {
     /// replaces every colour the caller did not set (see
     /// [`TextLook::resolved_color`]).
     pub fn paint(&self, painter: &Painter, pos: Pos2, color: Color32) {
-        let galley = place_rows(painter.ctx(), self.source.clone(), self.leading, pos.y);
+        let galley = place_rows(painter.ctx(), self.source.clone(), self.place, pos.y);
         painter.galley(pos, galley, color);
     }
 }
@@ -802,19 +812,57 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
     m
 }
 
+/// What [`place_rows`] places a galley's rows by, besides the galley.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Place {
+    leading: Leading,
+    /// The look's `underline`, drawn under every section without an
+    /// underline of its own.
+    underline: Option<Underline>,
+}
+
+/// `text-decoration: underline` as Blink draws it, with
+/// `text-decoration-thickness: auto` (see [`underline_dev`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Underline {
+    /// `text-underline-offset` in px; `None` is `auto`.
+    offset: Option<f32>,
+}
+
+/// Blink's underline under text of `size` px on a screen of `ppp` device
+/// pixels per point, in device px: its top below the baseline and its
+/// thickness. The thickness is `TextDecorationThickness::Resolve` for
+/// `auto` (a tenth of the font size, at least one device pixel), painted
+/// on whole device pixels (rounded down, as Chrome 156 paints it). The
+/// top is `TextDecorationOffset::ComputeUnderlineOffset` for
+/// `text-underline-position: auto`: the offset rounded to the device
+/// pixel, or for `auto` a gap of half the unrounded thickness, rounded
+/// up, at least one device pixel.
+fn underline_dev(size: f32, underline: Underline, ppp: f32) -> (f32, f32) {
+    // `auto` thickness: `font_size / 10.0f`.
+    const AUTO_THICKNESS_DIVISOR: f32 = 10.0; // behaviour-ok: Blink's auto thickness
+    let thickness = (size * ppp / AUTO_THICKNESS_DIVISOR).max(1.0); // behaviour-ok: one device px
+    let top = match underline.offset {
+        Some(px) => (px * ppp).round(),
+        None => (thickness / 2.0).ceil().max(1.0), // behaviour-ok: Blink's minimum gap
+    };
+    (top, thickness.floor())
+}
+
 /// A galley placed by [`place_rows`], with what it was placed from.
 #[derive(Clone)]
 struct Placed {
     source: Arc<Galley>,
     ppp: f32,
-    leading: Leading,
+    place: Place,
     placed: Arc<Galley>,
     frame: u64,
 }
 
-/// A [`PlacedCache`] key: the source galley's address and the device-pixel
-/// fraction of the origin it is painted at.
-type PlacedKey = (usize, u32);
+/// A [`PlacedCache`] key: the source galley's address, the device-pixel
+/// fraction of the origin it is painted at, the leading and the
+/// underline offset's bits.
+type PlacedKey = (usize, u32, Leading, Option<Option<u32>>);
 
 /// The galleys [`place_rows`] placed in this frame and the one before, by
 /// the address of the galley egui laid out. egui's galley cache hands out
@@ -830,10 +878,10 @@ struct PlacedCache {
 /// (points; 0 where the origin is not known yet), cached per galley egui
 /// laid out and origin fraction (notes §1: an idle widget allocates
 /// nothing beyond egui's own).
-pub(crate) fn place_rows(
+fn place_rows(
     ctx: &egui::Context,
     galley: Arc<Galley>,
-    leading: Leading,
+    place: Place,
     origin_y: f32,
 ) -> Arc<Galley> {
     let id = egui::Id::new("shadcn_egui::text::placed");
@@ -842,7 +890,12 @@ pub(crate) fn place_rows(
     // origin and baseline together. The fraction it drops goes into the
     // baselines.
     let frac = origin_y * ppp - (origin_y * ppp).round();
-    let key = (Arc::as_ptr(&galley) as usize, frac.to_bits());
+    let key = (
+        Arc::as_ptr(&galley) as usize,
+        frac.to_bits(),
+        place.leading,
+        place.underline.map(|u| u.offset.map(f32::to_bits)),
+    );
     let hit = ctx.data_mut(|d| {
         let cache = d.get_temp_mut_or_default::<PlacedCache>(id);
         if cache.frame != frame {
@@ -851,7 +904,7 @@ pub(crate) fn place_rows(
             cache.frame = frame;
         }
         let e = cache.entries.get_mut(&key)?;
-        let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.leading == leading;
+        let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.place == place;
         same.then(|| {
             e.frame = frame;
             e.placed.clone()
@@ -862,12 +915,12 @@ pub(crate) fn place_rows(
     }
     // Placing reads the font tables through `ctx.data`: not inside the
     // `data_mut` above.
-    let placed = place_galley_rows(ctx, galley.clone(), leading, frac);
+    let placed = place_galley_rows(ctx, galley.clone(), place, frac);
     ctx.data_mut(|d| {
         let entry = Placed {
             source: galley,
             ppp,
-            leading,
+            place,
             placed: placed.clone(),
             frame,
         };
@@ -893,9 +946,10 @@ pub(crate) fn place_rows(
 fn place_galley_rows(
     ctx: &egui::Context,
     mut galley: Arc<Galley>,
-    leading: Leading,
+    place: Place,
     frac: f32,
 ) -> Arc<Galley> {
+    let leading = place.leading;
     let ppp = ctx.pixels_per_point();
     let g = Arc::make_mut(&mut galley);
     let job = g.job.clone();
@@ -959,6 +1013,9 @@ fn place_galley_rows(
             }
             row.visuals.mesh.translate(shift);
             row.visuals.mesh_bounds = row.visuals.mesh_bounds.translate(shift);
+            if let Some(underline) = place.underline {
+                underline_row(row, &job, start, underline, baseline, ppp);
+            }
         }
         bounds |= row.visuals.mesh_bounds.translate(placed.pos.to_vec2());
         top += line;
@@ -966,6 +1023,50 @@ fn place_galley_rows(
     g.rect.max.y = g.rect.min.y + top;
     g.mesh_bounds = bounds;
     galley
+}
+
+/// Draw `underline` into `row`'s mesh under each run of glyphs whose
+/// section has no underline of its own, in the run's colour, its top and
+/// thickness from the run's font size by [`underline_dev`], below
+/// `baseline` (points from the row top, on a device pixel), from the run's
+/// first glyph's left to its last glyph's right edge. The row's text starts
+/// at byte `start` of the job's text.
+fn underline_row(
+    row: &mut egui::epaint::text::Row,
+    job: &LayoutJob,
+    start: usize,
+    underline: Underline,
+    baseline: f32,
+    ppp: f32,
+) {
+    let mut runs: Vec<(usize, f32, f32)> = Vec::new();
+    let (mut byte, mut prev) = (start, None);
+    for glyph in &row.glyphs {
+        let at = byte;
+        byte += job.text[at..].chars().next().map_or(0, char::len_utf8);
+        let section = job.sections.iter().position(|s| s.byte_range.contains(&at));
+        let same = section.is_some() && prev == section;
+        prev = section;
+        let Some(section) = section else {
+            continue;
+        };
+        if job.sections[section].format.underline != Stroke::NONE {
+            continue;
+        }
+        match runs.last_mut() {
+            Some((_, _, right)) if same => *right = glyph.max_x(),
+            _ => runs.push((section, glyph.pos.x, glyph.max_x())),
+        }
+    }
+    for (section, left, right) in runs {
+        let format = &job.sections[section].format;
+        let (top, thickness) = underline_dev(format.font_id.size, underline, ppp);
+        let y = baseline + top / ppp;
+        let rect =
+            egui::Rect::from_min_max(egui::pos2(left, y), egui::pos2(right, y + thickness / ppp));
+        row.visuals.mesh.add_colored_rect(rect, format.color);
+        row.visuals.mesh_bounds |= rect;
+    }
 }
 
 /// `uppercase`: every section's text in upper case, byte ranges adjusted

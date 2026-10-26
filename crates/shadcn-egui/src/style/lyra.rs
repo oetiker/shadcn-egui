@@ -332,6 +332,7 @@ fn button_variant_link() -> Box<Recipe> {
                 Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: true },
             ],
         },
+        underline_offset: Prop::fixed(4.0),
         text: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
         ..Recipe::default()
     })
@@ -597,6 +598,7 @@ fn badge_variant_link() -> Box<Recipe> {
                 Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: true },
             ],
         },
+        underline_offset: Prop::fixed(4.0),
         text: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
         ..Recipe::default()
     })

@@ -441,6 +441,7 @@ fn model_matches_recipe_rs() {
         Weight,
         Uppercase,
         Underline,
+        UnderlineOffset,
         TextWrap,
         TextAlign,
         Radius,

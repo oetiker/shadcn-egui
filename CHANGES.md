@@ -27,9 +27,11 @@ are recorded here. The format is based on
 - Keys act as on shadcn's elements: Space clicks a button when released, Enter no longer toggles a checkbox, Enter and Space no longer move a focused slider to the mouse pointer, and pressing a tab selects it on the press.
 - `Input::id_source` is removed; use `Input::id_salt`, which takes the same string.
 - `components::shared::line_box` is removed. `components::text::TextLook` resolves a part's text from its recipes and lays it out and paints it as the crate's own widgets do: `.label(..)` adds it as an egui label, `.layout(..)` returns a `TextBlock` to paint, `.color(..)` sets its colour, `.resolved_color(ui)` reads it and `.leading(Leading::Field)` places it as in a text field; `TextLook::line_height` is the height of one line.
+- `theme.style` recipes carry `underline_offset`, the `underline-offset-*` distance of a part's underline below the baseline.
 - `components::text::content_scope` hands a container's text size, line height and colour to the crate text inside it.
 
 ### Fixed
+- The underline of a hovered link Button or link Badge sits where Chrome draws it: 4 px below the baseline, as the style's `underline-offset-4` sets, and a tenth of the font size thick (1 device pixel at 1x, 2 at 2x). Before, it was one border width thick at the bottom of the line.
 - At a display scale of 1.5, borders are as wide as Chrome draws them: a 1 px border is one device pixel wide instead of one and a half, and a 2 px border three. The text in an input and the content of popovers, dialogs, tooltips and select lists no longer start one device pixel right of where Chrome puts them.
 - Crate text is spaced as Chrome spaces it: letters keep the widths of the weight on screen and kerned pairs such as "Te" or "fo" sit closer. Before, text in Figtree, Manrope, Merriweather, Montserrat, Nunito Sans, Outfit, Oxanium, Public Sans, Raleway, Source Sans 3, Space Grotesk and DM Sans, and every bold or medium text, took the letter widths of another weight, up to 20 px off over a 110-character line.
 - Text in Inter, DM Sans, Merriweather and Nunito Sans takes the letter shapes Chrome draws for its size, as these fonts carry a design per size: Inter headings and 16 px inputs are slimmer and tighter, and DM Sans text at every size is no longer drawn in its 9 px design.
