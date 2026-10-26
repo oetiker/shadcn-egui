@@ -35,7 +35,8 @@ if (!CHROME) {
   console.error('usage: node scripts/chrome-text-wrap.mjs <chrome-binary> [<output.tsv>]');
   process.exit(2);
 }
-const SCALES = [1, 1.5, 2];
+// Fractional scales put a CSS px off the device pixel grid.
+const SCALES = [1, 1.25, 1.5, 1.75, 2];
 const MODES = ['wrap', 'balance', 'pretty'];
 const WIDTHS = [140, 180, 220, 260, 300, 340];
 // Widths off the CSS pixel grid, where a fraction of a pixel decides.
@@ -48,6 +49,13 @@ const TEXTS = {
   form: ['Use the form below to tell us what went wrong with your order so we can sort it out', FRACTIONAL],
   // Kerning that widens a word end (lora).
   code: ['We have sent you a code by email. Please enter it below to continue with your sign up.', FRACTIONAL],
+  // Balance bisection steps of one CSS px (monospace faces).
+  save: ['Make changes to your account here. Click save when you are done.', FRACTIONAL],
+  // Three words: balance bisects (too few breaks to score); widths where
+  // the bisection's last step (one CSS px) decides.
+  avatar: ['Select View avatar', [80, 81.2]],
+  email: ['Open messages email', [101.9, 103.3, 105.1, 107.3]],
+  reset: ['Reset billing email', [62.7, 64.3, 79.6, 80.6, 81.8, 83]],
 };
 
 function page(fontUrl, weight) {

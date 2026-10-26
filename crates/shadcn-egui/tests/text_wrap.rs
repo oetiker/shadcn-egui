@@ -29,6 +29,13 @@ const TEXTS: &[(&str, &str)] = &[
         "code",
         "We have sent you a code by email. Please enter it below to continue with your sign up.",
     ),
+    (
+        "save",
+        "Make changes to your account here. Click save when you are done.",
+    ),
+    ("avatar", "Select View avatar"),
+    ("email", "Open messages email"),
+    ("reset", "Reset billing email"),
 ];
 const MODES: [Option<TextWrap>; 3] = [None, Some(TextWrap::Balance), Some(TextWrap::Pretty)];
 

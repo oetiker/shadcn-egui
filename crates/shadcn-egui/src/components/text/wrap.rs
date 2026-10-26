@@ -324,7 +324,7 @@ pub(super) enum Style {
 /// paragraph under `style` at `width` (device px, as `font_size`);
 /// `None` where Blink keeps its greedy breaks. `zoom` is the device pixels
 /// per point: Blink unzooms its scores once, and the bisection stops at
-/// one CSS pixel rounded up to whole device pixels. `space_width` is the
+/// one CSS pixel, rounded up to a `LayoutUnit`. `space_width` is the
 /// primary font's space advance and `text_len` the block's text length in
 /// chars, for Blink's line estimate.
 #[allow(clippy::too_many_arguments)]
@@ -361,7 +361,8 @@ pub(super) fn breaks(
                     0 => usize::MAX,
                     n => text_len.div_ceil(n),
                 };
-                let epsilon = zoom.ceil();
+                // `LayoutUnit::FromFloatCeil(EffectiveZoom())`: one CSS px.
+                let epsilon = (zoom * LAYOUT_UNITS).ceil() / LAYOUT_UNITS;
                 bisect(cands, width, epsilon, estimated)
             })?;
             Some(starts(ends, 0))
