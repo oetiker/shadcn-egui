@@ -66,6 +66,14 @@ fn build(case: &str, ui: &mut Ui, items: &Items) {
                 boxed(ui, items);
             });
         }
+        "max-content" => {
+            vstack(ui, 4.0, |ui| {
+                for (n, text) in [("-1", ASK), ("-2", MAIL), ("-3", WORD)] {
+                    let t = description(ui, text).rect;
+                    items.borrow_mut().insert(format!("text{n}"), t);
+                }
+            });
+        }
         "cell-text" => {
             row(ui, 8.0, |ui| {
                 StripBuilder::new(ui)
@@ -136,6 +144,7 @@ fn width_of(case: &str) -> f32 {
     match case {
         "row-two" | "strip-text" => 300.0,
         "row-min" => 180.0,
+        "max-content" => 400.0,
         _ => 220.0,
     }
 }
@@ -145,13 +154,10 @@ fn close(a: f32, b: f32) -> bool {
 }
 
 /// Cases still open (hand-back "A2b2 fix 2 part 2" in A2B-FIX-NOTES.md):
-/// `row-two`: the crate's unwrapped text widths (the flex bases) are
-/// 233.06 and 222.94 px where Chrome's are 247.36 and 238.53
-/// (`max-content`), so the two stacks split the shortfall in another ratio;
-/// `max-content` is the same defect. `cell-text`, `strip-text`: open check
-/// B, a vstack in a `StripBuilder` cell takes its content's width, not the
-/// cell's, and the strip puts `item_spacing` between cells.
-const KNOWN: &[&str] = &["row-two", "max-content", "cell-text", "strip-text"];
+/// `cell-text`, `strip-text`: open check B, a vstack in a `StripBuilder`
+/// cell takes its content's width, not the cell's, and the strip puts
+/// `item_spacing` between cells.
+const KNOWN: &[&str] = &["cell-text", "strip-text"];
 
 /// A vstack in a crate row shrinks as Chrome's flex item and its text
 /// wraps where Chrome's does; a vstack in a `StripBuilder` cell keeps to
@@ -174,7 +180,9 @@ fn flex_columns_shrink_as_chromes() {
             let (gx, gw) = (g.left(), g.width());
             // A stack's own height is the row's in egui (a centred child);
             // its text's height counts the lines.
-            let ok = if item.starts_with("text") {
+            let ok = if case == "max-content" {
+                close(gx, x) && close(gw, w) && close(g.height(), h)
+            } else if item.starts_with("text") {
                 close(gx, x) && close(g.height(), h)
             } else if item.starts_with("stack") {
                 close(gx, x) && close(gw, w)
@@ -192,6 +200,51 @@ fn flex_columns_shrink_as_chromes() {
     }
     assert!(compared > 0);
     assert!(bad.is_empty(), "{} differ:\n{}", bad.len(), bad.join("\n"));
+}
+
+/// A stack measures its unwrapped width again when its text changes: the
+/// first text, one word, is replaced by `row-two`'s, and the row ends as
+/// Chrome's `row-two`. (Every case above also starts with egui's own font
+/// before the theme's, the same relearning.)
+#[test]
+fn a_stack_relearns_its_width_when_its_text_changes() {
+    let want = &chrome()[&("row-two".to_string(), "1".to_string())];
+    let items: Items = Rc::default();
+    let long = Rc::new(std::cell::Cell::new(false));
+    let (out, flag) = (items.clone(), long.clone());
+    let mut h = Harness::builder()
+        .with_size(vec2(400.0, 300.0))
+        .build_ui(move |ui| {
+            out.borrow_mut().clear();
+            let max = Rect::from_min_size(ui.cursor().min, vec2(300.0, 280.0));
+            let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(max));
+            row(&mut ui, 8.0, |ui| {
+                para(ui, &out, "-1", if flag.get() { ASK } else { WORD });
+                para(ui, &out, "-2", MAIL);
+                boxed(ui, &out);
+            });
+            let mut o = out.borrow_mut();
+            for r in o.values_mut() {
+                *r = r.translate(-max.min.to_vec2());
+            }
+        });
+    Theme::vega_light().apply(&h.ctx);
+    for _ in 0..4 {
+        h.step();
+    }
+    long.set(true);
+    for _ in 0..4 {
+        h.step();
+    }
+    for item in ["stack-1", "stack-2"] {
+        let (g, [x, _, w, _]) = (items.borrow()[item], want[item]);
+        assert!(
+            close(g.left(), x) && close(g.width(), w),
+            "{item}: crate x {} w {}, chrome x {x} w {w}",
+            g.left(),
+            g.width()
+        );
+    }
 }
 
 fn button_case(case: &str) -> (Theme, Button) {

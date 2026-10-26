@@ -220,7 +220,9 @@ fn overflow_row<R>(
 /// stacks in one row share the shortfall in proportion to their unwrapped
 /// widths, none below its narrowest (its longest word or widest child).
 /// The widths come from the previous pass, and a pass that changes them
-/// is redone.
+/// is redone. When the stack's content takes another size at the same
+/// width (its text, font or scale changed), the next frame measures it
+/// unwrapped again in a pass that is not shown.
 pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // `ui.vertical`, tagged as a flex column.
     let column = egui::UiBuilder::new()
@@ -305,6 +307,12 @@ struct Intrinsic {
     /// The width it overflowed to when made narrower (exact), or lowered
     /// to the width it wrapped to (an upper bound).
     min: Option<f32>,
+    /// The last pass at a planned width: that width, the scale and the
+    /// content's size. The same width and scale giving another size means
+    /// the content or its font changed, and `max` and `min` with it.
+    seen: Option<[f32; 4]>,
+    /// Set when `seen` changed: the next pass measures the content again.
+    stale: bool,
 }
 
 fn flex_items_id(row: egui::Id) -> egui::Id {
@@ -407,16 +415,24 @@ fn flex_item<R>(
         items.push(FlexItem::default());
         items.len() - 1
     });
+    let mut known = ui.data(|d| d.get_temp::<Intrinsic>(id)).unwrap_or_default();
     let target = ui
         .data(|d| d.get_temp::<Vec<Option<f32>>>(flex_plan_id(row)))
-        .and_then(|plan| plan.get(index).copied().flatten());
-    let mut content = 0.0;
+        .and_then(|plan| plan.get(index).copied().flatten())
+        .filter(|_| !known.stale);
+    if known.stale {
+        // A measuring pass: never shown.
+        ui.ctx()
+            .request_discard("layout: a vstack in a row measures its content");
+        known = Intrinsic::default();
+    }
+    let mut content = egui::Vec2::ZERO;
     let response = ui.scope_builder(column, |ui| {
         // Unbounded, text does not wrap and a filling widget takes its
         // content minimum (`capped_width`): the stack's max-content.
         ui.set_max_width(target.unwrap_or(f32::INFINITY));
         let inner = add(ui);
-        content = ui.min_rect().width();
+        content = ui.min_rect().size();
         // A flex item is as wide as the row made it, also where its
         // content wraps narrower.
         if let Some(w) = target {
@@ -424,7 +440,16 @@ fn flex_item<R>(
         }
         inner
     });
-    let mut known = ui.data(|d| d.get_temp::<Intrinsic>(id)).unwrap_or_default();
+    if let Some(w) = target {
+        let seen = [w, ui.ctx().pixels_per_point(), content.x, content.y];
+        if known.seen.is_some_and(|s| s[..2] == seen[..2] && s != seen) {
+            // Measured next frame, so this one keeps a valid layout.
+            known.stale = true;
+            ui.ctx().request_repaint();
+        }
+        known.seen = Some(seen);
+    }
+    let content = content.x;
     match target {
         None => known.max = Some(content),
         Some(w) if content > w + ROW_HEIGHT_EPSILON => known.min = Some(content),
