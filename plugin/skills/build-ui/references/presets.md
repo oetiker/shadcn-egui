@@ -3,7 +3,8 @@
 A `Preset` holds the choices of the shadcn create page on ui.shadcn.com:
 style, base colour, theme colour, chart colour, body and heading font, icon
 library, radius, menu colour and menu accent. Light or dark is not part of a
-preset; the app passes a `Mode` when it applies one.
+preset: its theme holds both palettes, and the app sets the mode on the
+context with `ctx.set_theme(..)`.
 
 ## Preset codes
 
@@ -68,7 +69,7 @@ fn setup(ctx: &egui::Context) {
 }
 ```
 
-`preset.theme(mode)` returns the `Theme` without applying it, for an app that
+`preset.theme()` returns the `Theme` without applying it, for an app that
 adjusts the theme before `theme.apply(ctx)`.
 
 ## Fonts and icons
@@ -104,10 +105,11 @@ The warnings go through the `log` crate; the app needs a logger (for example
 
 ## Applying
 
-`preset.apply(ctx, mode)` is `preset.theme(mode).apply(ctx)`. Call it once
-after the context exists, and again when the mode or the preset changes. The
-fonts are reinstalled only when they change, so switching between light and
-dark is cheap.
+`preset.apply(ctx)` is `preset.theme().apply(ctx)`. Call it once after the
+context exists, and again when the preset changes. Switching between light
+and dark is `ctx.set_theme(egui::Theme::Light)` (or `Dark`, or
+`egui::ThemePreference::System`) and needs no second `apply`. The fonts are
+reinstalled only when they change.
 
 An app that installs fonts of its own uses `Theme::apply_with_fonts`. It
 starts from the app's `FontDefinitions` instead of egui's defaults and adds

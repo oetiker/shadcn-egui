@@ -70,9 +70,9 @@
   `box-shadow` stack goes through `RecipeBox`, which draws every Tailwind
   layer; egui's own `Shadow` is one linear ramp and does not match the browser.
 - **Apply the theme once, not every frame.** Call `Theme::apply` right after the
-  context is created, and again only when the theme changes (for example a light/dark
-  toggle). It sets the dark and the light style alike, so a system theme switch
-  keeps it, and eframe restores its saved state before the app creator runs
+  context is created, and again only when the theme changes (a new preset). It
+  installs the dark and the light style, so a light/dark toggle
+  (`ctx.set_theme(..)`) or a system theme switch needs no second `apply`, and eframe restores its saved state before the app creator runs
   (styles are not saved). Re-applying every frame buys nothing and hides bugs:
   code that overwrites the style is silently repainted over on the next frame
   instead of showing. Read tokens via `Theme::current(ctx)` inside widgets.

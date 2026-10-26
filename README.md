@@ -44,10 +44,11 @@ This preset uses the Geist font and the Hugeicons icons, which need
 Inter and Lucide. Its translucent menu colour always falls back to the
 opaque one, with a log warning.
 
-`apply` again to switch mode or preset; the fonts are reinstalled only when
-they change. An app that installs fonts of its own uses
+The theme holds the light and the dark palette: `ctx.set_theme(..)` switches
+the mode, and `apply` again only for another preset; the fonts are
+reinstalled only when they change. An app that installs fonts of its own uses
 `Theme::apply_with_fonts` instead (see the `Theme` docs). Without a preset,
-`Theme::vega_dark().apply(ctx)` gives the default look.
+`Theme::vega().apply(ctx)` gives the default look.
 
 ## Components
 

@@ -6,8 +6,9 @@ the crate.
 
 ## What the app can use
 
-- `Theme::current(ctx)`: the active theme, with `palette`, `metrics`,
-  `radius`, `dark`, `icons` and `style`.
+- `Theme::current(ctx)`: the active theme in the context's mode, with
+  `palette()` (the mode's palette; `light` and `dark` hold both),
+  `is_dark()`, `metrics`, `radius`, `icons` and `style`.
 - The `Style` fields of the markers the crate has ported
   (`theme.style.button`, `theme.style.checkbox`, …), for parts a new component
   shares with an existing one.

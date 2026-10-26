@@ -138,6 +138,39 @@ plus border, a size), take it through
 with `shared::inset_frame` (or `RecipeBox::frame`), which keeps a fraction
 of a point that egui's `Margin` would round away.
 
+## App variants
+
+A port into the crate gives every new component `XVariant`, `XRecipes` and
+`.variant(impl Into<XVariant>)`, so an app can define its own looks of it
+(`build-ui` SKILL.md, "App variants"). The mechanism is sealed: a port in an
+app has none. `components/separator.rs` is the smallest example,
+`components/card.rs` the one with a size and free-function parts.
+
+- No upstream variant: `default_variant!(XVariant, XRecipes { .. })` writes
+  the `Default` case, the hidden app case, `XVariant::app` and the recipes
+  struct. An enum with built-in variants (`ButtonVariant`, `TabsVariant`)
+  carries the app case by hand, as `components/button.rs` does.
+- `XRecipes` has one `Recipe` field per part the component draws, named
+  after its `data-slot` in snake case (`card_title`); a part without a
+  `data-slot` after its `cn-*` recipe, a pseudo-element after its slot plus
+  the element (`tabs_trigger_after`).
+- The widget resolves its variant with `t.resolve(self.variant)`, takes each
+  part from the result (`v.part(..)`) and starts its state from `v.bits()`.
+- A size upstream applies through state bits (`data-size`, read as
+  `data-[size=sm]:` in the parts' own recipes) gets
+  `state_size!(XSize, XVariant)`, which folds the base size's state rules
+  so an app size's `set` replaces them; the widget resolves with
+  `t.resolve_pair(variant, size)`. A size with recipes of its own
+  (`cn-button-size-*`) is a layer, as `ButtonSize`.
+- Parts that are free functions (`card_title`, `dialog::footer`) read the
+  parent's variant from the context tag (`components/context.rs`): the
+  parent pushes an `XContext` on the `Ui` it hands its content
+  (`context::push`), the part reads it with `context::find`. Never a new
+  `ctx.data` channel.
+- A unit test `edit_compiles_and_changes_its_part` defines one app variant
+  with `Theme::variant`, resolves it and checks that the edited part
+  changed and the rest kept the base's values.
+
 ## Behaviour, not just looks
 
 A shadcn component is a styled bits-ui primitive, and the primitive carries

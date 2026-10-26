@@ -5,8 +5,9 @@ draws itself from the active style's recipes; it does not hard-code a look.
 
 ## The style model
 
-- **Theme = Style × Palette × radius** (plus `Metrics`, the text-size scale).
-  `Theme { style: Arc<Style>, palette, radius, metrics, dark }`. `Theme` is
+- **Theme = Style × Palettes × radius** (plus `Metrics`, the text-size scale).
+  `Theme { style: Arc<Style>, light, dark, radius, metrics, .. }`: both
+  palettes; `Theme::current(ctx)` resolves `palette()` in the context's mode. `Theme` is
   `Clone` (the style sits behind an `Arc`), not `Copy`.
 - **A style is a class map.** upstream `style-<name>.css` binds Tailwind classes
   to marker classes (`cn-button`, `cn-button-size-sm`, …). `Style` has one
