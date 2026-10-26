@@ -80,7 +80,6 @@ const KNOWN: &[&str] = &[
     "manrope 1.5x digits 127.4 Some(Balance)",
     "manrope 1.75x digits 127.4 Some(Balance)",
     "manrope 2x digits 127.4 Some(Balance)",
-    "ibm-plex-sans 1.25x punct 121 None",
 ];
 const MODES: [Option<TextWrap>; 3] = [None, Some(TextWrap::Balance), Some(TextWrap::Pretty)];
 

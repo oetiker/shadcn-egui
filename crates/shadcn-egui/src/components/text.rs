@@ -449,8 +449,10 @@ impl TextLook {
                 // in 16.16 fixed point, a char's position rounded up to a
                 // `LayoutUnit`. A right edge before a kerned pair is the
                 // glyph shaped alone: its rounded left plus its own advance.
+                // The greedy breaker takes the same edges unrounded.
                 let step = |at: usize| i64::from(adv.fixed[at]) + shape::to_fixed(adv.spacing[at]);
                 let lu = shape::ceil_to_layout_unit;
+                let exact = |v: i64| v as f64 / f64::from(shape::FIXED_ONE);
                 let mut x: i64 = 0;
                 let edges: Vec<wrap::Glyph> = para
                     .iter()
@@ -468,12 +470,15 @@ impl TextLook {
                         } else {
                             left + step(at) as f32 / shape::FIXED_ONE
                         };
+                        let (x_left, x_end) = (exact(x), exact(x + step(at)));
                         x += step(at) + i64::from(next_kern);
                         let hyphen = adv.hyphen[at].map_or(0.0, |(_, w)| lu(i64::from(w)));
                         wrap::Glyph {
                             c,
                             left,
                             right,
+                            x: x_left,
+                            x_end,
                             hyphen,
                         }
                     })

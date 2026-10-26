@@ -17,17 +17,22 @@ pub(super) const SOFT_HYPHEN: char = '\u{AD}';
 /// `pos_no_break` (after the spaces). The line before it ends at
 /// `pos_if_break` for the score breaker: its last glyph shaped alone, as
 /// Blink's `AppendCandidates` reshapes a word end that is not safe to
-/// break, trailing spaces hanging; and at `pos_greedy` for the greedy
-/// breaker, which breaks after a run of spaces and keeps the kerning
-/// against the first space inside the line (elsewhere it reshapes the end
-/// too). A soft-hyphen break (`hyphenated`) adds the hyphen to both ends.
-/// Blink's `LineBreakCandidate`.
+/// break, trailing spaces hanging. The greedy breaker measures a line as
+/// the shaped width of its own text instead, rounded up to a `LayoutUnit`
+/// (`ShapeResult::SnappedWidth`): from `x_start`, where the next line
+/// starts, to `x_end`, where this one ends, both unsnapped. It breaks
+/// after a run of spaces and keeps the kerning against the first space
+/// inside the line (elsewhere it reshapes the end too). A soft-hyphen
+/// break (`hyphenated`) adds the hyphen to both ends: its snapped width
+/// `hyphen` for the greedy breaker. Blink's `LineBreakCandidate`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Candidate {
     pub start: usize,
     pub pos_no_break: f32,
     pub pos_if_break: f32,
-    pub pos_greedy: f32,
+    pub x_start: f64,
+    pub x_end: f64,
+    pub hyphen: f32,
     pub hyphenated: bool,
 }
 
@@ -35,13 +40,16 @@ pub(super) struct Candidate {
 /// glyph's left edge (after the kerning against the char before), its
 /// right edge (before the kerning against the next), as Blink's
 /// `ShapeResult` gives them (`LayoutUnit`s, a kerned right edge shaped
-/// alone), and the width of the hyphen Blink draws where a soft hyphen
-/// ends a line.
+/// alone), the same two edges unsnapped (`x`, `x_end`: the 16.16 sums),
+/// and the width of the hyphen Blink draws where a soft hyphen ends a
+/// line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Glyph {
     pub c: char,
     pub left: f32,
     pub right: f32,
+    pub x: f64,
+    pub x_end: f64,
     pub hyphen: f32,
 }
 
@@ -87,6 +95,12 @@ fn fits(len: f32, width: f32) -> bool {
     snap_len(len) <= snap_width(width) + unit()
 }
 
+/// The greedy breaker's width of the line from candidate `s` to `e`: its
+/// text's shaped width snapped, plus the hyphen.
+fn greedy_len(s: &Candidate, e: &Candidate) -> f32 {
+    ((e.x_end - s.x_start) * f64::from(LAYOUT_UNITS)).ceil() as f32 / LAYOUT_UNITS + e.hyphen
+}
+
 /// Whether Blink breaks spaces off a line (`IsBreakableSpace`).
 fn is_space(c: char) -> bool {
     c == ' ' || c == '\t'
@@ -97,15 +111,17 @@ fn is_space(c: char) -> bool {
 /// one between two other chars where [`line_break::can_break`] allows it,
 /// and a sentinel at the end of the last char that is not a space.
 pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
-    let x0 = chars.first().map_or(0.0, |c| c.left);
+    let (x0, x0_exact) = chars.first().map_or((0.0, 0.0), |c| (c.left, c.x));
     let mut out = vec![Candidate {
         start: 0,
         pos_no_break: x0,
         pos_if_break: x0,
-        pos_greedy: x0,
+        x_start: x0_exact,
+        x_end: x0_exact,
+        hyphen: 0.0,
         hyphenated: false,
     }];
-    let mut end = x0;
+    let (mut end, mut end_exact) = (x0, x0_exact);
     let mut i = 0;
     while i < chars.len() {
         let g = chars[i];
@@ -119,7 +135,9 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
                     start: j,
                     pos_no_break: chars[j].left,
                     pos_if_break: chars[i - 1].right,
-                    pos_greedy: g.left,
+                    x_start: chars[j].x,
+                    x_end: g.x,
+                    hyphen: 0.0,
                     hyphenated: false,
                 });
             }
@@ -127,16 +145,19 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
             continue;
         }
         end = g.right;
+        end_exact = g.x_end;
         let before2 = i.checked_sub(1).map(|k| chars[k].c);
         if let Some(next) = chars.get(i + 1).filter(|n| !is_space(n.c)) {
             if line_break::can_break(before2, g.c, next.c) {
                 let hyphenated = g.c == SOFT_HYPHEN;
-                let pos = g.right + if hyphenated { g.hyphen } else { 0.0 };
+                let hyphen = if hyphenated { g.hyphen } else { 0.0 };
                 out.push(Candidate {
                     start: i + 1,
                     pos_no_break: next.left,
-                    pos_if_break: pos,
-                    pos_greedy: pos,
+                    pos_if_break: g.right + hyphen,
+                    x_start: next.x,
+                    x_end: g.x_end,
+                    hyphen,
                     hyphenated,
                 });
             }
@@ -147,7 +168,9 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
         start: chars.len(),
         pos_no_break: end,
         pos_if_break: end,
-        pos_greedy: end,
+        x_start: end_exact,
+        x_end: end_exact,
+        hyphen: 0.0,
         hyphenated: false,
     });
     out
@@ -161,9 +184,8 @@ fn greedy(cands: &[Candidate], from: usize, width: f32, max_lines: usize) -> Opt
     let mut ends = Vec::new();
     let mut s = from;
     while s + 1 < cands.len() {
-        let start = cands[s].pos_no_break;
         let e = (s + 1..cands.len())
-            .take_while(|&e| fits(cands[e].pos_greedy - start, width))
+            .take_while(|&e| fits(greedy_len(&cands[s], &cands[e]), width))
             .last()?;
         ends.push(e);
         if ends.len() > max_lines {
@@ -183,9 +205,8 @@ pub(super) fn normal(cands: &[Candidate], width: f32) -> Vec<usize> {
     let mut out = Vec::new();
     let mut s = 0;
     while s + 1 < cands.len() {
-        let start = cands[s].pos_no_break;
         let e = (s + 1..cands.len())
-            .take_while(|&e| fits(cands[e].pos_greedy - start, width))
+            .take_while(|&e| fits(greedy_len(&cands[s], &cands[e]), width))
             .last()
             .unwrap_or(s + 1);
         if e + 1 < cands.len() {
@@ -297,7 +318,7 @@ fn bisect(cands: &[Candidate], width: f32, epsilon: f32, estimated: usize) -> Op
         return None;
     }
     // `LineWidthSum() / num_lines` in `LayoutUnit`s, then rounded.
-    let sum: f32 = line_widths(cands, 0, &normal).map(snap_len).sum();
+    let sum: f32 = line_widths(cands, 0, &normal).sum();
     let average = (sum * LAYOUT_UNITS / lines as f32).floor() / LAYOUT_UNITS;
     let mut lower = (average * BALANCE_START * LAYOUT_UNITS).round() / LAYOUT_UNITS;
     let mut upper = snap_width(width);
@@ -321,7 +342,7 @@ fn line_widths<'a>(
     std::iter::once(from)
         .chain(ends.iter().copied())
         .zip(ends.iter().copied())
-        .map(|(s, e)| cands[e].pos_greedy - cands[s].pos_no_break)
+        .map(|(s, e)| greedy_len(&cands[s], &cands[e]))
 }
 
 /// How a paragraph is broken.
@@ -388,7 +409,7 @@ pub(super) fn breaks(
             let k = n.saturating_sub(MAX_LINES_PRETTY);
             let from = if k == 0 { 0 } else { normal[k - 1] };
             let last_start = normal.get(n.wrapping_sub(2)).copied().unwrap_or(0);
-            let last_width = snap_len(line_widths(cands, from, &normal[k..]).last()?);
+            let last_width = line_widths(cands, from, &normal[k..]).last()?;
             // `ShouldOptimize`: a short last line holding one word; the
             // third of the width in whole `LayoutUnit`s.
             let third =
@@ -417,6 +438,8 @@ mod tests {
                 c,
                 left: i as f32,
                 right: i as f32 + 1.0,
+                x: i as f64,
+                x_end: i as f64 + 1.0,
                 hyphen: 1.0,
             })
             .collect()
@@ -458,7 +481,10 @@ mod tests {
         let starts: Vec<usize> = c.iter().map(|c| c.start).collect();
         assert_eq!(starts, [0, 3, 5]);
         assert!(c[1].hyphenated);
-        assert_eq!((c[1].pos_if_break, c[1].pos_greedy), (4.0, 4.0));
+        assert_eq!(
+            (c[1].pos_if_break, c[1].x_end, c[1].hyphen),
+            (4.0, 3.0, 1.0)
+        );
         assert_eq!(c[1].pos_no_break, 3.0);
     }
 
@@ -469,12 +495,26 @@ mod tests {
         for g in &mut chars[5..] {
             g.left -= 0.25;
             g.right -= 0.25;
+            g.x -= 0.25;
+            g.x_end -= 0.25;
         }
         let c = candidates(&chars);
-        assert_eq!((c[2].pos_greedy, c[2].pos_if_break), (4.75, 5.0));
+        assert_eq!((c[2].x_end, c[2].pos_if_break), (4.75, 5.0));
         // "ab cd" ends at 4.75 kerned: it fits 4.8 for the greedy breaker.
         assert_eq!(normal(&c, 4.8), [6]);
         assert_eq!(normal(&c, 4.7), [3, 6]);
+    }
+
+    #[test]
+    fn a_greedy_line_is_its_own_text_snapped_not_its_snapped_edges() {
+        // "abcd cd ef": the line "cd ef" starts 0.02 before 5 and ends at
+        // 10, 5 apart once each edge is snapped, 5.02 long unsnapped.
+        let mut chars = mono("abcd cd ef");
+        chars[5].x = 4.98;
+        let c = candidates(&chars);
+        assert_eq!(greedy_len(&c[1], &c[3]), 5.03125);
+        assert_eq!(normal(&c, 5.0), [5, 8]);
+        assert_eq!(normal(&c, 5.02), [5]);
     }
 
     #[test]
