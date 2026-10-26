@@ -7,9 +7,11 @@
 //! The reference rows are in `text_placement/chrome-wraps.tsv`: per font,
 //! scale, text and width, the char indices where each line after the first
 //! starts. Regenerate them after a font change with
-//! `node scripts/chrome-text-wrap.mjs <chrome-binary>`.
+//! `node scripts/chrome-text-wrap.mjs <chrome-binary>`. A `|` in a text
+//! starts or ends a coloured span there and is no char of the text.
 
-use egui::{RawInput, TextWrapMode};
+use egui::text::{LayoutJob, TextFormat};
+use egui::{Color32, RawInput, TextWrapMode};
 use shadcn_egui::components::text::TextLook;
 use shadcn_egui::style::{Prop, Recipe, State, TextSize, TextWrap};
 use shadcn_egui::{fonts, FontName, Theme};
@@ -66,6 +68,10 @@ const TEXTS: &[(&str, &str)] = &[
         "Hello (world), [this] is {a} test; it\u{2019}s okay! Really? Yes: 1,000.50 & 50% less.",
     ),
     (
+        "spans",
+        "T|oday AV|A W|aves Y|ou T|ry P|ay V|AT Y|ear AW|AY T|yped W|A V|ow L|T",
+    ),
+    (
         "cjk",
         "\u{4E2D}\u{6587}\u{FF0C}\u{65E5}\u{672C}\u{8A9E}\u{300C}\u{30C6}\u{30B9}\u{30C8}\u{300D}\u{3067}\u{3059}\u{3002}\u{30AD}\u{30E3}\u{30E9}\u{30FC}\u{30E1} ab\u{4E2D}cd",
     ),
@@ -87,6 +93,21 @@ const ACCEPTED: &[&str] = &[
     "manrope 2x digits 127.4 Some(Balance)",
 ];
 const MODES: [Option<TextWrap>; 3] = [None, Some(TextWrap::Balance), Some(TextWrap::Pretty)];
+
+/// `text` in the look's font, a section per `|`-separated part, every
+/// second one coloured, as the script's spans.
+fn spans(ui: &egui::Ui, look: &TextLook, text: &str) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    for (i, part) in text.split('|').enumerate() {
+        let color = if i % 2 == 1 {
+            Color32::RED
+        } else {
+            Color32::PLACEHOLDER
+        };
+        job.append(part, 0.0, TextFormat::simple(look.font_id(ui.ctx()), color));
+    }
+    job
+}
 
 /// Where each line after the first starts, as the TSV writes it.
 fn starts(galley: &egui::Galley) -> String {
@@ -151,12 +172,17 @@ fn lines_break_where_chrome_breaks_them() {
                             ..Recipe::default()
                         };
                         let look = TextLook::resolve(ui, &[&recipe], State::NONE);
-                        let block = look.layout(ui, text, TextWrapMode::Wrap, width);
+                        let block = if text.contains('|') {
+                            let job = spans(ui, &look, text);
+                            look.layout(ui, job, TextWrapMode::Wrap, width)
+                        } else {
+                            look.layout(ui, text, TextWrapMode::Wrap, width)
+                        };
                         let got = starts(block.galley());
                         compared += 1;
                         // A break adds no char: the galley's text, its
                         // indices and a copy are the caller's.
-                        if block.galley().text() != text {
+                        if block.galley().text() != text.replace('|', "") {
                             wrong.push(format!(
                                 "{} {scale}x {} {width} {mode:?}: galley text {:?}",
                                 f[0],

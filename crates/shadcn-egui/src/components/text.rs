@@ -447,6 +447,13 @@ impl TextLook {
         let chars: Vec<char> = job.text.chars().collect();
         let n = chars.len();
         let breaking = wrap == TextWrapMode::Wrap && width.is_finite();
+        let mut section_of = Vec::with_capacity(n);
+        for (si, s) in job.sections.iter().enumerate() {
+            section_of.extend(std::iter::repeat_n(
+                si,
+                job.text[s.byte_range.clone()].chars().count(),
+            ));
+        }
         // `starts[i]`: a line starts at char `i` after a chosen break.
         let mut starts = vec![false; n + 1];
         if breaking {
@@ -497,6 +504,7 @@ impl TextLook {
                             x: x_left,
                             x_end,
                             hyphen,
+                            item: i > 0 && section_of.get(at) != section_of.get(at - 1),
                         }
                     })
                     .collect();
@@ -537,13 +545,6 @@ impl TextLook {
                     .is_some_and(|d| shape::needs_opsz(d, s.format.coords.as_ref()))
             })
             .collect();
-        let mut section_of = Vec::with_capacity(n);
-        for (si, s) in job.sections.iter().enumerate() {
-            section_of.extend(std::iter::repeat_n(
-                si,
-                job.text[s.byte_range.clone()].chars().count(),
-            ));
-        }
         let mut out = LayoutJob {
             sections: Vec::with_capacity(n),
             text: String::with_capacity(job.text.len() + 8),

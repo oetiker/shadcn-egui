@@ -8,6 +8,9 @@
 // The texts have no ligature pairs (fi, ff, tt, ...): the crate draws no
 // ligatures (an accepted difference).
 //
+// A `|` in a text starts or ends a coloured span there (and is no char of
+// the text): the text keeps its font across it.
+//
 // Per row (font, scale, text, width): for each mode the char indices where
 // a line after the first starts, comma-separated ("-" for one line). A line
 // starts where a char's layout rect (a DOM Range over it) sits lower than
@@ -68,6 +71,8 @@ const TEXTS = {
   punct: ['Hello (world), [this] is {a} test; it\u2019s okay! Really? Yes: 1,000.50 & 50% less.', [1, ...FRACTIONAL]],
   // CJK: no face of the crate has these glyphs (Chrome falls back to a
   // system face), so only width 1, where the break positions alone decide.
+  // Colour changes inside kerned pairs: the kerning stays.
+  spans: ['T|oday AV|A W|aves Y|ou T|ry P|ay V|AT Y|ear AW|AY T|yped W|A V|ow L|T', FRACTIONAL],
   cjk: ['\u4E2D\u6587\uFF0C\u65E5\u672C\u8A9E\u300C\u30C6\u30B9\u30C8\u300D\u3067\u3059\u3002\u30AD\u30E3\u30E9\u30FC\u30E1 ab\u4E2Dcd', [1]],
 };
 
@@ -76,7 +81,8 @@ function page(fontUrl, weight) {
   for (const [id, [text, widths]] of Object.entries(TEXTS)) {
     for (const w of widths) {
       for (const m of MODES) {
-        boxes.push(`<div data-text=${id} data-width=${w} data-mode=${m} style="width:${w}px;text-wrap:${m}">${text}</div>`);
+        const html = text.split('|').map((part, i) => (i % 2 ? `<span style="color:#c00">${part}</span>` : part)).join('');
+        boxes.push(`<div data-text=${id} data-width=${w} data-mode=${m} style="width:${w}px;text-wrap:${m}">${html}</div>`);
       }
     }
   }
@@ -144,14 +150,22 @@ async function launch(tmp, s) {
 const MEASURE = `document.fonts.ready.then(() => {
   if (!document.fonts.check('14px F')) throw new Error('font not loaded');
   return [...document.querySelectorAll('div')].map((d) => {
-    const t = d.firstChild, r = document.createRange(), starts = [];
+    // Every char of the div's text nodes, in order.
+    const chars = [];
+    const walk = document.createTreeWalker(d, NodeFilter.SHOW_TEXT);
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      for (let j = 0; j < t.length; j++) chars.push([t, j]);
+    }
+    const r = document.createRange(), starts = [];
     let top = null;
-    for (let i = 0; i < t.length; i++) {
-      r.setStart(t, i); r.setEnd(t, i + 1);
+    for (let i = 0; i < chars.length; i++) {
+      const [t, j] = chars[i];
+      r.setStart(t, j); r.setEnd(t, j + 1);
       // After a soft hyphen, the range over the next char also holds the
       // hyphen drawn at a break, first: the char's own rect is the last.
       const rects = r.getClientRects();
-      const rect = t.data[i - 1] === '\u00AD' ? rects[rects.length - 1] : rects[0];
+      const prev = chars[i - 1];
+      const rect = prev && prev[0].data[prev[1]] === '\u00AD' ? rects[rects.length - 1] : rects[0];
       if (!rect) continue;
       if (top !== null && rect.top > top + 1) starts.push(i);
       top = rect.top;

@@ -25,6 +25,12 @@ pub(super) const SOFT_HYPHEN: char = '\u{AD}';
 /// inside the line (elsewhere it reshapes the end too). A soft-hyphen
 /// break (`hyphenated`) adds the hyphen to both ends: its snapped width
 /// `hyphen` for the greedy breaker. Blink's `LineBreakCandidate`.
+///
+/// The greedy breaker snaps each inline item (a section of the job) on
+/// the line on its own and sums them. `next_item` is the first item start
+/// after `x_start` (infinite where none follows) and `next_items` the
+/// paragraph's snapped item widths up to it; `prev_item` and `prev_items`
+/// the same for the last item start before `x_end`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Candidate {
     pub start: usize,
@@ -34,6 +40,10 @@ pub(super) struct Candidate {
     pub x_end: f64,
     pub hyphen: f32,
     pub hyphenated: bool,
+    pub next_item: f64,
+    pub next_items: f64,
+    pub prev_item: f64,
+    pub prev_items: f64,
 }
 
 /// One char of a paragraph as the breakers see it, in device px: its
@@ -41,8 +51,8 @@ pub(super) struct Candidate {
 /// right edge (before the kerning against the next), as Blink's
 /// `ShapeResult` gives them (`LayoutUnit`s, a kerned right edge shaped
 /// alone), the same two edges unsnapped (`x`, `x_end`: the 16.16 sums),
-/// and the width of the hyphen Blink draws where a soft hyphen ends a
-/// line.
+/// the width of the hyphen Blink draws where a soft hyphen ends a line,
+/// and whether the char starts a new inline item (a section of the job).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Glyph {
     pub c: char,
@@ -51,6 +61,7 @@ pub(super) struct Glyph {
     pub x: f64,
     pub x_end: f64,
     pub hyphen: f32,
+    pub item: bool,
 }
 
 /// `kMaxLinesForBalance`, `kMaxLinesForOptimal`.
@@ -95,10 +106,23 @@ fn fits(len: f32, width: f32) -> bool {
     snap_len(len) <= snap_width(width) + unit()
 }
 
-/// The greedy breaker's width of the line from candidate `s` to `e`: its
-/// text's shaped width snapped, plus the hyphen.
+/// `len` exact device px rounded up to a `LayoutUnit`.
+fn snap_exact(len: f64) -> f64 {
+    (len * f64::from(LAYOUT_UNITS)).ceil() / f64::from(LAYOUT_UNITS)
+}
+
+/// The greedy breaker's width of the line from candidate `s` to `e`: the
+/// shaped width of each item's text on it snapped (`SnappedWidth` per
+/// item result), summed, plus the hyphen.
 fn greedy_len(s: &Candidate, e: &Candidate) -> f32 {
-    ((e.x_end - s.x_start) * f64::from(LAYOUT_UNITS)).ceil() as f32 / LAYOUT_UNITS + e.hyphen
+    let len = if s.next_item >= e.x_end {
+        snap_exact(e.x_end - s.x_start)
+    } else {
+        snap_exact(s.next_item - s.x_start)
+            + (e.prev_items - s.next_items)
+            + snap_exact(e.x_end - e.prev_item)
+    };
+    len as f32 + e.hyphen
 }
 
 /// Whether Blink breaks spaces off a line (`IsBreakableSpace`).
@@ -120,6 +144,10 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
         x_end: x0_exact,
         hyphen: 0.0,
         hyphenated: false,
+        next_item: f64::INFINITY,
+        next_items: 0.0,
+        prev_item: 0.0,
+        prev_items: 0.0,
     }];
     let (mut end, mut end_exact) = (x0, x0_exact);
     let mut i = 0;
@@ -139,6 +167,7 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
                     x_end: g.x,
                     hyphen: 0.0,
                     hyphenated: false,
+                    ..out[0]
                 });
             }
             i = j;
@@ -159,6 +188,7 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
                     x_end: g.x_end,
                     hyphen,
                     hyphenated,
+                    ..out[0]
                 });
             }
         }
@@ -172,7 +202,27 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
         x_end: end_exact,
         hyphen: 0.0,
         hyphenated: false,
+        ..out[0]
     });
+    // Where each item after the first starts, and the snapped widths of
+    // the items before it.
+    let mut starts: Vec<(f64, f64)> = Vec::new();
+    let mut from = x0_exact;
+    let mut sum = 0.0;
+    for g in chars.iter().skip(1).filter(|g| g.item) {
+        sum += snap_exact(g.x - from);
+        starts.push((g.x, sum));
+        from = g.x;
+    }
+    if !starts.is_empty() {
+        for c in &mut out {
+            let next = starts.partition_point(|b| b.0 <= c.x_start);
+            (c.next_item, c.next_items) = starts.get(next).copied().unwrap_or((f64::INFINITY, 0.0));
+            let prev = starts.partition_point(|b| b.0 < c.x_end);
+            (c.prev_item, c.prev_items) =
+                prev.checked_sub(1).map_or((x0_exact, 0.0), |k| starts[k]);
+        }
+    }
     out
 }
 
@@ -441,6 +491,7 @@ mod tests {
                 x: i as f64,
                 x_end: i as f64 + 1.0,
                 hyphen: 1.0,
+                item: false,
             })
             .collect()
     }
@@ -515,6 +566,27 @@ mod tests {
         assert_eq!(greedy_len(&c[1], &c[3]), 5.03125);
         assert_eq!(normal(&c, 5.0), [5, 8]);
         assert_eq!(normal(&c, 5.02), [5]);
+    }
+
+    #[test]
+    fn a_greedy_line_snaps_each_item_on_its_own() {
+        // "ab c|d ef", an item (section) starting at "d" 4.005 in, "d"
+        // 1.005 wide: the line "ab cd" is 4.015625 + 1.015625 long, its
+        // items snapped each, not 5.01 snapped (5.015625).
+        let mut chars = mono("ab cd ef");
+        chars[4].x = 4.005;
+        chars[4].item = true;
+        for g in &mut chars[4..] {
+            g.x_end += 0.01;
+        }
+        for g in &mut chars[5..] {
+            g.x += 0.01;
+        }
+        let c = candidates(&chars);
+        assert_eq!(greedy_len(&c[0], &c[2]), 5.03125);
+        // A line within one item is snapped once.
+        assert_eq!(greedy_len(&c[2], &c[3]), 2.0);
+        assert_eq!(normal(&c, 5.0), [3, 6]);
     }
 
     #[test]

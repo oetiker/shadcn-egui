@@ -23,7 +23,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 /// Per char of a job's text: Chrome's advance in points (letter spacing
 /// included), the kerning between the char before and it (0 at a
-/// paragraph start and next to a char the face lacks), and egui's own
+/// paragraph start, next to a char the face lacks and where the section
+/// changes the face, its location, size or letter spacing), and egui's own
 /// advance. A `\n` has 0 for all of them. `fixed` and `fixed_kern` hold
 /// the advance (without letter spacing) and the kerning as Chrome holds
 /// them on the device: HarfBuzz positions, 1/65536 device px; `spacing`
@@ -539,6 +540,11 @@ pub(super) fn advances(
             })
             .collect()
     });
+    // The glyph before, where it is in this paragraph and in the same face,
+    // location, size and letter spacing: Blink shapes such sections
+    // together, so a colour change inside a word keeps its kerning.
+    let mut before: Option<GlyphId> = None;
+    let mut run: Option<(*const Mutex<Measures>, u32)> = None;
     for (si, ((section, row), asked)) in job.sections.iter().zip(&known).zip(&asked).enumerate() {
         let format = &section.format;
         let text = &job.text[section.byte_range.clone()];
@@ -571,8 +577,11 @@ pub(super) fn advances(
                 |w| ('\u{2010}', w),
             )
         });
-        // The glyph before, where it is this face's and in this paragraph.
-        let mut before: Option<GlyphId> = None;
+        let this = handle(si).map(|m| (m as *const _, format.extra_letter_spacing.to_bits()));
+        if this.is_none() || this != run {
+            before = None;
+        }
+        run = this;
         for (c, k) in text.chars().zip(row) {
             let egui_adv = k.egui.unwrap_or_default();
             if c == '\n' || ignorable(c) {
