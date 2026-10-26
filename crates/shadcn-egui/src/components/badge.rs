@@ -6,19 +6,78 @@ use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
 use crate::components::shared::{interaction_state, line_width, part_painter, RecipeBox};
 use crate::components::text::TextLook;
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, Style};
+use crate::style::app::Sealed;
+use crate::style::{
+    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+};
 use crate::Theme;
 use egui::{Response, Sense, Ui, Vec2, Widget};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BadgeVariant {
+    #[default]
     Default,
     Secondary,
     Destructive,
     Outline,
     Ghost,
     Link,
+    /// An app variant: [`BadgeVariant::app`].
+    #[doc(hidden)]
+    App(AppVariant<BadgeVariant>),
 }
+
+impl BadgeVariant {
+    /// An app variant, defined in the theme ([`Theme::variant`]).
+    pub const fn app(name: &'static str) -> AppVariant<BadgeVariant> {
+        AppVariant::new(name)
+    }
+
+    /// The variant layer (`cn-badge-variant-*`) of a built-in variant.
+    pub(crate) fn layer(self, s: &Style) -> &Recipe {
+        match self {
+            BadgeVariant::Default | BadgeVariant::App(_) => &s.badge_variant_default,
+            BadgeVariant::Secondary => &s.badge_variant_secondary,
+            BadgeVariant::Destructive => &s.badge_variant_destructive,
+            BadgeVariant::Outline => &s.badge_variant_outline,
+            BadgeVariant::Ghost => &s.badge_variant_ghost,
+            BadgeVariant::Link => &s.badge_variant_link,
+        }
+    }
+}
+
+impl From<AppVariant<BadgeVariant>> for BadgeVariant {
+    fn from(app: AppVariant<BadgeVariant>) -> Self {
+        BadgeVariant::App(app)
+    }
+}
+
+/// The badge's recipes an app variant's edit changes: copies of the
+/// base's, in the base's place in the stack.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct BadgeRecipes {
+    /// `data-slot="badge"`: the variant's layer.
+    pub badge: Recipe,
+}
+
+impl Sealed for BadgeVariant {}
+impl AppEnum for BadgeVariant {
+    type Recipes = BadgeRecipes;
+    fn app_name(self) -> Option<&'static str> {
+        match self {
+            BadgeVariant::App(a) => Some(a.name()),
+            _ => None,
+        }
+    }
+    fn recipes(self, style: &Style) -> BadgeRecipes {
+        BadgeRecipes {
+            badge: self.layer(style).clone(),
+        }
+    }
+}
+impl VariantEnum for BadgeVariant {}
 
 pub struct Badge {
     text: String,
@@ -36,8 +95,8 @@ impl Badge {
             icon_end: None,
         }
     }
-    pub fn variant(mut self, v: BadgeVariant) -> Self {
-        self.variant = v;
+    pub fn variant(mut self, v: impl Into<BadgeVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
@@ -50,34 +109,28 @@ impl Badge {
         self.icon_end = Some(*icon);
         self
     }
-
-    fn layers<'s>(&self, s: &'s Style) -> [&'s Recipe; 2] {
-        let v = match self.variant {
-            BadgeVariant::Default => &s.badge_variant_default,
-            BadgeVariant::Secondary => &s.badge_variant_secondary,
-            BadgeVariant::Destructive => &s.badge_variant_destructive,
-            BadgeVariant::Outline => &s.badge_variant_outline,
-            BadgeVariant::Ghost => &s.badge_variant_ghost,
-            BadgeVariant::Link => &s.badge_variant_link,
-        };
-        [&*s.badge, v]
-    }
 }
 
 /// A badge with the default variant order of the shadcn docs.
-pub fn badge(ui: &mut Ui, text: &str, variant: BadgeVariant) -> Response {
+pub fn badge(ui: &mut Ui, text: &str, variant: impl Into<BadgeVariant>) -> Response {
     ui.add(Badge::new(text).variant(variant))
 }
 
 impl Widget for Badge {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
-        let l = self.layers(&t.style);
+        let variant = t.resolve(self.variant);
+        let l = [
+            &*t.style.badge,
+            variant.part(&t.style, BadgeVariant::layer, |r| &r.badge),
+        ];
         let enabled = ui.is_enabled();
         // The `[a]:hover` rules are ignored (a badge is not a link in egui),
-        // so only Ghost and Link react to the pointer. A badge is never focused.
-        let hoverable = matches!(self.variant, BadgeVariant::Ghost | BadgeVariant::Link);
-        let context = State::NONE
+        // so only Ghost and Link (and app variants from them) react to the
+        // pointer. A badge is never focused.
+        let hoverable = matches!(variant.base(), BadgeVariant::Ghost | BadgeVariant::Link);
+        let context = variant
+            .bits()
             .with(State::ICON_START, self.icon.is_some())
             .with(State::ICON_END, self.icon_end.is_some());
         // Geometry never depends on hover: resolve it before allocating.
@@ -129,5 +182,34 @@ impl Widget for Badge {
         // A state's `underline` (the link variant on hover) lays out again.
         row.paint(ui, &painter, rect, &TextLook::resolve(ui, &l, st), fg);
         resp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An app variant's edit gets `BadgeRecipes` and changes only what it
+    /// names; it keeps its base's behaviour (Ghost reacts to hover).
+    #[test]
+    fn edit_compiles_and_changes_its_layer() {
+        const BRAND: Role = Role::custom("brand");
+        const QUIET: AppVariant<BadgeVariant> = BadgeVariant::app("quiet");
+        let t = Theme::vega()
+            .color(BRAND, egui::Color32::RED, egui::Color32::BLUE)
+            .variant(
+                QUIET,
+                BadgeVariant::Ghost,
+                |r: &mut BadgeRecipes, _style| {
+                    r.badge.text.on(State::HOVER, Paint::Role(BRAND, 1.0))
+                },
+            );
+        let v = t.resolve(BadgeVariant::from(QUIET));
+        assert_eq!(v.base(), BadgeVariant::Ghost);
+        let l = v.part(&t.style, BadgeVariant::layer, |r| &r.badge);
+        let ghost = &t.style.badge_variant_ghost;
+        assert_eq!(l.bg, ghost.bg);
+        assert_eq!(l.text.get(State::HOVER), Some(Paint::Role(BRAND, 1.0)));
+        assert_eq!(l.text.get(State::NONE), None);
     }
 }

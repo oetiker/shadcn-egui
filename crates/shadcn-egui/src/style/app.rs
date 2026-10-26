@@ -276,25 +276,11 @@ pub(crate) struct Resolved<X: AppEnum> {
 
 impl<X: AppEnum> Resolved<X> {
     /// The built-in case: the value itself, or the app case's base.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the first user is a component that branches on its variant (A3a4)"
-        )
-    )]
     pub(crate) fn base(&self) -> X {
         self.base
     }
 
     /// The state bits of the built-in case.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the first user is tabs (A3b): the trigger draws with the base's bits"
-        )
-    )]
     pub(crate) fn bits(&self) -> State {
         self.base.bits()
     }

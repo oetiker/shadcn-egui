@@ -11,7 +11,7 @@ use crate::components::shared::{
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
 use crate::style::{
-    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, SizeEnum, State, Style, VariantEnum,
 };
 use crate::Theme;
 use egui::{Response, Sense, Ui, Vec2, Widget};
@@ -82,10 +82,12 @@ impl AppEnum for ButtonVariant {
 }
 impl VariantEnum for ButtonVariant {}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ButtonSize {
     Xs,
     Sm,
+    #[default]
     Default,
     Lg,
     /// Square, icon only; the text is the accessible name.
@@ -93,7 +95,62 @@ pub enum ButtonSize {
     IconXs,
     IconSm,
     IconLg,
+    /// An app size: [`ButtonSize::app`].
+    #[doc(hidden)]
+    App(AppVariant<ButtonSize>),
 }
+
+impl ButtonSize {
+    /// An app size, defined in the theme ([`Theme::size`]).
+    pub const fn app(name: &'static str) -> AppVariant<ButtonSize> {
+        AppVariant::new(name)
+    }
+
+    /// The size layer (`cn-button-size-*`) of a built-in size.
+    pub(crate) fn layer(self, s: &Style) -> &Recipe {
+        match self {
+            ButtonSize::Xs => &s.button_size_xs,
+            ButtonSize::Sm => &s.button_size_sm,
+            ButtonSize::Default | ButtonSize::App(_) => &s.button_size_default,
+            ButtonSize::Lg => &s.button_size_lg,
+            ButtonSize::Icon => &s.button_size_icon,
+            ButtonSize::IconXs => &s.button_size_icon_xs,
+            ButtonSize::IconSm => &s.button_size_icon_sm,
+            ButtonSize::IconLg => &s.button_size_icon_lg,
+        }
+    }
+
+    /// A square, icon-only size.
+    fn is_icon(self) -> bool {
+        matches!(
+            self,
+            ButtonSize::Icon | ButtonSize::IconXs | ButtonSize::IconSm | ButtonSize::IconLg
+        )
+    }
+}
+
+impl From<AppVariant<ButtonSize>> for ButtonSize {
+    fn from(app: AppVariant<ButtonSize>) -> Self {
+        ButtonSize::App(app)
+    }
+}
+
+impl Sealed for ButtonSize {}
+impl AppEnum for ButtonSize {
+    type Recipes = ButtonRecipes;
+    fn app_name(self) -> Option<&'static str> {
+        match self {
+            ButtonSize::App(a) => Some(a.name()),
+            _ => None,
+        }
+    }
+    fn recipes(self, style: &Style) -> ButtonRecipes {
+        ButtonRecipes {
+            button: self.layer(style).clone(),
+        }
+    }
+}
+impl SizeEnum for ButtonSize {}
 
 pub struct Button {
     text: String,
@@ -127,8 +184,8 @@ impl Button {
         self.variant = v.into();
         self
     }
-    pub fn size(mut self, s: ButtonSize) -> Self {
-        self.size = s;
+    pub fn size(mut self, s: impl Into<ButtonSize>) -> Self {
+        self.size = s.into();
         self
     }
     /// Disabled buttons do not sense clicks, cannot take focus, show no
@@ -174,19 +231,9 @@ impl Button {
         self
     }
 
-    /// The recipe stack, with the variant layer `v`, and how many of its
-    /// layers are in use.
-    fn layers<'s>(&self, s: &'s Style, v: &'s Recipe) -> ([&'s Recipe; 4], usize) {
-        let z = match self.size {
-            ButtonSize::Xs => &s.button_size_xs,
-            ButtonSize::Sm => &s.button_size_sm,
-            ButtonSize::Default => &s.button_size_default,
-            ButtonSize::Lg => &s.button_size_lg,
-            ButtonSize::Icon => &s.button_size_icon,
-            ButtonSize::IconXs => &s.button_size_icon_xs,
-            ButtonSize::IconSm => &s.button_size_icon_sm,
-            ButtonSize::IconLg => &s.button_size_icon_lg,
-        };
+    /// The recipe stack, with the variant layer `v` and the size layer `z`,
+    /// and how many of its layers are in use.
+    fn layers<'s>(&self, s: &'s Style, v: &'s Recipe, z: &'s Recipe) -> ([&'s Recipe; 4], usize) {
         match self.extra {
             Some(extra) => ([&*s.button, v, z, extra(s)], 4),
             None => ([&*s.button, v, z, z], 3),
@@ -197,11 +244,10 @@ impl Button {
     /// text is not. `None` for text sizes. An icon size without an icon is a
     /// caller error (debug builds panic); release builds fall back to a
     /// button as wide as its text.
-    fn icon_only(&self) -> Option<Icon> {
-        let square = matches!(
-            self.size,
-            ButtonSize::Icon | ButtonSize::IconXs | ButtonSize::IconSm | ButtonSize::IconLg
-        );
+    /// `size` is the built-in size the button draws with (an app size's
+    /// base).
+    fn icon_only(&self, size: ButtonSize) -> Option<Icon> {
+        let square = size.is_icon();
         let icon = self.icon.or(self.icon_end);
         debug_assert!(
             !square || icon.is_some(),
@@ -220,11 +266,13 @@ impl Widget for Button {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
         let variant = t.resolve(self.variant);
+        let size = t.resolve(self.size);
         let v = variant.part(&t.style, ButtonVariant::layer, |r| &r.button);
-        let (layers, n) = self.layers(&t.style, v);
+        let z = size.part(&t.style, ButtonSize::layer, |r| &r.button);
+        let (layers, n) = self.layers(&t.style, v, z);
         let l = &layers[..n];
         let enabled = self.enabled && ui.is_enabled();
-        let context = State::NONE
+        let context = (variant.bits() | size.bits())
             .with(State::ICON_START, self.icon.is_some())
             .with(State::ICON_END, self.icon_end.is_some())
             .with(State::EXPANDED, self.expanded)
@@ -243,7 +291,7 @@ impl Widget for Button {
         // The text colour depends on the state, known only after allocating:
         // lay out in egui's placeholder colour, paint in the final one.
         let look = TextLook::resolve(ui, l, g);
-        let icon_only = self.icon_only();
+        let icon_only = self.icon_only(size.base());
         let row = match icon_only {
             Some(icon) => AtomRow::new(ui, "").icons(Some(icon), None, icon_px),
             None => AtomRow::new(ui, self.text.as_str()).icons(self.icon, self.icon_end, icon_px),
@@ -302,7 +350,7 @@ mod tests {
     use crate::style::{Paint, Role, State, Style};
 
     fn layers(s: &Style, v: ButtonVariant, z: ButtonSize) -> Vec<&Recipe> {
-        let (l, n) = Button::new("x").size(z).layers(s, v.layer(s));
+        let (l, n) = Button::new("x").layers(s, v.layer(s), z.layer(s));
         l[..n].to_vec()
     }
 
@@ -334,5 +382,38 @@ mod tests {
         let l = layers(&s, ButtonVariant::Default, ButtonSize::Default);
         assert!(pick(&l, |r| &r.shift_y, State::ACTIVE).is_some());
         assert!(pick(&l, |r| &r.shift_y, State::ACTIVE | State::HAS_POPUP).is_none());
+    }
+
+    /// An app variant's and an app size's edit get `ButtonRecipes` and
+    /// change only what they name.
+    #[test]
+    fn edit_compiles_and_changes_its_layer() {
+        const DANGER_GHOST: AppVariant<ButtonVariant> = ButtonVariant::app("danger-ghost");
+        const TALL: AppVariant<ButtonSize> = ButtonSize::app("tall");
+        let t = Theme::vega()
+            .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
+                r.button.text.set(Paint::Role(Role::Destructive, 1.0))
+            })
+            .size(TALL, ButtonSize::Icon, |r: &mut ButtonRecipes, _| {
+                r.button.height.set(48.0)
+            });
+        let v = t.resolve(ButtonVariant::from(DANGER_GHOST));
+        let z = t.resolve(ButtonSize::from(TALL));
+        let (v, z, base) = (
+            v.part(&t.style, ButtonVariant::layer, |r| &r.button),
+            z.part(&t.style, ButtonSize::layer, |r| &r.button),
+            z.base(),
+        );
+        assert_eq!(
+            v.text.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        assert_eq!(v.bg, t.style.button_variant_ghost.bg);
+        assert_eq!(z.height.get(State::NONE), Some(48.0));
+        assert_eq!(z.width, t.style.button_size_icon.width);
+        // An app size from an icon size draws icon only.
+        assert_eq!(base, ButtonSize::Icon);
+        let icon = crate::icons::lucide::X;
+        assert!(Button::new("x").icon(&icon).icon_only(base).is_some());
     }
 }

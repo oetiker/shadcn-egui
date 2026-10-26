@@ -97,6 +97,76 @@ fn button_snapshot() {
     });
 }
 
+/// App variants and an app size of Button and an app variant of Badge, in
+/// vega light and dark: the app colour follows the mode. "Remove" is
+/// hovered: Outline sets its text colour only on hover.
+#[test]
+fn app_variant_snapshot() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::button::{ButtonSize, ButtonVariant};
+    use shadcn_egui::layout;
+    use shadcn_egui::style::{AppVariant, Paint, Role};
+    const BRAND: Role = Role::custom("brand");
+    const DANGER_GHOST: AppVariant<ButtonVariant> = ButtonVariant::app("danger-ghost");
+    const DANGER_OUTLINE: AppVariant<ButtonVariant> = ButtonVariant::app("danger-outline");
+    const ROOMY: AppVariant<ButtonSize> = ButtonSize::app("roomy");
+    const BRAND_BADGE: AppVariant<BadgeVariant> = BadgeVariant::app("brand");
+    let theme = |mode| {
+        let t = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0)
+            .color(
+                BRAND,
+                egui::Color32::from_rgb(0x25, 0x63, 0xeb),
+                egui::Color32::from_rgb(0x93, 0xc5, 0xfd),
+            )
+            .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
+                r.button.text.set(Paint::Role(Role::Destructive, 1.0))
+            })
+            .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| {
+                r.button.recolor(Role::Foreground, Role::Destructive)
+            })
+            .size(ROOMY, ButtonSize::Default, |r, _| {
+                r.button.height.set(44.0);
+                r.button.pad_left.set(24.0);
+                r.button.pad_right.set(24.0);
+            })
+            .variant(BRAND_BADGE, BadgeVariant::Default, |r, _| {
+                r.badge.recolor(Role::Primary, BRAND)
+            });
+        (t, mode)
+    };
+    let themes = vec![
+        ("vega_dark", theme(egui::Theme::Dark)),
+        ("vega_light", theme(egui::Theme::Light)),
+    ]
+    .into_iter()
+    .map(|(n, (t, m))| (n, t, m))
+    .collect();
+    common::snapshot_with_themes(
+        "app_variant",
+        egui::vec2(560.0, 120.0),
+        themes,
+        |ui| {
+            layout::vstack(ui, 12.0, |ui| {
+                layout::row(ui, 8.0, |ui| {
+                    ui.add(Button::new("Delete").variant(DANGER_GHOST));
+                    ui.add(Button::new("Remove").variant(DANGER_OUTLINE));
+                    ui.add(Button::new("Roomy").size(ROOMY));
+                    ui.add(Button::new("Both").variant(DANGER_OUTLINE).size(ROOMY));
+                });
+                layout::row(ui, 8.0, |ui| {
+                    ui.add(Badge::new("Brand").variant(BRAND_BADGE));
+                    badge(ui, "Default", BadgeVariant::Default);
+                });
+            });
+        },
+        |h| {
+            h.get_by_label("Remove").hover();
+            h.run();
+        },
+    );
+}
+
 /// The shared Response-to-State mapping: a disabled widget gets `DISABLED`
 /// and loses every pointer and focus bit, also one its caller passed in.
 #[test]
