@@ -8,7 +8,7 @@ The helpers live in `shadcn_egui::layout`.
 | `display:flex; flex-direction:row; gap:N` | `shadcn_egui::layout::row(ui, N, \|ui\| ...)` |
 | `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)` |
 | `flex-direction:column; gap:N` | `shadcn_egui::layout::vstack(ui, N, \|ui\| ...)` |
-| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the `layout::row`'s tallest other child, `None` in a column |
+| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; `separator_vertical` stretches there too |
 | `justify-content:space-between` | `shadcn_egui::layout::space_between(ui, \|ui\| {left}, \|ui\| {right})` |
 | `flex:1` / `flex-grow` across siblings | `egui_extras::StripBuilder` with `Size::remainder()` per growing cell |
 | fixed + fluid columns | `StripBuilder` `Size::exact(w)` + `Size::remainder()` |

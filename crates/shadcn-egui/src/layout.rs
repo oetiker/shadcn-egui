@@ -47,112 +47,26 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let floor = ui.spacing().interact_size.y;
     let stored = ui.data(|d| d.get_temp::<f32>(id));
-    let stored_other = ui.data(|d| d.get_temp::<f32>(stretch_id(id)));
     let height = stored.unwrap_or(floor);
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(egui::Align::Center)
     } else {
         egui::Layout::left_to_right(egui::Align::Center)
     };
-    // The content height: the tallest child of the row, where a child that
-    // is a Ui (a scope, `add_enabled_ui`, a nested `vstack`) counts as the
-    // union of the leaf widgets inside it, not as its own rect. Measured from the widgets
-    // registered while `add` runs, so it does not depend on the row's own
-    // height. A Ui's own rect cannot serve: in a centred row egui makes it
-    // as high as the row, so a row holding one would never shrink. Neither
-    // can the union of all widgets: a nested `vstack` sits at the top while
-    // a widget beside it is centred, and the union grew on every pass.
-    let layer = ui.layer_id();
-    let before = ui
-        .ctx()
-        .viewport(|v| v.this_pass.widgets.get_layer(layer).count());
+    // The content height: the tallest item of the row, measured from the
+    // widgets registered while `add` runs (see `row_lines`), so it does not
+    // depend on the row's own height.
     let size = egui::vec2(ui.available_size_before_wrap().x, height);
-    // The entries the row's two Uis register, and the `id` the row's
-    // children name as parent.
-    let (mut own, mut row_ui) = ([id; 2], id);
-    let mut marks = Vec::new();
-    let inner = overflow_row(ui, size, layout, |room, ui| {
-        (own, row_ui) = ([room.unique_id(), ui.unique_id()], ui.id());
-        let pass = stretch_pass_id(ui.unique_id());
-        ui.data_mut(|d| {
-            d.insert_temp(
-                pass,
-                Stretch {
-                    height: stored_other,
-                    marks: Vec::new(),
-                },
-            )
-        });
+    let (inner, lines) = overflow_row(ui, size, layout, |_, ui| {
+        let items = RowItems::begin(ui);
         ui.spacing_mut().item_spacing.x = gap;
         let inner = shrink_stacks(ui, |ui| {
             let inner = add(ui);
             (inner, ui.min_rect().width())
         });
-        marks = ui
-            .data_mut(|d| d.remove_temp::<Stretch>(pass))
-            .map(|s| s.marks)
-            .unwrap_or_default();
-        inner
+        (inner, items.finish(ui, false))
     });
-    let (content, other) = ui.ctx().viewport(|v| {
-        // Each entry with its place on the layer, which a stretch item's
-        // mark names.
-        let added: Vec<(usize, egui::WidgetRect)> = v
-            .this_pass
-            .widgets
-            .get_layer(layer)
-            .enumerate()
-            .skip(before)
-            .filter(|(_, w)| !own.contains(&w.id))
-            .map(|(i, w)| (i, *w))
-            .collect();
-        // Rebuild the tree from the creation order: a Ui registers before
-        // what it holds, and an entry names its Ui's `id` as parent, not
-        // the `unique_id` the Ui registered under. So an entry whose next
-        // entry names a parent not on the stack opens a Ui.
-        let mut stack = vec![row_ui];
-        // Each child's first place on the layer and its rect.
-        let mut children: Vec<(usize, egui::Rect)> = Vec::new();
-        for (i, (at, w)) in added.iter().enumerate() {
-            while stack.len() > 1 && stack.last() != Some(&w.parent_id) {
-                stack.pop();
-            }
-            if stack.len() == 1 {
-                children.push((*at, egui::Rect::NOTHING));
-            }
-            match added.get(i + 1).map(|(_, n)| n.parent_id) {
-                Some(p) if !stack.contains(&p) => stack.push(p),
-                _ => {
-                    if let Some((_, c)) = children.last_mut() {
-                        *c = c.union(w.rect);
-                    }
-                }
-            }
-        }
-        // A stretch item is the child that holds the first entry
-        // registered after its mark.
-        let stretches = |i: usize| {
-            let start = children[i].0;
-            let end = children.get(i + 1).map_or(usize::MAX, |c| c.0);
-            marks.iter().any(|m| (start..end).contains(m))
-        };
-        let tallest = |skip: &dyn Fn(usize) -> bool| {
-            (0..children.len())
-                .filter(|&i| !skip(i))
-                .map(|i| children[i].1.height())
-                .fold(0.0, f32::max)
-        };
-        (tallest(&|_| false), tallest(&stretches))
-    });
-    if may_store(ui, stored_other.is_some())
-        && stored_other.is_none_or(|h| (h - other).abs() > ROW_HEIGHT_EPSILON)
-    {
-        ui.data_mut(|d| d.insert_temp(stretch_id(id), other));
-        if !marks.is_empty() {
-            ui.ctx()
-                .request_discard("layout::row stretch height changed");
-        }
-    }
+    let content = lines.iter().map(|l| l.height).fold(0.0, f32::max);
     let measured = content.max(floor);
     if may_store(ui, stored.is_some())
         && stored.is_none_or(|h| (h - measured).abs() > ROW_HEIGHT_EPSILON)
@@ -174,28 +88,214 @@ fn stretch_pass_id(row: egui::Id) -> egui::Id {
     row.with("shadcn_egui::layout::stretch_pass")
 }
 
-/// What a [`row`] gives its stretch items in a pass: the height of its
-/// tallest other child from the previous pass, and the place on the layer
-/// of the next entry after each [`stretch_height`] call, which marks the
-/// child that asked.
+/// What a crate row gives its stretch items in a pass and learns about
+/// them: the height the previous pass found for each [`stretch_height`]
+/// call, in call order; the place on the layer of the next entry after
+/// each call, which marks the item that asked; and the `Ui`s whose
+/// children are the row's items: `roots` by the `id` their children name
+/// as parent, `skip` the unique ids of the `Ui`s between a root and the
+/// row, which are no items themselves.
 #[derive(Clone, Debug, Default)]
 struct Stretch {
-    height: Option<f32>,
+    heights: Vec<f32>,
     marks: Vec<usize>,
+    roots: Vec<egui::Id>,
+    skip: Vec<egui::Id>,
 }
 
-/// The height of a `self-stretch` flex item: in a [`row`], the height of
-/// the row's tallest other child in the previous pass, without the row's
-/// `interact_size` floor (a vertical rule beside small text is as high as
-/// the text). The child that calls this before it draws counts as a
-/// stretch item, and stretch items do not count as other children; where
-/// the row's other children change height, the row redoes the pass.
+/// One line of a crate row's items in a pass: the height of its tallest
+/// item.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Line {
+    height: f32,
+}
+
+/// A crate row's pass over its items ([`row`], [`wrap_row`],
+/// [`space_between`], a card footer), for [`stretch_height`]: begun on the
+/// row's `Ui` before its items, finished after them.
+pub(crate) struct RowItems {
+    /// The row `Ui`'s unique id, which [`flex_row_of`] finds.
+    row: egui::Id,
+    layer: egui::LayerId,
+    before: usize,
+    stored: Option<Vec<f32>>,
+}
+
+impl RowItems {
+    pub(crate) fn begin(ui: &Ui) -> Self {
+        let (row, layer) = (ui.unique_id(), ui.layer_id());
+        let before = ui
+            .ctx()
+            .viewport(|v| v.this_pass.widgets.get_layer(layer).count());
+        let stored = ui.data(|d| d.get_temp::<Vec<f32>>(stretch_id(row)));
+        let pass = Stretch {
+            heights: stored.clone().unwrap_or_default(),
+            roots: vec![ui.id()],
+            ..Stretch::default()
+        };
+        ui.data_mut(|d| d.insert_temp(stretch_pass_id(row), pass));
+        Self {
+            row,
+            layer,
+            before,
+            stored,
+        }
+    }
+
+    /// Ends the pass: keeps each stretch item's height for the next pass
+    /// (the tallest other item of its line) and redoes the pass where one
+    /// changed. Gives the row's lines: one, or where the row `wraps` one
+    /// per line its items were placed on.
+    pub(crate) fn finish(self, ui: &Ui, wraps: bool) -> Vec<Line> {
+        let pass = ui
+            .data_mut(|d| d.remove_temp::<Stretch>(stretch_pass_id(self.row)))
+            .unwrap_or_default();
+        let (lines, heights) = ui.ctx().viewport(|v| {
+            let layer = v.this_pass.widgets.get_layer(self.layer);
+            let added: Vec<(usize, egui::WidgetRect)> = layer
+                .enumerate()
+                .skip(self.before)
+                .map(|(i, w)| (i, *w))
+                .collect();
+            let end = self.before + added.len();
+            row_lines(&added, end, &pass, wraps)
+        });
+        let changed = self.stored.as_ref().is_none_or(|old| {
+            old.len() != heights.len()
+                || old
+                    .iter()
+                    .zip(&heights)
+                    .any(|(a, b)| (a - b).abs() > ROW_HEIGHT_EPSILON)
+        });
+        if changed && may_store(ui, self.stored.is_some()) {
+            ui.data_mut(|d| d.insert_temp(stretch_id(self.row), heights));
+            if !pass.marks.is_empty() {
+                ui.ctx()
+                    .request_discard("layout: a row's stretch height changed");
+            }
+        }
+        lines
+    }
+}
+
+/// The lines of a crate row's items from the entries `added` on its layer
+/// in a pass (each with its place on the layer, `end` the place after the
+/// last), and the height for each of the pass's stretch marks: the
+/// tallest other item of the mark's line.
+fn row_lines(
+    added: &[(usize, egui::WidgetRect)],
+    end: usize,
+    pass: &Stretch,
+    wraps: bool,
+) -> (Vec<Line>, Vec<f32>) {
+    // An item is a child of a root: a leaf widget, or a Ui (a scope,
+    // `add_enabled_ui`, a nested `vstack`) that counts as the union of the
+    // leaf widgets inside it, not as its own rect. A Ui's own rect cannot
+    // serve: in a centred row egui makes it as high as the row, so a row
+    // holding one would never shrink. Neither can the union of all
+    // widgets: a nested `vstack` sits at the top while a widget beside it
+    // is centred, and the union grew on every pass.
+    //
+    // Rebuild the tree from the creation order: a Ui registers before what
+    // it holds, and an entry names its Ui's `id` as parent, not the
+    // `unique_id` the Ui registered under. So an entry whose next entry
+    // names a parent not on the stack opens a Ui.
+    let mut stack = vec![pass.roots[0]];
+    // Each item's first place on the layer and its rect.
+    let mut items: Vec<(usize, egui::Rect)> = Vec::new();
+    for (i, (at, w)) in added.iter().enumerate() {
+        while stack.len() > 1 && stack.last() != Some(&w.parent_id) {
+            stack.pop();
+        }
+        let skipped = pass.skip.contains(&w.id);
+        if !skipped && stack.last().is_some_and(|p| pass.roots.contains(p)) {
+            items.push((*at, egui::Rect::NOTHING));
+        }
+        match added.get(i + 1).map(|(_, n)| n.parent_id) {
+            Some(p) if !stack.contains(&p) => stack.push(p),
+            _ if !skipped => {
+                if let Some((_, c)) = items.last_mut() {
+                    *c = c.union(w.rect);
+                }
+            }
+            _ => {}
+        }
+    }
+    // An item starts a line when it is placed below the line so far.
+    let mut line_of = vec![0; items.len()];
+    let mut lines: Vec<Line> = Vec::new();
+    let mut bottom = f32::NEG_INFINITY;
+    for (k, (_, r)) in items.iter().enumerate() {
+        if !r.is_finite() {
+            line_of[k] = lines.len().saturating_sub(1);
+            continue;
+        }
+        if lines.is_empty() || (wraps && r.top() >= bottom) {
+            lines.push(Line { height: 0.0 });
+            bottom = f32::NEG_INFINITY;
+        }
+        bottom = bottom.max(r.bottom());
+        line_of[k] = lines.len() - 1;
+        let line = lines.last_mut().expect("a line was pushed");
+        line.height = line.height.max(r.height());
+    }
+    // A stretch item is the item that holds the first entry registered
+    // after its mark.
+    let item_at = |m: usize| {
+        (0..items.len()).find(|&k| {
+            let next = items.get(k + 1).map_or(end, |c| c.0);
+            (items[k].0..next).contains(&m)
+        })
+    };
+    let marked: Vec<Option<usize>> = pass.marks.iter().map(|&m| item_at(m)).collect();
+    let stretches = |k: usize| marked.contains(&Some(k));
+    let tallest_other = |line: Option<usize>| {
+        (0..items.len())
+            .filter(|&k| !stretches(k) && line.is_none_or(|l| line_of[k] == l))
+            .map(|k| items[k].1.height())
+            .fold(0.0, f32::max)
+    };
+    let heights = marked
+        .iter()
+        .map(|k| tallest_other(k.map(|k| line_of[k])))
+        .collect();
+    (lines, heights)
+}
+
+/// Makes the children of `ui` items of the crate row `ui` sits in, through
+/// `Ui`s of the crate's own (`space_between`'s right side, a card footer's
+/// text scope), so that [`stretch_height`] counts them one by one.
+pub(crate) fn hold_row_items(ui: &Ui) {
+    let mut skip = Vec::new();
+    for s in ui.stack().iter() {
+        if context::on_frame::<RowContext>(s).is_some() {
+            let root = ui.id();
+            ui.data_mut(|d| {
+                if let Some(mut pass) = d.get_temp::<Stretch>(stretch_pass_id(s.id)) {
+                    pass.roots.push(root);
+                    pass.skip.extend(skip);
+                    d.insert_temp(stretch_pass_id(s.id), pass);
+                }
+            });
+            return;
+        }
+        skip.push(s.id);
+    }
+}
+
+/// The height of a `self-stretch` flex item: in a crate row ([`row`],
+/// [`space_between`], a card footer), the height of the row's tallest
+/// other child in the previous pass, without the row's `interact_size`
+/// floor (a vertical rule beside small text is as high as the text); in a
+/// [`wrap_row`], the tallest other child of the item's own line. The
+/// child that calls this before it draws counts as a stretch item, and
+/// stretch items do not count as other children; where the row's other
+/// children change height, the row redoes the pass.
 ///
 /// `None` where the item gives no height: in a column (a [`vstack`], a
 /// vertical `Ui`), in a box of its own on the way to the row (a frame, a
-/// scroll area, a `StripBuilder` or table cell), outside a [`row`]
-/// ([`wrap_row`], [`space_between`] and card footers included), and in the
-/// row's first pass. The item then takes its own minimum.
+/// scroll area, a `StripBuilder` or table cell), outside a crate row, and
+/// in the row's first pass. The item then takes its own minimum.
 ///
 /// ```
 /// # egui::__run_test_ui(|ui| {
@@ -216,10 +316,10 @@ pub fn stretch_height(ui: &Ui) -> Option<f32> {
         .ctx()
         .viewport(|v| v.this_pass.widgets.get_layer(layer).count());
     ui.data_mut(|d| {
-        let mut stretch = d.get_temp::<Stretch>(stretch_pass_id(row))?;
-        stretch.marks.push(at);
-        let height = stretch.height;
-        d.insert_temp(stretch_pass_id(row), stretch);
+        let mut pass = d.get_temp::<Stretch>(stretch_pass_id(row))?;
+        let height = pass.heights.get(pass.marks.len()).copied();
+        pass.marks.push(at);
+        d.insert_temp(stretch_pass_id(row), pass);
         height
     })
 }
@@ -239,8 +339,11 @@ pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     };
     let size = egui::vec2(ui.available_size_before_wrap().x, 0.0);
     overflow_row(ui, size, layout.with_main_wrap(true), |_, ui| {
+        let items = RowItems::begin(ui);
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
-        add(ui)
+        let inner = add(ui);
+        items.finish(ui, true);
+        inner
     })
 }
 
@@ -893,11 +996,13 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
     );
     let layout = egui::Layout::left_to_right(egui::Align::Center);
     overflow_row(ui, size, layout, |_, ui| {
+        let items = RowItems::begin(ui);
         shrink_stacks(ui, |ui| {
             left(ui);
             let start = ui.min_rect().width();
             let end = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    hold_row_items(ui);
                     right(ui);
                 })
                 .response
@@ -911,6 +1016,7 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
             };
             ((), start + gap + end)
         });
+        items.finish(ui, false);
     });
 }
 

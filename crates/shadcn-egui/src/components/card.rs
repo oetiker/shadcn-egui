@@ -216,12 +216,17 @@ impl<'a> Card<'a> {
                 parts,
             ));
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
+            let items = crate::layout::RowItems::begin(&row);
             crate::layout::shrink_stacks(&mut row, |ui| {
                 content_scope(ui, &look, |ui| {
-                    content_ui(ui, &[&foot[..], &card[..]], st, footer)
+                    content_ui(ui, &[&foot[..], &card[..]], st, |ui| {
+                        crate::layout::hold_row_items(ui);
+                        footer(ui);
+                    })
                 });
                 ((), ui.min_rect().width())
             });
+            items.finish(&row, false);
             let strip_bottom = row.min_rect().bottom().max(inner.top()) + f_bottom;
             footer_shapes = Some((strip_bg, strip_top, strip_bottom));
             bottom = strip_bottom;

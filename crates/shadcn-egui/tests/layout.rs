@@ -420,7 +420,7 @@ fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
 type Content<'a> = &'a dyn Fn(&mut egui::Ui, bool, &mut Vec<egui::Rect>);
 
 /// Where [`frame_in`] lays out the content.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Host {
     /// The screen's `Ui`.
     Screen,
@@ -657,8 +657,7 @@ fn stretch_height_is_the_tallest_other_item() {
     }
 }
 
-/// In a column, a `wrap_row` or outside any row, `stretch_height` gives
-/// no height.
+/// In a column or outside any row, `stretch_height` gives no height.
 #[test]
 fn stretch_height_is_none_outside_a_row() {
     let ctx = egui::Context::default();
@@ -672,13 +671,9 @@ fn stretch_height_is_none_outside_a_row() {
                 ui.label("a");
                 layout::vstack(ui, 4.0, |ui| seen.push(layout::stretch_height(ui)));
             });
-            layout::wrap_row(ui, 8.0, |ui| {
-                ui.label("a");
-                seen.push(layout::stretch_height(ui));
-            });
         });
     }
-    assert_eq!(seen, vec![None; 3]);
+    assert_eq!(seen, vec![None; 2]);
 }
 
 /// A horizontal separator in a `vstack` in a `row`, the crate's and
@@ -796,4 +791,111 @@ fn a_vertical_separator_stretches_in_a_row() {
         });
     }
     assert_eq!(rule(&out, &theme)[0].height(), 24.0, "outside a crate row");
+}
+
+/// A box of `w` by `h` points.
+fn boxed(ui: &mut egui::Ui, w: f32, h: f32) -> egui::Rect {
+    ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover())
+        .0
+}
+
+/// A stretch item: a rule as high as `stretch_height` gives, 0 without.
+fn stretch_rule(ui: &mut egui::Ui) -> egui::Rect {
+    let height = layout::stretch_height(ui).unwrap_or(0.0);
+    boxed(ui, 1.0, height)
+}
+
+/// `content` after it settled in `host`: the passes of a still frame and
+/// the rects it pushed.
+fn settled(ctx: &egui::Context, host: Host, content: Content) -> (u64, Vec<egui::Rect>) {
+    for _ in 0..2 {
+        let _ = frame_in(ctx, host, false, content);
+    }
+    frame_in(ctx, host, false, content)
+}
+
+fn vega() -> egui::Context {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx
+}
+
+/// In a `wrap_row` a stretch item is as high as the tallest other item of
+/// its own line (`flex-wrap` with `align-self: stretch`), on the screen
+/// and in an `egui::Area`, and a still frame takes one pass.
+#[test]
+fn stretch_height_is_the_tallest_other_item_of_its_wrap_row_line() {
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(200.0);
+            layout::wrap_row(ui, 8.0, |ui| {
+                out.push(boxed(ui, 80.0, 60.0));
+                out.push(stretch_rule(ui));
+                out.push(boxed(ui, 150.0, 20.0));
+                out.push(stretch_rule(ui));
+            });
+        });
+        assert!(r[2].top() > r[0].bottom(), "{host:?}: two lines: {r:?}");
+        assert_eq!(r[1].y_range(), r[0].y_range(), "{host:?}: line 1: {r:?}");
+        assert_eq!(r[3].y_range(), r[2].y_range(), "{host:?}: line 2: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// `space_between`'s two sides are one row: a stretch item on either side
+/// is as high as the tallest other item on both, on the screen and in an
+/// `egui::Area`.
+#[test]
+fn stretch_height_spans_both_sides_of_space_between() {
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(300.0);
+            let out = std::cell::RefCell::new(out);
+            layout::space_between(
+                ui,
+                |ui| {
+                    let mut out = out.borrow_mut();
+                    out.push(boxed(ui, 10.0, 12.0));
+                    out.push(stretch_rule(ui));
+                },
+                |ui| {
+                    let mut out = out.borrow_mut();
+                    out.push(boxed(ui, 10.0, 40.0));
+                    out.push(stretch_rule(ui));
+                },
+            );
+        });
+        assert_eq!(r[1].height(), 40.0, "{host:?}: left side: {r:?}");
+        assert_eq!(
+            r[3].y_range(),
+            r[2].y_range(),
+            "{host:?}: right side: {r:?}"
+        );
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// A card footer is a row: a stretch item in it is as high as the
+/// footer's tallest other item, on the screen and in an `egui::Area`.
+#[test]
+fn stretch_height_works_in_a_card_footer() {
+    use shadcn_egui::components::card::Card;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(300.0);
+            let out = std::cell::RefCell::new(out);
+            Card::new()
+                .footer(|ui| {
+                    let mut out = out.borrow_mut();
+                    out.push(boxed(ui, 10.0, 40.0));
+                    out.push(stretch_rule(ui));
+                    out.push(boxed(ui, 10.0, 12.0));
+                })
+                .show(ui, |ui| {
+                    ui.label("body");
+                });
+        });
+        assert_eq!(r[1].y_range(), r[0].y_range(), "{host:?}: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
 }
