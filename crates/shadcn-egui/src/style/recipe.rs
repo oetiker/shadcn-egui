@@ -333,12 +333,26 @@ impl<T: Copy> Prop<T> {
 }
 
 /// The rank of a rule under `state` that no generated rule of the property
-/// gives: one specificity step per flag, `sm:` and `md:` none. It carries
-/// no Tailwind variant-order bits, so it loses a tie of equal specificity
-/// to a generated rule of another state.
+/// gives: the rank a generated class with each flag's own variant has
+/// (`STATE_RANKS`, from `tools/stylegen`), so it orders against generated
+/// rules of other states as upstream's classes do (`aria-expanded:` after
+/// `hover:`). The class steps add up, the variant bits combine. A flag
+/// without a variant of its own counts as one class.
 fn state_rank(state: State) -> u128 {
-    let steps = state.without(State::SM.or(State::MD)).0.count_ones();
-    u128::from(steps) << 122
+    const R_CLASSES: u32 = 121;
+    const VARIANT_BITS: u128 = (1 << R_CLASSES) - 1;
+    const PSEUDO_ELEMENT: u128 = 1 << 126;
+    let (mut bits, mut steps, mut rest) = (0, 0, state);
+    for (flag, rank) in super::generated::STATE_RANKS {
+        if state.contains(flag) {
+            bits |= rank & (VARIANT_BITS | PSEUDO_ELEMENT);
+            steps += (rank >> R_CLASSES) & 0x1f;
+            rest = rest.without(flag);
+        }
+    }
+    // One class is two steps.
+    steps += 2 * u128::from(rest.0.count_ones());
+    bits | steps << R_CLASSES
 }
 
 /// Resolve one property across stacked recipes, in the order upstream joins

@@ -408,15 +408,80 @@ mod tests {
             bg.get(State::DARK | State::HOVER),
             Some(Paint::Role(Role::Muted, 0.5))
         );
-        // A state the property had no rule for ranks by its specificity.
+        // A state the property had no rule for ranks as a generated
+        // `focus-visible:` class would.
         bg.on(State::FOCUS_VISIBLE, P(Role::Ring));
         let r = bg.rules.last().expect("pushed");
         assert_eq!(
             (r.when, r.rank),
-            (When::all(State::FOCUS_VISIBLE), 1 << 122)
+            (When::all(State::FOCUS_VISIBLE), (1 << 29) | (1 << 122))
         );
+        // `dark:sm:active:`: the variant bits combine, the class steps add.
         bg.on(State::DARK | State::SM | State::ACTIVE, P(Role::Ring));
-        assert_eq!(bg.rules.last().map(|r| r.rank), Some(2 << 122));
+        assert_eq!(
+            bg.rules.last().map(|r| r.rank),
+            Some((1 << 30) | (1 << 66) | (1 << 68) | (2 << 122))
+        );
+    }
+
+    /// `on(state, v)` for a state the property has no rule for beats or
+    /// loses to a generated rule of another state as the generated rules
+    /// order them: ghost's `aria-expanded:` beats its `hover:`.
+    #[test]
+    fn on_for_a_new_state_orders_as_generated_rules() {
+        for style in [Style::vega(), Style::nova(), Style::lyra()] {
+            let ghost = &style.button_variant_ghost.bg;
+            let only = |state| Prop {
+                base: None,
+                rules: ghost
+                    .rules
+                    .iter()
+                    .filter(|r| r.when == When::all(state))
+                    .cloned()
+                    .collect(),
+            };
+            let both = State::HOVER | State::EXPANDED;
+            // The generated order: the expanded rule wins.
+            let mut generated = ghost.clone();
+            generated
+                .rules
+                .retain(|r| r.when != When::all(State::DARK | State::HOVER));
+            for r in &mut generated.rules {
+                r.value = P(if r.when == When::all(State::EXPANDED) {
+                    Role::Primary
+                } else {
+                    Role::Accent
+                });
+            }
+            assert_eq!(
+                generated.get(both),
+                Some(P(Role::Primary)),
+                "{}",
+                style.name
+            );
+            // Hover rule kept, expanded added by `on`: `on` wins.
+            let mut a = only(State::HOVER);
+            a.on(State::EXPANDED, P(Role::Primary));
+            assert_eq!(a.get(both), Some(P(Role::Primary)), "{}", style.name);
+            // Expanded rule kept, hover added by `on`: `on` loses.
+            let mut b = only(State::EXPANDED);
+            b.on(State::HOVER, P(Role::Accent));
+            assert_eq!(
+                b.get(both),
+                Some(ghost.get(State::EXPANDED).unwrap()),
+                "{}",
+                style.name
+            );
+            // The added rule's rank is the generated one.
+            assert_eq!(
+                a.rules.last().map(|r| r.rank),
+                only(State::EXPANDED).rules.first().map(|r| r.rank)
+            );
+            assert_eq!(
+                b.rules.last().map(|r| r.rank),
+                only(State::HOVER).rules.first().map(|r| r.rank)
+            );
+        }
     }
 
     #[test]

@@ -1211,3 +1211,60 @@ fn route_reports_a_look_on_a_slot_without_a_part() {
         .any(|(c, _)| c == "*:data-[slot=input-group]:gap-2"));
     assert_eq!(ps[1].marker.routed.len(), 1, "{:?}", ps[1].marker.routed);
 }
+
+/// Each flag's variant is the part's own one: a `group-`/`peer-` form only
+/// where the flag has no other.
+#[test]
+fn flag_variant_is_the_parts_own() {
+    use stylegen::variant::{flag_variant, Meaning};
+    for (f, _) in FLAGS {
+        let Some(v) = flag_variant(f) else { continue };
+        let inherited = |n: &str| n.starts_with("group-") || n.starts_with("peer-");
+        if inherited(v) {
+            let all = TRANSLATED
+                .iter()
+                .filter(|(_, m, _)| matches!(m, Meaning::Is(x) if x == f));
+            for (n, ..) in all {
+                assert!(inherited(n), "{f}: {v} stands for it, but {n} is its own");
+            }
+        }
+    }
+    assert_eq!(flag_variant("EXPANDED"), Some("aria-expanded"));
+    assert_eq!(flag_variant("DISABLED"), Some("disabled"));
+    assert_eq!(flag_variant("FIRST"), None);
+}
+
+/// Composing the table as `Prop::on` does gives the rank a generated class
+/// with those flags' variants has.
+#[test]
+fn state_ranks_compose_like_a_class() {
+    use stylegen::variant::{flag_variant, rank, state_ranks};
+    let table = state_ranks();
+    let compose = |flags: &[&str]| {
+        let (mut mask, mut steps, mut pseudo) = (0u128, 0u128, 0u128);
+        for f in flags {
+            let r = table.iter().find(|(n, _)| n == f).expect("in the table").1;
+            mask |= r & ((1 << R_CLASSES) - 1);
+            steps += (r >> R_CLASSES) & 0x1f;
+            pseudo |= r & (1 << R_PSEUDO_ELEMENT);
+        }
+        mask | steps << R_CLASSES | pseudo
+    };
+    for flags in [
+        &["HOVER"][..],
+        &["DARK", "HOVER"],
+        &["DARK", "SM", "ACTIVE"],
+        &["EXPANDED", "FOCUS_VISIBLE"],
+        &["DISABLED", "PLACEHOLDER"],
+        &["SELECTED", "VERTICAL"],
+    ] {
+        let want = rank(
+            flags.iter().map(|f| flag_variant(f).expect("has one")),
+            false,
+        );
+        assert_eq!(compose(flags), want, "{flags:?}");
+    }
+    // `aria-expanded:` sorts after `hover:`: a rule under EXPANDED beats
+    // one under HOVER of equal specificity.
+    assert!(compose(&["EXPANDED"]) > compose(&["HOVER"]));
+}

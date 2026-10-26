@@ -72,7 +72,7 @@ pub(crate) fn header_react(pin: &str, source: &str) -> String {
 
 pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
     let mut s = header(pin, "the parts in tools/stylegen/markers.txt");
-    s += "use super::recipe::Recipe;\n\n";
+    s += "use super::recipe::{Recipe, State};\n\n";
     s += "/// One recipe per part the crate draws: a `cn-*` marker, a `data-slot`\n/// without one, or an `after:` pseudo-element. Adjust a value in\n";
     s += "/// your theme setup: `let mut s = Style::nova(); s.button_size_default.height.base = Some(36.0);`\n";
     s += "///\n/// Each recipe is boxed so a `Style` stays small on the stack; replace a\n";
@@ -83,6 +83,27 @@ pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
         s += &format!("    /// {doc}\n    pub {field}: Box<Recipe>,\n");
     }
     s += "}\n";
+    s + &emit_state_ranks()
+}
+
+/// The rank a generated rule under each state flag has
+/// ([`crate::variant::state_ranks`]), for `Prop::on`.
+fn emit_state_ranks() -> String {
+    let ranks = crate::variant::state_ranks();
+    let mut s = String::from(
+        "\n/// The rank a generated rule under one state flag has: the rank of the\n\
+         /// flag's own variant (`hover`, `aria-expanded`, …). `Prop::on` composes\n\
+         /// a state's rank from these. A flag missing here has no variant on the\n\
+         /// part itself.\n",
+    );
+    s += &format!(
+        "pub(super) const STATE_RANKS: [(State, u128); {}] = [\n",
+        ranks.len()
+    );
+    for (f, r) in ranks {
+        s += &format!("    (State::{f}, {}),\n", rank(r));
+    }
+    s += "];\n";
     s
 }
 
@@ -223,6 +244,17 @@ mod tests {
             },
             corrections: Vec::new(),
         }
+    }
+
+    #[test]
+    fn state_ranks_are_emitted_per_flag() {
+        let s = emit_state_ranks();
+        assert!(
+            s.contains("    (State::HOVER, (1 << 27) | (1 << 122)),\n"),
+            "{s}"
+        );
+        assert!(s.contains("    (State::SM, "), "{s}");
+        assert!(!s.contains("State::FIRST,"), "{s}");
     }
 
     #[test]

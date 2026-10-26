@@ -811,6 +811,29 @@ pub fn rank_with<'a>(
     encode(mask, spec, important)
 }
 
+/// The variant that stands for a state flag: the first [`TRANSLATED`]
+/// entry that sets it. The list names the part's own attribute or
+/// pseudo-class first (`hover`, `aria-expanded`, `data-[size=sm]`), a
+/// `group-`/`peer-` form only where the flag has no other.
+pub fn flag_variant(flag: &str) -> Option<&'static str> {
+    TRANSLATED
+        .iter()
+        .find(|(_, m, _)| matches!(m, Is(f) if *f == flag))
+        .map(|(n, _, _)| *n)
+}
+
+/// The rank a generated rule under one state flag has, for every flag
+/// with a [`flag_variant`], in [`crate::model::FLAGS`] order: what
+/// `Prop::on` composes the rank of a state from. Composing adds the class
+/// steps and ORs the variant and pseudo-element bits, as [`rank`] does for
+/// the flags' variants together.
+pub fn state_ranks() -> Vec<(&'static str, u128)> {
+    crate::model::FLAGS
+        .iter()
+        .filter_map(|(f, _)| flag_variant(f).map(|v| (*f, rank([v], false))))
+        .collect()
+}
+
 /// Combine a class's variants. The first variant that is ignored or
 /// unsupported decides for the whole class. A child target
 /// ([`CHILD_TARGETS`]) splits them: the flags before it are the parent's
