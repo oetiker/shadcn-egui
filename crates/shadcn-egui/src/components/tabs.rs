@@ -10,19 +10,88 @@ use crate::components::shared::{
     interaction_state, line_width, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
-use crate::style::{pick, Paint, Prop, Recipe, Role, State};
+use crate::style::app::Sealed;
+use crate::style::{
+    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+};
 use crate::{layout, Theme};
 use egui::{pos2, vec2, Key, Modifiers, Rect, Response, Sense, TextWrapMode, Ui, Widget};
 
-/// shadcn `TabsList` `variant`.
+/// shadcn `TabsList` `variant`, or an app variant ([`TabsVariant::app`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TabsVariant {
     /// A muted track with the active trigger as a raised pill.
     #[default]
     Default,
     /// No track; the active trigger gets an underline.
     Line,
+    /// An app variant: [`TabsVariant::app`].
+    #[doc(hidden)]
+    App(AppVariant<TabsVariant>),
 }
+
+impl TabsVariant {
+    /// An app variant, defined in the theme ([`Theme::variant`]).
+    pub const fn app(name: &'static str) -> AppVariant<TabsVariant> {
+        AppVariant::new(name)
+    }
+
+    /// The list's variant layer (`cn-tabs-list-variant-*`) of a built-in
+    /// variant.
+    fn layer(self, s: &Style) -> &Recipe {
+        match self {
+            TabsVariant::Default | TabsVariant::App(_) => &s.tabs_list_variant_default,
+            TabsVariant::Line => &s.tabs_list_variant_line,
+        }
+    }
+}
+
+impl From<AppVariant<TabsVariant>> for TabsVariant {
+    fn from(app: AppVariant<TabsVariant>) -> Self {
+        TabsVariant::App(app)
+    }
+}
+
+/// The tabs' recipes an app variant's edit changes: copies of the base's.
+/// The trigger and its line take their look from the base's state bits
+/// (`group-data-[variant=line]/tabs-list`), so they are copies of the
+/// part recipes.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct TabsRecipes {
+    /// `data-slot="tabs-list"`: the variant's layer.
+    pub tabs_list: Recipe,
+    /// `data-slot="tabs-trigger"`.
+    pub tabs_trigger: Recipe,
+    /// The trigger's `::after`: the line under the active tab.
+    pub tabs_trigger_after: Recipe,
+}
+
+impl Sealed for TabsVariant {}
+impl AppEnum for TabsVariant {
+    type Recipes = TabsRecipes;
+    fn app_name(self) -> Option<&'static str> {
+        match self {
+            TabsVariant::App(a) => Some(a.name()),
+            _ => None,
+        }
+    }
+    fn recipes(self, style: &Style) -> TabsRecipes {
+        TabsRecipes {
+            tabs_list: self.layer(style).clone(),
+            tabs_trigger: (*style.tabs_trigger).clone(),
+            tabs_trigger_after: (*style.tabs_trigger_after).clone(),
+        }
+    }
+    fn bits(self) -> State {
+        match self {
+            TabsVariant::Line => State::VARIANT_LINE,
+            _ => State::VARIANT_DEFAULT,
+        }
+    }
+}
+impl VariantEnum for TabsVariant {}
 
 /// shadcn `Tabs` `orientation`. The crate offers `Horizontal` only: a vertical
 /// list needs a content layout beside the list that the crate does not have.
@@ -59,8 +128,9 @@ impl<'a> Tabs<'a> {
             width: None,
         }
     }
-    pub fn variant(mut self, v: TabsVariant) -> Self {
-        self.variant = v;
+    /// shadcn `TabsList` `variant`, or an app variant ([`TabsVariant::app`]).
+    pub fn variant(mut self, v: impl Into<TabsVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     pub fn orientation(mut self, o: TabsOrientation) -> Self {
@@ -101,15 +171,16 @@ impl Widget for Tabs<'_> {
         let t = Theme::current(ui.ctx());
         let s = &t.style;
         let enabled = self.enabled && ui.is_enabled();
-        let (variant_bit, variant_layer) = match self.variant {
-            TabsVariant::Default => (State::VARIANT_DEFAULT, &*s.tabs_list_variant_default),
-            TabsVariant::Line => (State::VARIANT_LINE, &*s.tabs_list_variant_line),
-        };
+        let v = t.resolve(self.variant);
+        let variant_bit = v.bits();
         let TabsOrientation::Horizontal = self.orientation;
         let root = [&*s.tabs];
-        let list = [&*s.tabs_list, variant_layer];
-        let trigger = [&*s.tabs_trigger];
-        let after = [&*s.tabs_trigger_after];
+        let list = [
+            &*s.tabs_list,
+            v.part(s, |b, s| b.layer(s), |r| &r.tabs_list),
+        ];
+        let trigger = [v.part(s, |_, s| &s.tabs_trigger, |r| &r.tabs_trigger)];
+        let after = [v.part(s, |_, s| &s.tabs_trigger_after, |r| &r.tabs_trigger_after)];
 
         // Geometry depends neither on the selection nor on interaction.
         let g = t.state(ui.ctx(), State::HORIZONTAL.or(variant_bit));
@@ -358,4 +429,32 @@ fn flex_shares(content: &[f32], inner: f32) -> Vec<f32> {
 /// Returns true if it changed.
 pub fn tab_bar(ui: &mut Ui, active: &mut usize, labels: &[&str]) -> bool {
     ui.add(Tabs::new(active, labels)).changed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An app variant's edit gets `TabsRecipes`, keeps its base's bits and
+    /// changes only what it names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const BRAND_LINE: AppVariant<TabsVariant> = TabsVariant::app("brand-line");
+        let t = Theme::vega().variant(BRAND_LINE, TabsVariant::Line, |r: &mut TabsRecipes, _| {
+            r.tabs_trigger_after
+                .recolor(Role::Foreground, Role::Primary)
+        });
+        let v = t.resolve(TabsVariant::from(BRAND_LINE));
+        assert_eq!(v.bits(), State::VARIANT_LINE);
+        let s = &t.style;
+        let list = v.part(s, |b, s| b.layer(s), |r| &r.tabs_list);
+        assert_eq!(list, &*s.tabs_list_variant_line);
+        let trigger = v.part(s, |_, s| &s.tabs_trigger, |r| &r.tabs_trigger);
+        assert_eq!(trigger, &*s.tabs_trigger);
+        let after = v.part(s, |_, s| &s.tabs_trigger_after, |r| &r.tabs_trigger_after);
+        assert_ne!(after, &*s.tabs_trigger_after);
+        let mut want = (*s.tabs_trigger_after).clone();
+        want.recolor(Role::Foreground, Role::Primary);
+        assert_eq!(after, &want);
+    }
 }
