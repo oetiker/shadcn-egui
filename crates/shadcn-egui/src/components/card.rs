@@ -21,6 +21,7 @@
 use crate::components::context;
 use crate::components::shared::{content_ui, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
+use crate::style::app::{default_variant, state_size, ResolvedPair};
 use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
 use egui::{
@@ -28,26 +29,49 @@ use egui::{
     WidgetType,
 };
 
-/// `data-size` of a card: `default` or `sm`.
+/// `data-size` of a card: `default` or `sm`, or an app size
+/// ([`CardSize::app`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CardSize {
     #[default]
     Default,
     Sm,
+    /// An app size: [`CardSize::app`].
+    #[doc(hidden)]
+    App(crate::style::AppVariant<CardSize>),
 }
 
-impl CardSize {
-    fn state(self) -> State {
-        match self {
-            CardSize::Default => State::SIZE_DEFAULT,
-            CardSize::Sm => State::SIZE_SM,
-        }
+state_size!(CardSize, CardVariant);
+
+default_variant!(
+    /// The card's variant: upstream has none, so only app variants
+    /// ([`CardVariant::app`]) differ from `Default`.
+    CardVariant,
+    /// The card's recipes an app variant's or app size's edit changes.
+    CardRecipes {
+        /// `data-slot="card"`: the surface.
+        card,
+        /// `data-slot="card-header"`.
+        card_header,
+        /// `data-slot="card-title"`.
+        card_title,
+        /// `data-slot="card-description"`.
+        card_description,
+        /// `data-slot="card-action"`.
+        card_action,
+        /// `data-slot="card-content"`.
+        card_content,
+        /// `data-slot="card-footer"`.
+        card_footer,
     }
-}
+);
 
-/// The context a card gives its parts (`group-data-[size=sm]/card`).
-#[derive(Clone, Copy, Debug, Default)]
+/// The context a card gives its parts: its variant and its size
+/// (`group-data-[size=sm]/card`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct CardContext {
+    variant: CardVariant,
     size: CardSize,
 }
 
@@ -56,8 +80,10 @@ fn card_context(ui: &Ui) -> CardContext {
     context::find::<CardContext>(ui).unwrap_or_default()
 }
 
-fn current_size(ui: &Ui) -> CardSize {
-    card_context(ui).size
+/// The recipes of the card around `ui`.
+fn card_recipes(ui: &Ui, t: &Theme) -> ResolvedPair<CardVariant, CardSize> {
+    let cx = card_context(ui);
+    t.resolve_pair(cx.variant, cx.size)
 }
 
 fn len(layers: &[&Recipe], f: fn(&Recipe) -> &crate::style::Prop<f32>, st: State) -> f32 {
@@ -69,6 +95,7 @@ type FooterFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 /// A shadcn card: `Card::new().size(..).footer(..).show(ui, |ui| ..)`.
 pub struct Card<'a> {
     size: CardSize,
+    variant: CardVariant,
     footer: Option<FooterFn<'a>>,
 }
 
@@ -82,12 +109,20 @@ impl<'a> Card<'a> {
     pub fn new() -> Self {
         Self {
             size: CardSize::Default,
+            variant: CardVariant::Default,
             footer: None,
         }
     }
-    /// `data-size`: `Default` or the tighter `Sm`.
-    pub fn size(mut self, size: CardSize) -> Self {
-        self.size = size;
+    /// `data-size`: `Default` or the tighter `Sm`, or an app size
+    /// ([`CardSize::app`]). The card's parts inside take it.
+    pub fn size(mut self, size: impl Into<CardSize>) -> Self {
+        self.size = size.into();
+        self
+    }
+    /// An app variant ([`CardVariant::app`]). The card's parts inside take
+    /// it.
+    pub fn variant(mut self, v: impl Into<CardVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     /// A `card-footer` row: its children sit in a row, centred on the
@@ -103,16 +138,20 @@ impl<'a> Card<'a> {
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         let t = Theme::current(ui.ctx());
         let has_footer = self.footer.is_some();
+        let parts = CardContext {
+            variant: self.variant,
+            size: self.size,
+        };
+        let v = t.resolve_pair(self.variant, self.size);
         let st = t.state(
             ui.ctx(),
-            self.size
-                .state()
+            v.bits()
                 .with(State::HAS_FOOTER, has_footer)
                 .with(State::DISABLED, !ui.is_enabled()),
         );
-        let card = [&*t.style.card];
-        let content = [&*t.style.card_content];
-        let foot = [&*t.style.card_footer];
+        let card = [v.part(&t.style, |s| &s.card, |r| &r.card)];
+        let content = [v.part(&t.style, |s| &s.card_content, |r| &r.card_content)];
+        let foot = [v.part(&t.style, |s| &s.card_footer, |r| &r.card_footer)];
 
         let (pad_top, pad_bottom, gap) = (
             len(&card, |r| &r.pad_top, st),
@@ -142,7 +181,6 @@ impl<'a> Card<'a> {
                 origin.y + pad_top + ui.available_height().max(0.0),
             ),
         );
-        let parts = CardContext { size: self.size };
         let mut body = ui.new_child(context::push(
             UiBuilder::new()
                 .max_rect(body_rect)
@@ -219,8 +257,9 @@ impl<'a> Card<'a> {
 /// design's spacing.
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
-    let st = card_state(ui);
-    let l = [&*t.style.card_content];
+    let v = card_recipes(ui, &t);
+    let st = card_state(ui, &v);
+    let l = [v.part(&t.style, |s| &s.card_content, |r| &r.card_content)];
     let gap = len(&l, |r| &r.gap, st);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
@@ -232,20 +271,18 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// `card-header` with its title and description.
 pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
-    content_ui(ui, &[&[&*t.style.card_header][..]], card_state(ui), |ui| {
+    let v = card_recipes(ui, &t);
+    let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
+    content_ui(ui, &[&header[..]], card_state(ui, &v), |ui| {
         header_column(ui, title, description)
     });
 }
 
-/// The state of a card part: the current card's size, disabled with the `Ui`.
-fn card_state(ui: &Ui) -> State {
+/// The state of a card part: the current card's variant and size bits,
+/// disabled with the `Ui`.
+fn card_state(ui: &Ui, v: &ResolvedPair<CardVariant, CardSize>) -> State {
     let t = Theme::current(ui.ctx());
-    t.state(
-        ui.ctx(),
-        current_size(ui)
-            .state()
-            .with(State::DISABLED, !ui.is_enabled()),
-    )
+    t.state(ui.ctx(), v.bits().with(State::DISABLED, !ui.is_enabled()))
 }
 
 /// `card-header` with a `card-action` to the right of the title and
@@ -258,10 +295,13 @@ pub fn card_header_with_action(
 ) {
     // The action sits in the header, beside the title and description.
     let t = Theme::current(ui.ctx());
-    let st = card_state(ui);
-    content_ui(ui, &[&[&*t.style.card_header][..]], st, |ui| {
+    let v = card_recipes(ui, &t);
+    let st = card_state(ui, &v);
+    let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
+    let card_action = [v.part(&t.style, |s| &s.card_action, |r| &r.card_action)];
+    content_ui(ui, &[&header[..]], st, |ui| {
         ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-            content_ui(ui, &[&[&*t.style.card_action][..]], st, action);
+            content_ui(ui, &[&card_action[..]], st, action);
             let width = ui.available_width();
             ui.allocate_ui_with_layout(
                 egui::vec2(width, 0.0),
@@ -274,10 +314,11 @@ pub fn card_header_with_action(
 
 fn header_column(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
+    let v = card_recipes(ui, &t);
     let gap = len(
-        &[&*t.style.card_header],
+        &[v.part(&t.style, |s| &s.card_header, |r| &r.card_header)],
         |r| &r.gap,
-        t.state(ui.ctx(), current_size(ui).state()),
+        t.state(ui.ctx(), v.bits()),
     );
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
@@ -289,8 +330,9 @@ fn header_column(ui: &mut Ui, title: &str, description: &str) {
 /// `card-title`: size, weight and line height of the style.
 pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
-    let st = t.state(ui.ctx(), current_size(ui).state());
-    let l = [&*t.style.card_title];
+    let v = card_recipes(ui, &t);
+    let st = t.state(ui.ctx(), v.bits());
+    let l = [v.part(&t.style, |s| &s.card_title, |r| &r.card_title)];
     // upstream: card-title carries `cn-font-heading`
     let look = TextLook::resolve(ui, &l, st).heading(true);
     part_ui(ui, &[&l[..]], st, |ui| {
@@ -301,8 +343,9 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
 /// `card-description`: muted text at the style's size.
 pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
-    let st = t.state(ui.ctx(), current_size(ui).state());
-    let l = [&*t.style.card_description];
+    let v = card_recipes(ui, &t);
+    let st = t.state(ui.ctx(), v.bits());
+    let l = [v.part(&t.style, |s| &s.card_description, |r| &r.card_description)];
     let look = TextLook::resolve(ui, &l, st);
     part_ui(ui, &[&l[..]], st, |ui| {
         look.label(ui, text, TextWrapMode::Wrap)
@@ -312,6 +355,51 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::style::{AppVariant, Paint, Role};
+
+    /// An app variant's edit gets `CardRecipes` and changes only what it
+    /// names; an app size edits the same copy after it.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const BRAND: AppVariant<CardVariant> = CardVariant::app("brand");
+        const ROOMY: AppVariant<CardSize> = CardSize::app("roomy");
+        let t = Theme::vega()
+            .variant(BRAND, CardVariant::Default, |r: &mut CardRecipes, _| {
+                r.card_title.text.set(Paint::Role(Role::Primary, 1.0))
+            })
+            .size(ROOMY, CardSize::Sm, |r, _| {
+                r.card.gap.on(State::SIZE_SM, 40.0)
+            });
+        let v = t.resolve_pair(CardVariant::from(BRAND), CardSize::from(ROOMY));
+        assert_eq!(v.bits(), State::SIZE_SM);
+        let title = v.part(&t.style, |s| &s.card_title, |r| &r.card_title);
+        assert_eq!(
+            title.text.get(State::NONE),
+            Some(Paint::Role(Role::Primary, 1.0))
+        );
+        let card = v.part(&t.style, |s| &s.card, |r| &r.card);
+        assert_eq!(pick(&[card], |r| &r.gap, State::SIZE_SM), Some(40.0));
+        let footer = v.part(&t.style, |s| &s.card_footer, |r| &r.card_footer);
+        assert_eq!(footer, &*t.style.card_footer);
+    }
+
+    /// The card's parts take its variant from the context.
+    #[test]
+    fn parts_read_the_cards_variant() {
+        const BRAND: AppVariant<CardVariant> = CardVariant::app("brand");
+        let ctx = egui::Context::default();
+        Theme::vega()
+            .variant(BRAND, CardVariant::Default, |_, _| {})
+            .apply(&ctx);
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            Card::new().variant(BRAND).show(ui, |ui| {
+                assert_eq!(card_context(ui).variant, CardVariant::from(BRAND));
+                Card::new().show(ui, |ui| {
+                    assert_eq!(card_context(ui).variant, CardVariant::Default)
+                });
+            });
+        });
+    }
 
     /// Each card part reads the size of its nearest card; outside a card
     /// it reads the default.
@@ -319,21 +407,21 @@ mod tests {
     fn parts_read_the_nearest_cards_size() {
         let ctx = egui::Context::default();
         let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
-            assert_eq!(current_size(ui), CardSize::Default);
+            assert_eq!(card_context(ui).size, CardSize::Default);
             Card::new()
                 .size(CardSize::Sm)
-                .footer(|ui| assert_eq!(current_size(ui), CardSize::Sm))
+                .footer(|ui| assert_eq!(card_context(ui).size, CardSize::Sm))
                 .show(ui, |ui| {
-                    assert_eq!(current_size(ui), CardSize::Sm);
+                    assert_eq!(card_context(ui).size, CardSize::Sm);
                     Card::new().show(ui, |ui| {
-                        assert_eq!(current_size(ui), CardSize::Default);
+                        assert_eq!(card_context(ui).size, CardSize::Default);
                         Card::new()
                             .size(CardSize::Sm)
-                            .show(ui, |ui| assert_eq!(current_size(ui), CardSize::Sm));
+                            .show(ui, |ui| assert_eq!(card_context(ui).size, CardSize::Sm));
                     });
-                    assert_eq!(current_size(ui), CardSize::Sm);
+                    assert_eq!(card_context(ui).size, CardSize::Sm);
                 });
-            assert_eq!(current_size(ui), CardSize::Default);
+            assert_eq!(card_context(ui).size, CardSize::Default);
         });
     }
 }
