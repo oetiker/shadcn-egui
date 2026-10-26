@@ -70,10 +70,11 @@ const TEXTS: &[(&str, &str)] = &[
         "\u{4E2D}\u{6587}\u{FF0C}\u{65E5}\u{672C}\u{8A9E}\u{300C}\u{30C6}\u{30B9}\u{30C8}\u{300D}\u{3067}\u{3059}\u{3002}\u{30AD}\u{30E3}\u{30E9}\u{30FC}\u{30E1} ab\u{4E2D}cd",
     ),
 ];
-/// Rows still open after A2b2 F3 (break classes): each breaks at Chrome's
-/// opportunities (the width-1 rows of every text pass), but one line fits
-/// in one and not the other, or balance scores the same candidates
-/// differently. To be traced; a row that passes must leave this list.
+/// Rows where the crate cannot break as Chrome without contextual
+/// alternates: Manrope's `calt` turns the hyphen in "2-3" into
+/// `hyphen.case`, which has no kerning against "3"; the crate applies no
+/// GSUB, kerns the plain hyphen 0.56 px closer and balance then prefers
+/// "2-|3". A row that passes must leave this list.
 const KNOWN: &[&str] = &[
     "manrope 1x digits 127.4 Some(Balance)",
     "manrope 1.25x digits 127.4 Some(Balance)",
