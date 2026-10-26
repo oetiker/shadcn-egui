@@ -738,3 +738,62 @@ fn a_separator_in_a_stack_in_a_row_settles() {
     });
     assert_eq!(outside.1.width(), outside.0, "outside a row it spans");
 }
+
+/// A vertical separator is `self-stretch`: in a `row` it spans the row's
+/// tallest other item, below the row's `interact_size` floor too, and a
+/// still frame takes one pass; outside a crate row it takes the height it
+/// is given.
+#[test]
+fn a_vertical_separator_stretches_in_a_row() {
+    use shadcn_egui::components::separator::separator_vertical;
+    let rule = |out: &egui::FullOutput, theme: &Theme| {
+        let border = theme.palette_of(egui::Theme::Dark).border;
+        common::rect_shapes(out)
+            .into_iter()
+            .filter(|r| r.fill == border)
+            .map(|r| r.rect)
+            .collect::<Vec<_>>()
+    };
+    for tall in [60.0, 0.0] {
+        let ctx = egui::Context::default();
+        let theme = Theme::vega();
+        theme.apply(&ctx);
+        ctx.set_theme(egui::Theme::Dark);
+        let floor = ctx.global_style().spacing.interact_size.y;
+        let (mut label, mut passes) = (egui::Rect::NOTHING, 0);
+        let mut out = egui::FullOutput::default();
+        for _ in 0..3 {
+            let before = ctx.cumulative_pass_nr();
+            out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                layout::row(ui, 8.0, |ui| {
+                    label = ui.label("Docs").rect;
+                    separator_vertical(ui);
+                    if tall > 0.0 {
+                        ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover());
+                    }
+                });
+            });
+            passes = ctx.cumulative_pass_nr() - before;
+        }
+        let rules = rule(&out, &theme);
+        assert_eq!(rules.len(), 1, "{rules:?}");
+        let expected = if tall > 0.0 { tall } else { label.height() };
+        assert_eq!(rules[0].height(), expected, "tall {tall}");
+        assert!(tall > 0.0 || expected < floor, "text below the floor");
+        assert_eq!(passes, 1, "tall {tall}: a still frame");
+    }
+    let ctx = egui::Context::default();
+    let theme = Theme::vega();
+    theme.apply(&ctx);
+    ctx.set_theme(egui::Theme::Dark);
+    let mut out = egui::FullOutput::default();
+    for _ in 0..2 {
+        out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.horizontal(|ui| {
+                ui.set_height(24.0);
+                separator_vertical(ui);
+            });
+        });
+    }
+    assert_eq!(rule(&out, &theme)[0].height(), 24.0, "outside a crate row");
+}

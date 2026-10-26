@@ -4,7 +4,7 @@
 //! thick, or `metrics.border` thick where the recipe sets no thickness.
 
 use crate::components::shared::part_painter;
-use crate::layout::capped_width;
+use crate::layout::{self, capped_width};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::Theme;
@@ -18,7 +18,9 @@ pub enum SeparatorOrientation {
     /// fits its row) it has no length.
     #[default]
     Horizontal,
-    /// A rule as tall as the row it sits in.
+    /// A rule as tall as the tallest other item of the
+    /// [`row`](crate::layout::row) it sits in (`self-stretch`); elsewhere
+    /// as tall as the available height.
     Vertical,
 }
 
@@ -72,7 +74,10 @@ impl Widget for Separator {
         );
         let size = if vertical {
             let w = pick(&l, |r| &r.width, st).unwrap_or(t.metrics.border);
-            Vec2::new(w, ui.available_height())
+            // `self-stretch`: the row's tallest other item; elsewhere the
+            // height the separator is given.
+            let h = layout::stretch_height(ui).unwrap_or_else(|| ui.available_height());
+            Vec2::new(w, h)
         } else {
             let h = pick(&l, |r| &r.height, st).unwrap_or(t.metrics.border);
             // `w-full`; a rule has no content width (conformance 3.1).
@@ -94,7 +99,7 @@ pub fn separator(ui: &mut Ui) {
     ui.add(Separator::new());
 }
 
-/// A vertical rule as tall as the row it sits in: shorthand for
+/// A vertical rule as tall as the row's tallest other item: shorthand for
 /// `ui.add(Separator::new().orientation(SeparatorOrientation::Vertical))`.
 pub fn separator_vertical(ui: &mut Ui) {
     ui.add(Separator::new().orientation(SeparatorOrientation::Vertical));

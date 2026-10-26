@@ -30,10 +30,10 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// row therefore starts from the content height of the last pass, and asks
 /// egui to redo a pass whose content height changed.
 ///
-/// A widget that fills the available height (`separator_vertical`, a
-/// `ScrollArea`) takes the row's current height as its own, so a row that
-/// holds one does not shrink after a taller child goes; a `ScrollArea`
-/// grows the row to its full content height. Content that registers no
+/// A widget that fills the available height (a `ScrollArea`) takes the
+/// row's current height as its own, so a row that holds one does not
+/// shrink after a taller child goes; a `ScrollArea` grows the row to its
+/// full content height. Content that registers no
 /// widget (shapes painted directly, `allocate_space`) is not measured.
 ///
 /// A child wider than the room left pushes the children after it past its
@@ -41,8 +41,8 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// the overflow does not widen the parent: the browser's flex row. A plain
 /// `ui.horizontal` cannot do that (see [`allocate_overflowing`]).
 ///
-/// A child that is as high as the row's other children (`self-stretch`)
-/// takes its height from [`stretch_height`].
+/// A child that is as high as the row's other children (`self-stretch`,
+/// as `separator_vertical`) takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let floor = ui.spacing().interact_size.y;

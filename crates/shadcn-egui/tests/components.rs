@@ -1032,6 +1032,39 @@ fn label_separator_snapshot() {
     });
 }
 
+/// Vertical separators in a `layout::row` of items of different heights
+/// (a label, a button, a badge, a two-line stack): each spans the tallest
+/// other item (`self-stretch`).
+#[test]
+fn separator_vertical_row_snapshot() {
+    use shadcn_egui::components::badge::{badge, BadgeVariant};
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::label::{description, Label};
+    use shadcn_egui::components::separator::separator_vertical;
+    use shadcn_egui::layout;
+    let themes = common::themes().into_iter().take(2).collect();
+    common::snapshot_with_themes(
+        "separator_vertical_row",
+        egui::vec2(420.0, 100.0),
+        themes,
+        |ui| {
+            layout::row(ui, 12.0, |ui| {
+                ui.add(Label::new("Docs"));
+                separator_vertical(ui);
+                ui.add(Button::new("Open"));
+                separator_vertical(ui);
+                badge(ui, "New", BadgeVariant::Secondary);
+                separator_vertical(ui);
+                layout::vstack(ui, 2.0, |ui| {
+                    ui.add(Label::new("Account"));
+                    description(ui, "Signed in");
+                });
+            });
+        },
+        |_| {},
+    );
+}
+
 /// The `select` and `badge` shorthands; their sizes are asserted with the
 /// widgets they wrap.
 #[test]
