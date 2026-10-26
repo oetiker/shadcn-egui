@@ -10,7 +10,11 @@
 use egui::text::LayoutJob;
 use egui::{FontData, FontFamily};
 use skrifa::instance::{Location, Size};
-use skrifa::raw::tables::gpos::{PairPos, PositionLookup, PositionSubtables, ValueContext};
+use skrifa::raw::tables::gpos::{PairPos, PositionLookup, PositionSubtables, ValueRecord};
+use skrifa::raw::tables::layout::DeviceOrVariationIndex;
+use skrifa::raw::tables::variations::{DeltaSetIndex, FloatItemDeltaTarget, ItemVariationStore};
+use skrifa::raw::types::{F2Dot14, FWord};
+use skrifa::raw::FontData as RawData;
 use skrifa::raw::{FontRef, TableProvider};
 use skrifa::{GlyphId, MetadataProvider, Tag};
 use std::sync::Arc;
@@ -184,14 +188,14 @@ impl<'a> Face<'a> {
     /// The pair kerning of `a` followed by `b`, in font units: every
     /// `kern` lookup in order, each applying its first subtable that
     /// covers the pair, as HarfBuzz does.
-    fn kerning(&self, a: GlyphId, b: GlyphId, context: &ValueContext, scale: FixedScale) -> i32 {
+    fn kerning(&self, a: GlyphId, b: GlyphId, deltas: &Deltas, scale: FixedScale) -> i32 {
         let mut total = 0;
         for lookup in &self.kern {
             let Ok(PositionSubtables::Pair(subtables)) = lookup.subtables() else {
                 continue;
             };
             for sub in subtables.iter().flatten() {
-                if let Some((base, delta)) = pair_value(&sub, a, b, context) {
+                if let Some((base, delta)) = pair_value(&sub, a, b, deltas) {
                     total += scale.gpos(base, delta);
                     break;
                 }
@@ -204,7 +208,36 @@ impl<'a> Face<'a> {
 /// The x advance adjustment of the first glyph for the pair `a`, `b` in
 /// one pair subtable, in units and its variation delta, `None` where the
 /// subtable does not apply.
-fn pair_value(sub: &PairPos, a: GlyphId, b: GlyphId, context: &ValueContext) -> Option<(i16, f32)> {
+/// A face's variation deltas at its location: GDEF's item variation
+/// store and the normalized coordinates.
+struct Deltas<'a> {
+    store: Option<ItemVariationStore<'a>>,
+    coords: &'a [F2Dot14],
+}
+
+impl Deltas<'_> {
+    /// The x advance of `record` (its offsets relative to `data`) in units
+    /// and its variation delta, unrounded as HarfBuzz sums it: read-fonts
+    /// rounds the delta of `ValueRecord::value` to whole units.
+    fn x_advance(&self, record: &ValueRecord, data: RawData) -> (i16, f32) {
+        let base = record.x_advance().unwrap_or_default();
+        let delta = match (record.x_advance_device(data), &self.store) {
+            (Some(Ok(DeviceOrVariationIndex::VariationIndex(v))), Some(store)) => store
+                .compute_float_delta(
+                    DeltaSetIndex {
+                        outer: v.delta_set_outer_index(),
+                        inner: v.delta_set_inner_index(),
+                    },
+                    self.coords,
+                )
+                .map_or(0.0, |d| FWord::new(0).apply_float_delta(d)),
+            _ => 0.0,
+        };
+        (base, delta)
+    }
+}
+
+fn pair_value(sub: &PairPos, a: GlyphId, b: GlyphId, deltas: &Deltas) -> Option<(i16, f32)> {
     match sub {
         PairPos::Format1(t) => {
             let index = t.coverage().ok()?.get(a)?;
@@ -214,11 +247,7 @@ fn pair_value(sub: &PairPos, a: GlyphId, b: GlyphId, context: &ValueContext) -> 
                 .iter()
                 .flatten()
                 .find(|r| GlyphId::from(r.second_glyph()) == b)?;
-            let v = record
-                .value_record1()
-                .value(set.offset_data(), context)
-                .ok()?;
-            Some((v.x_advance, v.x_advance_delta as f32))
+            Some(deltas.x_advance(record.value_record1(), set.offset_data()))
         }
         PairPos::Format2(t) => {
             t.coverage().ok()?.get(a)?;
@@ -229,11 +258,7 @@ fn pair_value(sub: &PairPos, a: GlyphId, b: GlyphId, context: &ValueContext) -> 
             // a variable font's kerning keeps its default-instance value.
             let class1 = t.class1_records().get(usize::from(c1)).ok()?;
             let record = class1.class2_records().get(usize::from(c2)).ok()?;
-            let v = record
-                .value_record1()
-                .value(t.offset_data(), context)
-                .ok()?;
-            Some((v.x_advance, v.x_advance_delta as f32))
+            Some(deltas.x_advance(record.value_record1(), t.offset_data()))
         }
     }
 }
@@ -307,9 +332,7 @@ pub(super) fn advances(ctx: &egui::Context, job: &LayoutJob) -> Advances {
         let gdef = face.as_ref().and_then(|f| f.font.gdef().ok());
         let store = gdef.and_then(|g| g.item_var_store()).and_then(Result::ok);
         let coords = face.as_ref().map_or(&[][..], |f| f.location.coords());
-        let context = ValueContext::new()
-            .with_coords(coords)
-            .with_var_store(store);
+        let deltas = Deltas { store, coords };
         let fixed_of = |c: char| {
             let glyph = charmap.as_ref()?.map(c).filter(|g| *g != GlyphId::NOTDEF)?;
             Some(fixed_scale?.advance(metrics.as_ref()?.advance_width(glyph)?))
@@ -349,7 +372,7 @@ pub(super) fn advances(ctx: &egui::Context, job: &LayoutJob) -> Advances {
                 .and_then(|g| Some(fixed_scale?.advance(metrics.as_ref()?.advance_width(g)?)))
                 .unwrap_or_else(|| (egui_adv * ppp * FIXED_ONE).round() as i32);
             let kern = match (face.as_ref(), fixed_scale, before, glyph) {
-                (Some(f), Some(s), Some(a), Some(b)) => f.kerning(a, b, &context, s),
+                (Some(f), Some(s), Some(a), Some(b)) => f.kerning(a, b, &deltas, s),
                 _ => 0,
             };
             let points = |v: i32| v as f32 / FIXED_ONE / ppp;

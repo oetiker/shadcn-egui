@@ -75,17 +75,12 @@ const TEXTS: &[(&str, &str)] = &[
 /// in one and not the other, or balance scores the same candidates
 /// differently. To be traced; a row that passes must leave this list.
 const KNOWN: &[&str] = &[
-    "nunito-sans 1.25x slash 127.4 None",
-    "nunito-sans 1.25x slash 127.4 Some(Balance)",
-    "nunito-sans 1.25x slash 127.4 Some(Pretty)",
     "manrope 1x digits 127.4 Some(Balance)",
     "manrope 1.25x digits 127.4 Some(Balance)",
     "manrope 1.5x digits 127.4 Some(Balance)",
     "manrope 1.75x digits 127.4 Some(Balance)",
     "manrope 2x digits 127.4 Some(Balance)",
     "ibm-plex-sans 1.25x punct 121 None",
-    "source-sans-3 1.5x punct 177 Some(Balance)",
-    "source-sans-3 1.5x punct 203 Some(Balance)",
 ];
 const MODES: [Option<TextWrap>; 3] = [None, Some(TextWrap::Balance), Some(TextWrap::Pretty)];
 
