@@ -23,6 +23,14 @@
   borders, rings, shadows and the 1px press nudge follow those states.
 - **egui has no backdrop blur.** `backdrop-blur-*` on a dialog overlay is not
   drawn; the overlay is only the translucent fill.
+- **No ligatures or contextual alternates.** egui draws one glyph per
+  character, so a font's `liga`, `calt` and `ccmp` substitutions (Geist's
+  `tt`, Manrope's case hyphen in "2-3", JetBrains Mono's `//`) are not
+  drawn, and a line holding such a pair can break one word off from
+  Chrome. Crate text otherwise breaks where Chrome does: at spaces, before
+  and after em dashes, after hyphens and en dashes, at a zero-width
+  space, at a soft hyphen (U+00AD, drawn as a hyphen at the line end) and
+  between CJK characters.
 - **Translucent menus draw opaque.** The menu colours
   `default-translucent` and `inverted-translucent` draw like `default`
   and `inverted`, and log a warning. Upstream blurs what lies behind the
