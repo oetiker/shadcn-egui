@@ -139,20 +139,32 @@ pub(crate) fn row_builder(max_rect: egui::Rect, layout: egui::Layout) -> egui::U
         .ui_stack_info(egui::UiStackInfo::default().with_tag(ROW_TAG))
 }
 
-/// Whether `ui` is a crate row, or a horizontal `Ui` (a scope, an enabled
-/// scope) inside one.
+/// The tag on the `Ui` of a [`vstack`]: a flex column, which grows to the
+/// width of its widest child inside a crate row.
+const VSTACK_TAG: &str = "shadcn_egui::layout::vstack";
+
+/// Whether `ui` is a crate row, or sits inside one through horizontal
+/// `Ui`s (a scope, an enabled scope) and [`vstack`]s: a flex item of the
+/// row, which the browser grows to its content's minimum width.
 fn in_row(ui: &Ui) -> bool {
-    ui.stack()
-        .iter()
-        .take_while(|s| s.layout_direction.is_horizontal())
-        .any(|s| s.tags().contains(ROW_TAG))
+    for s in ui.stack().iter() {
+        if s.tags().contains(ROW_TAG) {
+            return true;
+        }
+        if !s.layout_direction.is_horizontal() && !s.tags().contains(VSTACK_TAG) {
+            return false;
+        }
+    }
+    false
 }
 
 /// A crate row of `size` in `layout`, placed as `allocate_ui_with_layout`
 /// places it. `add` gets the `Ui` that holds the room and the row's own
 /// `Ui`, built inside it with [`row_builder`]. The row's children may run
 /// past the room; the room takes the row's `min_rect` cut to its own
-/// width, and the parent allocates that.
+/// width, and the parent allocates that. A row that is itself a flex item
+/// of a crate row (in a [`vstack`] in a row) is not cut: the outer row
+/// takes the overflow, as the browser grows a flex item to its content.
 fn overflow_row<R>(
     ui: &mut Ui,
     size: egui::Vec2,
@@ -166,7 +178,14 @@ fn overflow_row<R>(
         // Dropping the row registers its `min_rect`.
         let used = row.min_rect();
         drop(row);
-        let x = |v: f32| v.clamp(max.left(), max.right());
+        let grows = in_row(room);
+        let x = |v: f32| {
+            if grows {
+                v
+            } else {
+                v.clamp(max.left(), max.right())
+            }
+        };
         room.advance_cursor_after_rect(egui::Rect::from_x_y_ranges(
             x(used.left())..=x(used.right()),
             used.y_range(),
@@ -184,10 +203,20 @@ fn overflow_row<R>(
 /// size it knows before the item draws, so the stack takes its width from
 /// the previous pass and redoes a pass when it changes. Alone on a line too
 /// narrow for it, its text wraps (flex-shrink).
+///
+/// Inside a crate row ([`row`], [`wrap_row`], [`space_between`], a card
+/// footer) it grows to its widest child, as a flex item does: a child
+/// raised past the room ([`allocate_overflowing`]) widens the stack and
+/// pushes the row's next children, and the row keeps the overflow from
+/// its own parent. Outside a crate row the child overflows the stack.
 pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    // `ui.vertical`, tagged as a flex column.
+    let column = egui::UiBuilder::new()
+        .layout(egui::Layout::top_down(egui::Align::Min))
+        .ui_stack_info(egui::UiStackInfo::default().with_tag(VSTACK_TAG));
     if !ui.layout().main_wrap() {
         return ui
-            .vertical(|ui| {
+            .scope_builder(column, |ui| {
                 ui.spacing_mut().item_spacing.y = gap;
                 add(ui)
             })
@@ -200,7 +229,7 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         ui.end_row();
     }
     let fits = stored.is_none_or(|w| w <= ui.available_size_before_wrap().x);
-    let response = ui.vertical(|ui| {
+    let response = ui.scope_builder(column, |ui| {
         ui.spacing_mut().item_spacing.y = gap;
         if fits {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
@@ -249,9 +278,9 @@ pub fn overlay_width(ctx: &egui::Context, requested: f32, inset: f32, content_mi
 /// sides in a centred column.
 ///
 /// In a crate row ([`row`], [`wrap_row`], [`space_between`], a card
-/// footer), or a horizontal scope inside one, the widget takes its whole
-/// width and the next widget starts after it, as in the browser; the row
-/// keeps the overflow from its own parent. In a plain `ui.horizontal` the
+/// footer), or a horizontal scope or a [`vstack`] inside one, the widget
+/// takes its whole width and the next widget starts after it, as in the
+/// browser; the row keeps the overflow from its own parent. In a plain `ui.horizontal` the
 /// next widget starts after the room the parent gave, so it covers the
 /// overflowing part: egui can move a row's cursor only by growing the row,
 /// and that would widen the row's parent.
@@ -467,6 +496,54 @@ mod tests {
                 ui.scope(|ui| add(ui));
             })),
             (154.0, 100.0)
+        );
+    }
+
+    /// A `vstack` in a crate row is a flex item: it grows to an
+    /// overflowing child, and the row's next child starts after it, also
+    /// when the child sits in a row of its own inside the stack. The
+    /// column holding the row keeps its width.
+    #[test]
+    fn a_vstack_in_a_crate_row_grows_to_its_overflowing_child() {
+        let in_stack = |inner_row: bool| {
+            let ctx = egui::Context::default();
+            let mut out = None;
+            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let max = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 200.0));
+                let mut column = ui.new_child(egui::UiBuilder::new().max_rect(max));
+                let mut stack_width = 0.0;
+                let next = row(&mut column, 4.0, |ui| {
+                    stack_width = vstack(ui, 0.0, |ui| {
+                        let overflow = |ui: &mut Ui| {
+                            allocate_overflowing(ui, egui::vec2(150.0, 20.0), egui::Sense::hover());
+                        };
+                        if inner_row {
+                            row(ui, 4.0, overflow);
+                        } else {
+                            overflow(ui);
+                        }
+                        ui.min_rect().width()
+                    });
+                    ui.allocate_exact_size(egui::vec2(10.0, 20.0), egui::Sense::hover())
+                        .0
+                        .left()
+                });
+                out = Some((stack_width, next, column.min_rect().width()));
+            });
+            out.expect("ran")
+        };
+        assert_eq!(in_stack(false), (150.0, 154.0, 100.0));
+        assert_eq!(in_stack(true), (150.0, 154.0, 100.0));
+    }
+
+    /// Outside a crate row a `vstack` is a block: the child overflows it.
+    #[test]
+    fn a_vstack_outside_a_row_keeps_its_width() {
+        assert_eq!(
+            after_overflow(|ui, add| {
+                vstack(ui, 0.0, |ui| add(ui));
+            }),
+            (0.0, 100.0)
         );
     }
 

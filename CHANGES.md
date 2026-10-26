@@ -57,6 +57,7 @@ are recorded here. The format is based on
 - In the settings example, rows of buttons and badges wrap onto further lines in a narrow window instead of running past the card.
 - A `layout::vstack` inside a `layout::wrap_row` now moves to the next line as a whole when it does not fit, as a flex item does, instead of running past the right edge.
 - In the luma and rhea styles, an invalid switch that is checked now shows the red invalid border instead of the checked border, as shadcn does.
+- A `layout::vstack` inside `layout::row`, `wrap_row`, `space_between` or a card footer now grows to its widest child, as a flex column does: an input or select wider than the room left pushes the row's next children aside instead of being covered by them.
 - At phone width in the luma, vega and maia styles, a tab list wider than the page column no longer widens the card under it; the list runs past the column's edge as in the browser, and the card keeps the column's width.
 - An input's placeholder now has the size of the typed text: 16 px below 768 px, and 12 px in the lyra and mira styles, instead of always 14 px.
 - `Input::max_width(f32::NAN)` now gives the narrowest field instead of the default width.
