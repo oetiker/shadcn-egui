@@ -125,6 +125,8 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `shift_x`, `shift_y` | `translate-x-*`, `translate-y-*` (`active:translate-y-px` is the press nudge) |
 | `hit_inset_x`, `hit_inset_y` | `after:-inset-x-*`, `after:-inset-y-*` (a larger hit area) |
 | `backdrop_blur` | `backdrop-blur-*` |
+| `transition`, `duration`, `easing` | `transition`, `transition-*` (the properties that move), `duration-*` (seconds), `ease-linear`, `ease-in`, `ease-out`, `ease-in-out`; `components::motion::transition` moves a changed value with them |
+| `animate_in`, `animate_out`, `enter_*`, `exit_*` | `animate-in`, `animate-out`, `fade-in-*`, `zoom-in-*`, `slide-in-from-*`, `fade-out-*`, `zoom-out-*` (an overlay's enter and exit) |
 
 `disabled:opacity-50` fades each shape of the part (fill, text, border,
 ring, shadow) to half alpha, the way egui fades a disabled `Ui`, because egui

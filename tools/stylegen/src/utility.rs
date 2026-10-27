@@ -589,7 +589,8 @@ fn calc(v: &str) -> Option<(f32, f32)> {
 /// Motion classes (D-88, axiom 8: a value a class gives is a look):
 /// tw-animate-css enter and exit (`animate-in`, `fade-in-0`, `zoom-in-95`,
 /// `slide-in-from-top-2`), `duration-*` (seconds, also the animation's
-/// duration) and `transition-*` (the properties that animate).
+/// duration), `ease-*` (the timing function) and `transition-*` (the
+/// properties that animate).
 fn motion(u: &str) -> Option<U> {
     use Field::*;
     let set = |f: Field, v: Value| Some(U::Set(vec![(f, v)]));
@@ -644,6 +645,15 @@ fn motion(u: &str) -> Option<U> {
                     U::Set(vec![(Duration, Value::Factor(ms / 1000.0))])
                 }),
         );
+    }
+    // Tailwind 4's `--ease-*` timing functions.
+    match u {
+        "ease-linear" => return set(Easing, Value::Easing("Linear")),
+        "ease-in" => return set(Easing, Value::Easing("In")),
+        "ease-out" => return set(Easing, Value::Easing("Out")),
+        "ease-in-out" => return set(Easing, Value::Easing("InOut")),
+        _ if u.starts_with("ease-") => return Some(U::Unsupported("easing value")),
+        _ => {}
     }
     let props: Option<&'static [&'static str]> = match u {
         "transition" => Some(&["COLORS", "OPACITY", "SHADOW", "TRANSFORM", "FILTER"]),

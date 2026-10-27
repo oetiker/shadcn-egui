@@ -43,9 +43,13 @@
   `cn-font-heading`; the crate draws them with `heading_family_for(ctx, weight)`,
   which is the theme's heading font (`Theme::fonts(body, Some(heading))`) or
   the body font when none is set.
-- **No CSS transitions.** Animate manually with `ctx.animate_bool(id, on)` and lerp
-  (see `switch.rs`). `animate_*` honours `animation_time`; set to 0 (as
-  `cpu-rendering.md` advises) it jumps to the target, which is what you want.
+- **CSS transitions.** Crate components move a value where upstream's
+  `transition-*` does. For your own widget, paint
+  `components::motion::transition(ctx, id, target, &stack, Transition::OTHER, state)`
+  with the part's recipe stack (upstream's duration and easing), or
+  `ctx.animate_bool(id, on)` and lerp. Both honour `animation_time`; set to
+  0 (as `cpu-rendering.md` advises) they jump to the target, which is what
+  you want.
 - **A fade you time yourself does not honour `animation_time`.** Opacity
   computed from `ctx.input(|i| i.time)` (a hint that fades out after N seconds)
   only moves while frames are drawn. `request_repaint_after(N)` alone draws one

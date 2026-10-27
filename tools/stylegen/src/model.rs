@@ -70,6 +70,7 @@ pub enum Field {
     Resizable,
     Transition,
     Duration,
+    Easing,
     AnimateIn,
     AnimateOut,
     EnterOpacity,
@@ -149,6 +150,7 @@ impl Field {
             Resizable => "resizable",
             Transition => "transition",
             Duration => "duration",
+            Easing => "easing",
             AnimateIn => "animate_in",
             AnimateOut => "animate_out",
             EnterOpacity => "enter_opacity",
@@ -200,6 +202,8 @@ pub enum Value {
     Blend(&'static str),
     /// The `Transition` const names it ORs together.
     Transition(&'static [&'static str]),
+    /// `Easing::Linear`, `Easing::In`, `Easing::Out`, `Easing::InOut`.
+    Easing(&'static str),
 }
 
 impl Value {
@@ -222,6 +226,7 @@ impl Value {
             Value::TextWrap(w) => format!("TextWrap::{w}"),
             Value::TextAlign(a) => format!("TextAlign::{a}"),
             Value::Blend(b) => format!("Blend::{b}"),
+            Value::Easing(e) => format!("Easing::{e}"),
             Value::Transition(names) => match names.split_first() {
                 None => "Transition::NONE".into(),
                 Some((first, rest)) => {

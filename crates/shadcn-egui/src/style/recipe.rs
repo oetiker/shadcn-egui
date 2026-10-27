@@ -627,6 +627,21 @@ impl BitOr for Transition {
     }
 }
 
+/// `ease-*`: the timing function of a part's transitions, as Tailwind 4
+/// defines it. A part without one eases as [`Easing::InOut`], Tailwind's
+/// `--default-transition-timing-function`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Easing {
+    /// `ease-linear`.
+    Linear,
+    /// `ease-in`: `cubic-bezier(0.4, 0, 1, 1)`.
+    In,
+    /// `ease-out`: `cubic-bezier(0, 0, 0.2, 1)`.
+    Out,
+    /// `ease-in-out`: `cubic-bezier(0.4, 0, 0.2, 1)`.
+    InOut,
+}
+
 /// Everything a style can say about one part. Lengths are logical px.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Recipe {
@@ -730,6 +745,8 @@ pub struct Recipe {
     /// `duration-N` in seconds: of the transition and of the enter and exit
     /// animation.
     pub duration: Prop<f32>,
+    /// `ease-*`: the timing function of the transition.
+    pub easing: Prop<Easing>,
     /// `animate-in`: the part plays its enter animation when it opens.
     pub animate_in: Prop<bool>,
     /// `animate-out`: the part plays its exit animation when it closes.
@@ -912,6 +929,7 @@ macro_rules! recipe_props {
             resizable,
             transition,
             duration,
+            easing,
             animate_in,
             animate_out,
             enter_opacity,

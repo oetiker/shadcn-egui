@@ -240,6 +240,16 @@ back, Right and Down forward) whatever its orientation.
   back to the content size (`TextLook::line_height` for a line of text), never
   to 0, so an app that replaces a recipe whole keeps a usable widget.
 - Geometry is resolved without interaction states.
+- A value that changes where upstream transitions it (`transition-all` on
+  the progress indicator) is painted at
+  `shadcn_egui::components::motion::transition(ctx, id, target, &stack,
+  Transition::OTHER, state)`: it moves over the recipe's `duration` along
+  its `easing` (Tailwind's 150 ms and `ease-in-out` curve where the part
+  sets none) when the picked `transition` names the property, jumps
+  otherwise and under reduced motion (`style.animation_time == 0`), and
+  asks for a repaint only while it moves. Name the property by what it is:
+  `Transition::COLORS` for a colour, `TRANSFORM` for a translate,
+  `OPACITY`, `OTHER` for a size.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`;
   a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
   `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.

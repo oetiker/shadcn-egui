@@ -12,7 +12,7 @@ the crate.
 - The `Style` fields of the markers the crate has ported
   (`theme.style.button`, `theme.style.checkbox`, …), for parts a new component
   shares with an existing one.
-- `shadcn_egui::style::{pick, Recipe, Prop, Rule, When, State, Paint, Role, Radius, Rung, TextSize, Weight}`.
+- `shadcn_egui::style::{pick, Recipe, Prop, Rule, When, State, Paint, Role, Radius, Rung, TextSize, Weight, Transition, Easing}`.
 - `Theme::{state, paint, role, radius_px, text_px, line_px, shadow}` to turn
   recipe values into pixels and colours.
 - `shadcn_egui::components::shared::interaction_state` (`text_entry_state`
@@ -36,6 +36,8 @@ the crate.
   allocation, so that it wraps in a `layout::wrap_row` as a crate widget
   does.
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
+- `shadcn_egui::components::motion::transition(ctx, id, target, &stack,
+  property, state)` for a value that moves as a CSS transition does.
 
 ## Recipes for new markers
 
@@ -81,8 +83,10 @@ builds the recipes itself:
   (`[&_svg:not([class*='size-'])]:size-4`) is a `When::ALWAYS` rule, not
   the base, as in a generated recipe.
 - Classes the crate ignores stay out of the recipe: layout keywords (`flex`,
-  `items-center`), transitions and animations, and variants for slots the
-  crate does not ship (`group-has-[:focus-visible]/field-label:`).
+  `items-center`), keyframe animations (`animate-spin`), and variants for
+  slots the crate does not ship (`group-has-[:focus-visible]/field-label:`).
+  Transitions and their timing (`transition-all`, `duration-200`,
+  `ease-in-out`) are recipe values.
   `tools/stylegen/reports/<style>.md` in the repository says why for each.
 - The component selects the recipe for `Theme::current(ctx).style.name`. A
   style without a recipe falls back to the first one and logs a warning.

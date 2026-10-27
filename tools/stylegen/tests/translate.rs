@@ -475,6 +475,7 @@ fn model_matches_recipe_rs() {
         Resizable,
         Transition,
         Duration,
+        Easing,
         AnimateIn,
         AnimateOut,
         EnterOpacity,
@@ -789,7 +790,14 @@ fn ignore_reasons_follow_the_spec_groups() {
         "group/button",
     ];
     // Motion classes are looks (rules axiom 8): recipe values.
-    for u in ["transition-all", "duration-100", "fade-in-0", "zoom-in-95"] {
+    for u in [
+        "transition-all",
+        "duration-100",
+        "ease-linear",
+        "ease-in-out",
+        "fade-in-0",
+        "zoom-in-95",
+    ] {
         assert!(matches!(utility(u, None), U::Set(_)), "{u}");
     }
     for u in browser {
