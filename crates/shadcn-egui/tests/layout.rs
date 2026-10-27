@@ -1727,3 +1727,49 @@ fn a_space_between_in_unbounded_room_takes_its_content_width() {
         assert_eq!(passes, 1, "{case}");
     }
 }
+
+/// A raw egui widget that fills to infinity (`add_sized` with an
+/// infinite width) in a card or a vstack of a crate row or wrap_row in
+/// unbounded room
+/// makes that item infinitely wide, as it makes an egui `Frame` around it,
+/// and the row settles: one pass a frame, no repaint asked for.
+#[test]
+fn an_infinitely_filling_item_of_a_row_in_unbounded_room_settles() {
+    use shadcn_egui::components::card::Card;
+    for (card, wrap) in [(false, false), (true, false), (false, true), (true, true)] {
+        let ctx = vega();
+        let (passes, r) = settled(&ctx, Host::Screen, &|ui, _, out| {
+            ui.allocate_ui(egui::vec2(f32::INFINITY, 400.0), |ui| {
+                let row = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut egui::Ui)| {
+                    if wrap {
+                        layout::wrap_row(ui, 8.0, |ui| add(ui));
+                    } else {
+                        layout::row(ui, 8.0, |ui| add(ui));
+                    }
+                };
+                row(ui, &mut |ui| {
+                    let fill = |ui: &mut egui::Ui| {
+                        ui.add_sized([f32::INFINITY, 20.0], egui::Separator::default())
+                    };
+                    let item = if card {
+                        Card::new().show(ui, |ui| fill(ui));
+                        let layer = ui.layer_id();
+                        ui.ctx()
+                            .viewport(|v| {
+                                v.this_pass.widgets.get_layer(layer).last().map(|w| w.rect)
+                            })
+                            .expect("the card registered its box")
+                    } else {
+                        layout::vstack(ui, 4.0, |ui| fill(ui));
+                        ui.min_rect()
+                    };
+                    out.push(item);
+                })
+            });
+        });
+        let case = format!("card {card}, wrap_row {wrap}: {r:?}");
+        assert_eq!(r[0].width(), f32::INFINITY, "{case}");
+        assert_eq!(passes, 1, "{case}");
+        assert!(!ctx.has_requested_repaint(), "{case}");
+    }
+}

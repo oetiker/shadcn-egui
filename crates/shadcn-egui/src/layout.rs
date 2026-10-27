@@ -11,6 +11,13 @@ use egui_extras::{Size, StripBuilder};
 /// reason to redo a pass.
 const ROW_HEIGHT_EPSILON: f32 = 0.01; // behaviour-ok: float tolerance, not a design token
 
+/// Whether two widths are the same up to [`ROW_HEIGHT_EPSILON`]. Equal
+/// infinite widths (an item holding a widget that fills unbounded room)
+/// are the same, where their difference is NaN.
+fn same_width(a: f32, b: f32) -> bool {
+    a == b || (a - b).abs() <= ROW_HEIGHT_EPSILON
+}
+
 /// How much narrower epaint reports text at a finite width than it
 /// measured unwrapped: it wraps at that width rounded to whole points
 /// (plus this, so it never wraps earlier) and reports the galley no
@@ -714,10 +721,7 @@ pub(crate) fn as_flex_item<R, F: FnOnce(&mut Ui) -> R>(
     });
     // Only an unwrapped pass measures the stack's own width.
     let width = response.response.rect.width();
-    if fits
-        && may_store(ui, stored.is_some())
-        && stored.is_none_or(|w| (w - width).abs() > ROW_HEIGHT_EPSILON)
-    {
+    if fits && may_store(ui, stored.is_some()) && stored.is_none_or(|w| !same_width(w, width)) {
         ui.data_mut(|d| d.insert_temp(id, width));
         ui.ctx()
             .request_discard("layout::vstack width changed in a wrap_row");
@@ -955,7 +959,7 @@ pub(crate) fn shrink_stacks<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> (R, f32
     let same = stored.as_ref().is_some_and(|old| {
         old.len() == plan.len()
             && old.iter().zip(&plan).all(|(a, b)| match (a, b) {
-                (Some(a), Some(b)) => (a - b).abs() <= ROW_HEIGHT_EPSILON,
+                (Some(a), Some(b)) => same_width(*a, *b),
                 (a, b) => a.is_none() && b.is_none(),
             })
     });
@@ -1101,11 +1105,7 @@ fn flex_item<R>(
         );
         match target {
             None => known.unwrapped = Some((content, ppp)),
-            Some(w)
-                if known
-                    .max
-                    .is_some_and(|m| (m - w).abs() <= ROW_HEIGHT_EPSILON) =>
-            {
+            Some(w) if known.max.is_some_and(|m| same_width(m, w)) => {
                 // A stack that fits is laid out at its unwrapped width, so
                 // its content is as large as the measuring pass found it,
                 // and paints what the last pass at this width painted,

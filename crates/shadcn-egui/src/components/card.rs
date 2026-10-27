@@ -146,7 +146,10 @@ impl<'a> Card<'a> {
     /// flex row is 0) and, in a row as in a column, clips content wider
     /// than itself at its box. Where the width is unbounded (an
     /// `allocate_ui` of infinite width, a crate row measuring it) it takes
-    /// its content's width.
+    /// its content's width. A raw egui widget that fills whatever width it
+    /// gets (`add_sized` with an infinite width) makes a card in unbounded
+    /// room infinitely wide, as it makes an egui `Frame` around it; a crate
+    /// row with room gives such a card the room its other items leave.
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         let id = ui.next_auto_id().with("shadcn_egui::components::card");
         match layout::as_flex_item(ui, id, true, move |ui: &mut Ui| self.show_box(ui, add)) {
