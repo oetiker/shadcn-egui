@@ -11,6 +11,7 @@ use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
 use crate::components::icon::IconView;
 use crate::components::input::Input;
+use crate::components::kbd::{kbd, Kbd, KbdGroup};
 use crate::components::label::{description, label};
 use crate::components::popover::{popover_header, Popover};
 use crate::components::select::Select;
@@ -18,7 +19,7 @@ use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
-use crate::components::tooltip::tooltip;
+use crate::components::tooltip::{tooltip, Tooltip};
 use crate::preset::{
     BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, RadiusChoice,
     StyleName, ThemeColor,
@@ -638,6 +639,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 inputs_group(ui, state);
                 controls_group(ui, state);
                 badges_group(ui);
+                kbd_gallery(ui);
                 tabs_group(ui, state);
             });
         });
@@ -688,6 +690,45 @@ fn badges_group(ui: &mut egui::Ui) {
             }
         });
     });
+}
+
+fn kbd_gallery(ui: &mut egui::Ui) {
+    let icons = Theme::current(ui.ctx()).icons;
+    group(
+        ui,
+        "Kbd",
+        "Key chips, groups, and a chip in a tooltip.",
+        |ui| {
+            layout::vstack(ui, 16.0, |ui| {
+                KbdGroup::new().show(ui, |ui| {
+                    for k in ["⌘", "⇧", "⌥", "⌃"] {
+                        kbd(ui, k);
+                    }
+                });
+                KbdGroup::new().show(ui, |ui| {
+                    kbd(ui, "Ctrl");
+                    ui.label("+");
+                    kbd(ui, "B");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    description(ui, "Use");
+                    KbdGroup::new().show(ui, |ui| {
+                        kbd(ui, "Ctrl + B");
+                        kbd(ui, "Ctrl + K");
+                    });
+                    description(ui, "to open the command palette");
+                });
+                ui.add(Kbd::icon_only(icons.check, "Enter"));
+                let save = ui.add(Button::new("Save").variant(ButtonVariant::Outline));
+                Tooltip::new(&save).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Save Changes");
+                        kbd(ui, "S");
+                    });
+                });
+            });
+        },
+    );
 }
 
 fn icons_group(ui: &mut egui::Ui) {
