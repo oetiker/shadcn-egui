@@ -187,8 +187,10 @@ impl<'a> Card<'a> {
         );
         // The card's `text-*` and text colour reach its content.
         let look = TextLook::resolve(ui, &card, st);
-        // Header, content and footer sit in the card.
-        let painter = part_painter(ui, ui.id().with("shadcn_egui::card"), &[&card[..]], st);
+        // Header, content and footer sit in the card; the card's parts
+        // key their transitions under its own id.
+        let id = ui.next_auto_id();
+        let painter = part_painter(ui, id.with("shadcn_egui::card"), &[&card[..]], st);
 
         // A block fills the room left; where that is unbounded, the card
         // is laid out unbounded and takes its content's width.
@@ -228,7 +230,7 @@ impl<'a> Card<'a> {
         let result = content_scope(&mut body, &look, |ui| {
             content_ui(
                 ui,
-                ui.id().with("shadcn_egui::card::content"),
+                id.with("shadcn_egui::card::content"),
                 &[&card[..]],
                 st,
                 add,
@@ -268,7 +270,7 @@ impl<'a> Card<'a> {
                 content_scope(ui, &look, |ui| {
                     content_ui(
                         ui,
-                        ui.id().with("shadcn_egui::card::footer"),
+                        id.with("shadcn_egui::card::footer"),
                         &[&foot[..], &card[..]],
                         st,
                         |ui| {
@@ -308,7 +310,7 @@ impl<'a> Card<'a> {
             );
             part_painter(
                 ui,
-                ui.id().with("shadcn_egui::card::footer"),
+                id.with("shadcn_egui::card::footer"),
                 &[&foot[..], &card[..]],
                 st,
             )
@@ -334,15 +336,10 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let st = card_state(ui, &v);
     let l = [v.part(&t.style, |s| &s.card_content, |r| &r.card_content)];
     let gap = len(&l, |r| &r.gap, st);
+    let id = ui.next_auto_id().with("shadcn_egui::card::part");
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
-        content_ui(
-            ui,
-            ui.id().with("shadcn_egui::card::part"),
-            &[&l[..]],
-            st,
-            add,
-        )
+        content_ui(ui, id, &[&l[..]], st, add)
     })
     .inner
 }
@@ -354,7 +351,7 @@ pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
     let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
     content_ui(
         ui,
-        ui.id().with("shadcn_egui::card::header"),
+        ui.next_auto_id().with("shadcn_egui::card::header"),
         &[&header[..]],
         card_state(ui, &v),
         |ui| header_column(ui, title, description),
@@ -436,7 +433,7 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let look = TextLook::resolve(ui, &l, st).heading(true);
     part_ui(
         ui,
-        ui.id().with("shadcn_egui::card::title"),
+        ui.next_auto_id().with("shadcn_egui::card::title"),
         &[&l[..]],
         st,
         |ui| look.label(ui, text, TextWrapMode::Wrap),
@@ -452,7 +449,7 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let look = TextLook::resolve(ui, &l, st);
     part_ui(
         ui,
-        ui.id().with("shadcn_egui::card::description"),
+        ui.next_auto_id().with("shadcn_egui::card::description"),
         &[&l[..]],
         st,
         |ui| look.label(ui, text, TextWrapMode::Wrap),

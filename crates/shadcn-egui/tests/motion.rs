@@ -691,3 +691,40 @@ fn a_property_moves_where_the_transition_names_any_part_of_it() {
     let mid = at(2.075, egui::Color32::WHITE);
     assert!(mid != egui::Color32::BLACK && mid != egui::Color32::WHITE);
 }
+
+#[test]
+fn sibling_labels_keep_their_own_transitions() {
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::style::{Rule, When};
+    // A label whose style fades it when disabled, under
+    // `transition-opacity`: two in one `Ui`, one disabled, each settles
+    // at its own opacity.
+    let mut style = (*shadcn_egui::Theme::vega().style).clone();
+    style.label.transition = Prop::fixed(Transition::OPACITY);
+    style.label.opacity.rules.push(Rule {
+        when: When::new(State::DISABLED, State::NONE),
+        rank: 1,
+        value: 0.5,
+    });
+    let mut theme = shadcn_egui::Theme::vega();
+    theme.style = std::sync::Arc::new(style);
+    let ctx = fresh();
+    let mut repaints = Vec::new();
+    for time in [1.0, 2.0, 3.0, 4.0] {
+        let out = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| {
+                theme.apply(ui.ctx());
+                ui.add(Label::new("On"));
+                ui.add(Label::new("Off").enabled(false));
+            },
+        );
+        repaints.push(
+            out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO,
+        );
+    }
+    assert!(!repaints[3], "{repaints:?}");
+}

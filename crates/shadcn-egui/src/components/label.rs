@@ -66,7 +66,7 @@ impl Widget for Label {
         let look = TextLook::resolve(ui, &l, st);
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
         let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
-        let painter = part_painter(ui, ui.id().with("shadcn_egui::label"), &[&l[..]], st);
+        let painter = part_painter(ui, ui.next_auto_id(), &[&l[..]], st);
 
         // The label is as tall as its line box (`leading-none`: the font
         // size).

@@ -127,7 +127,7 @@ impl<'a> Widget for Input<'a> {
         // The `TextEdit` is the field's own text: it paints at the part's opacity.
         let fade = part_opacity(
             ui,
-            ui.id().with("shadcn_egui::input"),
+            ui.next_auto_id().with("shadcn_egui::input"),
             &[&l[..]],
             g.with(State::DISABLED, !enabled),
         );
