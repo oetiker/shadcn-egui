@@ -13,9 +13,11 @@ use egui::{Response, Sense, Ui, Vec2, Widget};
 /// shadcn `orientation` of the separator.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SeparatorOrientation {
-    /// A rule across the available width; in an unbounded room (a
-    /// horizontal `ScrollArea`, a [`vstack`](crate::layout::vstack) that
-    /// fits its row) it has no length.
+    /// A rule across the available width (`w-full`). It has no content
+    /// width, so it never widens what it sits in: where the width is
+    /// unbounded (an `allocate_ui` of infinite width) it has no length,
+    /// and in a [`vstack`](crate::layout::vstack) that fits its row it
+    /// spans the width the stack's other items give it.
     #[default]
     Horizontal,
     /// A rule as tall as the tallest other item of the
