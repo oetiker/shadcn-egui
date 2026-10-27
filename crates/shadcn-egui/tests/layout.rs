@@ -2256,3 +2256,122 @@ fn dialog_footer_in_unbounded_room_takes_its_content_width() {
         assert_eq!(passes, 1, "{case}");
     }
 }
+
+/// A Tabs list in a horizontally justified layout takes the layout's
+/// width and shares it among its triggers as their `flex-1` does: equal
+/// widths, each label centred in its trigger, settled in one pass a
+/// frame, on screen and in an `Area`.
+#[test]
+fn a_justified_tabs_list_shares_its_width_equally() {
+    use shadcn_egui::components::tabs::Tabs;
+    for host in [Host::Screen, Host::Area(false)] {
+        let content = |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(360.0, 100.0),
+                egui::Layout::top_down_justified(egui::Align::Min),
+                |ui| {
+                    let mut tab = 0;
+                    let layer = ui.layer_id();
+                    let before = ui
+                        .ctx()
+                        .viewport(|v| v.this_pass.widgets.get_layer(layer).count());
+                    let list = ui
+                        .add(Tabs::new(&mut tab, &["A", "Longer label", "C"]))
+                        .rect;
+                    out.push(list);
+                    ui.ctx().viewport(|v| {
+                        out.extend(
+                            v.this_pass
+                                .widgets
+                                .get_layer(layer)
+                                .skip(before)
+                                .map(|w| w.rect)
+                                .filter(|r| *r != list && list.contains_rect(*r)),
+                        )
+                    });
+                },
+            );
+        };
+        let ctx = vega();
+        let (passes, r) = settled(&ctx, host, &content);
+        let case = format!("{host:?}: {r:?}");
+        let (list, triggers) = r.split_first().expect("list");
+        assert_eq!(list.width(), 360.0, "{case}");
+        assert_eq!(triggers.len(), 3, "{case}");
+        for t in triggers {
+            assert!((t.width() - triggers[0].width()).abs() < 0.01, "{case}");
+        }
+        assert_eq!(passes, 1, "{case}");
+        // The same frame again, with the rects on the screen, to compare
+        // with the painted labels.
+        let mut abs = Vec::new();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
+            Host::Screen => content(ui, false, &mut abs),
+            Host::Area(_) => {
+                egui::Area::new(egui::Id::new("popover"))
+                    .show(ui.ctx(), |ui| content(ui, false, &mut abs));
+            }
+        });
+        let texts = common::text_shapes(&out);
+        assert_eq!(texts.len(), 3, "{case}");
+        for (t, trigger) in texts.iter().zip(&abs[1..]) {
+            let centre = t.pos.x + t.galley.rect.center().x;
+            assert!(
+                (centre - trigger.center().x).abs() < 1.0,
+                "{case}: label centre {centre}, trigger {trigger:?}"
+            );
+        }
+    }
+}
+
+/// `layout::form_row` in a column narrower than its label column and
+/// control together keeps to the column: the control takes the rest and
+/// the row does not run past the column, settled in one pass a frame.
+/// In a crate row it is one item that ends at the row's end.
+#[test]
+fn a_form_row_keeps_to_a_narrow_column_and_a_crate_row() {
+    for host in [Host::Screen, Host::Area(false)] {
+        for in_row in [false, true] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.set_max_width(180.0);
+                out.push(ui.max_rect());
+                let add = |ui: &mut egui::Ui, out: &mut Vec<egui::Rect>| {
+                    let row = ui
+                        .scope(|ui| {
+                            layout::form_row(ui, 100.0, "Name", |ui| {
+                                out.push(ui.add(egui::Label::new("ok")).rect);
+                            })
+                        })
+                        .response
+                        .rect;
+                    out.push(row);
+                };
+                if in_row {
+                    layout::row(ui, 8.0, |ui| {
+                        out.push(ui.button("Go").rect);
+                        add(ui, out);
+                    });
+                } else {
+                    add(ui, out);
+                }
+            });
+            let case = format!("{host:?} in_row {in_row}: {r:?}");
+            let (column, row, control) = if in_row {
+                let [column, go, control, row] = r[..] else {
+                    panic!("{case}")
+                };
+                assert!(row.left() >= go.right(), "{case}");
+                (column, row, control)
+            } else {
+                let [column, control, row] = r[..] else {
+                    panic!("{case}")
+                };
+                (column, row, control)
+            };
+            assert!(row.right() <= column.right() + 0.01, "{case}");
+            assert!(control.right() <= column.right() + 0.01, "{case}");
+            assert!(control.left() >= row.left() + 100.0, "{case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}
