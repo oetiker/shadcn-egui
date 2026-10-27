@@ -811,6 +811,10 @@ struct Intrinsic {
 /// and never sizes the stack. Shapes without a texture (an icon a crate
 /// widget paints as paths, a frame) draw at a size their widget fixes,
 /// so the content's size already tells a change.
+///
+/// The hash covers what one pass painted, so it is compared only between
+/// passes at the same planned width: a pass that paints nothing (egui's
+/// invisible sizing pass of an `Area`) hashes as empty content.
 fn content_hash(ctx: &egui::Context, layer: egui::LayerId, first: usize) -> u64 {
     use std::hash::{Hash, Hasher};
     fn image(
@@ -999,6 +1003,12 @@ fn shrink(room: f32, items: &[FlexItem]) -> Vec<Option<f32>> {
 /// A [`vstack`] as an item of the crate row `row`: laid out unwrapped
 /// when the row's last plan gives it no width, else at that width, and
 /// reported to the row.
+///
+/// The measuring pass of a stack whose content changed is discarded, so
+/// it is not shown. Where it is egui's last allowed pass (`max_passes`
+/// 2), egui ignores the discard and shows it for one frame: its text
+/// unwrapped, a `w-full` child at its content minimum. The next frame
+/// lays the stack out at its measured width.
 fn flex_item<R>(
     ui: &mut Ui,
     row: egui::Id,
