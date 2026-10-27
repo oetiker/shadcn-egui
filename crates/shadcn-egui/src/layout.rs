@@ -57,7 +57,7 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // widgets registered while `add` runs (see `row_lines`), so it does not
     // depend on the row's own height.
     let size = egui::vec2(ui.available_size_before_wrap().x, height);
-    let (inner, lines) = overflow_row(ui, size, layout, |_, ui| {
+    let (inner, lines) = overflow_row(ui, size, layout, None, |_, ui| {
         let items = RowItems::begin(ui);
         ui.spacing_mut().item_spacing.x = gap;
         let inner = shrink_stacks(ui, |ui| {
@@ -331,49 +331,157 @@ pub fn stretch_height(ui: &Ui) -> Option<f32> {
 /// Horizontal stack that wraps onto further lines when it runs out of width
 /// (flex-direction: row; flex-wrap: wrap; gap: N; align-items: center).
 /// The gap applies both between items on a line and between wrapped lines.
-/// A [`vstack`] item wraps as a whole, as a flex item does.
+/// A [`vstack`] item wraps as a whole, as a flex item does, and so does an
+/// egui `Label`: egui text in a `wrap_row` does not wrap, except in a
+/// [`vstack`] too wide for a whole line.
 ///
-/// The first line starts from its height in the last pass, so an item
-/// placed before a taller one is centred on the line, as in a [`row`].
-/// egui starts each further line as high as the line before it, so there
-/// an item before a taller one sits higher than the centre, and a line
-/// after a taller one is as high as that one.
+/// Each line starts from its height in the last pass, so every item is
+/// centred on its line and a line is as high as its tallest item, as in a
+/// [`row`]; where a line's height changes, the row redoes the pass. A
+/// line starts this way where the crate wraps it: before a crate widget
+/// or a [`vstack`] that does not fit the line before. A line that an egui
+/// widget starts (an egui `Label`, `Button`, `allocate_space`) is started
+/// by egui, which makes it at least as high as the line before.
 pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // As `horizontal_wrapped`, but each line is as high as its tallest item:
     // egui's own starts every line `interact_size.y` high, which puts more
     // than `gap` between lines of smaller items (badges).
     let id = ui.next_auto_id().with("shadcn_egui::layout::wrap_row");
-    let stored = ui.data(|d| d.get_temp::<f32>(id));
-    let height = stored.unwrap_or(0.0);
+    let stored = ui.data(|d| d.get_temp::<Vec<f32>>(id));
+    let heights = stored.clone().unwrap_or_default();
+    let band = heights.first().copied().unwrap_or(0.0);
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(egui::Align::Center)
     } else {
         egui::Layout::left_to_right(egui::Align::Center)
     };
-    let size = egui::vec2(ui.available_size_before_wrap().x, height);
-    let (inner, lines) = overflow_row(ui, size, layout.with_main_wrap(true), |_, ui| {
+    let size = egui::vec2(ui.available_size_before_wrap().x, band);
+    let wrap = WrapContext(ui.wrap_mode());
+    let row = layout.with_main_wrap(true);
+    let (inner, lines, started) = overflow_row(ui, size, row, Some(wrap), |_, ui| {
+        let key = wrap_lines_id(ui.unique_id());
+        let before = ui
+            .ctx()
+            .viewport(|v| v.this_pass.widgets.get_layer(ui.layer_id()).count());
+        let pass = WrapLines {
+            heights,
+            started: vec![(0, band)],
+            before,
+        };
+        ui.data_mut(|d| d.insert_temp(key, pass));
         let items = RowItems::begin(ui);
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
         let inner = add(ui);
-        (inner, items.finish(ui, true))
+        let pass = ui
+            .data_mut(|d| d.remove_temp::<WrapLines>(key))
+            .unwrap_or_default();
+        (inner, items.finish(ui, true), pass.started)
     });
-    let first = lines.first().map_or(Line::default(), |l| *l);
-    if may_store(ui, stored.is_some())
-        && stored.is_none_or(|h| (h - first.height).abs() > ROW_HEIGHT_EPSILON)
-    {
-        ui.data_mut(|d| d.insert_temp(id, first.height));
+    let measured: Vec<f32> = lines.iter().map(|l| l.height).collect();
+    let changed = stored.as_ref().is_none_or(|old| {
+        old.len() != measured.len()
+            || old
+                .iter()
+                .zip(&measured)
+                .any(|(a, b)| (a - b).abs() > ROW_HEIGHT_EPSILON)
+    });
+    if changed && may_store(ui, stored.is_some()) {
+        ui.data_mut(|d| d.insert_temp(id, measured));
         // egui grows the line to each item as it comes, so a line that
         // started lower than it ends places its items as one that started
         // at its height only when the first item is the tallest.
-        let low = height < first.height - ROW_HEIGHT_EPSILON;
-        if height > first.height + ROW_HEIGHT_EPSILON
-            || (low && first.first < first.height - ROW_HEIGHT_EPSILON)
-        {
+        let misplaced = started.iter().any(|&(k, band)| {
+            lines.get(k).is_some_and(|l| {
+                band > l.height + ROW_HEIGHT_EPSILON
+                    || (band < l.height - ROW_HEIGHT_EPSILON
+                        && l.first < l.height - ROW_HEIGHT_EPSILON)
+            })
+        });
+        if misplaced {
             ui.ctx()
                 .request_discard("layout::wrap_row line height changed");
         }
     }
     inner
+}
+
+/// The context on the `Ui` of a [`wrap_row`]: the text wrap mode of the
+/// `Ui` around it, which a [`vstack`] too wide for a whole line gives its
+/// text back.
+#[derive(Clone, Copy)]
+struct WrapContext(egui::TextWrapMode);
+
+/// What a [`wrap_row`] knows about its lines in a pass: each line's height
+/// in the previous pass, the lines that started at it (line and height),
+/// and the place on the layer of the row's first item.
+#[derive(Clone, Debug, Default)]
+struct WrapLines {
+    heights: Vec<f32>,
+    started: Vec<(usize, f32)>,
+    before: usize,
+}
+
+fn wrap_lines_id(row: egui::Id) -> egui::Id {
+    row.with("shadcn_egui::layout::wrap_lines")
+}
+
+/// Whether the next item of the wrapping `ui` starts its line.
+fn at_line_start(ui: &Ui) -> bool {
+    let (cursor, max) = (ui.cursor(), ui.max_rect());
+    if ui.layout().prefer_right_to_left() {
+        cursor.max.x >= max.max.x
+    } else {
+        cursor.min.x <= max.min.x
+    }
+}
+
+/// Where `ui` is a [`wrap_row`] and an item `width` wide does not fit the
+/// rest of its line, starts the next line for it (see [`start_line`]).
+/// A crate widget calls this before it allocates, so that the crate, not
+/// egui, wraps it.
+pub(crate) fn wrap_item(ui: &mut Ui, width: f32) {
+    if context::on_frame::<WrapContext>(ui.stack()).is_some()
+        && !at_line_start(ui)
+        && width > ui.available_size_before_wrap().x
+    {
+        start_line(ui);
+    }
+}
+
+/// Ends the line of the wrapping `ui` and, in a [`wrap_row`], starts the
+/// next at its height in the previous pass: egui would start it at least
+/// as high as the line before.
+fn start_line(ui: &mut Ui) {
+    ui.end_row();
+    let key = wrap_lines_id(ui.unique_id());
+    let Some(mut pass) = ui.data(|d| d.get_temp::<WrapLines>(key)) else {
+        return;
+    };
+    // The new line's number: the lines the row's items so far are on.
+    let parent = ui.id();
+    let line = ui.ctx().viewport(|v| {
+        let mut bottom = f32::NEG_INFINITY;
+        let mut lines = 0;
+        for w in v
+            .this_pass
+            .widgets
+            .get_layer(ui.layer_id())
+            .skip(pass.before)
+            .filter(|w| w.parent_id == parent && w.rect.is_finite())
+        {
+            if w.rect.top() >= bottom {
+                lines += 1;
+                bottom = f32::NEG_INFINITY;
+            }
+            bottom = bottom.max(w.rect.bottom());
+        }
+        lines
+    });
+    let band = pass.heights.get(line).copied().unwrap_or(0.0);
+    ui.set_row_height(band);
+    pass.started.push((line, band));
+    ui.data_mut(|d| d.insert_temp(key, pass));
 }
 
 /// The context on the `Ui` of a crate row ([`row`], [`wrap_row`],
@@ -421,7 +529,8 @@ fn in_row(ui: &Ui) -> bool {
 
 /// A crate row of `size` in `layout`, placed as `allocate_ui_with_layout`
 /// places it. `add` gets the `Ui` that holds the room and the row's own
-/// `Ui`, built inside it with [`row_builder`]. The row's children may run
+/// `Ui`, built inside it with [`row_builder`] (and the `wrap` context of
+/// a [`wrap_row`]). The row's children may run
 /// past the room; the room takes the row's `min_rect` cut to its own
 /// width, and the parent allocates that. A row that is itself a flex item
 /// of a crate row (in a [`vstack`] in a row) is not cut: the outer row
@@ -430,11 +539,17 @@ fn overflow_row<R>(
     ui: &mut Ui,
     size: egui::Vec2,
     layout: egui::Layout,
+    wrap: Option<WrapContext>,
     add: impl FnOnce(&Ui, &mut Ui) -> R,
 ) -> R {
     ui.allocate_ui_with_layout(size, layout, |room| {
         let max = room.max_rect();
-        let mut row = room.new_child(row_builder(max, layout));
+        let mut builder = row_builder(max, layout);
+        if let Some(wrap) = wrap {
+            let info = builder.ui_stack_info.clone();
+            builder = builder.ui_stack_info(context::inherited_info(info, wrap));
+        }
+        let mut row = room.new_child(builder);
         let inner = add(room, &mut row);
         // Dropping the row registers its `min_rect`.
         let used = row.min_rect();
@@ -511,15 +626,17 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         });
     }
     let stored = ui.data(|d| d.get_temp::<f32>(id));
-    let line_start = ui.cursor().min.x <= ui.max_rect().min.x;
-    if !line_start && stored.is_some_and(|w| w > ui.available_size_before_wrap().x) {
-        ui.end_row();
+    if !at_line_start(ui) && stored.is_some_and(|w| w > ui.available_size_before_wrap().x) {
+        start_line(ui);
     }
     let fits = stored.is_none_or(|w| w <= ui.available_size_before_wrap().x);
+    let wrap = context::on_frame::<WrapContext>(ui.stack()).map(|w| w.0);
     let response = ui.scope_builder(column, |ui| {
         ui.spacing_mut().item_spacing.y = gap;
         if fits {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        } else if let Some(mode) = wrap {
+            ui.style_mut().wrap_mode = Some(mode);
         }
         add(ui)
     });
@@ -940,6 +1057,7 @@ pub fn allocate_overflowing(
     size: egui::Vec2,
     sense: egui::Sense,
 ) -> (egui::Rect, egui::Response) {
+    wrap_item(ui, size.x);
     let room = ui.available_width().max(0.0);
     if size.x <= room || in_row(ui) {
         return ui.allocate_exact_size(size, sense);
@@ -957,6 +1075,17 @@ pub fn allocate_overflowing(
     // inside the parent.
     response.rect = egui::Rect::from_min_size(egui::pos2(left, rect.top()), size);
     (response.rect, response)
+}
+
+/// `ui.allocate_exact_size` for a crate widget: in a [`wrap_row`] the
+/// crate, not egui, wraps it onto the next line (see [`wrap_item`]).
+pub(crate) fn allocate_item(
+    ui: &mut Ui,
+    size: egui::Vec2,
+    sense: egui::Sense,
+) -> (egui::Rect, egui::Response) {
+    wrap_item(ui, size.x);
+    ui.allocate_exact_size(size, sense)
 }
 
 /// The clamp order of [`capped_width`]: cap first, then the content
@@ -1024,7 +1153,7 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
         ui.spacing().interact_size.y,
     );
     let layout = egui::Layout::left_to_right(egui::Align::Center);
-    overflow_row(ui, size, layout, |_, ui| {
+    overflow_row(ui, size, layout, None, |_, ui| {
         let items = RowItems::begin(ui);
         shrink_stacks(ui, |ui| {
             left(ui);

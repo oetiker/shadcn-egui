@@ -211,6 +211,7 @@ impl Widget for Select<'_> {
         // Overflowing at its content minimum, the trigger keeps its parent's
         // width (conformance 3.6); otherwise `allocate_space` takes a
         // justified layout's width, as egui's `Button` does.
+        layout::wrap_item(ui, width);
         let rect = if width > ui.available_width() {
             layout::allocate_overflowing(ui, vec2(width, height), Sense::hover()).0
         } else {

@@ -323,7 +323,7 @@ impl Widget for Button {
         } else {
             Sense::hover()
         };
-        let (rect, mut resp) = ui.allocate_exact_size(Vec2::new(width, height), sense);
+        let (rect, mut resp) = crate::layout::allocate_item(ui, Vec2::new(width, height), sense);
         pressable(&mut resp, ActivationKeys::Button);
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)

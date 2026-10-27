@@ -71,7 +71,7 @@ impl Widget for Label {
         // The label is as tall as its line box (`leading-none`: the font
         // size).
         let block = look.layout(ui, self.text.as_str(), TextWrapMode::Extend, f32::INFINITY);
-        let (rect, resp) = ui.allocate_exact_size(block.size(), Sense::hover());
+        let (rect, resp) = crate::layout::allocate_item(ui, block.size(), Sense::hover());
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });

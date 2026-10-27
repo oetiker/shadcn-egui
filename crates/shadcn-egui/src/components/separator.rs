@@ -83,7 +83,7 @@ impl Widget for Separator {
             // `w-full`; a rule has no content width (conformance 3.1).
             Vec2::new(capped_width(ui, f32::INFINITY, 0.0), h)
         };
-        let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
+        let (rect, resp) = layout::allocate_item(ui, size, Sense::hover());
         if ui.is_rect_visible(rect) {
             if let Some(c) = pick(&l, |r| &r.bg, st).map(|p| t.paint(p)) {
                 part_painter(ui, &[&l[..]], st).rect_filled(rect, 0.0, c);

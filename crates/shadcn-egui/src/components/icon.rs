@@ -72,7 +72,7 @@ impl Widget for IconView<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
         let side = self.size.unwrap_or(t.metrics.icon);
-        let (rect, resp) = ui.allocate_exact_size(Vec2::splat(side), Sense::hover());
+        let (rect, resp) = crate::layout::allocate_item(ui, Vec2::splat(side), Sense::hover());
         // No label of its own (the icon's name is an id, not text a reader
         // should hear): name it with `labelled_by(label.id)`, which an own
         // label would override.

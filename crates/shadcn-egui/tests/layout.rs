@@ -943,3 +943,110 @@ fn wrap_row_line_settles_in_an_area() {
         });
     });
 }
+
+/// A label in a `wrap_row` is a flex item: after a taller `vstack` it
+/// reports its own height, centred on the line, as before the stack; a
+/// label that does not fit the rest of the line starts the next line
+/// whole. A stack alone on a line too narrow for it still wraps its text.
+#[test]
+fn a_label_in_a_wrap_row_is_a_flex_item() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    let mut rects = [egui::Rect::NOTHING; 5];
+    for _ in 0..3 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.set_max_width(200.0);
+            layout::wrap_row(ui, 8.0, |ui| {
+                rects[0] = ui.label("one").rect;
+                rects[1] = layout::vstack(ui, 4.0, |ui| {
+                    ui.label("top");
+                    ui.label("bottom");
+                    ui.min_rect()
+                });
+                rects[2] = ui.label("two").rect;
+                rects[3] = ui.label("a label too long for the rest").rect;
+                rects[4] = layout::vstack(ui, 4.0, |ui| {
+                    ui.label("a stack with more text than one line holds");
+                    ui.min_rect()
+                });
+            });
+        });
+    }
+    let [one, stack, two, long, narrow] = rects;
+    assert_eq!(two.height(), one.height(), "{rects:?}");
+    assert_eq!(two.center().y, stack.center().y, "{rects:?}");
+    assert_eq!(long.left(), one.left(), "starts a line: {rects:?}");
+    assert!(long.top() >= stack.bottom(), "{rects:?}");
+    assert!(narrow.width() <= 200.0, "wraps: {rects:?}");
+    assert!(narrow.height() > one.height(), "wraps: {rects:?}");
+}
+
+/// Every line of a `wrap_row` is as high as its own tallest item and
+/// centres its items, `gap` below the line before: a line after a taller
+/// one, started by a crate widget, is not as high as that one; an item
+/// placed before a taller one is centred; and the line, an egui `Label` on
+/// it, shrinks when its tall item goes, redoing the changed frame's pass
+/// once. On the screen and in an `egui::Area`, and a still frame takes one
+/// pass.
+#[test]
+fn wrap_row_lines_have_their_own_height() {
+    use shadcn_egui::components::badge::Badge;
+    for host in [Host::Screen, Host::Area(false)] {
+        let ctx = vega();
+        let content = |tall: f32| {
+            move |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+                ui.set_max_width(200.0);
+                layout::wrap_row(ui, 8.0, |ui| {
+                    out.push(boxed(ui, 150.0, 50.0));
+                    out.push(ui.add(Badge::new("Badge")).rect);
+                    if tall > 0.0 {
+                        out.push(boxed(ui, 10.0, tall));
+                    }
+                    out.push(ui.label("label").rect);
+                    out.push(boxed(ui, 10.0, 6.0));
+                });
+            }
+        };
+        for (i, tall) in [40.0, 0.0].into_iter().enumerate() {
+            let content = content(tall);
+            if i > 0 {
+                let (passes, _) = frame_in(&ctx, host, false, &content);
+                assert_eq!(passes, 2, "{host:?} tall {tall}: the change, once");
+            }
+            let (passes, r) = settled(&ctx, host, &content);
+            let line = &r[1..];
+            let centre = line[0].center().y;
+            assert!(
+                line.iter().all(|i| i.center().y == centre),
+                "{host:?} tall {tall}: centred: {r:?}"
+            );
+            let union = line.iter().fold(egui::Rect::NOTHING, |a, b| a.union(*b));
+            let own = line.iter().map(|i| i.height()).fold(0.0, f32::max);
+            assert_eq!(union.height(), own, "{host:?} tall {tall}: {r:?}");
+            assert!(own < 50.0, "{host:?} tall {tall}: {r:?}");
+            assert_eq!(
+                union.top() - r[0].bottom(),
+                8.0,
+                "{host:?} tall {tall}: gap"
+            );
+            assert_eq!(union.left(), r[0].left(), "{host:?} tall {tall}: line 2");
+            assert_eq!(passes, 1, "{host:?} tall {tall}: a still frame");
+        }
+    }
+}
+
+/// The heights of a `wrap_row`'s further lines (`request_discard`
+/// "layout::wrap_row line height changed") in an `egui::Area`.
+#[test]
+fn wrap_row_lines_settle_in_an_area() {
+    use shadcn_egui::components::badge::Badge;
+    settles_in_an_area("wrap_row lines", &|ui, sensitive, out| {
+        ui.set_max_width(200.0);
+        layout::wrap_row(ui, 8.0, |ui| {
+            out.push(boxed(ui, 150.0, 50.0));
+            out.push(ui.add(Badge::new("Badge")).rect);
+            out.push(probe(ui, sensitive, egui::vec2(20.0, 40.0)));
+            out.push(ui.label("label").rect);
+        });
+    });
+}

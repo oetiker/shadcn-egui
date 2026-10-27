@@ -159,7 +159,8 @@ impl Widget for Badge {
         // No height: CSS's initial `auto`, the content's height.
         let height = pick(&l, |r| &r.height, g).unwrap_or(row.size().y);
         let width = row.size().x;
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+        let (rect, resp) =
+            crate::layout::allocate_item(ui, Vec2::new(width, height), Sense::hover());
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });

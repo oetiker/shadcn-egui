@@ -91,7 +91,7 @@ impl Widget for Checkbox<'_> {
             pick(&l, |r| &r.width, g).unwrap_or(auto),
             pick(&l, |r| &r.height, g).unwrap_or(auto),
         );
-        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
+        let (rect, base) = crate::layout::allocate_item(ui, size, Sense::hover());
         let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
