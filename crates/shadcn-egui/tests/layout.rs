@@ -437,6 +437,23 @@ fn frame_in(
     sensitive: bool,
     content: Content,
 ) -> (u64, Vec<egui::Rect>) {
+    frame_in_window(ctx, host, sensitive, None, content)
+}
+
+/// [`frame_in`] in a window `window` points wide (egui's default where
+/// `None`).
+fn frame_in_window(
+    ctx: &egui::Context,
+    host: Host,
+    sensitive: bool,
+    window: Option<f32>,
+    content: Content,
+) -> (u64, Vec<egui::Rect>) {
+    let input = egui::RawInput {
+        screen_rect: window
+            .map(|w| egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 800.0))),
+        ..Default::default()
+    };
     let before = ctx.cumulative_pass_nr();
     let mut rects = Vec::new();
     let mut run = |ui: &mut egui::Ui| {
@@ -445,7 +462,7 @@ fn frame_in(
         let origin = ui.max_rect().min.to_vec2();
         rects.iter_mut().for_each(|r| *r = r.translate(-origin));
     };
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| match host {
+    let _ = ctx.run_ui(input, |ui| match host {
         Host::Screen => {
             ui.scope(&mut run);
         }
@@ -2033,5 +2050,60 @@ fn a_stretched_button_centres_its_label() {
             "widget {widget}: label centre {centre}, box {rect:?}"
         );
         assert_eq!(rect.width(), 300.0, "widget {widget}");
+    }
+}
+
+/// `dialog::footer` applies upstream's `flex-col-reverse gap-2
+/// sm:flex-row sm:justify-end` by itself (conformance 3.5): in a window
+/// narrower than `sm` (640 px) its actions stack, the last one the code
+/// adds on top, each as wide as the footer, a gap apart; from `sm` up they
+/// form a row at the end. On screen and in an `Area`, settled in one pass
+/// a frame; a resize across `sm` redoes at most one pass.
+#[test]
+fn dialog_footer_stacks_its_actions_below_sm() {
+    use shadcn_egui::components::dialog;
+    for host in [Host::Screen, Host::Area(false)] {
+        for labels in [&["Cancel", "Save"][..], &["One", "Two", "Three"]] {
+            let content = |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+                ui.allocate_ui(egui::vec2(400.0, 300.0), |ui| {
+                    let room = ui.max_rect();
+                    dialog::footer(ui, |ui| {
+                        for b in labels {
+                            out.push(ui.button(*b).rect);
+                        }
+                    });
+                    out.push(room);
+                });
+            };
+            let ctx = vega();
+            for window in [500.0, 800.0, 500.0] {
+                let first = frame_in_window(&ctx, host, false, Some(window), &content).0;
+                let _ = frame_in_window(&ctx, host, false, Some(window), &content);
+                let (passes, r) = frame_in_window(&ctx, host, false, Some(window), &content);
+                let case = format!("{host:?} {labels:?} window {window}: {r:?}");
+                let (room, buttons) = r.split_last().expect("rects");
+                assert_eq!(buttons.len(), labels.len(), "{case}");
+                assert_eq!(passes, 1, "{case}");
+                assert!(first <= 2, "{case}: {first} passes after the resize");
+                if window < 640.0 {
+                    let gap = buttons[0].top() - buttons[1].bottom();
+                    assert!(gap > 0.0, "{case}");
+                    for pair in buttons.windows(2) {
+                        assert_eq!(pair[0].top() - pair[1].bottom(), gap, "{case}");
+                    }
+                    for b in buttons {
+                        assert_eq!(b.x_range(), buttons[0].x_range(), "{case}");
+                        assert!(b.width() > room.width() - 100.0, "{case}");
+                    }
+                } else {
+                    for pair in buttons.windows(2) {
+                        assert!(pair[0].right() < pair[1].left(), "{case}");
+                        assert_eq!(pair[0].y_range(), pair[1].y_range(), "{case}");
+                    }
+                    let last = buttons.last().expect("buttons");
+                    assert_eq!(last.right(), room.right(), "{case}");
+                }
+            }
+        }
     }
 }

@@ -187,20 +187,36 @@ fn a_disabled_dialog_footer_keeps_its_strip_colour() {
     );
 }
 
+/// An open dialog over a page, with a two-action footer.
+fn dialog_page(ui: &mut egui::Ui) {
+    ui.label("page beneath");
+    Dialog::new("confirm", "Delete session?")
+        .description("The session and its files are removed.")
+        .show(ui.ctx(), &mut true, |ui| {
+            ui.label("This cannot be undone.");
+            dialog::footer(ui, |ui| {
+                ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
+            });
+        });
+}
+
 #[test]
 fn dialog_snapshot() {
-    common::snapshot_all("dialog", vec2(800.0, 500.0), |ui| {
-        ui.label("page beneath");
-        Dialog::new("confirm", "Delete session?")
-            .description("The session and its files are removed.")
-            .show(ui.ctx(), &mut true, |ui| {
-                ui.label("This cannot be undone.");
-                dialog::footer(ui, |ui| {
-                    ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
-                    ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
-                });
-            });
-    });
+    common::snapshot_all("dialog", vec2(800.0, 500.0), dialog_page);
+}
+
+/// In a phone-wide window the footer stacks its actions, the primary on
+/// top, each as wide as the footer (`flex-col-reverse` below `sm`).
+#[test]
+fn dialog_narrow_snapshot() {
+    common::snapshot_with_themes(
+        "dialog_narrow",
+        vec2(common::PHONE, 500.0),
+        common::themes(),
+        dialog_page,
+        |_| {},
+    );
 }
 
 fn popover_trigger(ui: &mut egui::Ui) {

@@ -1417,6 +1417,40 @@ pub(crate) fn end_aligned<R>(
     inner
 }
 
+/// Lays `add` out as a reverse column (`flex-direction: column-reverse`,
+/// `align-items: stretch`): the first widget the code adds at the bottom,
+/// each later one above it, each as wide as the room `ui` has left. It
+/// starts the column where its height from the previous pass, stored under
+/// `id`, ends it; where that height changes, the pass is discarded once
+/// with `why` (conformance 3.2), as [`end_aligned`] does on the x axis; a
+/// sizing pass never replaces a height a visible pass measured. Before its
+/// first pass the column ends at the room's top edge.
+pub(crate) fn reverse_column<R>(
+    ui: &mut Ui,
+    id: egui::Id,
+    why: &'static str,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let room = ui.available_rect_before_wrap();
+    let stored = ui.data(|d| d.get_temp::<f32>(id));
+    let height = stored.unwrap_or(0.0);
+    let inner = ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(egui::Rect::from_min_size(
+                room.min,
+                egui::vec2(room.width(), height),
+            ))
+            .layout(egui::Layout::bottom_up(egui::Align::Min).with_cross_justify(true)),
+        add,
+    );
+    let measured = inner.response.rect.height();
+    if may_store(ui, stored.is_some()) && stored.is_none_or(|h| !same_width(h, measured)) {
+        ui.data_mut(|d| d.insert_temp(id, measured));
+        ui.ctx().request_discard(why);
+    }
+    inner
+}
+
 /// A shadcn Card at the default size, across the available width of a
 /// column and content-sized in a crate row. See
 /// [`crate::components::card::Card`] for sizes, a footer and its width.

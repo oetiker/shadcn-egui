@@ -15,7 +15,7 @@ use crate::components::context;
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
-use crate::style::{pick, Recipe};
+use crate::style::{pick, Recipe, State};
 use crate::{layout, Theme};
 use egui::{Align, Color32, Id, Layout, Rect, Shape, TextWrapMode, Ui, UiBuilder};
 
@@ -258,15 +258,16 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
         .clicked()
 }
 
-/// `dialog-footer`: actions aligned right, left to right in the order the
-/// code adds them, as upstream's `sm:flex-row sm:justify-end`: add the
-/// primary action last. In a style with a footer strip (nova) the strip
-/// bleeds to the dialog's edges and bottom.
+/// `dialog-footer`: add the primary action last. In a window at least
+/// `sm` (640 points) wide the actions are aligned right, left to right in
+/// the order the code adds them (upstream's `sm:flex-row sm:justify-end`).
+/// In a narrower window they stack, each as wide as the footer, the last
+/// one the code adds on top (`flex-col-reverse`). In a style with a footer
+/// strip (nova) the strip bleeds to the dialog's edges and bottom.
 ///
-/// The actions are placed at the end from their width in the previous
-/// pass; where that width changes, the pass is discarded and redone.
-/// Upstream's narrow-window column (`flex-col-reverse` below `sm`) is not
-/// ported: the footer is a row at every width.
+/// The row is placed at the end from its width in the previous pass, the
+/// stack from its height; where that size changes, the pass is discarded
+/// and redone.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let id = ui.next_auto_id().with("shadcn_egui::dialog::footer");
     let t = Theme::current(ui.ctx());
@@ -300,14 +301,24 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             .max_rect(inner)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    row.spacing_mut().item_spacing.x = gap;
-    layout::end_aligned(
-        &mut row,
-        id,
-        Align::Center,
-        "dialog::footer actions width changed",
-        |ui| content_ui(ui, &[&l[..]], g, add),
-    );
+    if g.contains(State::SM) {
+        row.spacing_mut().item_spacing.x = gap;
+        layout::end_aligned(
+            &mut row,
+            id,
+            Align::Center,
+            "dialog::footer actions width changed",
+            |ui| content_ui(ui, &[&l[..]], g, add),
+        );
+    } else {
+        row.spacing_mut().item_spacing.y = gap;
+        layout::reverse_column(
+            &mut row,
+            id.with("column"),
+            "dialog::footer actions height changed",
+            |ui| content_ui(ui, &[&l[..]], g, add),
+        );
+    }
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
