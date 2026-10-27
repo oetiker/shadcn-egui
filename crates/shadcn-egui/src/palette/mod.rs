@@ -20,6 +20,36 @@ impl Oklch {
     }
 }
 
+/// The `oklch(l c h)` a theme defines for `c`, before it was clipped to sRGB:
+/// `Some` when `c` is exactly the `Color32` generated for an upstream
+/// token, as long as the token is the only one that clips to it. The
+/// browser mixes and fades the token unclipped and clips the result; a
+/// colour an app sets itself has no entry and mixes as it is. Keyed by the
+/// colour itself, so it cannot go stale when an app writes a palette field.
+pub(crate) fn unclipped(c: Color32) -> Option<[f32; 3]> {
+    use std::collections::HashMap;
+    static TABLE: std::sync::LazyLock<HashMap<Color32, Option<[f32; 3]>>> =
+        std::sync::LazyLock::new(|| {
+            let bases = generated::BASES.iter().flat_map(|b| [b.2, b.3]);
+            let overlays = generated::OVERLAYS.iter().flat_map(|o| [o.1, o.2]);
+            let mut table: HashMap<Color32, Option<[f32; 3]>> = HashMap::new();
+            for &(_, o) in bases.chain(overlays).flatten() {
+                let lch = [o.0, o.1, o.2];
+                table
+                    .entry(o.color())
+                    .and_modify(|seen| {
+                        // Two tokens clip to one colour: no single source.
+                        if seen.is_some_and(|s| s != lch) {
+                            *seen = None;
+                        }
+                    })
+                    .or_insert(Some(lch));
+            }
+            table
+        });
+    TABLE.get(&c).copied().flatten()
+}
+
 /// The upstream CSS vars a [`Palette`] holds. `sidebar-*` and `radius` are
 /// not palette colours and are not generated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

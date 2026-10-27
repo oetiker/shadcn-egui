@@ -53,6 +53,16 @@ pub fn srgb_to_oklch(c: Color32) -> (f32, f32, f32) {
     (ok_l, chroma, hue)
 }
 
+/// The OKLCH a mix starts from: a theme's own token unclipped, as the
+/// browser mixes it ([`crate::palette::unclipped`]), with `true`; else
+/// `c` itself, with `false`.
+fn mix_input(c: Color32) -> ((f32, f32, f32), bool) {
+    match crate::palette::unclipped(c) {
+        Some([l, c, h]) => ((l, c, h), true),
+        None => (srgb_to_oklch(c), false),
+    }
+}
+
 /// sRGB (unmultiplied, alpha ignored) to OKLab: L, a, b.
 fn srgb_to_oklab(c: Color32) -> (f32, f32, f32) {
     let [r, g, b, _] = c.to_srgba_unmultiplied();
@@ -79,7 +89,8 @@ fn srgb_to_oklab(c: Color32) -> (f32, f32, f32) {
 /// eased progress `t` (the share of `b`). CSS Color 4 §12 interpolates two
 /// colours in OKLab with premultiplied alpha unless both are legacy sRGB
 /// colours, and shadcn's tokens are `oklch()`, so Chrome mixes them in
-/// OKLab; a fully transparent side lends only its alpha.
+/// OKLab; a fully transparent side lends only its alpha. A colour that is
+/// exactly a theme token's mixes as the token, before its clip to sRGB.
 pub fn mix_oklab(a: Color32, b: Color32, t: f32) -> Color32 {
     if t <= 0.0 {
         return a;
@@ -89,7 +100,8 @@ pub fn mix_oklab(a: Color32, b: Color32, t: f32) -> Color32 {
     }
     let premultiplied = |c: Color32| {
         let alpha = f32::from(c.a()) / 255.0;
-        let (l, a, b) = srgb_to_oklab(c);
+        let ((l, chroma, h), _) = mix_input(c);
+        let (a, b) = (chroma * h.to_radians().cos(), chroma * h.to_radians().sin());
         [l * alpha, a * alpha, b * alpha, alpha]
     };
     let (p, q) = (premultiplied(a), premultiplied(b));
@@ -101,7 +113,9 @@ pub fn mix_oklab(a: Color32, b: Color32, t: f32) -> Color32 {
 }
 
 /// CSS `color-mix(in oklch, a, b t)`: `t` is the share of `b`. Hue takes the
-/// shorter arc; an achromatic side adopts the other side's hue.
+/// shorter arc; an achromatic side adopts the other side's hue. A colour
+/// that is exactly a theme token's mixes as the token's `oklch(l c h)`,
+/// before its clip to sRGB and with its own hue even at chroma 0.
 pub fn mix_oklch(a: Color32, b: Color32, t: f32) -> Color32 {
     if t <= 0.0 {
         return a;
@@ -109,12 +123,15 @@ pub fn mix_oklch(a: Color32, b: Color32, t: f32) -> Color32 {
     if t >= 1.0 {
         return b;
     }
-    let (l1, c1, mut h1) = srgb_to_oklch(a);
-    let (l2, c2, mut h2) = srgb_to_oklch(b);
-    if c1 < 1e-4 {
+    let ((l1, c1, mut h1), token1) = mix_input(a);
+    let ((l2, c2, mut h2), token2) = mix_input(b);
+    // A colour converted from sRGB has no hue at chroma 0 (CSS: powerless,
+    // so missing) and takes the other side's; a token's `oklch(l 0 h)`
+    // keeps the hue it names.
+    if c1 < 1e-4 && !token1 {
         h1 = h2;
     }
-    if c2 < 1e-4 {
+    if c2 < 1e-4 && !token2 {
         h2 = h1;
     }
     let mut dh = h2 - h1;
@@ -140,5 +157,48 @@ mod tests {
         let red = Color32::from_rgb(255, 0, 0);
         let half = mix_oklab(red, Color32::TRANSPARENT, 0.5);
         assert_eq!(half.to_srgba_unmultiplied(), [255, 0, 0, 128]);
+    }
+
+    /// Within 1/255 per channel of what Chrome shows.
+    fn near(got: Color32, chrome: [u8; 4]) -> bool {
+        let got = got.to_srgba_unmultiplied();
+        (0..4).all(|i| got[i].abs_diff(chrome[i]) <= 1)
+    }
+
+    /// A fade that involves a theme colour outside sRGB mixes the colour
+    /// the theme defines, not its clipped sRGB value, as Chrome does.
+    /// Chrome 156 at 75 of 150 ms along `ease-in-out`.
+    #[test]
+    fn a_fade_mixes_an_out_of_gamut_theme_colour_unclipped() {
+        let (light, dark) = (crate::Palette::light(), crate::Palette::dark());
+        let t = crate::style::Easing::InOut.at(0.5);
+        let mid = mix_oklab(light.primary, light.destructive, t);
+        assert!(near(mid, [181, 22, 25, 255]), "{mid:?}");
+        let mid = mix_oklab(dark.destructive, dark.primary, t);
+        assert!(near(mid, [240, 203, 200, 255]), "{mid:?}");
+    }
+
+    /// `Paint::Mix` at rest with an out-of-gamut role matches Chrome's
+    /// `color-mix(in oklch, ..)`; a role colour the app sets itself mixes
+    /// as that exact colour.
+    #[test]
+    fn a_rest_mix_takes_an_out_of_gamut_theme_colour_unclipped() {
+        use crate::style::{Paint, Role};
+        let mix = Paint::Mix(Role::Destructive, Role::Background, 0.3);
+        let mut theme = crate::Theme::vega().in_mode(egui::Theme::Light);
+        let got = theme.paint(mix);
+        assert!(near(got, [248, 108, 116, 255]), "{got:?}");
+        let rest = Paint::Mix(Role::Secondary, Role::Foreground, 0.05);
+        assert!(near(theme.paint(rest), [231, 231, 231, 255]));
+        let own = Color32::from_rgb(232, 0, 11);
+        theme.light.destructive = own;
+        let expect = {
+            let (l1, c1, h1) = srgb_to_oklch(own);
+            // Background is the token oklch(1 0 0): its hue 0 counts.
+            oklch_to_srgb(l1 + (1.0 - l1) * 0.3, c1 * 0.7, h1 * 0.7)
+        };
+        let got = theme.paint(mix);
+        assert!(near(got, expect.to_array()), "{got:?} {expect:?}");
+        assert!(!near(got, [248, 108, 116, 255]), "{got:?}");
     }
 }
