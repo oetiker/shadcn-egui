@@ -2257,6 +2257,71 @@ fn dialog_footer_in_unbounded_room_takes_its_content_width() {
     }
 }
 
+/// `dialog::footer` below `sm` in a `Ui` of unbounded width is
+/// upstream's `flex-col-reverse` (`align-items: stretch`) in max-content
+/// sizing: the column is as wide as its widest action, and each action
+/// is stretched to that width. A label change that narrows the widest
+/// action narrows the column again. In bounded room each action stays as
+/// wide as the footer. Settled in one pass a frame, on the screen with no
+/// repaint asked for.
+#[test]
+fn dialog_footer_below_sm_in_unbounded_room_stretches_to_its_widest_action() {
+    use shadcn_egui::components::dialog;
+    for host in [Host::Screen, Host::Area(false)] {
+        // One context through the cases: the label change re-measures.
+        let ctx = vega();
+        for (labels, bounded) in [
+            (&["OK", "Save changes", "Cancel"][..], false),
+            (&["OK", "Save", "Cancel"][..], false),
+            (&["OK", "Save changes", "Cancel"][..], true),
+        ] {
+            let content = |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+                // Each action's natural width, in a plain row.
+                ui.horizontal(|ui| {
+                    for b in labels {
+                        out.push(ui.button(*b).rect);
+                    }
+                });
+                let size = if bounded {
+                    egui::vec2(400.0, 300.0)
+                } else {
+                    egui::vec2(f32::INFINITY, f32::INFINITY)
+                };
+                ui.allocate_ui(size, |ui| {
+                    out.push(ui.max_rect());
+                    dialog::footer(ui, |ui| {
+                        for b in labels {
+                            out.push(ui.button(*b).rect);
+                        }
+                    });
+                });
+            };
+            for _ in 0..3 {
+                let _ = frame_in_window(&ctx, host, false, Some(500.0), &content);
+            }
+            let (passes, r) = frame_in_window(&ctx, host, false, Some(500.0), &content);
+            let case = format!("{host:?} {labels:?} bounded {bounded}: {r:?}");
+            let (natural, rest) = r.split_at(labels.len());
+            let (room, actions) = rest.split_first().expect("room");
+            assert_eq!(actions.len(), labels.len(), "{case}");
+            let widest = natural.iter().map(|n| n.width()).fold(0.0, f32::max);
+            for a in actions {
+                assert!(a.is_finite(), "{case}");
+                assert_eq!(a.x_range(), actions[0].x_range(), "{case}");
+                if bounded {
+                    assert!(a.width() > room.width() - 100.0, "{case}");
+                } else {
+                    assert_eq!(a.width(), widest, "{case}");
+                }
+            }
+            assert_eq!(passes, 1, "{case}");
+            if matches!(host, Host::Screen) {
+                assert!(!ctx.has_requested_repaint(), "{case}");
+            }
+        }
+    }
+}
+
 /// A Tabs list in a horizontally justified layout takes the layout's
 /// width and shares it among its triggers as their `flex-1` does: equal
 /// widths, each label centred in its trigger, settled in one pass a

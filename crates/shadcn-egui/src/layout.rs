@@ -840,6 +840,33 @@ struct Intrinsic {
     stale: bool,
 }
 
+impl Intrinsic {
+    /// Records a pass laid out at `w`, the unwrapped width `max` holds,
+    /// whose content had `size` and painted `hash` ([`content_hash`]) at
+    /// the scale `ppp`. Such a pass must find the content as large as
+    /// the unwrapped pass did and paint what the last pass at this width
+    /// painted, unless the content, its font or the scale changed: then
+    /// the memo turns stale and this returns `true`, so the caller
+    /// discards the pass and the next one measures again, as text may
+    /// wrap at the old width.
+    fn fitted_pass(&mut self, w: f32, ppp: f32, size: egui::Vec2, hash: u64) -> bool {
+        let seen = ([w, ppp, size.x, size.y], hash);
+        // Its text may report up to `TEXT_WIDTH_ROUNDING` narrower than
+        // unwrapped, at the same height.
+        let changed = self.unwrapped.is_some_and(|(old, p)| {
+            p != ppp
+                || size.x > old.x + ROW_HEIGHT_EPSILON
+                || size.x < old.x - TEXT_WIDTH_ROUNDING - ROW_HEIGHT_EPSILON
+                || (old.y - size.y).abs() > ROW_HEIGHT_EPSILON
+        }) || self
+            .seen
+            .is_some_and(|s| s.0[..2] == seen.0[..2] && s != seen);
+        self.seen = Some(seen);
+        self.stale |= changed;
+        changed
+    }
+}
+
 /// A hash of what decides the unwrapped width of the content painted on
 /// `layer` from shape `first` on: each galley's text and per section its
 /// byte range, font and letter spacing (not its colour, which a hover
@@ -1110,26 +1137,10 @@ fn flex_item<R>(
         match target {
             None => known.unwrapped = Some((content, ppp)),
             Some(w) if known.max.is_some_and(|m| same_width(m, w)) => {
-                // A stack that fits is laid out at its unwrapped width, so
-                // its content is as large as the measuring pass found it,
-                // and paints what the last pass at this width painted,
-                // unless the content, its font or the scale changed; its
-                // text may then wrap at the old width, so the pass is
-                // redone as a measuring pass, never shown.
-                let seen = ([w, ppp, content.x, content.y], hash);
-                // Its text may report up to `TEXT_WIDTH_ROUNDING` narrower
-                // than unwrapped, at the same height.
-                let changed = known.unwrapped.is_some_and(|(size, p)| {
-                    p != ppp
-                        || content.x > size.x + ROW_HEIGHT_EPSILON
-                        || content.x < size.x - TEXT_WIDTH_ROUNDING - ROW_HEIGHT_EPSILON
-                        || (size.y - content.y).abs() > ROW_HEIGHT_EPSILON
-                }) || known
-                    .seen
-                    .is_some_and(|s| s.0[..2] == seen.0[..2] && s != seen);
-                known.seen = Some(seen);
-                if changed {
-                    known.stale = true;
+                // A stack that fits is laid out at its unwrapped width; a
+                // changed content is redone as a measuring pass, never
+                // shown.
+                if known.fitted_pass(w, ppp, content, hash) {
                     ui.ctx()
                         .request_discard("layout: a fitting vstack's content changed");
                 }
@@ -1428,8 +1439,14 @@ pub(crate) fn end_aligned<R>(
 /// `id`, ends it; where that height changes, the pass is discarded once
 /// with `why` (conformance 3.2), as [`end_aligned`] does on the x axis; a
 /// sizing pass never replaces a height a visible pass measured. Before its
-/// first pass the column ends at the room's top edge. In room of unbounded
-/// width each widget keeps its own width.
+/// first pass the column ends at the room's top edge.
+///
+/// In room of unbounded width the column is as wide as its widest widget
+/// (max-content), and each widget as wide as the column. It learns that
+/// width as a [`vstack`] in a row learns its unwrapped width: a measuring
+/// pass lays the widgets out at their own widths and is discarded; later
+/// passes stretch them to the width found, and measure again where the
+/// content, its font or the scale changed.
 pub(crate) fn reverse_column<R>(
     ui: &mut Ui,
     id: egui::Id,
@@ -1439,22 +1456,58 @@ pub(crate) fn reverse_column<R>(
     let room = ui.available_rect_before_wrap();
     let stored = ui.data(|d| d.get_temp::<f32>(id));
     let height = stored.unwrap_or(0.0);
+    // Unbounded: the widest widget's width, kept as a fitting stack's.
+    let fit_id = id.with("shadcn_egui::layout::reverse_column::fit");
+    let unbounded = !room.width().is_finite();
+    let fit = unbounded.then(|| ui.data(|d| d.get_temp::<Intrinsic>(fit_id)));
+    let store_fit = may_store(ui, fit.flatten().is_some());
+    let mut known = fit.flatten().unwrap_or_default();
+    if known.stale && store_fit {
+        // A measuring pass: not shown where egui has a pass left, else
+        // followed by a frame at the measured width.
+        ui.ctx().request_discard(why);
+        ui.ctx().request_repaint();
+        known = Intrinsic::default();
+    }
+    let width = if unbounded {
+        known.max
+    } else {
+        Some(room.width())
+    };
+    let layer = ui.layer_id();
+    let first = ui
+        .ctx()
+        .graphics(|g| g.get(layer).map_or(0, |l| l.next_idx().0));
     let inner = ui.scope_builder(
         egui::UiBuilder::new()
             .max_rect(egui::Rect::from_min_size(
                 room.min,
-                egui::vec2(room.width(), height),
+                egui::vec2(width.unwrap_or(room.width()), height),
             ))
-            .layout(
-                egui::Layout::bottom_up(egui::Align::Min)
-                    .with_cross_justify(room.width().is_finite()),
-            ),
+            .layout(egui::Layout::bottom_up(egui::Align::Min).with_cross_justify(width.is_some())),
         add,
     );
     let measured = inner.response.rect.height();
     if may_store(ui, stored.is_some()) && stored.is_none_or(|h| !same_width(h, measured)) {
         ui.data_mut(|d| d.insert_temp(id, measured));
         ui.ctx().request_discard(why);
+    }
+    if fit.is_some() && store_fit {
+        let (ppp, size) = (ui.ctx().pixels_per_point(), inner.response.rect.size());
+        match known.max {
+            None => {
+                known.max = Some(size.x);
+                known.unwrapped = Some((size, ppp));
+                ui.ctx().request_discard(why);
+                ui.ctx().request_repaint();
+            }
+            Some(w) => {
+                if known.fitted_pass(w, ppp, size, content_hash(ui.ctx(), layer, first)) {
+                    ui.ctx().request_discard(why);
+                }
+            }
+        }
+        ui.data_mut(|d| d.insert_temp(fit_id, known));
     }
     inner
 }

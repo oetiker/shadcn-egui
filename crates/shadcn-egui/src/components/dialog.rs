@@ -280,12 +280,14 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
 /// [`layout::vstack`]s work there as in a [`layout::row`]. In a narrower
 /// window they stack, each as wide as the footer, the last one the code
 /// adds on top (`flex-col-reverse`). In a `Ui` of unbounded width the
-/// footer is as wide as its actions. In a style with a footer strip
+/// footer is as wide as its actions: from `sm` up as the row of them,
+/// below as the widest one, each stacked action stretched to that width.
+/// In a style with a footer strip
 /// (nova) the strip bleeds to the dialog's edges and bottom.
 ///
 /// The row is placed at the end from its width in the previous pass, the
-/// stack from its height; where that size changes, the pass is discarded
-/// and redone.
+/// stack from its height (and, in unbounded width, its widest action's
+/// width); where that size changes, the pass is discarded and redone.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let id = ui.next_auto_id().with("shadcn_egui::dialog::footer");
     let t = Theme::current(ui.ctx());
