@@ -339,7 +339,11 @@ fn card_state(ui: &Ui, v: &ResolvedPair<CardVariant, CardSize>) -> State {
 }
 
 /// `card-header` with a `card-action` to the right of the title and
-/// description, aligned to the top.
+/// description, aligned to the top. The action's widgets show left to
+/// right in the order the code adds them.
+///
+/// The action is placed at the end from its width in the previous pass;
+/// where that width changes, the pass is discarded and redone.
 pub fn card_header_with_action(
     ui: &mut Ui,
     title: &str,
@@ -352,14 +356,26 @@ pub fn card_header_with_action(
     let st = card_state(ui, &v);
     let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
     let card_action = [v.part(&t.style, |s| &s.card_action, |r| &r.card_action)];
+    let id = ui.next_auto_id().with("shadcn_egui::card::action");
     content_ui(ui, &[&header[..]], st, |ui| {
-        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-            content_ui(ui, &[&card_action[..]], st, action);
-            let width = ui.available_width();
+        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+            // The title column takes the room the action left in the
+            // previous pass; the action keeps the order the code adds its
+            // widgets in and ends at the header's end.
+            let action_w =
+                layout::end_aligned_width(ui, id).map_or(0.0, |w| w + ui.spacing().item_spacing.x);
+            let width = ui.available_width() - action_w;
             ui.allocate_ui_with_layout(
                 egui::vec2(width, 0.0),
                 Layout::top_down(Align::Min),
                 |ui| header_column(ui, title, description),
+            );
+            layout::end_aligned(
+                ui,
+                id,
+                Align::Min,
+                "card::card_header_with_action action width changed",
+                |ui| content_ui(ui, &[&card_action[..]], st, action),
             );
         })
     });

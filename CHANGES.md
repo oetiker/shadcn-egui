@@ -43,6 +43,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- Several widgets in the action of a card header, beside the title, now show in the order the code adds them, as in shadcn; before, they showed in reverse order.
 - Buttons in a dialog footer now show in the order the code adds them, as in shadcn, with the last one at the right; before, they showed in reverse order. Apps that added the primary action first must now add it last, after Cancel.
 - Buttons on the right of a `layout::space_between` row, such as the actions of a card footer, now show in the order the code adds them, as in shadcn; before, they showed in reverse order, so code had to add the primary action first to see it last. Apps that did so now add it last.
 - In a `layout::wrap_row`, items placed before a taller item are now centred on their line, as in a `layout::row`; before, they sat at the top of the line, as the small icon buttons before the large one did in the gallery. A line that starts with a shadcn-egui widget or a `layout::vstack` is now as high as its own tallest item, even after a taller line; before, it kept the taller line's height. A line that starts with a plain egui widget still keeps the height of a taller line before it and centres its items in that height.

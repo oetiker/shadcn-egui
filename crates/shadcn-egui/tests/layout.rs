@@ -1851,6 +1851,38 @@ fn dialog_footer_keeps_the_source_order_of_its_actions() {
     }
 }
 
+/// A card action keeps the order the code adds its widgets in, as the
+/// `card-action` cell does: they show left to right, the last one where a
+/// single action ends, on screen and in an `Area`, settled in one pass a
+/// frame.
+#[test]
+fn card_action_keeps_the_source_order_of_its_widgets() {
+    use shadcn_egui::components::card::{card_header_with_action, Card};
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.allocate_ui(egui::vec2(320.0, 300.0), |ui| {
+                for labels in [&["Go"][..], &["One", "Two", "Three"]] {
+                    Card::new().show(ui, |ui| {
+                        card_header_with_action(ui, "Title", "Description", |ui| {
+                            for b in labels {
+                                out.push(ui.button(*b).rect);
+                            }
+                        });
+                    });
+                }
+            });
+        });
+        let case = format!("{host:?}: {r:?}");
+        let [single, one, two, three] = r[..] else {
+            panic!("{case}")
+        };
+        assert!(one.right() < two.left(), "{case}");
+        assert!(two.right() < three.left(), "{case}");
+        assert_eq!(three.right(), single.right(), "{case}");
+        assert_eq!(passes, 1, "{case}");
+    }
+}
+
 /// A raw egui widget that fills to infinity (`add_sized` with an
 /// infinite width) in a card or a vstack of a crate row or wrap_row in
 /// unbounded room
