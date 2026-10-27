@@ -11,9 +11,11 @@ pub fn oklch_to_srgb(l: f32, c: f32, h: f32) -> Color32 {
 /// Same as [`oklch_to_srgb`] with an explicit alpha in 0..=1.
 pub fn oklch_to_srgb_a(l: f32, c: f32, h: f32, alpha: f32) -> Color32 {
     let h_rad = h.to_radians();
-    let oklab_a = c * h_rad.cos();
-    let oklab_b = c * h_rad.sin();
+    oklab_to_srgb_a(l, c * h_rad.cos(), c * h_rad.sin(), alpha)
+}
 
+/// oklab(L a b / alpha) to sRGB, out-of-gamut channels clamped.
+fn oklab_to_srgb_a(l: f32, oklab_a: f32, oklab_b: f32, alpha: f32) -> Color32 {
     // OKLab -> LMS' -> LMS
     let l_ = l + 0.396_337_78 * oklab_a + 0.215_803_76 * oklab_b;
     let m_ = l - 0.105_561_35 * oklab_a - 0.063_854_17 * oklab_b;
@@ -45,6 +47,14 @@ pub fn oklch_to_srgb_a(l: f32, c: f32, h: f32, alpha: f32) -> Color32 {
 
 /// sRGB (unmultiplied, alpha ignored) to OKLCH: L in 0..1, C, H in degrees.
 pub fn srgb_to_oklch(c: Color32) -> (f32, f32, f32) {
+    let (ok_l, ok_a, ok_b) = srgb_to_oklab(c);
+    let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
+    let hue = ok_b.atan2(ok_a).to_degrees().rem_euclid(360.0);
+    (ok_l, chroma, hue)
+}
+
+/// sRGB (unmultiplied, alpha ignored) to OKLab: L, a, b.
+fn srgb_to_oklab(c: Color32) -> (f32, f32, f32) {
     let [r, g, b, _] = c.to_srgba_unmultiplied();
     let lin = |v: u8| {
         let v = v as f32 / 255.0;
@@ -62,9 +72,32 @@ pub fn srgb_to_oklch(c: Color32) -> (f32, f32, f32) {
     let ok_l = 0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s;
     let ok_a = 1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s;
     let ok_b = 0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s;
-    let chroma = (ok_a * ok_a + ok_b * ok_b).sqrt();
-    let hue = ok_b.atan2(ok_a).to_degrees().rem_euclid(360.0);
-    (ok_l, chroma, hue)
+    (ok_l, ok_a, ok_b)
+}
+
+/// The colour a CSS transition or animation shows between `a` and `b` at
+/// eased progress `t` (the share of `b`). CSS Color 4 §12 interpolates two
+/// colours in OKLab with premultiplied alpha unless both are legacy sRGB
+/// colours, and shadcn's tokens are `oklch()`, so Chrome mixes them in
+/// OKLab; a fully transparent side lends only its alpha.
+pub fn mix_oklab(a: Color32, b: Color32, t: f32) -> Color32 {
+    if t <= 0.0 {
+        return a;
+    }
+    if t >= 1.0 {
+        return b;
+    }
+    let premultiplied = |c: Color32| {
+        let alpha = f32::from(c.a()) / 255.0;
+        let (l, a, b) = srgb_to_oklab(c);
+        [l * alpha, a * alpha, b * alpha, alpha]
+    };
+    let (p, q) = (premultiplied(a), premultiplied(b));
+    let [l, ok_a, ok_b, alpha] = std::array::from_fn(|i| p[i] + (q[i] - p[i]) * t);
+    if alpha <= 0.0 {
+        return Color32::TRANSPARENT;
+    }
+    oklab_to_srgb_a(l / alpha, ok_a / alpha, ok_b / alpha, alpha)
 }
 
 /// CSS `color-mix(in oklch, a, b t)`: `t` is the share of `b`. Hue takes the
@@ -92,4 +125,20 @@ pub fn mix_oklch(a: Color32, b: Color32, t: f32) -> Color32 {
     }
     let alpha = a.a() as f32 / 255.0 * (1.0 - t) + b.a() as f32 / 255.0 * t;
     oklch_to_srgb_a(l1 + (l2 - l1) * t, c1 + (c2 - c1) * t, h1 + dh * t, alpha)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mix_oklab_is_css_color_mix_in_oklab() {
+        // `color-mix(in oklab, white, black)` is oklab(0.5 0 0), rgb(99 99 99).
+        let mid = mix_oklab(Color32::WHITE, Color32::BLACK, 0.5);
+        assert_eq!(mid, Color32::from_gray(99));
+        // A transparent side lends only its alpha (premultiplied).
+        let red = Color32::from_rgb(255, 0, 0);
+        let half = mix_oklab(red, Color32::TRANSPARENT, 0.5);
+        assert_eq!(half.to_srgba_unmultiplied(), [255, 0, 0, 128]);
+    }
 }

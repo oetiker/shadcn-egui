@@ -124,7 +124,13 @@ impl<'a> Tooltip<'a> {
                 // The content's `text-*` and text colour reach what it holds.
                 let look = TextLook::resolve(ui, &content_l, g);
                 content_scope(ui, &look, |ui| {
-                    content_ui(ui, &[&content_l[..]], g, content)
+                    content_ui(
+                        ui,
+                        ui.id().with("shadcn_egui::tooltip::content"),
+                        &[&content_l[..]],
+                        g,
+                        content,
+                    )
                 })
                 .inner
             });

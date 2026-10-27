@@ -137,7 +137,8 @@ pub fn snapshot_with_themes(
 /// The rect of the widget `add` places, under `theme` in `mode`, and the output of
 /// the frame that painted it. Runs two frames: the fonts `Theme::apply`
 /// installs reach the atlas only on the second, and focus requested in the
-/// first frame shows in the second.
+/// first frame shows in the second. Transitions jump (`animation_time`
+/// 0, as in the snapshots), so the frame shows the settled state.
 pub fn measure_output(
     theme: &Theme,
     mode: egui::Theme,
@@ -146,6 +147,7 @@ pub fn measure_output(
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     ctx.set_theme(mode);
+    ctx.all_styles_mut(|s| s.animation_time = 0.0);
     let mut rect = egui::Rect::NOTHING;
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
     let out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);

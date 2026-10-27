@@ -2337,7 +2337,7 @@ fn content_ui_keeps_a_disable_inside_its_content() {
     let ctx = egui::Context::default();
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
         let alpha = ui.visuals().disabled_alpha();
-        content_ui(ui, chain, State::NONE, |ui| {
+        content_ui(ui, egui::Id::new("part"), chain, State::NONE, |ui| {
             assert_eq!(ui.opacity(), 0.5);
             ui.disable()
         });
@@ -2347,7 +2347,7 @@ fn content_ui_keeps_a_disable_inside_its_content() {
             "opacity {} after a disable inside content_ui, egui's fade is {alpha}",
             ui.opacity()
         );
-        content_ui(ui, chain, State::NONE, |_| {});
+        content_ui(ui, egui::Id::new("part"), chain, State::NONE, |_| {});
         assert!(
             (ui.opacity() - alpha).abs() < 1e-6,
             "an already disabled Ui"
@@ -2372,14 +2372,23 @@ fn part_opacity_takes_one_egui_fade_out() {
     let plain = Recipe::default();
     let ctx = egui::Context::default();
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
-        assert_eq!(part_opacity(ui, &[&[&quarter]], State::NONE), 1.0);
+        assert_eq!(
+            part_opacity(ui, egui::Id::new("part"), &[&[&quarter]], State::NONE),
+            1.0
+        );
         ui.add_enabled_ui(false, |ui| {
-            assert!((part_opacity(ui, &[&[&quarter]], State::NONE) - 0.25).abs() < 1e-6);
-            assert!((part_opacity(ui, &[&[&plain]], State::NONE) - 1.0).abs() < 1e-6);
+            assert!(
+                (part_opacity(ui, egui::Id::new("part"), &[&[&quarter]], State::NONE) - 0.25).abs()
+                    < 1e-6
+            );
+            assert!(
+                (part_opacity(ui, egui::Id::new("part"), &[&[&plain]], State::NONE) - 1.0).abs()
+                    < 1e-6
+            );
             // A nested disable fades twice in egui; one fade only comes out.
             ui.add_enabled_ui(false, |ui| {
                 let fade = ui.visuals().disabled_alpha();
-                let got = part_opacity(ui, &[&[&plain]], State::NONE);
+                let got = part_opacity(ui, egui::Id::new("part"), &[&[&plain]], State::NONE);
                 assert!((got - fade).abs() < 1e-6, "{got}");
             });
         });

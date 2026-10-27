@@ -133,7 +133,9 @@ fn small_button(ui: &mut egui::Ui) -> egui::Response {
     let (rect, mut resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
     pressable(&mut resp, ActivationKeys::Button);
     let st = interaction_state(&theme, &resp, State::NONE);
-    RecipeBox::resolve(ui.ctx(), &theme, &layers, st).paint(&part_painter(ui, &[&layers[..]], st), rect);
+    RecipeBox::resolve(ui.ctx(), &theme, &layers, st)
+        .transitioned(ui.ctx(), resp.id, &layers, st)
+        .paint(&part_painter(ui, resp.id, &[&layers[..]], st), rect);
     resp
 }
 ```
@@ -226,14 +228,16 @@ back, Right and Down forward) whatever its orientation.
   `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`. It gets `DISABLED` only.
 - A part fades by its recipe's `opacity` (`disabled:opacity-50`):
   `shared::opacity(&[part_stack, parent_stack], state)` multiplies the
-  values down the part tree as CSS does. `shared::part_painter(ui, chain,
-  state)` returns the painter at the part's opacity: the `Ui`'s opacity
-  with egui's disabled fade taken out once, times the part's own value, with
-  `DISABLED` added in a disabled `Ui` (`shared::part_opacity` is the bare
-  value). So a part fades by its style's `disabled:` rule, not by egui's
-  fade. A crate part drawn through egui (a title through `TextLook::label`) runs
-  in `shared::part_ui(ui, chain, state, |ui| ..)`; a container hands the
-  caller's content `shared::content_ui(ui, chain, state, |ui| ..)`, which
+  values down the part tree as CSS does. `shared::part_painter(ui, id,
+  chain, state)` returns the painter at the part's opacity: the `Ui`'s
+  opacity with egui's disabled fade taken out once, times the part's own
+  value, with `DISABLED` added in a disabled `Ui` (`shared::part_opacity`
+  is the bare value). So a part fades by its style's `disabled:` rule, not
+  by egui's fade; `id` is the widget's, and where the part's `transition`
+  names `opacity` a disabled toggle fades. A crate part drawn through egui
+  (a title through `TextLook::label`) runs in `shared::part_ui(ui, id,
+  chain, state, |ui| ..)`; a container hands the caller's content
+  `shared::content_ui(ui, id, chain, state, |ui| ..)`, which
   keeps egui's fade for plain egui widgets. A box an egui container paints
   outside that `Ui` (a popup frame) takes `RecipeBox::faded(opacity)`.
 - An empty size `Prop` is CSS's initial value: `width` and `height` fall
@@ -250,6 +254,13 @@ back, Right and Down forward) whatever its orientation.
   asks for a repaint only while it moves. Name the property by what it is:
   `Transition::COLORS` for a colour, `TRANSFORM` for a translate,
   `OPACITY`, `OTHER` for a size.
+- A ported part wires its recipe's transition: its box goes through
+  `RecipeBox::transitioned(ctx, id, &stack, state)` (fill, border, outline,
+  ring and shadow fade where the `transition` names them), its text and
+  icon colour through `motion::transition_color(ctx, id, colour, &stack,
+  Transition::COLOR, state)`, and its opacity through `part_painter` with
+  the widget's id. A widget scrolled away or not shown keeps time: shown
+  again after the duration, it shows the new value at once.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`;
   a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
   `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.

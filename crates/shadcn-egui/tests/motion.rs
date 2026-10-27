@@ -164,6 +164,35 @@ fn a_reversed_transition_takes_only_the_way_covered() {
     assert_eq!(pass(&ctx, 2.2, 0.0, &[&r]), (0.0, false));
 }
 
+/// One pass at `time` that does not show the widget.
+fn skip(ctx: &egui::Context, time: f64) {
+    let _ = ctx.run_ui(
+        egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        },
+        |_| {},
+    );
+}
+
+#[test]
+fn a_change_while_not_shown_runs_on_wall_time() {
+    // CSS runs a transition whether the element paints or not: a widget
+    // skipped for longer than the duration shows its new target at once.
+    let ctx = fresh();
+    let r = timed(Some(0.2), Some(Easing::Linear));
+    pass(&ctx, 1.0, 0.0, &[&r]);
+    for time in [1.1, 1.2, 1.3] {
+        skip(&ctx, time);
+    }
+    assert_eq!(pass(&ctx, 1.4, 100.0, &[&r]), (100.0, false));
+    // Skipped for half the duration, it is half way.
+    skip(&ctx, 1.45);
+    let (half, moving) = pass(&ctx, 1.5, 0.0, &[&r]);
+    assert!((half - 50.0).abs() < 1e-3, "{half}");
+    assert!(moving);
+}
+
 #[test]
 fn every_style_times_the_progress_indicator() {
     // `transition-all` on the indicator, no duration or easing: Tailwind's
@@ -249,4 +278,323 @@ fn switch_thumb_jumps_under_reduced_motion() {
     let (on, moving) = switch_pass(&ctx, 2.0, true, true);
     assert!(on > off + 1.0);
     assert!(!moving);
+}
+
+/// One pass of a vega default button at `time`, the pointer moving to
+/// `pointer` if given, in the central panel or in an `Area`: the button's rect, its
+/// fill (transparent when unpainted), and whether the pass ends with a repaint request.
+fn button_pass(
+    ctx: &egui::Context,
+    time: f64,
+    pointer: Option<egui::Pos2>,
+    reduced: bool,
+    in_area: bool,
+) -> (egui::Rect, egui::Color32, bool) {
+    let mut rect = egui::Rect::NOTHING;
+    let out = ctx.run_ui(
+        egui::RawInput {
+            time: Some(time),
+            events: pointer.map(egui::Event::PointerMoved).into_iter().collect(),
+            ..Default::default()
+        },
+        |ui| {
+            shadcn_egui::Theme::vega().apply(ui.ctx());
+            if reduced {
+                ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+            }
+            let add = |ui: &mut egui::Ui| {
+                ui.add(shadcn_egui::components::button::Button::new("Save"))
+                    .rect
+            };
+            rect = if in_area {
+                egui::Area::new(egui::Id::new("area"))
+                    .fixed_pos(egui::pos2(40.0, 40.0))
+                    .fade_in(false)
+                    .show(ui.ctx(), add)
+                    .inner
+            } else {
+                add(ui)
+            };
+        },
+    );
+    let fill = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            // The fill sits inside the border (`bg-clip-padding`).
+            egui::Shape::Rect(r) if rect.contains_rect(r.rect) && r.fill.a() > 0 => Some(r.fill),
+            _ => None,
+        })
+        // None on an `Area`'s sizing pass.
+        .unwrap_or(egui::Color32::TRANSPARENT);
+    let repaint =
+        out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
+    (rect, fill, repaint)
+}
+
+fn near(a: egui::Color32, b: egui::Color32) -> bool {
+    a.to_array()
+        .iter()
+        .zip(b.to_array())
+        .all(|(x, y)| x.abs_diff(y) <= 1)
+}
+
+#[test]
+fn button_background_fades_on_hover() {
+    // `transition-all`, no duration or easing: 150 ms on the default
+    // curve, the colours mixed in OKLab. Screen and Area alike.
+    for in_area in [false, true] {
+        let ctx = fresh();
+        // An `Area` paints nothing on its first, sizing pass.
+        button_pass(&ctx, 0.5, None, false, in_area);
+        let away = Some(egui::pos2(-50.0, -50.0));
+        let (rect, idle, _) = button_pass(&ctx, 1.0, away, false, in_area);
+        button_pass(&ctx, 1.5, None, false, in_area);
+        let (_, start, moving) = button_pass(&ctx, 2.0, Some(rect.center()), false, in_area);
+        assert_eq!(start, idle);
+        assert!(moving);
+        let (_, mid, _) = button_pass(&ctx, 2.075, None, false, in_area);
+        let (_, hover, _) = button_pass(&ctx, 2.2, None, false, in_area);
+        assert_ne!(hover, idle);
+        let eased = reference_bezier(0.4, 0.0, 0.2, 1.0, 0.5) as f32;
+        let want = shadcn_egui::color::mix_oklab(idle, hover, eased);
+        assert!(near(mid, want), "area {in_area}: {mid:?} != {want:?}");
+        // Settled: the pass after arrival asks for nothing.
+        let (_, settled, moving) = button_pass(&ctx, 2.4, None, false, in_area);
+        assert_eq!((settled, moving), (hover, false));
+    }
+}
+
+#[test]
+fn button_background_jumps_under_reduced_motion() {
+    let ctx = fresh();
+    // The theme's fonts reach the atlas on the second pass.
+    button_pass(&ctx, 0.5, Some(egui::pos2(-50.0, -50.0)), true, false);
+    let (rect, idle, _) = button_pass(&ctx, 1.0, None, true, false);
+    let (_, hover, _) = button_pass(&ctx, 2.0, Some(rect.center()), true, false);
+    assert_ne!(hover, idle);
+    // The pointer's move repaints, and egui adds one trailing repaint;
+    // nothing moves after that.
+    button_pass(&ctx, 2.01, None, true, false);
+    assert_eq!(
+        button_pass(&ctx, 2.02, None, true, false),
+        (rect, hover, false)
+    );
+}
+
+#[test]
+fn a_colour_the_transition_does_not_name_jumps() {
+    use shadcn_egui::components::shared::RecipeBox;
+    use shadcn_egui::style::{Paint, Role};
+    // `transition-[color,box-shadow]` (vega's input): the background is
+    // not named and jumps; under `transition-colors` it fades.
+    for (transition, fades) in [
+        (Transition::COLOR.or(Transition::SHADOW), false),
+        (Transition::COLORS, true),
+    ] {
+        let part = |role| Recipe {
+            bg: Prop::fixed(Paint::Role(role, 1.0)),
+            transition: Prop::fixed(transition),
+            ..Recipe::default()
+        };
+        let (from, to) = (part(Role::Muted), part(Role::Primary));
+        let theme = shadcn_egui::Theme::vega();
+        let ctx = fresh();
+        let fill = |time: f64, r: &Recipe| {
+            let mut fill = None;
+            let _ = ctx.run_ui(
+                egui::RawInput {
+                    time: Some(time),
+                    ..Default::default()
+                },
+                |ui| {
+                    fill = RecipeBox::resolve(ui.ctx(), &theme, &[r], State::NONE)
+                        .transitioned(ui.ctx(), egui::Id::new("box"), &[r], State::NONE)
+                        .fill();
+                },
+            );
+            fill.expect("a fill")
+        };
+        let idle = fill(1.0, &from);
+        let start = fill(2.0, &to);
+        let mid = fill(2.075, &to);
+        let target = fill(3.0, &to);
+        assert_ne!(target, idle);
+        if fades {
+            assert_eq!(start, idle);
+            assert!(mid != idle && mid != target, "{mid:?}");
+        } else {
+            assert_eq!((start, mid), (target, target));
+            assert_eq!(mid, target);
+        }
+    }
+}
+
+/// A recipe whose `prop` changes under `FOCUS_VISIBLE`, timed by `t`.
+fn focus_recipe(t: Transition) -> Recipe {
+    use shadcn_egui::style::{Paint, Role, Rule, ShadowLevel, When};
+    let when = When::new(State::FOCUS_VISIBLE, State::NONE);
+    let mut r = Recipe {
+        transition: Prop::fixed(t),
+        ..Recipe::default()
+    };
+    r.outline_width.rules.push(Rule {
+        when,
+        rank: 1,
+        value: 2.0,
+    });
+    r.outline_color.rules.push(Rule {
+        when,
+        rank: 1,
+        value: Paint::Role(Role::Ring, 1.0),
+    });
+    r.shadow.rules.push(Rule {
+        when,
+        rank: 1,
+        value: ShadowLevel::Md,
+    });
+    r
+}
+
+/// The shapes of `r`'s box on one pass at `time` under `s`, through
+/// `RecipeBox::transitioned`.
+fn box_pass(ctx: &egui::Context, time: f64, r: &Recipe, s: State) -> Vec<egui::Shape> {
+    use shadcn_egui::components::shared::RecipeBox;
+    let theme = shadcn_egui::Theme::vega();
+    let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(40.0, 20.0));
+    let mut shapes = Vec::new();
+    let _ = ctx.run_ui(
+        egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        },
+        |ui| {
+            shapes = RecipeBox::resolve(ui.ctx(), &theme, &[r], s)
+                .transitioned(ui.ctx(), egui::Id::new("box"), &[r], s)
+                .shapes(ui.ctx(), rect);
+        },
+    );
+    shapes
+}
+
+/// The outline's width among `shapes`: the only stroked rect.
+fn outline_width(shapes: &[egui::Shape]) -> f32 {
+    shapes
+        .iter()
+        .find_map(|s| match s {
+            egui::Shape::Rect(r) if r.stroke.width > 0.0 => Some(r.stroke.width),
+            _ => None,
+        })
+        .unwrap_or(0.0)
+}
+
+/// The darkest alpha of the shadow mesh among `shapes`.
+fn shadow_alpha(shapes: &[egui::Shape]) -> u8 {
+    shapes
+        .iter()
+        .filter_map(|s| match s {
+            egui::Shape::Mesh(m) => m.vertices.iter().map(|v| v.color.a()).max(),
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0)
+}
+
+#[test]
+fn outline_width_moves_under_transition_all_only() {
+    let ctx = fresh();
+    let r = focus_recipe(Transition::ALL);
+    box_pass(&ctx, 1.0, &r, State::NONE);
+    assert_eq!(
+        outline_width(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        0.0
+    );
+    let half = outline_width(&box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
+    let want = 2.0 * reference_bezier(0.4, 0.0, 0.2, 1.0, 0.5) as f32;
+    assert!((half - want).abs() < 1e-3, "{half} != {want}");
+    assert_eq!(
+        outline_width(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE)),
+        2.0
+    );
+    // `transition-colors` does not name `outline-width`: it jumps.
+    let ctx = fresh();
+    let r = focus_recipe(Transition::COLORS);
+    box_pass(&ctx, 1.0, &r, State::NONE);
+    assert_eq!(
+        outline_width(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        2.0
+    );
+}
+
+#[test]
+fn shadow_elevation_fades_where_box_shadow_is_named() {
+    let ctx = fresh();
+    let r = focus_recipe(Transition::COLOR.or(Transition::SHADOW));
+    box_pass(&ctx, 1.0, &r, State::NONE);
+    let full = {
+        let ctx = fresh();
+        shadow_alpha(&box_pass(&ctx, 1.0, &r, State::FOCUS_VISIBLE))
+    };
+    assert!(full > 0);
+    assert_eq!(
+        shadow_alpha(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        0
+    );
+    let half = shadow_alpha(&box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
+    assert!(half > 0 && half < full, "{half} of {full}");
+    assert_eq!(
+        shadow_alpha(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE)),
+        full
+    );
+    // `transition-colors` does not name `box-shadow`: it jumps.
+    let ctx = fresh();
+    let r = focus_recipe(Transition::COLORS);
+    box_pass(&ctx, 1.0, &r, State::NONE);
+    assert_eq!(
+        shadow_alpha(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        full
+    );
+}
+
+#[test]
+fn disabled_opacity_fades_where_opacity_is_named() {
+    use shadcn_egui::components::shared::part_opacity;
+    use shadcn_egui::style::{Rule, When};
+    let fade = |t: Transition| {
+        let mut r = Recipe {
+            transition: Prop::fixed(t),
+            ..Recipe::default()
+        };
+        r.opacity.rules.push(Rule {
+            when: When::new(State::DISABLED, State::NONE),
+            rank: 1,
+            value: 0.5,
+        });
+        r
+    };
+    let at = |ctx: &egui::Context, time: f64, r: &Recipe, s: State| {
+        let mut o = f32::NAN;
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| o = part_opacity(ui, egui::Id::new("part"), &[&[r]], s),
+        );
+        o
+    };
+    let ctx = fresh();
+    let r = fade(Transition::ALL);
+    assert_eq!(at(&ctx, 1.0, &r, State::NONE), 1.0);
+    assert_eq!(at(&ctx, 2.0, &r, State::DISABLED), 1.0);
+    // Tailwind's 150 ms along its default curve, at 75 ms.
+    let half = at(&ctx, 2.075, &r, State::DISABLED);
+    let want = 1.0 - 0.5 * reference_bezier(0.4, 0.0, 0.2, 1.0, 0.5) as f32;
+    assert!((half - want).abs() < 1e-3, "{half} != {want}");
+    assert_eq!(at(&ctx, 2.2, &r, State::DISABLED), 0.5);
+    // `transition-colors` does not name `opacity`: it jumps.
+    let ctx = fresh();
+    let r = fade(Transition::COLORS);
+    at(&ctx, 1.0, &r, State::NONE);
+    assert_eq!(at(&ctx, 2.0, &r, State::DISABLED), 0.5);
 }

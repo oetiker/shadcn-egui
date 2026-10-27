@@ -10,6 +10,7 @@
 //! cut to the outside of the border box. The mesh is cached per frame, so
 //! an idle box costs no allocation.
 
+use crate::color::mix_oklab;
 use crate::components::shared::{clip_outside, rounded_polygon};
 use crate::theme::ShadowLayer;
 use egui::cache::{ComputerMut, FrameCache};
@@ -34,6 +35,80 @@ const SIDE_POINTS: usize = (REACH * RINGS_PER_SIGMA) as usize;
 /// Samples across a corner band in the coverage integral.
 const BAND_SAMPLES: usize = 16;
 
+/// Most layers a theme shadow has: Tailwind's `--shadow-*` have two.
+const MAX_LAYERS: usize = 2;
+
+/// The layer CSS pads the shorter of two shadow lists with when it mixes
+/// them: `0 0 0 0 transparent`.
+const NO_LAYER: ShadowLayer =
+    ShadowLayer::new(egui::Vec2::ZERO, 0.0, 0.0, Color32::TRANSPARENT, 0.0);
+
+/// A `box-shadow` list held by value, so a transition can mix two of them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Layers {
+    list: [ShadowLayer; MAX_LAYERS],
+    len: usize,
+}
+
+impl Layers {
+    /// No shadow: `box-shadow: none`.
+    pub(crate) const NONE: Layers = Layers {
+        list: [NO_LAYER; MAX_LAYERS],
+        len: 0,
+    };
+
+    /// The theme's `layers`. Panics past [`MAX_LAYERS`], which no theme
+    /// shadow reaches.
+    pub(crate) fn new(layers: &[ShadowLayer]) -> Layers {
+        assert!(
+            layers.len() <= MAX_LAYERS,
+            "a theme shadow has at most {MAX_LAYERS} layers"
+        );
+        let mut list = [NO_LAYER; MAX_LAYERS];
+        list[..layers.len()].copy_from_slice(layers);
+        Layers {
+            list,
+            len: layers.len(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[ShadowLayer] {
+        &self.list[..self.len]
+    }
+
+    /// CSS's mix of two shadow lists at `t`: layer by layer, the shorter
+    /// list padded with `0 0 0 0 transparent`; lengths move linearly, the
+    /// colour in OKLab with premultiplied alpha ([`mix_oklab`]).
+    pub(crate) fn mix(a: Layers, b: Layers, t: f32) -> Layers {
+        let len = a.len.max(b.len);
+        let mut list = [NO_LAYER; MAX_LAYERS];
+        for (i, l) in list.iter_mut().enumerate().take(len) {
+            *l = mix_layer(a.list[i], b.list[i], t);
+        }
+        Layers { list, len }
+    }
+}
+
+fn mix_layer(a: ShadowLayer, b: ShadowLayer, t: f32) -> ShadowLayer {
+    let lerp = |p: f32, q: f32| p + (q - p) * t;
+    let alpha = lerp(a.alpha(), b.alpha());
+    // Premultiplied: each side's colour weighs by its alpha, so a padding
+    // layer lends only its alpha.
+    let w = if alpha > 0.0 {
+        t * b.alpha() / alpha
+    } else {
+        t
+    };
+    let opaque = |c: Color32| Color32::from_rgb(c.r(), c.g(), c.b());
+    ShadowLayer::new(
+        a.offset() + (b.offset() - a.offset()) * t,
+        lerp(a.blur(), b.blur()),
+        lerp(a.spread(), b.spread()),
+        mix_oklab(opaque(a.color()), opaque(b.color()), w),
+        alpha,
+    )
+}
+
 /// The shadow `layers` of the border box `rect` (already on the pixel grid
 /// where egui rounds rects) with CSS corner radii `radii` (nw, ne, sw, se),
 /// faded by `opacity` and cut to the outside of the box egui fills with
@@ -43,7 +118,7 @@ pub(crate) fn shadow_mesh(
     rect: Rect,
     radii: [f32; 4],
     cut: CornerRadius,
-    layers: &'static [ShadowLayer],
+    layers: Layers,
     opacity: f32,
 ) -> Arc<Mesh> {
     let key = Key {
@@ -67,7 +142,7 @@ struct Key {
     rect: Rect,
     radii: [f32; 4],
     cut: CornerRadius,
-    layers: &'static [ShadowLayer],
+    layers: Layers,
     opacity: f32,
     pixels_per_point: f32,
 }
@@ -89,7 +164,7 @@ impl Hash for Key {
             v.to_bits().hash(h);
         }
         self.cut.hash(h);
-        for l in self.layers {
+        for l in self.layers.as_slice() {
             for v in [l.offset().x, l.offset().y, l.blur(), l.spread(), l.alpha()] {
                 v.to_bits().hash(h);
             }
@@ -104,7 +179,7 @@ struct Builder;
 impl ComputerMut<Key, Arc<Mesh>> for Builder {
     fn compute(&mut self, k: Key) -> Arc<Mesh> {
         let mut mesh = Mesh::default();
-        for layer in k.layers.iter().rev() {
+        for layer in k.layers.as_slice().iter().rev() {
             add_layer(
                 &mut mesh,
                 k.rect,

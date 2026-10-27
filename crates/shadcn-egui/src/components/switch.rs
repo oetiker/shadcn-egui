@@ -139,7 +139,8 @@ impl Widget for Switch<'_> {
                 ui.ctx().pixels_per_point(),
             );
             RecipeBox::resolve(ui.ctx(), &t, &track, st)
-                .paint(&part_painter(ui, &[&track[..]], st), rect);
+                .transitioned(ui.ctx(), base.id, &track, st)
+                .paint(&part_painter(ui, base.id, &[&track[..]], st), rect);
 
             // The thumb lies inside the border, vertically centred; its
             // translate differs per value and moves as its transition says.
@@ -165,8 +166,10 @@ impl Widget for Switch<'_> {
                 st,
             );
             let thumb_rect = Rect::from_min_size(egui::pos2(left, target.top()), size);
-            RecipeBox::resolve(ui.ctx(), &t, &thumb, st)
-                .paint(&part_painter(ui, &[&thumb[..], &track[..]], st), thumb_rect);
+            RecipeBox::resolve(ui.ctx(), &t, &thumb, st).paint(
+                &part_painter(ui, base.id.with("thumb"), &[&thumb[..], &track[..]], st),
+                thumb_rect,
+            );
         }
         // No label of its own: name it with `labelled_by(label.id)`, which
         // an own label, even an empty one, would override.

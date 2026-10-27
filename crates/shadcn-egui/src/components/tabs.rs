@@ -6,11 +6,13 @@
 //! tab (automatic activation). The list is one Tab stop, on the selected
 //! trigger (roving focus).
 
+use crate::components::motion::{transition, transition_color};
 use crate::components::shared::{
     interaction_state, line_width, opacity, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
+use crate::style::Transition;
 use crate::style::{
     pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
@@ -346,8 +348,10 @@ impl Widget for Tabs<'_> {
         }
         if ui.is_rect_visible(list_rect.expand(reach)) {
             // The list sits in the tabs root; a trigger in the list.
-            RecipeBox::resolve(ui.ctx(), &t, &list, g)
-                .paint(&part_painter(ui, &[&list[..], &root[..]], g), list_rect);
+            RecipeBox::resolve(ui.ctx(), &t, &list, g).paint(
+                &part_painter(ui, resp.id.with("list"), &[&list[..], &root[..]], g),
+                list_rect,
+            );
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
 
@@ -356,21 +360,32 @@ impl Widget for Tabs<'_> {
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, context.with(State::DISABLED, !enabled));
-                let painter = part_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
+                let painter = part_painter(ui, r.id, &[&trigger[..], &list[..], &root[..]], st);
                 let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.paint(p))
                 };
                 let px =
                     |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, st).unwrap_or(0.0);
 
+                let key = |property: &str| r.id.with(("transition", property));
                 let fg = paint(&trigger, |r| &r.text)
                     .or(list_text)
                     .unwrap_or(inherited);
-                let mut shapes =
-                    RecipeBox::resolve(ui.ctx(), &t, &trigger, st).shapes(ui.ctx(), *rect);
+                let fg =
+                    transition_color(ui.ctx(), key("text"), fg, &trigger, Transition::COLOR, st);
+                let mut shapes = RecipeBox::resolve(ui.ctx(), &t, &trigger, st)
+                    .transitioned(ui.ctx(), r.id, &trigger, st)
+                    .shapes(ui.ctx(), *rect);
                 // The `after:` line indicator, placed against the padding box.
                 // The painter already carries the trigger's chain.
-                let bar_alpha = opacity(&[&after[..]], st);
+                let bar_alpha = transition(
+                    ui.ctx(),
+                    key("after-opacity"),
+                    opacity(&[&after[..]], st),
+                    &after,
+                    Transition::OPACITY,
+                    st,
+                );
                 if bar_alpha > 0.0 {
                     let inner = rect.shrink(border_w);
                     let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);

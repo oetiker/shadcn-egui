@@ -284,9 +284,16 @@ impl Widget for Slider<'_> {
         );
 
         if ui.is_rect_visible(hit) {
-            let track_painter = part_painter(ui, &[&track[..], &root[..]], st);
-            let range_painter = part_painter(ui, &[&range[..], &track[..], &root[..]], st);
-            let thumb_painter = part_painter(ui, &[&thumb[..], &root[..]], st);
+            let track_painter =
+                part_painter(ui, resp.id.with("track"), &[&track[..], &root[..]], st);
+            let range_painter = part_painter(
+                ui,
+                resp.id.with("range"),
+                &[&range[..], &track[..], &root[..]],
+                st,
+            );
+            let thumb_painter =
+                part_painter(ui, resp.id.with("thumb"), &[&thumb[..], &root[..]], st);
 
             let track_rect = if vertical {
                 Rect::from_center_size(rect.center(), vec2(thickness, rect.height()))
@@ -307,7 +314,9 @@ impl Widget for Slider<'_> {
                 .clipped_by(&track_box, track_rect, range_rect)
                 .paint(&range_painter, range_rect);
 
-            RecipeBox::resolve(ui.ctx(), &t, &thumb, st).paint(&thumb_painter, thumb_rect);
+            RecipeBox::resolve(ui.ctx(), &t, &thumb, st)
+                .transitioned(ui.ctx(), resp.id.with("thumb"), &thumb, st)
+                .paint(&thumb_painter, thumb_rect);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));

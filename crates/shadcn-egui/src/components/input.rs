@@ -125,7 +125,12 @@ impl<'a> Widget for Input<'a> {
         }
 
         // The `TextEdit` is the field's own text: it paints at the part's opacity.
-        let fade = part_opacity(ui, &[&l[..]], g.with(State::DISABLED, !enabled));
+        let fade = part_opacity(
+            ui,
+            ui.id().with("shadcn_egui::input"),
+            &[&l[..]],
+            g.with(State::DISABLED, !enabled),
+        );
         let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads input first
         let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
@@ -202,8 +207,10 @@ impl<'a> Widget for Input<'a> {
             .inner;
 
         let st = text_entry_state(&t, &resp, context.with(State::DISABLED, !enabled));
-        let shapes = RecipeBox::resolve(ui.ctx(), &t, &l, st).shapes(ui.ctx(), resp.rect);
-        part_painter(ui, &[&l[..]], st).set(slot, Shape::Vec(shapes));
+        let shapes = RecipeBox::resolve(ui.ctx(), &t, &l, st)
+            .transitioned(ui.ctx(), resp.id, &l, st)
+            .shapes(ui.ctx(), resp.rect);
+        part_painter(ui, resp.id, &[&l[..]], st).set(slot, Shape::Vec(shapes));
         resp
     }
 }

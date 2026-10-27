@@ -88,7 +88,8 @@ impl Widget for Separator {
         let (rect, resp) = layout::allocate_item(ui, size, Sense::hover());
         if ui.is_rect_visible(rect) {
             if let Some(c) = pick(&l, |r| &r.bg, st).map(|p| t.paint(p)) {
-                part_painter(ui, &[&l[..]], st).rect_filled(rect, 0.0, c);
+                part_painter(ui, ui.id().with("shadcn_egui::separator"), &[&l[..]], st)
+                    .rect_filled(rect, 0.0, c);
             }
         }
         resp

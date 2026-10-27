@@ -5,11 +5,13 @@
 
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
+use crate::components::motion::{transition, transition_color};
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
+use crate::style::Transition;
 use crate::style::{
     pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, SizeEnum, State, Style, VariantEnum,
 };
@@ -336,16 +338,41 @@ impl Widget for Button {
         }
 
         let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
-        let painter = part_painter(ui, &[l], st);
+        let painter = part_painter(ui, id, &[l], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
+        let ctx = ui.ctx();
+        let key = |property: &str| id.with(("transition", property));
         let fg = paint(|r| &r.text).unwrap_or(inherited);
-        let rect = shift(
+        let fg = transition_color(ctx, key("text"), fg, l, Transition::COLOR, st);
+        // `active:translate-y-px` moves as the transition says.
+        let shifted = shift(
             rect,
             pick(l, |r| &r.shift_x, st),
             pick(l, |r| &r.shift_y, st),
         );
-        RecipeBox::resolve(ui.ctx(), &t, l, st).paint(&painter, rect);
+        let offset = shifted.min - rect.min;
+        let rect = rect.translate(Vec2::new(
+            transition(
+                ctx,
+                key("translate-x"),
+                offset.x,
+                l,
+                Transition::TRANSFORM,
+                st,
+            ),
+            transition(
+                ctx,
+                key("translate-y"),
+                offset.y,
+                l,
+                Transition::TRANSFORM,
+                st,
+            ),
+        ));
+        RecipeBox::resolve(ctx, &t, l, st)
+            .transitioned(ctx, id, l, st)
+            .paint(&painter, rect);
         // A state's `underline` (the link variant on hover) lays out again.
         row.paint(ui, &painter, rect, &TextLook::resolve(ui, l, st), fg);
         resp

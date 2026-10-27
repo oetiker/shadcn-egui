@@ -115,8 +115,10 @@ impl Widget for Checkbox<'_> {
         let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
 
         if ui.is_rect_visible(rect) {
-            let painter = part_painter(ui, &[&l[..]], st);
-            RecipeBox::resolve(ui.ctx(), &t, &l, st).paint(&painter, rect);
+            let painter = part_painter(ui, resp.id, &[&l[..]], st);
+            RecipeBox::resolve(ui.ctx(), &t, &l, st)
+                .transitioned(ui.ctx(), resp.id, &l, st)
+                .paint(&painter, rect);
             if checked {
                 let side = pick(&ind, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
                 // `text-current`: the tick inherits the box's text colour.
@@ -125,7 +127,7 @@ impl Widget for Checkbox<'_> {
                     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(side));
                     // The indicator sits in the box: both opacities apply.
                     paint_icon(
-                        &part_painter(ui, &[&ind[..], &l[..]], st),
+                        &part_painter(ui, resp.id.with("indicator"), &[&ind[..], &l[..]], st),
                         icon_rect,
                         &t.icons.check,
                         color,

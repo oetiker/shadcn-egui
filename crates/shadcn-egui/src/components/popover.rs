@@ -125,7 +125,16 @@ impl<'a> Popover<'a> {
                 let inner = ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
                     // The content's `text-*` and text colour reach what it holds.
                     let look = TextLook::resolve(ui, &l, g);
-                    content_scope(ui, &look, |ui| content_ui(ui, &[&l[..]], g, content)).inner
+                    content_scope(ui, &look, |ui| {
+                        content_ui(
+                            ui,
+                            ui.id().with("shadcn_egui::popover::content"),
+                            &[&l[..]],
+                            g,
+                            content,
+                        )
+                    })
+                    .inner
                 });
                 (inner.inner, slot)
             })?;
@@ -169,14 +178,28 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let (title_l, desc_l2, header_l) = ([title_r], [desc_r], [header]);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
-        content_ui(ui, &[&header_l[..]], g, |ui| {
-            part_ui(ui, &[&title_l[..]], g, |ui| {
-                title_look.label(ui, title, TextWrapMode::Wrap)
-            });
-            part_ui(ui, &[&desc_l2[..]], g, |ui| {
-                desc_look.label(ui, description, TextWrapMode::Wrap)
-            });
-        });
+        content_ui(
+            ui,
+            ui.id().with("shadcn_egui::popover::header"),
+            &[&header_l[..]],
+            g,
+            |ui| {
+                part_ui(
+                    ui,
+                    ui.id().with("shadcn_egui::popover::title"),
+                    &[&title_l[..]],
+                    g,
+                    |ui| title_look.label(ui, title, TextWrapMode::Wrap),
+                );
+                part_ui(
+                    ui,
+                    ui.id().with("shadcn_egui::popover::description"),
+                    &[&desc_l2[..]],
+                    g,
+                    |ui| desc_look.label(ui, description, TextWrapMode::Wrap),
+                );
+            },
+        );
     });
 }
 

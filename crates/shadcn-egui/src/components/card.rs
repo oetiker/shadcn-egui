@@ -188,7 +188,7 @@ impl<'a> Card<'a> {
         // The card's `text-*` and text colour reach its content.
         let look = TextLook::resolve(ui, &card, st);
         // Header, content and footer sit in the card.
-        let painter = part_painter(ui, &[&card[..]], st);
+        let painter = part_painter(ui, ui.id().with("shadcn_egui::card"), &[&card[..]], st);
 
         // A block fills the room left; where that is unbounded, the card
         // is laid out unbounded and takes its content's width.
@@ -225,8 +225,16 @@ impl<'a> Card<'a> {
         ));
         body.spacing_mut().item_spacing.y = gap;
         clip(&mut body);
-        let result =
-            content_scope(&mut body, &look, |ui| content_ui(ui, &[&card[..]], st, add)).inner;
+        let result = content_scope(&mut body, &look, |ui| {
+            content_ui(
+                ui,
+                ui.id().with("shadcn_egui::card::content"),
+                &[&card[..]],
+                st,
+                add,
+            )
+        })
+        .inner;
         let mut bottom = body.min_rect().bottom().max(body_rect.top());
         let mut content_w = body.min_rect().right() - origin.x + side_r;
 
@@ -258,10 +266,16 @@ impl<'a> Card<'a> {
             let items = crate::layout::RowItems::begin(&row);
             crate::layout::shrink_stacks(&mut row, |ui| {
                 content_scope(ui, &look, |ui| {
-                    content_ui(ui, &[&foot[..], &card[..]], st, |ui| {
-                        crate::layout::hold_row_items(ui);
-                        footer(ui);
-                    })
+                    content_ui(
+                        ui,
+                        ui.id().with("shadcn_egui::card::footer"),
+                        &[&foot[..], &card[..]],
+                        st,
+                        |ui| {
+                            crate::layout::hold_row_items(ui);
+                            footer(ui);
+                        },
+                    )
                 });
                 ((), ui.min_rect().width())
             });
@@ -292,7 +306,13 @@ impl<'a> Card<'a> {
                 egui::pos2(outer.left(), top),
                 egui::pos2(outer.right(), bottom),
             );
-            part_painter(ui, &[&foot[..], &card[..]], st).set(
+            part_painter(
+                ui,
+                ui.id().with("shadcn_egui::card::footer"),
+                &[&foot[..], &card[..]],
+                st,
+            )
+            .set(
                 idx,
                 Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &foot, st).shapes(ui.ctx(), strip)),
             );
@@ -316,7 +336,13 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let gap = len(&l, |r| &r.gap, st);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
-        content_ui(ui, &[&l[..]], st, add)
+        content_ui(
+            ui,
+            ui.id().with("shadcn_egui::card::part"),
+            &[&l[..]],
+            st,
+            add,
+        )
     })
     .inner
 }
@@ -326,9 +352,13 @@ pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
     let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
-    content_ui(ui, &[&header[..]], card_state(ui, &v), |ui| {
-        header_column(ui, title, description)
-    });
+    content_ui(
+        ui,
+        ui.id().with("shadcn_egui::card::header"),
+        &[&header[..]],
+        card_state(ui, &v),
+        |ui| header_column(ui, title, description),
+    );
 }
 
 /// The state of a card part: the current card's variant and size bits,
@@ -357,7 +387,7 @@ pub fn card_header_with_action(
     let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
     let card_action = [v.part(&t.style, |s| &s.card_action, |r| &r.card_action)];
     let id = ui.next_auto_id().with("shadcn_egui::card::action");
-    content_ui(ui, &[&header[..]], st, |ui| {
+    content_ui(ui, id, &[&header[..]], st, |ui| {
         ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
             // The title column takes the room the action left in the
             // previous pass; the action keeps the order the code adds its
@@ -375,7 +405,7 @@ pub fn card_header_with_action(
                 id,
                 Align::Min,
                 "card::card_header_with_action action width changed",
-                |ui| content_ui(ui, &[&card_action[..]], st, action),
+                |ui| content_ui(ui, id.with("action"), &[&card_action[..]], st, action),
             );
         })
     });
@@ -404,9 +434,13 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
     let l = [v.part(&t.style, |s| &s.card_title, |r| &r.card_title)];
     // upstream: card-title carries `cn-font-heading`
     let look = TextLook::resolve(ui, &l, st).heading(true);
-    part_ui(ui, &[&l[..]], st, |ui| {
-        look.label(ui, text, TextWrapMode::Wrap)
-    })
+    part_ui(
+        ui,
+        ui.id().with("shadcn_egui::card::title"),
+        &[&l[..]],
+        st,
+        |ui| look.label(ui, text, TextWrapMode::Wrap),
+    )
 }
 
 /// `card-description`: muted text at the style's size.
@@ -416,9 +450,13 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
     let st = t.state(ui.ctx(), v.bits());
     let l = [v.part(&t.style, |s| &s.card_description, |r| &r.card_description)];
     let look = TextLook::resolve(ui, &l, st);
-    part_ui(ui, &[&l[..]], st, |ui| {
-        look.label(ui, text, TextWrapMode::Wrap)
-    })
+    part_ui(
+        ui,
+        ui.id().with("shadcn_egui::card::description"),
+        &[&l[..]],
+        st,
+        |ui| look.label(ui, text, TextWrapMode::Wrap),
+    )
 }
 
 #[cfg(test)]

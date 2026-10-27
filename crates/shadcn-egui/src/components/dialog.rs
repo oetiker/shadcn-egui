@@ -165,7 +165,7 @@ impl<'a> Dialog<'a> {
                     // The panel's `text-*` and text colour reach its content.
                     let look = TextLook::resolve(ui, &l, g);
                     content_scope(ui, &look, |ui| {
-                        content_ui(ui, &[&l[..]], g, |ui| {
+                        content_ui(ui, self.id.with("content"), &[&l[..]], g, |ui| {
                             header(ui, &t, &v, self.title, self.description);
                             let inner = body(ui);
                             let close =
@@ -211,16 +211,30 @@ fn header(
     // The title and the description sit in the header.
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
-        content_ui(ui, &[&header_l[..]], g, |ui| {
-            part_ui(ui, &[&heading[..]], g, |ui| {
-                title_look.label(ui, title, TextWrapMode::Wrap)
-            });
-            if let Some(d) = description {
-                part_ui(ui, &[&desc[..]], g, |ui| {
-                    desc_look.label(ui, d, TextWrapMode::Wrap)
-                });
-            }
-        });
+        content_ui(
+            ui,
+            ui.id().with("shadcn_egui::dialog::header"),
+            &[&header_l[..]],
+            g,
+            |ui| {
+                part_ui(
+                    ui,
+                    ui.id().with("shadcn_egui::dialog::title"),
+                    &[&heading[..]],
+                    g,
+                    |ui| title_look.label(ui, title, TextWrapMode::Wrap),
+                );
+                if let Some(d) = description {
+                    part_ui(
+                        ui,
+                        ui.id().with("shadcn_egui::dialog::description"),
+                        &[&desc[..]],
+                        g,
+                        |ui| desc_look.label(ui, d, TextWrapMode::Wrap),
+                    );
+                }
+            },
+        );
     });
 }
 
@@ -308,7 +322,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             id,
             Align::Center,
             "dialog::footer actions width changed",
-            |ui| content_ui(ui, &[&l[..]], g, add),
+            |ui| content_ui(ui, id, &[&l[..]], g, add),
         );
     } else {
         row.spacing_mut().item_spacing.y = gap;
@@ -316,13 +330,13 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
             &mut row,
             id.with("column"),
             "dialog::footer actions height changed",
-            |ui| content_ui(ui, &[&l[..]], g, add),
+            |ui| content_ui(ui, id, &[&l[..]], g, add),
         );
     }
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
-    let painter = part_painter(ui, &[&l[..]], g);
+    let painter = part_painter(ui, id, &[&l[..]], g);
     let shapes = RecipeBox::resolve(ui.ctx(), &t, &l, g).shapes(ui.ctx(), strip);
     painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.

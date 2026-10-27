@@ -4,9 +4,11 @@
 
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
+use crate::components::motion::transition_color;
 use crate::components::shared::{interaction_state, line_width, part_painter, RecipeBox};
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
+use crate::style::Transition;
 use crate::style::{
     pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
@@ -176,11 +178,21 @@ impl Widget for Badge {
         } else {
             st.without(State::HOVER)
         };
-        let painter = part_painter(ui, &[&l[..]], st);
+        let painter = part_painter(ui, id, &[&l[..]], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
         let fg = paint(|r| &r.text).unwrap_or(inherited);
-        RecipeBox::resolve(ui.ctx(), &t, &l, st).paint(&painter, rect);
+        let fg = transition_color(
+            ui.ctx(),
+            id.with(("transition", "text")),
+            fg,
+            &l,
+            Transition::COLOR,
+            st,
+        );
+        RecipeBox::resolve(ui.ctx(), &t, &l, st)
+            .transitioned(ui.ctx(), id, &l, st)
+            .paint(&painter, rect);
 
         // A state's `underline` (the link variant on hover) lays out again.
         row.paint(ui, &painter, rect, &TextLook::resolve(ui, &l, st), fg);

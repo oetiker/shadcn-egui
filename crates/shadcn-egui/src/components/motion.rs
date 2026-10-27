@@ -2,10 +2,14 @@
 //! moves to its new value over the recipe's `duration-*`, along its
 //! `ease-*` curve, when its `transition-*` names the property; otherwise it
 //! jumps. `style.animation_time == 0` counts as reduced motion: every
-//! transition jumps at once.
+//! transition jumps at once. [`transition`] moves a length or a fraction,
+//! [`transition_color`] a colour, mixed as the browser mixes it
+//! ([`mix_oklab`]).
 
+use crate::box_shadow::Layers;
+use crate::color::mix_oklab;
 use crate::style::{pick, Easing, Recipe, State, Transition};
-use egui::{Context, Id};
+use egui::{Color32, Context, Id};
 
 /// Tailwind 4's `--default-transition-duration`, in seconds: the duration
 /// of a transition whose part sets no `duration-*`.
@@ -53,24 +57,52 @@ fn cubic_bezier(x1: f64, y1: f64, x2: f64, y2: f64, t: f32) -> f32 {
     at(y1, y2, (lo + hi) / 2.0) as f32
 }
 
+/// A value a transition moves: the value at eased progress `t` between
+/// `a` and `b`.
+trait Tween: Copy + PartialEq + Send + Sync + 'static {
+    fn tween(a: Self, b: Self, t: f32) -> Self;
+}
+
+impl Tween for f32 {
+    fn tween(a: f32, b: f32, t: f32) -> f32 {
+        a + (b - a) * t
+    }
+}
+
+impl Tween for Color32 {
+    fn tween(a: Color32, b: Color32, t: f32) -> Color32 {
+        mix_oklab(a, b, t)
+    }
+}
+
+impl Tween for Layers {
+    fn tween(a: Layers, b: Layers, t: f32) -> Layers {
+        Layers::mix(a, b, t)
+    }
+}
+
 /// One running (or finished) transition, kept per id in the context's
 /// temporary data.
 #[derive(Clone, Copy, Debug)]
-struct Run {
-    from: f32,
-    to: f32,
+struct Run<T> {
+    from: T,
+    to: T,
     start: f64,
     duration: f32,
     easing: Easing,
     /// CSS's reversing-adjusted start value and reversing shortening
     /// factor: a transition back to where the last one came from takes
     /// only as long as the way already covered.
-    reverse_to: f32,
+    reverse_to: T,
     shortening: f32,
+    /// The pass and time the widget last asked for this value: a change
+    /// found after skipped passes happened while the widget was not shown.
+    seen_pass: u64,
+    seen_time: f64,
 }
 
-impl Run {
-    fn settled(value: f32) -> Run {
+impl<T: Tween> Run<T> {
+    fn settled(value: T) -> Run<T> {
         Run {
             from: value,
             to: value,
@@ -79,17 +111,19 @@ impl Run {
             easing: Easing::Linear,
             reverse_to: value,
             shortening: 1.0, // behaviour-ok: CSS's initial shortening factor
+            seen_pass: 0,
+            seen_time: 0.0,
         }
     }
 
     /// The value and eased progress at `now`, and whether it still runs.
-    fn at(&self, now: f64) -> (f32, f32, bool) {
+    fn at(&self, now: f64) -> (T, f32, bool) {
         let elapsed = (now - self.start) as f32;
         if self.duration <= 0.0 || elapsed >= self.duration {
             return (self.to, 1.0, false); // behaviour-ok: the finished progress
         }
         let eased = self.easing.at(elapsed.max(0.0) / self.duration);
-        (self.from + (self.to - self.from) * eased, eased, true)
+        (T::tween(self.from, self.to, eased), eased, true)
     }
 }
 
@@ -132,12 +166,63 @@ pub fn transition(
     property: Transition,
     s: State,
 ) -> f32 {
+    run(ctx, id, target, layers, property, s)
+}
+
+/// [`transition`] for a colour: `transition-colors`, `transition-all` or
+/// `transition-[color,box-shadow]` fade a part's state colours from where
+/// they are to `target`, mixed in OKLab as the browser mixes them
+/// ([`mix_oklab`]). `property` is the colour's property:
+/// [`Transition::BACKGROUND`] for the fill, [`Transition::COLOR`] for text
+/// and icons, [`Transition::BORDER_COLOR`], [`Transition::SHADOW`] for a
+/// ring. `id` names the property of this widget, as for [`transition`].
+pub fn transition_color(
+    ctx: &Context,
+    id: Id,
+    target: Color32,
+    layers: &[&Recipe],
+    property: Transition,
+    s: State,
+) -> Color32 {
+    run(ctx, id, target, layers, property, s)
+}
+
+/// [`transition`] for a part's `box-shadow` elevation (`shadow-*`), under
+/// [`Transition::SHADOW`], mixed layer by layer as CSS mixes shadow lists.
+pub(crate) fn transition_shadow(
+    ctx: &Context,
+    id: Id,
+    target: Layers,
+    layers: &[&Recipe],
+    s: State,
+) -> Layers {
+    run(ctx, id, target, layers, Transition::SHADOW, s)
+}
+
+fn run<T: Tween>(
+    ctx: &Context,
+    id: Id,
+    target: T,
+    layers: &[&Recipe],
+    property: Transition,
+    s: State,
+) -> T {
     let animates = pick(layers, |r| &r.transition, s).is_some_and(|t| t.contains(property))
         && ctx.global_style().animation_time > 0.0;
     let now = ctx.input(|i| i.time);
-    let run = match ctx.data(|d| d.get_temp::<Run>(id)) {
+    let pass = ctx.cumulative_pass_nr();
+    let mut run = match ctx.data(|d| d.get_temp::<Run<T>>(id)) {
         Some(run) if animates => {
-            let (current, progress, running) = run.at(now);
+            // A CSS transition runs on wall time whether the element paints
+            // or not. After passes without the widget (scrolled away, not
+            // shown) the change is dated to the last pass that showed it,
+            // so a change older than the duration shows its target at once.
+            let start = if run.seen_pass + 1 < pass {
+                run.seen_time
+            } else {
+                now
+            };
+            let (current, progress, running) = run.at(start);
             if target == run.to {
                 run
             } else {
@@ -153,20 +238,24 @@ pub fn transition(
                 Run {
                     from: current,
                     to: target,
-                    start: now,
+                    start,
                     duration: duration * shortening,
                     easing,
                     reverse_to,
                     shortening,
+                    seen_pass: 0,
+                    seen_time: 0.0,
                 }
             }
         }
         _ => Run::settled(target),
     };
     let (value, _, running) = run.at(now);
-    ctx.data_mut(|d| {
-        d.insert_temp(id, if running { run } else { Run::settled(target) });
-    });
+    if !running {
+        run = Run::settled(target);
+    }
+    (run.seen_pass, run.seen_time) = (pass, now);
+    ctx.data_mut(|d| d.insert_temp(id, run));
     if running {
         ctx.request_repaint();
     }

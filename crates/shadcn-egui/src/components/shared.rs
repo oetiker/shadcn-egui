@@ -1,8 +1,9 @@
 //! Shared painting helpers for shadcn-style components.
 
-use crate::box_shadow::clamp_radii;
-use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State};
-use crate::{ShadowLayer, Theme};
+use crate::box_shadow::{clamp_radii, Layers};
+use crate::components::motion::{transition, transition_color, transition_shadow};
+use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, Transition};
+use crate::Theme;
 use egui::{
     Color32, Context, CornerRadius, Id, Key, Painter, PointerButton, Rect, Response, Shape, Stroke,
     Ui,
@@ -24,6 +25,29 @@ pub fn opacity(chain: &[&[&Recipe]], s: State) -> f32 {
         .product()
 }
 
+/// [`opacity`] on its way to this state's, as each part in `chain` moves
+/// its own `opacity` under its own `transition-*` ([`transition`]): a
+/// disabled toggle fades where the transition names `opacity`
+/// (`transition-all`, `transition-opacity`) and jumps elsewhere. `id` is
+/// the widget's.
+fn transitioned_opacity(ctx: &Context, id: Id, chain: &[&[&Recipe]], s: State) -> f32 {
+    chain
+        .iter()
+        .enumerate()
+        .map(|(i, stack)| {
+            let o = pick(stack, |r| &r.opacity, s).unwrap_or(INITIAL_OPACITY);
+            transition(
+                ctx,
+                id.with(("opacity", i)),
+                o,
+                stack,
+                Transition::OPACITY,
+                s,
+            )
+        })
+        .product()
+}
+
 /// The `Ui`'s opacity without egui's disabled fade. `Ui::disable` multiplies
 /// the painter's opacity by `visuals.disabled_alpha`; a nested disable fades
 /// again, which the `Ui` does not report, so one fade only is taken out.
@@ -41,27 +65,29 @@ fn opacity_without_fade(ui: &Ui) -> f32 {
 /// there) under `s`, with `DISABLED` added in a disabled `Ui`. So a part
 /// fades by its style's `disabled:` rule, not by egui's fade, and a part
 /// with no such rule stays opaque in a disabled `Ui`, as in a disabled
-/// `<fieldset>` (conformance 2.2).
+/// `<fieldset>` (conformance 2.2). `id` is the widget's: a part whose
+/// `transition-*` names `opacity` fades to its new value
+/// ([`transition`]), as a disabled toggle does in the browser.
 ///
 /// A nested disable fades twice: `ui.add_enabled_ui(false, ..)` inside a
 /// `Ui` that is already disabled multiplies egui's fade in again, which the
 /// `Ui` does not report, so a part there paints at that one extra fade.
 /// Disable an area once.
-pub fn part_opacity(ui: &Ui, chain: &[&[&Recipe]], s: State) -> f32 {
+pub fn part_opacity(ui: &Ui, id: Id, chain: &[&[&Recipe]], s: State) -> f32 {
     let s = s.with(
         State::DISABLED,
         s.contains(State::DISABLED) || !ui.is_enabled(),
     );
-    opacity_without_fade(ui) * opacity(chain, s)
+    opacity_without_fade(ui) * transitioned_opacity(ui.ctx(), id, chain, s)
 }
 
 /// The `Ui`'s painter at the part's [`part_opacity`]. egui fades shape by
 /// shape: where a part lies on another (a switch thumb on its track) the
 /// lower part shows through, which CSS opacity on the whole group would not
 /// show.
-pub fn part_painter(ui: &Ui, chain: &[&[&Recipe]], s: State) -> Painter {
+pub fn part_painter(ui: &Ui, id: Id, chain: &[&[&Recipe]], s: State) -> Painter {
     let mut painter = ui.painter().clone();
-    painter.set_opacity(part_opacity(ui, chain, s));
+    painter.set_opacity(part_opacity(ui, id, chain, s));
     painter
 }
 
@@ -85,11 +111,12 @@ fn with_opacity<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) ->
 /// layout of its own.
 pub fn part_ui<R>(
     ui: &mut Ui,
+    id: Id,
     chain: &[&[&Recipe]],
     s: State,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    let opacity = part_opacity(ui, chain, s);
+    let opacity = part_opacity(ui, id, chain, s);
     with_opacity(ui, opacity, add)
 }
 
@@ -103,12 +130,15 @@ pub fn part_ui<R>(
 /// widgets by the theme's `disabled_alpha` once more.
 pub fn content_ui<R>(
     ui: &mut Ui,
+    id: Id,
     chain: &[&[&Recipe]],
     s: State,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
     let opacity = ui.opacity()
-        * opacity(
+        * transitioned_opacity(
+            ui.ctx(),
+            id,
             chain,
             s.with(
                 State::DISABLED,
@@ -186,7 +216,7 @@ pub struct RecipeBox {
     borders: [f32; 4],
     clip_padding: bool,
     /// `box-shadow` layers, first on top, and their fade.
-    shadow: &'static [ShadowLayer],
+    shadow: Layers,
     shadow_opacity: f32,
     ring: Option<Stroke>,
     outline: Option<Stroke>,
@@ -267,11 +297,79 @@ impl RecipeBox {
             border_color: paint(|r| &r.border_color).unwrap_or(base_border),
             borders,
             clip_padding: pick(layers, |r| &r.bg_clip_padding, state) == Some(true),
-            shadow: pick(layers, |r| &r.shadow, state).map_or(&[], |s| theme.shadow(s)),
+            shadow: pick(layers, |r| &r.shadow, state)
+                .map_or(Layers::NONE, |s| Layers::new(theme.shadow(s))),
             shadow_opacity: INITIAL_OPACITY,
             ring: stroke(ring_w, paint(|r| &r.ring_color)),
             outline: stroke(outline_w, paint(|r| &r.outline_color)),
         }
+    }
+
+    /// The same box with its colours on the way to this state's, as the
+    /// part's `transition-*` moves them ([`transition_color`]): the fill
+    /// under [`Transition::BACKGROUND`], the border colour under
+    /// [`Transition::BORDER_COLOR`], the outline colour under
+    /// [`Transition::OUTLINE_COLOR`], the outline's width under
+    /// [`Transition::OTHER`] (only `transition-all` names it), and the
+    /// `box-shadow`, its elevation layers and the ring's width and colour,
+    /// under [`Transition::SHADOW`]. A property the transition does not
+    /// name jumps. `id` is the widget's; each property
+    /// keys its own transition under it.
+    pub fn transitioned(
+        mut self,
+        ctx: &egui::Context,
+        id: egui::Id,
+        layers: &[&Recipe],
+        state: State,
+    ) -> Self {
+        let color = |key: &str, c: Color32, p: Transition| {
+            transition_color(ctx, id.with(("transition", key)), c, layers, p, state)
+        };
+        let fill = color(
+            "bg",
+            self.fill.unwrap_or(Color32::TRANSPARENT),
+            Transition::BACKGROUND,
+        );
+        self.fill = (fill.a() > 0).then_some(fill);
+        self.border_color = color("border", self.border_color, Transition::BORDER_COLOR);
+        let width = |key: &str, w: f32, p: Transition| {
+            transition(ctx, id.with(("transition", key)), w, layers, p, state)
+        };
+        // An absent outline has no width (`outline-style: none`): it grows
+        // from nothing and shrinks back into it, in the colour it last had;
+        // one never shown appears in its own colour.
+        let last = id.with(("transition", "outline-last"));
+        let known = self
+            .outline
+            .map(|o| o.color)
+            .or_else(|| ctx.data(|d| d.get_temp::<Color32>(last)));
+        let w = width(
+            "outline-width",
+            self.outline.map_or(0.0, |o| o.width),
+            Transition::OTHER,
+        );
+        let outline = known.map(|c| {
+            ctx.data_mut(|d| d.insert_temp(last, c));
+            Stroke::new(w, color("outline", c, Transition::OUTLINE_COLOR))
+        });
+        let outline = outline.unwrap_or(Stroke::NONE);
+        self.outline = (outline.width > 0.0 && outline.color.a() > 0).then_some(outline);
+        self.shadow = transition_shadow(
+            ctx,
+            id.with(("transition", "shadow")),
+            self.shadow,
+            layers,
+            state,
+        );
+        // An absent ring is CSS's `0 0 #0000` shadow: it grows out of
+        // nothing and fades back into it.
+        let ring = self.ring.unwrap_or(Stroke::NONE);
+        let ring = Stroke::new(
+            width("ring-width", ring.width, Transition::SHADOW),
+            color("ring", ring.color, Transition::SHADOW),
+        );
+        self.ring = (ring.width > 0.0 && ring.color.a() > 0).then_some(ring);
+        self
     }
 
     /// The same box with every colour faded by `opacity`: for a box an
@@ -448,7 +546,7 @@ impl RecipeBox {
     /// the border box: an outer `box-shadow` never shows through the box
     /// (conformance 2.5).
     fn shadow_shape(&self, ctx: &egui::Context, rect: Rect, radius: CornerRadius) -> Option<Shape> {
-        (!self.shadow.is_empty() && self.shadow_opacity > 0.0).then(|| {
+        (!self.shadow.as_slice().is_empty() && self.shadow_opacity > 0.0).then(|| {
             // The fill's rect as egui's tessellator places it.
             let rect = on_pixels(ctx, rect);
             Shape::Mesh(crate::box_shadow::shadow_mesh(

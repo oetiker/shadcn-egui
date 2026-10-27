@@ -37,7 +37,10 @@ the crate.
   does.
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
 - `shadcn_egui::components::motion::transition(ctx, id, target, &stack,
-  property, state)` for a value that moves as a CSS transition does.
+  property, state)` for a value that moves as a CSS transition does,
+  `transition_color` for a colour (mixed in OKLab as the browser mixes
+  it), and `RecipeBox::transitioned(ctx, id, &stack, state)` for a part's
+  box.
 
 ## Recipes for new markers
 
