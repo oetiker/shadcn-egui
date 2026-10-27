@@ -337,11 +337,16 @@ pub fn stretch_height(ui: &Ui) -> Option<f32> {
 ///
 /// Each line starts from its height in the last pass, so every item is
 /// centred on its line and a line is as high as its tallest item, as in a
-/// [`row`]; where a line's height changes, the row redoes the pass. A
-/// line starts this way where the crate wraps it: before a crate widget
-/// or a [`vstack`] that does not fit the line before. A line that an egui
-/// widget starts (an egui `Label`, `Button`, `allocate_space`) is started
-/// by egui, which makes it at least as high as the line before.
+/// [`row`]; where a line's height changes, the row redoes the pass. The
+/// crate starts a line this way before a crate widget or a [`vstack`] that
+/// does not fit the line before.
+///
+/// Limits, where egui gives the crate no say between two egui widgets:
+/// - A line that a plain egui widget starts (an egui `Label`, `Button`,
+///   `allocate_space`) keeps the height of the line before it where that
+///   is taller, and centres its items in that height.
+/// - A plain egui `Label` longer than a whole line overflows the line;
+///   the browser would shrink it to the line and wrap its text.
 pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // As `horizontal_wrapped`, but each line is as high as its tallest item:
     // egui's own starts every line `interact_size.y` high, which puts more
@@ -438,9 +443,10 @@ fn at_line_start(ui: &Ui) -> bool {
 
 /// Where `ui` is a [`wrap_row`] and an item `width` wide does not fit the
 /// rest of its line, starts the next line for it (see [`start_line`]).
-/// A crate widget calls this before it allocates, so that the crate, not
-/// egui, wraps it.
-pub(crate) fn wrap_item(ui: &mut Ui, width: f32) {
+/// The crate's allocation helpers ([`allocate_item`],
+/// [`allocate_item_space`], [`allocate_overflowing`]) call this before
+/// they allocate, so that the crate, not egui, wraps a crate widget.
+fn wrap_item(ui: &mut Ui, width: f32) {
     if context::on_frame::<WrapContext>(ui.stack()).is_some()
         && !at_line_start(ui)
         && width > ui.available_size_before_wrap().x
@@ -1086,6 +1092,13 @@ pub(crate) fn allocate_item(
 ) -> (egui::Rect, egui::Response) {
     wrap_item(ui, size.x);
     ui.allocate_exact_size(size, sense)
+}
+
+/// `ui.allocate_space` for a crate widget: in a [`wrap_row`] the crate,
+/// not egui, wraps it onto the next line (see [`wrap_item`]).
+pub(crate) fn allocate_item_space(ui: &mut Ui, size: egui::Vec2) -> egui::Rect {
+    wrap_item(ui, size.x);
+    ui.allocate_space(size).1
 }
 
 /// The clamp order of [`capped_width`]: cap first, then the content

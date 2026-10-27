@@ -1050,3 +1050,31 @@ fn wrap_row_lines_settle_in_an_area() {
         });
     });
 }
+
+/// Pins a known limit of `wrap_row`: a line that a plain egui widget
+/// starts is started by egui, which makes it as high as a taller line
+/// before it and centres its items in that height. Egui gives the crate
+/// no hook between two egui widgets; when it does, this test flips to
+/// the line's own height (`wrap_row_lines_have_their_own_height`).
+#[test]
+fn a_wrap_row_line_an_egui_widget_starts_keeps_the_height_before() {
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(200.0);
+            layout::wrap_row(ui, 8.0, |ui| {
+                out.push(boxed(ui, 150.0, 50.0));
+                out.push(boxed(ui, 60.0, 10.0));
+                out.push(boxed(ui, 10.0, 6.0));
+            });
+        });
+        assert_eq!(r[1].left(), r[0].left(), "{host:?}: line 2: {r:?}");
+        assert_eq!(r[1].center().y, r[2].center().y, "{host:?}: {r:?}");
+        let band_top = r[0].bottom() + 8.0;
+        assert_eq!(
+            r[1].center().y - band_top,
+            25.0,
+            "{host:?}: centred in a 50 px line: {r:?}"
+        );
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
