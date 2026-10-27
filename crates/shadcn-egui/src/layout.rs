@@ -1083,9 +1083,16 @@ pub fn allocate_overflowing(
     (response.rect, response)
 }
 
-/// `ui.allocate_exact_size` for a crate widget: in a [`wrap_row`] the
-/// crate, not egui, wraps it onto the next line (see [`wrap_item`]).
-pub(crate) fn allocate_item(
+/// `ui.allocate_exact_size` for a widget that may sit in a [`wrap_row`].
+///
+/// Call it instead of `allocate_exact_size` when a widget of your own
+/// (a ported component, a custom-painted control) allocates its rect:
+/// in a [`wrap_row`] the crate, not egui, then moves the widget to the
+/// next line when it does not fit the rest of its line, and that line is
+/// as high as its own tallest item, as for a crate widget. Elsewhere it
+/// is `allocate_exact_size`. A widget wider than its room allocates with
+/// [`allocate_overflowing`] instead, which wraps the same way.
+pub fn allocate_item(
     ui: &mut Ui,
     size: egui::Vec2,
     sense: egui::Sense,
@@ -1094,11 +1101,13 @@ pub(crate) fn allocate_item(
     ui.allocate_exact_size(size, sense)
 }
 
-/// `ui.allocate_space` for a crate widget: in a [`wrap_row`] the crate,
-/// not egui, wraps it onto the next line (see [`wrap_item`]).
-pub(crate) fn allocate_item_space(ui: &mut Ui, size: egui::Vec2) -> egui::Rect {
+/// `ui.allocate_space` for a widget that may sit in a [`wrap_row`]: it
+/// wraps as [`allocate_item`] does, and like `allocate_space` it senses
+/// nothing and returns an id to interact with and a rect that takes a
+/// justified layout's width.
+pub fn allocate_item_space(ui: &mut Ui, size: egui::Vec2) -> (egui::Id, egui::Rect) {
     wrap_item(ui, size.x);
-    ui.allocate_space(size).1
+    ui.allocate_space(size)
 }
 
 /// The clamp order of [`capped_width`]: cap first, then the content

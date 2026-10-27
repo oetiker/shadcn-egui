@@ -31,8 +31,10 @@ the crate.
   comes from another part, `.resolved_color(ui)` is the colour to paint a
   `TextBlock` in, and `content_scope` hands a container's `text-*` and
   text colour to its content.
-- `shadcn_egui::layout::{capped_width, overlay_width, allocate_overflowing}`
-  for a widget's width and its allocation.
+- `shadcn_egui::layout::{capped_width, overlay_width, allocate_item,
+  allocate_item_space, allocate_overflowing}` for a widget's width and its
+  allocation, so that it wraps in a `layout::wrap_row` as a crate widget
+  does.
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
 
 ## Recipes for new markers

@@ -89,7 +89,11 @@ drawing code holds no style value of its own.
    width to the room and raises it to the content minimum,
    `layout::overlay_width` does the same against the window, and
    `layout::allocate_overflowing` lets a widget wider than its room
-   overflow without widening its parent; a breakpoint reads the window through
+   overflow without widening its parent. The widget allocates its rect
+   with `layout::allocate_item` (for `allocate_exact_size`) or
+   `layout::allocate_item_space` (for `allocate_space`), never egui's own:
+   in a `layout::wrap_row` the crate then moves it to the next line and
+   gives that line its own height. A breakpoint reads the window through
    `layout::window_at_least` (`sm:`, `md:`; `theme.state` sets `SM` and
    `MD`) or its container through `layout::container_at_least`. Resolve
    geometry without interaction states: the size does not change on hover.

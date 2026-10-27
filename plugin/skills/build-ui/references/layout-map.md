@@ -6,7 +6,7 @@ The helpers live in `shadcn_egui::layout`.
 | Web intent | egui approach |
 |---|---|
 | `display:flex; flex-direction:row; gap:N` | `shadcn_egui::layout::row(ui, N, \|ui\| ...)` |
-| `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)` |
+| `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)`; a custom widget in it allocates with `layout::allocate_item(ui, size, sense)` (or `layout::allocate_item_space`), so that it starts a line as a crate widget does |
 | `flex-direction:column; gap:N` | `shadcn_egui::layout::vstack(ui, N, \|ui\| ...)` |
 | `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; `separator_vertical` stretches there too |
 | `justify-content:space-between` | `shadcn_egui::layout::space_between(ui, \|ui\| {left}, \|ui\| {right})` |

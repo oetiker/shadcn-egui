@@ -214,7 +214,7 @@ impl Widget for Select<'_> {
         let rect = if width > ui.available_width() {
             layout::allocate_overflowing(ui, vec2(width, height), Sense::hover()).0
         } else {
-            layout::allocate_item_space(ui, vec2(width, height))
+            layout::allocate_item_space(ui, vec2(width, height)).1
         };
         let sense = if enabled {
             Sense::click()

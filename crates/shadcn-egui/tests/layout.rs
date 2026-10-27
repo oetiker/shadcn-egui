@@ -1078,3 +1078,38 @@ fn a_wrap_row_line_an_egui_widget_starts_keeps_the_height_before() {
         assert_eq!(passes, 1, "{host:?}: a still frame");
     }
 }
+
+/// An app's own widget that allocates through `layout::allocate_item` or
+/// `layout::allocate_item_space` places itself in a `wrap_row` as a crate
+/// widget does: the line it starts after a taller line is as high as its
+/// own tallest item, `gap` below the line before. On the screen and in an
+/// `egui::Area`, and a still frame takes one pass.
+#[test]
+fn an_app_widget_starts_a_wrap_row_line_at_its_own_height() {
+    /// An app widget: a box of `w` by `h` points that the crate wraps.
+    fn app_box(ui: &mut egui::Ui, w: f32, h: f32) -> egui::Rect {
+        layout::allocate_item(ui, egui::vec2(w, h), egui::Sense::click()).0
+    }
+    /// The same, allocated as `ui.allocate_space` does.
+    fn app_space(ui: &mut egui::Ui, w: f32, h: f32) -> egui::Rect {
+        layout::allocate_item_space(ui, egui::vec2(w, h)).1
+    }
+    type Place = fn(&mut egui::Ui, f32, f32) -> egui::Rect;
+    for (name, start) in [("item", app_box as Place), ("space", app_space)] {
+        for host in [Host::Screen, Host::Area(false)] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.set_max_width(200.0);
+                layout::wrap_row(ui, 8.0, |ui| {
+                    out.push(boxed(ui, 150.0, 50.0));
+                    out.push(start(ui, 60.0, 10.0));
+                    out.push(boxed(ui, 10.0, 6.0));
+                });
+            });
+            assert_eq!(r[1].left(), r[0].left(), "{name} {host:?}: line 2: {r:?}");
+            assert_eq!(r[1].top() - r[0].bottom(), 8.0, "{name} {host:?}: {r:?}");
+            assert_eq!(r[1].height(), 10.0, "{name} {host:?}: {r:?}");
+            assert_eq!(r[1].center().y, r[2].center().y, "{name} {host:?}: {r:?}");
+            assert_eq!(passes, 1, "{name} {host:?}: a still frame");
+        }
+    }
+}
