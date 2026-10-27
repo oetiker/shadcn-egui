@@ -75,9 +75,26 @@ impl Widget for Label {
         // In a `wrap_row` a label longer than a whole line is a flex item
         // shrunk to the line (`min-width: auto`, its longest word): it
         // takes the line's width and its text wraps inside.
-        if let Some(line) = crate::layout::wrap_line_width(ui).filter(|&w| size.x > w) {
-            block = look.layout(ui, self.text.as_str(), TextWrapMode::Wrap, line);
+        let text = self.text.as_str();
+        if crate::layout::in_flex_row(ui) {
+            // An item of a crate row is a flex item that shrinks to the
+            // room the row's other items leave (`flex-shrink: 1`), not
+            // below its longest word (`min-width: auto`), as a `vstack`
+            // does there; its text wraps at the width the row gives it.
+            let min = || look.layout(ui, text, TextWrapMode::Wrap, 0.0).size().x;
+            if let Some(w) = crate::layout::flex_leaf(ui, size.x, min).filter(|&w| size.x > w) {
+                block = look.layout(ui, text, TextWrapMode::Wrap, w);
+                size = egui::vec2(block.size().x.max(w), block.size().y);
+            }
+        } else if let Some(line) = crate::layout::wrap_line_width(ui).filter(|&w| size.x > w) {
+            block = look.layout(ui, text, TextWrapMode::Wrap, line);
             size = egui::vec2(block.size().x.max(line), block.size().y);
+        } else if let Some(width) = crate::layout::text_wrap_width(ui).filter(|&w| size.x > w) {
+            // Elsewhere it wraps where egui's `Label` wraps (conformance
+            // 3.4): at the room left, as the `Ui`'s wrap mode says, and
+            // takes that room, as the block it is (a flex item's width).
+            block = look.layout(ui, text, ui.wrap_mode(), width);
+            size = egui::vec2(block.size().x.max(width), block.size().y);
         }
         let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
         resp.widget_info(|| {

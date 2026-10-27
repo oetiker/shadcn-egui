@@ -1153,3 +1153,103 @@ fn a_crate_label_longer_than_a_wrap_row_line_wraps_to_the_line() {
         assert_eq!(passes, 1, "{host:?}: a still frame");
     }
 }
+
+const LONG_LABEL: &str = "a crate label with more text than one whole line holds";
+
+/// A crate Label wraps where the browser wraps it (conformance 3.4): in a
+/// column narrower than its text at the column's width, and a short label
+/// keeps its one line.
+#[test]
+fn a_crate_label_wraps_in_a_narrow_column() {
+    use shadcn_egui::components::label::Label;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(120.0);
+            ui.vertical(|ui| {
+                out.push(ui.add(Label::new("short")).rect);
+                out.push(ui.add(Label::new(LONG_LABEL)).rect);
+            });
+        });
+        let [short, long] = r[..] else {
+            panic!("{r:?}")
+        };
+        assert!(long.width() <= 120.0, "{host:?}: wraps at 120: {r:?}");
+        assert!(
+            long.height() > 2.0 * short.height() - 0.5,
+            "{host:?}: wraps: {r:?}"
+        );
+        assert!(short.width() < 120.0, "{host:?}: content-sized: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// In a crate `row` a crate Label is a flex item (`flex-shrink: 1`): it
+/// keeps its one line while the row has room, and where it has not it
+/// shrinks to the room the row's other items leave and its text wraps, as
+/// a `vstack` of text there does. The item after it follows at the gap,
+/// inside the row. On the screen and in an `egui::Area`, and a still frame
+/// takes one pass.
+#[test]
+fn a_crate_label_in_a_row_shrinks_to_the_room_left() {
+    use shadcn_egui::components::label::Label;
+    for host in [Host::Screen, Host::Area(false)] {
+        for room in [600.0, 200.0] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.set_max_width(room);
+                out.push(ui.max_rect());
+                layout::row(ui, 8.0, |ui| {
+                    out.push(ui.button("Go").rect);
+                    out.push(ui.add(Label::new(LONG_LABEL)).rect);
+                    out.push(boxed(ui, 10.0, 10.0));
+                });
+            });
+            let [area, go, label, after] = r[..] else {
+                panic!("{r:?}")
+            };
+            assert_eq!(label.left(), go.right() + 8.0, "{host:?} {room}: {r:?}");
+            assert_eq!(after.left(), label.right() + 8.0, "{host:?} {room}: {r:?}");
+            assert!(after.right() <= area.right(), "{host:?} {room}: {r:?}");
+            if room > 300.0 {
+                assert!(label.height() < 20.0, "{host:?}: one line: {r:?}");
+            } else {
+                assert!(label.height() > 20.0, "{host:?}: wraps: {r:?}");
+                assert_eq!(after.right(), area.right(), "{host:?}: {r:?}");
+            }
+            assert_eq!(passes, 1, "{host:?} {room}: a still frame");
+        }
+    }
+}
+
+/// In a plain egui horizontal layout a crate Label follows the `Ui`'s
+/// text wrap mode, as egui's `Label` does: it extends past the room by
+/// default and wraps at the room left where the `Ui` wraps text.
+#[test]
+fn a_crate_label_in_a_plain_horizontal_follows_its_wrap_mode() {
+    use shadcn_egui::components::label::Label;
+    for wrap in [false, true] {
+        let (_, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+            ui.set_max_width(200.0);
+            ui.horizontal(|ui| {
+                if wrap {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                }
+                out.push(ui.button("Go").rect);
+                out.push(ui.add(Label::new(LONG_LABEL)).rect);
+            });
+        });
+        let [go, label] = r[..] else { panic!("{r:?}") };
+        if wrap {
+            assert!(label.right() <= 200.0, "wraps at the room: {r:?}");
+            assert!(label.height() > 20.0, "wraps: {r:?}");
+        } else {
+            assert!(label.right() > 200.0, "extends: {r:?}");
+            assert!(label.height() < 20.0, "one line: {r:?}");
+        }
+        assert_eq!(label.left(), go.right() + ui_gap(), "{r:?}");
+    }
+}
+
+/// egui's default `item_spacing.x` under the vega theme.
+fn ui_gap() -> f32 {
+    vega().global_style().spacing.item_spacing.x
+}

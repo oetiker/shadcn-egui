@@ -62,14 +62,16 @@ fn footer(ui: &mut egui::Ui) {
   `ROW_H` the design's row height.
 - In `layout::row`, `wrap_row` and `space_between` a child wider than the
   room left (an input or select raised to its content minimum, a long
-  label) pushes the children after it past its whole width, and the row
+  egui label) pushes the children after it past its whole width, and the row
   does not widen its parent, as a flex row in the browser. A
   `layout::vstack` in such a row grows to its widest child, as a flex
-  column does, and pushes the row's next children too. A vstack of
-  wrapping text in `row`, `space_between` or a card footer shrinks to the
-  room the other children leave, never below its longest word, and its
-  text wraps there; several such stacks share the room in proportion to
-  their unwrapped widths, as flex items with `flex-shrink: 1`. A plain
+  column does, and pushes the row's next children too. A crate `Label`
+  or a vstack of wrapping text in `row`, `space_between` or a card footer
+  shrinks to the room the other children leave, never below its longest
+  word, and its text wraps there; several such items share the room in
+  proportion to their unwrapped widths, as flex items with
+  `flex-shrink: 1`. In a column a crate `Label` wraps at the column's
+  width. A plain
   `ui.horizontal` cannot: the next child covers the overflow, and a child
   that runs past the room widens the parent. Use the crate rows for rows of
   controls.

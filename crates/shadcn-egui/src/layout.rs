@@ -461,6 +461,25 @@ pub(crate) fn wrap_line_width(ui: &Ui) -> Option<f32> {
     context::on_frame::<WrapContext>(ui.stack()).map(|_| ui.max_rect().width())
 }
 
+/// The width crate text in `ui` wraps at outside a [`wrap_row`], as egui's
+/// `Label` wraps there: none where the `Ui` does not wrap text, a whole
+/// line in a wrapping horizontal layout (egui moves a box too wide for the
+/// rest of the line to the next), else the room left.
+pub(crate) fn text_wrap_width(ui: &Ui) -> Option<f32> {
+    match ui.wrap_mode() {
+        egui::TextWrapMode::Extend => None,
+        _ if ui.layout().is_horizontal() && ui.layout().main_wrap() => Some(ui.max_rect().width()),
+        _ => Some(ui.available_width()),
+    }
+}
+
+/// Whether an item added to `ui` is a flex item of a crate row that
+/// shrinks as a [`vstack`] does there ([`row`], [`space_between`], a card
+/// footer; not a [`wrap_row`], whose items wrap whole).
+pub(crate) fn in_flex_row(ui: &Ui) -> bool {
+    !ui.layout().main_wrap() && flex_row_of(ui).is_some()
+}
+
 /// Ends the line of the wrapping `ui` and, in a [`wrap_row`], starts the
 /// next at its height in the previous pass: egui would start it at least
 /// as high as the line before.
@@ -705,6 +724,37 @@ fn in_cell(ui: &Ui) -> bool {
         }
         s = parent;
     }
+}
+
+/// Reports a leaf widget that is a flex item of the crate row `ui` sits in
+/// (see [`in_flex_row`]; crate text) to the row as a [`vstack`] item is
+/// reported: its unwrapped width `basis` and its narrowest width `min`
+/// (its longest word). Gives the width the row's last plan gives it where
+/// the row shrinks its items, `None` where they fit or `ui` is no such row.
+/// The widget takes that width, or `basis` without one.
+pub(crate) fn flex_leaf(ui: &Ui, basis: f32, min: impl FnOnce() -> f32) -> Option<f32> {
+    if ui.layout().main_wrap() {
+        return None;
+    }
+    let row = flex_row_of(ui)?;
+    let min = min();
+    let index = ui.data(|d| {
+        d.get_temp::<Vec<FlexItem>>(flex_items_id(row))
+            .map_or(0, |items| items.len())
+    });
+    let target = ui
+        .data(|d| d.get_temp::<Vec<Option<f32>>>(flex_plan_id(row)))
+        .and_then(|plan| plan.get(index).copied().flatten())
+        .map(|w| w.max(min));
+    ui.data_mut(|d| {
+        d.get_temp_mut_or_default::<Vec<FlexItem>>(flex_items_id(row))
+            .push(FlexItem {
+                width: target.unwrap_or(basis),
+                basis,
+                min,
+            });
+    });
+    target
 }
 
 /// What a row learns about one of its [`vstack`] items in a pass.
