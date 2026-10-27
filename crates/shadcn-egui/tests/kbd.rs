@@ -131,7 +131,7 @@ fn a_groups_variant_reaches_its_chips() {
 fn a_chip_in_a_tooltip_takes_the_tooltips_look() {
     let mode = egui::Theme::Light;
     let theme = Theme::vega();
-    let pal = theme.palette_of(mode);
+    let pal = *theme.palette_of(mode);
     let mut h = Harness::builder()
         .with_size(vec2(240.0, 120.0))
         .build_ui(move |ui| {
