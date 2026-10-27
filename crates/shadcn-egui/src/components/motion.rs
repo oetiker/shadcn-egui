@@ -61,11 +61,18 @@ fn cubic_bezier(x1: f64, y1: f64, x2: f64, y2: f64, t: f32) -> f32 {
 /// `a` and `b`.
 trait Tween: Copy + PartialEq + Send + Sync + 'static {
     fn tween(a: Self, b: Self, t: f32) -> Self;
+    /// Whether a transition can move from or to this value.
+    fn finite(self) -> bool {
+        true
+    }
 }
 
 impl Tween for f32 {
     fn tween(a: f32, b: f32, t: f32) -> f32 {
         a + (b - a) * t
+    }
+    fn finite(self) -> bool {
+        self.is_finite()
     }
 }
 
@@ -129,13 +136,15 @@ impl<T: Tween> Run<T> {
 
 /// The value to paint this pass for a property of a part that changes to
 /// `target`, timed by the part's recipe stack `layers` under state `s`:
-/// when the picked `transition` names `property`, the value moves from where
+/// when the picked `transition` names `property` (any of its properties,
+/// when it is a set), the value moves from where
 /// it is to `target` over the picked `duration` (Tailwind's 150 ms without
 /// one) along the picked `easing` ([`Easing::InOut`] without one), as a CSS
 /// transition does; else it jumps. Under reduced motion
 /// (`style.animation_time == 0`) it jumps too. `id` names the property of
 /// this widget; the first pass that sees it shows `target`. Asks for a
-/// repaint only while the value moves.
+/// repaint only while the value moves. A non-finite value has no way to
+/// move along: to or from one, the value jumps.
 ///
 /// ```
 /// use shadcn_egui::components::motion::transition;
@@ -207,12 +216,12 @@ fn run<T: Tween>(
     property: Transition,
     s: State,
 ) -> T {
-    let animates = pick(layers, |r| &r.transition, s).is_some_and(|t| t.contains(property))
+    let animates = pick(layers, |r| &r.transition, s).is_some_and(|t| t.intersects(property))
         && ctx.global_style().animation_time > 0.0;
     let now = ctx.input(|i| i.time);
     let pass = ctx.cumulative_pass_nr();
     let mut run = match ctx.data(|d| d.get_temp::<Run<T>>(id)) {
-        Some(run) if animates => {
+        Some(run) if animates && target.finite() && run.to.finite() => {
             // A CSS transition runs on wall time whether the element paints
             // or not. After passes without the widget (scrolled away, not
             // shown) the change is dated to the last pass that showed it,

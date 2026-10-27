@@ -252,8 +252,11 @@ back, Right and Down forward) whatever its orientation.
   sets none) when the picked `transition` names the property, jumps
   otherwise and under reduced motion (`style.animation_time == 0`), and
   asks for a repaint only while it moves. Name the property by what it is:
-  `Transition::COLORS` for a colour, `TRANSFORM` for a translate,
-  `OPACITY`, `OTHER` for a size.
+  `COLOR` for a text or icon colour, `BACKGROUND` for a fill,
+  `BORDER_COLOR`, `SHADOW` for a ring or shadow, `TRANSFORM` for a
+  translate, `OPACITY`, `OTHER` for a size. Transition the CSS value (an
+  offset from the part's place, a size), never a screen position: a part
+  whose widget moves must not slide after it.
 - A ported part wires its recipe's transition: its box goes through
   `RecipeBox::transitioned(ctx, id, &stack, state)` (fill, border, outline,
   ring and shadow fade where the `transition` names them), its text and

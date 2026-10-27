@@ -598,3 +598,96 @@ fn disabled_opacity_fades_where_opacity_is_named() {
     at(&ctx, 1.0, &r, State::NONE);
     assert_eq!(at(&ctx, 2.0, &r, State::DISABLED), 0.5);
 }
+
+/// One pass of a vega switch showing `on` at `time`, `shift` px from the
+/// left: the thumb's left edge minus the track's, and whether the pass
+/// ends with a repaint request.
+fn moved_switch_pass(ctx: &egui::Context, time: f64, on: bool, shift: f32) -> (f32, bool) {
+    let out = ctx.run_ui(
+        egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        },
+        |ui| {
+            shadcn_egui::Theme::vega().apply(ui.ctx());
+            ui.horizontal(|ui| {
+                ui.add_space(shift);
+                let mut on = on;
+                ui.add(shadcn_egui::components::switch::Switch::new(&mut on));
+            });
+        },
+    );
+    let lefts: Vec<f32> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.fill.a() > 0 => Some(r.rect.left()),
+            _ => None,
+        })
+        .collect();
+    let repaint =
+        out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
+    (lefts[lefts.len() - 1] - lefts[0], repaint)
+}
+
+#[test]
+fn switch_thumb_stays_in_its_track_when_the_switch_moves() {
+    // The thumb's `translate` is relative to the switch: moving the
+    // switch moves the thumb with it, nothing transitions.
+    let ctx = fresh();
+    moved_switch_pass(&ctx, 1.0, true, 0.0);
+    let (home, _) = moved_switch_pass(&ctx, 1.5, true, 0.0);
+    assert!(home > 1.0, "{home}");
+    for time in [2.0, 2.02, 2.04] {
+        assert_eq!(moved_switch_pass(&ctx, time, true, 40.0), (home, false));
+    }
+}
+
+#[test]
+fn a_nan_target_settles() {
+    let ctx = fresh();
+    let r = timed(None, None);
+    pass(&ctx, 1.0, 0.0, &[&r]);
+    let (v, moving) = pass(&ctx, 2.0, f32::NAN, &[&r]);
+    assert!(v.is_nan() && !moving);
+    let (v, moving) = pass(&ctx, 3.0, f32::NAN, &[&r]);
+    assert!(v.is_nan() && !moving);
+    // From a NaN there is no way to move along: the next value jumps.
+    assert_eq!(pass(&ctx, 4.0, 5.0, &[&r]), (5.0, false));
+}
+
+#[test]
+fn a_property_moves_where_the_transition_names_any_part_of_it() {
+    use shadcn_egui::components::motion::transition_color;
+    // `transition-[color,box-shadow]` names `color`: a colour asked for
+    // under `Transition::COLORS` fades.
+    let r = Recipe {
+        transition: Prop::fixed(Transition::COLOR.or(Transition::SHADOW)),
+        ..Recipe::default()
+    };
+    let ctx = fresh();
+    let at = |time: f64, c: egui::Color32| {
+        let mut out = c;
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| {
+                out = transition_color(
+                    ui.ctx(),
+                    egui::Id::new("c"),
+                    c,
+                    &[&r],
+                    Transition::COLORS,
+                    State::NONE,
+                )
+            },
+        );
+        out
+    };
+    at(1.0, egui::Color32::BLACK);
+    assert_eq!(at(2.0, egui::Color32::WHITE), egui::Color32::BLACK);
+    let mid = at(2.075, egui::Color32::WHITE);
+    assert!(mid != egui::Color32::BLACK && mid != egui::Color32::WHITE);
+}

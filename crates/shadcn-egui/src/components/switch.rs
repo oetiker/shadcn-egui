@@ -156,16 +156,18 @@ impl Widget for Switch<'_> {
                     pick(&thumb, |r| &r.shift_y, s),
                 )
             };
+            // The `translate` moves, not the screen position: a switch
+            // that moves takes its thumb along.
             let target = at(on);
-            let left = transition(
+            let x = transition(
                 ui.ctx(),
                 base.id.with("thumb-x"),
-                target.left(),
+                target.left() - home.left(),
                 &thumb,
                 Transition::TRANSFORM,
                 st,
             );
-            let thumb_rect = Rect::from_min_size(egui::pos2(left, target.top()), size);
+            let thumb_rect = Rect::from_min_size(egui::pos2(home.left() + x, target.top()), size);
             RecipeBox::resolve(ui.ctx(), &t, &thumb, st).paint(
                 &part_painter(ui, base.id.with("thumb"), &[&thumb[..], &track[..]], st),
                 thumb_rect,

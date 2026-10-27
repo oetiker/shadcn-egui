@@ -618,6 +618,12 @@ impl Transition {
     pub const fn contains(self, other: Transition) -> bool {
         self.0 & other.0 == other.0
     }
+    /// Whether the set names any property of `other`: a transition moves
+    /// a colour under `transition-[color,box-shadow]` asked for as
+    /// [`Transition::COLORS`].
+    pub const fn intersects(self, other: Transition) -> bool {
+        self.0 & other.0 != 0
+    }
 }
 
 impl BitOr for Transition {
