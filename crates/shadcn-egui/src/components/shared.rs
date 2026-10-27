@@ -421,8 +421,14 @@ impl RecipeBox {
     pub fn faded(mut self, opacity: f32) -> Self {
         self.fill = self.fill.map(|c| c.gamma_multiply(opacity));
         self.border_color = self.border_color.gamma_multiply(opacity);
+        self.outline_color = self.outline_color.gamma_multiply(opacity);
         let tones = &mut self.tones;
-        for t in [&mut tones.fill, &mut tones.border, &mut tones.ring] {
+        for t in [
+            &mut tones.fill,
+            &mut tones.border,
+            &mut tones.outline,
+            &mut tones.ring,
+        ] {
             *t = t.faded(opacity);
         }
         self.shadow_opacity *= opacity;

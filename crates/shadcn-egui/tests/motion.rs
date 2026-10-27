@@ -907,3 +907,40 @@ fn a_duration_without_a_transition_moves_every_property_on_ease() {
     pass(&ctx, 1.0, 0.0, &[&none]);
     assert_eq!(pass(&ctx, 2.0, 1.0, &[&none]), (1.0, false));
 }
+
+#[test]
+fn a_faded_box_fades_its_outline_too() {
+    use shadcn_egui::components::shared::RecipeBox;
+    use shadcn_egui::style::{Paint, Role};
+    // A panel fading in (`opacity`) fades every colour of its box, the
+    // outline included, also once `transitioned` has run.
+    let r = focus_recipe(Transition::COLORS);
+    let s = State::FOCUS_VISIBLE;
+    let theme = shadcn_egui::Theme::vega();
+    let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(40.0, 20.0));
+    let ctx = fresh();
+    let mut outline = None;
+    for time in [1.0, 5.0] {
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| {
+                let shapes = RecipeBox::resolve(ui.ctx(), &theme, &[&r], s)
+                    .faded(0.5)
+                    .transitioned(ui.ctx(), egui::Id::new("box"), &[&r], s)
+                    .shapes(ui.ctx(), rect);
+                outline = shapes.iter().find_map(|s| match s {
+                    egui::Shape::Rect(r) if r.stroke.width > 0.0 => Some(r.stroke.color),
+                    _ => None,
+                });
+            },
+        );
+    }
+    let want = theme
+        .paint(Paint::Role(Role::Ring, 1.0))
+        .gamma_multiply(0.5);
+    let got = outline.expect("an outline");
+    assert!(near(got, want), "{got:?} != {want:?}");
+}
