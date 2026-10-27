@@ -220,9 +220,9 @@ pub struct RecipeBox {
     shadow_opacity: f32,
     ring: Option<Stroke>,
     outline: Option<Stroke>,
-    /// The part's text colour, CSS's `currentcolor`: an outline's colour
-    /// before it has one.
-    current: Color32,
+    /// The outline's colour, also while it has no width: shadcn's base
+    /// `outline-ring/50` where the part sets none.
+    outline_color: Color32,
 }
 
 /// `rounded-full` (`calc(infinity * 1px)`) as a finite length, so CSS's
@@ -240,7 +240,7 @@ impl RecipeBox {
     /// rank the later layer wins (tailwind-merge drops the earlier class),
     /// and within one layer the side wins (Tailwind sorts the shorthand
     /// first). A border without a colour of its own takes shadcn's base
-    /// `border-border`.
+    /// `border-border`, an outline shadcn's base `outline-ring/50`.
     pub fn resolve(ctx: &egui::Context, theme: &Theme, layers: &[&Recipe], state: State) -> Self {
         let ppp = ctx.pixels_per_point();
         // Candidates in Tailwind's property order: a later one wins a tie.
@@ -294,6 +294,9 @@ impl RecipeBox {
         };
         // shadcn's base layer `* { @apply border-border }`.
         let base_border = theme.role(crate::style::Role::Border); // behaviour-ok: CSS base layer colour of every border
+                                                                  // shadcn's base layer `* { @apply outline-ring/50 }`.
+        let base_outline = theme.paint(Paint::Role(crate::style::Role::Ring, 0.5)); // behaviour-ok: CSS base layer colour of every outline
+        let outline_color = paint(|r| &r.outline_color).unwrap_or(base_outline);
         Self {
             radii: [corner(t, l), corner(t, r), corner(b, l), corner(r, b)],
             fill: paint(|r| &r.bg).filter(|c| c.a() > 0),
@@ -304,9 +307,8 @@ impl RecipeBox {
                 .map_or(Layers::NONE, |s| Layers::new(theme.shadow(s))),
             shadow_opacity: INITIAL_OPACITY,
             ring: stroke(ring_w, paint(|r| &r.ring_color)),
-            outline: stroke(outline_w, paint(|r| &r.outline_color)),
-            // shadcn's body `text-foreground` where the part sets none.
-            current: paint(|r| &r.text).unwrap_or(theme.role(crate::style::Role::Foreground)), // behaviour-ok: inherited body text colour
+            outline: stroke(outline_w, Some(outline_color)),
+            outline_color,
         }
     }
 
@@ -340,24 +342,16 @@ impl RecipeBox {
         let width = |key: &str, w: f32, p: Transition| {
             transition(ctx, id.with(("transition", key)), w, layers, p, state)
         };
-        // An absent outline has no width (`outline-style: none`): it grows
-        // from nothing and shrinks back into it, in the colour it last had;
-        // before it had one, in CSS's initial `currentcolor`.
-        let last = id.with(("transition", "outline-last"));
-        if let Some(o) = self.outline {
-            ctx.data_mut(|d| d.insert_temp(last, o.color));
-        }
-        let c = self
-            .outline
-            .map(|o| o.color)
-            .or_else(|| ctx.data(|d| d.get_temp::<Color32>(last)))
-            .unwrap_or(self.current);
+        // An absent outline has no width (`outline-style: none`) but keeps
+        // its colour: it grows from nothing and its colour moves from or to
+        // the resting one (shadcn's base `outline-ring/50`).
+        self.outline_color = color("outline", self.outline_color, Transition::OUTLINE_COLOR);
         let w = width(
             "outline-width",
             self.outline.map_or(0.0, |o| o.width),
             Transition::OTHER,
         );
-        let outline = Stroke::new(w, color("outline", c, Transition::OUTLINE_COLOR));
+        let outline = Stroke::new(w, self.outline_color);
         self.outline = (outline.width > 0.0 && outline.color.a() > 0).then_some(outline);
         self.shadow = transition_shadow(
             ctx,

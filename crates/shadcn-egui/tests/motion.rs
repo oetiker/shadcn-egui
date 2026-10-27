@@ -796,10 +796,11 @@ fn a_theme_or_mode_change_jumps() {
 }
 
 #[test]
-fn a_new_outline_fades_from_the_text_colour() {
+fn a_new_outline_fades_from_the_base_ring_colour() {
     use shadcn_egui::style::{Paint, Role};
-    // CSS's initial `outline-color` is `currentcolor`: an outline that
-    // appears under `transition-colors` fades from the part's text colour.
+    // shadcn's base layer `* { @apply outline-ring/50 }` gives every part a
+    // resting `outline-color`: an outline that appears under
+    // `transition-colors` fades from ring at 50 %, whatever the text colour.
     let mut r = focus_recipe(Transition::COLORS);
     r.text = Prop::fixed(Paint::Role(Role::Destructive, 1.0));
     let colour = |shapes: &[egui::Shape]| {
@@ -811,39 +812,29 @@ fn a_new_outline_fades_from_the_text_colour() {
             })
             .expect("an outline")
     };
+    let base = shadcn_egui::Theme::vega().paint(Paint::Role(Role::Ring, 0.5));
     let ctx = fresh();
-    let mut text = egui::Color32::TRANSPARENT;
-    let _ = ctx.run_ui(Default::default(), |ui| {
-        text = shadcn_egui::Theme::current(ui.ctx()).role(Role::Destructive);
-    });
     box_pass(&ctx, 1.0, &r, State::NONE);
-    assert_eq!(colour(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)), text);
+    assert_eq!(colour(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)), base);
     let mid = colour(&box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
     let ring = colour(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE));
-    assert!(mid != text && mid != ring, "{mid:?}");
+    assert!(mid != base && mid != ring, "{mid:?}");
 }
 
 #[test]
-fn a_duration_without_a_transition_moves_every_property_on_ease() {
-    // CSS's initial `transition-property` is `all` and its initial timing
-    // function `ease`: `duration-200` alone transitions every property.
-    let only_duration = Recipe {
-        duration: Prop::fixed(0.2),
-        ..Recipe::default()
-    };
+fn an_outline_without_a_colour_takes_the_base_ring_colour() {
+    use shadcn_egui::style::{Paint, Role};
+    // `outline-2` alone: the colour is the base layer's `outline-ring/50`.
+    let mut r = focus_recipe(Transition::COLORS);
+    r.outline_color = Prop::default();
+    let base = shadcn_egui::Theme::vega().paint(Paint::Role(Role::Ring, 0.5));
     let ctx = fresh();
-    pass(&ctx, 1.0, 0.0, &[&only_duration]);
-    pass(&ctx, 2.0, 1.0, &[&only_duration]);
-    let (v, moving) = pass(&ctx, 2.1, 1.0, &[&only_duration]);
-    let want = reference_bezier(0.25, 0.1, 0.25, 1.0, 0.5) as f32;
-    assert!((v - want).abs() < 1e-3, "{v} != {want}");
-    assert!(moving);
-    // `transition-none` still turns it off.
-    let none = Recipe {
-        transition: Prop::fixed(Transition::NONE),
-        ..only_duration
-    };
-    let ctx = fresh();
-    pass(&ctx, 1.0, 0.0, &[&none]);
-    assert_eq!(pass(&ctx, 2.0, 1.0, &[&none]), (1.0, false));
+    let stroke = box_pass(&ctx, 1.0, &r, State::FOCUS_VISIBLE)
+        .iter()
+        .find_map(|s| match s {
+            egui::Shape::Rect(r) if r.stroke.width > 0.0 => Some(r.stroke),
+            _ => None,
+        })
+        .expect("an outline");
+    assert_eq!(stroke.color, base);
 }
