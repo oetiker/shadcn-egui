@@ -1728,6 +1728,51 @@ fn a_space_between_in_unbounded_room_takes_its_content_width() {
     }
 }
 
+/// `space_between` keeps the source order of its right side, as CSS
+/// `justify-between` does: the widgets of `right` show left to right in
+/// the order the code adds them, the last one flush with the row's end,
+/// in bounded and unbounded room, on screen and in an `Area`, settled in
+/// one pass a frame.
+#[test]
+fn space_between_keeps_the_source_order_of_its_right_side() {
+    for host in [Host::Screen, Host::Area(false)] {
+        for width in [400.0, f32::INFINITY] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.allocate_ui(egui::vec2(width, 100.0), |ui| {
+                    let end = ui.max_rect().right();
+                    let (mut left, mut rects) = (egui::Rect::NOTHING, Vec::new());
+                    layout::space_between(
+                        ui,
+                        |ui| left = ui.label("Left side").rect,
+                        |ui| {
+                            for b in ["One", "Two", "Three"] {
+                                rects.push(ui.button(b).rect);
+                            }
+                        },
+                    );
+                    rects.insert(0, left);
+                    let row_end = if end.is_finite() {
+                        end
+                    } else {
+                        ui.min_rect().right()
+                    };
+                    out.extend(rects);
+                    out.push(egui::Rect::from_x_y_ranges(row_end..=row_end, 0.0..=0.0));
+                });
+            });
+            let case = format!("{host:?} width {width}: {r:?}");
+            let [left, one, two, three, end] = r[..] else {
+                panic!("{case}")
+            };
+            assert!(left.right() <= one.left(), "{case}");
+            assert!(one.right() < two.left(), "{case}");
+            assert!(two.right() < three.left(), "{case}");
+            assert_eq!(three.right(), end.right(), "{case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}
+
 /// A raw egui widget that fills to infinity (`add_sized` with an
 /// infinite width) in a card or a vstack of a crate row or wrap_row in
 /// unbounded room

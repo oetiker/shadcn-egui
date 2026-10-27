@@ -154,11 +154,9 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             layout::space_between(
                 ui,
                 |_ui| {},
-                // right_to_left: the first widget added lands rightmost, so add the
-                // primary action (Save) first to keep it on the right of Cancel.
                 |ui| {
-                    let _ = ui.add(Button::new("Save").variant(ButtonVariant::Default));
                     let _ = ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                    let _ = ui.add(Button::new("Save").variant(ButtonVariant::Default));
                 },
             );
         });

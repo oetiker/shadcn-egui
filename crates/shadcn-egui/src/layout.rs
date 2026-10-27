@@ -1323,36 +1323,60 @@ pub(crate) fn breakpoints(ctx: &egui::Context) -> crate::style::State {
 }
 
 /// A row whose `left` content hugs the start and `right` content hugs the end
-/// (justify-content: space-between). Where the width is unbounded, the
-/// row is as wide as its two sides, the right one after the left.
+/// (justify-content: space-between). Both sides keep the order the code
+/// adds their widgets in. Where the width is unbounded, the row is as wide
+/// as its two sides, the right one after the left.
+///
+/// The right side is placed at the end from its width in the previous
+/// pass; where that width changes, the pass is discarded and redone.
 pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
+    let id = ui.next_auto_id().with("shadcn_egui::layout::space_between");
     // `ui.horizontal`'s size and layout, as a crate row.
     let size = egui::vec2(
         ui.available_size_before_wrap().x,
         ui.spacing().interact_size.y,
     );
     let layout = egui::Layout::left_to_right(egui::Align::Center);
-    // Unbounded room (a crate row measuring a card around it) leaves no
-    // free space to put between the sides, as a `justify-between` row in
-    // max-content sizing: the right side follows the left one.
-    let end_layout = if size.x.is_finite() {
-        egui::Layout::right_to_left(egui::Align::Center)
-    } else {
-        layout
-    };
     overflow_row(ui, size, layout, None, |_, ui| {
         let items = RowItems::begin(ui);
         shrink_stacks(ui, |ui| {
             left(ui);
             let start = ui.min_rect().width();
+            // The right side, left to right, starts where its last width
+            // ends it at the row's end, never before the left side ends.
+            // Unbounded room (a crate row measuring a card around it)
+            // leaves no free space to put between the sides, as a
+            // `justify-between` row in max-content sizing: the right side
+            // follows the left one; so does a right side not yet measured.
+            let room = ui.available_rect_before_wrap();
+            let stored = ui.data(|d| d.get_temp::<f32>(id));
+            let x = stored
+                .filter(|_| room.right().is_finite())
+                .map_or(room.left(), |w| (room.right() - w).max(room.left()));
             let end = ui
-                .with_layout(end_layout, |ui| {
-                    hold_row_items(ui);
-                    right(ui);
-                })
+                .scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(egui::Rect::from_min_max(
+                            egui::pos2(x, room.top()),
+                            room.max,
+                        ))
+                        .layout(layout),
+                    |ui| {
+                        hold_row_items(ui);
+                        right(ui);
+                    },
+                )
                 .response
                 .rect
                 .width();
+            if room.right().is_finite()
+                && may_store(ui, stored.is_some())
+                && stored.is_none_or(|w| !same_width(w, end))
+            {
+                ui.data_mut(|d| d.insert_temp(id, end));
+                ui.ctx()
+                    .request_discard("layout::space_between right side width changed");
+            }
             // The free space between the two sides is not content.
             let gap = if end > 0.0 {
                 ui.spacing().item_spacing.x

@@ -55,6 +55,9 @@ fn footer(ui: &mut egui::Ui) {
 }
 ```
 
+- `layout::space_between` shows the widgets of each side left to right
+  in the order the code adds them, as `justify-between` does; add the
+  primary action last.
 - `layout::row` is at least `ui.spacing().interact_size.y` tall (36 px in
   luma), whatever its children need. For a tight list (radio rows,
   checkbox rows), lower `interact_size.y` in a scope around the list:
