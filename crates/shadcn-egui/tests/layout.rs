@@ -1565,10 +1565,17 @@ fn a_card_is_a_flex_item_of_a_crate_row() {
 
 /// In a column a card spans the available width, as a block does, also
 /// inside a `vstack` in a row, where it spans the stack; where the width
-/// is unbounded it takes its content's width.
+/// is unbounded it takes its content's width. A still frame takes one
+/// pass.
+///
+/// The stack is as wide as its label unwrapped (243.0625 in vega). The
+/// label's own rect is up to half a point narrower: at a finite width
+/// epaint wraps text at that width rounded to whole points, plus 0.5 so
+/// it never wraps earlier, and reports the galley no wider than the
+/// rounded width (`Fonts::layout_job`, `Galley::round_output_to_gui`).
 #[test]
 fn a_card_fills_a_column_and_takes_its_content_width_when_unbounded() {
-    let (_, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+    let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
         ui.set_max_width(400.0);
         out.push(ui.max_rect());
         out.push(card_with(ui, |ui| ui.label("Column").rect).0);
@@ -1591,6 +1598,38 @@ fn a_card_fills_a_column_and_takes_its_content_width_when_unbounded() {
     };
     assert_eq!(column.x_range(), space.x_range(), "{r:?}");
     assert_eq!(in_stack.x_range(), stack.x_range(), "{r:?}");
-    assert!((stack.width() - label.width()).abs() < 0.1, "{r:?}");
+    assert_eq!(stack.width(), 243.0625, "{r:?}");
+    assert_eq!(label.width(), stack.width().round(), "{r:?}");
     assert_eq!(unbounded.width(), text.width() + 48.0, "{r:?}");
+    assert_eq!(passes, 1, "{r:?}");
+}
+
+/// A stack that fits its row is laid out at its unwrapped width, where
+/// epaint reports a label up to half a point narrower than it measured
+/// unwrapped (see `a_card_fills_a_column_and_takes_its_content_width_when_unbounded`);
+/// that is no content change: a still frame takes one pass, on the
+/// screen and in an `egui::Area`, and on the screen asks for no repaint.
+#[test]
+fn a_stack_of_a_label_with_a_fractional_width_settles() {
+    for host in [Host::Screen, Host::Area(false)] {
+        let ctx = vega();
+        let (passes, r) = settled(&ctx, host, &|ui, _, out| {
+            let row = layout::row(ui, 8.0, |ui| {
+                layout::vstack(ui, 4.0, |ui| {
+                    out.push(ui.label("A label wider than the card's content").rect);
+                });
+                ui.min_rect()
+            });
+            out.push(row);
+        });
+        let [label, row] = r[..] else { panic!("{r:?}") };
+        assert_eq!(passes, 1, "{host:?} {r:?}");
+        assert_eq!(row.width(), 243.0625, "{host:?} {r:?}");
+        assert_eq!(label.width(), 243.0, "{host:?} {r:?}");
+        // An Area's fade-in asks for repaints while the test's clock
+        // stands still.
+        if matches!(host, Host::Screen) {
+            assert!(!ctx.has_requested_repaint());
+        }
+    }
 }

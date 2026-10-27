@@ -11,6 +11,13 @@ use egui_extras::{Size, StripBuilder};
 /// reason to redo a pass.
 const ROW_HEIGHT_EPSILON: f32 = 0.01; // behaviour-ok: float tolerance, not a design token
 
+/// How much narrower epaint reports text at a finite width than it
+/// measured unwrapped: it wraps at that width rounded to whole points
+/// (plus this, so it never wraps earlier) and reports the galley no
+/// wider than the rounded width (`Fonts::layout_job`,
+/// `Galley::round_output_to_gui`).
+const TEXT_WIDTH_ROUNDING: f32 = 0.5; // behaviour-ok: epaint's wrap-width rounding, not a design token
+
 /// Whether a pass of `ui` may replace what a layout helper stored from
 /// an earlier pass (`stored`). A sizing pass (the first frame of an
 /// `egui::Area` or a `Grid`, or one the app forces) lays out in a room and
@@ -1106,9 +1113,12 @@ fn flex_item<R>(
                 // text may then wrap at the old width, so the pass is
                 // redone as a measuring pass, never shown.
                 let seen = ([w, ppp, content.x, content.y], hash);
+                // Its text may report up to `TEXT_WIDTH_ROUNDING` narrower
+                // than unwrapped, at the same height.
                 let changed = known.unwrapped.is_some_and(|(size, p)| {
                     p != ppp
-                        || (size.x - content.x).abs() > ROW_HEIGHT_EPSILON
+                        || content.x > size.x + ROW_HEIGHT_EPSILON
+                        || content.x < size.x - TEXT_WIDTH_ROUNDING - ROW_HEIGHT_EPSILON
                         || (size.y - content.y).abs() > ROW_HEIGHT_EPSILON
                 }) || known
                     .seen
