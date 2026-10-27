@@ -133,9 +133,25 @@ impl<'a> Card<'a> {
         self
     }
 
-    /// Show the card across the available width. `add` fills the body:
-    /// [`card_header`] and [`card_content`] sections, `gap` apart.
+    /// Show the card. `add` fills the body: [`card_header`] and
+    /// [`card_content`] sections, `gap` apart.
+    ///
+    /// Upstream's card sets no width (conformance 3.1): in a column it
+    /// spans the available width, as a block does; in a crate row
+    /// ([`layout::row`], [`layout::wrap_row`], [`layout::space_between`],
+    /// a card footer) it is a flex item as a [`layout::vstack`] is, as
+    /// wide as its content and shrinking down to its narrowest content
+    /// where the row has no room for it. Where the width is unbounded (a
+    /// horizontal `ScrollArea`) it takes its content's width.
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+        let id = ui.next_auto_id().with("shadcn_egui::components::card");
+        match layout::as_flex_item(ui, id, true, move |ui: &mut Ui| self.show_box(ui, add)) {
+            Ok(inner) => inner,
+            Err(show) => show(ui),
+        }
+    }
+
+    fn show_box<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         let t = Theme::current(ui.ctx());
         let has_footer = self.footer.is_some();
         let parts = CardContext {
@@ -167,9 +183,11 @@ impl<'a> Card<'a> {
         // Header, content and footer sit in the card.
         let painter = part_painter(ui, &[&card[..]], st);
 
-        // `w-full` in a column: the room left, or the content minimum where
-        // that is unbounded (conformance 3.1).
-        let outer_w = layout::capped_width(ui, f32::INFINITY, side_l + side_r);
+        // A block fills the room left; where that is unbounded, the card
+        // is laid out unbounded and takes its content's width.
+        let bounded = ui.available_width().is_finite();
+        let fill = layout::capped_width(ui, f32::INFINITY, side_l + side_r);
+        let outer_w = if bounded { fill } else { f32::INFINITY };
         let origin = ui.cursor().min;
         let back = ui.painter().add(Shape::Noop);
 
@@ -191,6 +209,7 @@ impl<'a> Card<'a> {
         let result =
             content_scope(&mut body, &look, |ui| content_ui(ui, &[&card[..]], st, add)).inner;
         let mut bottom = body.min_rect().bottom().max(body_rect.top());
+        let mut content_w = body.min_rect().right() - origin.x + side_r;
 
         // Footer.
         let mut footer_shapes = None;
@@ -227,11 +246,21 @@ impl<'a> Card<'a> {
                 ((), ui.min_rect().width())
             });
             items.finish(&row, false);
+            content_w = content_w.max(row.min_rect().right() - origin.x + f_right);
             let strip_bottom = row.min_rect().bottom().max(inner.top()) + f_bottom;
             footer_shapes = Some((strip_bg, strip_top, strip_bottom));
             bottom = strip_bottom;
         }
         let card_bottom = bottom + pad_bottom;
+        // A flex item grows to content that overflows it, which tells the
+        // row its narrowest width; a block keeps its width.
+        let outer_w = if !bounded {
+            content_w.max(side_l + side_r)
+        } else if layout::in_row(ui) {
+            outer_w.max(content_w)
+        } else {
+            outer_w
+        };
         let outer = Rect::from_min_max(origin, egui::pos2(origin.x + outer_w, card_bottom));
 
         // Paint behind the sections: the card's box, then the footer strip.

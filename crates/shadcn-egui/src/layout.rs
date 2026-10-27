@@ -548,7 +548,7 @@ struct VstackContext;
 /// `StripBuilder` or table cell on the way keeps its width, as a sized box
 /// does in a flex row; a frame (a card) grows with its content, as a flex
 /// item does.
-fn in_row(ui: &Ui) -> bool {
+pub(crate) fn in_row(ui: &Ui) -> bool {
     for s in ui.stack().iter() {
         if context::on_frame::<RowContext>(s).is_some() {
             return true;
@@ -641,28 +641,52 @@ fn overflow_row<R>(
 /// keep the cell's layout) the stack takes the cell's width, as a block in
 /// a grid track or a sized flex item fills it, and its text wraps there.
 pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
-    // `ui.vertical`, tagged as a flex column.
-    let column = egui::UiBuilder::new()
-        .layout(egui::Layout::top_down(egui::Align::Min))
-        .ui_stack_info(context::info(egui::UiStackInfo::default(), VstackContext));
     let id = ui.next_auto_id().with("shadcn_egui::layout::vstack");
+    let add = |ui: &mut Ui| {
+        ui.spacing_mut().item_spacing.y = gap;
+        add(ui)
+    };
+    match as_flex_item(ui, id, false, add) {
+        Ok(inner) => inner,
+        Err(add) => {
+            let fill = in_cell(ui);
+            ui.scope_builder(flex_column(), |ui| {
+                if fill {
+                    ui.set_min_width(ui.available_width());
+                }
+                add(ui)
+            })
+            .inner
+        }
+    }
+}
+
+/// `ui.vertical`, tagged as a flex column: the `Ui` of a [`vstack`], and
+/// of a box laid out with [`as_flex_item`].
+fn flex_column() -> egui::UiBuilder {
+    egui::UiBuilder::new()
+        .layout(egui::Layout::top_down(egui::Align::Min))
+        .ui_stack_info(context::info(egui::UiStackInfo::default(), VstackContext))
+}
+
+/// Lays `add` out as a flex item of the crate row or [`wrap_row`] `ui`
+/// is in, as a [`vstack`] is (see there), in a column that keeps what it
+/// learns under `id`; outside such a row, hands `add` back unrun.
+///
+/// With `unbounded`, a column that fits its [`wrap_row`] line is laid
+/// out without a width limit, as a [`row`] measures its items, so a box
+/// that fills its room (a card) takes its content width there.
+pub(crate) fn as_flex_item<R, F: FnOnce(&mut Ui) -> R>(
+    ui: &mut Ui,
+    id: egui::Id,
+    unbounded: bool,
+    add: F,
+) -> Result<R, F> {
     if !ui.layout().main_wrap() {
         let Some(row) = flex_row_of(ui) else {
-            let fill = in_cell(ui);
-            return ui
-                .scope_builder(column, |ui| {
-                    if fill {
-                        ui.set_min_width(ui.available_width());
-                    }
-                    ui.spacing_mut().item_spacing.y = gap;
-                    add(ui)
-                })
-                .inner;
+            return Err(add);
         };
-        return flex_item(ui, row, id, column, |ui| {
-            ui.spacing_mut().item_spacing.y = gap;
-            add(ui)
-        });
+        return Ok(flex_item(ui, row, id, flex_column(), add));
     }
     let stored = ui.data(|d| d.get_temp::<f32>(id));
     if !at_line_start(ui) && stored.is_some_and(|w| w > ui.available_size_before_wrap().x) {
@@ -670,10 +694,12 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     }
     let fits = stored.is_none_or(|w| w <= ui.available_size_before_wrap().x);
     let wrap = context::on_frame::<WrapContext>(ui.stack()).map(|w| w.0);
-    let response = ui.scope_builder(column, |ui| {
-        ui.spacing_mut().item_spacing.y = gap;
+    let response = ui.scope_builder(flex_column(), |ui| {
         if fits {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+            if unbounded {
+                ui.set_max_width(f32::INFINITY);
+            }
         } else if let Some(mode) = wrap {
             ui.style_mut().wrap_mode = Some(mode);
         }
@@ -689,7 +715,7 @@ pub fn vstack<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         ui.ctx()
             .request_discard("layout::vstack width changed in a wrap_row");
     }
-    response.inner
+    Ok(response.inner)
 }
 
 /// The crate row whose flex item a [`vstack`] started in `ui` is: the
@@ -1320,8 +1346,9 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
     });
 }
 
-/// A shadcn Card at the default size, across the available width. See
-/// [`crate::components::card::Card`] for sizes and a footer.
+/// A shadcn Card at the default size, across the available width of a
+/// column and content-sized in a crate row. See
+/// [`crate::components::card::Card`] for sizes, a footer and its width.
 pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     crate::components::card::Card::new().show(ui, add)
 }

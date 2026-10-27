@@ -125,8 +125,8 @@ fn layout_card_matches_the_default_card() {
     assert_eq!(a, b);
 }
 
-/// In unbounded room the card takes its content minimum, its side padding
-/// (conformance 3.1), never an infinite width.
+/// In unbounded room the card takes its content's width, for an empty
+/// card its side padding (conformance 3.1), never an infinite width.
 #[test]
 fn a_card_in_unbounded_room_takes_its_padding() {
     use shadcn_egui::components::card::Card;
@@ -1371,11 +1371,10 @@ fn framed(ui: &mut egui::Ui, card: bool, footer: bool) -> egui::Rect {
 /// A framed child in a crate row: an egui `Frame` with an inner margin,
 /// a crate `Card` with and without a footer. In a `row` and a `wrap_row`
 /// its line is as high as its box with the margin, a `Button` beside it
-/// is centred on it, and a stretch item beside it spans it. The card
-/// fills its room (`w-full`): in a `row` the items after it overflow, in
-/// a `wrap_row` they start the next line, which is as high as its own
-/// items. On the screen and in an `egui::Area`, and a still frame takes
-/// one pass.
+/// is centred on it, and a stretch item beside it spans it. The card,
+/// which sets no width upstream, is as wide as its content, so the
+/// button follows it on its line. On the screen and in an `egui::Area`,
+/// and a still frame takes one pass.
 #[test]
 fn a_framed_child_is_one_item_of_a_crate_row() {
     use shadcn_egui::components::button::Button;
@@ -1408,15 +1407,7 @@ fn a_framed_child_is_one_item_of_a_crate_row() {
                 };
                 assert_eq!(rule.left(), go.right() + 8.0, "{case}");
                 assert_eq!(passes, 1, "{case}: a still frame");
-                if card && wraps {
-                    // The card fills its line; the button starts the next.
-                    assert_eq!(frame.width(), 400.0, "{case}");
-                    assert_eq!(go.top(), frame.bottom() + 8.0, "{case}");
-                    assert_eq!(go.left(), frame.left(), "{case}");
-                    assert_eq!(rule.y_range(), go.y_range(), "stretch: {case}");
-                    assert_eq!(band.height(), go.bottom() - frame.top(), "{case}");
-                    continue;
-                }
+                assert!(frame.width() < 200.0, "content-sized: {case}");
                 assert_eq!(go.left(), frame.right() + 8.0, "{case}");
                 assert_eq!(band.height(), frame.height(), "line height: {case}");
                 assert_eq!(rule.y_range(), frame.y_range(), "stretch: {case}");
@@ -1485,4 +1476,121 @@ fn a_shrunk_stack_relearns_its_width_when_its_font_changes() {
     }
     assert_ne!(before, fresh, "the case needs another split");
     assert_eq!(after, fresh, "the row relearns the font's widths");
+}
+
+/// The rects of a card in `ui` with `add` in its body: the card's box
+/// (the last widget it registered) and what `add` returns.
+fn card_with(
+    ui: &mut egui::Ui,
+    add: impl FnOnce(&mut egui::Ui) -> egui::Rect,
+) -> (egui::Rect, egui::Rect) {
+    use shadcn_egui::components::card::Card;
+    let inner = Card::new().show(ui, add);
+    let layer = ui.layer_id();
+    let card = ui
+        .ctx()
+        .viewport(|v| v.this_pass.widgets.get_layer(layer).last().map(|w| w.rect))
+        .expect("the card registered its box");
+    (card, inner)
+}
+
+/// A card sets no width upstream, so in a crate row it is a flex item:
+/// as wide as its content (its padding, 24 px a side in vega) where the
+/// row has room, shrinking with its text wrapped to the room the row's
+/// other items leave where it has not, and never narrower than its
+/// widest unbreakable content, which pushes the next item. In a `row` and
+/// a `wrap_row`, on the screen and in an `egui::Area`; a still frame
+/// takes one pass.
+#[test]
+fn a_card_is_a_flex_item_of_a_crate_row() {
+    use shadcn_egui::components::button::Button;
+    const LONG: &str = "Receive emails about new products, features and more.";
+    for wraps in [false, true] {
+        for host in [Host::Screen, Host::Area(false)] {
+            for (room, text, wide) in [
+                (400.0, "Short", 0.0),
+                (300.0, LONG, 0.0),
+                (150.0, "", 200.0),
+            ] {
+                let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                    ui.set_max_width(room);
+                    out.push(ui.max_rect());
+                    let items = |ui: &mut egui::Ui| {
+                        let (card, inner) = card_with(ui, |ui| {
+                            if wide > 0.0 {
+                                boxed(ui, wide, 20.0)
+                            } else {
+                                ui.label(text).rect
+                            }
+                        });
+                        out.extend([card, inner]);
+                        out.push(ui.add(Button::new("Go")).rect);
+                    };
+                    if wraps {
+                        layout::wrap_row(ui, 8.0, items);
+                    } else {
+                        layout::row(ui, 8.0, items);
+                    }
+                });
+                let case = format!("wraps {wraps} {host:?} room {room}: {r:?}");
+                let [space, card, inner, go] = r[..] else {
+                    panic!("{case}")
+                };
+                assert_eq!(passes, 1, "{case}: a still frame");
+                assert_eq!(card.left(), space.left(), "{case}");
+                if wraps && room < 400.0 {
+                    // The card does not fit beside the button: it takes
+                    // its own line, the line's width or its narrowest
+                    // width, and the button starts the next.
+                    assert_eq!(card.width(), room.max(wide + 48.0), "{case}");
+                    assert_eq!(go.left(), card.left(), "{case}");
+                    assert_eq!(go.top(), card.bottom() + 8.0, "{case}");
+                    continue;
+                }
+                assert_eq!(go.left(), card.right() + 8.0, "{case}");
+                assert_eq!(inner.left(), card.left() + 24.0, "{case}");
+                if room == 400.0 {
+                    assert_eq!(card.width(), inner.width() + 48.0, "content: {case}");
+                } else if room == 300.0 {
+                    assert_eq!(go.right(), space.right(), "shrinks: {case}");
+                    assert!(inner.height() > 30.0, "wraps: {case}");
+                    assert!(inner.right() <= card.right() - 24.0, "{case}");
+                } else {
+                    assert_eq!(card.width(), wide + 48.0, "narrowest: {case}");
+                }
+            }
+        }
+    }
+}
+
+/// In a column a card spans the available width, as a block does, also
+/// inside a `vstack` in a row, where it spans the stack; where the width
+/// is unbounded it takes its content's width.
+#[test]
+fn a_card_fills_a_column_and_takes_its_content_width_when_unbounded() {
+    let (_, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+        ui.set_max_width(400.0);
+        out.push(ui.max_rect());
+        out.push(card_with(ui, |ui| ui.label("Column").rect).0);
+        layout::row(ui, 8.0, |ui| {
+            let stack = layout::vstack(ui, 4.0, |ui| {
+                out.push(ui.label("A label wider than the card's content").rect);
+                out.push(card_with(ui, |ui| ui.label("In a stack").rect).0);
+                ui.min_rect()
+            });
+            out.push(stack);
+        });
+        ui.allocate_ui(egui::vec2(f32::INFINITY, 200.0), |ui| {
+            out.extend(<[_; 2]>::from(card_with(ui, |ui| {
+                ui.label("Unbounded").rect
+            })));
+        });
+    });
+    let [space, column, label, in_stack, stack, unbounded, text] = r[..] else {
+        panic!("{r:?}")
+    };
+    assert_eq!(column.x_range(), space.x_range(), "{r:?}");
+    assert_eq!(in_stack.x_range(), stack.x_range(), "{r:?}");
+    assert!((stack.width() - label.width()).abs() < 0.1, "{r:?}");
+    assert_eq!(unbounded.width(), text.width() + 48.0, "{r:?}");
 }
