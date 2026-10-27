@@ -13,6 +13,7 @@ use crate::components::icon::IconView;
 use crate::components::input::Input;
 use crate::components::label::{description, label};
 use crate::components::popover::{popover_header, Popover};
+use crate::components::progress::Progress;
 use crate::components::select::Select;
 use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
@@ -265,6 +266,11 @@ pub struct GalleryState {
     volume: f32,
     region: usize,
     dialog_open: bool,
+    /// When the progress demo first showed: it moves from 13 to 66
+    /// half a second later.
+    progress_shown: Option<f64>,
+    /// The controlled progress demo's value, 0..=100.
+    progress: f32,
 }
 
 impl GalleryState {
@@ -284,6 +290,8 @@ impl GalleryState {
             volume: 50.0,
             region: usize::MAX,
             dialog_open: false,
+            progress_shown: None,
+            progress: 50.0,
         }
     }
 
@@ -633,6 +641,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 buttons_group(ui);
                 icons_group(ui);
                 overlays_group(ui, state);
+                progress_group(ui, state);
             });
             layout::vstack(right, 24.0, |ui| {
                 inputs_group(ui, state);
@@ -763,6 +772,36 @@ fn controls_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                         &["Europe", "Americas", "Asia"],
                     )
                     .placeholder("Select a region"),
+                )
+            });
+        },
+    );
+}
+
+/// shadcn-svelte's `progress-demo` (13, then 66 after 500 ms, at 60 % of
+/// the width) and `progress-controlled` (a slider drives the value).
+fn progress_group(ui: &mut egui::Ui, state: &mut GalleryState) {
+    group(
+        ui,
+        "Progress",
+        "A value that moves, and one a slider sets.",
+        |ui| {
+            let now = ui.input(|i| i.time);
+            let since = now - *state.progress_shown.get_or_insert(now);
+            let value = if since < 0.5 {
+                ui.ctx().request_repaint_after_secs((0.5 - since) as f32);
+                13.0
+            } else {
+                66.0
+            };
+            let width = ui.available_width() * 0.6;
+            ui.add(Progress::from_value(value, 100.0).desired_width(width));
+            layout::vstack(ui, 16.0, |ui| {
+                ui.add(Progress::from_value(state.progress, 100.0));
+                ui.add(
+                    Slider::new(&mut state.progress, 0.0..=100.0)
+                        .step(1.0)
+                        .label("Progress"),
                 )
             });
         },

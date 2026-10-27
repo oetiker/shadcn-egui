@@ -309,10 +309,13 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
-            // The track's `overflow-hidden` rounds the range where they meet.
-            RecipeBox::resolve(ui.ctx(), &t, &range, st)
-                .clipped_by(&track_box, track_rect, range_rect)
-                .paint(&range_painter, range_rect);
+            // The track's `overflow-hidden` cuts the range to its rounded box.
+            RecipeBox::resolve(ui.ctx(), &t, &range, st).paint_inside(
+                &range_painter,
+                range_rect,
+                &track_box,
+                track_rect,
+            );
 
             RecipeBox::resolve(ui.ctx(), &t, &thumb, st)
                 .transitioned(ui.ctx(), resp.id.with("thumb"), &thumb, st)
