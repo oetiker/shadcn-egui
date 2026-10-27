@@ -640,6 +640,10 @@ impl BitOr for Transition {
 pub enum Easing {
     /// `ease-linear`.
     Linear,
+    /// CSS's initial timing function `ease`, `cubic-bezier(0.25, 0.1,
+    /// 0.25, 1)`: the curve of a part with a `duration-*` and no
+    /// `transition-*`. No Tailwind class sets it.
+    Ease,
     /// `ease-in`: `cubic-bezier(0.4, 0, 1, 1)`.
     In,
     /// `ease-out`: `cubic-bezier(0, 0, 0.2, 1)`.

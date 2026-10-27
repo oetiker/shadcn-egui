@@ -822,3 +822,28 @@ fn a_new_outline_fades_from_the_text_colour() {
     let ring = colour(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE));
     assert!(mid != text && mid != ring, "{mid:?}");
 }
+
+#[test]
+fn a_duration_without_a_transition_moves_every_property_on_ease() {
+    // CSS's initial `transition-property` is `all` and its initial timing
+    // function `ease`: `duration-200` alone transitions every property.
+    let only_duration = Recipe {
+        duration: Prop::fixed(0.2),
+        ..Recipe::default()
+    };
+    let ctx = fresh();
+    pass(&ctx, 1.0, 0.0, &[&only_duration]);
+    pass(&ctx, 2.0, 1.0, &[&only_duration]);
+    let (v, moving) = pass(&ctx, 2.1, 1.0, &[&only_duration]);
+    let want = reference_bezier(0.25, 0.1, 0.25, 1.0, 0.5) as f32;
+    assert!((v - want).abs() < 1e-3, "{v} != {want}");
+    assert!(moving);
+    // `transition-none` still turns it off.
+    let none = Recipe {
+        transition: Prop::fixed(Transition::NONE),
+        ..only_duration
+    };
+    let ctx = fresh();
+    pass(&ctx, 1.0, 0.0, &[&none]);
+    assert_eq!(pass(&ctx, 2.0, 1.0, &[&none]), (1.0, false));
+}

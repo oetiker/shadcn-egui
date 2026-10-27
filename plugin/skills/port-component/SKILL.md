@@ -249,8 +249,9 @@ back, Right and Down forward) whatever its orientation.
   `shadcn_egui::components::motion::transition(ctx, id, target, &stack,
   Transition::OTHER, state)`: it moves over the recipe's `duration` along
   its `easing` (Tailwind's 150 ms and `ease-in-out` curve where the part
-  sets none) when the picked `transition` names the property, jumps
-  otherwise and under reduced motion (`style.animation_time == 0`), and
+  sets none) when the picked `transition` names the property (a
+  `duration` without a `transition` names every property, along CSS's
+  `ease`, `Easing::Ease`), jumps otherwise and under reduced motion (`style.animation_time == 0`), and
   asks for a repaint only while it moves. Name the property by what it is:
   `COLOR` for a text or icon colour, `BACKGROUND` for a fill,
   `BORDER_COLOR`, `SHADOW` for a ring or shadow, `TRANSFORM` for a

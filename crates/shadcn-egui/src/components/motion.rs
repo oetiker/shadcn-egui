@@ -22,9 +22,10 @@ impl Easing {
     pub fn at(self, t: f32) -> f32 {
         let (x1, y1, x2, y2) = match self {
             Easing::Linear => return t.clamp(0.0, 1.0), // behaviour-ok: the unit interval
-            Easing::In => (0.4, 0.0, 1.0, 1.0),         // behaviour-ok: Tailwind --ease-in
-            Easing::Out => (0.0, 0.0, 0.2, 1.0),        // behaviour-ok: Tailwind --ease-out
-            Easing::InOut => (0.4, 0.0, 0.2, 1.0),      // behaviour-ok: Tailwind --ease-in-out
+            Easing::Ease => (0.25, 0.1, 0.25, 1.0), // behaviour-ok: CSS initial timing function ease
+            Easing::In => (0.4, 0.0, 1.0, 1.0),     // behaviour-ok: Tailwind --ease-in
+            Easing::Out => (0.0, 0.0, 0.2, 1.0),    // behaviour-ok: Tailwind --ease-out
+            Easing::InOut => (0.4, 0.0, 0.2, 1.0),  // behaviour-ok: Tailwind --ease-in-out
         };
         cubic_bezier(x1, y1, x2, y2, t)
     }
@@ -144,7 +145,9 @@ impl<T: Tween> Run<T> {
 /// when it is a set), the value moves from where
 /// it is to `target` over the picked `duration` (Tailwind's 150 ms without
 /// one) along the picked `easing` ([`Easing::InOut`] without one), as a CSS
-/// transition does; else it jumps. Under reduced motion
+/// transition does; else it jumps. A picked `duration` without a
+/// `transition` moves every property along [`Easing::Ease`], CSS's
+/// initial values. Under reduced motion
 /// (`style.animation_time == 0`) it jumps too. `id` names the property of
 /// this widget; the first pass that sees it shows `target`. Asks for a
 /// repaint only while the value moves. A non-finite value has no way to
@@ -221,8 +224,13 @@ fn run<T: Tween>(
     property: Transition,
     s: State,
 ) -> T {
-    let animates = pick(layers, |r| &r.transition, s).is_some_and(|t| t.intersects(property))
-        && ctx.global_style().animation_time > 0.0;
+    // A `duration-*` without a `transition-*` is CSS's initial
+    // `transition-property: all` along its initial `ease`.
+    let picked = pick(layers, |r| &r.transition, s);
+    let duration = pick(layers, |r| &r.duration, s);
+    let names = picked.or(duration.map(|_| Transition::ALL));
+    let animates =
+        names.is_some_and(|t| t.intersects(property)) && ctx.global_style().animation_time > 0.0;
     let now = ctx.input(|i| i.time);
     let pass = ctx.cumulative_pass_nr();
     let stamp = theme_stamp(ctx);
@@ -243,8 +251,13 @@ fn run<T: Tween>(
             if target == run.to {
                 run
             } else {
-                let duration = pick(layers, |r| &r.duration, s).unwrap_or(DEFAULT_DURATION);
-                let easing = pick(layers, |r| &r.easing, s).unwrap_or(Easing::InOut);
+                let duration = duration.unwrap_or(DEFAULT_DURATION);
+                let default_easing = if picked.is_some() {
+                    Easing::InOut
+                } else {
+                    Easing::Ease
+                };
+                let easing = pick(layers, |r| &r.easing, s).unwrap_or(default_easing);
                 // CSS Transitions 1, "starting of transitions", step 4.
                 let (reverse_to, shortening) = if running && target == run.reverse_to {
                     let f = progress * run.shortening + 1.0 - run.shortening; // behaviour-ok: CSS reversing shortening factor
@@ -293,7 +306,13 @@ mod tests {
 
     #[test]
     fn every_easing_starts_at_zero_and_ends_at_one() {
-        for e in [Easing::Linear, Easing::In, Easing::Out, Easing::InOut] {
+        for e in [
+            Easing::Linear,
+            Easing::Ease,
+            Easing::In,
+            Easing::Out,
+            Easing::InOut,
+        ] {
             assert_eq!(e.at(0.0), 0.0, "{e:?}");
             assert_eq!(e.at(1.0), 1.0, "{e:?}");
         }
