@@ -153,8 +153,16 @@ pub struct Theme {
 /// paddings and gaps belong to the [`Style`]. Geometry that belongs to
 /// a single widget's drawing (a checkmark path, a knob inset) stays local.
 ///
-/// Override with struct update syntax:
-/// `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega() }`.
+/// Override them on a theme value, with struct update syntax for the
+/// `Metrics` (a `Theme { .. }` literal does not compile: some fields are
+/// private):
+///
+/// ```
+/// use shadcn_egui::{Metrics, Theme};
+/// let mut theme = Theme::vega();
+/// theme.metrics = Metrics { icon: 20.0, ..Metrics::default() };
+/// assert_eq!(theme.metrics.icon, 20.0);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Metrics {
     /// `text-xs`: badges, captions (`TextStyle::Small`).
@@ -234,11 +242,11 @@ impl Theme {
         Self::new(Style::vega(), Palette::light(), Palette::dark(), 10.0)
     }
 
-    /// This theme resolving colours and `dark:` rules in `mode`, for code
-    /// that draws without a context's mode (tests, offscreen renders).
-    /// [`Theme::current`] already resolves in the context's mode, and
-    /// [`Theme::apply`] installs both modes whatever this says: switch
-    /// modes with `ctx.set_theme(..)`.
+    /// This theme resolving colours and `dark:` rules in `mode`: how
+    /// [`Theme::current`] gives it the context's mode, and how the crate's
+    /// unit tests pick one without a context. Apps switch modes with
+    /// `ctx.set_theme(..)`; [`Theme::apply`] installs both modes whatever
+    /// this says.
     pub(crate) fn in_mode(mut self, mode: egui::Theme) -> Self {
         self.mode = mode;
         self
@@ -317,6 +325,7 @@ impl Theme {
     ///     .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
     ///         r.button.text.set(Paint::Role(Role::Destructive, 1.0)); // Ghost's hover colours stay
     ///     })
+    ///     // Red where Outline sets a text colour: on hover and when expanded.
     ///     .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| r.button.recolor(Role::Foreground, Role::Destructive));
     /// ui.add(Button::new("Delete").variant(DANGER_GHOST));
     /// # }

@@ -177,6 +177,7 @@ fn setup(ctx: &egui::Context) {
             r.button.text.set(Paint::Role(Role::Destructive, 1.0)); // Ghost's hover colours stay
         })
         .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| {
+            // Red where Outline sets a text colour: on hover and when expanded.
             r.button.recolor(Role::Foreground, Role::Destructive)
         })
         .apply(ctx);
