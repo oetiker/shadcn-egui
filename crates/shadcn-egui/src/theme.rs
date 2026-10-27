@@ -1002,32 +1002,19 @@ impl Theme {
     /// component of the pass can still panic after an app's own
     /// `ctx.set_fonts`; use [`Theme::apply_with_fonts`].
     ///
-    /// A `ctx.set_theme(..)` after a crate widget of the same pass asks
-    /// egui to discard that pass (`Context::run_ui` runs it again) and to
-    /// repaint, so no frame shows widgets of both modes.
+    /// A `ctx.set_theme(..)` in the middle of a pass asks egui to discard
+    /// that pass (`Context::run_ui` runs it again) and to repaint, so no
+    /// frame shows widgets of both modes. A pass hook checks this at the
+    /// end of the pass too; an app's own `begin_pass`/`end_pass` loop runs
+    /// no hook, so there only a crate widget after the call catches it.
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
         if ctx.cumulative_pass_nr() > 0 {
             let _ = check_heading(ctx);
         }
-        let mode = ctx.theme();
-        let pass = ctx.cumulative_pass_nr();
-        let (theme, seen) = ctx.data(|d| {
-            let seen = d.get_temp::<(u64, egui::Theme)>(pass_mode_id());
-            (d.get_temp::<Theme>(theme_id()), seen)
-        });
-        if seen != Some((pass, mode)) {
-            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode)));
-        }
-        // A `ctx.set_theme(..)` since this pass's first crate widget: the
-        // widgets drawn before it are in the other mode. Redo the pass, as
-        // the browser restyles the whole page at once, and redraw for a
-        // loop that cannot redo it.
-        if seen.is_some_and(|(p, m)| p == pass && m != mode) {
-            ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
-            ctx.request_repaint();
-        }
+        let mode = check_mode_switch(ctx);
+        let theme = ctx.data(|d| d.get_temp::<Theme>(theme_id()));
         theme.unwrap_or_else(|| FALLBACK.clone()).in_mode(mode)
     }
 
@@ -1087,6 +1074,7 @@ impl Theme {
             d.insert_temp(hairline_id(), hairline);
         });
         install_hairline_hook(ctx);
+        install_mode_switch_hook(ctx);
     }
 
     /// One mode's egui style: type scale, spacing and colours.
@@ -1188,9 +1176,50 @@ fn hairline_id() -> egui::Id {
     egui::Id::new("shadcn_egui::hairline")
 }
 
-/// The pass number and the mode of the last [`Theme::current`].
+/// The pass number and the mode the pass started in, as first seen by
+/// [`check_mode_switch`].
 fn pass_mode_id() -> egui::Id {
     egui::Id::new("shadcn_egui::pass_mode")
+}
+
+/// The context's mode, checked against the mode its pass started in. A
+/// `ctx.set_theme(..)` since then leaves the widgets drawn before it in the
+/// other mode: discard the pass, as the browser restyles the whole page at
+/// once, and repaint for a loop that cannot redo it. Runs at the start and
+/// end of every pass ([`install_mode_switch_hook`]) and in every
+/// [`Theme::current`], so an app's own loop, which runs no pass hook, is
+/// caught by the next crate widget.
+fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
+    let mode = ctx.theme();
+    let pass = ctx.cumulative_pass_nr();
+    match ctx.data(|d| d.get_temp::<(u64, egui::Theme)>(pass_mode_id())) {
+        Some((p, start)) if p == pass => {
+            if start != mode {
+                ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
+                ctx.request_repaint();
+            }
+        }
+        _ => {
+            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode)));
+        }
+    }
+    mode
+}
+
+/// Run [`check_mode_switch`] at the start and end of every pass of `ctx`,
+/// so a switch after the pass's last crate widget, or before a plain egui
+/// `Area`, does not leave a mixed or stale frame; installed once.
+fn install_mode_switch_hook(ctx: &egui::Context) {
+    let hook_id = egui::Id::new("shadcn_egui::mode_switch_hook");
+    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(hook_id, true));
+    let check = |ui: &mut egui::Ui| {
+        check_mode_switch(ui.ctx());
+    };
+    ctx.on_begin_pass("shadcn_egui::mode_switch", Arc::new(check));
+    ctx.on_end_pass("shadcn_egui::mode_switch", Arc::new(check));
 }
 
 fn generation_id() -> egui::Id {

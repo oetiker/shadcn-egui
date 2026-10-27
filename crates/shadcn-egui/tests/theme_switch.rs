@@ -174,3 +174,77 @@ fn a_mode_switch_in_the_middle_of_a_pass_shows_no_mixed_frame() {
         }
     }
 }
+
+/// `ctx.set_theme(..)` after the last crate widget of a pass: under
+/// `run_ui` the frame egui returns draws that widget in the new mode, as
+/// the browser restyles the whole page at once, and a repaint is asked
+/// for, so no frame stays in the old mode until the next input.
+#[test]
+fn a_mode_switch_after_the_last_crate_widget_restyles_the_frame() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Dark);
+    let switch = std::cell::Cell::new(false);
+    let rect = std::cell::Cell::new(egui::Rect::NOTHING);
+    let frame = || {
+        common::pass(Loop::RunUi, &ctx, vec![], |ui| {
+            rect.set(ui.add(Button::new("Only")).rect);
+            if switch.get() {
+                ui.ctx().set_theme(egui::Theme::Light);
+            }
+        })
+    };
+    let _ = frame();
+    let _ = frame();
+    switch.set(true);
+    let out = frame();
+    assert_eq!(fill_at(&out, rect.get()), Theme::vega().light.primary);
+    assert!(ctx.has_requested_repaint(), "a repaint follows the switch");
+}
+
+/// A plain egui `Area` opened after a mid-pass `ctx.set_theme(..)` and the
+/// panel drawn before it end in the same mode: the frame `run_ui` returns
+/// has both in the new mode.
+#[test]
+fn a_mode_switch_before_a_plain_area_shows_no_mixed_frame() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Dark);
+    let switch = std::cell::Cell::new(false);
+    let rects = std::cell::Cell::new([egui::Rect::NOTHING; 2]);
+    let frame = || {
+        common::pass(Loop::RunUi, &ctx, vec![], |ui| {
+            let panel = ui.button("Panel").rect;
+            if switch.get() {
+                ui.ctx().set_theme(egui::Theme::Light);
+            }
+            let area = egui::Area::new(egui::Id::new("area"))
+                .fixed_pos(egui::pos2(300.0, 200.0))
+                .fade_in(false)
+                .show(ui.ctx(), |ui| ui.button("Area").rect)
+                .inner;
+            rects.set([panel, area]);
+        })
+    };
+    let _ = frame();
+    let _ = frame();
+    switch.set(true);
+    let out = frame();
+    let light = ctx
+        .style_of(egui::Theme::Light)
+        .visuals
+        .widgets
+        .inactive
+        .weak_bg_fill;
+    assert_ne!(
+        light,
+        ctx.style_of(egui::Theme::Dark)
+            .visuals
+            .widgets
+            .inactive
+            .weak_bg_fill
+    );
+    let [panel, area] = rects.get();
+    assert_eq!(fill_at(&out, panel), light, "panel");
+    assert_eq!(fill_at(&out, area), light, "area");
+}
