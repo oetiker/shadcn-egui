@@ -455,6 +455,12 @@ fn wrap_item(ui: &mut Ui, width: f32) {
     }
 }
 
+/// The width of a whole line where `ui` is a [`wrap_row`]: the most a flex
+/// item shrinks to there, so crate text longer than it wraps at it.
+pub(crate) fn wrap_line_width(ui: &Ui) -> Option<f32> {
+    context::on_frame::<WrapContext>(ui.stack()).map(|_| ui.max_rect().width())
+}
+
 /// Ends the line of the wrapping `ui` and, in a [`wrap_row`], starts the
 /// next at its height in the previous pass: egui would start it at least
 /// as high as the line before.

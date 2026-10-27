@@ -1113,3 +1113,43 @@ fn an_app_widget_starts_a_wrap_row_line_at_its_own_height() {
         }
     }
 }
+
+/// A crate `Label` longer than a whole `wrap_row` line is a flex item
+/// that shrinks to the line (`min-width: auto` is its longest word): it
+/// starts a line, takes the line's width and wraps its text inside, and
+/// the next crate item starts the line after it. A short label keeps its one
+/// line. On the screen and in an `egui::Area`, and a still frame takes one
+/// pass.
+#[test]
+fn a_crate_label_longer_than_a_wrap_row_line_wraps_to_the_line() {
+    use shadcn_egui::components::label::Label;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(200.0);
+            layout::wrap_row(ui, 8.0, |ui| {
+                out.push(ui.add(Label::new("short")).rect);
+                out.push(
+                    ui.add(Label::new(
+                        "a crate label with more text than one whole line holds",
+                    ))
+                    .rect,
+                );
+                let size = egui::vec2(10.0, 6.0);
+                out.push(layout::allocate_item(ui, size, egui::Sense::hover()).0);
+            });
+        });
+        let [short, long, next] = r[..] else {
+            panic!("{r:?}")
+        };
+        assert_eq!(long.left(), short.left(), "{host:?}: starts a line: {r:?}");
+        assert_eq!(long.top() - short.bottom(), 8.0, "{host:?}: gap: {r:?}");
+        assert_eq!(long.width(), 200.0, "{host:?}: the line's width: {r:?}");
+        assert!(
+            long.height() > 2.0 * short.height() - 0.5,
+            "{host:?}: wraps: {r:?}"
+        );
+        assert_eq!(next.left(), short.left(), "{host:?}: next line: {r:?}");
+        assert_eq!(next.top() - long.bottom(), 8.0, "{host:?}: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}

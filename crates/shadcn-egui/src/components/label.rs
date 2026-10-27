@@ -70,8 +70,16 @@ impl Widget for Label {
 
         // The label is as tall as its line box (`leading-none`: the font
         // size).
-        let block = look.layout(ui, self.text.as_str(), TextWrapMode::Extend, f32::INFINITY);
-        let (rect, resp) = crate::layout::allocate_item(ui, block.size(), Sense::hover());
+        let mut block = look.layout(ui, self.text.as_str(), TextWrapMode::Extend, f32::INFINITY);
+        let mut size = block.size();
+        // In a `wrap_row` a label longer than a whole line is a flex item
+        // shrunk to the line (`min-width: auto`, its longest word): it
+        // takes the line's width and its text wraps inside.
+        if let Some(line) = crate::layout::wrap_line_width(ui).filter(|&w| size.x > w) {
+            block = look.layout(ui, self.text.as_str(), TextWrapMode::Wrap, line);
+            size = egui::vec2(block.size().x.max(line), block.size().y);
+        }
+        let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });
