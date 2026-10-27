@@ -1428,3 +1428,61 @@ fn a_framed_child_is_one_item_of_a_crate_row() {
         }
     }
 }
+
+/// Two `vstack`s that shrink in a `row`, each with wrapped text of a
+/// fixed line height and a `w-full` separator, keep their size when the
+/// theme's body font changes under the same family: the row still ends as
+/// one that had the new font from the start.
+#[test]
+fn a_shrunk_stack_relearns_its_width_when_its_font_changes() {
+    use shadcn_egui::components::separator::Separator;
+    fn frame(ctx: &egui::Context) -> [egui::Rect; 2] {
+        let mut out = [egui::Rect::NOTHING; 2];
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.scope(|ui| {
+                ui.set_max_width(280.0);
+                layout::row(ui, 8.0, |ui| {
+                    for (i, text) in [
+                        "Receive emails about new products and offers.",
+                        "Get notified when someone mentions you in a comment.",
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        out[i] = layout::vstack(ui, 4.0, |ui| {
+                            ui.label(egui::RichText::new(text).line_height(Some(20.0)));
+                            ui.add(Separator::new());
+                            ui.min_rect()
+                        });
+                    }
+                });
+            });
+        });
+        out
+    }
+    let oxanium = || Theme::vega().fonts(&shadcn_egui_font_oxanium::FONT, None);
+    let ctx = vega();
+    let mut before = [egui::Rect::NOTHING; 2];
+    for _ in 0..4 {
+        before = frame(&ctx);
+    }
+    oxanium().apply(&ctx);
+    let switched = frame(&ctx);
+    assert_eq!(
+        before.map(|r| r.size()),
+        switched.map(|r| r.size()),
+        "the case needs an equal size"
+    );
+    let mut after = switched;
+    for _ in 0..4 {
+        after = frame(&ctx);
+    }
+    let fresh_ctx = egui::Context::default();
+    oxanium().apply(&fresh_ctx);
+    let mut fresh = [egui::Rect::NOTHING; 2];
+    for _ in 0..5 {
+        fresh = frame(&fresh_ctx);
+    }
+    assert_ne!(before, fresh, "the case needs another split");
+    assert_eq!(after, fresh, "the row relearns the font's widths");
+}

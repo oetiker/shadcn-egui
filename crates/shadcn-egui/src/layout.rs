@@ -802,7 +802,9 @@ struct Intrinsic {
 /// A hash of what decides the unwrapped width of the content painted on
 /// `layer` from shape `first` on: each galley's text and per section its
 /// byte range, font and letter spacing (not its colour, which a hover
-/// changes), and each image's texture, its size and the part (uv) drawn.
+/// changes), each glyph's advance (the theme swaps a font's data under
+/// the same `FontId`), and each image's texture, its size and the part
+/// (uv) drawn.
 /// A shrunk image of another intrinsic size, or an icon atom (an image
 /// per icon) swapped for another, can draw at the same size.
 ///
@@ -841,6 +843,11 @@ fn content_hash(ctx: &egui::Context, layer: egui::LayerId, first: usize) -> u64 
                     section.leading_space.to_bits().hash(h);
                     section.format.font_id.hash(h);
                     section.format.extra_letter_spacing.to_bits().hash(h);
+                }
+                for row in &text.galley.rows {
+                    row.glyphs
+                        .iter()
+                        .for_each(|g| g.advance_width.to_bits().hash(h));
                 }
             }
             egui::Shape::Rect(rect) => {
