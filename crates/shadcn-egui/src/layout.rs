@@ -623,8 +623,11 @@ fn overflow_row<R>(
 /// width the row leaves after its other children when it has not. Several
 /// stacks in one row share the shortfall in proportion to their unwrapped
 /// widths, none below its narrowest (its longest word or widest child).
-/// The widths come from the previous pass, and a pass that changes them
-/// is redone. When the stack's content takes another size or paints
+/// A stack that fits is laid out at its unwrapped width, so a child that
+/// fills (`w-full`: a horizontal separator) spans the stack. The widths
+/// come from the previous pass, and a pass that changes them is redone;
+/// where the content of a stack that fits changes, the pass is redone
+/// unwrapped, so its text never shows wrapped at the old width. When the stack's content takes another size or paints
 /// another text or image at the same width (its text, image, font or
 /// scale changed), the next frame measures it unwrapped again in a pass
 /// that is not shown.
@@ -783,7 +786,11 @@ struct Intrinsic {
     /// hash means the content or its font changed, and `max` and `min`
     /// with it, also where the wrapped block kept its size.
     seen: Option<([f32; 4], u64)>,
-    /// Set when `seen` changed: the next pass measures the content again.
+    /// The last unwrapped pass: the content's size and the scale. A stack that fits is laid out at its
+    /// unwrapped width, where its content must have this size.
+    unwrapped: Option<(egui::Vec2, f32)>,
+    /// Set when `seen` or `unwrapped` no longer match: the next pass
+    /// measures the content again.
     stale: bool,
 }
 
@@ -914,8 +921,8 @@ pub(crate) fn shrink_stacks<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> (R, f32
 }
 
 /// The widths of flex items that share `room`, by CSS's "resolve flexible
-/// lengths" for a shrinking line (`flex-shrink: 1`, no grow): `None` for
-/// all when their bases fit, else each base less its share of the
+/// lengths" for a shrinking line (`flex-shrink: 1`, no grow): each its
+/// base when the bases fit, else each base less its share of the
 /// shortfall in proportion to its base, an item held at its min-content
 /// leaving the rest to the others.
 ///
@@ -948,7 +955,7 @@ fn shrink(room: f32, items: &[FlexItem]) -> Vec<Option<f32>> {
     }
     let bases: f32 = items.iter().map(|i| i.basis).sum();
     if bases <= room + ROW_HEIGHT_EPSILON {
-        return vec![None; items.len()];
+        return items.iter().map(|i| Some(i.basis)).collect();
     }
     let mut frozen = vec![false; items.len()];
     let mut width: Vec<f32> = items.iter().map(|i| i.basis).collect();
@@ -1007,9 +1014,11 @@ fn flex_item<R>(
         .and_then(|plan| plan.get(index).copied().flatten())
         .filter(|_| !known.stale);
     if known.stale && store {
-        // A measuring pass: never shown.
+        // A measuring pass: not shown where egui has a pass left, else
+        // followed by a frame at the measured width.
         ui.ctx()
             .request_discard("layout: a vstack in a row measures its content");
+        ui.ctx().request_repaint();
         known = Intrinsic::default();
     }
     let mut content = egui::Vec2::ZERO;
@@ -1030,20 +1039,53 @@ fn flex_item<R>(
         }
         inner
     });
-    if let Some(w) = target.filter(|_| store) {
-        let seen = (
-            [w, ui.ctx().pixels_per_point(), content.x, content.y],
+    if store {
+        let (ppp, hash) = (
+            ui.ctx().pixels_per_point(),
             content_hash(ui.ctx(), layer, first),
         );
-        if known
-            .seen
-            .is_some_and(|s| s.0[..2] == seen.0[..2] && s != seen)
-        {
-            // Measured next frame, so this one keeps a valid layout.
-            known.stale = true;
-            ui.ctx().request_repaint();
+        match target {
+            None => known.unwrapped = Some((content, ppp)),
+            Some(w)
+                if known
+                    .max
+                    .is_some_and(|m| (m - w).abs() <= ROW_HEIGHT_EPSILON) =>
+            {
+                // A stack that fits is laid out at its unwrapped width, so
+                // its content is as large as the measuring pass found it,
+                // and paints what the last pass at this width painted,
+                // unless the content, its font or the scale changed; its
+                // text may then wrap at the old width, so the pass is
+                // redone as a measuring pass, never shown.
+                let seen = ([w, ppp, content.x, content.y], hash);
+                let changed = known.unwrapped.is_some_and(|(size, p)| {
+                    p != ppp
+                        || (size.x - content.x).abs() > ROW_HEIGHT_EPSILON
+                        || (size.y - content.y).abs() > ROW_HEIGHT_EPSILON
+                }) || known
+                    .seen
+                    .is_some_and(|s| s.0[..2] == seen.0[..2] && s != seen);
+                known.seen = Some(seen);
+                if changed {
+                    known.stale = true;
+                    ui.ctx()
+                        .request_discard("layout: a fitting vstack's content changed");
+                }
+            }
+            Some(w) => {
+                let seen = ([w, ppp, content.x, content.y], hash);
+                if known
+                    .seen
+                    .is_some_and(|s| s.0[..2] == seen.0[..2] && s != seen)
+                {
+                    // A shrunk stack wraps anyway: measured next frame, so
+                    // this one keeps a valid layout.
+                    known.stale = true;
+                    ui.ctx().request_repaint();
+                }
+                known.seen = Some(seen);
+            }
         }
-        known.seen = Some(seen);
     }
     let content = content.x;
     match target {

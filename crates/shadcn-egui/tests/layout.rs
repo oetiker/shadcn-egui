@@ -678,9 +678,10 @@ fn stretch_height_is_none_outside_a_row() {
 
 /// A horizontal separator in a `vstack` in a `row`, the crate's and
 /// egui's own, neither panics. The crate's has no content width
-/// (conformance 3.1), so the stack stays as wide as its label; egui's
-/// fills the room it gets, so the stack takes the room the row's other
-/// items leave. Both settle: a still frame takes one pass.
+/// (conformance 3.1), so the stack stays as wide as its label and the
+/// rule spans it (`w-full`); egui's fills the room it gets, so the stack
+/// takes the room the row's other items leave. Both settle: a still frame
+/// takes one pass.
 #[test]
 fn a_separator_in_a_stack_in_a_row_settles() {
     for egui_own in [false, true] {
@@ -716,8 +717,8 @@ fn a_separator_in_a_stack_in_a_row_settles() {
             assert!(stack.width() > label.width(), "{rects:?}");
             assert_eq!(go.right(), room.right(), "{rects:?}");
         } else {
-            assert_eq!(rule.width(), 0.0, "{rects:?}");
-            assert_eq!(stack.width(), label.width(), "{rects:?}");
+            assert_eq!(rule.x_range(), stack.x_range(), "{rects:?}");
+            assert!((stack.width() - label.width()).abs() < 0.5, "{rects:?}");
             assert_eq!(go.left(), stack.right() + 8.0, "{rects:?}");
         }
     }
@@ -1252,4 +1253,89 @@ fn a_crate_label_in_a_plain_horizontal_follows_its_wrap_mode() {
 /// egui's default `item_spacing.x` under the vega theme.
 fn ui_gap() -> f32 {
     vega().global_style().spacing.item_spacing.x
+}
+
+/// A `vstack` that fits its `row` is laid out at its measured width, so
+/// its `w-full` children span the stack's width, as in CSS: a horizontal
+/// crate separator spans it, and an Input in a stack wider than the
+/// Input's maximum width keeps that maximum. On the screen and in an `egui::Area`, and a
+/// still frame takes one pass.
+#[test]
+fn w_full_children_span_a_fitting_stack_in_a_row() {
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::separator::Separator;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.set_max_width(500.0);
+            layout::row(ui, 8.0, |ui| {
+                let stack = layout::vstack(ui, 4.0, |ui| {
+                    out.push(
+                        ui.label("A label that is wider than the field's own maximum width")
+                            .rect,
+                    );
+                    out.push(ui.add(Separator::new()).rect);
+                    let mut text = String::new();
+                    out.push(ui.add(Input::new(&mut text)).rect);
+                    ui.min_rect()
+                });
+                out.push(stack);
+                out.push(ui.button("Go").rect);
+            });
+        });
+        let [label, rule, input, stack, go] = r[..] else {
+            panic!("{r:?}")
+        };
+        assert_eq!(stack.width(), label.width(), "{host:?}: {r:?}");
+        assert_eq!(rule.x_range(), stack.x_range(), "{host:?}: {r:?}");
+        // Text entry fills up to its maximum width (conformance 3.1).
+        let field = Theme::vega().metrics.field_max_width;
+        assert!(stack.width() > field, "{host:?}: {r:?}");
+        assert_eq!(input.left(), stack.left(), "{host:?}: {r:?}");
+        assert_eq!(input.width(), field, "{host:?}: {r:?}");
+        assert_eq!(go.left(), stack.right() + 8.0, "{host:?}: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// When the text of a fitting `vstack` in a `row` changes, the frame of
+/// the change redoes its pass once and never shows the text wrapped at the
+/// old width; the next frame lays the stack out at its new width, its
+/// separator spanning it, in one pass. On the screen and in an
+/// `egui::Area`.
+#[test]
+fn a_fitting_stack_whose_text_changes_shows_no_wrapped_frame() {
+    use shadcn_egui::components::separator::Separator;
+    let content = |text: &'static str| {
+        move |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+            ui.set_max_width(400.0);
+            layout::row(ui, 8.0, |ui| {
+                let stack = layout::vstack(ui, 4.0, |ui| {
+                    out.push(ui.label(text).rect);
+                    out.push(ui.add(Separator::new()).rect);
+                    ui.min_rect()
+                });
+                out.push(stack);
+            });
+        }
+    };
+    for host in [Host::Screen, Host::Area(false)] {
+        let ctx = vega();
+        let (_, before) = settled(&ctx, host, &content("Account"));
+        let (passes, change) = frame_in(&ctx, host, false, &content("Account settings"));
+        assert_eq!(passes, 2, "{host:?}: one discard: {change:?}");
+        assert_eq!(
+            change[0].height(),
+            before[0].height(),
+            "{host:?}: not wrapped: {change:?}"
+        );
+        let (passes, after) = frame_in(&ctx, host, false, &content("Account settings"));
+        assert_eq!(passes, 1, "{host:?}: the frame after");
+        assert_eq!(after[0].height(), before[0].height(), "{host:?}");
+        assert_eq!(
+            after[1].x_range(),
+            after[2].x_range(),
+            "{host:?}: {after:?}"
+        );
+        assert!(after[2].width() > before[2].width(), "{host:?}: {after:?}");
+    }
 }
