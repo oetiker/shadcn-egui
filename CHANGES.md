@@ -42,6 +42,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- On the first line of a `layout::wrap_row`, items placed before a taller item are now centred on the line, as in a `layout::row`; before, they sat at the top of the line, as the small icon buttons before the large one did in the gallery. On further lines an item before a taller one still sits above the centre, and a line after a taller line keeps that line's height.
 - A horizontal separator in a `layout::vstack` inside a `layout::row` no longer stops the app with "Negative size: [NaN 0.0]", for the crate's `separator(ui)` as for egui's `ui.separator()`. The crate's separator there has no length, so it does not widen the stack; egui's makes the stack take the room the row's other items leave, as it fills a plain egui row.
 - A `layout::row`, a `layout::wrap_row` or a `layout::vstack` in either, shown in an `egui::Area` that measures its size again (`Area::sizing_pass(true)`), no longer lays out the measuring frame twice and the frame after it twice. Before, each such measurement cost two extra layout passes.
 - A card title, description or content in the footer of a small card (`CardSize::Sm`) now takes the small card's look, as in its body, for example its smaller title text; before, the footer drew them at the default size.

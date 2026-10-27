@@ -899,3 +899,47 @@ fn stretch_height_works_in_a_card_footer() {
         assert_eq!(passes, 1, "{host:?}: a still frame");
     }
 }
+
+/// A `wrap_row` centres each item on its line (`align-items: center`): an
+/// item placed before a taller one is centred too, and the line shrinks
+/// when the tall item goes. On the screen and in an `egui::Area`, and a
+/// still frame takes one pass.
+#[test]
+fn wrap_row_centres_items_on_their_line() {
+    for host in [Host::Screen, Host::Area(false)] {
+        let ctx = vega();
+        for tall in [38.0, 0.0] {
+            let (passes, r) = settled(&ctx, host, &|ui, _, out| {
+                layout::wrap_row(ui, 8.0, |ui| {
+                    out.push(boxed(ui, 10.0, 17.0));
+                    if tall > 0.0 {
+                        out.push(boxed(ui, 10.0, tall));
+                    }
+                    out.push(boxed(ui, 10.0, 12.0));
+                });
+            });
+            let centre = r[0].center().y;
+            assert!(
+                r.iter().all(|i| i.center().y == centre),
+                "{host:?} tall {tall}: {r:?}"
+            );
+            let line = r.iter().fold(egui::Rect::NOTHING, |a, b| a.union(*b));
+            assert_eq!(line.height(), tall.max(17.0), "{host:?} tall {tall}");
+            assert_eq!(passes, 1, "{host:?} tall {tall}: a still frame");
+        }
+    }
+}
+
+/// The height of a `wrap_row`'s first line (`request_discard`
+/// "layout::wrap_row line height changed") in an `egui::Area`.
+#[test]
+fn wrap_row_line_settles_in_an_area() {
+    settles_in_an_area("wrap_row line", &|ui, sensitive, out| {
+        ui.set_max_width(200.0);
+        layout::wrap_row(ui, 8.0, |ui| {
+            out.push(boxed(ui, 10.0, 17.0));
+            out.push(probe(ui, sensitive, egui::vec2(20.0, 60.0)));
+            out.push(boxed(ui, 10.0, 12.0));
+        });
+    });
+}

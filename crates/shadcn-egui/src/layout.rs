@@ -104,10 +104,11 @@ struct Stretch {
 }
 
 /// One line of a crate row's items in a pass: the height of its tallest
-/// item.
+/// item and of its first.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Line {
     height: f32,
+    first: f32,
 }
 
 /// A crate row's pass over its items ([`row`], [`wrap_row`],
@@ -231,7 +232,10 @@ fn row_lines(
             continue;
         }
         if lines.is_empty() || (wraps && r.top() >= bottom) {
-            lines.push(Line { height: 0.0 });
+            lines.push(Line {
+                height: 0.0,
+                first: r.height(),
+            });
             bottom = f32::NEG_INFINITY;
         }
         bottom = bottom.max(r.bottom());
@@ -325,26 +329,51 @@ pub fn stretch_height(ui: &Ui) -> Option<f32> {
 }
 
 /// Horizontal stack that wraps onto further lines when it runs out of width
-/// (flex-direction: row; flex-wrap: wrap; gap: N). The gap applies both between
-/// items on a line and between wrapped lines. A [`vstack`] item wraps as a
-/// whole, as a flex item does.
+/// (flex-direction: row; flex-wrap: wrap; gap: N; align-items: center).
+/// The gap applies both between items on a line and between wrapped lines.
+/// A [`vstack`] item wraps as a whole, as a flex item does.
+///
+/// The first line starts from its height in the last pass, so an item
+/// placed before a taller one is centred on the line, as in a [`row`].
+/// egui starts each further line as high as the line before it, so there
+/// an item before a taller one sits higher than the centre, and a line
+/// after a taller one is as high as that one.
 pub fn wrap_row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     // As `horizontal_wrapped`, but each line is as high as its tallest item:
     // egui's own starts every line `interact_size.y` high, which puts more
     // than `gap` between lines of smaller items (badges).
+    let id = ui.next_auto_id().with("shadcn_egui::layout::wrap_row");
+    let stored = ui.data(|d| d.get_temp::<f32>(id));
+    let height = stored.unwrap_or(0.0);
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(egui::Align::Center)
     } else {
         egui::Layout::left_to_right(egui::Align::Center)
     };
-    let size = egui::vec2(ui.available_size_before_wrap().x, 0.0);
-    overflow_row(ui, size, layout.with_main_wrap(true), |_, ui| {
+    let size = egui::vec2(ui.available_size_before_wrap().x, height);
+    let (inner, lines) = overflow_row(ui, size, layout.with_main_wrap(true), |_, ui| {
         let items = RowItems::begin(ui);
         ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
         let inner = add(ui);
-        items.finish(ui, true);
-        inner
-    })
+        (inner, items.finish(ui, true))
+    });
+    let first = lines.first().map_or(Line::default(), |l| *l);
+    if may_store(ui, stored.is_some())
+        && stored.is_none_or(|h| (h - first.height).abs() > ROW_HEIGHT_EPSILON)
+    {
+        ui.data_mut(|d| d.insert_temp(id, first.height));
+        // egui grows the line to each item as it comes, so a line that
+        // started lower than it ends places its items as one that started
+        // at its height only when the first item is the tallest.
+        let low = height < first.height - ROW_HEIGHT_EPSILON;
+        if height > first.height + ROW_HEIGHT_EPSILON
+            || (low && first.first < first.height - ROW_HEIGHT_EPSILON)
+        {
+            ui.ctx()
+                .request_discard("layout::wrap_row line height changed");
+        }
+    }
+    inner
 }
 
 /// The context on the `Ui` of a crate row ([`row`], [`wrap_row`],
