@@ -5,9 +5,10 @@
 
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
-use crate::components::motion::{transition, transition_color};
+use crate::components::motion::transition;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, shift, transitioned_text,
+    ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
@@ -344,7 +345,7 @@ impl Widget for Button {
         let ctx = ui.ctx();
         let key = |property: &str| id.with(("transition", property));
         let fg = paint(|r| &r.text).unwrap_or(inherited);
-        let fg = transition_color(ctx, key("text"), fg, l, Transition::COLOR, st);
+        let fg = transitioned_text(ctx, id, fg, l, st);
         // `active:translate-y-px` moves as the transition says.
         let shifted = shift(
             rect,

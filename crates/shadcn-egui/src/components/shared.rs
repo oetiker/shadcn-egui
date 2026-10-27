@@ -30,7 +30,7 @@ pub fn opacity(chain: &[&[&Recipe]], s: State) -> f32 {
 /// disabled toggle fades where the transition names `opacity`
 /// (`transition-all`, `transition-opacity`) and jumps elsewhere. `id` is
 /// the widget's.
-fn transitioned_opacity(ctx: &Context, id: Id, chain: &[&[&Recipe]], s: State) -> f32 {
+pub(crate) fn transitioned_opacity(ctx: &Context, id: Id, chain: &[&[&Recipe]], s: State) -> f32 {
     chain
         .iter()
         .enumerate()
@@ -46,6 +46,25 @@ fn transitioned_opacity(ctx: &Context, id: Id, chain: &[&[&Recipe]], s: State) -
             )
         })
         .product()
+}
+
+/// A part's text and icon colour `color` on its way to this state's, under
+/// [`Transition::COLOR`] ([`transition_color`]). `id` is the widget's.
+pub(crate) fn transitioned_text(
+    ctx: &Context,
+    id: Id,
+    color: Color32,
+    layers: &[&Recipe],
+    s: State,
+) -> Color32 {
+    transition_color(
+        ctx,
+        id.with(("transition", "text")),
+        color,
+        layers,
+        Transition::COLOR,
+        s,
+    )
 }
 
 /// The `Ui`'s opacity without egui's disabled fade. `Ui::disable` multiplies

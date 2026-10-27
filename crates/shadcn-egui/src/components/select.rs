@@ -28,14 +28,12 @@
 //! width is capped to the room (conformance 3.1).
 
 use crate::components::icon::paint_icon;
-use crate::components::motion::transition_color;
 use crate::components::shared::{
-    content_ui, interaction_state, line_width, opacity, part_painter, pressable, ActivationKeys,
-    RecipeBox, DEFAULT_SIDE_OFFSET,
+    content_ui, interaction_state, line_width, opacity, part_painter, pressable, transitioned_text,
+    ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
 };
 use crate::components::text::TextLook;
 use crate::style::app::{default_variant, state_size};
-use crate::style::Transition;
 use crate::style::{pick, Paint, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::{vec2, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
@@ -362,12 +360,11 @@ impl Widget for Select<'_> {
                 );
             }
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
-            let text_color = transition_color(
+            let text_color = transitioned_text(
                 ui.ctx(),
-                resp.id.with(("transition", "text")),
+                resp.id,
                 paint(|r| &r.text).unwrap_or(inherited),
                 &trig,
-                Transition::COLOR,
                 st,
             );
             let text_area = Rect::from_min_max(
