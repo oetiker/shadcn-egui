@@ -14,7 +14,7 @@ use crate::components::icon::Icon;
 use crate::components::shared::{line_width, part_painter, transitioned_text, RecipeBox};
 use crate::components::text::TextLook;
 use crate::style::app::default_variant;
-use crate::style::{pick, Prop, Recipe, Role, State};
+use crate::style::{pick, Prop, Recipe, Role};
 use crate::{layout, Theme};
 use egui::{InnerResponse, IntoAtoms, Response, Sense, Ui, UiBuilder, Vec2, Widget};
 
@@ -205,7 +205,7 @@ impl KbdGroup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::style::{AppVariant, Paint};
+    use crate::style::{AppVariant, Paint, State};
 
     /// An app variant's edit gets `KbdRecipes` and changes only what it
     /// names.
