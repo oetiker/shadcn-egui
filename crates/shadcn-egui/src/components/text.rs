@@ -61,7 +61,10 @@ mod wrap;
 struct Inherited {
     line_factor: f32,
     weight: Weight,
-    tracking: f32,
+    /// In px: CSS computes `letter-spacing` to a length on the element
+    /// whose `tracking-*` sets it, and text of another size inherits the
+    /// length.
+    tracking_px: f32,
     uppercase: bool,
 }
 
@@ -143,7 +146,7 @@ impl TextLook {
             heading: false,
             color: pick(layers, |r| &r.text, state).map(|p| theme.paint(p)),
             tracking: pick(layers, |r| &r.tracking, state)
-                .or(inherited.map(|i| i.tracking))
+                .or(inherited.map(|i| i.tracking_px / size))
                 .unwrap_or(0.0),
             uppercase: pick(layers, |r| &r.uppercase, state)
                 .or(inherited.map(|i| i.uppercase))
@@ -758,7 +761,7 @@ pub fn content_scope<R>(
         Inherited {
             line_factor: look.line_height / look.size,
             weight: look.weight,
-            tracking: look.tracking,
+            tracking_px: look.tracking * look.size,
             uppercase: look.uppercase,
         },
     ));
@@ -1286,14 +1289,13 @@ mod tests {
             content_scope(ui, &outer, |ui| {
                 let inner = TextLook::resolve(ui, &[], State::NONE);
                 assert_eq!(inner.weight, Weight::Semibold);
-                assert_eq!(inner.tracking, 0.1);
+                // A length that round-trips through px: equal up to float.
+                assert!((inner.tracking - 0.1).abs() < 1e-6);
                 assert!(inner.uppercase);
                 let job = inner.job(ui, "ab".into());
                 assert_eq!(job.text, "AB");
-                assert_eq!(
-                    job.sections[0].format.extra_letter_spacing,
-                    0.1 * inner.size()
-                );
+                let spacing = job.sections[0].format.extra_letter_spacing;
+                assert!((spacing - 0.1 * inner.size()).abs() < 1e-5);
                 // The text's own recipe wins over the scope's.
                 let mut own = Recipe::default();
                 own.weight.base = Some(Weight::Normal);
@@ -1308,6 +1310,36 @@ mod tests {
                 let rich = egui::RichText::new("ab").extra_letter_spacing(2.0);
                 let job = inner.job(ui, rich.into());
                 assert_eq!(job.sections[0].format.extra_letter_spacing, 2.0);
+            });
+        });
+    }
+
+    /// CSS computes `letter-spacing` to a length where the class sets it:
+    /// `text-xs tracking-widest` (0.1 em of 12 px) spaces `text-sm` text
+    /// inside by 1.2 px, not by 0.1 em of 14 px, also one scope further in.
+    #[test]
+    fn content_scope_passes_tracking_as_a_length() {
+        with_ui(1.0, |ui| {
+            let mut outer = Recipe::default();
+            outer.text_size.base = Some(TextSize::Px(12.0));
+            outer.tracking.base = Some(0.1);
+            let outer = TextLook::resolve(ui, &[&outer], State::NONE);
+            let mut sm = Recipe::default();
+            sm.text_size.base = Some(TextSize::Px(14.0));
+            let spacing = |ui: &Ui| {
+                let inner = TextLook::resolve(ui, &[&sm], State::NONE);
+                inner.job(ui, "ab".into()).sections[0]
+                    .format
+                    .extra_letter_spacing
+            };
+            content_scope(ui, &outer, |ui| {
+                assert!((spacing(ui) - 1.2).abs() < 1e-5, "{}", spacing(ui));
+                let mut lg = Recipe::default();
+                lg.text_size.base = Some(TextSize::Px(18.0));
+                let middle = TextLook::resolve(ui, &[&lg], State::NONE);
+                content_scope(ui, &middle, |ui| {
+                    assert!((spacing(ui) - 1.2).abs() < 1e-5, "{}", spacing(ui));
+                });
             });
         });
     }
