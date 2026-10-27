@@ -1818,6 +1818,39 @@ fn space_between_keeps_the_source_order_of_its_right_side() {
     }
 }
 
+/// `dialog::footer` keeps the order the code adds its actions in, as
+/// upstream's `sm:flex-row sm:justify-end` does: they show left to
+/// right, the last one flush with the footer's end, on screen and in an
+/// `Area`, settled in one pass a frame.
+#[test]
+fn dialog_footer_keeps_the_source_order_of_its_actions() {
+    use shadcn_egui::components::dialog;
+    for host in [Host::Screen, Host::Area(false)] {
+        for labels in [&["Cancel", "Save"][..], &["One", "Two", "Three"]] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.allocate_ui(egui::vec2(400.0, 100.0), |ui| {
+                    let end = ui.max_rect().right();
+                    dialog::footer(ui, |ui| {
+                        for b in labels {
+                            out.push(ui.button(*b).rect);
+                        }
+                    });
+                    out.push(egui::Rect::from_x_y_ranges(end..=end, 0.0..=0.0));
+                });
+            });
+            let case = format!("{host:?} {labels:?}: {r:?}");
+            let (end, buttons) = r.split_last().expect("rects");
+            assert_eq!(buttons.len(), labels.len(), "{case}");
+            for pair in buttons.windows(2) {
+                assert!(pair[0].right() < pair[1].left(), "{case}");
+            }
+            let last = buttons.last().expect("buttons");
+            assert_eq!(last.right(), end.right(), "{case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}
+
 /// A raw egui widget that fills to infinity (`add_sized` with an
 /// infinite width) in a card or a vstack of a crate row or wrap_row in
 /// unbounded room

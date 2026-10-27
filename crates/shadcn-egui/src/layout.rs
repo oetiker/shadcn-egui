@@ -1342,41 +1342,23 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
         shrink_stacks(ui, |ui| {
             left(ui);
             let start = ui.min_rect().width();
-            // The right side, left to right, starts where its last width
-            // ends it at the row's end, never before the left side ends.
             // Unbounded room (a crate row measuring a card around it)
             // leaves no free space to put between the sides, as a
             // `justify-between` row in max-content sizing: the right side
-            // follows the left one; so does a right side not yet measured.
-            let room = ui.available_rect_before_wrap();
-            let stored = ui.data(|d| d.get_temp::<f32>(id));
-            let x = stored
-                .filter(|_| room.right().is_finite())
-                .map_or(room.left(), |w| (room.right() - w).max(room.left()));
-            let end = ui
-                .scope_builder(
-                    egui::UiBuilder::new()
-                        .max_rect(egui::Rect::from_min_max(
-                            egui::pos2(x, room.top()),
-                            room.max,
-                        ))
-                        .layout(layout),
-                    |ui| {
-                        hold_row_items(ui);
-                        right(ui);
-                    },
-                )
-                .response
-                .rect
-                .width();
-            if room.right().is_finite()
-                && may_store(ui, stored.is_some())
-                && stored.is_none_or(|w| !same_width(w, end))
-            {
-                ui.data_mut(|d| d.insert_temp(id, end));
-                ui.ctx()
-                    .request_discard("layout::space_between right side width changed");
-            }
+            // follows the left one.
+            let end = end_aligned(
+                ui,
+                id,
+                egui::Align::Center,
+                "layout::space_between right side width changed",
+                |ui| {
+                    hold_row_items(ui);
+                    right(ui);
+                },
+            )
+            .response
+            .rect
+            .width();
             // The free space between the two sides is not content.
             let gap = if end > 0.0 {
                 ui.spacing().item_spacing.x
@@ -1387,6 +1369,52 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
         });
         items.finish(ui, false);
     });
+}
+
+/// The width [`end_aligned`] took under `id` in the previous pass; `None`
+/// before its first pass.
+pub(crate) fn end_aligned_width(ui: &Ui, id: egui::Id) -> Option<f32> {
+    ui.data(|d| d.get_temp::<f32>(id))
+}
+
+/// Lays `add` out left to right, in the order the code adds its widgets,
+/// flush with the end of the room `ui` has left (`justify-content:
+/// flex-end`): it starts where its width from the previous pass, stored
+/// under `id`, ends it at the room's right edge, never before the room's
+/// left edge. Where that width changes, the pass is discarded once with
+/// `why` (conformance 3.2), as `flex_item` does; a sizing pass never
+/// replaces a width a visible pass measured. Before its first pass, and
+/// in unbounded room, it starts at the room's left edge.
+pub(crate) fn end_aligned<R>(
+    ui: &mut Ui,
+    id: egui::Id,
+    align: egui::Align,
+    why: &'static str,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let room = ui.available_rect_before_wrap();
+    let stored = end_aligned_width(ui, id);
+    let x = stored
+        .filter(|_| room.right().is_finite())
+        .map_or(room.left(), |w| (room.right() - w).max(room.left()));
+    let inner = ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(egui::Rect::from_min_max(
+                egui::pos2(x, room.top()),
+                room.max,
+            ))
+            .layout(egui::Layout::left_to_right(align)),
+        add,
+    );
+    let width = inner.response.rect.width();
+    if room.right().is_finite()
+        && may_store(ui, stored.is_some())
+        && stored.is_none_or(|w| !same_width(w, width))
+    {
+        ui.data_mut(|d| d.insert_temp(id, width));
+        ui.ctx().request_discard(why);
+    }
+    inner
 }
 
 /// A shadcn Card at the default size, across the available width of a

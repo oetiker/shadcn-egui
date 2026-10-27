@@ -24,13 +24,13 @@ fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
                     .description("The session and its files are removed.")
                     .show(ui.ctx(), open, |ui| {
                         dialog::footer(ui, |ui| {
+                            ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
                             if ui
                                 .add(Button::new("Delete").variant(ButtonVariant::Destructive))
                                 .clicked()
                             {
                                 *clicks += 1;
                             }
-                            ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
                         });
                     });
             },
@@ -196,8 +196,8 @@ fn dialog_snapshot() {
             .show(ui.ctx(), &mut true, |ui| {
                 ui.label("This cannot be undone.");
                 dialog::footer(ui, |ui| {
-                    ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
                     ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                    ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
                 });
             });
     });

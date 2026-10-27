@@ -823,11 +823,10 @@ fn overlays_group(ui: &mut egui::Ui, state: &mut GalleryState) {
         .description("Make changes to your profile here. Click save when you are done.")
         .show(ui.ctx(), &mut state.dialog_open, |ui| {
             dialog::footer(ui, |ui| {
-                // The row runs right to left: the primary action first.
-                close |= ui.add(Button::new("Save changes")).clicked();
                 close |= ui
                     .add(Button::new("Cancel").variant(ButtonVariant::Outline))
                     .clicked();
+                close |= ui.add(Button::new("Save changes")).clicked();
             });
         });
     if close {

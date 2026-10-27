@@ -258,10 +258,17 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
         .clicked()
 }
 
-/// `dialog-footer`: actions aligned right, primary action last (add it first:
-/// the row runs right to left). In a style with a footer strip (nova) the
-/// strip bleeds to the dialog's edges and bottom.
+/// `dialog-footer`: actions aligned right, left to right in the order the
+/// code adds them, as upstream's `sm:flex-row sm:justify-end`: add the
+/// primary action last. In a style with a footer strip (nova) the strip
+/// bleeds to the dialog's edges and bottom.
+///
+/// The actions are placed at the end from their width in the previous
+/// pass; where that width changes, the pass is discarded and redone.
+/// Upstream's narrow-window column (`flex-col-reverse` below `sm`) is not
+/// ported: the footer is a row at every width.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    let id = ui.next_auto_id().with("shadcn_egui::dialog::footer");
     let t = Theme::current(ui.ctx());
     let v = dialog_recipes(ui, &t);
     let g = t.state(ui.ctx(), v.bits());
@@ -291,10 +298,16 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let mut row = ui.new_child(
         UiBuilder::new()
             .max_rect(inner)
-            .layout(Layout::right_to_left(Align::Center)),
+            .layout(Layout::left_to_right(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = gap;
-    content_ui(&mut row, &[&l[..]], g, add);
+    layout::end_aligned(
+        &mut row,
+        id,
+        Align::Center,
+        "dialog::footer actions width changed",
+        |ui| content_ui(ui, &[&l[..]], g, add),
+    );
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));

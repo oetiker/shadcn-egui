@@ -892,8 +892,8 @@ fn footer_gap(theme: Theme) -> f32 {
             theme.apply(ui.ctx());
             Dialog::new("gap", "Title").show(ui.ctx(), &mut true, |ui| {
                 dialog::footer(ui, |ui| {
-                    ui.add(Button::new("Right"));
                     ui.add(Button::new("Left"));
+                    ui.add(Button::new("Right"));
                 });
             });
         });
