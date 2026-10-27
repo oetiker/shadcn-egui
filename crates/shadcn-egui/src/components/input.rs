@@ -221,7 +221,7 @@ impl<'a> Widget for Input<'a> {
 /// (`caret-color: auto`), snapped to device pixels where the painter puts
 /// the galley. Blinks as egui's caret does, from the last edit or cursor
 /// move.
-fn paint_caret(
+pub(crate) fn paint_caret(
     ui: &Ui,
     out: &egui::text_edit::TextEditOutput,
     cursor: &egui::style::TextCursorStyle,
