@@ -232,16 +232,21 @@ impl TextLook {
         Some((a + d + gap) / ppp)
     }
 
-    /// Where Blink paints a field's caret in its editor line, in points
-    /// below the line's top: the font's ascent and descent (each rounded
-    /// to device pixels) around the baseline, which sits half the line
-    /// gap plus the ascent below that top.
+    /// Where Blink paints the caret in a row, in points below the row's
+    /// top: the font's ascent and descent (each rounded to device pixels)
+    /// around the baseline. In a field's editor line ([`Leading::Field`])
+    /// the baseline sits half the line gap plus the ascent below the top;
+    /// in a line box ([`Leading::Inline`], a textarea's rows) half the
+    /// leading, rounded down, plus the ascent, where the text sits.
     pub(crate) fn caret_span(&self, ctx: &egui::Context) -> Option<std::ops::Range<f32>> {
         let ppp = ctx.pixels_per_point();
         let em = family_vmetrics(ctx, &self.font_id(ctx).family)?;
         let [a, d, gap] =
             [em.ascent, em.descent, em.line_gap].map(|v| (v * self.size * ppp).round());
-        let top = (gap / 2.0).floor();
+        let top = match self.leading {
+            Leading::Field => (gap / 2.0).floor(),
+            Leading::Inline => ((self.line_height * ppp - a - d) / 2.0).floor(),
+        };
         Some(top / ppp..(top + a + d) / ppp)
     }
 
@@ -1185,6 +1190,48 @@ mod tests {
                 f(ui);
             }
         });
+    }
+
+    /// The caret in a line box (a textarea's row) spans the font's ascent
+    /// and descent where the row's text sits: half the leading, rounded
+    /// down, below the line top, the baseline an ascent below that. Blink
+    /// takes the caret's height and top from the text fragment, which is
+    /// as tall as the font's ascent plus descent and placed at the half
+    /// leading of its line box (`ComputeLocalCaretRectAtTextOffset` in
+    /// `third_party/blink/renderer/core/editing/local_caret_rect.cc`, the
+    /// fragment from `inline_box_state.cc`'s `ComputeTextMetrics`); a text
+    /// `<input>`'s editor line keeps its own span ([`Leading::Field`]).
+    #[test]
+    fn an_inline_caret_spans_the_text_of_its_line_box() {
+        for ppp in [1.0, 1.5] {
+            with_ui(ppp, |ui| {
+                Theme::vega().apply(ui.ctx());
+                let mut r = Recipe::default();
+                r.text_size.base = Some(TextSize::Sm);
+                let look = TextLook::resolve(ui, &[&r], State::NONE);
+                let em = family_vmetrics(ui.ctx(), &look.font_id(ui.ctx()).family)
+                    .expect("the theme's font has tables");
+                let [a, d, gap] =
+                    [em.ascent, em.descent, em.line_gap].map(|v| (v * look.size() * ppp).round());
+                let span = look.caret_span(ui.ctx()).unwrap();
+                let half = ((look.line_height() * ppp - a - d) / 2.0).floor();
+                assert_eq!(span, half / ppp..(half + a + d) / ppp, "ppp {ppp}");
+                // The row's baseline sits an ascent below the caret's top.
+                let block = look.layout(ui, "Ag", TextWrapMode::Extend, f32::INFINITY);
+                let baseline = block.galley().rows[0].row.glyphs[0].pos.y;
+                assert!(
+                    (baseline - (span.start + a / ppp)).abs() < 1e-3,
+                    "ppp {ppp}"
+                );
+                // A field's editor line keeps the line-gap rule.
+                let field = look.clone().leading(Leading::Field);
+                let top = (gap / 2.0).floor();
+                assert_eq!(
+                    field.caret_span(ui.ctx()).unwrap(),
+                    top / ppp..(top + a + d) / ppp
+                );
+            });
+        }
     }
 
     #[test]
