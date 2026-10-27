@@ -2,15 +2,18 @@
 //! `tools/stylegen/PIN`. Every value, the hit area and the disabled fade
 //! included, comes from the style's `cn-switch` (track) and
 //! `cn-switch-thumb` recipes. The thumb sits inside the track's 1px transparent border and
-//! slides between its two positions with `animate_bool`.
+//! slides between its two positions with the thumb's `transition-transform`
+//! through [`motion::transition`](crate::components::motion::transition):
+//! upstream's 150 ms ease-in-out, a jump under reduced motion.
 
+use crate::components::motion::transition;
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::style::app::{default_variant, state_size};
-use crate::style::{pick, Prop, Recipe, State};
+use crate::style::{pick, Prop, Recipe, State, Transition};
 use crate::Theme;
-use egui::{lerp, vec2, Rect, Sense, Ui, Widget};
+use egui::{vec2, Rect, Sense, Ui, Widget};
 
 /// shadcn `data-size` of the switch.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -129,7 +132,6 @@ impl Widget for Switch<'_> {
                 .with(State::INVALID, self.invalid)
         };
         let st = interaction_state(&t, &resp, context(on).with(State::DISABLED, !enabled));
-        let how_on = ui.ctx().animate_bool(base.id, on);
 
         if ui.is_rect_visible(rect) {
             let border_w = line_width(
@@ -140,7 +142,7 @@ impl Widget for Switch<'_> {
                 .paint(&part_painter(ui, &[&track[..]], st), rect);
 
             // The thumb lies inside the border, vertically centred; its
-            // translate differs per value, so the animation blends both.
+            // translate differs per value and moves as its transition says.
             let side = |f: fn(&Recipe) -> &Prop<f32>| pick(&thumb, f, st).unwrap_or(0.0);
             let size = vec2(side(|r| &r.width), side(|r| &r.height));
             let home =
@@ -153,14 +155,16 @@ impl Widget for Switch<'_> {
                     pick(&thumb, |r| &r.shift_y, s),
                 )
             };
-            let (off_rect, on_rect) = (at(false), at(true));
-            let thumb_rect = Rect::from_min_size(
-                egui::pos2(
-                    lerp(off_rect.left()..=on_rect.left(), how_on),
-                    off_rect.top(),
-                ),
-                size,
+            let target = at(on);
+            let left = transition(
+                ui.ctx(),
+                base.id.with("thumb-x"),
+                target.left(),
+                &thumb,
+                Transition::TRANSFORM,
+                st,
             );
+            let thumb_rect = Rect::from_min_size(egui::pos2(left, target.top()), size);
             RecipeBox::resolve(ui.ctx(), &t, &thumb, st)
                 .paint(&part_painter(ui, &[&thumb[..], &track[..]], st), thumb_rect);
         }

@@ -189,3 +189,64 @@ fn every_style_times_the_progress_indicator() {
         assert_eq!(pass(&ctx, 2.3, 1.0, &[ind]), (1.0, false), "{}", style.name);
     }
 }
+
+/// One pass of a vega switch showing `on` at `time`, `reduced` setting
+/// `animation_time` to 0: the left edge of the last filled rect (the
+/// thumb), and whether the pass ends with a repaint request.
+fn switch_pass(ctx: &egui::Context, time: f64, on: bool, reduced: bool) -> (f32, bool) {
+    let out = ctx.run_ui(
+        egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        },
+        |ui| {
+            shadcn_egui::Theme::vega().apply(ui.ctx());
+            if reduced {
+                ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+            }
+            let mut on = on;
+            ui.add(shadcn_egui::components::switch::Switch::new(&mut on));
+        },
+    );
+    let left = out
+        .shapes
+        .iter()
+        .rev()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.fill.a() > 0 => Some(r.rect.left()),
+            _ => None,
+        })
+        .expect("the thumb");
+    let repaint =
+        out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
+    (left, repaint)
+}
+
+#[test]
+fn switch_thumb_moves_with_upstreams_timing() {
+    // The thumb's `transition-transform`: 150 ms on the default curve.
+    let ctx = fresh();
+    let (off, _) = switch_pass(&ctx, 1.0, false, false);
+    switch_pass(&ctx, 1.5, false, false);
+    let (start, moving) = switch_pass(&ctx, 2.0, true, false);
+    assert_eq!(start, off);
+    assert!(moving);
+    let (mid, moving) = switch_pass(&ctx, 2.075, true, false);
+    let (on, _) = switch_pass(&ctx, 2.2, true, false);
+    assert!(on > off + 1.0);
+    let want = off + (on - off) * reference_bezier(0.4, 0.0, 0.2, 1.0, 0.5) as f32;
+    assert!((mid - want).abs() < 1e-3, "{mid} != {want}");
+    assert!(moving);
+    // Settled: the pass after arrival asks for nothing.
+    assert_eq!(switch_pass(&ctx, 2.4, true, false), (on, false));
+}
+
+#[test]
+fn switch_thumb_jumps_under_reduced_motion() {
+    let ctx = fresh();
+    let (off, _) = switch_pass(&ctx, 1.0, false, true);
+    switch_pass(&ctx, 1.5, false, true);
+    let (on, moving) = switch_pass(&ctx, 2.0, true, true);
+    assert!(on > off + 1.0);
+    assert!(!moving);
+}

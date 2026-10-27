@@ -43,6 +43,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- The Switch thumb slides with shadcn's timing, 150 ms along the ease-in-out curve; it took 100 ms at an even pace before. With `animation_time` set to 0 it jumps.
 - A shadcn-egui `Button`, `Badge` or `Tabs` list placed with `ui.add_sized` or in a `Layout::top_down_justified` column now takes the full width there, as an egui button does, with its label centred; before, it kept the width of its label. A `Tabs` list shares the width among its triggers.
 - In a window narrower than 640 px a dialog footer now stacks its buttons full width, the last one on top, as shadcn does on a phone; before, it kept them in a row.
 - Buttons in a dialog footer, widgets in the action of a card header and widgets on the right of a `layout::space_between` row, such as the actions of a card footer, now show in the order the code adds them, as in shadcn, with the last one at the right; before, they showed in reverse order. Apps that added the primary action first to see it last must now add it last, after Cancel.
