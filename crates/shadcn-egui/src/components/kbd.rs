@@ -3,9 +3,9 @@
 //! from the style's `cn-kbd` and `cn-kbd-group` recipes.
 //!
 //! A key chip lays out its content in one row, as a button does: text and
-//! icons, `gap` apart, `min-w-*` wide at least. Inside a tooltip's content
-//! it takes the tooltip's look (`in-data-[slot=tooltip-content]:` and the
-//! tooltip's `**:data-[slot=kbd]:` rules) by itself.
+//! icons, `gap` apart, `min-w-*` wide at least. The look inside a
+//! tooltip (`in-data-[slot=tooltip-content]:`) waits for the tooltip's
+//! closure form; a chip draws its own look everywhere.
 
 use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
@@ -13,7 +13,6 @@ use crate::components::context;
 use crate::components::icon::Icon;
 use crate::components::shared::{line_width, part_painter, transitioned_text, RecipeBox};
 use crate::components::text::TextLook;
-use crate::components::tooltip;
 use crate::style::app::default_variant;
 use crate::style::{pick, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
@@ -105,8 +104,7 @@ impl Widget for Kbd<'_> {
             .unwrap_or_default();
         let v = t.resolve(variant);
         let l = [v.part(&t.style, |_, s| &s.kbd, |r| &r.kbd)];
-        let in_tooltip = tooltip::report_kbd(ui);
-        let context = v.bits().with(State::IN_TOOLTIP_CONTENT, in_tooltip);
+        let context = v.bits();
         // A kbd has no interaction states (`pointer-events-none`): its
         // geometry and paint state are one.
         let st = t.state(ui.ctx(), context);

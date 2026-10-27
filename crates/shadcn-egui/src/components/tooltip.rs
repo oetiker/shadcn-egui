@@ -7,14 +7,13 @@
 //! trigger.
 
 use crate::components::context;
-use crate::components::registry::{self, Group};
 use crate::components::shared::{content_ui, opacity, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
-use crate::style::{pick, State};
+use crate::style::pick;
 use crate::Theme;
 use egui::{
-    pos2, Color32, Context, Id, InnerResponse, Pos2, RectAlign, Response, Shape, TextWrapMode, Ui,
+    pos2, Color32, Context, InnerResponse, Pos2, RectAlign, Response, Shape, TextWrapMode, Ui,
     UiBuilder,
 };
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
@@ -35,25 +34,10 @@ default_variant!(
     }
 );
 
-/// The context a tooltip gives its content: its variant, and the group
-/// its kbd chips report to (`has-data-[slot=kbd]:`).
+/// The context a tooltip gives its content: its variant.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct TooltipContext {
     variant: TooltipVariant,
-    group: Option<Id>,
-}
-
-/// Whether `ui` lies in a tooltip's content (`in-data-[slot=tooltip-content]:`).
-/// A kbd chip calls it: the tooltip learns that it holds one on the next
-/// pass.
-pub(crate) fn report_kbd(ui: &Ui) -> bool {
-    let Some(cx) = context::find::<TooltipContext>(ui) else {
-        return false;
-    };
-    if let Some(group) = cx.group {
-        registry::report(ui.ctx(), group, State::HAS_KBD);
-    }
-    true
 }
 
 /// The recipes of the tooltip around `ui`; outside a tooltip, the
@@ -128,20 +112,13 @@ impl<'a> Tooltip<'a> {
         // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
         let size = pick(&arrow, |r| &r.width, g).unwrap_or(0.0);
         let reach = size * FRAC_1_SQRT_2;
-        // The right padding depends on a kbd inside (`has-data-[slot=kbd]:`),
-        // known from the previous pass inside the content: the content adds it.
-        let frame = panel.frame([pad_t, 0.0, pad_b, pad_l]);
+        let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(frame);
-        let group_id = resp.id.with("shadcn_egui::tooltip::content");
         let parts = TooltipContext {
             variant: self.variant,
-            group: Some(group_id),
         };
         let shown = tip.show(|ui| {
             let slot = RecipeBox::reserve(ui);
-            let group = Group::begin(ui, group_id);
-            let has = g.or(group.presence(State::HAS_KBD));
-            let pad_r = pick(&content_l, |r| &r.pad_right, has).unwrap_or(pad_r);
             ui.set_max_width(max_w - pad_l - pad_r);
             let inner = ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
                 // The content's `text-*` and text colour reach what it holds.
@@ -157,8 +134,6 @@ impl<'a> Tooltip<'a> {
                 })
                 .inner
             });
-            ui.expand_to_include_x(ui.min_rect().right() + pad_r);
-            group.end(ui.ctx());
             (inner.inner, slot)
         })?;
         let (inner, slot) = shown.inner;

@@ -3,10 +3,8 @@ mod common;
 use egui::vec2;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
-use shadcn_egui::components::button::{Button, ButtonVariant};
 use shadcn_egui::components::kbd::{kbd, Kbd, KbdGroup, KbdRecipes, KbdVariant};
 use shadcn_egui::components::label::description;
-use shadcn_egui::components::tooltip::Tooltip;
 use shadcn_egui::style::AppVariant;
 use shadcn_egui::style::Style;
 use shadcn_egui::{layout, Palette, Theme};
@@ -125,77 +123,6 @@ fn a_groups_variant_reaches_its_chips() {
     assert_eq!(own.width(), 20.0);
 }
 
-/// In a tooltip the chip takes the tooltip's look
-/// (`in-data-[slot=tooltip-content]:bg-background/20 text-background`).
-#[test]
-fn a_chip_in_a_tooltip_takes_the_tooltips_look() {
-    let mode = egui::Theme::Light;
-    let theme = Theme::vega();
-    let pal = *theme.palette_of(mode);
-    let mut h = Harness::builder()
-        .with_size(vec2(240.0, 120.0))
-        .build_ui(move |ui| {
-            theme.apply(ui.ctx());
-            ui.ctx().set_theme(mode);
-            tooltip_with_kbd(ui);
-        });
-    h.run();
-    h.get_by_label("Save").hover();
-    h.run();
-    h.run();
-    let chip = h.get_by_label("S").rect();
-    let img = h.render().expect("render");
-    let c = img.get_pixel(chip.left() as u32 + 2, chip.center().y as u32);
-    // background at 20% over the foreground fill.
-    let want = pal.foreground.lerp_to_gamma(pal.background, 0.2);
-    for (got, want) in [c[0], c[1], c[2]]
-        .into_iter()
-        .zip([want.r(), want.g(), want.b()])
-    {
-        assert!(got.abs_diff(want) <= 3, "chip fill {c:?}, want {want:?}");
-    }
-}
-
-/// `has-data-[slot=kbd]:pr-1.5`: a tooltip that holds a chip has the
-/// smaller right padding.
-#[test]
-fn a_tooltip_with_a_chip_has_the_smaller_right_padding() {
-    let mut h = Harness::builder()
-        .with_size(vec2(240.0, 120.0))
-        .build_ui(|ui| {
-            Theme::vega().apply(ui.ctx());
-            tooltip_with_kbd(ui);
-        });
-    h.run();
-    h.get_by_label("Save").hover();
-    h.run();
-    h.run();
-    let chip = h.get_by_label("S").rect();
-    let img = h.render().expect("render");
-    // The fill ends `pr-1.5` (6 px) right of the chip.
-    let y = chip.center().y as u32;
-    let fill = img.get_pixel(chip.right() as u32 + 3, y);
-    let page = img.get_pixel(chip.right() as u32 + 9, y);
-    assert_ne!(fill, page, "tooltip fill right of the chip");
-    let past = img.get_pixel(chip.right() as u32 + 12, y);
-    assert_eq!(page, past, "no tooltip fill 9 px right of the chip");
-}
-
-fn tooltip_with_kbd(ui: &mut egui::Ui) {
-    ui.style_mut().interaction.tooltip_delay = 0.0;
-    ui.add_space(56.0);
-    ui.horizontal(|ui| {
-        ui.add_space(56.0);
-        let save = ui.add(Button::new("Save").variant(ButtonVariant::Outline));
-        Tooltip::new(&save).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Save Changes");
-                kbd(ui, "S");
-            });
-        });
-    });
-}
-
 /// shadcn-svelte `kbd-demo` and `kbd-group-demo`, and an icon-only chip.
 fn kbd_demo(ui: &mut egui::Ui) {
     let icons = Theme::current(ui.ctx()).icons;
@@ -225,14 +152,4 @@ fn kbd_demo(ui: &mut egui::Ui) {
 #[test]
 fn kbd_snapshot() {
     common::snapshot_all("kbd", vec2(420.0, 180.0), kbd_demo);
-}
-
-/// shadcn-svelte `kbd-tooltip-demo`'s first tooltip, open.
-#[test]
-fn kbd_tooltip_snapshot() {
-    common::snapshot_all_with("kbd_tooltip", vec2(240.0, 120.0), tooltip_with_kbd, |h| {
-        h.get_by_label("Save").hover();
-        h.run();
-        h.run();
-    });
 }
