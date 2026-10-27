@@ -262,7 +262,6 @@ pub struct GalleryState {
     name: String,
     email: String,
     message: String,
-    message_field: String,
     message_invalid: String,
     checked: bool,
     switch_on: bool,
@@ -284,7 +283,6 @@ impl GalleryState {
             name: String::new(),
             email: "ada@example".into(),
             message: String::new(),
-            message_field: String::new(),
             message_invalid: String::new(),
             checked: true,
             switch_on: true,
@@ -752,14 +750,14 @@ fn inputs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
     );
 }
 
-/// shadcn-svelte's textarea demos: plain, with a button, in a field
-/// (label and description), disabled and invalid.
+/// shadcn-svelte's textarea-demo and textarea-button, and the field's
+/// disabled and invalid states.
 fn textarea_group(ui: &mut egui::Ui, state: &mut GalleryState) {
     const HINT: &str = "Type your message here.";
     group(
         ui,
         "Textarea",
-        "Multi-line text that grows with its content.",
+        "Multi-line text that grows with its content; disabled; invalid.",
         |ui| {
             layout::vstack(ui, 8.0, |ui| {
                 ui.add(
@@ -769,37 +767,18 @@ fn textarea_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                 );
                 let _ = ui.add(Button::new("Send message"));
             });
-            layout::vstack(ui, 8.0, |ui| {
-                let name = label(ui, "Message");
-                description(ui, "Enter your message below.");
-                ui.add(
-                    Textarea::new(&mut state.message_field)
-                        .hint_text(HINT)
-                        .desired_width(f32::INFINITY),
-                )
-                .labelled_by(name.id);
-            });
-            layout::vstack(ui, 8.0, |ui| {
-                let name = label(ui, "Message (disabled)");
-                ui.add_enabled(
-                    false,
-                    Textarea::new(&mut String::new())
-                        .hint_text(HINT)
-                        .desired_width(f32::INFINITY),
-                )
-                .labelled_by(name.id);
-            });
-            layout::vstack(ui, 8.0, |ui| {
-                let name = label(ui, "Message (invalid)");
-                ui.add(
-                    Textarea::new(&mut state.message_invalid)
-                        .hint_text(HINT)
-                        .invalid(true)
-                        .desired_width(f32::INFINITY),
-                )
-                .labelled_by(name.id);
-                description(ui, "Please enter a valid message.");
-            });
+            ui.add_enabled(
+                false,
+                Textarea::new(&mut String::new())
+                    .hint_text(HINT)
+                    .desired_width(f32::INFINITY),
+            );
+            ui.add(
+                Textarea::new(&mut state.message_invalid)
+                    .hint_text(HINT)
+                    .invalid(true)
+                    .desired_width(f32::INFINITY),
+            );
         },
     );
 }

@@ -6,7 +6,6 @@ mod common;
 use egui::accesskit::Role as AccessRole;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
-use shadcn_egui::components::label::{description, label};
 use shadcn_egui::components::textarea::{textarea, Textarea, TextareaVariant};
 use shadcn_egui::style::{AppVariant, Paint, Role};
 use shadcn_egui::Theme;
@@ -265,17 +264,18 @@ fn a_recipe_that_does_not_grow_fails_a_debug_assert() {
     });
 }
 
-/// Upstream's demos: textarea-demo, -button, -field, -disabled and
-/// -invalid. The Field wrapper of the last three is not ported: its label
-/// is the crate `label`, its description the crate `description`.
+/// Upstream's textarea-demo and textarea-button, then the disabled
+/// (`disabled` from the `Ui`) and invalid (`aria-invalid`) states on the
+/// bare field, a filled field with a wrapped and a broken line, and a
+/// focused one. textarea-field, -disabled and -invalid wrap the field in
+/// Field, which waits for the Field port.
 #[test]
 fn textarea_snapshot() {
     use shadcn_egui::components::button::Button;
     // `text-base md:text-sm`: the phone and the desktop text size.
-    common::snapshot_widths("textarea", 860.0, common::snapshot_themes(), |ui| {
+    common::snapshot_widths("textarea", 700.0, common::snapshot_themes(), |ui| {
         let mut demo = String::new();
         let mut button = String::new();
-        let mut field = String::new();
         let mut disabled = String::new();
         let mut invalid = String::new();
         let mut filled = String::from(
@@ -290,11 +290,6 @@ fn textarea_snapshot() {
         ui.add_space(8.0);
         ui.add(Button::new("Send message"));
         ui.add_space(16.0);
-        label(ui, "Message");
-        description(ui, "Enter your message below.");
-        ui.add(Textarea::new(&mut field).hint_text(hint).id_salt("field"));
-        ui.add_space(16.0);
-        label(ui, "Message");
         ui.add_enabled(
             false,
             Textarea::new(&mut disabled)
@@ -302,14 +297,12 @@ fn textarea_snapshot() {
                 .id_salt("disabled"),
         );
         ui.add_space(16.0);
-        label(ui, "Message");
         ui.add(
             Textarea::new(&mut invalid)
                 .hint_text(hint)
                 .invalid(true)
                 .id_salt("invalid"),
         );
-        description(ui, "Please enter a valid message.");
         ui.add_space(16.0);
         ui.add(Textarea::new(&mut filled).id_salt("filled"));
         ui.add_space(16.0);
