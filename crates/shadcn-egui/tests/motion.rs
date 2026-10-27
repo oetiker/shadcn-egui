@@ -728,3 +728,69 @@ fn sibling_labels_keep_their_own_transitions() {
     }
     assert!(!repaints[3], "{repaints:?}");
 }
+
+/// One pass of a button under `theme` in `mode` at `time`, the pointer
+/// away: its fill, and whether the pass ends with a repaint request.
+fn themed_button_pass(
+    ctx: &egui::Context,
+    time: f64,
+    theme: &shadcn_egui::Theme,
+    mode: egui::Theme,
+) -> (egui::Color32, bool) {
+    let mut rect = egui::Rect::NOTHING;
+    let out = ctx.run_ui(
+        egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        },
+        |ui| {
+            ui.ctx().set_theme(mode);
+            theme.apply(ui.ctx());
+            rect = ui
+                .add(shadcn_egui::components::button::Button::new("Save"))
+                .rect;
+        },
+    );
+    let fill = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if rect.contains_rect(r.rect) && r.fill.a() > 0 => Some(r.fill),
+            _ => None,
+        })
+        .expect("a fill");
+    let repaint =
+        out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
+    (fill, repaint)
+}
+
+#[test]
+fn a_theme_or_mode_change_jumps() {
+    // The shadcn pages turn transitions off for a theme change
+    // (`disableTransitions`, `disableTransitionOnChange`).
+    use egui::Theme::{Dark, Light};
+    let vega = shadcn_egui::Theme::vega();
+    let mut swapped = vega.clone();
+    swapped.light = vega.dark;
+    let settled = |theme: &shadcn_egui::Theme, mode| {
+        let ctx = fresh();
+        themed_button_pass(&ctx, 1.0, theme, mode);
+        themed_button_pass(&ctx, 2.0, theme, mode).0
+    };
+    let (light, dark) = (settled(&vega, Light), settled(&vega, Dark));
+    assert_ne!(light, dark);
+    let ctx = fresh();
+    themed_button_pass(&ctx, 1.0, &vega, Light);
+    themed_button_pass(&ctx, 2.0, &vega, Light);
+    // Light to dark.
+    assert_eq!(themed_button_pass(&ctx, 3.0, &vega, Dark).0, dark);
+    assert_eq!(themed_button_pass(&ctx, 3.05, &vega, Dark), (dark, false));
+    // Back to light, then a palette change in the same mode.
+    themed_button_pass(&ctx, 4.0, &vega, Light);
+    themed_button_pass(&ctx, 5.0, &vega, Light);
+    assert_eq!(themed_button_pass(&ctx, 6.0, &swapped, Light).0, dark);
+    assert_eq!(
+        themed_button_pass(&ctx, 6.05, &swapped, Light),
+        (dark, false)
+    );
+}

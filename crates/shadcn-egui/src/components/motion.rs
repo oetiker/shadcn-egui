@@ -9,6 +9,7 @@
 use crate::box_shadow::Layers;
 use crate::color::mix_oklab;
 use crate::style::{pick, Easing, Recipe, State, Transition};
+use crate::theme::theme_stamp;
 use egui::{Color32, Context, Id};
 
 /// Tailwind 4's `--default-transition-duration`, in seconds: the duration
@@ -106,6 +107,8 @@ struct Run<T> {
     /// found after skipped passes happened while the widget was not shown.
     seen_pass: u64,
     seen_time: f64,
+    /// The theme and mode the value was seen under ([`theme_stamp`]).
+    stamp: u64,
 }
 
 impl<T: Tween> Run<T> {
@@ -120,6 +123,7 @@ impl<T: Tween> Run<T> {
             shortening: 1.0, // behaviour-ok: CSS's initial shortening factor
             seen_pass: 0,
             seen_time: 0.0,
+            stamp: 0,
         }
     }
 
@@ -144,7 +148,8 @@ impl<T: Tween> Run<T> {
 /// (`style.animation_time == 0`) it jumps too. `id` names the property of
 /// this widget; the first pass that sees it shows `target`. Asks for a
 /// repaint only while the value moves. A non-finite value has no way to
-/// move along: to or from one, the value jumps.
+/// move along: to or from one, the value jumps. A change of the applied
+/// theme or of the mode jumps too.
 ///
 /// ```
 /// use shadcn_egui::components::motion::transition;
@@ -220,8 +225,11 @@ fn run<T: Tween>(
         && ctx.global_style().animation_time > 0.0;
     let now = ctx.input(|i| i.time);
     let pass = ctx.cumulative_pass_nr();
+    let stamp = theme_stamp(ctx);
     let mut run = match ctx.data(|d| d.get_temp::<Run<T>>(id)) {
-        Some(run) if animates && target.finite() && run.to.finite() => {
+        // A theme, palette or mode change jumps, as the shadcn pages turn
+        // transitions off for it (`disableTransitions`).
+        Some(run) if animates && target.finite() && run.to.finite() && run.stamp == stamp => {
             // A CSS transition runs on wall time whether the element paints
             // or not. After passes without the widget (scrolled away, not
             // shown) the change is dated to the last pass that showed it,
@@ -254,6 +262,7 @@ fn run<T: Tween>(
                     shortening,
                     seen_pass: 0,
                     seen_time: 0.0,
+                    stamp: 0,
                 }
             }
         }
@@ -263,7 +272,7 @@ fn run<T: Tween>(
     if !running {
         run = Run::settled(target);
     }
-    (run.seen_pass, run.seen_time) = (pass, now);
+    (run.seen_pass, run.seen_time, run.stamp) = (pass, now, stamp);
     ctx.data_mut(|d| d.insert_temp(id, run));
     if running {
         ctx.request_repaint();

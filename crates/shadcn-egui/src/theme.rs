@@ -1051,6 +1051,10 @@ impl Theme {
         }
 
         ctx.data_mut(|d| {
+            if d.get_temp::<Theme>(theme_id()).as_ref() != Some(self) {
+                let generation = d.get_temp::<u64>(generation_id()).unwrap_or(0);
+                d.insert_temp(generation_id(), generation + 1);
+            }
             d.insert_temp(theme_id(), self.clone());
             d.insert_temp(hairline_id(), hairline);
         });
@@ -1154,6 +1158,18 @@ impl Theme {
 
 fn hairline_id() -> egui::Id {
     egui::Id::new("shadcn_egui::hairline")
+}
+
+fn generation_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::theme_generation")
+}
+
+/// What the colours of the context's pass resolve from: the applied
+/// theme (counted up by each [`Theme::apply`] of a different theme) and
+/// the mode. A transition that sees it change jumps.
+pub(crate) fn theme_stamp(ctx: &egui::Context) -> u64 {
+    let generation = ctx.data(|d| d.get_temp::<u64>(generation_id()).unwrap_or(0));
+    generation * 2 + u64::from(ctx.theme() == egui::Theme::Dark)
 }
 
 /// Every stroke [`Theme::apply`] gives the theme's hairline (`border`).
