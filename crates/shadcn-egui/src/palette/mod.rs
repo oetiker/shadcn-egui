@@ -191,3 +191,41 @@ pub(crate) fn base_radius_px(base_id: &str) -> Option<f32> {
 pub(crate) fn is_theme(id: &str) -> bool {
     theme_vars(id, false).is_some()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Where generated tokens with different `oklch(l c h)` clip to one
+    /// `Color32`, [`unclipped`] has no entry and the colour mixes as itself:
+    /// each token must lie so close to that colour that no mix moves by
+    /// 1/255 (hue error times a mix's chroma, at most 0.4, under 1e-3).
+    /// Today one: stone and taupe's `oklch(0.147 0.004 49.25)` and
+    /// `oklch(0.147 0.004 49.3)`, both `#0C0A09`.
+    #[test]
+    fn tokens_that_clip_to_one_colour_mix_as_that_colour() {
+        use std::collections::BTreeMap;
+        let bases = generated::BASES.iter().flat_map(|b| [b.2, b.3]);
+        let overlays = generated::OVERLAYS.iter().flat_map(|o| [o.1, o.2]);
+        let mut seen: BTreeMap<[u8; 4], Vec<[f32; 3]>> = BTreeMap::new();
+        for &(_, o) in bases.chain(overlays).flatten() {
+            let lch = [o.0, o.1, o.2];
+            let sources = seen.entry(o.color().to_array()).or_default();
+            if !sources.contains(&lch) {
+                sources.push(lch);
+            }
+        }
+        let collisions: Vec<_> = seen.iter().filter(|(_, s)| s.len() > 1).collect();
+        assert_eq!(collisions.len(), 1, "{collisions:#?}");
+        for (&[r, g, b, a], sources) in collisions {
+            let own = Color32::from_rgba_unmultiplied(r, g, b, a);
+            assert_eq!(unclipped(own), None);
+            let (l, c, h) = crate::color::srgb_to_oklch(own);
+            for &[sl, sc, sh] in sources {
+                let dh = ((sh - h + 180.0).rem_euclid(360.0) - 180.0).to_radians();
+                let off = (sl - l).abs().max((sc - c).abs()).max(dh.abs() * 0.4);
+                assert!(off < 1e-3, "{own:?}: oklch({sl} {sc} {sh}) is {off} off");
+            }
+        }
+    }
+}
