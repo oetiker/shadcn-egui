@@ -1577,6 +1577,51 @@ fn a_card_is_a_flex_item_of_a_crate_row() {
     }
 }
 
+/// The card's `overflow-hidden` clips its footer as it clips its body:
+/// a footer box wider than the card overflows it, and the footer's clip
+/// rect stays inside the card's box, in a column and in a crate row, on
+/// the screen and in an `egui::Area`.
+#[test]
+fn a_card_clips_its_footer_at_its_box() {
+    use shadcn_egui::components::card::Card;
+    for in_row in [false, true] {
+        for host in [Host::Screen, Host::Area(false)] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.set_max_width(150.0);
+                let item = |ui: &mut egui::Ui, out: &mut Vec<egui::Rect>| {
+                    let (mut clip, mut foot) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+                    Card::new()
+                        .footer(|ui| {
+                            clip = ui.clip_rect();
+                            foot = boxed(ui, 200.0, 20.0);
+                        })
+                        .show(ui, |ui| ui.label("Body"));
+                    let layer = ui.layer_id();
+                    let card = ui
+                        .ctx()
+                        .viewport(|v| v.this_pass.widgets.get_layer(layer).last().map(|w| w.rect))
+                        .expect("the card registered its box");
+                    out.extend([card, clip, foot]);
+                };
+                if in_row {
+                    layout::row(ui, 8.0, |ui| item(ui, out));
+                } else {
+                    item(ui, out);
+                }
+            });
+            let case = format!("in a row {in_row} {host:?}: {r:?}");
+            let [card, clip, foot] = r[..] else {
+                panic!("{case}")
+            };
+            assert_eq!(card.width(), 150.0, "{case}");
+            assert!(foot.right() > card.right(), "overflows: {case}");
+            assert!(clip.left() >= card.left(), "clipped: {case}");
+            assert!(clip.right() <= card.right(), "clipped: {case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}
+
 /// In a column a card spans the available width, as a block does, also
 /// inside a `vstack` in a row, where it spans the stack; where the width
 /// is unbounded it takes its content's width. A still frame takes one
