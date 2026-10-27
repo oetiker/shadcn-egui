@@ -220,6 +220,9 @@ pub struct RecipeBox {
     shadow_opacity: f32,
     ring: Option<Stroke>,
     outline: Option<Stroke>,
+    /// The part's text colour, CSS's `currentcolor`: an outline's colour
+    /// before it has one.
+    current: Color32,
 }
 
 /// `rounded-full` (`calc(infinity * 1px)`) as a finite length, so CSS's
@@ -302,6 +305,8 @@ impl RecipeBox {
             shadow_opacity: INITIAL_OPACITY,
             ring: stroke(ring_w, paint(|r| &r.ring_color)),
             outline: stroke(outline_w, paint(|r| &r.outline_color)),
+            // shadcn's body `text-foreground` where the part sets none.
+            current: paint(|r| &r.text).unwrap_or(theme.role(crate::style::Role::Foreground)), // behaviour-ok: inherited body text colour
         }
     }
 
@@ -337,22 +342,22 @@ impl RecipeBox {
         };
         // An absent outline has no width (`outline-style: none`): it grows
         // from nothing and shrinks back into it, in the colour it last had;
-        // one never shown appears in its own colour.
+        // before it had one, in CSS's initial `currentcolor`.
         let last = id.with(("transition", "outline-last"));
-        let known = self
+        if let Some(o) = self.outline {
+            ctx.data_mut(|d| d.insert_temp(last, o.color));
+        }
+        let c = self
             .outline
             .map(|o| o.color)
-            .or_else(|| ctx.data(|d| d.get_temp::<Color32>(last)));
+            .or_else(|| ctx.data(|d| d.get_temp::<Color32>(last)))
+            .unwrap_or(self.current);
         let w = width(
             "outline-width",
             self.outline.map_or(0.0, |o| o.width),
             Transition::OTHER,
         );
-        let outline = known.map(|c| {
-            ctx.data_mut(|d| d.insert_temp(last, c));
-            Stroke::new(w, color("outline", c, Transition::OUTLINE_COLOR))
-        });
-        let outline = outline.unwrap_or(Stroke::NONE);
+        let outline = Stroke::new(w, color("outline", c, Transition::OUTLINE_COLOR));
         self.outline = (outline.width > 0.0 && outline.color.a() > 0).then_some(outline);
         self.shadow = transition_shadow(
             ctx,

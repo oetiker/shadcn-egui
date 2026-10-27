@@ -794,3 +794,31 @@ fn a_theme_or_mode_change_jumps() {
         (dark, false)
     );
 }
+
+#[test]
+fn a_new_outline_fades_from_the_text_colour() {
+    use shadcn_egui::style::{Paint, Role};
+    // CSS's initial `outline-color` is `currentcolor`: an outline that
+    // appears under `transition-colors` fades from the part's text colour.
+    let mut r = focus_recipe(Transition::COLORS);
+    r.text = Prop::fixed(Paint::Role(Role::Destructive, 1.0));
+    let colour = |shapes: &[egui::Shape]| {
+        shapes
+            .iter()
+            .find_map(|s| match s {
+                egui::Shape::Rect(r) if r.stroke.width > 0.0 => Some(r.stroke.color),
+                _ => None,
+            })
+            .expect("an outline")
+    };
+    let ctx = fresh();
+    let mut text = egui::Color32::TRANSPARENT;
+    let _ = ctx.run_ui(Default::default(), |ui| {
+        text = shadcn_egui::Theme::current(ui.ctx()).role(Role::Destructive);
+    });
+    box_pass(&ctx, 1.0, &r, State::NONE);
+    assert_eq!(colour(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)), text);
+    let mid = colour(&box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
+    let ring = colour(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE));
+    assert!(mid != text && mid != ring, "{mid:?}");
+}
