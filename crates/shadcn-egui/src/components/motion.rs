@@ -234,59 +234,64 @@ fn run<T: Tween>(
     let now = ctx.input(|i| i.time);
     let pass = ctx.cumulative_pass_nr();
     let stamp = theme_stamp(ctx);
-    let mut run = match ctx.data(|d| d.get_temp::<Run<T>>(id)) {
-        // A theme, palette or mode change jumps, as the shadcn pages turn
-        // transitions off for it (`disableTransitions`).
-        Some(run) if animates && target.finite() && run.to.finite() && run.stamp == stamp => {
-            // A CSS transition runs on wall time whether the element paints
-            // or not. After passes without the widget (scrolled away, not
-            // shown) the change is dated to the last pass that showed it,
-            // so a change older than the duration shows its target at once.
-            let start = if run.seen_pass + 1 < pass {
-                run.seen_time
-            } else {
-                now
-            };
-            let (current, progress, running) = run.at(start);
-            if target == run.to {
-                run
-            } else {
-                let duration = duration.unwrap_or(DEFAULT_DURATION);
-                let default_easing = if picked.is_some() {
-                    Easing::InOut
+    // Updated in place: a settled value allocates nothing per pass.
+    let (value, running) = ctx.data_mut(|d| {
+        let slot = d.get_temp_mut_or_insert_with(id, || Run::settled(target));
+        let mut run = match Some(*slot) {
+            // A theme, palette or mode change jumps, as the shadcn pages turn
+            // transitions off for it (`disableTransitions`).
+            Some(run) if animates && target.finite() && run.to.finite() && run.stamp == stamp => {
+                // A CSS transition runs on wall time whether the element paints
+                // or not. After passes without the widget (scrolled away, not
+                // shown) the change is dated to the last pass that showed it,
+                // so a change older than the duration shows its target at once.
+                let start = if run.seen_pass + 1 < pass {
+                    run.seen_time
                 } else {
-                    Easing::Ease
+                    now
                 };
-                let easing = pick(layers, |r| &r.easing, s).unwrap_or(default_easing);
-                // CSS Transitions 1, "starting of transitions", step 4.
-                let (reverse_to, shortening) = if running && target == run.reverse_to {
-                    let f = progress * run.shortening + 1.0 - run.shortening; // behaviour-ok: CSS reversing shortening factor
-                    (run.to, f.abs().clamp(0.0, 1.0)) // behaviour-ok: the unit interval
+                let (current, progress, running) = run.at(start);
+                if target == run.to {
+                    run
                 } else {
-                    (current, 1.0) // behaviour-ok: CSS's initial shortening factor
-                };
-                Run {
-                    from: current,
-                    to: target,
-                    start,
-                    duration: duration * shortening,
-                    easing,
-                    reverse_to,
-                    shortening,
-                    seen_pass: 0,
-                    seen_time: 0.0,
-                    stamp: 0,
+                    let duration = duration.unwrap_or(DEFAULT_DURATION);
+                    let default_easing = if picked.is_some() {
+                        Easing::InOut
+                    } else {
+                        Easing::Ease
+                    };
+                    let easing = pick(layers, |r| &r.easing, s).unwrap_or(default_easing);
+                    // CSS Transitions 1, "starting of transitions", step 4.
+                    let (reverse_to, shortening) = if running && target == run.reverse_to {
+                        let f = progress * run.shortening + 1.0 - run.shortening; // behaviour-ok: CSS reversing shortening factor
+                        (run.to, f.abs().clamp(0.0, 1.0)) // behaviour-ok: the unit interval
+                    } else {
+                        (current, 1.0) // behaviour-ok: CSS's initial shortening factor
+                    };
+                    Run {
+                        from: current,
+                        to: target,
+                        start,
+                        duration: duration * shortening,
+                        easing,
+                        reverse_to,
+                        shortening,
+                        seen_pass: 0,
+                        seen_time: 0.0,
+                        stamp: 0,
+                    }
                 }
             }
+            _ => Run::settled(target),
+        };
+        let (value, _, running) = run.at(now);
+        if !running {
+            run = Run::settled(target);
         }
-        _ => Run::settled(target),
-    };
-    let (value, _, running) = run.at(now);
-    if !running {
-        run = Run::settled(target);
-    }
-    (run.seen_pass, run.seen_time, run.stamp) = (pass, now, stamp);
-    ctx.data_mut(|d| d.insert_temp(id, run));
+        (run.seen_pass, run.seen_time, run.stamp) = (pass, now, stamp);
+        *slot = run;
+        (value, running)
+    });
     if running {
         ctx.request_repaint();
     }
