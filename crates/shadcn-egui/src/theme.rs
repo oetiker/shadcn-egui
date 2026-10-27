@@ -211,7 +211,7 @@ impl Default for Metrics {
 impl Theme {
     /// A theme from a style, the light and the dark palette and the radius
     /// (`--radius` in px). It resolves in dark mode, egui's fallback, until
-    /// [`Theme::current`] or [`Theme::in_mode`] gives it another.
+    /// [`Theme::current`] gives it the context's mode.
     pub fn new(style: Style, light: Palette, dark: Palette, radius: f32) -> Self {
         // `Arc::new` copies the large `Style` through two stack frames in a
         // debug build; a box moves it to the heap once.
