@@ -21,8 +21,10 @@ pub enum SeparatorOrientation {
     #[default]
     Horizontal,
     /// A rule as tall as the tallest other item of the
-    /// [`row`](crate::layout::row) it sits in (`self-stretch`); elsewhere
-    /// as tall as the available height.
+    /// [`row`](crate::layout::row) it sits in (`self-stretch`). In a
+    /// column (a [`vstack`](crate::layout::vstack), a vertical `Ui`) it
+    /// has no height, as in the browser; in a plain egui horizontal `Ui`
+    /// it is as tall as that row.
     Vertical,
 }
 
@@ -76,9 +78,21 @@ impl Widget for Separator {
         );
         let size = if vertical {
             let w = pick(&l, |r| &r.width, st).unwrap_or(t.metrics.border);
-            // `self-stretch`: the row's tallest other item; elsewhere the
-            // height the separator is given.
-            let h = layout::stretch_height(ui).unwrap_or_else(|| ui.available_height());
+            // `self-stretch`: the row's tallest other item. Elsewhere the
+            // separator has no height of its own (no `h-full`), so in a
+            // column it takes its minimum, 0; a plain egui row keeps its
+            // idiom and gives its height, or its content's where unbounded.
+            let h = layout::stretch_height(ui).unwrap_or_else(|| {
+                if !ui.layout().is_horizontal() {
+                    0.0
+                } else if ui.available_height().is_finite() {
+                    ui.available_height()
+                } else {
+                    Some(ui.min_rect().height())
+                        .filter(|h| h.is_finite())
+                        .unwrap_or(0.0)
+                }
+            });
             Vec2::new(w, h)
         } else {
             let h = pick(&l, |r| &r.height, st).unwrap_or(t.metrics.border);

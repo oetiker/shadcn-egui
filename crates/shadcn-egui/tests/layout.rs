@@ -2107,3 +2107,41 @@ fn dialog_footer_stacks_its_actions_below_sm() {
         }
     }
 }
+
+/// A vertical separator outside a crate row takes its own minimum height,
+/// 0 (upstream's `self-stretch` with no `h-full`; Chrome draws it 0 px
+/// high in a block or a flex column): in a `vstack`, in a plain vertical
+/// `Ui` and in a `Ui` of unbounded size. In an unbounded horizontal `Ui`
+/// its height stays finite.
+#[test]
+fn a_vertical_separator_outside_a_row_takes_its_minimum_height() {
+    use shadcn_egui::components::separator::{Separator, SeparatorOrientation};
+    let vertical = || Separator::new().orientation(SeparatorOrientation::Vertical);
+    let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+        layout::vstack(ui, 4.0, |ui| out.push(ui.add(vertical()).rect));
+        out.push(ui.add(vertical()).rect);
+        ui.allocate_ui(egui::vec2(f32::INFINITY, f32::INFINITY), |ui| {
+            out.push(ui.add(vertical()).rect)
+        });
+        ui.allocate_ui_with_layout(
+            egui::vec2(f32::INFINITY, f32::INFINITY),
+            // `Align::Min`: egui centres any item at infinity in an
+            // unbounded height.
+            egui::Layout::left_to_right(egui::Align::Min),
+            |ui| out.push(ui.add(vertical()).rect),
+        );
+    });
+    let [stack, column, unbounded, row] = r[..] else {
+        panic!("{r:?}")
+    };
+    for (case, rect) in [
+        ("vstack", stack),
+        ("column", column),
+        ("unbounded", unbounded),
+    ] {
+        assert_eq!(rect.height(), 0.0, "{case}: {rect:?}");
+        assert!(rect.is_finite(), "{case}: {rect:?}");
+    }
+    assert!(row.is_finite(), "unbounded horizontal: {row:?}");
+    assert_eq!(passes, 1, "a still frame");
+}
