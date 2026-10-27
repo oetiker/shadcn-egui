@@ -1323,7 +1323,8 @@ pub(crate) fn breakpoints(ctx: &egui::Context) -> crate::style::State {
 }
 
 /// A row whose `left` content hugs the start and `right` content hugs the end
-/// (justify-content: space-between).
+/// (justify-content: space-between). Where the width is unbounded, the
+/// row is as wide as its two sides, the right one after the left.
 pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
     // `ui.horizontal`'s size and layout, as a crate row.
     let size = egui::vec2(
@@ -1331,13 +1332,21 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
         ui.spacing().interact_size.y,
     );
     let layout = egui::Layout::left_to_right(egui::Align::Center);
+    // Unbounded room (a crate row measuring a card around it) leaves no
+    // free space to put between the sides, as a `justify-between` row in
+    // max-content sizing: the right side follows the left one.
+    let end_layout = if size.x.is_finite() {
+        egui::Layout::right_to_left(egui::Align::Center)
+    } else {
+        layout
+    };
     overflow_row(ui, size, layout, None, |_, ui| {
         let items = RowItems::begin(ui);
         shrink_stacks(ui, |ui| {
             left(ui);
             let start = ui.min_rect().width();
             let end = ui
-                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                .with_layout(end_layout, |ui| {
                     hold_row_items(ui);
                     right(ui);
                 })

@@ -1633,3 +1633,83 @@ fn a_stack_of_a_label_with_a_fractional_width_settles() {
         }
     }
 }
+
+/// A `space_between` in unbounded room (a card footer where the card is
+/// laid out without a width limit) has no free space to put between its
+/// sides, as a `justify-between` row in max-content sizing: the right
+/// side follows the left one a gap apart (none in vega's footer), and the
+/// card around it takes that width plus its footer padding (24 px a side
+/// in vega). On its own in unbounded room the row is as wide as its two
+/// sides and the gap. In a crate row with room the card is that wide too,
+/// as the row measures it unbounded, and the row's next item follows it.
+#[test]
+fn a_space_between_in_unbounded_room_takes_its_content_width() {
+    use shadcn_egui::components::card::Card;
+    for in_row in [false, true] {
+        let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+            let body = |ui: &mut egui::Ui, out: &mut Vec<egui::Rect>| {
+                let (mut l, mut b, mut gap) = (egui::Rect::NOTHING, egui::Rect::NOTHING, 0.0);
+                Card::new()
+                    .footer(|ui| {
+                        gap = ui.spacing().item_spacing.x;
+                        layout::space_between(
+                            ui,
+                            |ui| l = ui.label("Left side").rect,
+                            |ui| b = ui.button("Go").rect,
+                        )
+                    })
+                    .show(ui, |ui| ui.label("Body"));
+                let layer = ui.layer_id();
+                let card = ui
+                    .ctx()
+                    .viewport(|v| v.this_pass.widgets.get_layer(layer).last().map(|w| w.rect))
+                    .expect("the card registered its box");
+                let mut gap2 = 0.0;
+                let row = ui
+                    .horizontal(|ui| {
+                        gap2 = ui.spacing().item_spacing.x;
+                        layout::space_between(
+                            ui,
+                            |ui| {
+                                ui.label("Left side");
+                            },
+                            |ui| {
+                                let _ = ui.button("Go");
+                            },
+                        );
+                    })
+                    .response
+                    .rect;
+                out.extend([
+                    card,
+                    l,
+                    b,
+                    egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(gap, gap2)),
+                    row,
+                ]);
+            };
+            if in_row {
+                ui.set_max_width(400.0);
+                layout::row(ui, 8.0, |ui| body(ui, out));
+            } else {
+                ui.allocate_ui(egui::vec2(f32::INFINITY, 400.0), |ui| body(ui, out));
+            }
+        });
+        let [card, left, go, gap, row] = r[..] else {
+            panic!("{r:?}")
+        };
+        let case = format!("in a row {in_row}: {r:?}");
+        assert_eq!(go.left(), left.right() + gap.width(), "{case}");
+        assert_eq!(card.right(), go.right() + 24.0, "{case}");
+        if in_row {
+            assert_eq!(row.left(), card.right() + 8.0, "{case}");
+        } else {
+            assert_eq!(
+                row.width(),
+                left.width() + gap.height() + go.width(),
+                "{case}"
+            );
+        }
+        assert_eq!(passes, 1, "{case}");
+    }
+}
