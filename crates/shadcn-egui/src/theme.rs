@@ -1001,15 +1001,34 @@ impl Theme {
     /// such a loop, a heading in a `Ui` built before the first shadcn
     /// component of the pass can still panic after an app's own
     /// `ctx.set_fonts`; use [`Theme::apply_with_fonts`].
+    ///
+    /// A `ctx.set_theme(..)` after a crate widget of the same pass asks
+    /// egui to discard that pass (`Context::run_ui` runs it again) and to
+    /// repaint, so no frame shows widgets of both modes.
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
         if ctx.cumulative_pass_nr() > 0 {
             let _ = check_heading(ctx);
         }
-        ctx.data(|d| d.get_temp::<Theme>(theme_id()))
-            .unwrap_or_else(|| FALLBACK.clone())
-            .in_mode(ctx.theme())
+        let mode = ctx.theme();
+        let pass = ctx.cumulative_pass_nr();
+        let (theme, seen) = ctx.data(|d| {
+            let seen = d.get_temp::<(u64, egui::Theme)>(pass_mode_id());
+            (d.get_temp::<Theme>(theme_id()), seen)
+        });
+        if seen != Some((pass, mode)) {
+            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode)));
+        }
+        // A `ctx.set_theme(..)` since this pass's first crate widget: the
+        // widgets drawn before it are in the other mode. Redo the pass, as
+        // the browser restyles the whole page at once, and redraw for a
+        // loop that cannot redo it.
+        if seen.is_some_and(|(p, m)| p == pass && m != mode) {
+            ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
+            ctx.request_repaint();
+        }
+        theme.unwrap_or_else(|| FALLBACK.clone()).in_mode(mode)
     }
 
     /// Push this theme into the egui context: fonts, type scale, spacing,
@@ -1167,6 +1186,11 @@ impl Theme {
 
 fn hairline_id() -> egui::Id {
     egui::Id::new("shadcn_egui::hairline")
+}
+
+/// The pass number and the mode of the last [`Theme::current`].
+fn pass_mode_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::pass_mode")
 }
 
 fn generation_id() -> egui::Id {

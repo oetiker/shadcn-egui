@@ -44,6 +44,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- A light/dark switch with `ctx.set_theme(..)` that an app makes in the middle of a frame, without user input, no longer leaves a frame on screen whose widgets above the call show the old mode and those below it the new one: the crate has egui redo the frame and redraw.
 - The Switch thumb slides with shadcn's timing, 150 ms along the ease-in-out curve; it took 100 ms at an even pace before. With `animation_time` set to 0 it jumps.
 - A shadcn-egui `Button`, `Badge` or `Tabs` list placed with `ui.add_sized` or in a `Layout::top_down_justified` column now takes the full width there, as an egui button does, with its label centred; before, it kept the width of its label. A `Tabs` list shares the width among its triggers.
 - In a window narrower than 640 px a dialog footer now stacks its buttons full width, the last one on top, as shadcn does on a phone; before, it kept them in a row.

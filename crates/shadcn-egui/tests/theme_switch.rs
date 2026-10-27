@@ -1,3 +1,7 @@
+mod common;
+
+use common::Loop;
+use shadcn_egui::components::button::Button;
 use shadcn_egui::reference::{settings_ui, SettingsState};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
@@ -96,5 +100,77 @@ fn native_button_height_is_the_default_button_height() {
             });
         }
         assert_eq!(height, ctx.global_style().spacing.interact_size.y, "{name}");
+    }
+}
+
+/// The fill of the first non-transparent rect painted over `at`'s centre.
+fn fill_at(out: &egui::FullOutput, at: egui::Rect) -> egui::Color32 {
+    common::rect_shapes(out)
+        .iter()
+        .find(|r| {
+            r.rect.contains(at.center())
+                && r.fill != egui::Color32::TRANSPARENT
+                && r.rect.width() < 300.0
+        })
+        .map(|r| r.fill)
+        .expect("a fill over the widget")
+}
+
+/// `ctx.set_theme(..)` in the middle of a pass that no input caused (a
+/// timer, an app's own logic): no frame mixes the two modes. Under
+/// `run_ui` the frame egui returns draws the button before the call and the
+/// one after it in the new mode; an app's own loop gets the pass marked for
+/// discard and a repaint, and its next pass is in the new mode.
+#[test]
+fn a_mode_switch_in_the_middle_of_a_pass_shows_no_mixed_frame() {
+    for app_loop in Loop::BOTH {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        ctx.set_theme(egui::Theme::Dark);
+        let switch = std::cell::Cell::new(false);
+        let rects = std::cell::Cell::new([egui::Rect::NOTHING; 2]);
+        let frame = || {
+            common::pass(app_loop, &ctx, vec![], |ui| {
+                let before = ui.add(Button::new("Before")).rect;
+                if switch.get() {
+                    ui.ctx().set_theme(egui::Theme::Light);
+                }
+                let after = ui.add(Button::new("After")).rect;
+                rects.set([before, after]);
+            })
+        };
+        let _ = frame();
+        let _ = frame();
+        switch.set(true);
+        let out = frame();
+        let light = Theme::vega().light.primary;
+        let [before, after] = rects.get();
+        match app_loop {
+            Loop::RunUi => {
+                assert_eq!(fill_at(&out, before), light, "{app_loop:?}: before");
+                assert_eq!(fill_at(&out, after), light, "{app_loop:?}: after");
+            }
+            Loop::Own => {
+                assert!(
+                    out.platform_output.requested_discard(),
+                    "{app_loop:?}: the mixed pass asks to be discarded"
+                );
+                assert!(
+                    ctx.has_requested_repaint(),
+                    "{app_loop:?}: a repaint follows"
+                );
+                let out = frame();
+                assert_eq!(
+                    fill_at(&out, before),
+                    light,
+                    "{app_loop:?}: next pass, before"
+                );
+                assert_eq!(
+                    fill_at(&out, after),
+                    light,
+                    "{app_loop:?}: next pass, after"
+                );
+            }
+        }
     }
 }
