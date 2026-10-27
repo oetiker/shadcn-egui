@@ -127,10 +127,9 @@ impl Widget for Badge {
             variant.part(&t.style, BadgeVariant::layer, |r| &r.badge),
         ];
         let enabled = ui.is_enabled();
-        // The `[a]:hover` rules are ignored (a badge is not a link in egui),
-        // so only Ghost and Link (and app variants from them) react to the
-        // pointer. A badge is never focused.
-        let hoverable = matches!(variant.base(), BadgeVariant::Ghost | BadgeVariant::Link);
+        // The style has no `[a]:hover` rules (a badge is not a link in
+        // egui): the hover rules it has, and an app variant's, decide. A
+        // badge is never focused.
         let context = variant
             .bits()
             .with(State::ICON_START, self.icon.is_some())
@@ -173,11 +172,6 @@ impl Widget for Badge {
         }
 
         let st = interaction_state(&t, &resp, context);
-        let st = if hoverable {
-            st
-        } else {
-            st.without(State::HOVER)
-        };
         let painter = part_painter(ui, id, &[&l[..]], st);
         let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
