@@ -140,9 +140,13 @@ impl<'a> Card<'a> {
     /// spans the available width, as a block does; in a crate row
     /// ([`layout::row`], [`layout::wrap_row`], [`layout::space_between`],
     /// a card footer) it is a flex item as a [`layout::vstack`] is, as
-    /// wide as its content and shrinking down to its narrowest content
-    /// where the row has no room for it. Where the width is unbounded (a
-    /// horizontal `ScrollArea`) it takes its content's width.
+    /// wide as its content and shrinking where the row has no room for
+    /// it. Every style's card is `overflow-hidden`, so it shrinks below
+    /// its narrowest content (a scroll container's minimum width in a
+    /// flex row is 0) and, in a row as in a column, clips content wider
+    /// than itself at its box. Where the width is unbounded (an
+    /// `allocate_ui` of infinite width, a crate row measuring it) it takes
+    /// its content's width.
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         let id = ui.next_auto_id().with("shadcn_egui::components::card");
         match layout::as_flex_item(ui, id, true, move |ui: &mut Ui| self.show_box(ui, add)) {
@@ -190,6 +194,17 @@ impl<'a> Card<'a> {
         let outer_w = if bounded { fill } else { f32::INFINITY };
         let origin = ui.cursor().min;
         let back = ui.painter().add(Shape::Noop);
+        // Every style's card is `overflow-hidden`: content wider than a
+        // bounded card is cut at its box (no style gives it a border, so
+        // the padding box is the border box).
+        let clip = |child: &mut Ui| {
+            if bounded {
+                let mut r = child.clip_rect();
+                r.min.x = r.min.x.max(origin.x);
+                r.max.x = r.max.x.min(origin.x + outer_w);
+                child.set_clip_rect(r);
+            }
+        };
 
         // Header and content.
         let body_rect = Rect::from_min_max(
@@ -206,6 +221,7 @@ impl<'a> Card<'a> {
             parts,
         ));
         body.spacing_mut().item_spacing.y = gap;
+        clip(&mut body);
         let result =
             content_scope(&mut body, &look, |ui| content_ui(ui, &[&card[..]], st, add)).inner;
         let mut bottom = body.min_rect().bottom().max(body_rect.top());
@@ -235,6 +251,7 @@ impl<'a> Card<'a> {
                 parts,
             ));
             row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
+            clip(&mut row);
             let items = crate::layout::RowItems::begin(&row);
             crate::layout::shrink_stacks(&mut row, |ui| {
                 content_scope(ui, &look, |ui| {
@@ -252,14 +269,13 @@ impl<'a> Card<'a> {
             bottom = strip_bottom;
         }
         let card_bottom = bottom + pad_bottom;
-        // A flex item grows to content that overflows it, which tells the
-        // row its narrowest width; a block keeps its width.
-        let outer_w = if !bounded {
-            content_w.max(side_l + side_r)
-        } else if layout::in_row(ui) {
-            outer_w.max(content_w)
-        } else {
+        // Bounded, the card keeps its width and clips what overflows it,
+        // also as a flex item: a scroll container's automatic minimum
+        // width is 0, so the row learns no narrowest width from it.
+        let outer_w = if bounded {
             outer_w
+        } else {
+            content_w.max(side_l + side_r)
         };
         let outer = Rect::from_min_max(origin, egui::pos2(origin.x + outer_w, card_bottom));
 

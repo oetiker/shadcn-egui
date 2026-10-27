@@ -553,9 +553,9 @@ struct VstackContext;
 /// `Ui`s (a scope, an enabled scope) and [`vstack`]s: a flex item of the
 /// row, which the browser grows to its content's minimum width. A
 /// `StripBuilder` or table cell on the way keeps its width, as a sized box
-/// does in a flex row; a frame (a card) grows with its content, as a flex
+/// does in a flex row; an egui `Frame` grows with its content, as a flex
 /// item does.
-pub(crate) fn in_row(ui: &Ui) -> bool {
+fn in_row(ui: &Ui) -> bool {
     for s in ui.stack().iter() {
         if context::on_frame::<RowContext>(s).is_some() {
             return true;

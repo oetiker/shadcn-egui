@@ -1497,10 +1497,14 @@ fn card_with(
 /// A card sets no width upstream, so in a crate row it is a flex item:
 /// as wide as its content (its padding, 24 px a side in vega) where the
 /// row has room, shrinking with its text wrapped to the room the row's
-/// other items leave where it has not, and never narrower than its
-/// widest unbreakable content, which pushes the next item. In a `row` and
-/// a `wrap_row`, on the screen and in an `egui::Area`; a still frame
-/// takes one pass.
+/// other items leave where it has not. Every style's card is
+/// `overflow-hidden`, a scroll container, whose automatic minimum width
+/// in a flex row is 0: too narrow for its widest unbreakable content it
+/// still takes only the room left, pushes nothing, and clips its content
+/// at its box. In a `wrap_row` a card that does not fit beside the button
+/// takes a line of its own at the line's width. In a `row` and a
+/// `wrap_row`, on the screen and in an `egui::Area`; a still frame takes
+/// one pass.
 #[test]
 fn a_card_is_a_flex_item_of_a_crate_row() {
     use shadcn_egui::components::button::Button;
@@ -1516,14 +1520,16 @@ fn a_card_is_a_flex_item_of_a_crate_row() {
                     ui.set_max_width(room);
                     out.push(ui.max_rect());
                     let items = |ui: &mut egui::Ui| {
+                        let mut clip = egui::Rect::NOTHING;
                         let (card, inner) = card_with(ui, |ui| {
+                            clip = ui.clip_rect();
                             if wide > 0.0 {
                                 boxed(ui, wide, 20.0)
                             } else {
                                 ui.label(text).rect
                             }
                         });
-                        out.extend([card, inner]);
+                        out.extend([card, inner, clip]);
                         out.push(ui.add(Button::new("Go")).rect);
                     };
                     if wraps {
@@ -1533,16 +1539,23 @@ fn a_card_is_a_flex_item_of_a_crate_row() {
                     }
                 });
                 let case = format!("wraps {wraps} {host:?} room {room}: {r:?}");
-                let [space, card, inner, go] = r[..] else {
+                let [space, card, inner, clip, go] = r[..] else {
                     panic!("{case}")
                 };
                 assert_eq!(passes, 1, "{case}: a still frame");
                 assert_eq!(card.left(), space.left(), "{case}");
+                if room < 400.0 {
+                    // Laid out in the room it got, the card clips there;
+                    // laid out unbounded (fitting a `wrap_row` line), its
+                    // content cannot overflow it.
+                    assert!(clip.left() >= card.left(), "clipped: {case}");
+                    assert!(clip.right() <= card.right(), "clipped: {case}");
+                }
                 if wraps && room < 400.0 {
                     // The card does not fit beside the button: it takes
-                    // its own line, the line's width or its narrowest
-                    // width, and the button starts the next.
-                    assert_eq!(card.width(), room.max(wide + 48.0), "{case}");
+                    // its own line at the line's width, and the button
+                    // starts the next.
+                    assert_eq!(card.width(), room, "{case}");
                     assert_eq!(go.left(), card.left(), "{case}");
                     assert_eq!(go.top(), card.bottom() + 8.0, "{case}");
                     continue;
@@ -1556,7 +1569,8 @@ fn a_card_is_a_flex_item_of_a_crate_row() {
                     assert!(inner.height() > 30.0, "wraps: {case}");
                     assert!(inner.right() <= card.right() - 24.0, "{case}");
                 } else {
-                    assert_eq!(card.width(), wide + 48.0, "narrowest: {case}");
+                    assert_eq!(go.right(), space.right(), "shrinks: {case}");
+                    assert!(inner.right() > card.right(), "overflows: {case}");
                 }
             }
         }
