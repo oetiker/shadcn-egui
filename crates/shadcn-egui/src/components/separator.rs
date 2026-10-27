@@ -20,11 +20,13 @@ pub enum SeparatorOrientation {
     /// spans the width the stack's other items give it.
     #[default]
     Horizontal,
-    /// A rule as tall as the tallest other item of the
-    /// [`row`](crate::layout::row) it sits in (`self-stretch`). In a
-    /// column (a [`vstack`](crate::layout::vstack), a vertical `Ui`) it
-    /// has no height, as in the browser; in a plain egui horizontal `Ui`
-    /// it is as tall as that row.
+    /// Upstream's `data-vertical:self-stretch`: it stretches in a flex
+    /// row and has no height (0) in a block or a column. In a crate
+    /// [`row`](crate::layout::row) it is as tall as the row's tallest
+    /// other item. A plain egui horizontal `Ui` counts as a flex row: the
+    /// rule is as tall as that row, or as its content where the height
+    /// is unbounded. In a column (a [`vstack`](crate::layout::vstack), a
+    /// vertical `Ui`) it is 0.
     Vertical,
 }
 
@@ -115,7 +117,8 @@ pub fn separator(ui: &mut Ui) {
     ui.add(Separator::new());
 }
 
-/// A vertical rule as tall as the row's tallest other item: shorthand for
+/// A vertical rule that stretches in a row and is 0 in a column (see
+/// [`SeparatorOrientation::Vertical`]): shorthand for
 /// `ui.add(Separator::new().orientation(SeparatorOrientation::Vertical))`.
 pub fn separator_vertical(ui: &mut Ui) {
     ui.add(Separator::new().orientation(SeparatorOrientation::Vertical));
