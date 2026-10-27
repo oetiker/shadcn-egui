@@ -227,10 +227,16 @@ impl Widget for Tabs<'_> {
         let chrome = gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
         let hug_w = widths.iter().sum::<f32>() + chrome;
         // A NaN width, one below the triggers' own, or an unbounded `Ui`
-        // leaves the list as wide as its triggers.
-        let list_w = self
-            .width
-            .map_or(hug_w, |w| layout::capped_width(ui, w, hug_w));
+        // leaves the list as wide as its triggers. Without a width, a
+        // justified layout gives the list its width, as egui's `Button`
+        // takes it (conformance 3.1), and the triggers share it (`flex-1`).
+        let list_w = match self.width {
+            Some(w) => layout::capped_width(ui, w, hug_w),
+            None if ui.layout().horizontal_justify() => {
+                layout::capped_width(ui, f32::INFINITY, hug_w)
+            }
+            None => hug_w,
+        };
         let widths = if list_w > hug_w {
             flex_shares(&widths, list_w - chrome)
         } else {

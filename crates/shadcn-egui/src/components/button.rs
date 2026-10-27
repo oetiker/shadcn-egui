@@ -323,7 +323,10 @@ impl Widget for Button {
         } else {
             Sense::hover()
         };
-        let (rect, mut resp) = crate::layout::allocate_item(ui, Vec2::new(width, height), sense);
+        // In a justified layout the box takes the layout's width, as egui's
+        // `Button` does (conformance 3.1); the content stays centred in it.
+        let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
+        let mut resp = ui.interact(rect, id, sense);
         pressable(&mut resp, ActivationKeys::Button);
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)

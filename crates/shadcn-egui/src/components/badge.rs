@@ -159,8 +159,10 @@ impl Widget for Badge {
         // No height: CSS's initial `auto`, the content's height.
         let height = pick(&l, |r| &r.height, g).unwrap_or(row.size().y);
         let width = row.size().x;
-        let (rect, resp) =
-            crate::layout::allocate_item(ui, Vec2::new(width, height), Sense::hover());
+        // In a justified layout the box takes the layout's width, as egui's
+        // `Button` does (conformance 3.1); the content stays centred in it.
+        let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
+        let resp = ui.interact(rect, id, Sense::hover());
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });

@@ -1928,3 +1928,110 @@ fn an_infinitely_filling_item_of_a_row_in_unbounded_room_settles() {
         assert!(!ctx.has_requested_repaint(), "{case}");
     }
 }
+
+/// One content-sized crate widget (conformance 3.1) per index, with ids
+/// of its own per `slot`: a button, a badge, a select trigger and a tab
+/// list.
+fn content_sized(ui: &mut egui::Ui, widget: usize, slot: usize) -> egui::Response {
+    use shadcn_egui::components::{badge::Badge, button::Button, select::Select, tabs::Tabs};
+    const OPTIONS: [&str; 2] = ["Apple", "Banana"];
+    const IDS: [&str; 3] = ["select-0", "select-1", "select-2"];
+    let mut index = 0;
+    match widget {
+        0 => ui.add(Button::new("Save")),
+        1 => ui.add(Badge::new("New")),
+        2 => ui.add(Select::new(IDS[slot], &mut index, &OPTIONS)),
+        _ => {
+            ui.push_id(slot, |ui| ui.add(Tabs::new(&mut index, &["One", "Two"])))
+                .inner
+        }
+    }
+}
+
+/// The widest box a frame painted no wider than 400 points: the box of
+/// the one widget the frame holds.
+fn widest_box(out: &egui::FullOutput) -> egui::Rect {
+    common::rect_shapes(out)
+        .into_iter()
+        .map(|r| r.rect)
+        .filter(|r| r.width() <= 400.0)
+        .max_by(|a, b| a.width().total_cmp(&b.width()))
+        .unwrap_or(egui::Rect::NOTHING)
+}
+
+/// A content-sized crate widget in a justified layout takes the layout's
+/// width, as egui's `Button` does (conformance 3.1): it paints and senses
+/// that width in `add_sized` and in a `top_down_justified` column, on
+/// screen and in an `Area`, settled in one pass a frame. Elsewhere it
+/// keeps its content width.
+#[test]
+fn a_content_sized_widget_takes_a_justified_layout_width() {
+    for widget in 0..4 {
+        for host in [Host::Screen, Host::Area(false)] {
+            let mut boxes = Vec::new();
+            for place in 0..3 {
+                let content = |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+                    ui.allocate_ui(egui::vec2(400.0, 400.0), |ui| match place {
+                        0 => out.push(content_sized(ui, widget, 0).rect),
+                        1 => out.push(
+                            ui.add_sized([300.0, 30.0], |ui: &mut egui::Ui| {
+                                content_sized(ui, widget, 1)
+                            })
+                            .rect,
+                        ),
+                        _ => {
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(250.0, 100.0),
+                                egui::Layout::top_down_justified(egui::Align::Min),
+                                |ui| out.push(content_sized(ui, widget, 2).rect),
+                            );
+                        }
+                    });
+                };
+                let ctx = vega();
+                let (passes, r) = settled(&ctx, host, &content);
+                let case = format!("widget {widget} {host:?} place {place}: {r:?}");
+                assert_eq!(passes, 1, "{case}");
+                let out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
+                    Host::Screen => content(ui, false, &mut Vec::new()),
+                    Host::Area(_) => {
+                        egui::Area::new(egui::Id::new("popover"))
+                            .show(ui.ctx(), |ui| content(ui, false, &mut Vec::new()));
+                    }
+                });
+                let painted = widest_box(&out);
+                assert_eq!(painted.width(), r[0].width(), "{case}: painted {painted:?}");
+                boxes.push(painted.width());
+            }
+            let case = format!("widget {widget} {host:?}: {boxes:?}");
+            assert!(boxes[0] < 200.0, "{case}");
+            assert_eq!(boxes[1], 300.0, "{case}");
+            assert_eq!(boxes[2], 250.0, "{case}");
+        }
+    }
+}
+
+/// A button or badge stretched by a justified layout keeps its content
+/// where the recipe places it (`justify-center`): the label is centred in
+/// the wider box.
+#[test]
+fn a_stretched_button_centres_its_label() {
+    for widget in 0..2 {
+        let (rect, out) = common::measure_output(&Theme::vega(), egui::Theme::Dark, |ui| {
+            ui.add_sized([300.0, 30.0], |ui: &mut egui::Ui| {
+                content_sized(ui, widget, 0)
+            })
+        });
+        assert_eq!(widest_box(&out).width(), 300.0, "widget {widget}");
+        let texts = common::text_shapes(&out);
+        let [text] = &texts[..] else {
+            panic!("widget {widget}: {texts:?}")
+        };
+        let centre = text.pos.x + text.galley.rect.center().x;
+        assert!(
+            (centre - rect.center().x).abs() < 1.0,
+            "widget {widget}: label centre {centre}, box {rect:?}"
+        );
+        assert_eq!(rect.width(), 300.0, "widget {widget}");
+    }
+}
