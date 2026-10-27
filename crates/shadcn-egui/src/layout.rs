@@ -201,6 +201,11 @@ fn row_lines(
     // it holds, and an entry names its Ui's `id` as parent, not the
     // `unique_id` the Ui registered under. So an entry whose next entry
     // names a parent not on the stack opens a Ui.
+    //
+    // A frame (egui's `Frame`, a card) registers the `Ui`s of its content,
+    // then the box around them: the box is an item of its own on the line
+    // of its content, and the line and a stretch item beside it are as
+    // high as the box.
     let mut stack = vec![pass.roots[0]];
     // Each item's first place on the layer and its rect.
     let mut items: Vec<(usize, egui::Rect)> = Vec::new();

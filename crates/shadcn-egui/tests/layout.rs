@@ -1339,3 +1339,92 @@ fn a_fitting_stack_whose_text_changes_shows_no_wrapped_frame() {
         assert!(after[2].width() > before[2].width(), "{host:?}: {after:?}");
     }
 }
+
+/// A framed child: the crate's `Card` (with a footer when `footer`) or an
+/// egui `Frame` with an inner margin of 16. Its rect: the last widget it
+/// registered, the box it allocated around its content.
+fn framed(ui: &mut egui::Ui, card: bool, footer: bool) -> egui::Rect {
+    use shadcn_egui::components::card::Card;
+    if card {
+        let card = Card::new();
+        let card = if footer {
+            card.footer(|ui| {
+                ui.label("Footer");
+            })
+        } else {
+            card
+        };
+        card.show(ui, |ui| {
+            ui.label("Card");
+        });
+    } else {
+        egui::Frame::new().inner_margin(16.0).show(ui, |ui| {
+            ui.label("Frame");
+        });
+    }
+    let layer = ui.layer_id();
+    ui.ctx()
+        .viewport(|v| v.this_pass.widgets.get_layer(layer).last().map(|w| w.rect))
+        .expect("the frame registered its box")
+}
+
+/// A framed child in a crate row: an egui `Frame` with an inner margin,
+/// a crate `Card` with and without a footer. In a `row` and a `wrap_row`
+/// its line is as high as its box with the margin, a `Button` beside it
+/// is centred on it, and a stretch item beside it spans it. The card
+/// fills its room (`w-full`): in a `row` the items after it overflow, in
+/// a `wrap_row` they start the next line, which is as high as its own
+/// items. On the screen and in an `egui::Area`, and a still frame takes
+/// one pass.
+#[test]
+fn a_framed_child_is_one_item_of_a_crate_row() {
+    use shadcn_egui::components::button::Button;
+    let cases = [(false, false), (true, false), (true, true)];
+    for wraps in [false, true] {
+        for (card, footer) in cases {
+            for host in [Host::Screen, Host::Area(false)] {
+                let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                    ui.set_max_width(400.0);
+                    let top = ui.cursor().top();
+                    let items = |ui: &mut egui::Ui| {
+                        out.push(framed(ui, card, footer));
+                        out.push(ui.add(Button::new("Go")).rect);
+                        out.push(stretch_rule(ui));
+                    };
+                    if wraps {
+                        layout::wrap_row(ui, 8.0, items);
+                    } else {
+                        layout::row(ui, 8.0, items);
+                    }
+                    let gap = ui.spacing().item_spacing.y;
+                    out.push(egui::Rect::from_x_y_ranges(
+                        0.0..=0.0,
+                        top..=ui.cursor().top() - gap,
+                    ));
+                });
+                let case = format!("wraps {wraps} card {card} footer {footer} {host:?}: {r:?}");
+                let [frame, go, rule, band] = r[..] else {
+                    panic!("{case}")
+                };
+                assert_eq!(rule.left(), go.right() + 8.0, "{case}");
+                assert_eq!(passes, 1, "{case}: a still frame");
+                if card && wraps {
+                    // The card fills its line; the button starts the next.
+                    assert_eq!(frame.width(), 400.0, "{case}");
+                    assert_eq!(go.top(), frame.bottom() + 8.0, "{case}");
+                    assert_eq!(go.left(), frame.left(), "{case}");
+                    assert_eq!(rule.y_range(), go.y_range(), "stretch: {case}");
+                    assert_eq!(band.height(), go.bottom() - frame.top(), "{case}");
+                    continue;
+                }
+                assert_eq!(go.left(), frame.right() + 8.0, "{case}");
+                assert_eq!(band.height(), frame.height(), "line height: {case}");
+                assert_eq!(rule.y_range(), frame.y_range(), "stretch: {case}");
+                assert!(
+                    (go.center().y - frame.center().y).abs() < 0.5,
+                    "centred: {case}"
+                );
+            }
+        }
+    }
+}
