@@ -175,8 +175,8 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 - The width a widget takes is the requested (or default) width, capped
   to the available width (to the window, for a floating overlay), then
   raised to the content minimum.
-- Where nothing finite is requested and the available width is unbounded
-  (a horizontal `ScrollArea`), the width is the content minimum.
+- Where nothing finite is requested and the available width is unbounded,
+  the width is the content minimum.
 - The content minimum is what the widget cannot shrink below: its
   padding plus its fixed parts (chevron, gaps, a thumb's length, one
   glyph for text entry), never 0.

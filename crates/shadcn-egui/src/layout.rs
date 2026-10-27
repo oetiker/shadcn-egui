@@ -1179,8 +1179,8 @@ fn flex_item<R>(
 /// (the caller's width setter, else the widget's default), capped to the
 /// width `ui` has left, then raised to `content_min`, what the widget
 /// cannot shrink below (its padding and fixed parts). `f32::INFINITY`
-/// requests the full width; where that is unbounded too (a horizontal
-/// `ScrollArea`), the widget takes `content_min`. A NaN request is no
+/// requests the full width; where that is unbounded too (an
+/// `allocate_ui` of infinite width), the widget takes `content_min`. A NaN request is no
 /// request: the widget takes `content_min`, never NaN.
 #[must_use]
 pub fn capped_width(ui: &Ui, requested: f32, content_min: f32) -> f32 {
