@@ -126,8 +126,8 @@ pub(crate) struct Line {
 }
 
 /// A crate row's pass over its items ([`row`], [`wrap_row`],
-/// [`space_between`], a card footer), for [`stretch_height`]: begun on the
-/// row's `Ui` before its items, finished after them.
+/// [`space_between`], a card or dialog footer), for [`stretch_height`]:
+/// begun on the row's `Ui` before its items, finished after them.
 pub(crate) struct RowItems {
     /// The row `Ui`'s unique id, which [`flex_row_of`] finds.
     row: egui::Id,
@@ -286,8 +286,9 @@ fn row_lines(
 }
 
 /// Makes the children of `ui` items of the crate row `ui` sits in, through
-/// `Ui`s of the crate's own (`space_between`'s right side, a card footer's
-/// text scope), so that [`stretch_height`] counts them one by one.
+/// `Ui`s of the crate's own (`space_between`'s right side, a card or dialog
+/// footer's text scope), so that [`stretch_height`] counts them one by
+/// one.
 pub(crate) fn hold_row_items(ui: &Ui) {
     let mut skip = Vec::new();
     for s in ui.stack().iter() {
@@ -307,9 +308,10 @@ pub(crate) fn hold_row_items(ui: &Ui) {
 }
 
 /// The height of a `self-stretch` flex item: in a crate row ([`row`],
-/// [`space_between`], a card footer), the height of the row's tallest
-/// other child in the previous pass, without the row's `interact_size`
-/// floor (a vertical rule beside small text is as high as the text); in a
+/// [`space_between`], a card footer, a dialog footer from `sm` up), the
+/// height of the row's tallest other child in the previous pass, without
+/// the row's `interact_size` floor (a vertical rule beside small text is
+/// as high as the text); in a
 /// [`wrap_row`], the tallest other child of the item's own line. The
 /// child that calls this before it draws counts as a stretch item, and
 /// stretch items do not count as other children; where the row's other
@@ -535,7 +537,8 @@ fn start_line(ui: &mut Ui) {
 }
 
 /// The context on the `Ui` of a crate row ([`row`], [`wrap_row`],
-/// [`space_between`], a card footer), where [`allocate_overflowing`]
+/// [`space_between`], a card or dialog footer), where
+/// [`allocate_overflowing`]
 /// allocates a widget's whole width.
 #[derive(Clone, Copy)]
 struct RowContext;
@@ -636,8 +639,9 @@ fn overflow_row<R>(
 /// pushes the row's next children, and the row keeps the overflow from
 /// its own parent. Outside a crate row the child overflows the stack.
 ///
-/// In a [`row`], [`space_between`] or a card footer the stack shrinks as a
-/// flex item (`flex-shrink: 1`, `min-width: auto`): its text keeps its
+/// In a [`row`], [`space_between`], a card footer or a dialog footer from
+/// `sm` up the stack shrinks as a flex item (`flex-shrink: 1`,
+/// `min-width: auto`): its text keeps its
 /// widest, unwrapped width while the row has room for it, and wraps at the
 /// width the row leaves after its other children when it has not. Several
 /// stacks in one row share the shortfall in proportion to their unwrapped
@@ -1424,7 +1428,8 @@ pub(crate) fn end_aligned<R>(
 /// `id`, ends it; where that height changes, the pass is discarded once
 /// with `why` (conformance 3.2), as [`end_aligned`] does on the x axis; a
 /// sizing pass never replaces a height a visible pass measured. Before its
-/// first pass the column ends at the room's top edge.
+/// first pass the column ends at the room's top edge. In room of unbounded
+/// width each widget keeps its own width.
 pub(crate) fn reverse_column<R>(
     ui: &mut Ui,
     id: egui::Id,
@@ -1440,7 +1445,10 @@ pub(crate) fn reverse_column<R>(
                 room.min,
                 egui::vec2(room.width(), height),
             ))
-            .layout(egui::Layout::bottom_up(egui::Align::Min).with_cross_justify(true)),
+            .layout(
+                egui::Layout::bottom_up(egui::Align::Min)
+                    .with_cross_justify(room.width().is_finite()),
+            ),
         add,
     );
     let measured = inner.response.rect.height();

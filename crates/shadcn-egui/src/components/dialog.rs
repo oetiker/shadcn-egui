@@ -274,10 +274,14 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
 
 /// `dialog-footer`: add the primary action last. In a window at least
 /// `sm` (640 points) wide the actions are aligned right, left to right in
-/// the order the code adds them (upstream's `sm:flex-row sm:justify-end`).
-/// In a narrower window they stack, each as wide as the footer, the last
-/// one the code adds on top (`flex-col-reverse`). In a style with a footer
-/// strip (nova) the strip bleeds to the dialog's edges and bottom.
+/// the order the code adds them (upstream's `sm:flex-row sm:justify-end`),
+/// at the top of the row (no `items-*`: `align-items: stretch`); the row
+/// is a crate row, so [`layout::stretch_height`] and shrinking
+/// [`layout::vstack`]s work there as in a [`layout::row`]. In a narrower
+/// window they stack, each as wide as the footer, the last one the code
+/// adds on top (`flex-col-reverse`). In a `Ui` of unbounded width the
+/// footer is as wide as its actions. In a style with a footer strip
+/// (nova) the strip bleeds to the dialog's edges and bottom.
 ///
 /// The row is placed at the end from its width in the previous pass, the
 /// stack from its height; where that size changes, the pass is discarded
@@ -310,20 +314,39 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         egui::pos2(left + pad_l, top + pad_t),
         egui::pos2(right - pad_r, top + pad_t + ui.spacing().interact_size.y),
     );
-    let mut row = ui.new_child(
+    let sm = g.contains(State::SM);
+    // From `sm` up a crate row (`flex-row`, `align-items: stretch`: a
+    // control with its own height sits at the top), so its items stretch
+    // and shrink as in the browser.
+    let mut row = ui.new_child(if sm {
+        layout::row_builder(inner, Layout::left_to_right(Align::Min))
+    } else {
         UiBuilder::new()
             .max_rect(inner)
-            .layout(Layout::left_to_right(Align::Center)),
-    );
-    if g.contains(State::SM) {
+            .layout(Layout::left_to_right(Align::Center))
+    });
+    if sm {
         row.spacing_mut().item_spacing.x = gap;
-        layout::end_aligned(
-            &mut row,
-            id,
-            Align::Center,
-            "dialog::footer actions width changed",
-            |ui| content_ui(ui, id, &[&l[..]], g, add),
-        );
+        let items = layout::RowItems::begin(&row);
+        layout::shrink_stacks(&mut row, |ui| {
+            let width = layout::end_aligned(
+                ui,
+                id,
+                Align::Min,
+                "dialog::footer actions width changed",
+                |ui| {
+                    content_ui(ui, id, &[&l[..]], g, |ui| {
+                        layout::hold_row_items(ui);
+                        add(ui)
+                    })
+                },
+            )
+            .response
+            .rect
+            .width();
+            ((), width)
+        });
+        items.finish(&row, false);
     } else {
         row.spacing_mut().item_spacing.y = gap;
         layout::reverse_column(
@@ -334,6 +357,14 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         );
     }
     let bottom = row.min_rect().bottom().max(inner.top()) + pad_b;
+    // Unbounded room leaves `justify-end` no free space: the footer is as
+    // wide as its actions.
+    let (right, outer_right) = if right.is_finite() {
+        (right, at.right())
+    } else {
+        let right = row.min_rect().right() + pad_r;
+        (right, right + m_r)
+    };
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
     let painter = part_painter(ui, id, &[&l[..]], g);
@@ -343,7 +374,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     ui.allocate_rect(
         Rect::from_min_max(
             egui::pos2(at.left(), top),
-            egui::pos2(at.right(), bottom + m_b),
+            egui::pos2(outer_right, bottom + m_b),
         ),
         egui::Sense::hover(),
     );

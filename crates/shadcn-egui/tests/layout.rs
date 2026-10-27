@@ -2145,3 +2145,114 @@ fn a_vertical_separator_outside_a_row_takes_its_minimum_height() {
     assert!(row.is_finite(), "unbounded horizontal: {row:?}");
     assert_eq!(passes, 1, "a still frame");
 }
+
+/// `dialog::footer` from `sm` up aligns its actions as upstream's
+/// `sm:flex-row` with no `items-*` (`align-items: stretch`): a button
+/// with its own height sits at the top of the row, so a small button
+/// beside a default one shares its top, on screen and in an `Area`.
+#[test]
+fn dialog_footer_puts_its_actions_at_the_top_of_the_row() {
+    use shadcn_egui::components::button::{Button, ButtonSize};
+    use shadcn_egui::components::dialog;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.allocate_ui(egui::vec2(400.0, 100.0), |ui| {
+                dialog::footer(ui, |ui| {
+                    out.push(ui.add(Button::new("Later").size(ButtonSize::Sm)).rect);
+                    out.push(ui.add(Button::new("Save")).rect);
+                });
+            });
+        });
+        let [small, default] = r[..] else {
+            panic!("{host:?}: {r:?}")
+        };
+        assert!(small.height() < default.height(), "{host:?}: {r:?}");
+        assert_eq!(small.top(), default.top(), "{host:?}: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// `dialog::footer` from `sm` up is a crate row: a stretch item in it is
+/// as high as the footer's tallest other item, on screen and in an
+/// `Area`.
+#[test]
+fn stretch_height_works_in_a_dialog_footer() {
+    use shadcn_egui::components::dialog;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.allocate_ui(egui::vec2(400.0, 100.0), |ui| {
+                dialog::footer(ui, |ui| {
+                    out.push(boxed(ui, 10.0, 40.0));
+                    out.push(stretch_rule(ui));
+                    out.push(boxed(ui, 10.0, 12.0));
+                });
+            });
+        });
+        assert_eq!(r[1].height(), 40.0, "{host:?}: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// A crate Label in `dialog::footer` (from `sm` up) is a flex item of its
+/// row: it shrinks to the room the actions leave and wraps there, so the
+/// last action still ends at the footer's end.
+#[test]
+fn a_crate_label_in_a_dialog_footer_shrinks_to_the_room_left() {
+    use shadcn_egui::components::dialog;
+    use shadcn_egui::components::label::Label;
+    for host in [Host::Screen, Host::Area(false)] {
+        let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+            ui.allocate_ui(egui::vec2(260.0, 200.0), |ui| {
+                out.push(ui.max_rect());
+                dialog::footer(ui, |ui| {
+                    out.push(ui.add(Label::new(LONG_LABEL)).rect);
+                    out.push(ui.button("Save").rect);
+                });
+            });
+        });
+        let [room, label, save] = r[..] else {
+            panic!("{host:?}: {r:?}")
+        };
+        assert!(label.height() > 20.0, "{host:?}: wraps: {r:?}");
+        assert!(label.left() >= room.left(), "{host:?}: {r:?}");
+        assert_eq!(save.right(), room.right(), "{host:?}: {r:?}");
+        assert_eq!(passes, 1, "{host:?}: a still frame");
+    }
+}
+
+/// `dialog::footer` in a `Ui` of unbounded width is as wide as its
+/// actions: `justify-end` in max-content sizing leaves no free space. Its
+/// rect stays finite, from `sm` up and below.
+#[test]
+fn dialog_footer_in_unbounded_room_takes_its_content_width() {
+    use shadcn_egui::components::dialog;
+    for window in [800.0, 500.0] {
+        let content = |ui: &mut egui::Ui, _: bool, out: &mut Vec<egui::Rect>| {
+            let footer = ui
+                .allocate_ui(egui::vec2(f32::INFINITY, f32::INFINITY), |ui| {
+                    dialog::footer(ui, |ui| {
+                        out.push(ui.button("Cancel").rect);
+                        out.push(ui.button("Save").rect);
+                    });
+                })
+                .response
+                .rect;
+            out.push(footer);
+        };
+        let ctx = vega();
+        for _ in 0..2 {
+            let _ = frame_in_window(&ctx, Host::Screen, false, Some(window), &content);
+        }
+        let (passes, r) = frame_in_window(&ctx, Host::Screen, false, Some(window), &content);
+        let [cancel, save, footer] = r[..] else {
+            panic!("window {window}: {r:?}")
+        };
+        let case = format!("window {window}: {r:?}");
+        assert!(footer.is_finite(), "{case}");
+        assert!(cancel.is_finite() && save.is_finite(), "{case}");
+        let left = cancel.left().min(save.left());
+        let right = cancel.right().max(save.right());
+        assert_eq!(left - footer.left(), footer.right() - right, "{case}");
+        assert_eq!(passes, 1, "{case}");
+    }
+}

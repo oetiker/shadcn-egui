@@ -8,7 +8,7 @@ The helpers live in `shadcn_egui::layout`.
 | `display:flex; flex-direction:row; gap:N` | `shadcn_egui::layout::row(ui, N, \|ui\| ...)` |
 | `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)`; a custom widget in it allocates with `layout::allocate_item(ui, size, sense)` (or `layout::allocate_item_space`), so that it starts a line as a crate widget does |
 | `flex-direction:column; gap:N` | `shadcn_egui::layout::vstack(ui, N, \|ui\| ...)` |
-| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; `separator_vertical` stretches there too |
+| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer, a dialog footer from `sm` up; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; `separator_vertical` stretches there too, and in a column has no height |
 | `justify-content:space-between` | `shadcn_egui::layout::space_between(ui, \|ui\| {left}, \|ui\| {right})` |
 | `flex:1` / `flex-grow` across siblings | `egui_extras::StripBuilder` with `Size::remainder()` per growing cell |
 | fixed + fluid columns | `StripBuilder` `Size::exact(w)` + `Size::remainder()` |
@@ -69,7 +69,8 @@ fn footer(ui: &mut egui::Ui) {
   does not widen its parent, as a flex row in the browser. A
   `layout::vstack` in such a row grows to its widest child, as a flex
   column does, and pushes the row's next children too. A crate `Label`
-  or a vstack of wrapping text in `row`, `space_between` or a card footer
+  or a vstack of wrapping text in `row`, `space_between`, a card footer
+  or a dialog footer
   shrinks to the room the other children leave, never below its longest
   word, and its text wraps there; several such items share the room in
   proportion to their unwrapped widths, as flex items with
