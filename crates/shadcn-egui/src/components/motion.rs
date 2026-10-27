@@ -4,10 +4,10 @@
 //! jumps. `style.animation_time == 0` counts as reduced motion: every
 //! transition jumps at once. [`transition`] moves a length or a fraction,
 //! [`transition_color`] a colour, mixed as the browser mixes it
-//! ([`mix_oklab`]).
+//! ([`mix_oklab`](crate::color::mix_oklab)).
 
 use crate::box_shadow::Layers;
-use crate::color::mix_oklab;
+use crate::color::Tone;
 use crate::style::{pick, Easing, Recipe, State, Transition};
 use crate::theme::theme_stamp;
 use egui::{Color32, Context, Id};
@@ -78,9 +78,9 @@ impl Tween for f32 {
     }
 }
 
-impl Tween for Color32 {
-    fn tween(a: Color32, b: Color32, t: f32) -> Color32 {
-        mix_oklab(a, b, t)
+impl Tween for Tone {
+    fn tween(a: Tone, b: Tone, t: f32) -> Tone {
+        Tone::mix_oklab(a, b, t)
     }
 }
 
@@ -189,7 +189,7 @@ pub fn transition(
 /// [`transition`] for a colour: `transition-colors`, `transition-all` or
 /// `transition-[color,box-shadow]` fade a part's state colours from where
 /// they are to `target`, mixed in OKLab as the browser mixes them
-/// ([`mix_oklab`]). `property` is the colour's property:
+/// ([`mix_oklab`](crate::color::mix_oklab)). `property` is the colour's property:
 /// [`Transition::BACKGROUND`] for the fill, [`Transition::COLOR`] for text
 /// and icons, [`Transition::BORDER_COLOR`], [`Transition::SHADOW`] for a
 /// ring. `id` names the property of this widget, as for [`transition`].
@@ -201,6 +201,20 @@ pub fn transition_color(
     property: Transition,
     s: State,
 ) -> Color32 {
+    transition_tone(ctx, id, Tone::of(target), layers, property, s).color
+}
+
+/// [`transition_color`] for a colour that keeps the unclipped value it
+/// stands for ([`Theme::tone`](crate::Theme)): a role at an alpha fades
+/// as its token does.
+pub(crate) fn transition_tone(
+    ctx: &Context,
+    id: Id,
+    target: Tone,
+    layers: &[&Recipe],
+    property: Transition,
+    s: State,
+) -> Tone {
     run(ctx, id, target, layers, property, s)
 }
 

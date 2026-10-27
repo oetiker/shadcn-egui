@@ -1,7 +1,8 @@
 //! Shared painting helpers for shadcn-style components.
 
 use crate::box_shadow::{clamp_radii, Layers};
-use crate::components::motion::{transition, transition_color, transition_shadow};
+use crate::color::Tone;
+use crate::components::motion::{transition, transition_shadow, transition_tone};
 use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, Transition};
 use crate::Theme;
 use egui::{
@@ -49,15 +50,15 @@ pub(crate) fn transitioned_opacity(ctx: &Context, id: Id, chain: &[&[&Recipe]], 
 }
 
 /// A part's text and icon colour `color` on its way to this state's, under
-/// [`Transition::COLOR`] ([`transition_color`]). `id` is the widget's.
+/// [`Transition::COLOR`] ([`transition_tone`]). `id` is the widget's.
 pub(crate) fn transitioned_text(
     ctx: &Context,
     id: Id,
-    color: Color32,
+    color: Tone,
     layers: &[&Recipe],
     s: State,
 ) -> Color32 {
-    transition_color(
+    transition_tone(
         ctx,
         id.with(("transition", "text")),
         color,
@@ -65,6 +66,7 @@ pub(crate) fn transitioned_text(
         Transition::COLOR,
         s,
     )
+    .color
 }
 
 /// The `Ui`'s opacity without egui's disabled fade. `Ui::disable` multiplies
@@ -242,6 +244,18 @@ pub struct RecipeBox {
     /// The outline's colour, also while it has no width: shadcn's base
     /// `outline-ring/50` where the part sets none.
     outline_color: Color32,
+    /// The colours a transition fades from and to.
+    tones: BoxTones,
+}
+
+/// A [`RecipeBox`]'s colours with the unclipped value each stands for
+/// ([`Tone`]); an absent fill or ring is transparent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BoxTones {
+    fill: Tone,
+    border: Tone,
+    outline: Tone,
+    ring: Tone,
 }
 
 /// `rounded-full` (`calc(infinity * 1px)`) as a finite length, so CSS's
@@ -272,7 +286,7 @@ impl RecipeBox {
             }
             best.map(|(_, v)| v)
         }
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(layers, f, state).map(|p| theme.paint(p));
+        let tone = |f: fn(&Recipe) -> &Prop<Paint>| pick(layers, f, state).map(|p| theme.tone(p));
         let width = |f: fn(&Recipe) -> &Prop<f32>| pick_ranked(layers, f, state);
         let all = width(|r| &r.border_width);
         let top = width(|r| &r.border_top_width);
@@ -312,27 +326,39 @@ impl RecipeBox {
                 .map(|c| Stroke::new(w, c))
         };
         // shadcn's base layer `* { @apply border-border }`.
-        let base_border = theme.role(crate::style::Role::Border); // behaviour-ok: CSS base layer colour of every border
-                                                                  // shadcn's base layer `* { @apply outline-ring/50 }`.
-        let base_outline = theme.paint(Paint::Role(crate::style::Role::Ring, 0.5)); // behaviour-ok: CSS base layer colour of every outline
-        let outline_color = paint(|r| &r.outline_color).unwrap_or(base_outline);
+        let base_border = theme.tone(Paint::Role(crate::style::Role::Border, 1.0)); // behaviour-ok: CSS base layer colour of every border
+                                                                                    // shadcn's base layer `* { @apply outline-ring/50 }`.
+        let base_outline = theme.tone(Paint::Role(crate::style::Role::Ring, 0.5)); // behaviour-ok: CSS base layer colour of every outline
+        let clear = Tone::of(Color32::TRANSPARENT);
+        let fill = tone(|r| &r.bg).filter(|c| c.color.a() > 0);
+        let border = tone(|r| &r.border_color).unwrap_or(base_border);
+        let outline = tone(|r| &r.outline_color).unwrap_or(base_outline);
+        let ring_tone = tone(|r| &r.ring_color);
+        let ring = stroke(ring_w, ring_tone.map(|c| c.color));
         Self {
             radii: [corner(t, l), corner(t, r), corner(b, l), corner(r, b)],
-            fill: paint(|r| &r.bg).filter(|c| c.a() > 0),
-            border_color: paint(|r| &r.border_color).unwrap_or(base_border),
+            fill: fill.map(|c| c.color),
+            border_color: border.color,
             borders,
             clip_padding: pick(layers, |r| &r.bg_clip_padding, state) == Some(true),
             shadow: pick(layers, |r| &r.shadow, state)
                 .map_or(Layers::NONE, |s| Layers::new(theme.shadow(s))),
             shadow_opacity: INITIAL_OPACITY,
-            ring: stroke(ring_w, paint(|r| &r.ring_color)),
-            outline: stroke(outline_w, Some(outline_color)),
-            outline_color,
+            ring,
+            outline: stroke(outline_w, Some(outline.color)),
+            outline_color: outline.color,
+            tones: BoxTones {
+                fill: fill.unwrap_or(clear),
+                border,
+                outline,
+                ring: ring_tone.filter(|_| ring.is_some()).unwrap_or(clear),
+            },
         }
     }
 
     /// The same box with its colours on the way to this state's, as the
-    /// part's `transition-*` moves them ([`transition_color`]): the fill
+    /// part's `transition-*` moves them
+    /// ([`transition_color`](crate::components::motion::transition_color)): the fill
     /// under [`Transition::BACKGROUND`], the border colour under
     /// [`Transition::BORDER_COLOR`], the outline colour under
     /// [`Transition::OUTLINE_COLOR`], the outline's width under
@@ -348,23 +374,22 @@ impl RecipeBox {
         layers: &[&Recipe],
         state: State,
     ) -> Self {
-        let color = |key: &str, c: Color32, p: Transition| {
-            transition_color(ctx, id.with(("transition", key)), c, layers, p, state)
+        let color = |key: &str, c: Tone, p: Transition| {
+            transition_tone(ctx, id.with(("transition", key)), c, layers, p, state)
         };
-        let fill = color(
-            "bg",
-            self.fill.unwrap_or(Color32::TRANSPARENT),
-            Transition::BACKGROUND,
-        );
-        self.fill = (fill.a() > 0).then_some(fill);
-        self.border_color = color("border", self.border_color, Transition::BORDER_COLOR);
+        let tones = &mut self.tones;
+        tones.fill = color("bg", tones.fill, Transition::BACKGROUND);
+        self.fill = (tones.fill.color.a() > 0).then_some(tones.fill.color);
+        tones.border = color("border", tones.border, Transition::BORDER_COLOR);
+        self.border_color = tones.border.color;
         let width = |key: &str, w: f32, p: Transition| {
             transition(ctx, id.with(("transition", key)), w, layers, p, state)
         };
         // An absent outline has no width (`outline-style: none`) but keeps
         // its colour: it grows from nothing and its colour moves from or to
         // the resting one (shadcn's base `outline-ring/50`).
-        self.outline_color = color("outline", self.outline_color, Transition::OUTLINE_COLOR);
+        tones.outline = color("outline", tones.outline, Transition::OUTLINE_COLOR);
+        self.outline_color = tones.outline.color;
         let w = width(
             "outline-width",
             self.outline.map_or(0.0, |o| o.width),
@@ -381,11 +406,10 @@ impl RecipeBox {
         );
         // An absent ring is CSS's `0 0 #0000` shadow: it grows out of
         // nothing and fades back into it.
-        let ring = self.ring.unwrap_or(Stroke::NONE);
-        let ring = Stroke::new(
-            width("ring-width", ring.width, Transition::SHADOW),
-            color("ring", ring.color, Transition::SHADOW),
-        );
+        let ring_width = self.ring.map_or(0.0, |r| r.width);
+        let ring_width = width("ring-width", ring_width, Transition::SHADOW);
+        self.tones.ring = color("ring", self.tones.ring, Transition::SHADOW);
+        let ring = Stroke::new(ring_width, self.tones.ring.color);
         self.ring = (ring.width > 0.0 && ring.color.a() > 0).then_some(ring);
         self
     }
@@ -397,6 +421,10 @@ impl RecipeBox {
     pub fn faded(mut self, opacity: f32) -> Self {
         self.fill = self.fill.map(|c| c.gamma_multiply(opacity));
         self.border_color = self.border_color.gamma_multiply(opacity);
+        let tones = &mut self.tones;
+        for t in [&mut tones.fill, &mut tones.border, &mut tones.ring] {
+            *t = t.faded(opacity);
+        }
         self.shadow_opacity *= opacity;
         for s in [&mut self.ring, &mut self.outline].into_iter().flatten() {
             s.color = s.color.gamma_multiply(opacity);

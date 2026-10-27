@@ -2,6 +2,7 @@
 //! `tools/stylegen/PIN`. Every value comes from the style's badge
 //! recipes: `cn-badge` and `cn-badge-variant-*`, stacked in that order.
 
+use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
 use crate::components::shared::{
@@ -173,9 +174,9 @@ impl Widget for Badge {
 
         let st = interaction_state(&t, &resp, context);
         let painter = part_painter(ui, id, &[&l[..]], st);
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.paint(p));
+        let tone = |f: fn(&Recipe) -> &Prop<Paint>| pick(&l, f, st).map(|p| t.tone(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
-        let fg = paint(|r| &r.text).unwrap_or(inherited);
+        let fg = tone(|r| &r.text).unwrap_or(Tone::of(inherited));
         let fg = transitioned_text(ui.ctx(), id, fg, &l, st);
         RecipeBox::resolve(ui.ctx(), &t, &l, st)
             .transitioned(ui.ctx(), id, &l, st)

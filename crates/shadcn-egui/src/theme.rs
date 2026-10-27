@@ -1,6 +1,6 @@
 //! shadcn v4 (OKLCH) design tokens and the `Theme` (style x palette x radius), materialized for egui.
 
-use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
+use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca, Tone};
 use crate::style::app::{AppMap, Resolved, ResolvedPair};
 use crate::style::{
     pick, AppEnum, AppVariant, Edit, Paint, Radius, Role, Rung, ShadowLevel, SizeEnum, State,
@@ -464,10 +464,17 @@ impl Theme {
     /// A style colour as egui paints it. Alpha scales the premultiplied colour,
     /// which matches CSS `/alpha` compositing in sRGB.
     pub fn paint(&self, p: Paint) -> Color32 {
+        self.tone(p).color
+    }
+    /// [`Theme::paint`] with the unclipped colour it stands for, which a
+    /// fade or mix takes: the role's token at the paint's alpha.
+    pub(crate) fn tone(&self, p: Paint) -> Tone {
         match p {
-            Paint::Role(r, a) if a >= 1.0 => self.role(r),
-            Paint::Role(r, a) => self.role(r).gamma_multiply(a.max(0.0)),
-            Paint::Mix(a, b, t) => crate::color::mix_oklch(self.role(a), self.role(b), t),
+            Paint::Role(r, a) if a >= 1.0 => Tone::of(self.role(r)),
+            Paint::Role(r, a) => Tone::of(self.role(r)).faded(a),
+            Paint::Mix(a, b, t) => {
+                Tone::mix_oklch(Tone::of(self.role(a)), Tone::of(self.role(b)), t)
+            }
         }
     }
     /// A text size in px, from [`Metrics`].

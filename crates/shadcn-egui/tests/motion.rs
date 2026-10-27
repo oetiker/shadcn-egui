@@ -430,6 +430,50 @@ fn a_colour_the_transition_does_not_name_jumps() {
     }
 }
 
+/// A fill at a role's alpha (`bg-destructive/50`) fades from the theme's
+/// colour at that alpha, unclipped, as Chrome does: Chrome 156 shows
+/// `oklab(0.252 0.0275 0.0142 / 0.888)`, drawn [48, 28, 26], at 75 of
+/// 150 ms from `bg-destructive/50` to `bg-primary` (light neutral).
+#[test]
+fn an_alpha_scaled_fill_fades_from_its_theme_colour() {
+    use shadcn_egui::components::shared::RecipeBox;
+    use shadcn_egui::style::{Paint, Role};
+    let part = |paint| Recipe {
+        bg: Prop::fixed(paint),
+        transition: Prop::fixed(Transition::COLORS),
+        ..Recipe::default()
+    };
+    let from = part(Paint::Role(Role::Destructive, 0.5));
+    let to = part(Paint::Role(Role::Primary, 1.0));
+    // The light palette, in the theme's own mode.
+    let mut theme = shadcn_egui::Theme::vega();
+    theme.dark = theme.light;
+    let ctx = fresh();
+    let fill = |time: f64, r: &Recipe| {
+        let mut fill = None;
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| {
+                fill = RecipeBox::resolve(ui.ctx(), &theme, &[r], State::NONE)
+                    .transitioned(ui.ctx(), egui::Id::new("box"), &[r], State::NONE)
+                    .fill();
+            },
+        );
+        fill.expect("a fill")
+    };
+    fill(1.0, &from);
+    fill(2.0, &to);
+    let mid = fill(2.075, &to).to_array();
+    let alpha = 0.887_781;
+    let chrome = [48.0 * alpha, 28.0 * alpha, 26.0 * alpha, 255.0 * alpha];
+    for (got, want) in mid.into_iter().zip(chrome) {
+        assert!((f32::from(got) - want).abs() <= 1.0, "{mid:?} {chrome:?}");
+    }
+}
+
 /// A recipe whose `prop` changes under `FOCUS_VISIBLE`, timed by `t`.
 fn focus_recipe(t: Transition) -> Recipe {
     use shadcn_egui::style::{Paint, Role, Rule, ShadowLevel, When};

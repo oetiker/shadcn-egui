@@ -6,6 +6,7 @@
 //! tab (automatic activation). The list is one Tab stop, on the selected
 //! trigger (roving focus).
 
+use crate::color::Tone;
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, transitioned_opacity,
     transitioned_text, ActivationKeys, RecipeBox,
@@ -352,7 +353,7 @@ impl Widget for Tabs<'_> {
                 list_rect,
             );
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
-            let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
+            let list_text = pick(&list, |r| &r.text, g).map(|p| t.tone(p));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
                 let context = State::HORIZONTAL
@@ -360,15 +361,15 @@ impl Widget for Tabs<'_> {
                     .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, context.with(State::DISABLED, !enabled));
                 let painter = part_painter(ui, r.id, &[&trigger[..], &list[..], &root[..]], st);
-                let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
-                    pick(l, f, st).map(|p| t.paint(p))
+                let tone = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
+                    pick(l, f, st).map(|p| t.tone(p))
                 };
                 let px =
                     |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, st).unwrap_or(0.0);
 
-                let fg = paint(&trigger, |r| &r.text)
+                let fg = tone(&trigger, |r| &r.text)
                     .or(list_text)
-                    .unwrap_or(inherited);
+                    .unwrap_or(Tone::of(inherited));
                 let fg = transitioned_text(ui.ctx(), r.id, fg, &trigger, st);
                 let mut shapes = RecipeBox::resolve(ui.ctx(), &t, &trigger, st)
                     .transitioned(ui.ctx(), r.id, &trigger, st)

@@ -53,16 +53,6 @@ pub fn srgb_to_oklch(c: Color32) -> (f32, f32, f32) {
     (ok_l, chroma, hue)
 }
 
-/// The OKLCH a mix starts from: a theme's own token unclipped, as the
-/// browser mixes it ([`crate::palette::unclipped`]), with `true`; else
-/// `c` itself, with `false`.
-fn mix_input(c: Color32) -> ((f32, f32, f32), bool) {
-    match crate::palette::unclipped(c) {
-        Some([l, c, h]) => ((l, c, h), true),
-        None => (srgb_to_oklch(c), false),
-    }
-}
-
 /// sRGB (unmultiplied, alpha ignored) to OKLab: L, a, b.
 fn srgb_to_oklab(c: Color32) -> (f32, f32, f32) {
     let [r, g, b, _] = c.to_srgba_unmultiplied();
@@ -85,6 +75,152 @@ fn srgb_to_oklab(c: Color32) -> (f32, f32, f32) {
     (ok_l, ok_a, ok_b)
 }
 
+/// A colour as the browser mixes it: `oklch(l c h / alpha)` before any clip
+/// to sRGB. `hue` says the hue counts at chroma 0 (a theme's `oklch(l 0 h)`
+/// token); a colour converted from sRGB has none there (CSS: powerless).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Unclipped {
+    l: f32,
+    c: f32,
+    h: f32,
+    alpha: f32,
+    hue: bool,
+}
+
+impl Unclipped {
+    /// The theme token `c` was generated from, unclipped
+    /// ([`crate::palette::unclipped`]); else `c` itself.
+    pub(crate) fn of(c: Color32) -> Self {
+        match crate::palette::unclipped(c) {
+            Some([l, chroma, h, alpha]) => Unclipped {
+                l,
+                c: chroma,
+                h,
+                alpha,
+                hue: true,
+            },
+            None => {
+                let (l, chroma, h) = srgb_to_oklch(c);
+                let alpha = f32::from(c.a()) / 255.0;
+                Unclipped {
+                    l,
+                    c: chroma,
+                    h,
+                    alpha,
+                    hue: false,
+                }
+            }
+        }
+    }
+
+    /// Clipped to sRGB, as the browser paints it.
+    pub(crate) fn color(self) -> Color32 {
+        oklch_to_srgb_a(self.l, self.c, self.h, self.alpha)
+    }
+
+    /// CSS Color 4 §12: OKLab with premultiplied alpha.
+    fn mix_oklab(self, other: Self, t: f32) -> Self {
+        let premultiplied = |u: Self| {
+            let (a, b) = (u.c * u.h.to_radians().cos(), u.c * u.h.to_radians().sin());
+            [u.l * u.alpha, a * u.alpha, b * u.alpha, u.alpha]
+        };
+        let (p, q) = (premultiplied(self), premultiplied(other));
+        let [l, ok_a, ok_b, alpha] = std::array::from_fn(|i| p[i] + (q[i] - p[i]) * t);
+        if alpha <= 0.0 {
+            return Unclipped::of(Color32::TRANSPARENT);
+        }
+        let (ok_a, ok_b) = (ok_a / alpha, ok_b / alpha);
+        Unclipped {
+            l: l / alpha,
+            c: (ok_a * ok_a + ok_b * ok_b).sqrt(),
+            h: ok_b.atan2(ok_a).to_degrees().rem_euclid(360.0),
+            alpha,
+            hue: false,
+        }
+    }
+
+    /// CSS `color-mix(in oklch, ..)`: hue on the shorter arc; a side
+    /// without a hue takes the other side's.
+    fn mix_oklch(self, other: Self, t: f32) -> Self {
+        let (mut h1, mut h2) = (self.h, other.h);
+        if self.c < 1e-4 && !self.hue {
+            h1 = h2;
+        }
+        if other.c < 1e-4 && !other.hue {
+            h2 = h1;
+        }
+        let mut dh = h2 - h1;
+        if dh > 180.0 {
+            dh -= 360.0;
+        } else if dh < -180.0 {
+            dh += 360.0;
+        }
+        let lerp = |a: f32, b: f32| a + (b - a) * t;
+        Unclipped {
+            l: lerp(self.l, other.l),
+            c: lerp(self.c, other.c),
+            h: h1 + dh * t,
+            alpha: lerp(self.alpha, other.alpha),
+            hue: self.hue || other.hue,
+        }
+    }
+}
+
+/// A colour as egui paints it and the [`Unclipped`] colour it stands for,
+/// which mixes and fades take. A theme role keeps its token's value at any
+/// alpha (`destructive/20`); an app's own colour stands for itself.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Tone {
+    pub(crate) color: Color32,
+    unclipped: Unclipped,
+}
+
+impl Tone {
+    /// `c` and what it stands for ([`Unclipped::of`]).
+    pub(crate) fn of(color: Color32) -> Self {
+        Tone {
+            color,
+            unclipped: Unclipped::of(color),
+        }
+    }
+
+    /// The same colour at `opacity` times its alpha (CSS `/alpha`).
+    pub(crate) fn faded(self, opacity: f32) -> Self {
+        let opacity = opacity.max(0.0);
+        Tone {
+            color: self.color.gamma_multiply(opacity),
+            unclipped: Unclipped {
+                alpha: self.unclipped.alpha * opacity,
+                ..self.unclipped
+            },
+        }
+    }
+
+    fn mixed(a: Self, b: Self, t: f32, mix: fn(Unclipped, Unclipped, f32) -> Unclipped) -> Self {
+        if t <= 0.0 {
+            return a;
+        }
+        if t >= 1.0 {
+            return b;
+        }
+        let unclipped = mix(a.unclipped, b.unclipped, t);
+        Tone {
+            color: unclipped.color(),
+            unclipped,
+        }
+    }
+
+    /// [`mix_oklab`] on what the two colours stand for.
+    pub(crate) fn mix_oklab(a: Self, b: Self, t: f32) -> Self {
+        Self::mixed(a, b, t, Unclipped::mix_oklab)
+    }
+
+    /// [`mix_oklch`] on what the two colours stand for.
+    pub(crate) fn mix_oklch(a: Self, b: Self, t: f32) -> Self {
+        Self::mixed(a, b, t, Unclipped::mix_oklch)
+    }
+}
+
 /// The colour a CSS transition or animation shows between `a` and `b` at
 /// eased progress `t` (the share of `b`). CSS Color 4 §12 interpolates two
 /// colours in OKLab with premultiplied alpha unless both are legacy sRGB
@@ -92,24 +228,7 @@ fn srgb_to_oklab(c: Color32) -> (f32, f32, f32) {
 /// OKLab; a fully transparent side lends only its alpha. A colour that is
 /// exactly a theme token's mixes as the token, before its clip to sRGB.
 pub fn mix_oklab(a: Color32, b: Color32, t: f32) -> Color32 {
-    if t <= 0.0 {
-        return a;
-    }
-    if t >= 1.0 {
-        return b;
-    }
-    let premultiplied = |c: Color32| {
-        let alpha = f32::from(c.a()) / 255.0;
-        let ((l, chroma, h), _) = mix_input(c);
-        let (a, b) = (chroma * h.to_radians().cos(), chroma * h.to_radians().sin());
-        [l * alpha, a * alpha, b * alpha, alpha]
-    };
-    let (p, q) = (premultiplied(a), premultiplied(b));
-    let [l, ok_a, ok_b, alpha] = std::array::from_fn(|i| p[i] + (q[i] - p[i]) * t);
-    if alpha <= 0.0 {
-        return Color32::TRANSPARENT;
-    }
-    oklab_to_srgb_a(l / alpha, ok_a / alpha, ok_b / alpha, alpha)
+    Tone::mix_oklab(Tone::of(a), Tone::of(b), t).color
 }
 
 /// CSS `color-mix(in oklch, a, b t)`: `t` is the share of `b`. Hue takes the
@@ -117,31 +236,7 @@ pub fn mix_oklab(a: Color32, b: Color32, t: f32) -> Color32 {
 /// that is exactly a theme token's mixes as the token's `oklch(l c h)`,
 /// before its clip to sRGB and with its own hue even at chroma 0.
 pub fn mix_oklch(a: Color32, b: Color32, t: f32) -> Color32 {
-    if t <= 0.0 {
-        return a;
-    }
-    if t >= 1.0 {
-        return b;
-    }
-    let ((l1, c1, mut h1), token1) = mix_input(a);
-    let ((l2, c2, mut h2), token2) = mix_input(b);
-    // A colour converted from sRGB has no hue at chroma 0 (CSS: powerless,
-    // so missing) and takes the other side's; a token's `oklch(l 0 h)`
-    // keeps the hue it names.
-    if c1 < 1e-4 && !token1 {
-        h1 = h2;
-    }
-    if c2 < 1e-4 && !token2 {
-        h2 = h1;
-    }
-    let mut dh = h2 - h1;
-    if dh > 180.0 {
-        dh -= 360.0;
-    } else if dh < -180.0 {
-        dh += 360.0;
-    }
-    let alpha = a.a() as f32 / 255.0 * (1.0 - t) + b.a() as f32 / 255.0 * t;
-    oklch_to_srgb_a(l1 + (l2 - l1) * t, c1 + (c2 - c1) * t, h1 + dh * t, alpha)
+    Tone::mix_oklch(Tone::of(a), Tone::of(b), t).color
 }
 
 #[cfg(test)]
@@ -176,6 +271,49 @@ mod tests {
         assert!(near(mid, [181, 22, 25, 255]), "{mid:?}");
         let mid = mix_oklab(dark.destructive, dark.primary, t);
         assert!(near(mid, [240, 203, 200, 255]), "{mid:?}");
+    }
+
+    /// Within 1/255 per channel of Chrome's premultiplied colour: its
+    /// `oklab(..)` drawn opaque, scaled by its alpha.
+    fn near_premultiplied(got: Color32, opaque: [u8; 3], alpha: f32) -> bool {
+        let want: [f32; 4] = std::array::from_fn(|i| match opaque.get(i) {
+            Some(&c) => f32::from(c) * alpha,
+            None => alpha * 255.0,
+        });
+        (0..4).all(|i| (f32::from(got.to_array()[i]) - want[i]).abs() <= 1.0)
+    }
+
+    /// A fade between alpha-scaled roles (`bg-destructive/10` to
+    /// `bg-destructive/20`, `ring-ring/50` to `ring-destructive/20`) mixes
+    /// each role's theme colour unclipped at its alpha, premultiplied in
+    /// OKLab, as Chrome does. Chrome 156 at 75 of 150 ms along
+    /// `ease-in-out`, neutral.
+    #[test]
+    fn a_fade_between_alpha_scaled_roles_mixes_them_unclipped() {
+        use crate::style::{Paint, Role};
+        use egui::Theme::{Dark, Light};
+        let t = crate::style::Easing::InOut.at(0.5);
+        let d = |a| Paint::Role(Role::Destructive, a);
+        let ring50 = Paint::Role(Role::Ring, 0.5);
+        let clear = Paint::Role(Role::Background, 0.0);
+        let primary = Paint::Role(Role::Primary, 1.0);
+        let cases = [
+            (Light, d(0.1), d(0.2), [231, 0, 11], 0.177_556),
+            (Light, ring50, d(0.2), [210, 99, 89], 0.267_332),
+            (Light, clear, ring50, [161, 161, 161], 0.387_781),
+            (Light, clear, d(0.2), [231, 0, 11], 0.155_112),
+            (Dark, ring50, d(0.4), [220, 109, 108], 0.422_444),
+            (Light, d(0.5), ring50, [184, 139, 133], 0.5),
+            (Light, d(0.5), primary, [48, 28, 26], 0.887_781),
+        ];
+        for (mode, a, b, opaque, alpha) in cases {
+            let theme = crate::Theme::vega().in_mode(mode);
+            let mid = Tone::mix_oklab(theme.tone(a), theme.tone(b), t).color;
+            assert!(
+                near_premultiplied(mid, opaque, alpha),
+                "{a:?} -> {b:?}: {mid:?}"
+            );
+        }
     }
 
     /// `Paint::Mix` at rest with an out-of-gamut role matches Chrome's

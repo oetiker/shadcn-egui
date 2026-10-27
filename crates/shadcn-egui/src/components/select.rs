@@ -27,6 +27,7 @@
 //! widest option (`w-fit` would make it jump with the chosen text); either
 //! width is capped to the room (conformance 3.1).
 
+use crate::color::Tone;
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
     content_ui, interaction_state, line_width, opacity, part_painter, pressable, transitioned_text,
@@ -339,7 +340,7 @@ impl Widget for Select<'_> {
         );
         if ui.is_rect_visible(rect) {
             let painter = part_painter(ui, resp.id, &[&trig[..]], st);
-            let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.paint(p));
+            let tone = |f: fn(&Recipe) -> &Prop<Paint>| pick(&trig, f, st).map(|p| t.tone(p));
             RecipeBox::resolve(ui.ctx(), &t, &trig, st)
                 .transitioned(ui.ctx(), resp.id, &trig, st)
                 .paint(&painter, rect);
@@ -363,7 +364,7 @@ impl Widget for Select<'_> {
             let text_color = transitioned_text(
                 ui.ctx(),
                 resp.id,
-                paint(|r| &r.text).unwrap_or(inherited),
+                tone(|r| &r.text).unwrap_or(Tone::of(inherited)),
                 &trig,
                 st,
             );

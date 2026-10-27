@@ -3,6 +3,7 @@
 //! recipes: `cn-button`, `cn-button-variant-*` and `cn-button-size-*`,
 //! stacked in that order.
 
+use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
 use crate::components::motion::transition;
@@ -340,11 +341,11 @@ impl Widget for Button {
 
         let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
         let painter = part_painter(ui, id, &[l], st);
-        let paint = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
+        let tone = |f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.tone(p));
         let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
         let ctx = ui.ctx();
         let key = |property: &str| id.with(("transition", property));
-        let fg = paint(|r| &r.text).unwrap_or(inherited);
+        let fg = tone(|r| &r.text).unwrap_or(Tone::of(inherited));
         let fg = transitioned_text(ctx, id, fg, l, st);
         // `active:translate-y-px` moves as the transition says.
         let shifted = shift(
