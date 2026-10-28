@@ -7,7 +7,8 @@
 //! how its text lays out, and its hint.
 
 use crate::components::shared::{
-    inset_frame, line_width, part_opacity, part_painter, text_entry_state, RecipeBox,
+    inset_frame, line_width, part_opacity, part_painter, report_invalid, text_entry_state,
+    RecipeBox,
 };
 use crate::components::text::{Leading, TextLook};
 use crate::style::{pick, pick_len, Prop, Recipe, Role, State};
@@ -168,6 +169,7 @@ impl<'a> TextEntry<'a> {
             .inner;
 
         let resp = &out.response.response;
+        report_invalid(resp, self.context.contains(State::INVALID));
         let st = text_entry_state(
             self.theme,
             resp,

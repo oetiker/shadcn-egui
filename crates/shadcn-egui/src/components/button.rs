@@ -8,8 +8,8 @@ use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
 use crate::components::motion::transition;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, pressable, shift, transitioned_text,
-    ActivationKeys, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, report_invalid, shift,
+    transitioned_text, ActivationKeys, RecipeBox,
 };
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
@@ -337,6 +337,7 @@ impl Widget for Button {
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
         });
+        report_invalid(&resp, self.invalid);
         if !ui.is_rect_visible(rect) {
             return resp;
         }

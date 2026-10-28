@@ -8,8 +8,8 @@
 
 use crate::components::motion::transition;
 use crate::components::shared::{
-    disabled_cursor, interaction_state, line_width, part_painter, pressable, shift, ActivationKeys,
-    RecipeBox,
+    disabled_cursor, interaction_state, line_width, part_painter, pressable, report_invalid, shift,
+    ActivationKeys, RecipeBox,
 };
 use crate::style::app::{default_variant, state_size};
 use crate::style::{pick, pick_len, Prop, Recipe, State, Transition};
@@ -184,6 +184,7 @@ impl Widget for Switch<'_> {
         // `data-disabled:cursor-not-allowed`, on the hit area as on its
         // `::after`.
         disabled_cursor(&resp, !enabled);
+        report_invalid(&resp, self.invalid);
         resp.rect = rect;
         resp
     }

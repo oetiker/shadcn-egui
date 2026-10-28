@@ -1216,6 +1216,18 @@ pub fn widget_info_with_role(
         .accesskit_node_builder(resp.id, |node| node.set_role(role));
 }
 
+/// Upstream's `aria-invalid`: while `invalid`, the accessibility node of
+/// `resp` says its value is invalid, as the browser reports the attribute.
+/// `widget_info` sets no invalid state, so the call may come before or
+/// after it.
+pub(crate) fn report_invalid(resp: &Response, invalid: bool) {
+    if invalid {
+        resp.ctx.accesskit_node_builder(resp.id, |node| {
+            node.set_invalid(egui::accesskit::Invalid::True)
+        });
+    }
+}
+
 /// Upstream's `disabled:cursor-not-allowed` (and `data-disabled:`,
 /// `peer-disabled:`): while `disabled`, the pointer over `resp` shows the
 /// not-allowed cursor. A disabled `Ui` hovers nothing in egui, so the test

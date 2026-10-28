@@ -31,7 +31,7 @@ use crate::color::Tone;
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
     content_ui, disabled_cursor, interaction_state, line_width, opacity, part_painter, pressable,
-    transitioned_text, ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
+    report_invalid, transitioned_text, ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
 };
 use crate::components::text::TextLook;
 use crate::style::app::{default_variant, state_size};
@@ -384,6 +384,7 @@ impl Widget for Select<'_> {
         });
         // The trigger's `disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);
+        report_invalid(&resp, self.invalid);
 
         // The list.
         if open {

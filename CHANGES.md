@@ -48,6 +48,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- A screen reader now hears that a button, checkbox, switch, select, input or textarea drawn with `.invalid(true)` holds an invalid value, as with shadcn's `aria-invalid`; before, only the red border showed it.
 - The mouse pointer over a disabled checkbox, switch, select or textarea, or over the label of a disabled control, now shows the not-allowed cursor, as on the shadcn page; before, it showed the normal arrow. A disabled input keeps the normal arrow, as on the shadcn page.
 - A row of small widgets in `layout::row`, `layout::space_between`, `layout::form_row` or a card footer is now as high as its tallest widget, as in shadcn; before, it was at least egui's widget height (36 px in vega), so rows of badges or icons left extra space above and below, and what follows them now moves up. A row with a checkbox, a switch or a slider is as high as the control itself, as in shadcn, not as its larger click target, which still takes clicks around the control. A `form_row` is as high as its label or its control, no longer at least one text line.
 - An input narrowed to its smallest width whose placeholder starts with a letter wider than `M`, such as `W`, no longer takes clicks and hover about half a point left of its box: the field keeps to its box and cuts the letter inside it, as Chrome does.
