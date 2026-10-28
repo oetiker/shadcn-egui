@@ -2878,3 +2878,89 @@ fn a_row_of_a_progress_and_a_slider_is_as_high_as_the_bars() {
         assert_eq!(passes, 1, "{case}");
     }
 }
+
+/// Two `space_between` rows of a label and a control in a card, as the
+/// gallery's "Checkbox, Switch, Slider and Select" group: per frame, the
+/// card's height after the frame's last pass, the frame's passes and its
+/// repaint delay. The theme is applied before the first frame, or by
+/// the first pass itself (`in_pass`), as `gallery_ui` applies its preset.
+fn label_rows_frames(in_pass: bool) -> Vec<(f32, usize, std::time::Duration)> {
+    use shadcn_egui::components::{checkbox::checkbox, label::label, switch::toggle};
+    let ctx = egui::Context::default();
+    if !in_pass {
+        Theme::vega().apply(&ctx);
+    }
+    let (mut a, mut b) = (false, false);
+    (0..4)
+        .map(|frame| {
+            let mut height = 0.0;
+            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                if in_pass && frame == 0 {
+                    Theme::vega().apply(ui.ctx());
+                }
+                height = ui
+                    .scope(|ui| {
+                        ui.set_width(300.0);
+                        layout::card(ui, |ui| {
+                            layout::vstack(ui, 16.0, |ui| {
+                                layout::space_between(
+                                    ui,
+                                    |ui| drop(label(ui, "Accept terms")),
+                                    |ui| drop(checkbox(ui, &mut a)),
+                                );
+                                layout::space_between(
+                                    ui,
+                                    |ui| drop(label(ui, "Airplane mode")),
+                                    |ui| drop(toggle(ui, &mut b)),
+                                );
+                            });
+                        });
+                    })
+                    .response
+                    .rect
+                    .height();
+            });
+            let delay = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+            (height, out.platform_output.num_completed_passes, delay)
+        })
+        .collect()
+}
+
+/// A theme applied inside the first pass settles by the end of the second
+/// frame, then a still frame takes one pass and asks for no repaint.
+///
+/// egui swaps in the theme's fonts only at the next pass, so the first
+/// pass measures the labels in egui's default font; the second pass gives
+/// each label that narrower width (a flex item's width from the previous
+/// pass) and its wider Inter text wraps, and the frame has no third pass
+/// to undo it. The second frame redoes one pass. Applied before the first
+/// frame, the theme's fonts are there from the first pass on.
+#[test]
+fn a_theme_applied_in_the_first_pass_settles_by_the_second_frame() {
+    let before = label_rows_frames(false);
+    let settled = before[1].0;
+    for (frame, &(height, passes, delay)) in before.iter().enumerate().skip(1) {
+        assert_eq!(height, settled, "applied before, frame {frame}");
+        assert_eq!(passes, 1, "applied before, frame {frame}: a still frame");
+        assert_eq!(
+            delay,
+            std::time::Duration::MAX,
+            "applied before, frame {frame}"
+        );
+    }
+    let in_pass = label_rows_frames(true);
+    assert!(in_pass[0].1 <= 2, "{in_pass:?}");
+    assert_eq!(
+        in_pass[1].0, settled,
+        "the second frame ends settled: {in_pass:?}"
+    );
+    for (frame, &(height, passes, delay)) in in_pass.iter().enumerate().skip(2) {
+        assert_eq!(height, settled, "applied in pass, frame {frame}");
+        assert_eq!(passes, 1, "applied in pass, frame {frame}: a still frame");
+        assert_eq!(
+            delay,
+            std::time::Duration::MAX,
+            "applied in pass, frame {frame}"
+        );
+    }
+}
