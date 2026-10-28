@@ -4,9 +4,12 @@
 //!
 //! An icon atom is an image atom whose URI (`shadcn-icon://<n>`) names an
 //! entry of a process-wide icon registry. The entry records the icon, its
-//! side and whether the caller gave a colour ([`IconAtom::tint`]), so a
-//! crate widget re-tints only an atom without one, in its recipe's state
-//! colour, as a typed `.icon` slot (conformance 2.3). In an egui host an
+//! side, whether the caller gave a side ([`IconAtom::size`]) and whether
+//! the caller gave a colour ([`IconAtom::tint`]), so a crate widget
+//! re-tints only an atom without a colour, in its recipe's state colour,
+//! as a typed `.icon` slot (conformance 2.3), and sizes only an atom
+//! without a side, to its recipe's icon size, as upstream sizes an svg
+//! without a `size-*` class (`[&_svg:not([class*='size-'])]:size-*`). In an egui host an
 //! atom without a caller colour draws in the theme's text colour, which
 //! the loader bakes in; [`crate::Theme::apply`] makes it draw again on a
 //! theme change. egui gives an image atom no colour of its `Ui`, so a
@@ -28,8 +31,8 @@ const LOADER_ID: &str = "shadcn_egui::icon_atom";
 
 /// What makes two registered entries the same: the icon's name, size and
 /// path data address (as the raster cache keys), the atom's side and
-/// whether the caller gave a colour.
-type Key = (&'static str, u32, (usize, usize, u32, u32), u32, bool);
+/// whether the caller gave a side and a colour.
+type Key = (&'static str, u32, (usize, usize, u32, u32), u32, bool, bool);
 
 fn key(e: &Entry) -> Key {
     let icon = &e.icon;
@@ -42,6 +45,7 @@ fn key(e: &Entry) -> Key {
         icon.size.to_bits(),
         shape,
         e.side.to_bits(),
+        e.sized,
         e.tinted,
     )
 }
@@ -51,6 +55,8 @@ fn key(e: &Entry) -> Key {
 struct Entry {
     icon: Icon,
     side: f32,
+    /// The caller gave the side: crate widgets keep it.
+    sized: bool,
     /// The caller gave a colour: the raster is a white mask under the
     /// image's tint, and crate widgets keep it.
     tinted: bool,
@@ -112,8 +118,9 @@ pub struct IconAtom {
 }
 
 impl IconAtom {
-    /// `icon` at the default icon size (`Metrics::icon`), in the widget's
-    /// colour.
+    /// `icon` in the widget's colour, at the widget's icon size: a crate
+    /// widget's recipe size, the default icon size (`Metrics::icon`) in
+    /// any other widget.
     #[inline]
     pub fn new(icon: Icon) -> Self {
         Self {
@@ -123,7 +130,8 @@ impl IconAtom {
         }
     }
 
-    /// The side of the icon's square in points.
+    /// The side of the icon's square in points, also inside a crate
+    /// widget.
     #[inline]
     pub fn size(mut self, size: f32) -> Self {
         self.size = Some(size);
@@ -143,6 +151,7 @@ impl From<IconAtom> for egui::Atom<'_> {
         let entry = Entry {
             icon: a.icon,
             side: a.size.unwrap_or(crate::Metrics::default().icon),
+            sized: a.size.is_some(),
             tinted: a.tint.is_some(),
         };
         egui::Atom::from(image(entry, a.tint))
@@ -154,6 +163,18 @@ impl From<IconAtom> for egui::Atom<'_> {
 pub(crate) fn retint(img: Image<'_>, color: Color32) -> Image<'_> {
     match img.uri().and_then(lookup) {
         Some(e) if !e.tinted => image(Entry { tinted: true, ..e }, Some(color)),
+        _ => img,
+    }
+}
+
+/// `image` at `side`, a crate widget's icon size, if it is an icon atom
+/// without a caller side; any other image unchanged.
+pub(crate) fn resize(img: Image<'_>, side: f32) -> Image<'_> {
+    match img.uri().and_then(lookup) {
+        Some(e) if !e.sized && e.side != side => {
+            let tint = e.tinted.then(|| img.image_options().tint);
+            image(Entry { side, ..e }, tint)
+        }
         _ => img,
     }
 }
@@ -268,6 +289,7 @@ mod tests {
         Entry {
             icon,
             side: 16.0,
+            sized: false,
             tinted,
         }
     }
@@ -337,6 +359,39 @@ mod tests {
             })
             .collect();
         assert_eq!(looks, vec![(red, true), (white, true)]);
+    }
+
+    /// A crate widget sizes only atoms without a caller side, and keeps
+    /// a caller colour while it does.
+    #[test]
+    fn crate_widgets_resize_only_atoms_without_a_caller_side() {
+        let icons = crate::icons::lucide::SLOTS;
+        // token-ok: test colours
+        let (blue, white) = (Color32::BLUE, Color32::WHITE);
+        let mut atoms = egui::Atoms::new((
+            IconAtom::new(icons.check),
+            IconAtom::new(icons.check).size(20.0),
+            IconAtom::new(icons.close).tint(blue),
+            // A caller side equal to the default is a side too.
+            IconAtom::new(icons.close).size(16.0),
+        ));
+        atoms.map_images(|i| resize(i, 12.0));
+        let looks: Vec<(f32, bool, Color32)> = atoms
+            .iter_images()
+            .map(|i| {
+                let e = lookup(i.uri().expect("uri")).expect("entry");
+                (e.side, e.tinted, i.image_options().tint)
+            })
+            .collect();
+        assert_eq!(
+            looks,
+            vec![
+                (12.0, false, white),
+                (20.0, false, white),
+                (12.0, true, blue),
+                (16.0, false, white)
+            ]
+        );
     }
 
     /// An atom borrows its registered URI: converting one every frame

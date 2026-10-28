@@ -3,6 +3,7 @@ mod common;
 use egui::vec2;
 use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
+use shadcn_egui::components::icon_atom::IconAtom;
 use shadcn_egui::components::kbd::{kbd, Kbd, KbdGroup, KbdRecipes, KbdVariant};
 use shadcn_egui::components::label::description;
 use shadcn_egui::style::AppVariant;
@@ -78,6 +79,38 @@ fn an_icon_only_chip_reports_its_name() {
         &["Enter"],
     )[0];
     assert_eq!(r.size(), vec2(20.0, 20.0));
+}
+
+/// `[&_svg:not([class*='size-'])]:size-3`: an icon atom without a side
+/// is 12 px in a chip, `px-1` from each edge: a 20 px square. One with a
+/// side keeps it: 16 px make a 24 px wide chip.
+#[test]
+fn an_icon_atom_takes_the_chips_icon_size_unless_sized() {
+    let theme = Theme::vega();
+    let check = theme.icons.check;
+    let measure = |atom: IconAtom| {
+        common::measure(&theme, egui::Theme::Light, move |ui| ui.add(Kbd::new(atom))).size()
+    };
+    assert_eq!(measure(IconAtom::new(check)), vec2(20.0, 20.0));
+    assert_eq!(measure(IconAtom::new(check).size(16.0)), vec2(24.0, 20.0));
+}
+
+/// In a plain egui widget an icon atom without a side is `Metrics::icon`
+/// (16 px), as one sized 16 px.
+#[test]
+fn an_icon_atom_in_an_egui_button_keeps_the_default_size() {
+    let theme = Theme::vega();
+    let check = theme.icons.check;
+    let measure = |atom: IconAtom| {
+        common::measure(&theme, egui::Theme::Light, move |ui| {
+            ui.add(egui::Button::new(atom))
+        })
+        .size()
+    };
+    let plain = measure(IconAtom::new(check));
+    assert_eq!(plain, measure(IconAtom::new(check).size(16.0)));
+    // The button keeps egui's `interact_size` height: only the width shows it.
+    assert_eq!(plain.x - measure(IconAtom::new(check).size(12.0)).x, 4.0);
 }
 
 /// `pointer-events-none`: the pointer over a chip does not hover the chip

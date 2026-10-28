@@ -149,7 +149,8 @@ impl Widget for Badge {
         // lay out in egui's placeholder colour, paint in the final one.
         let look = TextLook::resolve(ui, &l, g);
         let row = AtomRow::new(ui, self.text.as_str())
-            .icons(self.icon, self.icon_end, icon_px)
+            .icons(self.icon, self.icon_end)
+            .icon_size(icon_px)
             .gap(gap)
             .inset(
                 pad_l + border_w,

@@ -302,11 +302,12 @@ impl Widget for Button {
         let look = TextLook::resolve(ui, l, g);
         let icon_only = self.icon_only(size.base());
         let row = match icon_only {
-            Some(icon) => AtomRow::new(ui, "").icons(Some(icon), None, icon_px),
-            None => AtomRow::new(ui, self.text.as_str()).icons(self.icon, self.icon_end, icon_px),
+            Some(icon) => AtomRow::new(ui, "").icons(Some(icon), None),
+            None => AtomRow::new(ui, self.text.as_str()).icons(self.icon, self.icon_end),
         };
         let (pad_t, pad_b) = (get(|r| &r.pad_top), get(|r| &r.pad_bottom));
         let row = row
+            .icon_size(icon_px)
             .gap(gap)
             .inset(
                 pad_l + border_w,

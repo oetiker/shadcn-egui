@@ -113,10 +113,7 @@ impl Widget for Kbd<'_> {
         let icon_px = pick(&l, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
         let look = TextLook::resolve(ui, &l, st);
         let (row, name) = match self.icon {
-            Some((icon, name)) => (
-                AtomRow::new(ui, self.atoms).icons(Some(icon), None, icon_px),
-                name,
-            ),
+            Some((icon, name)) => (AtomRow::new(ui, self.atoms).icons(Some(icon), None), name),
             None => {
                 let name = self
                     .atoms
@@ -127,6 +124,7 @@ impl Widget for Kbd<'_> {
             }
         };
         let row = row
+            .icon_size(icon_px)
             .gap(get(|r| &r.gap))
             .inset(
                 get(|r| &r.pad_left) + border_w,
