@@ -304,28 +304,31 @@ impl Widget for Slider<'_> {
             let under_thumb =
                 |shapes| thumb_box.hiding(ui.ctx(), thumb_rect, thumb_painter.opacity(), shapes);
             let track_box = RecipeBox::resolve(ui.ctx(), &t, &track, st);
-            track_painter.extend(under_thumb(track_box.shapes_at(
-                ui.ctx(),
-                track_rect,
-                track_painter.opacity(),
-            )));
-
+            let range_box = RecipeBox::resolve(ui.ctx(), &t, &range, st);
             let c = centre_of(frac_of(value));
             let range_rect = if vertical {
                 Rect::from_min_max(pos2(track_rect.left(), c), track_rect.right_bottom())
             } else {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
+            // The range hides the track under it as the thumb does.
+            track_painter.extend(under_thumb(range_box.hiding_inside(
+                ui.ctx(),
+                range_rect,
+                &track_box,
+                track_rect,
+                range_painter.opacity(),
+                track_box.shapes_at(ui.ctx(), track_rect, track_painter.opacity()),
+            )));
+
             // The track's `overflow-hidden` cuts the range to its rounded box.
-            range_painter.extend(under_thumb(
-                RecipeBox::resolve(ui.ctx(), &t, &range, st).shapes_inside(
-                    ui.ctx(),
-                    range_rect,
-                    &track_box,
-                    track_rect,
-                    range_painter.opacity(),
-                ),
-            ));
+            range_painter.extend(under_thumb(range_box.shapes_inside(
+                ui.ctx(),
+                range_rect,
+                &track_box,
+                track_rect,
+                range_painter.opacity(),
+            )));
 
             thumb_box.paint(&thumb_painter, thumb_rect);
         }

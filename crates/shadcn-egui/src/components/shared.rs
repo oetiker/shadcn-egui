@@ -505,10 +505,7 @@ impl RecipeBox {
                 r
             }
         };
-        let outline = rounded_polygon(
-            snap(padding_box(outer_rect, outer.borders), None),
-            inner_radius(outer.radius_on(outer_rect), outer.borders),
-        );
+        let outline = outer.padding_outline(ctx, outer_rect);
         let shapes = self.shapes_at(ctx, rect, opacity);
         // A plain fill (every style's indicator and range): the outer box's
         // outline cut to the rect, a convex polygon egui anti-aliases as it
@@ -546,22 +543,55 @@ impl RecipeBox {
         opacity: f32,
         shapes: Vec<Shape>,
     ) -> Vec<Shape> {
+        if !self.hides(opacity) {
+            return shapes;
+        }
+        let outline = rounded_polygon(on_pixels(ctx, rect), self.radius_on(rect));
+        hide(ctx, outline, shapes)
+    }
+
+    /// [`RecipeBox::hiding`] for this box painted inside `outer` at
+    /// `outer_rect` ([`RecipeBox::shapes_inside`]): the slider's range
+    /// hides the track under it. The cut follows the range as it is
+    /// painted, the outer box's rounding included.
+    pub(crate) fn hiding_inside(
+        &self,
+        ctx: &egui::Context,
+        rect: Rect,
+        outer: &RecipeBox,
+        outer_rect: Rect,
+        opacity: f32,
+        shapes: Vec<Shape>,
+    ) -> Vec<Shape> {
+        if !self.hides(opacity) {
+            return shapes;
+        }
+        let own = rounded_polygon(on_pixels(ctx, rect), self.radius_on(rect));
+        let outline = clip_convex(&own, &outer.padding_outline(ctx, outer_rect));
+        if outline.len() < 3 {
+            return shapes;
+        }
+        hide(ctx, outline, shapes)
+    }
+
+    /// Whether this box, painted at `opacity`, is faded and opaque: then
+    /// it hides what lies under it (see [`RecipeBox::hiding`]).
+    fn hides(&self, opacity: f32) -> bool {
         // The fill's own alpha, before `faded`'s fade.
         let opaque = self.fill.is_some_and(|f| {
             f.to_normalized_gamma_f32()[3] >= self.opacity - 0.5 / 255.0 // behaviour-ok: one 8-bit alpha step
         });
-        if !opaque || self.opacity * opacity >= INITIAL_OPACITY {
-            return shapes;
-        }
-        let clip = RoundedClip::new(
-            ctx,
-            rounded_polygon(on_pixels(ctx, rect), self.radius_on(rect)),
-        );
-        let mut out = Vec::new();
-        for shape in shapes {
-            cut(ctx, shape, &|m| clip.remove(m), &mut out);
-        }
-        out
+        opaque && self.opacity * opacity < INITIAL_OPACITY
+    }
+
+    /// The padding box's outline at `rect` as egui paints the box, on
+    /// whole pixels where egui puts it: what `overflow: hidden` cuts a
+    /// child to.
+    fn padding_outline(&self, ctx: &egui::Context, rect: Rect) -> Vec<egui::Pos2> {
+        rounded_polygon(
+            on_pixels(ctx, padding_box(rect, self.borders)),
+            inner_radius(self.radius_on(rect), self.borders),
+        )
     }
 
     /// The fill colour, if the recipe sets one that is not transparent.
@@ -773,6 +803,17 @@ fn on_pixels(ctx: &egui::Context, rect: Rect) -> Rect {
     } else {
         rect
     }
+}
+
+/// `shapes` less what lies inside the convex `outline`, faded in across
+/// its feathering band ([`RoundedClip::remove`]).
+fn hide(ctx: &egui::Context, outline: Vec<egui::Pos2>, shapes: Vec<Shape>) -> Vec<Shape> {
+    let clip = RoundedClip::new(ctx, outline);
+    let mut out = Vec::new();
+    for shape in shapes {
+        cut(ctx, shape, &|m| clip.remove(m), &mut out);
+    }
+    out
 }
 
 /// `top` composited over `under` (premultiplied, as the browser blends),
@@ -1171,6 +1212,49 @@ fn clip_to_rect(polygon: &[egui::Pos2], rect: Rect) -> Vec<egui::Pos2> {
         if points.len() < 3 {
             return Vec::new();
         }
+    }
+    points
+}
+
+/// The convex `polygon` cut to the convex `clip` (Sutherland-Hodgman
+/// against each of the clip's edges): their intersection, also convex.
+fn clip_convex(polygon: &[egui::Pos2], clip: &[egui::Pos2]) -> Vec<egui::Pos2> {
+    let n = clip.len();
+    let turn: f32 = (0..n)
+        .map(|i| {
+            let (p, q) = (clip[i], clip[(i + 1) % n]);
+            p.x * q.y - q.x * p.y
+        })
+        .sum::<f32>()
+        .signum();
+    let mut points = polygon.to_vec();
+    for i in 0..n {
+        let (a, b) = (clip[i], clip[(i + 1) % n]);
+        let side = |p: egui::Pos2| (b - a).x * (p - a).y - (b - a).y * (p - a).x;
+        let inside = |p: egui::Pos2| side(p) * turn >= 0.0;
+        let mut next = Vec::with_capacity(points.len() + 2);
+        for k in 0..points.len() {
+            let (p, q) = (points[k], points[(k + 1) % points.len()]);
+            if inside(p) {
+                next.push(p);
+            }
+            if inside(p) != inside(q) {
+                let t = side(p) / (side(p) - side(q));
+                next.push(p + (q - p) * t);
+            }
+        }
+        points = next;
+        if points.len() < 3 {
+            return Vec::new();
+        }
+    }
+    // A clip edge through a vertex puts that vertex in twice.
+    points.dedup_by(|a, b| (*a - *b).length_sq() < 1e-6);
+    while points.len() > 1 && (points[0] - points[points.len() - 1]).length_sq() < 1e-6 {
+        points.pop();
+    }
+    if points.len() < 3 {
+        return Vec::new();
     }
     points
 }

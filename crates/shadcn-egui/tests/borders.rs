@@ -329,6 +329,8 @@ fn a_faded_box_has_no_hole_along_its_cuts() {
 /// scale 1 and 2): the slider's white thumb reads 133 over a 229 range,
 /// the checked switch's 23 thumb reads 16 over a 229 track. The crate
 /// blended each thumb with the faded part under it (about 187 and 71).
+/// The range hides the track as well: Chrome reads 120 there, the range
+/// blended with the faded track would read about 127.
 #[test]
 fn a_faded_thumb_hides_the_track_under_it() {
     use shadcn_egui::components::slider::Slider;
@@ -365,6 +367,11 @@ fn a_faded_thumb_hides_the_track_under_it() {
                 .map(|x| i32::from(img.get_pixel(x, y).0[0]))
                 .collect::<Vec<_>>()
         };
+        let range = row(slider)[(slider.width() * ppp * 0.25) as usize];
+        assert!(
+            (range - 120).abs() <= 2,
+            "{ppp}x slider range {range}, Chrome 120"
+        );
         let brightest = *row(slider).iter().max().unwrap();
         assert!(
             (brightest - 133).abs() <= 2,
