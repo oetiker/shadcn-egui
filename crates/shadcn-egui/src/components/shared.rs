@@ -11,6 +11,7 @@ use egui::{
     Color32, Context, CornerRadius, Id, Key, Painter, PointerButton, Rect, Response, Shape, Stroke,
     Ui,
 };
+use std::sync::Arc;
 
 /// CSS's initial `opacity`.
 const INITIAL_OPACITY: f32 = 1.0; // behaviour-ok: CSS initial value of opacity
@@ -655,18 +656,23 @@ impl RecipeBox {
                 );
                 let border = over(self.border_color, fill, self.opacity);
                 let outline = rounded_polygon(placed, radius);
-                let mesh = two_tone(ctx, &outline, hole.clone(), self.borders, fill, border)
-                    .unwrap_or_else(|| {
-                        // The box's own coverage, its outer edge feathered.
-                        let cover = tessellate(
-                            ctx,
-                            // token-ok: a coverage mask, not a colour
-                            &egui::epaint::RectShape::filled(placed, radius, Color32::WHITE) // behaviour-ok: coverage mask
-                                .with_round_to_pixels(false),
-                        );
-                        RoundedClip::new(ctx, hole).two_tone(&cover, fill, border)
-                    });
-                out.push(Shape::mesh(mesh));
+                let mesh = match two_tone(ctx, &outline, hole.clone(), self.borders, fill, border) {
+                    Some(mesh) => Arc::new(mesh),
+                    None => {
+                        let key = CutKey::new(ctx, placed, self.borders, radius, fill, border);
+                        cut_mesh(ctx, key, || {
+                            // The box's own coverage, its outer edge feathered.
+                            let cover = tessellate(
+                                ctx,
+                                // token-ok: a coverage mask, not a colour
+                                &egui::epaint::RectShape::filled(placed, radius, Color32::WHITE) // behaviour-ok: coverage mask
+                                    .with_round_to_pixels(false),
+                            );
+                            RoundedClip::new(ctx, hole).two_tone(&cover, fill, border)
+                        })
+                    }
+                };
+                out.push(Shape::Mesh(mesh));
                 border_done = true;
             } else if t > 0.0 && r > 0.0 && b > 0.0 && l > 0.0 && self.border_color.a() == 255 {
                 // Blink's background bleed avoidance: under an opaque
@@ -810,6 +816,94 @@ fn hide(ctx: &egui::Context, outline: Vec<egui::Pos2>, shapes: Vec<Shape>) -> Ve
         cut(ctx, shape, &|m| clip.remove(m), &mut out);
     }
     out
+}
+
+/// Everything [`two_tone`]'s fallback mesh depends on: the box as egui
+/// puts it on the pixels, its borders, radius and colours, and the
+/// context's scale and feathering.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct CutKey {
+    rect: [u32; 4],
+    borders: [u32; 4],
+    radius: CornerRadius,
+    fill: Color32,
+    border: Color32,
+    ppp: u32,
+    feathering: Option<u32>,
+}
+
+impl CutKey {
+    fn new(
+        ctx: &egui::Context,
+        rect: Rect,
+        borders: [f32; 4],
+        radius: CornerRadius,
+        fill: Color32,
+        border: Color32,
+    ) -> Self {
+        let (on, px) = ctx.tessellation_options(|o| (o.feathering, o.feathering_size_in_pixels));
+        Self {
+            rect: [rect.min.x, rect.min.y, rect.max.x, rect.max.y].map(f32::to_bits),
+            borders: borders.map(f32::to_bits),
+            radius,
+            fill,
+            border,
+            ppp: ctx.pixels_per_point().to_bits(),
+            feathering: on.then_some(px.to_bits()),
+        }
+    }
+}
+
+/// The fallback meshes of faded boxes with sides of unequal width, which
+/// cost 1-4k vertices and milliseconds to cut: the ones the last pass
+/// used and the ones this pass used so far. A pass keeps only what it
+/// uses, as egui's `FrameCache` does, so an animated box cannot grow it.
+#[derive(Clone, Default)]
+struct CutCache {
+    pass: u64,
+    current: std::collections::HashMap<CutKey, Arc<egui::Mesh>>,
+    previous: std::collections::HashMap<CutKey, Arc<egui::Mesh>>,
+    /// Meshes built, for the tests.
+    builds: u64,
+}
+
+fn cut_cache_id() -> Id {
+    Id::new("shadcn_egui::cut_cache")
+}
+
+/// The mesh for `key`, from the cache or from `build`.
+fn cut_mesh(
+    ctx: &egui::Context,
+    key: CutKey,
+    build: impl FnOnce() -> egui::Mesh,
+) -> Arc<egui::Mesh> {
+    let pass = ctx.cumulative_pass_nr();
+    let cached = ctx.data_mut(|d| {
+        let cache = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
+        if cache.pass != pass {
+            cache.pass = pass;
+            cache.previous = std::mem::take(&mut cache.current);
+        }
+        let hit = cache
+            .current
+            .get(&key)
+            .cloned()
+            .or_else(|| cache.previous.remove(&key));
+        if let Some(mesh) = &hit {
+            cache.current.insert(key, mesh.clone());
+        }
+        hit
+    });
+    if let Some(mesh) = cached {
+        return mesh;
+    }
+    let mesh = Arc::new(build());
+    ctx.data_mut(|d| {
+        let cache = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
+        cache.current.insert(key, mesh.clone());
+        cache.builds += 1;
+    });
+    mesh
 }
 
 /// `top` composited over `under` (premultiplied, as the browser blends),
@@ -1909,5 +2003,67 @@ mod tests {
         // Top 20 + bottom 20 + right 8, plus egui's feathering band.
         let border = area(meshes[0]);
         assert!((48.0..48.0 + 60.0).contains(&border), "{border}");
+    }
+
+    /// A faded box with sides of unequal width, as the button group's
+    /// `NOT_FIRST` rule makes it: no left border.
+    fn one_side_off() -> RecipeBox {
+        let mut r = Recipe::default();
+        r.border_width.base = Some(1.0);
+        r.border_left_width.base = Some(0.0);
+        r.bg.base = Some(Paint::Role(crate::style::Role::Background, 1.0));
+        RecipeBox::resolve(
+            &egui::Context::default(),
+            &Theme::vega().in_mode(egui::Theme::Light),
+            &[&r],
+            State::NONE,
+        )
+    }
+
+    /// `(builds, cached meshes)` of the context's fallback cache.
+    fn cut_cache(ctx: &egui::Context) -> (u64, usize) {
+        ctx.data_mut(|d| {
+            let c = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
+            (c.builds, c.current.len() + c.previous.len())
+        })
+    }
+
+    /// A still frame cuts the fallback mesh of a faded box with unequal
+    /// sides once: later frames take it from the cache.
+    #[test]
+    fn a_still_faded_box_with_unequal_sides_is_cut_once() {
+        let b = one_side_off();
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(40.0, 20.0));
+        let mut vertices = 0;
+        for _ in 0..4 {
+            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+                for shape in b.shapes_at(&ctx, rect, 0.5) {
+                    if let Shape::Mesh(m) = shape {
+                        vertices = m.vertices.len();
+                    }
+                }
+            });
+        }
+        assert!(vertices > 0, "the box is one mesh");
+        assert_eq!(cut_cache(&ctx).0, 1, "builds over 4 frames");
+    }
+
+    /// A faded box with unequal sides that moves every frame keeps the
+    /// cache at the meshes of two passes.
+    #[test]
+    fn the_cut_cache_stays_bounded_while_a_box_moves() {
+        let b = one_side_off();
+        let ctx = egui::Context::default();
+        for frame in 0..20 {
+            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+                let at = egui::pos2(10.0 + frame as f32, 10.0);
+                let rect = Rect::from_min_size(at, egui::vec2(40.0, 20.0));
+                let _ = b.shapes_at(&ctx, rect, 0.5);
+            });
+        }
+        let (builds, size) = cut_cache(&ctx);
+        assert_eq!(builds, 20);
+        assert!(size <= 2, "cached meshes {size}");
     }
 }
