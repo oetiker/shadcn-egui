@@ -48,6 +48,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- The rounded corners of a box with a border, such as a checked checkbox, a switch, a slider thumb or an alert, no longer show a dark seam of the box's background along the outside of the border; the edge now blends the border into the page as Chrome does.
 - An alert in egui's `horizontal_wrapped` that does not fit the rest of its line now starts the next line, as a card there does and as an alert in `layout::wrap_row` already did; before, it ran past the right edge of the row.
 - A screen reader now hears that a button, checkbox, switch, select, input or textarea drawn with `.invalid(true)` holds an invalid value, as with shadcn's `aria-invalid`; before, only the red border showed it.
 - The mouse pointer over a disabled checkbox, switch, select or textarea, or over the label of a disabled control, now shows the not-allowed cursor, as on the shadcn page; before, it showed the normal arrow. A disabled input keeps the normal arrow, as on the shadcn page.

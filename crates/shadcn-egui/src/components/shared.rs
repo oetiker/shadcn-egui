@@ -545,8 +545,9 @@ impl RecipeBox {
 
     /// The box as shapes in paint order on `rect`: shadow (outside the
     /// border box only), ring, fill (inside the border under
-    /// `bg-clip-padding`), border inside `rect` (`box-sizing: border-box`),
-    /// outline.
+    /// `bg-clip-padding`; to the middle of an opaque border on every side,
+    /// as Chrome paints it), border inside `rect` (`box-sizing:
+    /// border-box`), outline.
     pub fn shapes(&self, ctx: &egui::Context, rect: Rect) -> Vec<Shape> {
         let radius = self.radius_on(rect);
         let mut out = Vec::new();
@@ -560,6 +561,26 @@ impl RecipeBox {
                     inner,
                     inner_radius(radius, self.borders),
                     fill,
+                ));
+            } else if t > 0.0 && r > 0.0 && b > 0.0 && l > 0.0 && self.border_color.a() == 255 {
+                // Blink's background bleed avoidance: under an opaque
+                // border on every side the fill ends half a border width
+                // in, so no fill shows in the border's anti-aliased outer
+                // edge. The cut is made on the box as egui puts it on the
+                // pixels, and stays where it is cut.
+                let half = self.borders.map(|w| w / 2.0);
+                let placed = if ctx.tessellation_options(|o| o.round_rects_to_pixels) {
+                    egui::emath::GuiRounding::round_to_pixels(rect, ctx.pixels_per_point())
+                } else {
+                    rect
+                };
+                out.push(Shape::Rect(
+                    egui::epaint::RectShape::filled(
+                        padding_box(placed, half),
+                        inner_radius(radius, half),
+                        fill,
+                    )
+                    .with_round_to_pixels(false),
                 ));
             } else {
                 out.push(Shape::rect_filled(rect, radius, fill));

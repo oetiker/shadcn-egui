@@ -130,3 +130,58 @@ fn borders_and_content_sit_on_chromes_device_pixels() {
     assert_eq!(compared, 15);
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Chrome does not let a box's background show in the anti-aliased outer
+/// edge of an opaque border (Blink's background bleed avoidance): at the
+/// rounded corners of a dark box with a red border on white, every edge
+/// pixel is a mix of the red and the white only. Measured in headless
+/// Chrome at device scale 2: no edge pixel more than 2 levels darker
+/// than that mix; the crate painted the fill under the edge, up to 55.
+#[test]
+fn an_opaque_border_hides_the_fill_in_its_outer_edge() {
+    use shadcn_egui::style::Radius;
+    let theme = Theme::vega();
+    let palette = theme.palette_of(egui::Theme::Light);
+    let red = palette.destructive;
+    let mut h = Harness::builder()
+        .with_size(vec2(160.0, 80.0))
+        .with_pixels_per_point(2.0)
+        .with_theme(egui::Theme::Light)
+        .build_ui(|ui| {
+            let theme = Theme::current(ui.ctx());
+            ui.painter()
+                .rect_filled(ui.ctx().content_rect(), 0.0, Color32::WHITE);
+            for (i, radius) in [6.0, 10.0].into_iter().enumerate() {
+                let mut r = Recipe::default();
+                r.border_width.base = Some(1.0);
+                r.border_color.base = Some(Paint::Role(Role::Destructive, 1.0));
+                r.bg.base = Some(Paint::Role(Role::Foreground, 1.0));
+                r.radius.base = Some(Radius::Px(radius));
+                let rect = Rect::from_min_size(pos2(LEFT + i as f32 * 70.0, TOP), vec2(60.0, 40.0));
+                RecipeBox::resolve(ui.ctx(), &theme, &[&r], State::NONE).paint(ui.painter(), rect);
+            }
+        });
+    h.step();
+    let img = h.render().expect("wgpu render");
+    let (mut worst, mut edge) = (0.0_f32, 0);
+    for p in img.pixels() {
+        let [r, g, b, _] = p.0.map(f32::from);
+        // An outer edge pixel: some white in it (green above the red's and
+        // the fill's), not all of it.
+        if g <= 12.0 || g >= 250.0 {
+            continue;
+        }
+        edge += 1;
+        // The red's share, from green and from blue; the red channel of
+        // that mix of red and white.
+        let a = (255.0 - g) / (255.0 - f32::from(red.g()));
+        let a_b = (255.0 - b) / (255.0 - f32::from(red.b()));
+        let want = 255.0 - a.max(a_b) * (255.0 - f32::from(red.r()));
+        worst = worst.max(want - r);
+    }
+    assert!(edge > 20, "{edge} edge pixels");
+    assert!(
+        worst <= 4.0,
+        "the fill darkens an edge pixel by {worst} levels"
+    );
+}

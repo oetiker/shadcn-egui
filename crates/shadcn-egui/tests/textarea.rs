@@ -444,9 +444,15 @@ fn a_disabled_ui_fades_the_field() {
         let fill = pick(&layers, |r| &r.bg, disabled).map_or(egui::Color32::TRANSPARENT, |p| {
             r.paint(p).gamma_multiply(opacity)
         });
+        // The fill is the box, or under an opaque border the box less half
+        // the border (the browser's background bleed avoidance).
         let painted = common::rect_shapes(&off)
             .into_iter()
-            .find(|s| s.rect == rect && s.fill != egui::Color32::TRANSPARENT)
+            .find(|s| {
+                rect.contains_rect(s.rect)
+                    && s.rect.width() >= rect.width() - 1.0
+                    && s.fill != egui::Color32::TRANSPARENT
+            })
             .map_or(egui::Color32::TRANSPARENT, |s| s.fill);
         assert_eq!(painted, fill, "{name}");
     }
