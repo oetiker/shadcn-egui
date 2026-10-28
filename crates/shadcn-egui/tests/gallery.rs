@@ -9,7 +9,7 @@ use shadcn_egui::reference::{gallery_ui, GalleryState};
 use shadcn_egui::{Preset, Theme};
 
 /// Tall enough that nothing needs scrolling.
-const FULL: egui::Vec2 = egui::vec2(1280.0, 2120.0);
+const FULL: egui::Vec2 = egui::vec2(1280.0, 2340.0);
 
 /// The gallery in a harness, its page colour also under kittest's 8px outer
 /// margin, so no band of another colour shows.
@@ -106,12 +106,12 @@ fn the_dialog_closes_on_its_own_buttons() {
 #[test]
 fn gallery_after_applying_a_code() {
     // Luma's larger controls need more height.
-    let mut h = harness(GalleryState::default(), egui::vec2(1280.0, 2320.0));
+    let mut h = harness(GalleryState::default(), egui::vec2(1280.0, 2550.0));
     h.state_mut().code = "b2D0wqNxT".into();
     h.get_by_role_and_label(Role::Button, "Apply").click();
     h.run();
     // Leave the Apply button unhovered.
-    h.hover_at(egui::pos2(1270.0, 2310.0));
+    h.hover_at(egui::pos2(1270.0, 2540.0));
     h.run();
     common::snapshot(&mut h, "gallery_code_b2D0wqNxT_light");
 }
