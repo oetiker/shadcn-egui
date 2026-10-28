@@ -8,6 +8,7 @@ use egui::{Rect, Shape};
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
 use shadcn_egui::components::input::Input;
+use shadcn_egui::components::shared::line_width;
 use shadcn_egui::components::textarea::Textarea;
 use shadcn_egui::Theme;
 
@@ -73,12 +74,23 @@ fn assert_clip_x(what: &str, clip: Rect, want: Rect) {
     );
 }
 
+/// `clip`'s sides as egui-wgpu cuts on the device pixels (each side
+/// rounded) against the painted box `want` (egui rounds its sides too).
+fn assert_clip_px(what: &str, clip: Rect, want: Rect, ppp: f32) {
+    let px = |v: f32| (v * ppp).round();
+    assert!(
+        px(clip.left()) == px(want.left()) && px(clip.right()) == px(want.right()),
+        "{what}: clip {clip:?}, want x {:?}",
+        want.x_range()
+    );
+}
+
 /// An input's hint and typed text are clipped at the content box: a `W`
 /// that overhangs the field's one-`M` content minimum stops at the
 /// content box, not in the padding.
 #[test]
 fn an_input_clips_its_text_and_hint_at_the_content_box() {
-    for ppp in [1.0, 2.0] {
+    for ppp in [1.0, 1.25, 1.5, 2.0] {
         let h = harness(ppp, |ui| {
             let mut empty = String::new();
             ui.add(Input::new(&mut empty).hint("WWW").max_width(0.0))
@@ -110,7 +122,7 @@ fn an_input_clips_its_text_and_hint_at_the_content_box() {
 /// caret at the end stays whole inside the content box, as in Chrome.
 #[test]
 fn a_caret_at_the_end_of_a_full_input_is_inside_the_content_box() {
-    for ppp in [1.0, 2.0] {
+    for ppp in [1.0, 1.25, 1.5, 2.0] {
         let h = harness(ppp, |ui| {
             let mut empty = String::new();
             ui.add(Input::new(&mut empty).hint("M").max_width(0.0))
@@ -154,18 +166,19 @@ fn a_caret_at_the_end_of_a_full_input_is_inside_the_content_box() {
 /// Chrome, and stops at the border.
 #[test]
 fn a_textarea_clips_its_text_and_hint_at_the_padding_box() {
-    for ppp in [1.0, 2.0] {
+    for ppp in [1.0, 1.25, 1.5, 2.0] {
         for (typed, hint) in [("", "WWW"), ("WWW", "")] {
             let h = harness(ppp, move |ui| {
                 let mut text = String::from(typed);
                 ui.add(Textarea::new(&mut text).hint_text(hint).desired_width(0.0))
             });
             let rect = *h.state();
-            let padding = rect.shrink(BORDER);
+            // The border is whole device pixels (one at 1.25x: 0.8 pt).
+            let padding = rect.shrink(line_width(BORDER, ppp));
             let (texts, _) = clipped(h.output());
             assert!(!texts.is_empty(), "{ppp}x {typed:?}/{hint:?}: text drawn");
             for (clip, _) in &texts {
-                assert_clip_x(&format!("{ppp}x {typed:?}/{hint:?}"), *clip, padding);
+                assert_clip_px(&format!("{ppp}x {typed:?}/{hint:?}"), *clip, padding, ppp);
             }
         }
     }
