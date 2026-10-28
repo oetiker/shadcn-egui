@@ -13,8 +13,9 @@
 //! single title or description, the icon's second row stays empty and its
 //! gap stays, as the browser lays out an implicit empty row.
 //!
-//! The action ([`AlertAction`]) is absolutely placed in the browser
-//! (`absolute top-2.5 right-3`): it takes no room in the grid, and the
+//! The action ([`AlertAction`]) is absolutely placed in the browser, at
+//! the style's `cn-alert-action` inset (`top-2.5 right-3` in vega,
+//! `top-2 right-2` in nova): it takes no room in the grid, and the
 //! alert reserves room for it with `has-data-[slot=alert-action]:pr-18`.
 //! The alert learns that an action exists from the previous pass, and the
 //! action takes its width from the previous pass; where either changes,
@@ -126,7 +127,7 @@ struct AlertContext {
     /// The alert's state bits (variant, breakpoints).
     state: State,
     /// The top right corner of the action's place: the padding box's top
-    /// right, `top-2.5 right-3` inside it.
+    /// right, the style's `cn-alert-action` inset inside it.
     action_corner: egui::Pos2,
 }
 
@@ -498,11 +499,12 @@ fn text_part(
     response
 }
 
-/// `alert-action`: widgets placed in the alert's top right corner
-/// (`absolute top-2.5 right-3`), left to right in the order the code adds
-/// them. It takes no room in the alert's content; the alert reserves room
-/// on its right for it (`has-data-[slot=alert-action]:pr-18`). Call it in
-/// the [`Alert::show`] closure after the title and description.
+/// `alert-action`: widgets placed in the alert's top right corner, at the
+/// style's `cn-alert-action` inset (`top-2.5 right-3` in vega), left to
+/// right in the order the code adds them. It takes no room in the alert's
+/// content; the alert reserves room on its right for it
+/// (`has-data-[slot=alert-action]:pr-18`). Call it in the [`Alert::show`]
+/// closure after the title and description.
 ///
 /// It takes its width from the previous pass, and the alert learns from
 /// the previous pass that it has an action; where either changes, the pass
