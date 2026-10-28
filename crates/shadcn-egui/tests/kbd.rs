@@ -6,8 +6,9 @@ use egui_kittest::Harness;
 use shadcn_egui::components::icon_atom::IconAtom;
 use shadcn_egui::components::kbd::{kbd, Kbd, KbdGroup, KbdRecipes, KbdVariant};
 use shadcn_egui::components::label::description;
-use shadcn_egui::style::AppVariant;
+use shadcn_egui::components::text::TextLook;
 use shadcn_egui::style::Style;
+use shadcn_egui::style::{AppVariant, State};
 use shadcn_egui::{layout, Palette, Theme};
 
 /// The rects of the chips `add` places, by their text.
@@ -216,6 +217,46 @@ fn a_groups_variant_reaches_its_chips() {
     assert_eq!(own.width(), 20.0);
 }
 
+/// `kbd-demo`'s `Ctrl + B` group: the `+` is a plain span between the
+/// chips.
+fn ctrl_plus_b(ui: &mut egui::Ui) {
+    KbdGroup::new().show(ui, |ui| {
+        kbd(ui, "Ctrl");
+        TextLook::resolve(ui, &[], State::NONE).label(ui, "+", egui::TextWrapMode::Extend);
+        kbd(ui, "B");
+    });
+}
+
+/// The `+` between two chips is body text in the inherited look: one
+/// line box of the body size, centred on the chips' centre line
+/// (`items-center`), as in the browser.
+#[test]
+fn the_plus_between_chips_is_body_text_centred_on_the_chips() {
+    for (name, theme, mode) in common::snapshot_themes() {
+        let mut h = Harness::builder()
+            .with_size(vec2(320.0, 120.0))
+            .build_ui_state(
+                move |ui, line: &mut f32| {
+                    theme.apply(ui.ctx());
+                    ui.ctx().set_theme(mode);
+                    *line = TextLook::resolve(ui, &[], State::NONE).line_height();
+                    ctrl_plus_b(ui);
+                },
+                0.0,
+            );
+        h.run();
+        let line = *h.state();
+        let [ctrl, plus, b] = ["Ctrl", "+", "B"].map(|n| h.get_by_label(n).rect());
+        let case = format!("{name}: {ctrl:?} {plus:?} {b:?}");
+        assert_eq!(plus.height(), line, "{case}");
+        assert!((plus.center().y - ctrl.center().y).abs() < 0.01, "{case}");
+        assert!(
+            plus.left() > ctrl.right() && b.left() > plus.right(),
+            "{case}"
+        );
+    }
+}
+
 /// shadcn-svelte `kbd-demo` and `kbd-group-demo`, and an icon-only chip.
 fn kbd_demo(ui: &mut egui::Ui) {
     let icons = Theme::current(ui.ctx()).icons;
@@ -225,11 +266,7 @@ fn kbd_demo(ui: &mut egui::Ui) {
                 kbd(ui, k);
             }
         });
-        KbdGroup::new().show(ui, |ui| {
-            kbd(ui, "Ctrl");
-            ui.label("+");
-            kbd(ui, "B");
-        });
+        ctrl_plus_b(ui);
         ui.horizontal_wrapped(|ui| {
             description(ui, "Use");
             KbdGroup::new().show(ui, |ui| {

@@ -25,7 +25,7 @@ variants"), and its parts follow it.
 | `<Dialog>` + Header/Title/Description/Footer | `shadcn_egui::components::dialog::Dialog::new("id", "Title")` with `.description(..)`, `.width(..)`, `.backdrop(..)`, `.show_close_button(..)`, then `.show(ctx, &mut open, \|ui\| { ..; footer(ui, \|ui\| { secondary; primary }) })`. Closes on Esc, a backdrop click or the close button; the footer shows its actions right-aligned in the order the code adds them (primary last); in a window narrower than `sm` (640) it stacks them full width, the primary on top; in nova its muted strip reaches the panel edges. The width is the style's `sm:max-w-*`, capped to the window minus 32. The overlay blur is not drawn. Markers: `cn-dialog-overlay`, `cn-dialog-content`, `cn-dialog-close`, `cn-dialog-header`, `cn-dialog-footer`, `cn-dialog-title`, `cn-dialog-description` |
 | `<Popover>` + Trigger/Content | `let t = ui.add(Button::new("Open")); shadcn_egui::components::popover::Popover::new(&t).width(..).side_offset(..).show(\|ui\| ..)`; `side_offset` is the gap between the trigger and the popup, default 4. A click on the trigger toggles it; Esc or a click outside closes it. `popover_header(ui, title, description)` inside. Markers: `cn-popover-content`, `cn-popover-header`, `cn-popover-title`, `cn-popover-description` |
 | `<Tooltip>` | `shadcn_egui::components::tooltip::tooltip(ui.add(..), "text")`, or `Tooltip::new(&resp).show(ui, \|ui\| ..)` for other content; text inside takes the tooltip's look. Markers: `cn-tooltip-content`, `cn-tooltip-arrow` |
-| `<Kbd>` + `<Kbd.Group>` | `shadcn_egui::components::kbd::kbd(ui, "Ctrl")`, or `ui.add(Kbd::new(content))` with any `IntoAtoms` content (text, `IconAtom`s); `Kbd::icon_only(icon, name)` for an icon alone, `name` its accessible name. A shortcut of several keys: `KbdGroup::new().show(ui, \|ui\| ..)`, which lays its chips and any text between them out in one row; its `.variant(..)` reaches the chips. A chip in a tooltip does not yet take the tooltip's look. Markers: `cn-kbd`, `cn-kbd-group` |
+| `<Kbd>` + `<Kbd.Group>` | `shadcn_egui::components::kbd::kbd(ui, "Ctrl")`, or `ui.add(Kbd::new(content))` with any `IntoAtoms` content (text, `IconAtom`s); `Kbd::icon_only(icon, name)` for an icon alone, `name` its accessible name. A shortcut of several keys: `KbdGroup::new().show(ui, \|ui\| ..)`, which lays its chips and any text between them out in one row (plain text such as a `+` as body text: `TextLook::resolve(ui, &[], State::NONE).label(ui, "+", TextWrapMode::Extend)`, centred on the chips as in the browser; `ui.label` sits low); its `.variant(..)` reaches the chips. A chip in a tooltip does not yet take the tooltip's look. Markers: `cn-kbd`, `cn-kbd-group` |
 | Lucide `<Mic />` | `shadcn_egui::components::icon::IconView::new(&shadcn_egui::icons::lucide::MIC)` with `.size(..)`, `.color(..)`; `paint_icon(painter, rect, icon, color, stroke)` for custom widgets. See `icons.md` |
 | An icon inside `IntoAtoms` content (`egui::Button`, a crate widget's content) | `shadcn_egui::components::icon_atom::IconAtom::new(icon)`, with `.size(..)` and `.tint(..)`. Without a size it is a crate widget's icon size (12 px in a `Kbd`), `Metrics::icon` in a plain egui widget. Without a tint it draws in the theme's text colour, and a crate widget draws it in its state colour, as its `.icon` slot; a tinted one keeps its colour everywhere. A text colour a host `Ui` overrides does not reach an untinted atom in a plain egui widget (egui gives image atoms no `Ui` colour), so tint it there. Needs `Theme::apply` |
 | `transition-*` (`transition-all duration-200 ease-in-out`) on a value of your own widget | `shadcn_egui::components::motion::transition(ui.ctx(), id, target, &stack, Transition::OTHER, state)` with the part's recipe stack: the value moves over the recipe's `duration` along its `easing` (150 ms `ease-in-out` where it sets none) when its `transition` names the property, and jumps under `animation_time == 0` |
@@ -37,11 +37,13 @@ before using it; do not paint it ad hoc in the screen.
 
 ```rust
 use shadcn_egui::components::kbd::{kbd, KbdGroup};
+use shadcn_egui::components::text::TextLook;
+use shadcn_egui::style::State;
 
 fn shortcut(ui: &mut egui::Ui) {
     KbdGroup::new().show(ui, |ui| {
         kbd(ui, "Ctrl");
-        ui.label("+");
+        TextLook::resolve(ui, &[], State::NONE).label(ui, "+", egui::TextWrapMode::Extend);
         kbd(ui, "B");
     });
 }

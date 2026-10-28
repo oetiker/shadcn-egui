@@ -19,11 +19,13 @@ use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
+use crate::components::text::TextLook;
 use crate::components::tooltip::tooltip;
 use crate::preset::{
     BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, RadiusChoice,
     StyleName, ThemeColor,
 };
+use crate::style::State;
 use crate::{layout, Theme};
 
 pub struct SettingsState {
@@ -703,7 +705,7 @@ fn kbd_gallery(ui: &mut egui::Ui) {
             });
             KbdGroup::new().show(ui, |ui| {
                 kbd(ui, "Ctrl");
-                ui.label("+");
+                TextLook::resolve(ui, &[], State::NONE).label(ui, "+", egui::TextWrapMode::Extend);
                 kbd(ui, "B");
             });
             ui.horizontal_wrapped(|ui| {
