@@ -193,9 +193,9 @@ impl<'a> TextEntry<'a> {
                 // clips the text a point outside the content box and the
                 // hint not at all.
                 let clip = match self.clip {
-                    TextClip::Content => egui::Rect::from_min_max(
-                        rect.min + egui::vec2(self.inset[3], self.inset[0]),
-                        rect.max - egui::vec2(self.inset[1], self.inset[2]),
+                    TextClip::Content => egui::Rect::from_x_y_ranges(
+                        rect.left() + self.inset[3]..=rect.right() - self.inset[1],
+                        rect.top() + self.inset[0]..=rect.bottom() - self.inset[2],
                     ),
                     TextClip::Padding => rect.shrink(self.border),
                 }
