@@ -156,6 +156,23 @@ fn a_chip_lets_hover_through_to_what_is_under_it() {
     assert!(s.plain, "hover-only rect under the chip not hovered");
 }
 
+/// `inline-flex`: a group is as high as its tallest chip, also in a `Ui`
+/// whose `interact_size.y` is larger.
+#[test]
+fn a_group_is_as_high_as_its_tallest_chip() {
+    let r = common::measure(&Theme::vega(), egui::Theme::Light, |ui| {
+        ui.spacing_mut().interact_size.y = 60.0;
+        ui.scope(|ui| {
+            KbdGroup::new().show(ui, |ui| {
+                kbd(ui, "Ctrl");
+                kbd(ui, "B");
+            })
+        })
+        .response
+    });
+    assert_eq!(r.height(), 20.0);
+}
+
 /// `cn-kbd-group`'s `gap-1` between chips, which share one centre line.
 #[test]
 fn a_group_lays_its_chips_out_in_one_row() {

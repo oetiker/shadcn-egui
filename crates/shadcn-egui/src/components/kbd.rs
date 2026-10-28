@@ -198,10 +198,8 @@ impl KbdGroup {
         let parts = KbdContext {
             variant: self.variant,
         };
+        // `inline-flex`: a crate row, as high as its content.
         ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
-            // `inline-flex`: as high as its content, without egui's
-            // `interact_size` floor of a row.
-            ui.spacing_mut().interact_size.y = 0.0;
             layout::row(ui, gap, add)
         })
     }

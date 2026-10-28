@@ -55,8 +55,8 @@ fn space_between_composes() {
     assert!(right.left() > left.right() + 100.0, "{left:?} {right:?}");
 }
 
-/// `form_row`: the control starts after the label column, and the row is at
-/// least a text-sm line high.
+/// `form_row`: the control starts after the label column, and the row is
+/// as high as the taller of the label and the control.
 #[test]
 fn form_row_puts_the_control_after_the_label_column() {
     let mode = egui::Theme::Dark;
@@ -72,7 +72,10 @@ fn form_row_puts_the_control_after_the_label_column() {
         .response
     });
     assert_eq!(control.left() - row.left(), 100.0 + gap);
-    assert!(row.height() >= theme.line_px(shadcn_egui::style::TextSize::Sm));
+    let label = common::measure(&theme, mode, |ui| {
+        ui.add(shadcn_egui::components::label::Label::new("Name"))
+    });
+    assert_eq!(row.height(), label.height().max(control.height()));
 }
 
 /// `form_row` draws its label as the crate's `Label`: the same recipe text
@@ -212,8 +215,9 @@ fn vstack_items_wrap_in_a_wrap_row() {
 }
 
 /// The vertical centres of a row and its children (a label, then a button
-/// `tall`er or shorter than egui's row height), after the row has settled.
-fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32) {
+/// `tall`er or shorter than egui's row height), after the row has settled,
+/// and the heights of the row and the button.
+fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32, [f32; 2]) {
     use shadcn_egui::components::button::{Button, ButtonSize};
     let (mut row, mut a, mut b) = (
         egui::Rect::NOTHING,
@@ -241,7 +245,12 @@ fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32) {
                 .rect;
         });
     }
-    (row.center().y, a.center().y, b.center().y)
+    (
+        row.center().y,
+        a.center().y,
+        b.center().y,
+        [row.height(), b.height()],
+    )
 }
 
 /// How the short child sits in the row: bare, or inside a child Ui that
@@ -254,8 +263,8 @@ enum Wrap {
 }
 
 /// `row` centres a short child placed before a child taller than egui's
-/// row height, and shrinks again when the tall child goes, also when the
-/// short child sits in a child Ui.
+/// row height, and shrinks again to its tallest child when the tall child
+/// goes, also when the short child sits in a child Ui.
 #[test]
 fn row_centres_children_of_mixed_height() {
     for wrap in [Wrap::None, Wrap::EnabledUi, Wrap::Scope] {
@@ -263,14 +272,14 @@ fn row_centres_children_of_mixed_height() {
             let ctx = egui::Context::default();
             theme.apply(&ctx);
             ctx.set_theme(mode);
-            let (row, a, b) = row_centres(&ctx, true, wrap);
+            let (row, a, b, _) = row_centres(&ctx, true, wrap);
             assert_eq!(
                 (a, b),
                 (row, row),
                 "{name} {wrap:?} tall: row {row}, label {a}, button {b}"
             );
             let tall_row = row;
-            let (row, a, b) = row_centres(&ctx, false, wrap);
+            let (row, a, b, [row_h, button_h]) = row_centres(&ctx, false, wrap);
             assert_eq!(
                 (a, b),
                 (row, row),
@@ -280,7 +289,8 @@ fn row_centres_children_of_mixed_height() {
                 row < tall_row,
                 "{name} {wrap:?}: the row shrinks: {row} vs {tall_row}"
             );
-            assert_eq!(row, ctx.global_style().spacing.interact_size.y / 2.0);
+            // As high as its tallest child, not egui's `interact_size`.
+            assert_eq!(row_h, button_h, "{name} {wrap:?}");
         }
     }
 }
@@ -2436,6 +2446,137 @@ fn a_form_row_keeps_to_a_narrow_column_and_a_crate_row() {
             assert!(row.right() <= column.right() + 0.01, "{case}");
             assert!(control.right() <= column.right() + 0.01, "{case}");
             assert!(control.left() >= row.left() + 100.0, "{case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}
+
+/// A crate row is as high as its tallest item (conformance 3.3: egui's
+/// `interact_size` is no parent height): in a `Ui` whose `interact_size.y`
+/// is 60, a row of 12 and 20 point boxes is 20 high, and its items sit in
+/// it. On the screen and in an `egui::Area`; a still frame takes one pass.
+#[test]
+fn crate_rows_are_as_high_as_their_tallest_item() {
+    type Row = fn(&mut egui::Ui, &mut dyn FnMut(&mut egui::Ui));
+    let rows: [(&str, Row); 3] = [
+        ("row", |ui, add| layout::row(ui, 8.0, |ui| add(ui))),
+        ("wrap_row", |ui, add| {
+            layout::wrap_row(ui, 8.0, |ui| add(ui))
+        }),
+        ("space_between", |ui, add| {
+            let add = std::cell::RefCell::new(add);
+            layout::space_between(ui, |ui| (add.borrow_mut())(ui), |_| {});
+        }),
+    ];
+    for (name, row) in rows {
+        for host in [Host::Screen, Host::Area(false)] {
+            let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                ui.spacing_mut().interact_size.y = 60.0;
+                let mut items = Vec::new();
+                let outer = ui
+                    .scope(|ui| {
+                        row(ui, &mut |ui| {
+                            items.push(boxed(ui, 10.0, 12.0));
+                            items.push(boxed(ui, 10.0, 20.0));
+                        })
+                    })
+                    .response
+                    .rect;
+                out.push(outer);
+                out.extend(items);
+            });
+            let case = format!("{name} {host:?}: {r:?}");
+            assert_eq!(r[0].height(), 20.0, "{case}");
+            assert_eq!(r[2].y_range(), r[0].y_range(), "{case}");
+            assert_eq!(r[1].center().y, r[0].center().y, "{case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}
+
+/// A card footer is as high as its tallest item, not egui's
+/// `interact_size`: a footer 10 points taller makes the card 10 points
+/// taller, also below `interact_size.y`.
+#[test]
+fn a_card_footer_is_as_high_as_its_tallest_item() {
+    use shadcn_egui::components::card::Card;
+    let height = |tall: f32| {
+        let (passes, r) = settled(&vega(), Host::Screen, &move |ui, _, out| {
+            ui.spacing_mut().interact_size.y = 60.0;
+            ui.set_max_width(300.0);
+            Card::new()
+                .footer(|ui| {
+                    boxed(ui, 10.0, 12.0);
+                    boxed(ui, 10.0, tall);
+                })
+                .show(ui, |ui| {
+                    ui.label("body");
+                });
+            out.push(ui.min_rect());
+        });
+        assert_eq!(passes, 1, "tall {tall}");
+        r[0].height()
+    };
+    assert_eq!(height(30.0) - height(20.0), 10.0);
+}
+
+/// A dialog footer from `sm` up is as high as its tallest action, not
+/// egui's `interact_size`: an action 10 points taller makes the footer
+/// 10 points taller, also below `interact_size.y`.
+#[test]
+fn a_dialog_footer_is_as_high_as_its_tallest_action() {
+    use shadcn_egui::components::dialog;
+    let height = |tall: f32| {
+        let (passes, r) = settled(&vega(), Host::Screen, &move |ui, _, out| {
+            ui.spacing_mut().interact_size.y = 60.0;
+            let r = ui
+                .allocate_ui(egui::vec2(400.0, 200.0), |ui| {
+                    dialog::footer(ui, |ui| {
+                        boxed(ui, 10.0, 12.0);
+                        boxed(ui, 10.0, tall);
+                    });
+                })
+                .response
+                .rect;
+            out.push(r);
+        });
+        assert_eq!(passes, 1, "tall {tall}");
+        r[0].height()
+    };
+    assert_eq!(height(30.0) - height(20.0), 10.0);
+}
+
+/// `form_row` is as high as its taller cell, the label's line or the
+/// control, not egui's `interact_size`, and centres both in it; it grows
+/// with a taller control and shrinks again when it goes. On the screen
+/// and in an `egui::Area`; a still frame takes one pass.
+#[test]
+fn form_row_is_as_high_as_its_label_or_control() {
+    use shadcn_egui::components::label::Label;
+    let label = common::measure(&Theme::vega(), egui::Theme::Light, |ui| {
+        ui.add(Label::new("Name"))
+    })
+    .height();
+    for host in [Host::Screen, Host::Area(false)] {
+        let ctx = vega();
+        for tall in [30.0, 4.0] {
+            let (passes, r) = settled(&ctx, host, &move |ui, _, out| {
+                ui.spacing_mut().interact_size.y = 60.0;
+                ui.set_max_width(380.0);
+                let mut control = egui::Rect::NOTHING;
+                let row = ui
+                    .scope(|ui| {
+                        layout::form_row(ui, 100.0, "Name", |ui| {
+                            control = boxed(ui, 10.0, tall);
+                        })
+                    })
+                    .response
+                    .rect;
+                out.extend([row, control]);
+            });
+            let case = format!("{host:?} tall {tall}: {r:?}");
+            assert_eq!(r[0].height(), label.max(tall), "{case}");
+            assert_eq!(r[1].center().y, r[0].center().y, "{case}");
             assert_eq!(passes, 1, "{case}");
         }
     }
