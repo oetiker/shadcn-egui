@@ -2758,3 +2758,120 @@ fn a_hit_area_stays_no_row_content_across_an_immediate_viewport() {
     assert_eq!(r[0].height(), r[1].height().max(r[2].height()), "{case}");
     assert_eq!(passes, 1, "{case}");
 }
+
+/// A crate row is as high as a block item in it, an alert, a card or a
+/// textarea, and centres a smaller item beside it: in `row` and
+/// `space_between`, on the screen and in an `egui::Area`; a still frame
+/// takes one pass.
+#[test]
+fn a_crate_row_is_as_high_as_a_block_item() {
+    use shadcn_egui::components::alert::Alert;
+    use shadcn_egui::components::card::Card;
+    use shadcn_egui::components::textarea::Textarea;
+    type Item = fn(&mut egui::Ui) -> egui::Rect;
+    let items: [(&str, Item); 3] = [
+        ("alert", |ui| {
+            ui.add(
+                Alert::new()
+                    .title("Heads up")
+                    .description("A longer description."),
+            )
+            .rect
+        }),
+        ("card", |ui| {
+            ui.scope(|ui| {
+                Card::new()
+                    .footer(|ui| {
+                        ui.label("footer");
+                    })
+                    .show(ui, |ui| {
+                        ui.label("body");
+                    })
+            })
+            .response
+            .rect
+        }),
+        ("textarea", |ui| {
+            let mut text = String::from("one\ntwo\nthree");
+            ui.add(Textarea::new(&mut text)).rect
+        }),
+    ];
+    type Row = fn(&mut egui::Ui, &mut dyn FnMut(&mut egui::Ui));
+    let rows: [(&str, Row); 2] = [
+        ("row", |ui, add| layout::row(ui, 8.0, |ui| add(ui))),
+        ("space_between", |ui, add| {
+            let add = std::cell::RefCell::new(add);
+            layout::space_between(ui, |ui| (add.borrow_mut())(ui), |_| {});
+        }),
+    ];
+    for (row_name, row) in rows {
+        for (item_name, item) in items {
+            for host in [Host::Screen, Host::Area(false)] {
+                let (passes, r) = settled(&vega(), host, &|ui, _, out| {
+                    ui.set_max_width(400.0);
+                    let mut rects = Vec::new();
+                    let outer = ui
+                        .scope(|ui| {
+                            row(ui, &mut |ui| {
+                                rects.push(boxed(ui, 10.0, 12.0));
+                                ui.scope(|ui| {
+                                    ui.set_max_width(300.0);
+                                    rects.push(item(ui));
+                                });
+                            })
+                        })
+                        .response
+                        .rect;
+                    out.push(outer);
+                    out.extend(rects);
+                });
+                let case = format!("{row_name} {item_name} {host:?}: {r:?}");
+                assert!(r[2].height() > 12.0, "{case}");
+                assert_eq!(r[0].height(), r[2].height(), "{case}");
+                assert_eq!(r[2].y_range(), r[0].y_range(), "{case}");
+                assert_eq!(r[1].center().y, r[0].center().y, "{case}");
+                assert_eq!(passes, 1, "{case}");
+            }
+        }
+    }
+}
+
+/// A progress bar beside a slider: the row is as high as the taller of
+/// the two drawn bars, not the slider's thumb target, and the progress
+/// bar is centred in it, in every style.
+#[test]
+fn a_row_of_a_progress_and_a_slider_is_as_high_as_the_bars() {
+    use shadcn_egui::components::progress::Progress;
+    use shadcn_egui::components::slider::Slider;
+    for (name, theme, _) in common::snapshot_themes()
+        .into_iter()
+        .filter(|(n, ..)| n.ends_with("light"))
+    {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let (passes, r) = settled(&ctx, Host::Screen, &|ui, _, out| {
+            let (mut progress, mut slider) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+            let row = ui
+                .scope(|ui| {
+                    layout::row(ui, 8.0, |ui| {
+                        ui.scope(|ui| {
+                            ui.set_max_width(120.0);
+                            progress = ui.add(Progress::new(0.4)).rect;
+                        });
+                        ui.scope(|ui| {
+                            ui.set_max_width(120.0);
+                            let mut v = 50.0;
+                            slider = ui.add(Slider::new(&mut v, 0.0..=100.0).label("V")).rect;
+                        });
+                    })
+                })
+                .response
+                .rect;
+            out.extend([row, progress, slider]);
+        });
+        let case = format!("{name}: {r:?}");
+        assert_eq!(r[0].height(), r[1].height().max(r[2].height()), "{case}");
+        assert_eq!(r[1].center().y, r[0].center().y, "{case}");
+        assert_eq!(passes, 1, "{case}");
+    }
+}
