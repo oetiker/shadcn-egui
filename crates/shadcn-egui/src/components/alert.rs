@@ -34,7 +34,7 @@ use crate::components::shared::{
 use crate::components::text::{content_scope, TextLook};
 use crate::layout;
 use crate::style::app::{Resolved, Sealed};
-use crate::style::{pick, AppEnum, AppVariant, Prop, Recipe, State, Style, VariantEnum};
+use crate::style::{pick, pick_len, AppEnum, AppVariant, Recipe, State, Style, VariantEnum};
 use crate::Theme;
 use egui::{
     Align, InnerResponse, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder,
@@ -143,10 +143,6 @@ fn part_setup(ui: &Ui, t: &Theme) -> (Resolved<AlertVariant>, State) {
     let v = t.resolve(cx.map_or(AlertVariant::Default, |c| c.variant));
     let bits = cx.map_or_else(|| v.bits(), |c| c.state);
     (v, t.state(ui.ctx(), bits))
-}
-
-fn len(layers: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>, st: State) -> f32 {
-    pick(layers, f, st).unwrap_or(0.0)
 }
 
 /// A shadcn alert (`role="alert"`): a bordered box with an optional icon, a
@@ -284,18 +280,18 @@ impl Alert {
         );
 
         let ppp = ui.ctx().pixels_per_point();
-        let border = line_width(len(&root, |r| &r.border_width, st), ppp);
+        let border = line_width(pick_len(&root, |r| &r.border_width, st), ppp);
         let (pad_t, pad_r, pad_b, pad_l) = (
-            len(&root, |r| &r.pad_top, st),
-            len(&root, |r| &r.pad_right, st),
-            len(&root, |r| &r.pad_bottom, st),
-            len(&root, |r| &r.pad_left, st),
+            pick_len(&root, |r| &r.pad_top, st),
+            pick_len(&root, |r| &r.pad_right, st),
+            pick_len(&root, |r| &r.pad_bottom, st),
+            pick_len(&root, |r| &r.pad_left, st),
         );
-        let gap = len(&root, |r| &r.gap, st);
+        let gap = pick_len(&root, |r| &r.gap, st);
         let icon_size = self
             .icon
             .map(|_| pick(&root, |r| &r.icon_size, st).unwrap_or(t.metrics.icon));
-        let icon_col = icon_size.map_or(0.0, |s| s + len(&root, |r| &r.gap_x, st));
+        let icon_col = icon_size.map_or(0.0, |s| s + pick_len(&root, |r| &r.gap_x, st));
         let side = border + pad_l + icon_col;
         let end = pad_r + border;
         let look = TextLook::resolve(ui, &root, st);
@@ -318,8 +314,8 @@ impl Alert {
             state: bits,
             action_corner: egui::pos2(
                 known_w.map_or(f32::INFINITY, |w| origin.x + w - border)
-                    - len(&action, |r| &r.inset_right, st),
-                origin.y + border + len(&action, |r| &r.inset_top, st),
+                    - pick_len(&action, |r| &r.inset_right, st),
+                origin.y + border + pick_len(&action, |r| &r.inset_top, st),
             ),
         };
 

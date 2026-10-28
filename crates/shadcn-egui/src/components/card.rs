@@ -22,7 +22,7 @@ use crate::components::context;
 use crate::components::shared::{content_ui, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, state_size, ResolvedPair};
-use crate::style::{pick, Recipe, State};
+use crate::style::{pick_len, State};
 use crate::{layout, Theme};
 use egui::{
     Align, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder, WidgetInfo,
@@ -84,10 +84,6 @@ fn card_context(ui: &Ui) -> CardContext {
 fn card_recipes(ui: &Ui, t: &Theme) -> ResolvedPair<CardVariant, CardSize> {
     let cx = card_context(ui);
     t.resolve_pair(cx.variant, cx.size)
-}
-
-fn len(layers: &[&Recipe], f: fn(&Recipe) -> &crate::style::Prop<f32>, st: State) -> f32 {
-    pick(layers, f, st).unwrap_or(0.0)
 }
 
 type FooterFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
@@ -177,13 +173,13 @@ impl<'a> Card<'a> {
         let foot = [v.part(&t.style, |s| &s.card_footer, |r| &r.card_footer)];
 
         let (pad_top, pad_bottom, gap) = (
-            len(&card, |r| &r.pad_top, st),
-            len(&card, |r| &r.pad_bottom, st),
-            len(&card, |r| &r.gap, st),
+            pick_len(&card, |r| &r.pad_top, st),
+            pick_len(&card, |r| &r.pad_bottom, st),
+            pick_len(&card, |r| &r.gap, st),
         );
         let (side_l, side_r) = (
-            len(&content, |r| &r.pad_left, st),
-            len(&content, |r| &r.pad_right, st),
+            pick_len(&content, |r| &r.pad_left, st),
+            pick_len(&content, |r| &r.pad_right, st),
         );
         // The card's `text-*` and text colour reach its content.
         let look = TextLook::resolve(ui, &card, st);
@@ -244,10 +240,10 @@ impl<'a> Card<'a> {
         let mut footer_shapes = None;
         if let Some(footer) = self.footer {
             let (f_top, f_right, f_bottom, f_left) = (
-                len(&foot, |r| &r.pad_top, st),
-                len(&foot, |r| &r.pad_right, st),
-                len(&foot, |r| &r.pad_bottom, st),
-                len(&foot, |r| &r.pad_left, st),
+                pick_len(&foot, |r| &r.pad_top, st),
+                pick_len(&foot, |r| &r.pad_right, st),
+                pick_len(&foot, |r| &r.pad_bottom, st),
+                pick_len(&foot, |r| &r.pad_left, st),
             );
             let strip_top = bottom + gap;
             let strip_bg = ui.painter().add(Shape::Noop);
@@ -263,7 +259,7 @@ impl<'a> Card<'a> {
                 crate::layout::row_builder(inner, Layout::left_to_right(Align::Center)),
                 parts,
             ));
-            row.spacing_mut().item_spacing.x = len(&foot, |r| &r.gap, st);
+            row.spacing_mut().item_spacing.x = pick_len(&foot, |r| &r.gap, st);
             clip(&mut row);
             let items = crate::layout::RowItems::begin(&row);
             crate::layout::shrink_stacks(&mut row, |ui| {
@@ -335,7 +331,7 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let v = card_recipes(ui, &t);
     let st = card_state(ui, &v);
     let l = [v.part(&t.style, |s| &s.card_content, |r| &r.card_content)];
-    let gap = len(&l, |r| &r.gap, st);
+    let gap = pick_len(&l, |r| &r.gap, st);
     let id = ui.next_auto_id().with("shadcn_egui::card::part");
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.y = gap;
@@ -411,7 +407,7 @@ pub fn card_header_with_action(
 fn header_column(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
-    let gap = len(
+    let gap = pick_len(
         &[v.part(&t.style, |s| &s.card_header, |r| &r.card_header)],
         |r| &r.gap,
         t.state(ui.ctx(), v.bits()),
@@ -459,7 +455,7 @@ pub fn card_description(ui: &mut Ui, text: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::style::{AppVariant, Paint, Role};
+    use crate::style::{pick, AppVariant, Paint, Recipe, Role};
 
     /// An app variant's edit gets `CardRecipes` and changes only what it
     /// names; an app size edits the same copy after it.
