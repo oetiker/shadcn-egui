@@ -153,16 +153,30 @@ fn zero_and_negative_values_show_no_indicator() {
     assert_eq!(indicator(Progress::from_value(-20.0, 100.0), 200.0).1, None);
 }
 
-/// `translateX(-{100 - 100 * value / max}%)` past `max` moves the
-/// indicator right of the track start: the track shows it from there to
-/// its end, as the browser does.
+/// Past `max` upstream writes `translateX(--50%)`: not a number, so the
+/// browser drops the `transform` and the indicator fills the track.
 #[test]
-fn a_value_past_max_shifts_the_indicator_as_upstream() {
-    let (rect, span) = indicator(Progress::from_value(150.0, 100.0), 200.0);
+fn a_value_past_max_fills_the_track() {
+    for p in [Progress::from_value(150.0, 100.0), Progress::new(2.0)] {
+        let (rect, span) = indicator(p, 200.0);
+        let (lo, hi) = span.expect("an indicator");
+        assert!(
+            near(lo, rect.left()) && near(hi, rect.right()),
+            "{p:?}: {lo}..{hi} vs {rect:?}"
+        );
+    }
+}
+
+/// A negative `max` goes through the same formula: `50 / -100` gives
+/// `translateX(-150%)` (no indicator), `-50 / -100` gives
+/// `translateX(-50%)` (half).
+#[test]
+fn a_negative_max_follows_upstreams_formula() {
+    assert_eq!(indicator(Progress::from_value(50.0, -100.0), 200.0).1, None);
+    let (rect, span) = indicator(Progress::from_value(-50.0, -100.0), 200.0);
     let (lo, hi) = span.expect("an indicator");
-    assert!(near(lo, rect.left() + 100.0), "{lo} vs {rect:?}");
-    assert!(near(hi, rect.right()), "{hi} vs {rect:?}");
-    assert_eq!(indicator(Progress::new(2.0), 200.0).1, None);
+    assert!(near(lo, rect.left()), "{lo} vs {rect:?}");
+    assert!(near(hi, rect.left() + 100.0), "{hi} vs {rect:?}");
 }
 
 /// A non-finite offset makes the browser drop the `transform`: the

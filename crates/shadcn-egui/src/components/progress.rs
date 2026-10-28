@@ -35,11 +35,10 @@ default_variant!(
 /// (`style.animation_time == 0`).
 ///
 /// The indicator sits where upstream's formula puts it, also outside
-/// `0..=max`: a value past `max` moves it right of the track's start (the
-/// track shows it from there to its end), a negative value hides it, and a
-/// non-finite offset (`max` of 0, a NaN value) fills the track, as the
-/// browser drops a `transform` it cannot read. Upstream's indeterminate
-/// state (`value={null}`) draws as 0 and is not offered.
+/// `0..=max`: a negative value hides it, and a value past `max`, a `max`
+/// of 0 or a NaN value fills the track, as the browser drops a `transform`
+/// it cannot read (`translateX(--50%)`, `translateX(-NaN%)`). Upstream's
+/// indeterminate state (`value={null}`) draws as 0 and is not offered.
 ///
 /// ```
 /// use shadcn_egui::components::progress::{progress, Progress};
@@ -111,10 +110,15 @@ impl Widget for Progress {
         let (rect, resp) = layout::allocate_item(ui, Vec2::new(width, height), Sense::hover());
 
         // `translateX(-{100 - 100 * value / max}%)` as a share of the
-        // indicator's own width; the browser drops a transform it cannot
-        // read, which leaves the indicator in place.
+        // indicator's own width. A negative offset prints as `--50%` and a
+        // non-finite one as `-NaN%` or `--Infinity%`: the browser drops a
+        // transform it cannot read, which leaves the indicator in place.
         let offset = 1.0 - self.value / self.max; // behaviour-ok: upstream's 100% less the filled share
-        let offset = if offset.is_finite() { offset } else { 0.0 };
+        let offset = if offset.is_finite() && offset >= 0.0 {
+            offset
+        } else {
+            0.0
+        };
         let offset = transition(
             ui.ctx(),
             resp.id.with("offset"),
