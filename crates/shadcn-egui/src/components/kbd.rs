@@ -141,7 +141,14 @@ impl Widget for Kbd<'_> {
             .max(get(|r| &r.min_height));
         let width = row.size().x.max(get(|r| &r.min_width));
         let (id, rect) = layout::allocate_item_space(ui, Vec2::new(width, height));
+        // `pointer-events-none`: egui has no sense without hover, so the
+        // chip registers with an empty clip, as a widget scrolled out of
+        // view: its hit rect (clip ∩ rect) never holds the pointer, while
+        // the response keeps `rect` for the accessible node's bounds.
+        let clip = ui.clip_rect();
+        ui.set_clip_rect(egui::Rect::NOTHING);
         let resp = ui.interact(rect, id, Sense::hover());
+        ui.set_clip_rect(clip);
         let enabled = ui.is_enabled();
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &name));
         if !ui.is_rect_visible(rect) {

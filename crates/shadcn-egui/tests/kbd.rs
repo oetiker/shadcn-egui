@@ -1,7 +1,7 @@
 mod common;
 
 use egui::vec2;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
 use shadcn_egui::components::kbd::{kbd, Kbd, KbdGroup, KbdRecipes, KbdVariant};
 use shadcn_egui::components::label::description;
@@ -78,6 +78,49 @@ fn an_icon_only_chip_reports_its_name() {
         &["Enter"],
     )[0];
     assert_eq!(r.size(), vec2(20.0, 20.0));
+}
+
+/// `pointer-events-none`: the pointer over a chip does not hover the chip
+/// but still hovers what lies under it, a clickable rect and a hover-only
+/// one; the chip keeps its accessible label node.
+#[test]
+fn a_chip_lets_hover_through_to_what_is_under_it() {
+    #[derive(Default)]
+    struct Hover {
+        chip: bool,
+        click: bool,
+        plain: bool,
+    }
+    let theme = Theme::vega();
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 80.0))
+        .build_ui_state(
+            move |ui, s: &mut Hover| {
+                theme.apply(ui.ctx());
+                let under = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(100.0, 60.0));
+                let click = ui.interact(under, egui::Id::new("click"), egui::Sense::click());
+                let plain = ui.interact(under, egui::Id::new("plain"), egui::Sense::hover());
+                let chip = ui.put(under.shrink(20.0), Kbd::new("K"));
+                *s = Hover {
+                    chip: chip.hovered(),
+                    click: click.hovered(),
+                    plain: plain.hovered(),
+                };
+            },
+            Hover::default(),
+        );
+    h.run();
+    let centre = {
+        let node = h.get_by_label("K");
+        assert_eq!(node.accesskit_node().role(), egui::accesskit::Role::Label);
+        node.rect().center()
+    };
+    h.hover_at(centre);
+    h.run();
+    let s = h.state();
+    assert!(!s.chip, "chip hovered");
+    assert!(s.click, "clickable rect under the chip not hovered");
+    assert!(s.plain, "hover-only rect under the chip not hovered");
 }
 
 /// `cn-kbd-group`'s `gap-1` between chips, which share one centre line.
