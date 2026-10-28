@@ -1007,6 +1007,61 @@ struct Modality {
     input: Option<bool>,
 }
 
+/// The ids [`hit_area`] registered in one pass of one viewport. Only the
+/// current pass's are kept, so the set does not grow with every control
+/// ever drawn. Each viewport has its own set: an immediate viewport runs
+/// its passes inside a pass of its parent, with pass numbers of its own.
+#[derive(Clone, Debug, Default)]
+struct HitAreas {
+    pass: u64,
+    ids: egui::IdSet,
+}
+
+fn hit_areas_id(ctx: &Context) -> Id {
+    Id::new("shadcn_egui::hit_areas").with(ctx.viewport_id())
+}
+
+/// A control's hit area, upstream's `after:absolute after:-inset-*`: a
+/// widget at `rect` that takes the pointer with `sense`, but no part in
+/// the layout of a crate row (its height, a `self-stretch` item's
+/// height), as an absolute box takes none in a flex row (conformance
+/// 3.3).
+pub(crate) fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let key = hit_areas_id(ui.ctx());
+    ui.data_mut(|d| {
+        let areas = d.get_temp_mut_or_default::<HitAreas>(key);
+        if areas.pass != pass {
+            *areas = HitAreas {
+                pass,
+                ids: egui::IdSet::default(),
+            };
+        }
+        areas.ids.insert(id);
+    });
+    ui.interact(rect, id, sense)
+}
+
+/// The ids among `ids` that name a widget [`hit_area`] registered in this
+/// pass of this viewport. The pass's set is read in place, not cloned:
+/// every crate row asks once per pass.
+pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) -> Vec<Id> {
+    let pass = ctx.cumulative_pass_nr();
+    let key = egui::util::id_type_map::RawKey::new::<HitAreas>(hit_areas_id(ctx));
+    ctx.data(|d| {
+        match d
+            .get_temp_raw(key)
+            .and_then(|a| a.downcast_ref::<HitAreas>())
+        {
+            Some(areas) if areas.pass == pass => ids
+                .into_iter()
+                .filter(|id| areas.ids.contains(id))
+                .collect(),
+            _ => Vec::new(),
+        }
+    })
+}
+
 /// Whether `:focus-visible` holds for the focused widget, as the browser
 /// tracks it (conformance 2.6), crate-wide. The modality is taken when
 /// focus changes: by the pass's last key press or pointer button event,

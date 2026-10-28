@@ -247,16 +247,15 @@ impl<'a> Card<'a> {
             );
             let strip_top = bottom + gap;
             let strip_bg = ui.painter().add(Shape::Noop);
+            // A crate row as high as its content, as `layout::row`.
+            let band_id = id.with("shadcn_egui::card::footer_height");
+            let (stored, band, align) = crate::layout::row_band(ui, band_id);
             let inner = Rect::from_min_max(
                 egui::pos2(origin.x + f_left, strip_top + f_top),
-                egui::pos2(
-                    origin.x + outer_w - f_right,
-                    strip_top + f_top + ui.spacing().interact_size.y,
-                ),
+                egui::pos2(origin.x + outer_w - f_right, strip_top + f_top + band),
             );
-            // A row as high as a control, like `ui.horizontal`.
             let mut row = frame.new_child(context::push(
-                crate::layout::row_builder(inner, Layout::left_to_right(Align::Center)),
+                crate::layout::row_builder(inner, Layout::left_to_right(align)),
                 parts,
             ));
             row.spacing_mut().item_spacing.x = pick_len(&foot, |r| &r.gap, st);
@@ -277,7 +276,15 @@ impl<'a> Card<'a> {
                 });
                 ((), ui.min_rect().width())
             });
-            items.finish(&row, false);
+            let lines = items.finish(&row, false);
+            crate::layout::settle_row_band(
+                ui,
+                band_id,
+                stored,
+                band,
+                &lines,
+                "card::footer content height changed",
+            );
             content_w = content_w.max(row.min_rect().right() - origin.x + f_right);
             let strip_bottom = row.min_rect().bottom().max(inner.top()) + f_bottom;
             footer_shapes = Some((strip_bg, strip_top, strip_bottom));

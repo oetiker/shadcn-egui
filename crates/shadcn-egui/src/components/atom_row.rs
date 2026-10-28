@@ -7,7 +7,10 @@
 //! Text atoms go through the text path ([`TextLook`]): Chrome's advances,
 //! kerning and line box. Typed icon slots and [`IconAtom`]s without a
 //! caller colour draw in the colour the row paints in, the part's state
-//! colour (rules, Media and icons); other images draw as given.
+//! colour (rules, Media and icons); other images draw as given. Typed icon
+//! slots and [`IconAtom`]s without a caller side are the part's icon size
+//! ([`AtomRow::icon_size`]), as upstream sizes an svg without a `size-*`
+//! class.
 //!
 //! Use it in two steps, as the size never depends on the interaction
 //! state: [`AtomRow::lay_out`] gives the row's border-box size to allocate;
@@ -17,7 +20,7 @@
 //! [`IconAtom`]: crate::components::icon_atom::IconAtom
 
 use crate::components::icon::{paint_icon, Icon};
-use crate::components::icon_atom::retint;
+use crate::components::icon_atom::{resize, retint};
 use crate::components::text::{TextBlock, TextLook};
 use egui::{
     Align2, AtomKind, Atoms, Color32, Image, IntoAtoms, Painter, Rect, SizedAtomKind, TextWrapMode,
@@ -52,11 +55,17 @@ impl<'a> AtomRow<'a> {
         }
     }
 
-    /// The typed icon slots before and after the content, each `size`
-    /// points square.
-    pub(crate) fn icons(mut self, start: Option<Icon>, end: Option<Icon>, size: f32) -> Self {
+    /// The typed icon slots before and after the content.
+    pub(crate) fn icons(mut self, start: Option<Icon>, end: Option<Icon>) -> Self {
         self.start = start;
         self.end = end;
+        self
+    }
+
+    /// The part's icon size (`[&_svg:not([class*='size-'])]:size-*`): the
+    /// side of the typed icon slots and of icon atoms without a caller
+    /// side; `Metrics::icon` by default.
+    pub(crate) fn icon_size(mut self, size: f32) -> Self {
         self.icon_size = size;
         self
     }
@@ -97,6 +106,10 @@ impl<'a> AtomRow<'a> {
                     (ItemKind::Text { text, block }, size)
                 }
                 kind => {
+                    let kind = match kind {
+                        AtomKind::Image(img) => AtomKind::Image(resize(img, self.icon_size)),
+                        kind => kind,
+                    };
                     let sized = egui::Atom {
                         kind,
                         ..Default::default()
@@ -267,13 +280,15 @@ mod tests {
             sizes.push(size(AtomRow::new(ui, "Save").inset(8.0, 6.0, 3.0, 3.0)));
             sizes.push(size(
                 AtomRow::new(ui, "Save")
-                    .icons(Some(icons.check), Some(icons.check), 12.0)
+                    .icons(Some(icons.check), Some(icons.check))
+                    .icon_size(12.0)
                     .gap(4.0),
             ));
             // An empty text is no item: one icon, no gap.
             sizes.push(size(
                 AtomRow::new(ui, "")
-                    .icons(Some(icons.check), None, 24.0)
+                    .icons(Some(icons.check), None)
+                    .icon_size(24.0)
                     .gap(4.0),
             ));
             sizes.push(size(
@@ -322,6 +337,36 @@ mod tests {
                 Color32::BLUE.gamma_multiply(0.5)
             ]
         );
+    }
+
+    /// An icon atom without a caller side measures and paints at the row's
+    /// icon size (`[&_svg:not([class*='size-'])]:size-*`); one with a side
+    /// keeps it.
+    #[test]
+    fn icon_atoms_take_the_row_icon_size_unless_sized() {
+        let ctx = egui::Context::default();
+        crate::components::icon_atom::install(&ctx);
+        let mut sizes = Vec::new();
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let look = look(ui);
+            let check = crate::icons::lucide::SLOTS.check;
+            for atom in [IconAtom::new(check), IconAtom::new(check).size(20.0)] {
+                let row = AtomRow::new(ui, atom).icon_size(12.0).lay_out(ui, &look);
+                sizes.push(row.size());
+                let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), row.size());
+                row.paint(ui, ui.painter(), rect, &look, Color32::RED);
+            }
+        });
+        assert_eq!(sizes, [Vec2::splat(12.0), Vec2::splat(20.0)]);
+        let painted: Vec<Vec2> = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Rect(r) => Some(r.rect.size()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(painted, [Vec2::splat(12.0), Vec2::splat(20.0)]);
     }
 
     #[test]

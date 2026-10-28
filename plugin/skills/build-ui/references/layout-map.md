@@ -58,11 +58,12 @@ fn footer(ui: &mut egui::Ui) {
 - `layout::space_between` shows the widgets of each side left to right
   in the order the code adds them, as `justify-between` does; add the
   primary action last.
-- `layout::row` is at least `ui.spacing().interact_size.y` tall (36 px in
-  luma), whatever its children need. For a tight list (radio rows,
-  checkbox rows), lower `interact_size.y` in a scope around the list:
-  `ui.scope(|ui| { ui.spacing_mut().interact_size.y = ROW_H; … })`, with
-  `ROW_H` the design's row height.
+- `layout::row`, `space_between`, `form_row` and a card footer are as
+  high as their tallest child, never `ui.spacing().interact_size.y`. A
+  checkbox's, switch's or slider's larger click target does not count, as an
+  absolute box in a flex row: a row of a label and a checkbox is 16 px
+  high in vega. For a taller row, give the design's height to a child (`add_sized`), not to
+  `interact_size`.
 - In `layout::row`, `wrap_row` and `space_between` a child wider than the
   room left (an input or select raised to its content minimum, a long
   egui label) pushes the children after it past its whole width, and the row

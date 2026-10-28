@@ -10,6 +10,7 @@ pub mod icon;
 pub mod icon_atom;
 mod icon_raster;
 pub mod input;
+pub mod kbd;
 pub mod label;
 pub mod motion;
 pub mod popover;

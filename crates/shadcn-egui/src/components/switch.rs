@@ -115,7 +115,7 @@ impl Widget for Switch<'_> {
         } else {
             Sense::hover()
         };
-        let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        let mut resp = crate::components::shared::hit_area(ui, hit, base.id.with("hit"), sense);
         pressable(&mut resp, ActivationKeys::EnterAndSpace);
         if enabled && resp.clicked() {
             *self.on = !*self.on;

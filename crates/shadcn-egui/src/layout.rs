@@ -2,8 +2,6 @@
 //! `gap` maps to item_spacing; space-between right-aligns via a nested layout.
 
 use crate::components::context;
-use crate::style::TextSize;
-use crate::Theme;
 use egui::Ui;
 use egui_extras::{Size, StripBuilder};
 
@@ -39,10 +37,12 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// Horizontal stack with an explicit gap (flex-direction: row; gap: N;
 /// align-items: center).
 ///
-/// egui centres each child in the row height so far, so a child taller than
-/// `interact_size.y` would leave the children before it above centre. The
-/// row therefore starts from the content height of the last pass, and asks
-/// egui to redo a pass whose content height changed.
+/// The row is as high as its tallest child, never egui's `interact_size`
+/// (conformance 3.3). egui centres each child in the row height so far,
+/// so a child taller than the children before it would leave them above
+/// centre. The row therefore starts from the content height of the last
+/// pass (0 in its first pass), and asks egui to redo a pass whose content
+/// height changed.
 ///
 /// A widget that fills the available height (a `ScrollArea`) takes the
 /// row's current height as its own, so a row that holds one does not
@@ -59,13 +59,11 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// as `separator_vertical`) takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
-    let floor = ui.spacing().interact_size.y;
-    let stored = ui.data(|d| d.get_temp::<f32>(id));
-    let height = stored.unwrap_or(floor);
+    let (stored, height, align) = row_band(ui, id);
     let layout = if ui.layout().prefer_right_to_left() {
-        egui::Layout::right_to_left(egui::Align::Center)
+        egui::Layout::right_to_left(align)
     } else {
-        egui::Layout::left_to_right(egui::Align::Center)
+        egui::Layout::left_to_right(align)
     };
     // The content height: the tallest item of the row, measured from the
     // widgets registered while `add` runs (see `row_lines`), so it does not
@@ -80,18 +78,56 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         });
         (inner, items.finish(ui, false))
     });
-    let content = lines.iter().map(|l| l.height).fold(0.0, f32::max);
-    let measured = content.max(floor);
+    settle_row_band(
+        ui,
+        id,
+        stored,
+        height,
+        &lines,
+        "layout::row content height changed",
+    );
+    inner
+}
+
+/// The height a content-height row (one line: [`row`], [`space_between`],
+/// a card footer) lays its children out in, stored under `id`: what it
+/// stored, its content height of the last pass (0 in its first pass), and
+/// the cross alignment of its items. The first pass, redone once it has
+/// measured the content, puts its items at the top of the empty band:
+/// egui moves an item taller than the band down to the row's top, and
+/// that move turns an item that a filling egui widget pushed to an
+/// infinite place (a `Separator` in a [`vstack`] measuring its content)
+/// into a NaN rect.
+pub(crate) fn row_band(ui: &Ui, id: egui::Id) -> (Option<f32>, f32, egui::Align) {
+    let stored = ui.data(|d| d.get_temp::<f32>(id));
+    let align = if stored.is_some() {
+        egui::Align::Center
+    } else {
+        egui::Align::Min
+    };
+    (stored, stored.unwrap_or(0.0), align)
+}
+
+/// Store the content height `lines` measured for the row under `id` that
+/// laid out in `band` ([`row_band`]), and redo the pass with `why` where
+/// it differs from `band`.
+pub(crate) fn settle_row_band(
+    ui: &Ui,
+    id: egui::Id,
+    stored: Option<f32>,
+    band: f32,
+    lines: &[Line],
+    why: &'static str,
+) {
+    let measured = lines.iter().map(|l| l.height).fold(0.0, f32::max);
     if may_store(ui, stored.is_some())
         && stored.is_none_or(|h| (h - measured).abs() > ROW_HEIGHT_EPSILON)
     {
         ui.data_mut(|d| d.insert_temp(id, measured));
-        if (height - measured).abs() > ROW_HEIGHT_EPSILON {
-            ui.ctx()
-                .request_discard("layout::row content height changed");
+        if (band - measured).abs() > ROW_HEIGHT_EPSILON {
+            ui.ctx().request_discard(why);
         }
     }
-    inner
 }
 
 fn stretch_id(row: egui::Id) -> egui::Id {
@@ -108,7 +144,8 @@ fn stretch_pass_id(row: egui::Id) -> egui::Id {
 /// each call, which marks the item that asked; and the `Ui`s whose
 /// children are the row's items: `roots` by the `id` their children name
 /// as parent, `skip` the unique ids of the `Ui`s between a root and the
-/// row, which are no items themselves.
+/// row, which are no items themselves, and of the pass's hit areas,
+/// which take no part in the row's layout.
 #[derive(Clone, Debug, Default)]
 struct Stretch {
     heights: Vec<f32>,
@@ -165,7 +202,7 @@ impl RowItems {
         let pass = ui
             .data_mut(|d| d.remove_temp::<Stretch>(stretch_pass_id(self.row)))
             .unwrap_or_default();
-        let (lines, heights) = ui.ctx().viewport(|v| {
+        let (added, end) = ui.ctx().viewport(|v| {
             let layer = v.this_pass.widgets.get_layer(self.layer);
             let added: Vec<(usize, egui::WidgetRect)> = layer
                 .enumerate()
@@ -173,8 +210,15 @@ impl RowItems {
                 .map(|(i, w)| (i, *w))
                 .collect();
             let end = self.before + added.len();
-            row_lines(&added, end, &pass, wraps)
+            (added, end)
         });
+        // A hit area takes no part in the row's layout.
+        let mut pass = pass;
+        pass.skip.extend(crate::components::shared::hit_areas_among(
+            ui.ctx(),
+            added.iter().map(|(_, w)| w.id),
+        ));
+        let (lines, heights) = row_lines(&added, end, &pass, wraps);
         let changed = self.stored.as_ref().is_none_or(|old| {
             old.len() != heights.len()
                 || old
@@ -309,9 +353,8 @@ pub(crate) fn hold_row_items(ui: &Ui) {
 
 /// The height of a `self-stretch` flex item: in a crate row ([`row`],
 /// [`space_between`], a card footer, a dialog footer from `sm` up), the
-/// height of the row's tallest other child in the previous pass, without
-/// the row's `interact_size` floor (a vertical rule beside small text is
-/// as high as the text); in a
+/// height of the row's tallest other child in the previous pass (a
+/// vertical rule beside small text is as high as the text); in a
 /// [`wrap_row`], the tallest other child of the item's own line. The
 /// child that calls this before it draws counts as a stretch item, and
 /// stretch items do not count as other children; where the row's other
@@ -1379,7 +1422,7 @@ pub fn container_at_least(ui: &Ui, px: f32) -> bool {
 }
 
 /// The media-query flags of the window: [`State::SM`] at 640 px and up,
-/// [`State::MD`] at 768 px and up. [`Theme::state`] adds them to every
+/// [`State::MD`] at 768 px and up. [`Theme::state`](crate::Theme::state) adds them to every
 /// state it resolves.
 ///
 /// [`State::SM`]: crate::style::State::SM
@@ -1401,13 +1444,12 @@ pub(crate) fn breakpoints(ctx: &egui::Context) -> crate::style::State {
 /// pass; where that width changes, the pass is discarded and redone.
 pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
     let id = ui.next_auto_id().with("shadcn_egui::layout::space_between");
-    // `ui.horizontal`'s size and layout, as a crate row.
-    let size = egui::vec2(
-        ui.available_size_before_wrap().x,
-        ui.spacing().interact_size.y,
-    );
-    let layout = egui::Layout::left_to_right(egui::Align::Center);
-    overflow_row(ui, size, layout, None, |_, ui| {
+    // A crate row as high as its content, as `row`.
+    let band_id = id.with("height");
+    let (stored, band, align) = row_band(ui, band_id);
+    let size = egui::vec2(ui.available_size_before_wrap().x, band);
+    let layout = egui::Layout::left_to_right(align);
+    let lines = overflow_row(ui, size, layout, None, |_, ui| {
         let items = RowItems::begin(ui);
         shrink_stacks(ui, |ui| {
             left(ui);
@@ -1437,8 +1479,16 @@ pub fn space_between(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce
             };
             ((), start + gap + end)
         });
-        items.finish(ui, false);
+        items.finish(ui, false)
     });
+    settle_row_band(
+        ui,
+        band_id,
+        stored,
+        band,
+        &lines,
+        "layout::space_between content height changed",
+    );
 }
 
 /// The width [`end_aligned`] took under `id` in the previous pass; `None`
@@ -1574,27 +1624,51 @@ pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     crate::components::card::Card::new().show(ui, add)
 }
 
-/// A labeled control row: fixed-width label column + control filling the rest.
+/// A labeled control row: fixed-width label column + control filling the
+/// rest, as high as the taller of the two (never egui's `interact_size`),
+/// both centred in it. The height comes from the previous pass; where it
+/// changes, the pass is redone.
 pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce(&mut Ui)) {
-    let t = Theme::current(ui.ctx());
-    let row_h = ui.spacing().interact_size.y.max(t.line_px(TextSize::Sm));
-    ui.allocate_ui(egui::vec2(ui.available_width(), row_h), |ui| {
+    let id = ui.next_auto_id().with("shadcn_egui::layout::form_row");
+    let (stored, band, align) = row_band(ui, id);
+    let mut lines = Vec::new();
+    // A cell measures its widgets, not its own rect: egui makes a centred
+    // cell as high as the band, so the row would never shrink.
+    let mut cell = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
+        ui.with_layout(egui::Layout::left_to_right(align), |ui| {
+            let items = RowItems::begin(ui);
+            add(ui);
+            lines.extend(items.finish(ui, false));
+        });
+    };
+    let mut control = Some(control);
+    ui.allocate_ui(egui::vec2(ui.available_width(), band), |ui| {
         StripBuilder::new(ui)
             .size(Size::exact(label_width))
             .size(Size::remainder())
             .horizontal(|mut strip| {
                 strip.cell(|ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    cell(ui, &mut |ui| {
                         ui.add(crate::components::label::Label::new(label));
-                    });
+                    })
                 });
                 strip.cell(|ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        control(ui)
-                    });
+                    cell(ui, &mut |ui| {
+                        if let Some(control) = control.take() {
+                            control(ui);
+                        }
+                    })
                 });
             });
     });
+    settle_row_band(
+        ui,
+        id,
+        stored,
+        band,
+        &lines,
+        "layout::form_row content height changed",
+    );
 }
 
 #[cfg(test)]

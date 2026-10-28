@@ -200,7 +200,7 @@ impl Widget for Slider<'_> {
         } else {
             Sense::hover()
         };
-        let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        let mut resp = crate::components::shared::hit_area(ui, hit, base.id.with("hit"), sense);
         pressable(&mut resp, ActivationKeys::None);
 
         let mut moved = false;
