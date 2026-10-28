@@ -134,15 +134,17 @@ impl<'a> Widget for Input<'a> {
         let width = layout::capped_width(ui, max_width, frame.content_min);
         let mut edit = TextEdit::singleline(self.text);
         if !self.hint.is_empty() {
-            // The placeholder is laid out in the field's look, cut to the
-            // content box as egui cuts its hint text, and measured in the
-            // room the field leaves before the caret's.
+            // The placeholder is laid out in the field's look on one line,
+            // its line breaks stripped as the HTML spec says for an input,
+            // and not elided (`text-overflow: clip`): the field's clip cuts
+            // it at the content box. It is measured in the room the field
+            // leaves before the caret's.
             let content = frame.content_width(width);
             let hint = frame.look.layout_colored(
                 ui,
-                self.hint.as_str(),
-                TextWrapMode::Truncate,
-                content,
+                self.hint.replace(['\r', '\n'], ""),
+                TextWrapMode::Extend,
+                f32::INFINITY,
                 frame.placeholder,
             );
             edit = edit.hint_text(within(hint, content - frame.caret_room(ui.ctx())));

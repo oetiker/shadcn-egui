@@ -170,3 +170,79 @@ fn a_textarea_clips_its_text_and_hint_at_the_padding_box() {
         }
     }
 }
+
+/// The glyphs of every text shape a frame painted, as text, with its row
+/// count.
+fn painted_texts(out: &egui::FullOutput) -> Vec<(String, usize)> {
+    fn walk(s: &Shape, texts: &mut Vec<(String, usize)>) {
+        match s {
+            Shape::Text(t) => {
+                let glyphs = t.galley.rows.iter().flat_map(|r| &r.glyphs);
+                let text: String = glyphs.map(|g| g.chr).collect();
+                if !text.is_empty() {
+                    texts.push((text, t.galley.rows.len()));
+                }
+            }
+            Shape::Vec(v) => v.iter().for_each(|s| walk(s, texts)),
+            _ => {}
+        }
+    }
+    let mut texts = Vec::new();
+    for c in &out.shapes {
+        walk(&c.shape, &mut texts);
+    }
+    texts
+}
+
+/// A hint too long for its field is cut, never elided: Chrome's
+/// placeholder has `text-overflow: clip`, so an input shows the hint's
+/// start on one line (line breaks stripped, as the HTML spec says for an
+/// input's placeholder) up to the clip, and a textarea wraps it, a word
+/// wider than the field broken, with no ellipsis in either (Chrome page
+/// `infra/q9/ph.html`).
+#[test]
+fn a_hint_too_long_for_its_field_is_clipped_not_elided() {
+    for ppp in [1.0, 2.0] {
+        for (hint, want) in [
+            (
+                "Enter your email address please",
+                "Enter your email address please",
+            ),
+            ("line one\nline two", "line oneline two"),
+        ] {
+            let h = harness(ppp, move |ui| {
+                let mut empty = String::new();
+                ui.add(Input::new(&mut empty).hint(hint).max_width(120.0))
+            });
+            assert_eq!(
+                painted_texts(h.output()),
+                vec![(want.to_owned(), 1)],
+                "{ppp}x input hint {hint:?}"
+            );
+        }
+        for hint in [
+            "Enter your email address please and some more words",
+            "Supercalifragilisticexpialidocious",
+        ] {
+            let h = harness(ppp, move |ui| {
+                let mut empty = String::new();
+                ui.add(
+                    Textarea::new(&mut empty)
+                        .hint_text(hint)
+                        .desired_width(120.0),
+                )
+            });
+            let texts = painted_texts(h.output());
+            assert_eq!(texts.len(), 1, "{ppp}x textarea hint {hint:?}: {texts:?}");
+            assert_eq!(
+                texts[0].0.replace(' ', ""),
+                hint.replace(' ', ""),
+                "{ppp}x textarea hint shows all its text"
+            );
+            assert!(
+                texts[0].1 > 1,
+                "{ppp}x textarea hint {hint:?} wraps: {texts:?}"
+            );
+        }
+    }
+}
