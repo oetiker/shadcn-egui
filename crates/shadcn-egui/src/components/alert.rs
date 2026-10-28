@@ -300,7 +300,7 @@ impl Alert {
         // its content's width.
         let bounded = ui.available_width().is_finite();
         let outer_w = layout::capped_width(ui, f32::INFINITY, side + end);
-        let (origin, mut frame) = layout::begin_item(ui, outer_w);
+        let (origin, mut frame) = layout::begin_block(ui, outer_w);
         let width_key = id.with("shadcn_egui::alert::width");
         let known_w = if bounded {
             Some(outer_w)

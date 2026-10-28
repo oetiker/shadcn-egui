@@ -94,6 +94,25 @@ fn wraps_to_its_own_line_in_a_wrap_row() {
     assert_eq!(alert.width(), 448.0);
 }
 
+/// `w-full` in a `layout::row` beside a nowrap button: the alert's flex
+/// basis is the whole row and the button keeps its min-content, so the
+/// alert takes the rest of the row (a card there is content-wide).
+#[test]
+fn fills_the_rest_of_a_row() {
+    let t = vega();
+    let (button, alert) = settle(&t, 900.0, |ui| {
+        ui.set_max_width(448.0);
+        shadcn_egui::layout::row(ui, 8.0, |ui| {
+            let b = ui.add(Button::new("Before")).rect;
+            let a = ui.add(Alert::new().title("Alert in a row")).rect;
+            (b, a)
+        })
+    });
+    assert_eq!(alert.center().y, button.center().y, "{button:?} {alert:?}");
+    assert_eq!(alert.left(), button.right() + 8.0, "{button:?} {alert:?}");
+    assert_eq!(alert.right(), 448.0, "{button:?} {alert:?}");
+}
+
 /// In unbounded room the alert is as wide as its content plus its padding,
 /// never infinite.
 #[test]

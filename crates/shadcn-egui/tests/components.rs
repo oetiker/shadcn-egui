@@ -1157,6 +1157,40 @@ fn card_wraps_in_a_wrap_row() {
     assert!(body.top() >= button.bottom() + 8.0, "{button:?} {body:?}");
 }
 
+/// A card in a `layout::row` beside a nowrap button: upstream's card sets
+/// no width, so it is a flex item as wide as its content, not the rest of
+/// the row (an alert, `w-full`, takes the rest there).
+#[test]
+fn card_is_content_wide_in_a_row() {
+    let ctx = egui::Context::default();
+    let (mut button, mut card, mut body) = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
+    for _ in 0..3 {
+        let _ = common::pass(common::Loop::RunUi, &ctx, vec![], |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.set_max_width(448.0);
+            shadcn_egui::layout::row(ui, 8.0, |ui| {
+                button = ui.add(Button::new("Before")).rect;
+                card = ui
+                    .scope(|ui| {
+                        Card::new().show(ui, |ui| {
+                            body = card_content(ui, |ui| ui.label("Card")).rect;
+                        })
+                    })
+                    .response
+                    .rect;
+            });
+        });
+    }
+    assert_eq!(card.left(), button.right() + 8.0, "{button:?} {card:?}");
+    // vega's card content is `px-6`: the card is the body plus 48.
+    assert_eq!(card.width(), body.width() + 48.0, "{body:?} {card:?}");
+    assert!(card.right() < 448.0, "{card:?}");
+}
+
 /// The card's node holds its header, content and footer, as upstream's
 /// card `div` holds its children.
 #[test]
