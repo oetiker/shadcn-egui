@@ -2442,3 +2442,41 @@ fn input_text_follows_md_breakpoint() {
     assert_eq!(text_px(767.0), theme.metrics.text_base);
     assert_eq!(text_px(768.0), theme.metrics.text_sm);
 }
+
+/// In a crate row, a slider's thumb still drags from inside its larger
+/// target above the track (mira: 8 px), though the target takes no part
+/// in the row's height.
+#[test]
+fn slider_in_a_row_drags_from_inside_its_target() {
+    use shadcn_egui::components::slider::Slider;
+    let theme = shadcn_egui::Theme::new(
+        shadcn_egui::style::Style::mira(),
+        shadcn_egui::Palette::light(),
+        shadcn_egui::Palette::dark(),
+        10.0,
+    );
+    let mut h = egui_kittest::Harness::new_ui_state(
+        move |ui, s: &mut (f32, egui::Rect)| {
+            theme.apply(ui.ctx());
+            ui.add_space(20.0);
+            shadcn_egui::layout::row(ui, 8.0, |ui| {
+                ui.set_width(200.0);
+                s.1 = ui.add(Slider::new(&mut s.0, 0.0..=100.0).label("V")).rect;
+            });
+        },
+        (50.0, egui::Rect::NOTHING),
+    );
+    h.run();
+    let r = h.state().1;
+    // Above the track, beside the thumb's centre, inside its target.
+    let start = egui::pos2(r.center().x, r.top() - 5.0);
+    h.hover_at(start);
+    h.run();
+    h.drag_at(start);
+    h.run();
+    h.hover_at(egui::pos2(r.right(), start.y));
+    h.run();
+    h.drop_at(egui::pos2(r.right(), start.y));
+    h.run();
+    assert_eq!(h.state().0, 100.0, "{r:?}");
+}

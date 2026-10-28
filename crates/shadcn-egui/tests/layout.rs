@@ -2675,3 +2675,36 @@ fn a_row_of_a_label_and_a_check_control_is_as_high_as_its_content() {
         }
     }
 }
+
+/// A slider's larger thumb target (`after:absolute after:-inset-*`) takes
+/// no part in a crate row's layout: a `row` of one slider is as high as
+/// the slider, in every style (mira and lyra have a 12 px slider and an
+/// 8 px vertical target inset).
+#[test]
+fn a_row_of_a_slider_is_as_high_as_the_slider() {
+    use shadcn_egui::components::slider::Slider;
+    for (name, theme, _) in common::snapshot_themes()
+        .into_iter()
+        .filter(|(n, ..)| n.ends_with("light"))
+    {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let (passes, r) = settled(&ctx, Host::Screen, &|ui, _, out| {
+            let mut slider = egui::Rect::NOTHING;
+            let row = ui
+                .scope(|ui| {
+                    layout::row(ui, 8.0, |ui| {
+                        ui.set_width(300.0);
+                        let mut v = 50.0;
+                        slider = ui.add(Slider::new(&mut v, 0.0..=100.0).label("V")).rect;
+                    })
+                })
+                .response
+                .rect;
+            out.extend([row, slider]);
+        });
+        let case = format!("{name}: {r:?}");
+        assert_eq!(r[0].height(), r[1].height(), "{case}");
+        assert_eq!(passes, 1, "{case}");
+    }
+}
