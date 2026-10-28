@@ -643,3 +643,54 @@ fn alert_md_snapshot() {
         });
     });
 }
+
+/// An alert or a card in an egui box of an explicit size
+/// (`ui.allocate_ui(vec2(300, 400), ..)`) inside a crate row or egui's
+/// `horizontal`: the box is no definite parent (conformance 3.3), so the
+/// container sits as egui's own `Frame` around a vertical stack sits
+/// there (P2): at the top of the box, the box as high as the container
+/// and egui's centre line of the box, the row's other items centred on
+/// that box, and what follows the row below it.
+#[test]
+fn a_container_in_an_explicit_size_box_sits_as_an_egui_frame() {
+    let t = vega();
+    for row in [true, false] {
+        // The box, the container in it, the next item, the row's bottom.
+        let measure = |what: &str| {
+            settle(&t, 900.0, |ui| {
+                let mut out = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
+                let mut body = |ui: &mut Ui| {
+                    let r = ui.allocate_ui(vec2(300.0, 400.0), |ui| match what {
+                        "alert" => ui.add(Alert::new().title("T").description("D")).rect,
+                        "card" => Card::new().show(ui, |ui| {
+                            card_content(ui, |ui| ui.label("Card")).rect.expand(24.0)
+                        }),
+                        _ => {
+                            egui::Frame::new()
+                                .show(ui, |ui| ui.vertical(|ui| ui.label("Frame")).response.rect)
+                                .inner
+                        }
+                    });
+                    let o = ui.add(Button::new("Other")).rect;
+                    out = (r.response.rect, r.inner, o);
+                };
+                if row {
+                    shadcn_egui::layout::row(ui, 8.0, &mut body);
+                } else {
+                    ui.horizontal(&mut body);
+                }
+                let below = ui.label("below").rect.top();
+                (out.0, out.1, out.2, below)
+            })
+        };
+        let (frame_box, _, frame_other, frame_below) = measure("frame");
+        for what in ["alert", "card"] {
+            let (bx, item, other, below) = measure(what);
+            let at = format!("{what}, row {row}: {bx:?} {item:?} {other:?}");
+            assert_eq!(item.top(), bx.top(), "{at}");
+            assert_eq!(bx.y_range(), frame_box.y_range(), "{at}");
+            assert_eq!(other.y_range(), frame_other.y_range(), "{at}");
+            assert_eq!(below, frame_below, "{at}");
+        }
+    }
+}
