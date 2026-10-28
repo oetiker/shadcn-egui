@@ -237,6 +237,20 @@ fn the_alert_node_holds_its_content() {
     }
 }
 
+/// Parts come in upstream's source order (rules, Part): the action after
+/// the title and description, so its button is last in Tab order too.
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "after the title and description")]
+fn a_title_after_the_action_fails_the_order_assert() {
+    let _ = settle(&vega(), 900.0, |ui| {
+        Alert::new().show(ui, |ui| {
+            let _ = alert_action(ui, |ui| ui.button("Undo"));
+            shadcn_egui::components::alert::alert_title(ui, "Saved");
+        })
+    });
+}
+
 /// Degenerate input: an empty alert and a zero-width room draw without
 /// NaN or a panic.
 #[test]

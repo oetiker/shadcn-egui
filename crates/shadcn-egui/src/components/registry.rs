@@ -256,6 +256,17 @@ pub(crate) fn report(ctx: &Context, group: Id, flags: State) {
     });
 }
 
+/// Those of `flags` that a part of `group` has reported so far in this
+/// pass: for a part that must come after another (rules, Part: source
+/// order).
+pub(crate) fn reported(ctx: &Context, group: Id, flags: State) -> State {
+    let has = ctx.data(|d| {
+        d.get_temp::<Record>(key(group))
+            .map_or(State::NONE, |r| r.current.presence)
+    });
+    has.without(has.without(flags))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

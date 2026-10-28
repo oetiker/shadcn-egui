@@ -473,6 +473,13 @@ fn text_part(
     app: fn(&AlertRecipes) -> &Recipe,
 ) -> Response {
     let t = Theme::current(ui.ctx());
+    // Upstream's source order: title and description, then the action,
+    // whose widgets come last in Tab order.
+    debug_assert!(
+        alert_context(ui)
+            .is_none_or(|cx| registry::reported(ui.ctx(), cx.id, State::HAS_ACTION) == State::NONE),
+        "alert_action comes after the title and description"
+    );
     let (v, st) = part_setup(ui, &t);
     let l = [v.part(&t.style, builtin, app)];
     let look = TextLook::resolve(ui, &l, st);
