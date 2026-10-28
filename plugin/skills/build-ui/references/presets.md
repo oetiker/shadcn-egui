@@ -101,7 +101,8 @@ show falls back to a usable one and logs one `log::warn!` line, on every call:
   the opaque one. egui has no backdrop blur.
 
 The warnings go through the `log` crate; the app needs a logger (for example
-`env_logger`) to show them.
+`env_logger`) to show them. `preset.apply(ctx)` logs each one once per
+context; `preset.theme()` logs them on every call.
 
 ## Applying
 

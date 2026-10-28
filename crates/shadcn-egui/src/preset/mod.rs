@@ -114,13 +114,18 @@ impl Preset {
     /// translucent menu colour); each falls back to a usable default, and
     /// the lines repeat on every call.
     pub fn theme(&self) -> Theme {
+        self.theme_with_warnings(&mut |line| log::warn!("{line}"))
+    }
+
+    /// [`Preset::theme`], giving each fallback warning line to `warn`.
+    fn theme_with_warnings(&self, warn: &mut dyn FnMut(String)) -> Theme {
         let style = if self.style == StyleName::Sera {
-            log::warn!("shadcn-egui: style \"sera\" is not available in egui; using \"nova\"");
+            warn("shadcn-egui: style \"sera\" is not available in egui; using \"nova\"".into());
             StyleName::Nova
         } else {
             self.style
         };
-        let ids = self.palette_ids();
+        let ids = self.palette_ids(warn);
         let mut theme = with_style(
             style_fn(style),
             self.palette(ids, false),
@@ -129,18 +134,18 @@ impl Preset {
         );
         let inter = crate::fonts::files(FontName::Inter).expect("Inter is always bundled");
         let body = crate::fonts::files(self.font).unwrap_or_else(|| {
-            log::warn!("{}", crate::fonts::fallback_warning(self.font, false));
+            warn(crate::fonts::fallback_warning(self.font, false));
             inter
         });
         let heading = match self.font_heading {
             FontHeading::Inherit => None,
             FontHeading::Font(f) => Some(crate::fonts::files(f).unwrap_or_else(|| {
-                log::warn!("{}", crate::fonts::fallback_warning(f, true));
+                warn(crate::fonts::fallback_warning(f, true));
                 inter
             })),
         };
         let slots = crate::icons::slots(self.icons).unwrap_or_else(|| {
-            log::warn!("{}", crate::icons::fallback_warning(self.icons));
+            warn(crate::icons::fallback_warning(self.icons));
             crate::icons::lucide::SLOTS
         });
         let inverted = matches!(
@@ -155,11 +160,11 @@ impl Preset {
             } else {
                 MenuColor::Default
             };
-            log::warn!(
+            warn(format!(
                 "shadcn-egui: menu colour \"{}\" needs a backdrop blur egui lacks; using \"{}\"",
                 self.menu_color.id(),
                 opaque.id()
-            );
+            ));
         }
         theme = theme
             .fonts(body, heading)
@@ -168,9 +173,21 @@ impl Preset {
         theme
     }
 
-    /// `self.theme().apply(ctx)`.
+    /// `self.theme().apply(ctx)`, except that each fallback warning line
+    /// is logged once per context: applying the same preset again logs
+    /// nothing new.
     pub fn apply(&self, ctx: &egui::Context) {
-        self.theme().apply(ctx);
+        let id = egui::Id::new("shadcn_egui::preset_warnings");
+        let mut logged: std::collections::BTreeSet<String> =
+            ctx.data(|d| d.get_temp(id)).unwrap_or_default();
+        let theme = self.theme_with_warnings(&mut |line| {
+            if !logged.contains(&line) {
+                log::warn!("{line}");
+                logged.insert(line);
+            }
+        });
+        ctx.data_mut(|d| d.insert_temp(id, logged));
+        theme.apply(ctx);
     }
 
     /// The base colour with a palette: `gray`, which ui.shadcn.com codes can
@@ -187,17 +204,20 @@ impl Preset {
     /// The base colour, theme and chart ids with a palette: a code value
     /// ui.shadcn.com has no palette for (`gray`) falls back with a warning,
     /// the base to neutral, theme and chart to the resolved base.
-    fn palette_ids(&self) -> (&'static str, &'static str, &'static str) {
+    fn palette_ids(
+        &self,
+        warn: &mut dyn FnMut(String),
+    ) -> (&'static str, &'static str, &'static str) {
         let base = self.base_id();
         if base != self.base_color.id() {
             let id = self.base_color.id();
-            log::warn!("shadcn-egui: base colour \"{id}\" has no palette on ui.shadcn.com; using \"{base}\"");
+            warn(format!("shadcn-egui: base colour \"{id}\" has no palette on ui.shadcn.com; using \"{base}\""));
         }
-        let pick = |what: &str, id: &'static str| {
+        let mut pick = |what: &str, id: &'static str| {
             if crate::palette::is_theme(id) {
                 id
             } else {
-                log::warn!("shadcn-egui: {what} \"{id}\" has no palette on ui.shadcn.com; using \"{base}\"");
+                warn(format!("shadcn-egui: {what} \"{id}\" has no palette on ui.shadcn.com; using \"{base}\""));
                 base
             }
         };

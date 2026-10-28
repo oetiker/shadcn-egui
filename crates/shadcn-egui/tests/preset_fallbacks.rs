@@ -160,3 +160,25 @@ fn a_supported_preset_logs_nothing() {
     let (_, lines) = warnings(|| Preset::default().theme());
     assert!(lines.is_empty(), "{lines:?}");
 }
+
+/// `Preset::apply` logs each fallback warning once per context: applying
+/// the same preset again (an app that re-applies its settings, the
+/// gallery after its app creator) logs nothing new, while another context
+/// gets the lines again. `Preset::theme` has no context and logs on every
+/// call.
+#[test]
+fn apply_logs_each_fallback_warning_once_per_context() {
+    let sera = Preset::default().style(StyleName::Sera);
+    let ctx = egui::Context::default();
+    let ((), first) = warnings(|| sera.apply(&ctx));
+    assert_eq!(first, [SERA]);
+    let ((), again) = warnings(|| {
+        sera.apply(&ctx);
+        sera.apply(&ctx);
+    });
+    assert!(again.is_empty(), "{again:?}");
+    let ((), other) = warnings(|| sera.apply(&egui::Context::default()));
+    assert_eq!(other, [SERA]);
+    let (_, theme) = warnings(|| sera.theme());
+    assert_eq!(theme, [SERA]);
+}
