@@ -2708,3 +2708,53 @@ fn a_row_of_a_slider_is_as_high_as_the_slider() {
         assert_eq!(passes, 1, "{case}");
     }
 }
+
+/// The hit areas a crate row skips are kept per viewport: an immediate
+/// viewport shown inside a row, with its own checkbox, leaves the parent
+/// row's checkbox target out of the row's height.
+#[test]
+fn a_hit_area_stays_no_row_content_across_an_immediate_viewport() {
+    use shadcn_egui::components::{checkbox::checkbox, label::label};
+    // A backend with real immediate viewports, as eframe's: the child
+    // runs its own pass, nested in the parent's.
+    egui::Context::set_immediate_viewport_renderer(|ctx, mut viewport| {
+        let id = viewport.ids.this;
+        let input = egui::RawInput {
+            viewport_id: id,
+            viewports: std::iter::once((id, egui::ViewportInfo::default())).collect(),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+    });
+    let ctx = vega();
+    ctx.set_embed_viewports(false);
+    // The parent's pass numbers run ahead of the child's.
+    for _ in 0..2 {
+        let _ = frame_in(&ctx, Host::Screen, false, &|_, _, _| {});
+    }
+    let (passes, r) = settled(&ctx, Host::Screen, &|ui, _, out| {
+        let mut items = Vec::new();
+        let row = ui
+            .scope(|ui| {
+                layout::row(ui, 8.0, |ui| {
+                    items.push(label(ui, "Email").rect);
+                    items.push(checkbox(ui, &mut false).rect);
+                    ui.ctx().show_viewport_immediate(
+                        egui::ViewportId::from_hash_of("child"),
+                        egui::ViewportBuilder::default(),
+                        |ui, class| {
+                            assert!(matches!(class, egui::ViewportClass::Immediate));
+                            checkbox(ui, &mut false);
+                        },
+                    );
+                })
+            })
+            .response
+            .rect;
+        out.push(row);
+        out.extend(items);
+    });
+    let case = format!("{r:?}");
+    assert_eq!(r[0].height(), r[1].height().max(r[2].height()), "{case}");
+    assert_eq!(passes, 1, "{case}");
+}

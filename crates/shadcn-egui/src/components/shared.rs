@@ -807,16 +807,18 @@ struct Modality {
     input: Option<bool>,
 }
 
-/// The ids [`hit_area`] registered in one pass. Only the current pass's
-/// are kept, so the set does not grow with every control ever drawn.
+/// The ids [`hit_area`] registered in one pass of one viewport. Only the
+/// current pass's are kept, so the set does not grow with every control
+/// ever drawn. Each viewport has its own set: an immediate viewport runs
+/// its passes inside a pass of its parent, with pass numbers of its own.
 #[derive(Clone, Debug, Default)]
 struct HitAreas {
     pass: u64,
     ids: egui::IdSet,
 }
 
-fn hit_areas_id() -> Id {
-    Id::new("shadcn_egui::hit_areas")
+fn hit_areas_id(ctx: &Context) -> Id {
+    Id::new("shadcn_egui::hit_areas").with(ctx.viewport_id())
 }
 
 /// A control's hit area, upstream's `after:absolute after:-inset-*`: a
@@ -826,8 +828,9 @@ fn hit_areas_id() -> Id {
 /// 3.3).
 pub(crate) fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
     let pass = ui.ctx().cumulative_pass_nr();
+    let key = hit_areas_id(ui.ctx());
     ui.data_mut(|d| {
-        let areas = d.get_temp_mut_or_default::<HitAreas>(hit_areas_id());
+        let areas = d.get_temp_mut_or_default::<HitAreas>(key);
         if areas.pass != pass {
             *areas = HitAreas {
                 pass,
@@ -844,7 +847,7 @@ pub(crate) fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Respo
 pub(crate) fn is_hit_area(ctx: &Context) -> impl Fn(Id) -> bool {
     let pass = ctx.cumulative_pass_nr();
     let ids = ctx
-        .data(|d| d.get_temp::<HitAreas>(hit_areas_id()))
+        .data(|d| d.get_temp::<HitAreas>(hit_areas_id(ctx)))
         .filter(|a| a.pass == pass)
         .map(|a| a.ids)
         .unwrap_or_default();
