@@ -796,13 +796,17 @@ fn progress_group(ui: &mut egui::Ui, state: &mut GalleryState) {
             };
             let width = ui.available_width() * 0.6;
             ui.add(Progress::from_value(value, 100.0).desired_width(width));
-            layout::vstack(ui, 16.0, |ui| {
-                ui.add(Progress::from_value(state.progress, 100.0));
-                ui.add(
-                    Slider::new(&mut state.progress, 0.0..=100.0)
-                        .step(1.0)
-                        .label("Progress"),
-                )
+            // progress-controlled: `flex w-full max-w-sm flex-col gap-4`.
+            ui.scope(|ui| {
+                ui.set_max_width(384.0);
+                layout::vstack(ui, 16.0, |ui| {
+                    ui.add(Progress::from_value(state.progress, 100.0));
+                    ui.add(
+                        Slider::new(&mut state.progress, 0.0..=100.0)
+                            .step(1.0)
+                            .label("Progress"),
+                    )
+                });
             });
         },
     );
