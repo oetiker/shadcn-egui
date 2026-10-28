@@ -831,7 +831,24 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
     };
     let mono_installed = last.is_some_and(|f| f.mono_body);
     ctx.set_fonts(font_definitions(fonts, base, mono_installed));
-    ctx.data_mut(|d| d.insert_temp(id, key));
+    // A pass that has started sees the count change (`check_mode_switch`)
+    // and is redone. Where no crate call has seen this pass yet, a call
+    // between two passes cannot be told from the first call of a pass:
+    // repaint, so a pass that drew in the old fonts is not the last one.
+    // egui repaints after the first pass anyway.
+    let pass = ctx.cumulative_pass_nr();
+    let seen = ctx.data(|d| {
+        d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())
+            .is_some_and(|(p, ..)| p == pass)
+    });
+    if pass > 0 && !seen {
+        ctx.request_repaint();
+    }
+    ctx.data_mut(|d| {
+        d.insert_temp(id, key);
+        let n = d.get_temp::<u64>(font_installs_id()).unwrap_or(0);
+        d.insert_temp(font_installs_id(), n + 1);
+    });
 }
 
 /// `TextStyle::Heading` waits in `Proportional` until the heading family is
@@ -1043,6 +1060,14 @@ impl Theme {
     /// heading in a `Ui` built before the first shadcn component of that pass
     /// can still panic. Calling `apply` and `set_fonts` every frame rebuilds
     /// the font atlas on every other frame.
+    ///
+    /// egui swaps in new fonts only at the next pass. Called in the middle
+    /// of a pass, `apply` of other fonts asks egui to discard that pass and
+    /// to repaint, as a mid-pass `ctx.set_theme(..)` does; layout that the
+    /// crate takes from the previous pass then needs one more pass, so the
+    /// first frame of such a change can show it unsettled. Called before
+    /// the first pass (in eframe's app creator, on `cc.egui_ctx`), the
+    /// first frame is in the theme's fonts.
     pub fn apply(&self, ctx: &egui::Context) {
         self.apply_inner(ctx, None);
     }
@@ -1183,31 +1208,47 @@ fn hairline_id() -> egui::Id {
     egui::Id::new("shadcn_egui::hairline")
 }
 
-/// The pass number and the mode the pass started in, as first seen by
-/// [`check_mode_switch`].
+/// The pass number, and the mode and the font install the pass started
+/// with, as first seen by [`check_mode_switch`].
 fn pass_mode_id() -> egui::Id {
     egui::Id::new("shadcn_egui::pass_mode")
+}
+
+/// How many times [`install_fonts`] has called `ctx.set_fonts`.
+fn font_installs_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::font_installs")
+}
+
+fn font_installs(ctx: &egui::Context) -> u64 {
+    ctx.data(|d| d.get_temp::<u64>(font_installs_id()).unwrap_or(0))
 }
 
 /// The context's mode, checked against the mode its pass started in. A
 /// `ctx.set_theme(..)` since then leaves the widgets drawn before it in the
 /// other mode: discard the pass, as the browser restyles the whole page at
-/// once, and repaint for a loop that cannot redo it. Runs at the start and
+/// once, and repaint for a loop that cannot redo it. A font install since
+/// the pass started does the same: egui swaps in new fonts only at the
+/// next pass, so the whole pass is in the old fonts. Runs at the start and
 /// end of every pass ([`install_mode_switch_hook`]) and in every
 /// [`Theme::current`], so an app's own loop, which runs no pass hook, is
 /// caught by the next crate widget.
 fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
     let mode = ctx.theme();
     let pass = ctx.cumulative_pass_nr();
-    match ctx.data(|d| d.get_temp::<(u64, egui::Theme)>(pass_mode_id())) {
-        Some((p, start)) if p == pass => {
+    let fonts = font_installs(ctx);
+    match ctx.data(|d| d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())) {
+        Some((p, start, start_fonts)) if p == pass => {
             if start != mode {
                 ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
                 ctx.request_repaint();
             }
+            if start_fonts != fonts {
+                ctx.request_discard("shadcn-egui: the theme's fonts changed in the pass");
+                ctx.request_repaint();
+            }
         }
         _ => {
-            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode)));
+            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode, fonts)));
         }
     }
     mode

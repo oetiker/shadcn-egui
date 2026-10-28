@@ -248,3 +248,129 @@ fn a_mode_switch_before_a_plain_area_shows_no_mixed_frame() {
     assert_eq!(fill_at(&out, panel), light, "panel");
     assert_eq!(fill_at(&out, area), light, "area");
 }
+
+/// Vega with Oxanium as its body and heading font.
+fn oxanium() -> Theme {
+    let mut t = Theme::vega();
+    t.fonts = shadcn_egui::ThemeFonts::inherit(&shadcn_egui_font_oxanium::FONT);
+    t
+}
+
+/// The width of one crate label in `theme`'s fonts, settled.
+fn label_width(theme: &Theme) -> f32 {
+    use shadcn_egui::components::label::label;
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    let mut width = 0.0;
+    for _ in 0..2 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            width = label(ui, "Accept terms").rect.width();
+        });
+    }
+    width
+}
+
+/// `Theme::apply` of a theme with other fonts in the middle of a pass
+/// (a preset picker, an app's own logic): egui swaps in the new fonts only
+/// at the next pass, so the pass asks to be discarded and a repaint
+/// follows, as a mid-pass `ctx.set_theme(..)` does. Under `run_ui` the
+/// frame egui returns draws the labels before and after the call in the
+/// new fonts; an app's own loop gets the pass marked for discard and a
+/// repaint, and its next pass is in the new fonts. Either way no frame
+/// keeps the old fonts until the next input.
+#[test]
+fn a_font_change_in_the_middle_of_a_pass_shows_the_new_fonts() {
+    use shadcn_egui::components::label::label;
+    let (vega, new) = (label_width(&Theme::vega()), label_width(&oxanium()));
+    assert_ne!(vega, new, "the two fonts measure apart");
+    for app_loop in Loop::BOTH {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        let switch = std::cell::Cell::new(false);
+        let widths = std::cell::Cell::new([0.0; 2]);
+        let frame = || {
+            common::pass(app_loop, &ctx, vec![], |ui| {
+                let before = label(ui, "Accept terms").rect.width();
+                if switch.get() {
+                    oxanium().apply(ui.ctx());
+                }
+                let after = label(ui, "Accept terms").rect.width();
+                widths.set([before, after]);
+            })
+        };
+        let _ = frame();
+        let _ = frame();
+        assert_eq!(widths.get(), [vega; 2], "{app_loop:?}: settled in vega");
+        switch.set(true);
+        let out = frame();
+        switch.set(false);
+        match app_loop {
+            Loop::RunUi => {
+                assert_eq!(widths.get(), [new; 2], "{app_loop:?}: the frame");
+            }
+            Loop::Own => {
+                assert!(
+                    out.platform_output.requested_discard(),
+                    "{app_loop:?}: the pass in the old fonts asks to be discarded"
+                );
+                assert!(
+                    ctx.has_requested_repaint(),
+                    "{app_loop:?}: a repaint follows"
+                );
+                let _ = frame();
+                assert_eq!(widths.get(), [new; 2], "{app_loop:?}: next pass");
+            }
+        }
+    }
+}
+
+/// `Theme::apply` of a theme with other fonts after the last crate widget
+/// of a pass: the pass hook asks for a discard, so the frame `run_ui`
+/// returns draws the widget in the new fonts.
+#[test]
+fn a_font_change_after_the_last_crate_widget_shows_the_new_fonts() {
+    use shadcn_egui::components::label::label;
+    let new = label_width(&oxanium());
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    let switch = std::cell::Cell::new(false);
+    let width = std::cell::Cell::new(0.0);
+    let frame = || {
+        common::pass(Loop::RunUi, &ctx, vec![], |ui| {
+            width.set(label(ui, "Accept terms").rect.width());
+            if switch.get() {
+                oxanium().apply(ui.ctx());
+            }
+        })
+    };
+    let _ = frame();
+    let _ = frame();
+    switch.set(true);
+    let _ = frame();
+    assert_eq!(width.get(), new);
+}
+
+/// An app's own loop whose pass starts with `Theme::apply` of other fonts
+/// and draws no crate widget after it: no crate call saw the pass start,
+/// so the change cannot be told from one between two passes, and a
+/// repaint follows; the next pass is in the new fonts.
+#[test]
+fn a_font_change_as_the_first_crate_call_of_a_pass_repaints() {
+    use shadcn_egui::components::label::label;
+    let new = label_width(&oxanium());
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    for _ in 0..2 {
+        let _ = common::own_pass(&ctx, vec![], |ui| drop(label(ui, "Accept terms")));
+    }
+    let _ = common::own_pass(&ctx, vec![], |ui| {
+        oxanium().apply(ui.ctx());
+        ui.label("Accept terms");
+    });
+    assert!(ctx.has_requested_repaint(), "a repaint follows");
+    let mut width = 0.0;
+    let _ = common::own_pass(&ctx, vec![], |ui| {
+        width = label(ui, "Accept terms").rect.width();
+    });
+    assert_eq!(width, new);
+}
