@@ -648,7 +648,9 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
         ui.columns_const(|[left, right]| {
             layout::vstack(left, 24.0, |ui| {
                 buttons_group(ui);
+                badges_group(ui);
                 icons_group(ui);
+                kbd_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
             });
@@ -656,9 +658,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 inputs_group(ui, state);
                 textarea_group(ui, state);
                 controls_group(ui, state);
-                badges_group(ui);
                 alerts_group(ui);
-                kbd_gallery(ui);
                 tabs_group(ui, state);
             });
         });

@@ -33,6 +33,7 @@ are recorded here. The format is based on
 - `ButtonVariant`, `ButtonSize`, `BadgeVariant`, `TabsVariant`, `CardSize`, `SwitchSize` and `SelectSize` now hold app cases and are `#[non_exhaustive]`: a `match` on one outside the crate needs a `_` arm. Their setters, `badge(ui, text, variant)` included, take `impl Into<..>`, so they take a built-in case or an app constant, and existing calls compile unchanged. `ButtonVariant`, `ButtonSize` and `BadgeVariant` now implement `Default`.
 - `reference::GalleryState::new` and its `mode` field take an `egui::Theme` in place of the removed `preset::Mode`.
 - Every icon library now supplies a plain down chevron, up, left and right chevrons and a three-dot icon to `Theme::icons`, as upstream's components use them. The Select trigger icon moved from `chevron_down` to `select_trigger`, and an app builds its own icon set from `IconSlots::all(icon)` instead of listing every slot, so later slots do not break it.
+- The browser gallery splits its cards evenly between its two columns: Badge now sits under Button and Kbd under Icons, so the right column no longer runs far below the left one.
 - The browser gallery's icon card shows every icon slot and wraps them onto several lines.
 - `Theme::state` takes the egui context as its first argument, to read the window width.
 - `State` no longer exposes its bits: combine flags with `|` or `State::or` and drop one with `State::without`. `Shift::SelfMinus(n)` is now `Shift::Calc(1.0, -n)`, which also expresses a share of the part's own size such as `translate-x-1/2`.
