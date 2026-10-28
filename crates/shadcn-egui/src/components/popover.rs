@@ -15,7 +15,7 @@ use crate::components::context;
 use crate::components::shared::{content_ui, opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
-use crate::style::pick;
+use crate::style::{pick, pick_len};
 use crate::Theme;
 use egui::{PopupCloseBehavior, Response, TextWrapMode, Ui, UiBuilder};
 
@@ -89,9 +89,7 @@ impl<'a> Popover<'a> {
         let v = t.resolve(self.variant);
         let g = t.state(&self.trigger.ctx, v.bits());
         let l = [v.part(&t.style, |_, s| &s.popover_content, |r| &r.popover_content)];
-        let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
-            pick(&l, f, g).unwrap_or(0.0)
-        };
+        let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| pick_len(&l, f, g);
         let (pad_t, pad_r, pad_b, pad_l) = (
             px(|r| &r.pad_top),
             px(|r| &r.pad_right),
@@ -166,7 +164,7 @@ pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
     let content = v.part(&t.style, |_, s| &s.popover_content, |r| &r.popover_content);
     let title_l = [header, title_r];
     let desc_l = [header, desc_r];
-    let gap = pick(&[header], |r| &r.gap, g).unwrap_or(0.0);
+    let gap = pick_len(&[header], |r| &r.gap, g);
     let title_look = TextLook::resolve(ui, &title_l, g);
     let content_color = pick(&[content], |r| &r.text, g).map(|p| t.paint(p));
     let title_look = match (title_look.recipe_color(), content_color) {

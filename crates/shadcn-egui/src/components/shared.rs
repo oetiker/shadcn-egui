@@ -3,7 +3,9 @@
 use crate::box_shadow::{clamp_radii, Layers};
 use crate::color::Tone;
 use crate::components::motion::{transition, transition_shadow, transition_tone};
-use crate::style::{pick, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, Transition};
+use crate::style::{
+    pick, pick_len, pick_ranked, Paint, Prop, Radius, Recipe, Shift, State, Transition,
+};
 use crate::Theme;
 use egui::{
     Color32, Context, CornerRadius, Id, Key, Painter, PointerButton, Rect, Response, Shape, Stroke,
@@ -316,11 +318,8 @@ impl RecipeBox {
         );
         // Tailwind's order: rounded, rounded-t, -r, -b, -l.
         let corner = |a, b| side(&[base, a, b]).unwrap_or(0.0);
-        let ring_w = pick(layers, |r| &r.ring_width, state).unwrap_or(0.0);
-        let outline_w = line_width(
-            pick(layers, |r| &r.outline_width, state).unwrap_or(0.0),
-            ppp,
-        );
+        let ring_w = pick_len(layers, |r| &r.ring_width, state);
+        let outline_w = line_width(pick_len(layers, |r| &r.outline_width, state), ppp);
         let stroke = |w: f32, c: Option<Color32>| {
             c.filter(|c| w > 0.0 && c.a() > 0)
                 .map(|c| Stroke::new(w, c))

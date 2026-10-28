@@ -12,7 +12,7 @@ use crate::components::shared::{
     interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::style::app::default_variant;
-use crate::style::{pick, Recipe, State};
+use crate::style::{pick_len, Recipe, State};
 use crate::{layout, Theme};
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
 
@@ -141,12 +141,8 @@ impl Widget for Slider<'_> {
 
         // Geometry depends on neither the value nor interaction.
         let g = t.state(ui.ctx(), orient);
-        let size_of = |l: &[&Recipe]| {
-            vec2(
-                pick(l, |r| &r.width, g).unwrap_or(0.0),
-                pick(l, |r| &r.height, g).unwrap_or(0.0),
-            )
-        };
+        let size_of =
+            |l: &[&Recipe]| vec2(pick_len(l, |r| &r.width, g), pick_len(l, |r| &r.height, g));
         let thumb_size = size_of(&thumb);
         let thickness = if vertical {
             size_of(&track).x
@@ -160,10 +156,7 @@ impl Widget for Slider<'_> {
         };
         let cross = cross.max(thickness);
         let size = if vertical {
-            vec2(
-                cross,
-                pick(&root, |r| &r.min_height, g).unwrap_or(0.0).max(along),
-            )
+            vec2(cross, pick_len(&root, |r| &r.min_height, g).max(along))
         } else {
             vec2(layout::capped_width(ui, f32::INFINITY, along), cross)
         };
@@ -198,8 +191,8 @@ impl Widget for Slider<'_> {
         // The value is always clamped; NaN becomes the minimum.
         let mut value = snap(*self.value, lo, hi, 0.0);
         let hit_inset = vec2(
-            pick(&thumb, |r| &r.hit_inset_x, g).unwrap_or(0.0),
-            pick(&thumb, |r| &r.hit_inset_y, g).unwrap_or(0.0),
+            pick_len(&thumb, |r| &r.hit_inset_x, g),
+            pick_len(&thumb, |r| &r.hit_inset_y, g),
         );
         let hit = rect.union(thumb_at(frac_of(value)).expand2(hit_inset));
         let sense = if enabled {

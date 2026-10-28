@@ -12,7 +12,7 @@ use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, ActivationKeys, RecipeBox,
 };
 use crate::style::app::default_variant;
-use crate::style::{pick, Prop, Recipe, State};
+use crate::style::{pick, pick_len, Prop, Recipe, State};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Ui, Vec2, Widget};
 
@@ -76,7 +76,7 @@ impl Widget for Checkbox<'_> {
         let enabled = self.enabled && ui.is_enabled();
         // Geometry depends on neither the value nor interaction.
         let g = t.state(ui.ctx(), v.bits().with(State::INVALID, self.invalid));
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&l, f, g);
 
         // No size: CSS's initial `auto`, the indicator's tick inside the
         // border. The box keeps that size unticked too, so it does not jump.

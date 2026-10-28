@@ -11,7 +11,7 @@ use crate::components::shared::{
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
 use crate::style::{
-    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+    pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
 use crate::Theme;
 use egui::{Response, Sense, Ui, Vec2, Widget};
@@ -137,7 +137,7 @@ impl Widget for Badge {
             .with(State::ICON_END, self.icon_end.is_some());
         // Geometry never depends on hover: resolve it before allocating.
         let g = t.state(ui.ctx(), context);
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&l, f, g);
         let (pad_l, pad_r, gap, border_w) = (
             get(|r| &r.pad_left),
             get(|r| &r.pad_right),

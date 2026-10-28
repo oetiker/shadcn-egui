@@ -10,7 +10,7 @@ use crate::components::context;
 use crate::components::shared::{content_ui, opacity, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
-use crate::style::pick;
+use crate::style::{pick, pick_len};
 use crate::Theme;
 use egui::{
     pos2, Color32, Context, InnerResponse, Pos2, RectAlign, Response, Shape, TextWrapMode, Ui,
@@ -90,9 +90,8 @@ impl<'a> Tooltip<'a> {
         let g = t.state(ctx, v.bits());
         let content_l = [v.part(&t.style, |_, s| &s.tooltip_content, |r| &r.tooltip_content)];
         let arrow = [v.part(&t.style, |_, s| &s.tooltip_arrow, |r| &r.tooltip_arrow)];
-        let px = |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| {
-            pick(&content_l, f, g).unwrap_or(0.0)
-        };
+        let px =
+            |f: fn(&crate::style::Recipe) -> &crate::style::Prop<f32>| pick_len(&content_l, f, g);
         let (pad_t, pad_r, pad_b, pad_l) = (
             px(|r| &r.pad_top),
             px(|r| &r.pad_right),
@@ -110,7 +109,7 @@ impl<'a> Tooltip<'a> {
         let mut tip = egui::Tooltip::for_enabled(resp);
         let max_w = pick(&content_l, |r| &r.max_width, g).unwrap_or(f32::INFINITY);
         // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
-        let size = pick(&arrow, |r| &r.width, g).unwrap_or(0.0);
+        let size = pick_len(&arrow, |r| &r.width, g);
         let reach = size * FRAC_1_SQRT_2;
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         tip.popup = tip.popup.align(RectAlign::TOP).gap(reach).frame(frame);

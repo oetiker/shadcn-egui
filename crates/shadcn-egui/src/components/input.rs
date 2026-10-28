@@ -8,7 +8,7 @@ use crate::components::shared::{
 };
 use crate::components::text::{Leading, TextLook};
 use crate::style::app::default_variant;
-use crate::style::{pick, Prop, Recipe, Role, State};
+use crate::style::{pick, pick_len, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::{Sense, Shape, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget};
 
@@ -96,7 +96,7 @@ impl<'a> Widget for Input<'a> {
         let context = v.bits().with(State::INVALID, self.invalid);
         // Geometry never depends on focus: resolve it before allocating.
         let g = t.state(ui.ctx(), context);
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&l, f, g);
         let border_w = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point());
         // Top, right, bottom, left: padding plus border.
         let mut inset = [
