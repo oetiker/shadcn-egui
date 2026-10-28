@@ -48,6 +48,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- A disabled checked checkbox or switch now shows one even colour, as in the browser; before, its border drew as a lighter ring around the faded box, because the faded border was painted over the faded fill. The same holds for every faded box with a border, such as a disabled input, select, textarea or slider thumb, and for a popover, tooltip or dialog while it fades in.
 - An input's placeholder and typed text now stop at the edge of the text area, as in the browser; before, a wide letter of the placeholder could reach into the field's padding, and typed text up to a point into it. In a full input, the text cursor after the last letter now stays inside the text area, as in the browser, where before it sat on its edge.
 - A textarea's text and placeholder now reach into the field's padding before they are cut at its border, as in the browser; before, a letter wider than the field was cut a point past the text area.
 - The rounded corners of a box with a border, such as a checked checkbox, a switch, a slider thumb or an alert, no longer show a dark seam of the box's background along the outside of the border; the edge now blends the border into the page as Chrome does.

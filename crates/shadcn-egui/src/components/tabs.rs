@@ -371,7 +371,7 @@ impl Widget for Tabs<'_> {
                 let fg = transitioned_text(ui.ctx(), r.id, fg, &trigger, st);
                 let mut shapes = RecipeBox::resolve(ui.ctx(), &t, &trigger, st)
                     .transitioned(ui.ctx(), r.id, &trigger, st)
-                    .shapes(ui.ctx(), *rect);
+                    .shapes_at(ui.ctx(), *rect, painter.opacity());
                 // The `after:` line indicator, placed against the padding box.
                 // The painter already carries the trigger's chain.
                 let bar_alpha =
@@ -389,7 +389,7 @@ impl Widget for Tabs<'_> {
                     shapes.extend(
                         RecipeBox::resolve(ui.ctx(), &t, &after, st)
                             .faded(bar_alpha)
-                            .shapes(ui.ctx(), bar),
+                            .shapes_at(ui.ctx(), bar, painter.opacity()),
                     );
                 }
                 painter.extend(shapes);

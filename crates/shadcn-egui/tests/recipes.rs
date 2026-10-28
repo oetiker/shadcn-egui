@@ -787,11 +787,12 @@ fn checkbox_fade_comes_from_the_style() {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
             ui.add(Checkbox::new(&mut true).enabled(enabled))
         });
-        common::rect_shapes(&out)
+        // Faded, the box paints as meshes: its first is the fill.
+        common::box_fills(&out)
             .into_iter()
-            .find(|r| r.fill != egui::Color32::TRANSPARENT)
+            .find(|(_, fill)| *fill != egui::Color32::TRANSPARENT)
             .expect("checked box")
-            .fill
+            .1
     };
     assert_eq!(fill(false), fill(true).gamma_multiply(0.25));
 }
@@ -816,43 +817,51 @@ fn slider_fade_multiplies_down_the_parts() {
                 .push(Rule::important(When::all(State::DISABLED), v));
         }
     });
-    // Fill and stroke colour of every rect and path in paint order: the
-    // range is the track's outline cut to its rect, a path.
+    // Every colour a rect, path or mesh paints, in paint order: the range
+    // is the track's outline cut to its rect, a path; a faded box with a
+    // border (the thumb) paints its fill and border as one mesh.
     let rects = |enabled: bool| {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
             ui.add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(enabled))
         });
-        fn walk(s: &egui::Shape, out: &mut Vec<(egui::Color32, egui::Color32)>) {
+        fn walk(s: &egui::Shape, out: &mut Vec<egui::Color32>) {
             match s {
-                egui::Shape::Rect(r) => out.push((r.fill, r.stroke.color)),
-                egui::Shape::Path(p) => out.push((
+                egui::Shape::Rect(r) => out.extend([r.fill, r.stroke.color]),
+                egui::Shape::Path(p) => out.extend([
                     p.fill,
                     match p.stroke.color {
                         egui::epaint::ColorMode::Solid(c) => c,
                         _ => egui::Color32::TRANSPARENT,
                     },
-                )),
+                ]),
+                egui::Shape::Mesh(m) => out.extend(m.vertices.iter().map(|v| v.color)),
                 egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
                 _ => {}
             }
         }
         let mut found = Vec::new();
         out.shapes.iter().for_each(|c| walk(&c.shape, &mut found));
+        found.retain(|c| *c != egui::Color32::TRANSPARENT);
         found
     };
     let (on, off) = (rects(true), rects(false));
-    assert_eq!(on.len(), off.len());
     assert!(on.len() >= 3, "track, range and thumb: {}", on.len());
     // Root > track > range; root > thumb.
     let factors = [track * root, range * track * root];
-    for (i, (a, b)) in on.iter().zip(&off).enumerate() {
+    for (i, a) in on.iter().enumerate() {
         let (part, f) = match i {
             0 => ("track", factors[0]),
             1 => ("range", factors[1]),
             _ => ("thumb", thumb * root),
         };
-        assert_eq!(b.0, a.0.gamma_multiply(f), "{part} fill");
-        assert_eq!(b.1, a.1.gamma_multiply(f), "{part} stroke");
+        let want = a.gamma_multiply(f);
+        if want == egui::Color32::TRANSPARENT {
+            continue;
+        }
+        assert!(
+            off.contains(&want),
+            "{part} colour {i}: {want:?} not painted"
+        );
     }
 }
 
@@ -1191,19 +1200,26 @@ fn replaced_recipes_keep_their_icons() {
 
 /// The alpha of every leaf shape a frame painted, in paint order: a rect's
 /// or path's fill (or its stroke where it has no fill), a text's glyphs with
-/// the shape's opacity, a mesh's first vertex.
+/// the shape's opacity, a mesh's first vertex. A border right after its
+/// box's fill (a stroke-only rect after a filled one) counts with the
+/// fill: a faded box paints both as one mesh.
 fn painted_alphas(out: &egui::FullOutput) -> Vec<Option<f32>> {
     use egui::epaint::ColorMode;
     fn a(c: egui::Color32) -> f32 {
         f32::from(c.a())
     }
-    fn walk(s: &egui::Shape, acc: &mut Vec<Option<f32>>) {
+    fn walk(s: &egui::Shape, acc: &mut Vec<Option<f32>>, after_fill: &mut bool) {
+        let fill = matches!(s, egui::Shape::Rect(r) if r.fill.a() > 0);
+        let border = matches!(s, egui::Shape::Rect(r) if r.fill.a() == 0);
+        if !matches!(s, egui::Shape::Vec(_)) && std::mem::replace(after_fill, fill) && border {
+            return;
+        }
         let solid = |m: &ColorMode| match m {
             ColorMode::Solid(c) => Some(a(*c)),
             _ => None,
         };
         let alpha = match s {
-            egui::Shape::Vec(v) => return v.iter().for_each(|s| walk(s, acc)),
+            egui::Shape::Vec(v) => return v.iter().for_each(|s| walk(s, acc, after_fill)),
             egui::Shape::Rect(r) if r.fill.a() > 0 => Some(a(r.fill)),
             egui::Shape::Rect(r) => Some(a(r.stroke.color)),
             egui::Shape::Path(p) if p.fill.a() > 0 => Some(a(p.fill)),
@@ -1229,7 +1245,10 @@ fn painted_alphas(out: &egui::FullOutput) -> Vec<Option<f32>> {
         acc.push(alpha);
     }
     let mut acc = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    let mut after_fill = false;
+    out.shapes
+        .iter()
+        .for_each(|c| walk(&c.shape, &mut acc, &mut after_fill));
     acc
 }
 

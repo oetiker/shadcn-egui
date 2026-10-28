@@ -2021,8 +2021,11 @@ fn a_content_sized_widget_takes_a_justified_layout_width() {
                 assert_eq!(passes, 1, "{case}");
                 let out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
                     Host::Screen => content(ui, false, &mut Vec::new()),
+                    // No fade-in: a faded box paints as meshes, and the
+                    // painted width is read from rect shapes.
                     Host::Area(_) => {
                         egui::Area::new(egui::Id::new("popover"))
+                            .fade_in(false)
                             .show(ui.ctx(), |ui| content(ui, false, &mut Vec::new()));
                     }
                 });

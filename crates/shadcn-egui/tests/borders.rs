@@ -185,3 +185,139 @@ fn an_opaque_border_hides_the_fill_in_its_outer_edge() {
         "the fill darkens an edge pixel by {worst} levels"
     );
 }
+
+/// A faded box paints as CSS group opacity: the border does not composite
+/// over the fill. `infra/q8`'s Chrome page, 16px boxes at `opacity: .5` on
+/// the dark background, measured at device scale 1: a primary box with a
+/// primary border reads 120 in the border and the fill alike; a box with
+/// `bg-input/30` and a `border-input` border reads 32 in the border and 15
+/// in the fill. The crate painted the first border at 147 (border over the
+/// faded fill).
+#[test]
+fn a_faded_box_paints_its_border_and_fill_as_one_group() {
+    let mut h = Harness::builder()
+        .with_size(vec2(80.0, 40.0))
+        .with_pixels_per_point(1.0)
+        .with_theme(egui::Theme::Dark)
+        .build_ui(|ui| {
+            let theme = Theme::current(ui.ctx());
+            ui.painter().rect_filled(
+                ui.ctx().content_rect(),
+                0.0,
+                theme.palette_of(egui::Theme::Dark).background,
+            );
+            let mut painter = ui.painter().clone();
+            painter.set_opacity(0.5);
+            for (i, (bg, border)) in [
+                (
+                    Paint::Role(Role::Primary, 1.0),
+                    Paint::Role(Role::Primary, 1.0),
+                ),
+                (Paint::Role(Role::Input, 0.3), Paint::Role(Role::Input, 1.0)),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let mut r = Recipe::default();
+                r.border_width.base = Some(1.0);
+                r.border_color.base = Some(border);
+                r.bg.base = Some(bg);
+                let rect =
+                    Rect::from_min_size(pos2(LEFT + i as f32 * 30.0, 10.0), vec2(16.0, 16.0));
+                RecipeBox::resolve(ui.ctx(), &theme, &[&r], State::NONE).paint(&painter, rect);
+            }
+        });
+    h.step();
+    let img = h.render().expect("wgpu render");
+    let px = |x: f32, y: f32| i32::from(img.get_pixel(x as u32, y as u32).0[0]);
+    for (i, (border, fill)) in [(120, 120), (32, 15)].into_iter().enumerate() {
+        let left = LEFT + i as f32 * 30.0;
+        let got = (px(left, 18.0), px(left + 8.0, 18.0), px(left + 8.0, 10.0));
+        assert!(
+            (got.0 - border).abs() <= 1 && (got.2 - border).abs() <= 1,
+            "box {i}: border {got:?}, Chrome {border}"
+        );
+        assert!(
+            (got.1 - fill).abs() <= 1,
+            "box {i}: fill {got:?}, Chrome {fill}"
+        );
+    }
+}
+
+/// A faded box paints fill and border as one mesh, cut along its border's
+/// inner edge and the feathering band beside it. Those cuts lie on pixel
+/// centres for a box on whole pixels; every pixel inside the box must
+/// still be painted (a switch track showed the page through one pixel).
+#[test]
+fn a_faded_box_has_no_hole_along_its_cuts() {
+    use shadcn_egui::style::{Radius, Rung};
+    // (rect, border width): luma's switch track has 2px.
+    let rects = [
+        (
+            Rect::from_min_size(pos2(72.0, 190.0), vec2(28.0, 16.0)),
+            2.0,
+        ),
+        (
+            Rect::from_min_size(pos2(72.0, 160.0), vec2(28.0, 16.0)),
+            1.0,
+        ),
+        (Rect::from_min_size(pos2(20.0, 20.0), vec2(44.0, 20.0)), 1.0),
+        (Rect::from_min_size(pos2(20.0, 60.0), vec2(16.0, 16.0)), 1.0),
+    ];
+    let mut h = Harness::builder()
+        .with_size(vec2(120.0, 220.0))
+        .with_pixels_per_point(1.0)
+        .with_theme(egui::Theme::Dark)
+        .build_ui(move |ui| {
+            let theme = Theme::current(ui.ctx());
+            ui.painter().rect_filled(
+                ui.ctx().content_rect(),
+                0.0,
+                theme.palette_of(egui::Theme::Dark).background,
+            );
+            let mut painter = ui.painter().clone();
+            painter.set_opacity(0.5);
+            for (i, (rect, width)) in rects.into_iter().enumerate() {
+                let mut r = Recipe::default();
+                r.border_width.base = Some(width);
+                r.border_color.base = Some(Paint::Role(Role::Primary, 1.0));
+                r.bg.base = Some(Paint::Role(Role::Primary, 1.0));
+                r.radius.base = Some(if i == 3 {
+                    Radius::Px(4.0)
+                } else {
+                    Radius::Rung(Rung::Full)
+                });
+                RecipeBox::resolve(ui.ctx(), &theme, &[&r], State::NONE).paint(&painter, rect);
+            }
+        });
+    h.step();
+    let img = h.render().expect("wgpu render");
+    let mut holes = Vec::new();
+    for (rect, _) in rects {
+        // Pixels a whole pixel inside the outline: the pill's ends are
+        // half circles, the small box's corners 4px arcs.
+        let r = if rect.width() > 20.0 {
+            rect.height() / 2.0
+        } else {
+            4.0
+        };
+        let inner = rect.shrink(r);
+        for y in rect.top() as u32..rect.bottom() as u32 {
+            for x in rect.left() as u32..rect.right() as u32 {
+                let c = pos2(x as f32 + 0.5, y as f32 + 0.5);
+                let near = pos2(
+                    c.x.clamp(inner.left(), inner.right()),
+                    c.y.clamp(inner.top(), inner.bottom()),
+                );
+                if (c - near).length() > r - 1.0 {
+                    continue;
+                }
+                let v = img.get_pixel(x, y).0[0];
+                if v.abs_diff(120) > 2 {
+                    holes.push((x, y, v));
+                }
+            }
+        }
+    }
+    assert!(holes.is_empty(), "pixels off the faded colour: {holes:?}");
+}

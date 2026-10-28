@@ -304,23 +304,29 @@ impl<'a> Card<'a> {
         // Paint behind the sections: the card's box, then the footer strip.
         painter.set(
             back,
-            Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &card, st).shapes(ui.ctx(), outer)),
+            Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &card, st).shapes_at(
+                ui.ctx(),
+                outer,
+                painter.opacity(),
+            )),
         );
         if let Some((idx, top, bottom)) = footer_shapes {
             let strip = Rect::from_min_max(
                 egui::pos2(outer.left(), top),
                 egui::pos2(outer.right(), bottom),
             );
-            part_painter(
+            let painter = part_painter(
                 ui,
                 id.with("shadcn_egui::card::footer"),
                 &[&foot[..], &card[..]],
                 st,
-            )
-            .set(
-                idx,
-                Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &foot, st).shapes(ui.ctx(), strip)),
             );
+            let shapes = RecipeBox::resolve(ui.ctx(), &t, &foot, st).shapes_at(
+                ui.ctx(),
+                strip,
+                painter.opacity(),
+            );
+            painter.set(idx, Shape::Vec(shapes));
         }
 
         let response = crate::layout::end_item(ui, frame, outer, Sense::hover());

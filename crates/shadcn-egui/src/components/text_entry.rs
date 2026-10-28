@@ -235,10 +235,11 @@ impl<'a> TextEntry<'a> {
             self.context.with(State::DISABLED, !enabled),
         );
         let l = self.layers;
+        let painter = part_painter(ui, resp.id, &[l], st);
         let shapes = RecipeBox::resolve(ui.ctx(), self.theme, l, st)
             .transitioned(ui.ctx(), resp.id, l, st)
-            .shapes(ui.ctx(), rect);
-        part_painter(ui, resp.id, &[l], st).set(slot, Shape::Vec(shapes));
+            .shapes_at(ui.ctx(), rect, painter.opacity());
+        painter.set(slot, Shape::Vec(shapes));
         out
     }
 }

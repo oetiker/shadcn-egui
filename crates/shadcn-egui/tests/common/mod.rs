@@ -193,6 +193,36 @@ pub fn mesh_shapes(out: &egui::FullOutput) -> Vec<egui::Mesh> {
     meshes
 }
 
+/// The colour a mesh paints in its middle: the vertex nearest the centre
+/// of its bounds (a faded recipe box's fill, where the border is around).
+pub fn mesh_colour(mesh: &egui::Mesh) -> egui::Color32 {
+    let centre = mesh.calc_bounds().center();
+    mesh.vertices
+        .iter()
+        .min_by(|a, b| {
+            let d = |v: &egui::epaint::Vertex| (v.pos - centre).length_sq();
+            d(a).total_cmp(&d(b))
+        })
+        .map_or(egui::Color32::TRANSPARENT, |v| v.color)
+}
+
+/// Every filled box a frame painted, in paint order, as (rect, colour): a
+/// rect shape's fill, and a mesh's bounds and [`mesh_colour`] (a faded
+/// recipe box paints its fill and border as one mesh).
+pub fn box_fills(out: &egui::FullOutput) -> Vec<(egui::Rect, egui::Color32)> {
+    fn walk(s: &egui::Shape, out: &mut Vec<(egui::Rect, egui::Color32)>) {
+        match s {
+            egui::Shape::Rect(r) => out.push((r.rect, r.fill)),
+            egui::Shape::Mesh(m) => out.push((m.calc_bounds(), mesh_colour(m))),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut fills = Vec::new();
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut fills));
+    fills
+}
+
 /// Every text shape a frame painted, in paint order.
 pub fn text_shapes(out: &egui::FullOutput) -> Vec<egui::epaint::TextShape> {
     fn walk(s: &egui::Shape, out: &mut Vec<egui::epaint::TextShape>) {

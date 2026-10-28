@@ -370,7 +370,8 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
 
     let strip = Rect::from_min_max(egui::pos2(left, top), egui::pos2(right, bottom));
     let painter = part_painter(ui, id, &[&l[..]], g);
-    let shapes = RecipeBox::resolve(ui.ctx(), &t, &l, g).shapes(ui.ctx(), strip);
+    let shapes =
+        RecipeBox::resolve(ui.ctx(), &t, &l, g).shapes_at(ui.ctx(), strip, painter.opacity());
     painter.set(strip_bg, Shape::Vec(shapes));
     // The negative bottom margin hands the panel's own bottom padding to the strip.
     ui.allocate_rect(

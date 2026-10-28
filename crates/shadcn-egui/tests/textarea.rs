@@ -446,14 +446,15 @@ fn a_disabled_ui_fades_the_field() {
         });
         // The fill is the box, or under an opaque border the box less half
         // the border (the browser's background bleed avoidance).
-        let painted = common::rect_shapes(&off)
+        // Faded, fill and border are one mesh, feathered half a point out.
+        let painted = common::box_fills(&off)
             .into_iter()
-            .find(|s| {
-                rect.contains_rect(s.rect)
-                    && s.rect.width() >= rect.width() - 1.0
-                    && s.fill != egui::Color32::TRANSPARENT
+            .find(|(r, fill)| {
+                rect.expand(1.0).contains_rect(*r)
+                    && r.width() >= rect.width() - 1.0
+                    && *fill != egui::Color32::TRANSPARENT
             })
-            .map_or(egui::Color32::TRANSPARENT, |s| s.fill);
+            .map_or(egui::Color32::TRANSPARENT, |(_, fill)| fill);
         assert_eq!(painted, fill, "{name}");
     }
     // nova and lyra fill the disabled box; vega does not.

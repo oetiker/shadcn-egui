@@ -384,7 +384,11 @@ impl Alert {
         let painter = part_painter(ui, id, &[&root[..]], st);
         painter.set(
             back,
-            Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &root, st).shapes(ui.ctx(), outer)),
+            Shape::Vec(RecipeBox::resolve(ui.ctx(), &t, &root, st).shapes_at(
+                ui.ctx(),
+                outer,
+                painter.opacity(),
+            )),
         );
         if let (Some(icon), Some(size)) = (self.icon, icon_size) {
             // `*:[svg]:text-current`: the icon in the alert's text colour.
