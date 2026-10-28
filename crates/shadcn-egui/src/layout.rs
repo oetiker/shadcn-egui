@@ -518,7 +518,7 @@ fn wrap_item(ui: &mut Ui, width: f32) {
 
 /// Where an item `width` wide does not fit the rest of the line of the
 /// wrapping `ui`, starts the next line for it (see [`start_line`]): the
-/// one line break of [`wrap_item`] and [`as_flex_item`].
+/// one line break of [`wrap_item`], [`as_flex_item`] and [`begin_block`].
 fn wrap_line(ui: &mut Ui, width: f32) {
     if !at_line_start(ui) && width > ui.available_size_before_wrap().x {
         start_line(ui);
@@ -1354,12 +1354,16 @@ pub(crate) fn begin_item(ui: &mut Ui) -> (egui::Pos2, Ui) {
 }
 
 /// [`begin_item`] for a `w-full` container (an alert) `width` wide: in
-/// a [`wrap_row`] it wraps from its width before its content is drawn,
-/// as [`allocate_item`] wraps a widget (rule 6 of the porting standard);
-/// in a [`row`] it fills the room the row's other items leave. A
-/// content-sized container (a card) goes through [`as_flex_item`] instead.
+/// a wrapping `Ui` (a [`wrap_row`] or egui's `horizontal_wrapped`) it
+/// wraps from its width before its content is drawn, as [`as_flex_item`]
+/// wraps a card (rule 6 of the porting standard): egui wraps only what it
+/// allocates, not a container drawn in a child `Ui`. In a [`row`] it
+/// fills the room the row's other items leave. A content-sized container
+/// (a card) goes through [`as_flex_item`] instead.
 pub(crate) fn begin_block(ui: &mut Ui, width: f32) -> (egui::Pos2, Ui) {
-    wrap_item(ui, width);
+    if ui.layout().main_wrap() {
+        wrap_line(ui, width);
+    }
     begin_item(ui)
 }
 

@@ -7,6 +7,7 @@ use egui::{vec2, Color32, Rect, Ui};
 use shadcn_egui::color::oklch_to_srgb;
 use shadcn_egui::components::alert::{alert_action, Alert, AlertVariant};
 use shadcn_egui::components::button::{Button, ButtonSize};
+use shadcn_egui::components::card::{card_content, Card};
 use shadcn_egui::icons::lucide;
 use shadcn_egui::style::{AppVariant, Paint, Role, Style};
 use shadcn_egui::{Palette, Theme};
@@ -92,6 +93,57 @@ fn wraps_to_its_own_line_in_a_wrap_row() {
     assert_eq!(alert.left(), button.left(), "{button:?} {alert:?}");
     assert!(alert.top() >= button.bottom() + 8.0, "{button:?} {alert:?}");
     assert_eq!(alert.width(), 448.0);
+}
+
+/// An alert and a card wrap alike, in a `layout::wrap_row` and in egui's
+/// `horizontal_wrapped`: one that does not fit the rest of the line goes
+/// onto the next line (porting rule 6), never past the row's end. egui
+/// itself wraps only what it allocates, not a container drawn in a child
+/// `Ui`.
+#[test]
+fn an_alert_and_a_card_wrap_alike_in_both_wrapping_rows() {
+    let t = vega();
+    type Host = fn(&mut Ui, &mut dyn FnMut(&mut Ui));
+    let hosts: [(&str, Host); 2] = [
+        ("wrap_row", |ui, add| {
+            shadcn_egui::layout::wrap_row(ui, 8.0, add);
+        }),
+        ("horizontal_wrapped", |ui, add| {
+            ui.horizontal_wrapped(add);
+        }),
+    ];
+    for (host_name, host) in hosts {
+        for card in [false, true] {
+            let (button, item) = settle(&t, 900.0, |ui| {
+                ui.set_max_width(448.0);
+                let (mut b, mut a) = (Rect::NOTHING, Rect::NOTHING);
+                host(ui, &mut |ui| {
+                    b = ui.add(Button::new("Before")).rect;
+                    a = if card {
+                        // vega's card content is `px-6`: the card is the
+                        // body and 24 on each side.
+                        Card::new()
+                            .show(ui, |ui| {
+                                card_content(ui, |ui| {
+                                    ui.label(
+                                        "A card body that is far too wide for the rest of the line",
+                                    )
+                                })
+                                .rect
+                            })
+                            .expand2(vec2(24.0, 0.0))
+                    } else {
+                        ui.add(Alert::new().title("Alert in a row")).rect
+                    };
+                });
+                (b, a)
+            });
+            let what = format!("{host_name}, card {card}: {button:?} {item:?}");
+            assert_eq!(item.left(), button.left(), "{what}");
+            assert!(item.top() >= button.bottom(), "{what}");
+            assert!(item.right() <= 448.0, "{what}");
+        }
+    }
 }
 
 /// `w-full` in a `layout::row` beside a nowrap button: the alert's flex
