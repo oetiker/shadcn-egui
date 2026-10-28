@@ -472,6 +472,27 @@ fn the_hint_takes_the_placeholder_colour() {
     assert_eq!(common::text_colour(&out), want);
 }
 
+/// A recipe without a placeholder colour shows the hint in upstream's
+/// `placeholder:text-muted-foreground`, never in an egui colour
+/// (conformance 2.1).
+#[test]
+fn a_recipe_without_a_placeholder_colour_falls_back_to_muted() {
+    const PLAIN: AppVariant<TextareaVariant> = TextareaVariant::app("plain");
+    let theme = Theme::vega().variant(PLAIN, TextareaVariant::Default, |r, _| {
+        r.textarea.text = shadcn_egui::style::Prop::default();
+    });
+    let mut text = String::new();
+    let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        ui.add(
+            Textarea::new(&mut text)
+                .hint_text("Type here")
+                .variant(PLAIN),
+        )
+    });
+    let want = common::resolved(&theme, egui::Theme::Light).role(Role::MutedForeground);
+    assert_eq!(common::text_colour(&out), want);
+}
+
 /// An app variant's edit reaches the drawn field.
 #[test]
 fn an_app_variant_recolours_the_field() {

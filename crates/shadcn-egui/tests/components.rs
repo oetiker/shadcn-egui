@@ -1484,6 +1484,25 @@ fn a_long_word_stays_on_one_line_in_the_input() {
     }
 }
 
+/// A recipe without a placeholder colour shows the hint in upstream's
+/// `placeholder:text-muted-foreground`, never in an egui colour
+/// (conformance 2.1).
+#[test]
+fn input_hint_without_a_recipe_colour_is_muted() {
+    use shadcn_egui::components::input::{Input, InputVariant};
+    use shadcn_egui::style::{AppVariant, Prop, Role};
+    const PLAIN: AppVariant<InputVariant> = InputVariant::app("plain");
+    let theme = Theme::vega().variant(PLAIN, InputVariant::Default, |r, _| {
+        r.input.text = Prop::default();
+    });
+    let mut text = String::new();
+    let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        ui.add(Input::new(&mut text).hint("Type here").variant(PLAIN))
+    });
+    let want = common::resolved(&theme, egui::Theme::Light).role(Role::MutedForeground);
+    assert_eq!(common::text_colour(&out), want);
+}
+
 /// `Input::id_salt` gives the field an id that does not depend on how many
 /// widgets precede it, so callers can address it from outside.
 #[test]

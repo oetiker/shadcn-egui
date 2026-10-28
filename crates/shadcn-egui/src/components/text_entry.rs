@@ -75,8 +75,12 @@ impl<'a> TextEntry<'a> {
             &[layers],
             geometry.with(State::DISABLED, !enabled),
         );
+        // Upstream's text-entry parts all carry
+        // `placeholder:text-muted-foreground`; a recipe without a
+        // placeholder colour keeps it.
+        let muted = theme.role(Role::MutedForeground); // behaviour-ok: upstream's placeholder colour
         let placeholder = pick(layers, |r| &r.text, geometry.or(State::PLACEHOLDER))
-            .map_or_else(|| ui.visuals().weak_text_color(), |p| theme.paint(p));
+            .map_or(muted, |p| theme.paint(p));
         let inherited = theme.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads the part first
         let typed = pick(layers, |r| &r.text, geometry).map_or(inherited, |p| theme.paint(p));
         let content_min = inset[3] + inset[1] + ui.ctx().fonts_mut(|f| f.glyph_width(&font, 'M'));
