@@ -31,6 +31,10 @@ pub(super) const SOFT_HYPHEN: char = '\u{AD}';
 /// after `x_start` (infinite where none follows) and `next_items` the
 /// paragraph's snapped item widths up to it; `prev_item` and `prev_items`
 /// the same for the last item start before `x_end`.
+///
+/// An `emergency` candidate is no break opportunity: it sits between two
+/// chars inside a word, where `overflow-wrap: break-word` breaks a word
+/// too wide for a line of its own ([`break_word`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Candidate {
     pub start: usize,
@@ -44,6 +48,7 @@ pub(super) struct Candidate {
     pub next_items: f64,
     pub prev_item: f64,
     pub prev_items: f64,
+    pub emergency: bool,
 }
 
 /// One char of a paragraph as the breakers see it, in device px: its
@@ -135,6 +140,12 @@ fn is_space(c: char) -> bool {
 /// one between two other chars where [`line_break::can_break`] allows it,
 /// and a sentinel at the end of the last char that is not a space.
 pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
+    candidates_with(chars, false)
+}
+
+/// [`candidates`], and with `emergency` an emergency candidate between
+/// any two other chars inside a word that [`cluster_boundary`] separates.
+pub(super) fn candidates_with(chars: &[Glyph], emergency: bool) -> Vec<Candidate> {
     let (x0, x0_exact) = chars.first().map_or((0.0, 0.0), |c| (c.left, c.x));
     let mut out = vec![Candidate {
         start: 0,
@@ -148,6 +159,7 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
         next_items: 0.0,
         prev_item: 0.0,
         prev_items: 0.0,
+        emergency: false,
     }];
     let (mut end, mut end_exact) = (x0, x0_exact);
     let mut i = 0;
@@ -177,8 +189,9 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
         end_exact = g.x_end;
         let before2 = i.checked_sub(1).map(|k| chars[k].c);
         if let Some(next) = chars.get(i + 1).filter(|n| !is_space(n.c)) {
-            if line_break::can_break(before2, g.c, next.c) {
-                let hyphenated = g.c == SOFT_HYPHEN;
+            let opportunity = line_break::can_break(before2, g.c, next.c);
+            if opportunity || (emergency && cluster_boundary(g.c, next.c)) {
+                let hyphenated = opportunity && g.c == SOFT_HYPHEN;
                 let hyphen = if hyphenated { g.hyphen } else { 0.0 };
                 out.push(Candidate {
                     start: i + 1,
@@ -188,6 +201,7 @@ pub(super) fn candidates(chars: &[Glyph]) -> Vec<Candidate> {
                     x_end: g.x_end,
                     hyphen,
                     hyphenated,
+                    emergency: !opportunity,
                     ..out[0]
                 });
             }
@@ -259,6 +273,50 @@ pub(super) fn normal(cands: &[Candidate], width: f32) -> Vec<usize> {
             .take_while(|&e| fits(greedy_len(&cands[s], &cands[e]), width))
             .last()
             .unwrap_or(s + 1);
+        if e + 1 < cands.len() {
+            out.push(cands[e].start);
+        }
+        s = e;
+    }
+    out
+}
+
+/// Whether a word may break between `a` and `b` under
+/// `overflow-wrap: break-word`, which breaks at grapheme cluster
+/// boundaries: not around a zero-width joiner, nor before a combining
+/// mark, a variation selector or an emoji skin-tone modifier.
+fn cluster_boundary(a: char, b: char) -> bool {
+    !(a == '\u{200D}'
+        || matches!(
+            b,
+            '\u{200D}'
+                | '\u{0300}'..='\u{036F}'
+                | '\u{FE00}'..='\u{FE0F}'
+                | '\u{1F3FB}'..='\u{1F3FF}'
+        ))
+}
+
+/// Blink's normal line breaking under `overflow-wrap: break-word` over
+/// `cands` ([`candidates_with`] with emergency candidates) at `width`:
+/// as [`normal`], except that a line where no break opportunity fits
+/// (a word too wide for a line of its own) ends at the last emergency
+/// candidate inside the word that fits, after one char at least
+/// (`LineBreaker::HandleOverflow` breaking anywhere). A word that fits
+/// a line of its own moves down whole. The char index where each line
+/// after the first starts.
+pub(super) fn break_word(cands: &[Candidate], width: f32) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut s = 0;
+    while s + 1 < cands.len() {
+        let fit = |e: &usize| fits(greedy_len(&cands[s], &cands[*e]), width);
+        let regular = (s + 1..cands.len()).filter(|&e| !cands[e].emergency);
+        // The end sentinel is a regular candidate.
+        let first = regular.clone().next().unwrap_or(cands.len() - 1);
+        let e = if fit(&first) {
+            regular.take_while(fit).last().unwrap_or(first)
+        } else {
+            (s + 1..first).take_while(fit).last().unwrap_or(s + 1)
+        };
         if e + 1 < cands.len() {
             out.push(cands[e].start);
         }
@@ -514,6 +572,45 @@ mod tests {
             s = e;
         }
         out
+    }
+
+    /// `text` broken under `overflow-wrap: break-word` at `width`.
+    fn break_word_lines(text: &str, width: f32) -> Vec<String> {
+        let chars = mono(text);
+        let starts = break_word(&candidates_with(&chars, true), width);
+        let mut out = Vec::new();
+        let mut s = 0;
+        for e in starts.into_iter().chain(std::iter::once(chars.len())) {
+            out.push(
+                text.chars()
+                    .skip(s)
+                    .take(e - s)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned(),
+            );
+            s = e;
+        }
+        out
+    }
+
+    #[test]
+    fn break_word_breaks_only_a_word_too_wide_for_its_own_line() {
+        assert_eq!(
+            break_word_lines("see abcdefghij", 4.0),
+            ["see", "abcd", "efgh", "ij"]
+        );
+        assert_eq!(break_word_lines("ab cdef", 4.0), ["ab", "cdef"]);
+        assert_eq!(break_word_lines("ab cd", 8.0), ["ab cd"]);
+        // One char a line at least, even where none fits.
+        assert_eq!(break_word_lines("abc", 0.5), ["a", "b", "c"]);
+        // A combining mark stays with its base.
+        assert_eq!(
+            break_word_lines("e\u{301}e\u{301}", 1.0),
+            ["e\u{301}", "e\u{301}"]
+        );
+        // Emergency candidates never reach the other breakers.
+        assert!(candidates(&mono("abcd")).iter().all(|c| !c.emergency));
     }
 
     #[test]

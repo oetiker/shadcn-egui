@@ -104,6 +104,7 @@ pub struct TextLook {
     underline_offset: Option<f32>,
     leading: Leading,
     wrap_style: Option<TextWrap>,
+    break_word: bool,
 }
 
 impl TextLook {
@@ -155,6 +156,7 @@ impl TextLook {
             underline_offset: pick(layers, |r| &r.underline_offset, state),
             leading: Leading::Inline,
             wrap_style: pick(layers, |r| &r.text_wrap, state),
+            break_word: false,
         }
     }
 
@@ -171,6 +173,15 @@ impl TextLook {
     #[inline]
     pub fn leading(mut self, leading: Leading) -> Self {
         self.leading = leading;
+        self
+    }
+
+    /// `overflow-wrap: break-word`, a `<textarea>`'s UA default: wrapped
+    /// text breaks a word too wide for a line of its own between two of
+    /// its chars, so the text fits its width.
+    #[inline]
+    pub(crate) fn break_word(mut self, break_word: bool) -> Self {
+        self.break_word = break_word;
         self
     }
 
@@ -423,7 +434,7 @@ impl TextLook {
         }
         let measured_key = hasher.finish();
         let style = self.wrap_style.map(|s| s as u8);
-        (wrap as u8, width.to_bits(), style).hash(&mut hasher);
+        (wrap as u8, width.to_bits(), style, self.break_word).hash(&mut hasher);
         let key = hasher.finish();
         let id = egui::Id::new("shadcn_egui::text::laid_out");
         let frame = ctx.cumulative_frame_nr();
@@ -544,7 +555,13 @@ impl TextLook {
                     .and_then(|s| {
                         wrap::breaks(&cands, s, width * ppp, size * ppp, ppp, space * ppp, n)
                     })
-                    .unwrap_or_else(|| wrap::normal(&cands, width * ppp));
+                    .unwrap_or_else(|| {
+                        if self.break_word {
+                            wrap::break_word(&wrap::candidates_with(&edges, true), width * ppp)
+                        } else {
+                            wrap::normal(&cands, width * ppp)
+                        }
+                    });
                 for s in found {
                     starts[first + s] = true;
                 }

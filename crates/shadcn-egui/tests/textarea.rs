@@ -160,6 +160,71 @@ fn wrapped_text_grows_the_field() {
     assert!(h > 100.0, "wraps and grows: {h}");
 }
 
+/// A word wider than the field breaks inside it, as Chrome's `<textarea>`
+/// does (`overflow-wrap: break-word`, the UA default): the field keeps its
+/// allocated width and grows in height; the box and the text stay inside
+/// the allocation. A word that fits on a line by itself is moved down
+/// whole, not broken.
+#[test]
+fn a_long_word_breaks_inside_the_field() {
+    let theme = Theme::vega();
+    let mut text = format!("see https://{}", "x".repeat(80));
+    let mut start = egui::Pos2::ZERO;
+    let mut galley = None;
+    let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        start = ui.cursor().min;
+        let out = Textarea::new(&mut text).desired_width(200.0).show(ui);
+        galley = Some(out.galley.clone());
+        out.response.response
+    });
+    assert_eq!(rect.left(), start.x, "{rect:?}");
+    assert_eq!(rect.width(), 200.0, "{rect:?}");
+    let galley = galley.unwrap();
+    assert!(galley.rows.len() > 3, "{} rows", galley.rows.len());
+    assert!(galley.size().x <= 200.0, "galley {:?}", galley.size());
+    // `see` stays alone on the first row: the URL fits no line beside it.
+    assert_eq!(galley.rows[0].text().trim_end(), "see");
+    assert!(galley.rows[1].text().starts_with("https"));
+    for r in common::rect_shapes(&out) {
+        assert!(
+            r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+            "box {:?} outside {rect:?}",
+            r.rect
+        );
+    }
+    let tall = common::measure(&theme, egui::Theme::Light, |ui| {
+        ui.add(Textarea::new(&mut text).desired_width(200.0))
+    });
+    let mut one_row = String::from("x");
+    let one = common::measure(&theme, egui::Theme::Light, |ui| {
+        ui.add(Textarea::new(&mut one_row).desired_width(200.0))
+    });
+    // The field holds every row: vega's `py-2` and border add 18.
+    assert_eq!(tall.height(), galley.size().y + 18.0, "{tall:?}");
+    assert!(tall.height() > one.height(), "{tall:?} {one:?}");
+}
+
+/// At its content minimum (the padding box around one `M`) the field
+/// breaks a word after each char and keeps its box at the allocated rect.
+#[test]
+fn a_word_breaks_at_the_content_minimum() {
+    let theme = Theme::vega();
+    let mut text = String::from("MMMM");
+    let mut start = egui::Pos2::ZERO;
+    let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        start = ui.cursor().min;
+        ui.add(Textarea::new(&mut text).desired_width(0.0))
+    });
+    assert_eq!(rect.left(), start.x, "{rect:?}");
+    for r in common::rect_shapes(&out) {
+        assert!(
+            r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+            "box {:?} outside {rect:?}",
+            r.rect
+        );
+    }
+}
+
 /// While empty, the field grows to hold its wrapped hint text, as Chrome's
 /// `field-sizing: content` sizes an empty field by its placeholder.
 #[test]

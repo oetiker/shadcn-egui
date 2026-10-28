@@ -138,7 +138,9 @@ impl<'t> Textarea<'t> {
             "Textarea grows with its content: a recipe without field_sizing_content \
              would need a scrolling field, which the crate does not draw"
         );
-        let look = frame.look.clone();
+        // A `<textarea>` breaks a word wider than the field
+        // (`overflow-wrap: break-word`, the browser's default for it).
+        let look = frame.look.clone().break_word(true);
         let max_width = self.desired_width.unwrap_or(t.metrics.field_max_width);
         let width = layout::capped_width(ui, max_width, frame.content_min);
         let wrap = frame.content_width(width);

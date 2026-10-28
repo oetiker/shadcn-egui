@@ -107,7 +107,8 @@ impl<'a> TextEntry<'a> {
     }
 
     /// Allocate the box at `size`, show `edit` in it (`id_salt` gives it
-    /// a stable id), and paint the box under it in the field's state.
+    /// a stable id), and paint the box under it, at the allocated rect, in
+    /// the field's state.
     /// Raised to its content minimum, the field overflows its room without
     /// widening the parent (conformance 3.6).
     pub(crate) fn show(
@@ -121,7 +122,7 @@ impl<'a> TextEntry<'a> {
         // The box goes under the text: reserve its place in paint order, fill
         // it once the focus state is known.
         let slot = ui.painter().add(Shape::Noop);
-        let out = ui
+        let (rect, out) = ui
             .scope(|ui| {
                 ui.set_opacity(self.fade);
                 // As `add_sized`, with the id made in the `Ui` that shows
@@ -157,7 +158,7 @@ impl<'a> TextEntry<'a> {
                         self.typed,
                     );
                 }
-                out
+                (rect, out)
             })
             .inner;
 
@@ -170,7 +171,7 @@ impl<'a> TextEntry<'a> {
         let l = self.layers;
         let shapes = RecipeBox::resolve(ui.ctx(), self.theme, l, st)
             .transitioned(ui.ctx(), resp.id, l, st)
-            .shapes(ui.ctx(), resp.rect);
+            .shapes(ui.ctx(), rect);
         part_painter(ui, resp.id, &[l], st).set(slot, Shape::Vec(shapes));
         out
     }

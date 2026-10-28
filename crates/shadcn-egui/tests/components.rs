@@ -1456,6 +1456,34 @@ fn invalid_input_border_is_destructive() {
     }
 }
 
+/// A word wider than the field stays on one line, as in Chrome's
+/// `<input>`, which scrolls its text sideways and never wraps: the field
+/// keeps its allocated width, and its text is clipped to the field.
+#[test]
+fn a_long_word_stays_on_one_line_in_the_input() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    let mut text = format!("see https://{}", "x".repeat(80));
+    let mut start = egui::Pos2::ZERO;
+    let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        start = ui.cursor().min;
+        ui.add(Input::new(&mut text).max_width(200.0))
+    });
+    assert_eq!(rect.left(), start.x, "{rect:?}");
+    assert_eq!(rect.width(), 200.0, "{rect:?}");
+    let shapes = common::text_shapes(&out);
+    let galley = &shapes.first().expect("the field's text").galley;
+    assert_eq!(galley.rows.len(), 1);
+    assert!(galley.size().x > 200.0, "{:?}", galley.size());
+    for r in common::rect_shapes(&out) {
+        assert!(
+            r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+            "box {:?} outside {rect:?}",
+            r.rect
+        );
+    }
+}
+
 /// `Input::id_salt` gives the field an id that does not depend on how many
 /// widgets precede it, so callers can address it from outside.
 #[test]
