@@ -1086,7 +1086,11 @@ impl Theme {
     /// crate takes from the previous pass then needs one more pass, so the
     /// first frame of such a change can show it unsettled. Called before
     /// the first pass (in eframe's app creator, on `cc.egui_ctx`), the
-    /// first frame is in the theme's fonts.
+    /// first frame is in the theme's fonts. An app's own `ctx.set_fonts`
+    /// in a pass is not seen: egui asks for no repaint, so the screen keeps
+    /// the old fonts until the next input. Install the fonts through
+    /// [`Theme::apply_with_fonts`] instead, or call `ctx.request_repaint()`
+    /// after `set_fonts`.
     pub fn apply(&self, ctx: &egui::Context) {
         self.apply_inner(ctx, None);
     }
