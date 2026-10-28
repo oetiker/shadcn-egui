@@ -761,11 +761,26 @@ fn switch_fade_comes_from_the_style() {
             .push(Rule::important(When::all(State::DISABLED), 0.25));
     });
     let fills = |enabled: bool| {
-        let (_, out) = common::measure_output(&theme, mode, |ui| {
+        let (track, out) = common::measure_output(&theme, mode, |ui| {
             ui.add(Switch::new(&mut true).enabled(enabled))
         });
+        // Faded, the track paints as a mesh with the thumb cut out of it
+        // (its bounds the track's plus egui's feathering): its fill is its
+        // most opaque vertex.
+        let near = |r: egui::Rect| {
+            r.expand(1.0).contains_rect(track) && track.expand(1.0).contains_rect(r)
+        };
+        let fill = common::mesh_shapes(&out)
+            .iter()
+            .filter(|m| near(m.calc_bounds()))
+            .flat_map(|m| m.vertices.iter().map(|v| v.color))
+            .max_by_key(|c| c.a());
         let rects = common::rect_shapes(&out);
-        (rects[0].fill, rects.last().expect("thumb").fill)
+        let rect_fill = rects.iter().find(|r| near(r.rect)).map(|r| r.fill);
+        (
+            fill.or(rect_fill).expect("track fill"),
+            rects.last().expect("thumb").fill,
+        )
     };
     let ((track_on, thumb_on), (track_off, thumb_off)) = (fills(true), fills(false));
     assert_eq!(track_off, track_on.gamma_multiply(0.25), "track");

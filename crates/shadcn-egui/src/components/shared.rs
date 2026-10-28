@@ -488,7 +488,7 @@ impl RecipeBox {
     }
 
     /// [`RecipeBox::paint_inside`]'s shapes: meshes cut to the outer box.
-    fn shapes_inside(
+    pub(crate) fn shapes_inside(
         &self,
         ctx: &egui::Context,
         rect: Rect,
@@ -509,22 +509,6 @@ impl RecipeBox {
             snap(padding_box(outer_rect, outer.borders), None),
             inner_radius(outer.radius_on(outer_rect), outer.borders),
         );
-        fn cut(ctx: &egui::Context, shape: Shape, clip: &RoundedClip, out: &mut Vec<Shape>) {
-            match shape {
-                Shape::Noop => {}
-                Shape::Vec(shapes) => {
-                    for s in shapes {
-                        cut(ctx, s, clip, out);
-                    }
-                }
-                Shape::Mesh(mesh) => out.push(Shape::mesh(clip.apply(&mesh))),
-                shape => {
-                    let mut mesh = egui::Mesh::default();
-                    tessellator(ctx).tessellate_shape(shape, &mut mesh);
-                    out.push(Shape::mesh(clip.apply(&mesh)));
-                }
-            }
-        }
         let shapes = self.shapes_at(ctx, rect, opacity);
         // A plain fill (every style's indicator and range): the outer box's
         // outline cut to the rect, a convex polygon egui anti-aliases as it
@@ -542,7 +526,40 @@ impl RecipeBox {
         let clip = RoundedClip::new(ctx, outline);
         let mut out = Vec::new();
         for shape in shapes {
-            cut(ctx, shape, &clip, &mut out);
+            cut(ctx, shape, &|m| clip.apply(m), &mut out);
+        }
+        out
+    }
+
+    /// `shapes`, a part painted under this box at `rect`, less what the
+    /// box hides of them while it is faded (`opacity`, the box's painter's
+    /// opacity) and opaque: CSS fades a component's root as one group, so
+    /// an opaque part (a slider's or a switch's thumb) hides what lies
+    /// under it, where per-shape fading would let it show through. The
+    /// cut follows the box's outline as egui paints it, the hidden part
+    /// fading out across the outline's feathering band as the box fades
+    /// in. Unfaded or see-through, the shapes come back as they are.
+    pub(crate) fn hiding(
+        &self,
+        ctx: &egui::Context,
+        rect: Rect,
+        opacity: f32,
+        shapes: Vec<Shape>,
+    ) -> Vec<Shape> {
+        // The fill's own alpha, before `faded`'s fade.
+        let opaque = self.fill.is_some_and(|f| {
+            f.to_normalized_gamma_f32()[3] >= self.opacity - 0.5 / 255.0 // behaviour-ok: one 8-bit alpha step
+        });
+        if !opaque || self.opacity * opacity >= INITIAL_OPACITY {
+            return shapes;
+        }
+        let clip = RoundedClip::new(
+            ctx,
+            rounded_polygon(on_pixels(ctx, rect), self.radius_on(rect)),
+        );
+        let mut out = Vec::new();
+        for shape in shapes {
+            cut(ctx, shape, &|m| clip.remove(m), &mut out);
         }
         out
     }
@@ -804,6 +821,29 @@ fn tessellator(ctx: &egui::Context) -> egui::epaint::Tessellator {
         [1, 1], // behaviour-ok: no text in a box, the font atlas size is unused
         Vec::new(),
     )
+}
+
+/// `shape` as meshes in this context, each passed through `cut`.
+fn cut(
+    ctx: &egui::Context,
+    shape: Shape,
+    cut_mesh: &dyn Fn(&egui::Mesh) -> egui::Mesh,
+    out: &mut Vec<Shape>,
+) {
+    match shape {
+        Shape::Noop => {}
+        Shape::Vec(shapes) => {
+            for s in shapes {
+                cut(ctx, s, cut_mesh, out);
+            }
+        }
+        Shape::Mesh(mesh) => out.push(Shape::mesh(cut_mesh(&mesh))),
+        shape => {
+            let mut mesh = egui::Mesh::default();
+            tessellator(ctx).tessellate_shape(shape, &mut mesh);
+            out.push(Shape::mesh(cut_mesh(&mesh)));
+        }
+    }
 }
 
 /// The convex outline of a rounded rect, as egui's tessellator traces it.
@@ -1072,6 +1112,28 @@ impl RoundedClip {
             let mut piece = clip_inside(&band, &quad);
             for v in &mut piece.vertices {
                 v.color = v.color.gamma_multiply(self.cover(i, v.pos));
+            }
+            out.append(piece);
+        }
+        out
+    }
+
+    /// The part of `mesh` outside the box, the complement of
+    /// [`RoundedClip::apply`]: faded in across the edge's band as egui
+    /// fades the outline's own fill out there.
+    fn remove(&self, mesh: &egui::Mesh) -> egui::Mesh {
+        let n = self.exact.len();
+        if self.half <= 0.0 || n < 3 || self.folded() {
+            return clip_outside(mesh, &self.exact);
+        }
+        let (kept, mut out) = split_convex(mesh, &self.outer);
+        let band = clip_outside(&kept, &self.inner);
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let quad = [self.outer[i], self.outer[j], self.inner[j], self.inner[i]];
+            let mut piece = clip_inside(&band, &quad);
+            for v in &mut piece.vertices {
+                v.color = v.color.gamma_multiply(INSIDE - self.cover(i, v.pos));
             }
             out.append(piece);
         }

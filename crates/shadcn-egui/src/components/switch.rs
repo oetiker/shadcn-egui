@@ -139,10 +139,6 @@ impl Widget for Switch<'_> {
                 pick_len(&track, |r| &r.border_width, st),
                 ui.ctx().pixels_per_point(),
             );
-            RecipeBox::resolve(ui.ctx(), &t, &track, st)
-                .transitioned(ui.ctx(), base.id, &track, st)
-                .paint(&part_painter(ui, base.id, &[&track[..]], st), rect);
-
             // The thumb lies inside the border, vertically centred; its
             // translate differs per value and moves as its transition says.
             let side = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&thumb, f, st);
@@ -169,10 +165,22 @@ impl Widget for Switch<'_> {
                 st,
             );
             let thumb_rect = Rect::from_min_size(egui::pos2(home.left() + x, target.top()), size);
-            RecipeBox::resolve(ui.ctx(), &t, &thumb, st).paint(
-                &part_painter(ui, base.id.with("thumb"), &[&thumb[..], &track[..]], st),
+            let thumb_box = RecipeBox::resolve(ui.ctx(), &t, &thumb, st);
+            let thumb_painter =
+                part_painter(ui, base.id.with("thumb"), &[&thumb[..], &track[..]], st);
+            // The track under the thumb is hidden, as in the root's faded
+            // group.
+            let track_painter = part_painter(ui, base.id, &[&track[..]], st);
+            let track_shapes = RecipeBox::resolve(ui.ctx(), &t, &track, st)
+                .transitioned(ui.ctx(), base.id, &track, st)
+                .shapes_at(ui.ctx(), rect, track_painter.opacity());
+            track_painter.extend(thumb_box.hiding(
+                ui.ctx(),
                 thumb_rect,
-            );
+                thumb_painter.opacity(),
+                track_shapes,
+            ));
+            thumb_box.paint(&thumb_painter, thumb_rect);
         }
         // No label of its own: name it with `labelled_by(label.id)`, which
         // an own label, even an empty one, would override.

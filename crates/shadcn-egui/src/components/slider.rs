@@ -293,8 +293,22 @@ impl Widget for Slider<'_> {
             } else {
                 Rect::from_center_size(rect.center(), vec2(rect.width(), thickness))
             };
+            // The thumb hides what lies under it, as in the root's faded
+            // group.
+            let thumb_box = RecipeBox::resolve(ui.ctx(), &t, &thumb, st).transitioned(
+                ui.ctx(),
+                resp.id.with("thumb"),
+                &thumb,
+                st,
+            );
+            let under_thumb =
+                |shapes| thumb_box.hiding(ui.ctx(), thumb_rect, thumb_painter.opacity(), shapes);
             let track_box = RecipeBox::resolve(ui.ctx(), &t, &track, st);
-            track_box.paint(&track_painter, track_rect);
+            track_painter.extend(under_thumb(track_box.shapes_at(
+                ui.ctx(),
+                track_rect,
+                track_painter.opacity(),
+            )));
 
             let c = centre_of(frac_of(value));
             let range_rect = if vertical {
@@ -303,16 +317,17 @@ impl Widget for Slider<'_> {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
             // The track's `overflow-hidden` cuts the range to its rounded box.
-            RecipeBox::resolve(ui.ctx(), &t, &range, st).paint_inside(
-                &range_painter,
-                range_rect,
-                &track_box,
-                track_rect,
-            );
+            range_painter.extend(under_thumb(
+                RecipeBox::resolve(ui.ctx(), &t, &range, st).shapes_inside(
+                    ui.ctx(),
+                    range_rect,
+                    &track_box,
+                    track_rect,
+                    range_painter.opacity(),
+                ),
+            ));
 
-            RecipeBox::resolve(ui.ctx(), &t, &thumb, st)
-                .transitioned(ui.ctx(), resp.id.with("thumb"), &thumb, st)
-                .paint(&thumb_painter, thumb_rect);
+            thumb_box.paint(&thumb_painter, thumb_rect);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));

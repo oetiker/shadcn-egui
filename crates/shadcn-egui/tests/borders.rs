@@ -321,3 +321,59 @@ fn a_faded_box_has_no_hole_along_its_cuts() {
     }
     assert!(holes.is_empty(), "pixels off the faded colour: {holes:?}");
 }
+
+/// An opaque part over another in a faded component hides the part under
+/// it, as CSS group opacity does: upstream fades the slider and the switch
+/// root (`data-disabled:opacity-50`), so Chrome blends the thumb with the
+/// page only. `infra/q10`'s Chrome page (vega dark, opacity .5, at device
+/// scale 1 and 2): the slider's white thumb reads 133 over a 229 range,
+/// the checked switch's 23 thumb reads 16 over a 229 track. The crate
+/// blended each thumb with the faded part under it (about 187 and 71).
+#[test]
+fn a_faded_thumb_hides_the_track_under_it() {
+    use shadcn_egui::components::slider::Slider;
+    use shadcn_egui::components::switch::Switch;
+    for ppp in [1.0, 2.0] {
+        let mut h = Harness::builder()
+            .with_size(vec2(160.0, 80.0))
+            .with_pixels_per_point(ppp)
+            .with_theme(egui::Theme::Dark)
+            .build_ui_state(
+                |ui, rects: &mut [Rect; 2]| {
+                    Theme::vega().apply(ui.ctx());
+                    ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+                    let theme = Theme::current(ui.ctx());
+                    ui.painter().rect_filled(
+                        ui.ctx().content_rect(),
+                        0.0,
+                        theme.palette_of(egui::Theme::Dark).background,
+                    );
+                    ui.set_width(100.0);
+                    rects[0] = ui
+                        .add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(false))
+                        .rect;
+                    rects[1] = ui.add(Switch::new(&mut true).enabled(false)).rect;
+                },
+                [Rect::NOTHING; 2],
+            );
+        h.run();
+        let [slider, switch] = *h.state();
+        let img = h.render().expect("wgpu render");
+        let row = |r: Rect| {
+            let y = (r.center().y * ppp) as u32;
+            (r.left() as u32 * ppp as u32..(r.right() * ppp) as u32)
+                .map(|x| i32::from(img.get_pixel(x, y).0[0]))
+                .collect::<Vec<_>>()
+        };
+        let brightest = *row(slider).iter().max().unwrap();
+        assert!(
+            (brightest - 133).abs() <= 2,
+            "{ppp}x slider thumb {brightest}, Chrome 133"
+        );
+        let darkest = *row(switch).iter().min().unwrap();
+        assert!(
+            (darkest - 16).abs() <= 2,
+            "{ppp}x switch thumb {darkest}, Chrome 16"
+        );
+    }
+}

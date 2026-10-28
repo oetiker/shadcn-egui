@@ -48,6 +48,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- The thumb of a disabled slider or switch now shows one flat colour, as in the browser; before, the coloured range or track showed through it, so half of a disabled slider's thumb looked grey and a disabled checked switch's thumb looked lighter than on the shadcn page.
 - A disabled checked checkbox or switch now shows one even colour, as in the browser; before, its border drew as a lighter ring around the faded box, because the faded border was painted over the faded fill. The same holds for every faded box with a border, such as a disabled input, select, textarea or slider thumb, and for a popover, tooltip or dialog while it fades in.
 - An input's placeholder and typed text now stop at the edge of the text area, as in the browser; before, a wide letter of the placeholder could reach into the field's padding, and typed text up to a point into it. In a full input, the text cursor after the last letter now stays inside the text area, as in the browser, where before it sat on its edge.
 - An input's placeholder that is too long for the field now shows as many letters as fit and is cut at the edge of the text area, as in the browser; before, it ended early with `…`. A line break in an input's placeholder is dropped, as in the browser, where before only the first line showed.
