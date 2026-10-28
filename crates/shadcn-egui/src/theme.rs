@@ -830,13 +830,33 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
         }
     };
     let mono_installed = last.is_some_and(|f| f.mono_body);
-    ctx.set_fonts(font_definitions(fonts, base, mono_installed));
+    let defs = Arc::new(font_definitions(fonts, base, mono_installed));
+    let pass = ctx.cumulative_pass_nr();
+    // Fonts that change nothing count as no install, or an app that
+    // applies the same theme in every pass gets every pass discarded. After
+    // the first pass this is egui's own test in `set_fonts`, which then does
+    // nothing; before and in the first pass egui may have no fonts yet, so
+    // the comparison is with the last install.
+    let unchanged = if pass > 0 {
+        ctx.fonts(|f| f.definitions() == &*defs)
+    } else {
+        ctx.data(|d| d.get_temp::<Arc<FontDefinitions>>(last_defs_id()))
+            .is_some_and(|last| *last == *defs)
+    };
+    ctx.data_mut(|d| d.insert_temp(id, key));
+    if unchanged {
+        if pass == 0 {
+            ctx.set_fonts((*defs).clone());
+        }
+        return;
+    }
+    ctx.set_fonts((*defs).clone());
+    ctx.data_mut(|d| d.insert_temp(last_defs_id(), defs));
     // A pass that has started sees the count change (`check_mode_switch`)
     // and is redone. Where no crate call has seen this pass yet, a call
     // between two passes cannot be told from the first call of a pass:
     // repaint, so a pass that drew in the old fonts is not the last one.
     // egui repaints after the first pass anyway.
-    let pass = ctx.cumulative_pass_nr();
     let seen = ctx.data(|d| {
         d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())
             .is_some_and(|(p, ..)| p == pass)
@@ -845,7 +865,6 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
         ctx.request_repaint();
     }
     ctx.data_mut(|d| {
-        d.insert_temp(id, key);
         let n = d.get_temp::<u64>(font_installs_id()).unwrap_or(0);
         d.insert_temp(font_installs_id(), n + 1);
     });
@@ -1073,7 +1092,9 @@ impl Theme {
     }
 
     /// Like [`Theme::apply`], starting from the app's own font definitions
-    /// instead of egui's defaults. Always reinstalls the fonts.
+    /// instead of egui's defaults. Always builds the fonts again from
+    /// `base`; egui takes them only when they differ from its own, so the
+    /// same call in every pass costs no extra pass.
     pub fn apply_with_fonts(&self, ctx: &egui::Context, base: FontDefinitions) {
         self.apply_inner(ctx, Some(base));
     }
@@ -1214,7 +1235,13 @@ fn pass_mode_id() -> egui::Id {
     egui::Id::new("shadcn_egui::pass_mode")
 }
 
-/// How many times [`install_fonts`] has called `ctx.set_fonts`.
+/// The font definitions [`install_fonts`] installed last.
+fn last_defs_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::last_font_definitions")
+}
+
+/// How many times [`install_fonts`] has installed fonts that differ from
+/// the ones egui has.
 fn font_installs_id() -> egui::Id {
     egui::Id::new("shadcn_egui::font_installs")
 }

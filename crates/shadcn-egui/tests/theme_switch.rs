@@ -374,3 +374,36 @@ fn a_font_change_as_the_first_crate_call_of_a_pass_repaints() {
     });
     assert_eq!(width, new);
 }
+
+/// `Theme::apply_with_fonts` of the same fonts in every pass, after a
+/// crate widget or before any: egui keeps its fonts, so no pass is
+/// discarded and a still frame asks for no repaint.
+#[test]
+fn the_same_fonts_applied_every_pass_settle() {
+    for first in [false, true] {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        let apply = |ctx: &egui::Context| {
+            Theme::vega().apply_with_fonts(ctx, egui::FontDefinitions::default());
+        };
+        for frame in 0..6 {
+            let mut passes = 0;
+            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                passes += 1;
+                if first {
+                    apply(ui.ctx());
+                }
+                ui.add(Button::new("A"));
+                if !first {
+                    apply(ui.ctx());
+                }
+                ui.add(Button::new("B"));
+            });
+            assert_eq!(passes, 1, "first {first}, frame {frame}: passes");
+            if frame > 0 {
+                let delay = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+                assert_eq!(delay, std::time::Duration::MAX, "first {first}, frame {frame}");
+            }
+        }
+    }
+}
