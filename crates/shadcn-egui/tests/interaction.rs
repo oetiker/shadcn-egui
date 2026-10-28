@@ -298,3 +298,38 @@ fn closed_select_opens_on_enter_space_and_arrow_down() {
         assert_eq!(value.get(), 0, "the highlight stayed on the value");
     }
 }
+
+/// The click target of a checkbox and a switch is larger than the
+/// visible control: a click beside the control, inside the target, still
+/// toggles it.
+#[test]
+fn a_click_beside_a_check_control_inside_its_target_toggles() {
+    for switch in [false, true] {
+        let ctx = egui::Context::default();
+        let (rect, on) = (Cell::new(Rect::NOTHING), Cell::new(false));
+        let run = |events| {
+            common::pass(Loop::RunUi, &ctx, events, |ui| {
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
+                ui.add_space(20.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(20.0);
+                    let mut c = on.get();
+                    rect.set(if switch {
+                        ui.add(Switch::new(&mut c)).rect
+                    } else {
+                        ui.add(Checkbox::new(&mut c)).rect
+                    });
+                    on.set(c);
+                });
+            });
+        };
+        run(vec![]);
+        let beside = rect.get().left_center() - egui::vec2(4.0, 0.0);
+        run(common::click(beside));
+        assert!(on.get(), "switch {switch}: a click beside toggles");
+        let above = rect.get().center_top() - egui::vec2(0.0, 4.0);
+        run(common::click(above));
+        assert!(!on.get(), "switch {switch}: a click above toggles");
+    }
+}

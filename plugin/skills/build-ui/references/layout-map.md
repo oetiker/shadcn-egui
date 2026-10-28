@@ -60,8 +60,9 @@ fn footer(ui: &mut egui::Ui) {
   primary action last.
 - `layout::row`, `space_between`, `form_row` and a card footer are as
   high as their tallest child, never `ui.spacing().interact_size.y`. A
-  checkbox or switch counts with its touch area (32 to 34 px). For a
-  taller row, give the design's height to a child (`add_sized`), not to
+  checkbox's or switch's larger click target does not count, as an
+  absolute box in a flex row: a row of a label and a checkbox is 16 px
+  high in vega. For a taller row, give the design's height to a child (`add_sized`), not to
   `interact_size`.
 - In `layout::row`, `wrap_row` and `space_between` a child wider than the
   room left (an input or select raised to its content minimum, a long

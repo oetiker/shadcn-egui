@@ -144,7 +144,8 @@ fn stretch_pass_id(row: egui::Id) -> egui::Id {
 /// each call, which marks the item that asked; and the `Ui`s whose
 /// children are the row's items: `roots` by the `id` their children name
 /// as parent, `skip` the unique ids of the `Ui`s between a root and the
-/// row, which are no items themselves.
+/// row, which are no items themselves, and of the pass's hit areas,
+/// which take no part in the row's layout.
 #[derive(Clone, Debug, Default)]
 struct Stretch {
     heights: Vec<f32>,
@@ -201,7 +202,7 @@ impl RowItems {
         let pass = ui
             .data_mut(|d| d.remove_temp::<Stretch>(stretch_pass_id(self.row)))
             .unwrap_or_default();
-        let (lines, heights) = ui.ctx().viewport(|v| {
+        let (added, end) = ui.ctx().viewport(|v| {
             let layer = v.this_pass.widgets.get_layer(self.layer);
             let added: Vec<(usize, egui::WidgetRect)> = layer
                 .enumerate()
@@ -209,8 +210,14 @@ impl RowItems {
                 .map(|(i, w)| (i, *w))
                 .collect();
             let end = self.before + added.len();
-            row_lines(&added, end, &pass, wraps)
+            (added, end)
         });
+        // A hit area takes no part in the row's layout.
+        let hit_area = crate::components::shared::is_hit_area(ui.ctx());
+        let mut pass = pass;
+        pass.skip
+            .extend(added.iter().map(|(_, w)| w.id).filter(|&id| hit_area(id)));
+        let (lines, heights) = row_lines(&added, end, &pass, wraps);
         let changed = self.stored.as_ref().is_none_or(|old| {
             old.len() != heights.len()
                 || old

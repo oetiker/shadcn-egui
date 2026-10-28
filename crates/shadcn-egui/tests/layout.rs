@@ -2581,3 +2581,97 @@ fn form_row_is_as_high_as_its_label_or_control() {
         }
     }
 }
+
+/// A checkbox's or switch's hit area (`after:absolute after:-inset-*`)
+/// takes no part in the row's layout, as an absolute box in a flex row:
+/// a `space_between` row of a label and the control is as high as the
+/// taller of the two, and a stretch item beside the control is as high
+/// as the control's box.
+#[test]
+fn a_hit_area_is_no_row_content() {
+    use shadcn_egui::components::{checkbox::checkbox, label::label, switch::toggle};
+    for switch in [false, true] {
+        let (passes, r) = settled(&vega(), Host::Screen, &move |ui, _, out| {
+            ui.set_max_width(300.0);
+            let out = std::cell::RefCell::new(out);
+            let row = ui
+                .scope(|ui| {
+                    layout::space_between(
+                        ui,
+                        |ui| {
+                            let r = label(ui, "Accept terms").rect;
+                            out.borrow_mut().push(r);
+                        },
+                        |ui| {
+                            let mut on = true;
+                            let r = if switch {
+                                toggle(ui, &mut on).rect
+                            } else {
+                                checkbox(ui, &mut on).rect
+                            };
+                            let rule = stretch_rule(ui);
+                            out.borrow_mut().extend([r, rule]);
+                        },
+                    );
+                })
+                .response
+                .rect;
+            out.borrow_mut().push(row);
+        });
+        let case = format!("switch {switch}: {r:?}");
+        let [label, control, rule, row] = r[..] else {
+            panic!("{case}")
+        };
+        let content = label.height().max(control.height());
+        assert!(content < 20.0, "{case}");
+        assert_eq!(row.height(), content, "{case}");
+        assert_eq!(rule.height(), content, "{case}");
+        assert_eq!(passes, 1, "{case}");
+    }
+}
+
+/// A checkbox's or switch's larger click target (upstream
+/// `after:absolute after:-inset-*`) takes no part in the row's layout: a
+/// crate `row` or `space_between` of a label and the control is as high
+/// as its tallest visible item, as in the browser, not as the target.
+#[test]
+fn a_row_of_a_label_and_a_check_control_is_as_high_as_its_content() {
+    use shadcn_egui::components::checkbox::Checkbox;
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::switch::Switch;
+    type Row = fn(&mut egui::Ui, &mut dyn FnMut(&mut egui::Ui));
+    let rows: [(&str, Row); 2] = [
+        ("row", |ui, add| layout::row(ui, 8.0, |ui| add(ui))),
+        ("space_between", |ui, add| {
+            let add = std::cell::RefCell::new(add);
+            layout::space_between(ui, |ui| (add.borrow_mut())(ui), |_| {});
+        }),
+    ];
+    type Control = fn(&mut egui::Ui) -> egui::Rect;
+    let controls: [(&str, Control); 2] = [
+        ("checkbox", |ui| ui.add(Checkbox::new(&mut false)).rect),
+        ("switch", |ui| ui.add(Switch::new(&mut false)).rect),
+    ];
+    for (name, row) in rows {
+        for (control, add) in controls {
+            let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+                let mut items = Vec::new();
+                let outer = ui
+                    .scope(|ui| {
+                        row(ui, &mut |ui| {
+                            items.push(ui.add(Label::new("Email")).rect);
+                            items.push(add(ui));
+                        })
+                    })
+                    .response
+                    .rect;
+                out.push(outer);
+                out.extend(items);
+            });
+            let case = format!("{name} {control}: {r:?}");
+            let content = r[1].height().max(r[2].height());
+            assert_eq!(r[0].height(), content, "{case}");
+            assert_eq!(passes, 1, "{case}");
+        }
+    }
+}

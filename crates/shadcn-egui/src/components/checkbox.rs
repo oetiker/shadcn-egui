@@ -98,7 +98,7 @@ impl Widget for Checkbox<'_> {
         } else {
             Sense::hover()
         };
-        let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        let mut resp = crate::components::shared::hit_area(ui, hit, base.id.with("hit"), sense);
         pressable(&mut resp, ActivationKeys::Space);
         if enabled && resp.clicked() {
             *self.checked = !*self.checked;

@@ -807,6 +807,50 @@ struct Modality {
     input: Option<bool>,
 }
 
+/// The ids [`hit_area`] registered in one pass. Only the current pass's
+/// are kept, so the set does not grow with every control ever drawn.
+#[derive(Clone, Debug, Default)]
+struct HitAreas {
+    pass: u64,
+    ids: egui::IdSet,
+}
+
+fn hit_areas_id() -> Id {
+    Id::new("shadcn_egui::hit_areas")
+}
+
+/// A control's hit area, upstream's `after:absolute after:-inset-*`: a
+/// widget at `rect` that takes the pointer with `sense`, but no part in
+/// the layout of a crate row (its height, a `self-stretch` item's
+/// height), as an absolute box takes none in a flex row (conformance
+/// 3.3).
+pub(crate) fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.data_mut(|d| {
+        let areas = d.get_temp_mut_or_default::<HitAreas>(hit_areas_id());
+        if areas.pass != pass {
+            *areas = HitAreas {
+                pass,
+                ids: egui::IdSet::default(),
+            };
+        }
+        areas.ids.insert(id);
+    });
+    ui.interact(rect, id, sense)
+}
+
+/// Whether an id names a widget [`hit_area`] registered in this pass: the
+/// pass's set, read once.
+pub(crate) fn is_hit_area(ctx: &Context) -> impl Fn(Id) -> bool {
+    let pass = ctx.cumulative_pass_nr();
+    let ids = ctx
+        .data(|d| d.get_temp::<HitAreas>(hit_areas_id()))
+        .filter(|a| a.pass == pass)
+        .map(|a| a.ids)
+        .unwrap_or_default();
+    move |id| ids.contains(&id)
+}
+
 /// Whether `:focus-visible` holds for the focused widget, as the browser
 /// tracks it (conformance 2.6), crate-wide. The modality is taken when
 /// focus changes: by the pass's last key press or pointer button event,
