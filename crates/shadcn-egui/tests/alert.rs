@@ -151,6 +151,170 @@ fn action_sits_top_right_and_reserves_room() {
     assert_eq!(alert.height(), plain.height());
 }
 
+/// The action is absolutely placed: a tall action overflows the alert and
+/// does not grow it (lyra's alert is lower than an `Lg` button).
+#[test]
+fn a_tall_action_overflows_without_growing_the_alert() {
+    for style in [Style::lyra(), Style::vega(), Style::nova()] {
+        let t = Theme::new(style, Palette::light(), Palette::dark(), 10.0);
+        let (with, button) = settle(&t, 900.0, |ui| {
+            ui.set_max_width(448.0);
+            let r = Alert::new().title("Spam").show(ui, |ui| {
+                alert_action(ui, |ui| ui.add(Button::new("Undo").size(ButtonSize::Lg)))
+                    .inner
+                    .rect
+            });
+            (r.response.rect, r.inner)
+        });
+        let without = settle(&t, 900.0, |ui| {
+            ui.set_max_width(448.0);
+            ui.add(Alert::new().title("Spam")).rect
+        });
+        assert_eq!(with.height(), without.height(), "{with:?} {button:?}");
+    }
+    let t = Theme::new(Style::lyra(), Palette::light(), Palette::dark(), 10.0);
+    let (alert, button) = settle(&t, 900.0, |ui| {
+        let r = Alert::new().title("Spam").show(ui, |ui| {
+            alert_action(ui, |ui| ui.add(Button::new("Undo").size(ButtonSize::Lg)))
+                .inner
+                .rect
+        });
+        (r.response.rect, r.inner)
+    });
+    assert!(button.bottom() > alert.bottom(), "{alert:?} {button:?}");
+}
+
+/// An action that goes away gives back the `pr-18` it reserved, from the
+/// next pass on.
+#[test]
+fn removing_the_action_gives_back_its_room() {
+    let t = vega();
+    let long = "Enable it under your profile settings to get started, \
+                and tell your friends about it while you are there.";
+    let ctx = egui::Context::default();
+    t.apply(&ctx);
+    let frame = |action: bool| {
+        let mut desc = Rect::NOTHING;
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(900.0, 800.0))),
+                ..Default::default()
+            },
+            |ui| {
+                ui.set_max_width(448.0);
+                Alert::new().title("T").show(ui, |ui| {
+                    desc = shadcn_egui::components::alert::alert_description(ui, long).rect;
+                    if action {
+                        let _ = alert_action(ui, |ui| ui.button("x"));
+                    }
+                });
+            },
+        );
+        desc
+    };
+    let reserved = 448.0 - 1.0 - 72.0;
+    let mut desc = Rect::NOTHING;
+    for _ in 0..3 {
+        desc = frame(true);
+    }
+    assert!(desc.right() <= reserved + 0.5, "{desc:?}");
+    for _ in 0..2 {
+        desc = frame(false);
+    }
+    assert!(
+        desc.right() > reserved + 1.0,
+        "room not given back: {desc:?}"
+    );
+}
+
+/// In unbounded room the action ends at the alert's border less its inset,
+/// once the alert knows its width from the previous pass.
+#[test]
+fn an_unbounded_alert_places_its_action_inside() {
+    let t = vega();
+    let (alert, button) = settle(&t, 900.0, |ui| {
+        ui.allocate_ui(vec2(f32::INFINITY, 300.0), |ui| {
+            let r = Alert::new().title("Saved").show(ui, |ui| {
+                alert_action(ui, |ui| ui.add(Button::new("Enable").size(ButtonSize::Xs)))
+                    .inner
+                    .rect
+            });
+            (r.response.rect, r.inner)
+        })
+        .inner
+    });
+    assert!(alert.width().is_finite());
+    assert_eq!(button.right(), alert.right() - 1.0 - 12.0, "{alert:?}");
+}
+
+/// Two alerts with actions of different widths keep each its own.
+#[test]
+fn two_alerts_keep_their_own_actions() {
+    let t = vega();
+    let (a1, b1, a2, b2) = settle(&t, 900.0, |ui| {
+        ui.set_max_width(448.0);
+        let action = |label: &'static str| {
+            move |ui: &mut Ui| {
+                alert_action(ui, |ui| ui.add(Button::new(label).size(ButtonSize::Xs)))
+                    .inner
+                    .rect
+            }
+        };
+        let r1 = Alert::new().title("One").show(ui, action("Enable"));
+        let r2 = Alert::new()
+            .title("Two")
+            .show(ui, action("A much longer action"));
+        (r1.response.rect, r1.inner, r2.response.rect, r2.inner)
+    });
+    assert_eq!(b1.right(), a1.right() - 13.0);
+    assert_eq!(b2.right(), a2.right() - 13.0);
+    assert!(b2.width() > b1.width(), "{b1:?} {b2:?}");
+}
+
+/// A settled frame takes one pass and asks for no repaint, under both app
+/// loops: the registry and the action's width need no pass hook.
+#[test]
+fn a_settled_frame_takes_one_pass_and_no_repaint() {
+    for app_loop in common::Loop::BOTH {
+        let t = vega();
+        let ctx = egui::Context::default();
+        let mut rects = (Rect::NOTHING, Rect::NOTHING);
+        let mut last = (0, std::time::Duration::ZERO);
+        for _ in 0..6 {
+            let before = ctx.cumulative_pass_nr();
+            let out = common::pass(app_loop, &ctx, vec![], |ui| {
+                t.apply(ui.ctx());
+                ui.set_max_width(448.0);
+                let r = Alert::new()
+                    .icon(lucide::INFO)
+                    .title("Dark mode")
+                    .description("Enable it under your profile settings to get started.")
+                    .show(ui, |ui| {
+                        alert_action(ui, |ui| ui.add(Button::new("Enable").size(ButtonSize::Xs)))
+                            .inner
+                            .rect
+                    });
+                rects = (r.response.rect, r.inner);
+            });
+            let delay = out
+                .viewport_output
+                .values()
+                .next()
+                .expect("a viewport")
+                .repaint_delay;
+            last = (ctx.cumulative_pass_nr() - before, delay);
+        }
+        assert_eq!(last.0, 1, "{app_loop:?}: passes");
+        assert!(
+            last.1 > std::time::Duration::from_secs(1000),
+            "{app_loop:?}: repaint after {:?}",
+            last.1
+        );
+        let (alert, button) = rects;
+        assert_eq!(button.right(), alert.right() - 1.0 - 12.0, "{app_loop:?}");
+    }
+}
+
 /// The variant's colours: title in the alert's text colour, description
 /// muted, or destructive at 90 % in the destructive variant.
 #[test]
