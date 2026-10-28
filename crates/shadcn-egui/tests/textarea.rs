@@ -546,9 +546,11 @@ fn textarea_snapshot() {
         let hint = "Type your message here.";
         ui.add(Textarea::new(&mut demo).hint_text(hint).id_salt("demo"));
         ui.add_space(16.0);
-        ui.add(Textarea::new(&mut button).hint_text(hint).id_salt("button"));
-        ui.add_space(8.0);
-        ui.add(Button::new("Send message"));
+        // textarea-button: `grid w-full gap-2`.
+        shadcn_egui::layout::vstack(ui, 8.0, |ui| {
+            ui.add(Textarea::new(&mut button).hint_text(hint).id_salt("button"));
+            ui.add(Button::new("Send message"));
+        });
         ui.add_space(16.0);
         ui.add_enabled(
             false,
