@@ -8,7 +8,8 @@
 
 use crate::components::motion::transition;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
+    disabled_cursor, interaction_state, line_width, part_painter, pressable, shift, ActivationKeys,
+    RecipeBox,
 };
 use crate::style::app::{default_variant, state_size};
 use crate::style::{pick, pick_len, Prop, Recipe, State, Transition};
@@ -180,6 +181,9 @@ impl Widget for Switch<'_> {
             selected: Some(on),
             ..egui::WidgetInfo::new(egui::WidgetType::Checkbox)
         });
+        // `data-disabled:cursor-not-allowed`, on the hit area as on its
+        // `::after`.
+        disabled_cursor(&resp, !enabled);
         resp.rect = rect;
         resp
     }

@@ -149,6 +149,10 @@ impl<'a> Widget for Input<'a> {
             .layouter(&mut layouter)
             .password(password)
             .vertical_align(egui::Align::Center);
+        // No not-allowed cursor while disabled: upstream's
+        // `disabled:cursor-not-allowed` comes with
+        // `disabled:pointer-events-none`, so the browser shows the cursor
+        // of what lies under the field.
         frame
             .show(ui, Vec2::new(width, height), edit, self.id_salt)
             .response

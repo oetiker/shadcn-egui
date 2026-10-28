@@ -1,14 +1,15 @@
 //! shadcn Label, ported from shadcn-svelte `ui/label/label.svelte` at
-//! `tools/stylegen/PIN`. The label has no base classes that matter in egui
-//! (`flex items-center select-none` and the pointer/cursor rules); its look
-//! comes from the style's `cn-label` recipe. `peer-disabled:opacity-50`
-//! arrives as the DISABLED state of that recipe.
+//! `tools/stylegen/PIN`. Of the label's base classes only
+//! `peer-disabled:cursor-not-allowed` matters in egui: the label of a
+//! disabled control shows the not-allowed cursor. Its look comes from the
+//! style's `cn-label` recipe. `peer-disabled:opacity-50` arrives as the
+//! DISABLED state of that recipe.
 //!
 //! `description` has no marker of its own in shadcn: it is the muted `text-sm`
 //! paragraph that `cn-card-description` and `cn-dialog-description` share, so
 //! it reads the `card_description` recipe.
 
-use crate::components::shared::part_painter;
+use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
 use crate::style::app::default_variant;
 use crate::style::{pick, Role, State};
@@ -100,6 +101,8 @@ impl Widget for Label {
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });
+        // `peer-disabled:cursor-not-allowed`.
+        disabled_cursor(&resp, !enabled);
         if ui.is_rect_visible(rect) {
             block.paint(&painter, rect.min, fg);
         }

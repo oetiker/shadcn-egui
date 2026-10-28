@@ -9,7 +9,8 @@
 
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, pressable, ActivationKeys, RecipeBox,
+    disabled_cursor, interaction_state, line_width, part_painter, pressable, ActivationKeys,
+    RecipeBox,
 };
 use crate::style::app::default_variant;
 use crate::style::{pick, pick_len, Prop, Recipe, State};
@@ -143,6 +144,8 @@ impl Widget for Checkbox<'_> {
             selected: Some(checked),
             ..egui::WidgetInfo::new(egui::WidgetType::Checkbox)
         });
+        // `disabled:cursor-not-allowed`, on the hit area as on its `::after`.
+        disabled_cursor(&resp, !enabled);
         resp.rect = rect;
         resp
     }

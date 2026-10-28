@@ -30,8 +30,8 @@
 use crate::color::Tone;
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
-    content_ui, interaction_state, line_width, opacity, part_painter, pressable, transitioned_text,
-    ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
+    content_ui, disabled_cursor, interaction_state, line_width, opacity, part_painter, pressable,
+    transitioned_text, ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
 };
 use crate::components::text::TextLook;
 use crate::style::app::{default_variant, state_size};
@@ -382,6 +382,8 @@ impl Widget for Select<'_> {
             current_text_value: Some(shown.to_owned()),
             ..egui::WidgetInfo::new(egui::WidgetType::ComboBox)
         });
+        // The trigger's `disabled:cursor-not-allowed`.
+        disabled_cursor(&resp, !enabled);
 
         // The list.
         if open {

@@ -1,6 +1,7 @@
 //! Pointer, focus and keys as on upstream's element (conformance 2.6, 4.1):
 //! a press focuses without a ring, a keyboard focus shows one, and each
-//! widget clicks on its own activation keys.
+//! widget clicks on its own activation keys; a disabled control shows the
+//! cursor upstream gives it.
 
 mod common;
 
@@ -8,11 +9,14 @@ use common::Loop;
 use egui::{Key, Rect};
 use shadcn_egui::components::button::Button;
 use shadcn_egui::components::checkbox::Checkbox;
+use shadcn_egui::components::input::Input;
+use shadcn_egui::components::label::Label;
 use shadcn_egui::components::select::Select;
 use shadcn_egui::components::shared::{interaction_state, pressable, ActivationKeys};
 use shadcn_egui::components::slider::Slider;
 use shadcn_egui::components::switch::Switch;
 use shadcn_egui::components::tabs::Tabs;
+use shadcn_egui::components::textarea::Textarea;
 use shadcn_egui::style::State;
 use shadcn_egui::Theme;
 use std::cell::Cell;
@@ -331,5 +335,104 @@ fn a_click_beside_a_check_control_inside_its_target_toggles() {
         let above = rect.get().center_top() - egui::vec2(0.0, 4.0);
         run(common::click(above));
         assert!(!on.get(), "switch {switch}: a click above toggles");
+    }
+}
+
+/// One control of [`a_disabled_control_shows_the_not_allowed_cursor`]:
+/// drawn enabled or with its own `enabled(false)`.
+type Control = fn(&mut egui::Ui, bool) -> egui::Response;
+
+/// Upstream's `disabled:cursor-not-allowed` (checkbox, switch, select
+/// trigger, textarea; the label as `peer-disabled:`): the pointer over a
+/// disabled control, its hit area beside it included, shows the
+/// not-allowed cursor, whether its own flag or a disabled `Ui` disables
+/// it. The input's rule comes with `disabled:pointer-events-none`, so the
+/// browser shows the cursor of what lies under it: the default one here.
+/// An enabled control never shows it.
+#[test]
+fn a_disabled_control_shows_the_not_allowed_cursor() {
+    let controls: [(&str, Control, Option<f32>, bool); 6] = [
+        (
+            "checkbox",
+            |ui, on| ui.add(Checkbox::new(&mut false).enabled(on)),
+            Some(4.0),
+            true,
+        ),
+        (
+            "switch",
+            |ui, on| ui.add(Switch::new(&mut false).enabled(on)),
+            Some(4.0),
+            true,
+        ),
+        (
+            "select",
+            |ui, on| ui.add(Select::new("fruit", &mut 0, &["Apple", "Pear"]).enabled(on)),
+            None,
+            true,
+        ),
+        (
+            "label",
+            |ui, on| ui.add(Label::new("Email").enabled(on)),
+            None,
+            true,
+        ),
+        (
+            "textarea",
+            |ui, on| ui.add_enabled(on, Textarea::new(&mut String::new())),
+            None,
+            true,
+        ),
+        (
+            "input",
+            |ui, on| ui.add(Input::new(&mut String::new()).enabled(on)),
+            None,
+            false,
+        ),
+    ];
+    for (name, control, beside, shows) in controls {
+        for (how, enabled, ui_enabled) in [
+            ("enabled", true, true),
+            ("own flag", false, true),
+            ("disabled Ui", true, false),
+        ] {
+            let ctx = egui::Context::default();
+            let rect = Cell::new(Rect::NOTHING);
+            let run = |events| {
+                common::pass(Loop::RunUi, &ctx, events, |ui| {
+                    Theme::vega().apply(ui.ctx());
+                    ui.ctx().set_theme(egui::Theme::Light);
+                    ui.add_space(20.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(20.0);
+                        ui.add_enabled_ui(ui_enabled, |ui| rect.set(control(ui, enabled).rect));
+                    });
+                })
+            };
+            run(vec![]);
+            let mut points = vec![rect.get().center()];
+            points.extend(beside.map(|d| rect.get().left_center() - egui::vec2(d, 0.0)));
+            for at in points {
+                let cursor = run(vec![egui::Event::PointerMoved(at)])
+                    .platform_output
+                    .cursor_icon;
+                let disabled = !(enabled && ui_enabled);
+                if disabled && shows {
+                    assert_eq!(
+                        cursor,
+                        egui::CursorIcon::NotAllowed,
+                        "{name}, {how}, at {at:?}"
+                    );
+                } else {
+                    assert_ne!(
+                        cursor,
+                        egui::CursorIcon::NotAllowed,
+                        "{name}, {how}, at {at:?}"
+                    );
+                }
+                if disabled && !shows {
+                    assert_eq!(cursor, egui::CursorIcon::Default, "{name}, {how}");
+                }
+            }
+        }
     }
 }

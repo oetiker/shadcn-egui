@@ -23,6 +23,7 @@
 //! ```
 
 use crate::components::icon_atom::retint;
+use crate::components::shared::disabled_cursor;
 use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextEntry};
 use crate::style::app::default_variant;
@@ -183,7 +184,13 @@ impl<'t> Textarea<'t> {
             .desired_width(f32::INFINITY)
             .desired_rows(1)
             .vertical_align(egui::Align::Min);
-        frame.show(ui, Vec2::new(width, height), edit, self.id_salt)
+        let disabled = !frame.enabled;
+        let out = frame.show(ui, Vec2::new(width, height), edit, self.id_salt);
+        // `disabled:cursor-not-allowed`: unlike the input, the textarea
+        // has no `disabled:pointer-events-none` that would let the pointer
+        // through.
+        disabled_cursor(&out.response.response, disabled);
+        out
     }
 }
 

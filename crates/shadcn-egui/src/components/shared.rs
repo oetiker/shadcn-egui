@@ -1216,6 +1216,19 @@ pub fn widget_info_with_role(
         .accesskit_node_builder(resp.id, |node| node.set_role(role));
 }
 
+/// Upstream's `disabled:cursor-not-allowed` (and `data-disabled:`,
+/// `peer-disabled:`): while `disabled`, the pointer over `resp` shows the
+/// not-allowed cursor. A disabled `Ui` hovers nothing in egui, so the test
+/// is that the pointer is on `resp`, not that `resp` is hovered. A part
+/// whose upstream classes also say `disabled:pointer-events-none` lets the
+/// pointer through to what lies under it, so the browser never shows its
+/// cursor: such a part does not call this.
+pub(crate) fn disabled_cursor(resp: &Response, disabled: bool) {
+    if disabled && resp.contains_pointer() {
+        resp.ctx.set_cursor_icon(egui::CursorIcon::NotAllowed);
+    }
+}
+
 fn state_of(theme: &Theme, resp: &Response, context: State, keyboard: bool) -> State {
     let live = resp.enabled() && !context.contains(State::DISABLED);
     let pointer_and_focus = State::HOVER | State::ACTIVE | State::FOCUS | State::FOCUS_VISIBLE;
