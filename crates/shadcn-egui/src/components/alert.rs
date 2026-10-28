@@ -303,7 +303,7 @@ impl Alert {
         // its content's width.
         let bounded = ui.available_width().is_finite();
         let outer_w = layout::capped_width(ui, f32::INFINITY, side + end);
-        let origin = ui.cursor().min;
+        let (origin, mut frame) = layout::begin_item(ui);
         let width_key = id.with("shadcn_egui::alert::width");
         let known_w = if bounded {
             Some(outer_w)
@@ -335,7 +335,7 @@ impl Alert {
                 f32::INFINITY,
             ),
         );
-        let mut content = ui.new_child(context::push(
+        let mut content = frame.new_child(context::push(
             group.push(
                 UiBuilder::new()
                     .max_rect(column)
@@ -405,7 +405,7 @@ impl Alert {
             );
         }
 
-        let response = ui.allocate_rect(outer, Sense::hover());
+        let response = layout::end_item(ui, frame, outer, Sense::hover());
         widget_info_with_role(&response, egui::accesskit::Role::Alert, || {
             WidgetInfo::new(WidgetType::Other)
         });

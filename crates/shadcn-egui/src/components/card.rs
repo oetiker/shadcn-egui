@@ -197,7 +197,7 @@ impl<'a> Card<'a> {
         let bounded = ui.available_width().is_finite();
         let fill = layout::capped_width(ui, f32::INFINITY, side_l + side_r);
         let outer_w = if bounded { fill } else { f32::INFINITY };
-        let origin = ui.cursor().min;
+        let (origin, mut frame) = crate::layout::begin_item(ui);
         let back = ui.painter().add(Shape::Noop);
         // Every style's card is `overflow-hidden`: content wider than a
         // bounded card is cut at its box (no style gives it a border, so
@@ -219,7 +219,7 @@ impl<'a> Card<'a> {
                 origin.y + pad_top + ui.available_height().max(0.0),
             ),
         );
-        let mut body = ui.new_child(context::push(
+        let mut body = frame.new_child(context::push(
             UiBuilder::new()
                 .max_rect(body_rect)
                 .layout(Layout::top_down(Align::Min)),
@@ -259,7 +259,7 @@ impl<'a> Card<'a> {
                 ),
             );
             // A row as high as a control, like `ui.horizontal`.
-            let mut row = ui.new_child(context::push(
+            let mut row = frame.new_child(context::push(
                 crate::layout::row_builder(inner, Layout::left_to_right(Align::Center)),
                 parts,
             ));
@@ -320,7 +320,7 @@ impl<'a> Card<'a> {
             );
         }
 
-        let response = ui.allocate_rect(outer, Sense::hover());
+        let response = crate::layout::end_item(ui, frame, outer, Sense::hover());
         response.widget_info(|| WidgetInfo::new(WidgetType::Panel));
         result
     }

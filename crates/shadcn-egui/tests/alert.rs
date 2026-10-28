@@ -189,6 +189,36 @@ fn reports_the_alert_role() {
     let _ = h.get_by_label("Saved");
 }
 
+/// The alert's node holds its title, description and the closure's
+/// content, as upstream's `div role="alert"` holds its children: a screen
+/// reader announces the live region's subtree.
+#[test]
+fn the_alert_node_holds_its_content() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut h = egui_kittest::Harness::new_ui(|ui| {
+        Alert::new()
+            .title("Saved")
+            .description("All good.")
+            .show(ui, |ui| ui.label("More"));
+    });
+    h.run();
+    let alert = h
+        .get_by_role(egui::accesskit::Role::Alert)
+        .accesskit_node()
+        .id();
+    for label in ["Saved", "All good.", "More"] {
+        let node = h.get_by_label(label);
+        let mut up = node.parent();
+        while let Some(p) = up {
+            if p.accesskit_node().id() == alert {
+                break;
+            }
+            up = p.parent();
+        }
+        assert!(up.is_some(), "{label} is not inside the alert node");
+    }
+}
+
 /// Degenerate input: an empty alert and a zero-width room draw without
 /// NaN or a panic.
 #[test]

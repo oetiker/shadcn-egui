@@ -1128,6 +1128,30 @@ fn card_sm_snapshot() {
     });
 }
 
+/// The card's node holds its header, content and footer, as upstream's
+/// card `div` holds its children.
+#[test]
+fn the_card_node_holds_its_sections() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut h = egui_kittest::Harness::new_ui(|ui| demo_card(ui, CardSize::Default, true));
+    h.run();
+    let card = h
+        .get_by_role(egui::accesskit::Role::Pane)
+        .accesskit_node()
+        .id();
+    for label in ["Notifications", "You have 3 unread messages.", "Save"] {
+        let node = h.get_by_label(label);
+        let mut up = node.parent();
+        while let Some(p) = up {
+            if p.accesskit_node().id() == card {
+                break;
+            }
+            up = p.parent();
+        }
+        assert!(up.is_some(), "{label} is not inside the card node");
+    }
+}
+
 #[test]
 fn card_action_snapshot() {
     common::snapshot_all("card_action", egui::vec2(360.0, 140.0), |ui| {
