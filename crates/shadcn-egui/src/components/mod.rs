@@ -20,5 +20,6 @@ pub mod slider;
 pub mod switch;
 pub mod tabs;
 pub mod text;
+mod text_entry;
 pub mod textarea;
 pub mod tooltip;

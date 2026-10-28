@@ -149,6 +149,7 @@ fn component_map_has_every_component() {
             "atom_row",
             "context",
             "registry",
+            "text_entry",
         ]
         .contains(&module)
         {

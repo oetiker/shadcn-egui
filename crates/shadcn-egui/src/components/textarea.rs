@@ -23,18 +23,15 @@
 //! ```
 
 use crate::components::icon_atom::retint;
-use crate::components::input::paint_caret;
-use crate::components::shared::{
-    inset_frame, line_width, part_opacity, part_painter, text_entry_state, RecipeBox,
-};
-use crate::components::text::TextLook;
+use crate::components::text::Leading;
+use crate::components::text_entry::TextEntry;
 use crate::style::app::default_variant;
-use crate::style::{pick, Prop, Recipe, Role, State};
+use crate::style::{pick, State};
 use crate::{layout, Theme};
 use egui::text_edit::TextEditOutput;
 use egui::{
-    AtomKind, Atoms, IntoAtoms, Response, Sense, Shape, TextBuffer, TextEdit, TextWrapMode, Ui,
-    Vec2, Widget, WidgetText,
+    AtomKind, Atoms, IntoAtoms, Response, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget,
+    WidgetText,
 };
 
 default_variant!(
@@ -124,44 +121,27 @@ impl<'t> Textarea<'t> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.textarea, |r| &r.textarea)];
-        let enabled = ui.is_enabled();
         let context = v.bits().with(State::INVALID, self.invalid);
-        // Geometry never depends on focus: resolve it before allocating.
-        let g = t.state(ui.ctx(), context);
+        // A `<textarea>`'s rows are line boxes, placed as inline text.
+        let frame = TextEntry::resolve(
+            ui,
+            &t,
+            &l,
+            context,
+            true,
+            Leading::Inline,
+            "shadcn_egui::textarea",
+        );
+        let g = frame.geometry;
         debug_assert!(
             pick(&l, |r| &r.field_sizing_content, g).unwrap_or(false),
             "Textarea grows with its content: a recipe without field_sizing_content \
              would need a scrolling field, which the crate does not draw"
         );
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
-        let border_w = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point());
-        // Top, right, bottom, left: padding plus border.
-        let inset = [
-            get(|r| &r.pad_top),
-            get(|r| &r.pad_right),
-            get(|r| &r.pad_bottom),
-            get(|r| &r.pad_left),
-        ]
-        .map(|pad| pad + border_w);
-        // A `<textarea>`'s rows are line boxes, placed as inline text.
-        let look = TextLook::resolve(ui, &l, g);
-        let font = look.font_id(ui.ctx());
-
-        let fade = part_opacity(
-            ui,
-            ui.next_auto_id().with("shadcn_egui::textarea"),
-            &[&l[..]],
-            g.with(State::DISABLED, !enabled),
-        );
-        let placeholder = pick(&l, |r| &r.text, g.or(State::PLACEHOLDER)).map(|p| t.paint(p));
-        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads textarea first
-        let typed = pick(&l, |r| &r.text, g).map_or(inherited, |p| t.paint(p));
-
+        let look = frame.look.clone();
         let max_width = self.desired_width.unwrap_or(t.metrics.field_max_width);
-        // The content minimum: the padding box around one glyph.
-        let content_min = inset[3] + inset[1] + ui.ctx().fonts_mut(|f| f.glyph_width(&font, 'M'));
-        let width = layout::capped_width(ui, max_width, content_min);
-        let wrap = width - inset[3] - inset[1];
+        let width = layout::capped_width(ui, max_width, frame.content_min);
+        let wrap = frame.content_width(width);
 
         // `field-sizing-content`: the box holds its text, or its hint text
         // while empty, inside the recipe's height bounds.
@@ -172,7 +152,7 @@ impl<'t> Textarea<'t> {
         let mut hint = self.hint_text;
         let mut hint_height = 0.0_f32;
         if self.text.as_str().is_empty() {
-            let color = placeholder.unwrap_or_else(|| ui.visuals().weak_text_color());
+            let color = frame.placeholder;
             hint.map_kind(|kind| match kind {
                 AtomKind::Text(text) => {
                     let galley = look.layout_colored(ui, text, TextWrapMode::Wrap, wrap, color);
@@ -183,68 +163,26 @@ impl<'t> Textarea<'t> {
                 other => other,
             });
         }
-        let content = text_height.max(hint_height) + inset[0] + inset[2];
+        let content = text_height.max(hint_height) + frame.inset[0] + frame.inset[2];
         let height = pick(&l, |r| &r.height, g)
             .unwrap_or(content)
-            .max(get(|r| &r.min_height));
+            .max(frame.get(|r| &r.min_height));
 
         let mut layouter = |ui: &Ui, text: &dyn TextBuffer, wrap_width: f32| {
             look.layout(ui, text.as_str(), TextWrapMode::Wrap, wrap_width)
                 .galley()
                 .clone()
         };
-        // The box goes under the text: reserve its place in paint order, fill
-        // it once the focus state is known.
-        let slot = ui.painter().add(Shape::Noop);
-        let out = ui
-            .scope(|ui| {
-                ui.set_opacity(fade);
-                // Raised to its content minimum, the field overflows its
-                // room without widening the parent (conformance 3.6).
-                let (rect, _) =
-                    layout::allocate_overflowing(ui, Vec2::new(width, height), Sense::hover());
-                let mut edit = TextEdit::multiline(self.text);
-                if !hint.is_empty() {
-                    edit = edit.hint_text(hint);
-                }
-                let edit = edit
-                    .layouter(&mut layouter)
-                    .interactive(enabled)
-                    .frame(inset_frame(inset))
-                    .font(font.clone())
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(1)
-                    .vertical_align(egui::Align::Min)
-                    .text_color(typed);
-                let mut field = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(rect)
-                        .layout(egui::Layout::centered_and_justified(ui.layout().main_dir())),
-                );
-                let edit = match self.id_salt {
-                    Some(salt) => edit.id(field.make_persistent_id(salt)),
-                    None => edit,
-                };
-                // egui's caret spans the row and 1.5 pt beyond it; the
-                // field paints Chrome's instead.
-                let blink = field.visuals().text_cursor.clone();
-                field.visuals_mut().text_cursor.stroke = egui::Stroke::NONE;
-                field.visuals_mut().text_cursor.blink = false;
-                let out = edit.show(&mut field);
-                if enabled {
-                    paint_caret(&field, &out, &blink, look.caret_span(field.ctx()), typed);
-                }
-                out
-            })
-            .inner;
-
-        let resp = &out.response.response;
-        let st = text_entry_state(&t, resp, context.with(State::DISABLED, !enabled));
-        let shapes = RecipeBox::resolve(ui.ctx(), &t, &l, st)
-            .transitioned(ui.ctx(), resp.id, &l, st)
-            .shapes(ui.ctx(), resp.rect);
-        part_painter(ui, resp.id, &[&l[..]], st).set(slot, Shape::Vec(shapes));
-        out
+        let mut edit = TextEdit::multiline(self.text);
+        if !hint.is_empty() {
+            edit = edit.hint_text(hint);
+        }
+        let edit = edit
+            .layouter(&mut layouter)
+            .desired_width(f32::INFINITY)
+            .desired_rows(1)
+            .vertical_align(egui::Align::Min);
+        frame.show(ui, Vec2::new(width, height), edit, self.id_salt)
     }
 }
 
