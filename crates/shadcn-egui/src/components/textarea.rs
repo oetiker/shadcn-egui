@@ -25,7 +25,7 @@
 use crate::components::icon_atom::retint;
 use crate::components::shared::disabled_cursor;
 use crate::components::text::Leading;
-use crate::components::text_entry::{within, TextEntry};
+use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::{layout, Theme};
@@ -131,6 +131,7 @@ impl<'t> Textarea<'t> {
             context,
             true,
             Leading::Inline,
+            TextClip::Padding,
             "shadcn_egui::textarea",
         );
         let g = frame.geometry;

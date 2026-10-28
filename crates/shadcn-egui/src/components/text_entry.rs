@@ -17,6 +17,17 @@ use egui::text_edit::TextEditOutput;
 use egui::{Color32, FontId, Galley, Sense, Shape, TextEdit, Ui, Vec2};
 use std::sync::Arc;
 
+/// Where a field clips its text, its hint and its caret, as Chrome does.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TextClip {
+    /// An `<input>`: at the content box. The text scrolls so a caret at its
+    /// end stays inside.
+    Content,
+    /// A `<textarea>`: at the padding box; a wide glyph paints into the
+    /// padding.
+    Padding,
+}
+
 /// A text-entry field's resolved frame. Build it with
 /// [`TextEntry::resolve`], size the box from its fields, then
 /// [`TextEntry::show`] the widget's `TextEdit` in it.
@@ -32,6 +43,9 @@ pub(crate) struct TextEntry<'a> {
     pub(crate) enabled: bool,
     /// Top, right, bottom, left: padding plus border.
     pub(crate) inset: [f32; 4],
+    /// The border width, in points on whole device pixels.
+    border: f32,
+    clip: TextClip,
     pub(crate) look: TextLook,
     pub(crate) font: FontId,
     fade: f32,
@@ -47,7 +61,9 @@ impl<'a> TextEntry<'a> {
     /// The frame of a field drawn from `layers` in `theme`, in `context`
     /// (the variant's bits, `aria-invalid`), disabled where `ui` is or
     /// `enabled` is false, its text placed in its line box as `leading`
-    /// says. `name` keys the part's fade transition.
+    /// says, its text clipped as `clip` says. `name` keys the part's fade
+    /// transition.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve(
         ui: &Ui,
         theme: &'a Theme,
@@ -55,6 +71,7 @@ impl<'a> TextEntry<'a> {
         context: State,
         enabled: bool,
         leading: Leading,
+        clip: TextClip,
         name: &str,
     ) -> Self {
         let enabled = enabled && ui.is_enabled();
@@ -93,6 +110,8 @@ impl<'a> TextEntry<'a> {
             geometry,
             enabled,
             inset,
+            border: border_w,
+            clip,
             look,
             font,
             fade,
@@ -112,6 +131,20 @@ impl<'a> TextEntry<'a> {
         width - self.inset[3] - self.inset[1]
     }
 
+    /// The room an input keeps at the end of its scrolled text for the
+    /// caret, in whole points: Blink adds the caret's width to the
+    /// scrollable width of an editable box, so a caret after the last
+    /// glyph of a full field stays inside it. None in a textarea, whose
+    /// lines wrap.
+    pub(crate) fn caret_room(&self, ctx: &egui::Context) -> f32 {
+        match self.clip {
+            TextClip::Content => {
+                (caret_width(ctx.pixels_per_point()) / ctx.pixels_per_point()).ceil()
+            }
+            TextClip::Padding => 0.0,
+        }
+    }
+
     /// Allocate the box at `size`, show `edit` in it (`id_salt` gives it
     /// a stable id), and paint the box under it, at the allocated rect, in
     /// the field's state.
@@ -125,6 +158,8 @@ impl<'a> TextEntry<'a> {
         id_salt: Option<egui::Id>,
     ) -> TextEditOutput {
         let enabled = self.enabled;
+        let mut edit_inset = self.inset;
+        edit_inset[1] += self.caret_room(ui.ctx());
         // The box goes under the text: reserve its place in paint order, fill
         // it once the focus state is known.
         let slot = ui.painter().add(Shape::Noop);
@@ -137,7 +172,7 @@ impl<'a> TextEntry<'a> {
                 let (rect, _) = layout::allocate_overflowing(ui, size, Sense::hover());
                 let edit = edit
                     .interactive(enabled)
-                    .frame(inset_frame(self.inset))
+                    .frame(inset_frame(edit_inset))
                     .font(self.font.clone())
                     .text_color(self.typed);
                 let mut field = ui.new_child(
@@ -154,7 +189,30 @@ impl<'a> TextEntry<'a> {
                 let blink = field.visuals().text_cursor.clone();
                 field.visuals_mut().text_cursor.stroke = egui::Stroke::NONE;
                 field.visuals_mut().text_cursor.blink = false;
+                // Chrome's clip for the text, the hint and the caret: egui
+                // clips the text a point outside the content box and the
+                // hint not at all.
+                let clip = match self.clip {
+                    TextClip::Content => egui::Rect::from_min_max(
+                        rect.min + egui::vec2(self.inset[3], self.inset[0]),
+                        rect.max - egui::vec2(self.inset[1], self.inset[2]),
+                    ),
+                    TextClip::Padding => rect.shrink(self.border),
+                }
+                .intersect(field.clip_rect());
+                let layer = field.layer_id();
+                let first = field.ctx().graphics_mut(|g| g.entry(layer).next_idx());
                 let out = edit.show(&mut field);
+                field.ctx().graphics_mut(|g| {
+                    let list = g.entry(layer);
+                    for i in first.0..list.next_idx().0 {
+                        list.mutate_shape(egui::layers::ShapeIdx(i), |c| {
+                            if matches!(c.shape, Shape::Text(_)) {
+                                c.clip_rect = clip;
+                            }
+                        });
+                    }
+                });
                 if enabled {
                     paint_caret(
                         &field,
@@ -162,6 +220,7 @@ impl<'a> TextEntry<'a> {
                         &blink,
                         self.look.caret_span(field.ctx()),
                         self.typed,
+                        clip,
                     );
                 }
                 (rect, out)
@@ -211,6 +270,7 @@ fn paint_caret(
     cursor: &egui::style::TextCursorStyle,
     span: Option<std::ops::Range<f32>>,
     color: Color32,
+    clip: egui::Rect,
 ) {
     let Some(range) = out.cursor_range else {
         return;
@@ -248,15 +308,23 @@ fn paint_caret(
     // The painter rounds the galley origin to the device pixel; the row
     // is whole device pixels tall.
     let top = (origin.y * ppp).round();
-    let left = ((origin.x + row.min.x) * ppp).round();
-    // Blink's caret: 1 css px wide, at least one device pixel.
-    let width = ppp.round().max(1.0); // behaviour-ok: the browser's caret width
+    let width = caret_width(ppp);
+    // The field keeps the caret's room after its text (`caret_room`), in
+    // whole points; a caret the rounding puts past the clip moves in by
+    // that last device pixel.
+    let left = ((origin.x + row.min.x) * ppp)
+        .round()
+        .min((clip.right() * ppp).floor() - width);
     let rect = egui::Rect::from_min_max(
         egui::pos2(left, top + (row.min.y + span.start) * ppp),
         egui::pos2(left + width, top + (row.min.y + span.end) * ppp),
     );
     let rect = egui::Rect::from_min_max(rect.min / ppp, rect.max / ppp);
-    // As egui's TextEdit: the clip grows a point so a caret at the edge shows.
-    let clip = out.text_clip_rect.expand(1.0); // behaviour-ok: egui's caret clip
     ui.painter_at(clip).rect_filled(rect, 0.0, color);
+}
+
+/// Blink's caret width in device pixels: 1 css px, at least one device
+/// pixel.
+fn caret_width(ppp: f32) -> f32 {
+    ppp.round().max(1.0) // behaviour-ok: the browser's caret width
 }

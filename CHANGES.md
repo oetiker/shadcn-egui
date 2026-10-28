@@ -48,6 +48,8 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- An input's placeholder and typed text now stop at the edge of the text area, as in the browser; before, a wide letter of the placeholder could reach into the field's padding, and typed text up to a point into it. In a full input, the text cursor after the last letter now stays inside the text area, as in the browser, where before it sat on its edge.
+- A textarea's text and placeholder now reach into the field's padding before they are cut at its border, as in the browser; before, a letter wider than the field was cut a point past the text area.
 - The rounded corners of a box with a border, such as a checked checkbox, a switch, a slider thumb or an alert, no longer show a dark seam of the box's background along the outside of the border; the edge now blends the border into the page as Chrome does.
 - An alert in egui's `horizontal_wrapped` that does not fit the rest of its line now starts the next line, as a card there does and as an alert in `layout::wrap_row` already did; before, it ran past the right edge of the row.
 - A screen reader now hears that a button, checkbox, switch, select, input or textarea drawn with `.invalid(true)` holds an invalid value, as with shadcn's `aria-invalid`; before, only the red border showed it.

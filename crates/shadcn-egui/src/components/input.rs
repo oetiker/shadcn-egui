@@ -4,7 +4,7 @@
 //! paints.
 
 use crate::components::text::Leading;
-use crate::components::text_entry::{within, TextEntry};
+use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::{layout, Theme};
@@ -100,6 +100,7 @@ impl<'a> Widget for Input<'a> {
             context,
             self.enabled,
             Leading::Field,
+            TextClip::Content,
             "shadcn_egui::input",
         );
         let look = frame.look.clone();
@@ -134,7 +135,8 @@ impl<'a> Widget for Input<'a> {
         let mut edit = TextEdit::singleline(self.text);
         if !self.hint.is_empty() {
             // The placeholder is laid out in the field's look, cut to the
-            // content box as egui cuts its hint text.
+            // content box as egui cuts its hint text, and measured in the
+            // room the field leaves before the caret's.
             let content = frame.content_width(width);
             let hint = frame.look.layout_colored(
                 ui,
@@ -143,7 +145,7 @@ impl<'a> Widget for Input<'a> {
                 content,
                 frame.placeholder,
             );
-            edit = edit.hint_text(within(hint, content));
+            edit = edit.hint_text(within(hint, content - frame.caret_room(ui.ctx())));
         }
         let edit = edit
             .layouter(&mut layouter)
