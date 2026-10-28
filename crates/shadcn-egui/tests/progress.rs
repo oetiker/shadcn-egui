@@ -6,9 +6,9 @@ mod common;
 use egui::accesskit::Role;
 use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
-use shadcn_egui::components::progress::{progress, Progress};
+use shadcn_egui::components::progress::{progress, Progress, ProgressRecipes, ProgressVariant};
 use shadcn_egui::components::slider::Slider;
-use shadcn_egui::style::Style;
+use shadcn_egui::style::{AppVariant, Paint, Radius, Role as Token, Rung, Style};
 use shadcn_egui::{Palette, Theme};
 
 const MODE: egui::Theme = egui::Theme::Light;
@@ -225,6 +225,147 @@ fn a_sliver_shows_a_segment_of_the_round_cap() {
             seg.height() < rect.height() * 0.9,
             "{name}: {seg:?} in {rect:?}"
         );
+    }
+}
+
+/// How far egui's own feathering of the track outline is from a
+/// supersampled render (a plain fill on a half-full maia bar).
+const PLAIN_OFF: i32 = 7;
+
+const BORDER: AppVariant<ProgressVariant> = ProgressVariant::app("border");
+const ROUND: AppVariant<ProgressVariant> = ProgressVariant::app("round");
+
+/// maia (a 12 px `rounded-full` track) with two app variants whose
+/// indicator is no plain fill: a 1 px destructive border, `rounded-full`.
+fn clip_theme() -> Theme {
+    Theme::new(Style::maia(), Palette::light(), Palette::dark(), 10.0)
+        .variant(
+            BORDER,
+            ProgressVariant::Default,
+            |r: &mut ProgressRecipes, _| {
+                r.progress_indicator.border_width.set(1.0);
+                r.progress_indicator
+                    .border_color
+                    .set(Paint::Role(Token::Destructive, 1.0));
+            },
+        )
+        .variant(
+            ROUND,
+            ProgressVariant::Default,
+            |r: &mut ProgressRecipes, _| {
+                r.progress_indicator.radius.set(Radius::Rung(Rung::Full));
+            },
+        )
+}
+
+/// The columns of the track's left cap at 1 ppp, where the track cuts the
+/// indicator in the renders below: the bar starts 8 px in, plus egui's
+/// 8 px item spacing; maia's cap is 6 px wide; one more pixel of fringe.
+const CAP: std::ops::Range<u32> = 16..23;
+
+/// `paint` on white at `ppp`, 240 x 40 points.
+fn render(ppp: f32, paint: impl Fn(&mut egui::Ui) + 'static) -> image::RgbaImage {
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(240.0, 40.0))
+        .with_pixels_per_point(ppp)
+        .with_theme(MODE)
+        .build_ui(move |ui| {
+            let page = ui.ctx().viewport_rect();
+            ui.ctx()
+                .layer_painter(egui::LayerId::background())
+                .rect_filled(page, 0.0, egui::Color32::WHITE);
+            paint(ui);
+        });
+    h.run();
+    h.render().expect("render")
+}
+
+/// A 200 px maia bar at `fraction`, 8 px from the corner.
+fn bar(variant: ProgressVariant, fraction: f32) -> impl Fn(&mut egui::Ui) + Clone + 'static {
+    let t = clip_theme();
+    move |ui| {
+        t.apply(ui.ctx());
+        ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            ui.add(
+                Progress::new(fraction)
+                    .desired_width(200.0)
+                    .variant(variant),
+            );
+        });
+    }
+}
+
+/// The largest channel difference in the columns `cols` between a 1 ppp
+/// render and an 8 ppp render box-filtered down to 1 ppp: how far the
+/// edges there are from an exact, supersampled cut.
+fn off_supersampled(
+    paint: impl Fn(&mut egui::Ui) + Clone + 'static,
+    cols: std::ops::Range<u32>,
+) -> i32 {
+    let lo = render(1.0, paint.clone());
+    let hi = render(8.0, paint);
+    let mut worst = 0;
+    for y in 0..lo.height() {
+        for x in cols.clone() {
+            for c in 0..3 {
+                let mut sum = 0_u32;
+                for dy in 0..8 {
+                    for dx in 0..8 {
+                        sum += u32::from(hi.get_pixel(x * 8 + dx, y * 8 + dy).0[c]);
+                    }
+                }
+                let reference = (sum as f32 / 64.0).round() as i32;
+                worst = worst.max((i32::from(lo.get_pixel(x, y).0[c]) - reference).abs());
+            }
+        }
+    }
+    worst
+}
+
+/// The track's `overflow-x-hidden` cuts a `rounded-full` indicator as
+/// closely to a supersampled render as egui's own anti-aliasing cuts a
+/// plain fill: the cut fades along the track outline's normals, as egui
+/// feathers the outline itself.
+#[test]
+fn a_rounded_indicators_cut_is_as_close_as_a_plain_fill() {
+    let plain = off_supersampled(bar(ProgressVariant::Default, 0.5), CAP);
+    assert!(plain <= PLAIN_OFF, "{plain}");
+    for fraction in [0.5, 0.01] {
+        let plain = off_supersampled(bar(ProgressVariant::Default, fraction), CAP);
+        let off = off_supersampled(bar(ROUND.into(), fraction), CAP);
+        assert!(
+            off <= plain.max(PLAIN_OFF),
+            "{fraction}: {off} vs plain {plain}"
+        );
+    }
+}
+
+/// A bordered indicator: where its border meets the cut, its fill shows
+/// through the border's faded edge, as it does where egui draws a bordered
+/// rounded box by itself (one anti-aliased layer over another). The cut
+/// is as close to a supersampled render as egui's own box.
+#[test]
+fn a_bordered_indicators_cut_is_as_close_as_eguis_own_box() {
+    let destructive = clip_theme().palette_of(MODE).destructive;
+    let fill = clip_theme().palette_of(MODE).primary;
+    let pill = move |ui: &mut egui::Ui| {
+        let p = ui.ctx().layer_painter(egui::LayerId::background());
+        let r = egui::Rect::from_min_size(egui::pos2(16.0, 28.0), egui::vec2(200.0, 12.0));
+        p.rect_filled(r, 6.0, fill);
+        p.rect_stroke(
+            r,
+            6.0,
+            egui::Stroke::new(1.0_f32, destructive),
+            egui::StrokeKind::Inside,
+        );
+    };
+    let own = off_supersampled(pill, CAP);
+    for fraction in [0.5, 0.01] {
+        let off = off_supersampled(bar(BORDER.into(), fraction), CAP);
+        assert!(off <= own + 2, "{fraction}: {off} vs egui's own {own}");
     }
 }
 

@@ -484,8 +484,7 @@ impl RecipeBox {
                 r
             }
         };
-        let clip = RoundedClip::new(
-            ctx,
+        let outline = rounded_polygon(
             snap(padding_box(outer_rect, outer.borders), None),
             inner_radius(outer.radius_on(outer_rect), outer.borders),
         );
@@ -511,7 +510,7 @@ impl RecipeBox {
         // does the outer box itself.
         if let [Shape::Rect(r)] = shapes.as_slice() {
             if r.stroke.width <= 0.0 && r.corner_radius == CornerRadius::ZERO {
-                let points = clip_to_rect(&clip.exact, snap(r.rect, r.round_to_pixels));
+                let points = clip_to_rect(&outline, snap(r.rect, r.round_to_pixels));
                 return if points.len() < 3 {
                     Vec::new()
                 } else {
@@ -519,6 +518,7 @@ impl RecipeBox {
                 };
             }
         }
+        let clip = RoundedClip::new(ctx, outline);
         let mut out = Vec::new();
         for shape in shapes {
             cut(ctx, shape, &clip, &mut out);
@@ -724,102 +724,91 @@ pub(crate) fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos
     points
 }
 
-/// A rounded box as an anti-aliased clip, as the browser clips to a part
-/// with `overflow: hidden` and rounded corners: inside its edge a mesh
-/// keeps its colour, and across a band as wide as egui's feathering it
-/// fades out by its distance to the edge, as egui fades a shape's own edge.
+/// A convex outline as an anti-aliased clip, as the browser clips to a
+/// part with `overflow: hidden` and rounded corners: inside the outline a
+/// mesh keeps its colour, and across the band egui feathers the outline
+/// over it fades out exactly as egui fades the outline's own fill.
 struct RoundedClip {
-    rect: Rect,
-    /// nw, ne, sw, se in points.
-    radii: [f32; 4],
-    /// Half the feathering width in points; 0 without feathering.
-    half: f32,
-    /// The box's outline as egui paints the box, and the outlines half a
-    /// band outside and inside it.
+    /// The outline as egui paints the box.
     exact: Vec<egui::Pos2>,
+    /// Each edge's outward unit normal (edge `i` runs from point `i`).
+    normals: Vec<egui::Vec2>,
+    /// The outline moved half the feathering width out and in along
+    /// egui's miter normals, where egui puts its feathering's vertices.
     outer: Vec<egui::Pos2>,
     inner: Vec<egui::Pos2>,
+    /// Half the feathering width in points; 0 without feathering.
+    half: f32,
 }
 
 impl RoundedClip {
-    fn new(ctx: &egui::Context, rect: Rect, radius: CornerRadius) -> Self {
+    fn new(ctx: &egui::Context, mut exact: Vec<egui::Pos2>) -> Self {
         let (on, px) = ctx.tessellation_options(|o| (o.feathering, o.feathering_size_in_pixels));
         let half = if on {
             px / ctx.pixels_per_point() / 2.0
         } else {
             0.0
         };
-        let radii = [radius.nw, radius.ne, radius.sw, radius.se].map(f32::from);
-        let polygon = |grow: f32| {
-            let r = radii.map(|r| (r + grow).max(0.0));
-            let mut points = Vec::new();
-            egui::epaint::tessellator::path::rounded_rectangle(
-                &mut points,
-                rect.expand(grow),
-                egui::epaint::CornerRadiusF32 {
-                    nw: r[0],
-                    ne: r[1],
-                    sw: r[2],
-                    se: r[3],
-                },
-            );
-            points.dedup_by(|a, b| (*a - *b).length_sq() < 1e-6);
-            points
-        };
-        Self {
-            rect,
-            radii,
-            half,
-            exact: rounded_polygon(rect, radius),
-            outer: polygon(half),
-            inner: polygon(-half),
+        while exact.len() > 1 && (exact[0] - exact[exact.len() - 1]).length_sq() < 1e-6 {
+            exact.pop();
         }
-    }
-
-    /// The signed distance from `p` to the box's edge, negative inside.
-    fn distance(&self, p: egui::Pos2) -> f32 {
-        let c = self.rect.center();
-        let [nw, ne, sw, se] = self.radii;
-        let r = match (p.x < c.x, p.y < c.y) {
-            (true, true) => nw,
-            (false, true) => ne,
-            (true, false) => sw,
-            (false, false) => se,
+        let n = exact.len();
+        let centre = exact.iter().fold(egui::Vec2::ZERO, |c, p| c + p.to_vec2()) / n.max(1) as f32;
+        let mut normals: Vec<egui::Vec2> = (0..n)
+            .map(|i| (exact[(i + 1) % n] - exact[i]).normalized().rot90())
+            .collect();
+        // Outward: away from the centre of the convex outline.
+        if n >= 3 && normals[0].dot(exact[0].to_vec2() - centre) < 0.0 {
+            normals.iter_mut().for_each(|v| *v = -*v);
+        }
+        // egui's miter join (`PathBuilder::add_line_loop`): the mean of
+        // the two edges' normals over its squared length, so a vertex moved
+        // along it by `half` lies `half` off both edges.
+        let miter = |i: usize| {
+            let m = (normals[(i + n - 1) % n] + normals[i]) / 2.0;
+            m / m.length_sq()
         };
-        let q = (p - c).abs() - (self.rect.size() / 2.0 - egui::vec2(r, r));
-        q.max(egui::Vec2::ZERO).length() + q.x.max(q.y).min(0.0) - r
+        let outer = (0..n).map(|i| exact[i] + miter(i) * half).collect();
+        let inner = (0..n).map(|i| exact[i] - miter(i) * half).collect();
+        Self {
+            exact,
+            normals,
+            outer,
+            inner,
+            half,
+        }
     }
 
     /// The part of `mesh` inside the box, faded across the edge's band.
     fn apply(&self, mesh: &egui::Mesh) -> egui::Mesh {
-        if self.half <= 0.0 {
-            return clip_inside(mesh, &self.outer);
+        let n = self.exact.len();
+        // An outline thinner than the band turns its inner outline inside
+        // out; it is cut hard, as egui paints without feathering.
+        let folded = (0..n).any(|i| {
+            let j = (i + 1) % n;
+            (self.inner[j] - self.inner[i]).dot(self.exact[j] - self.exact[i]) <= 0.0
+        });
+        if self.half <= 0.0 || n < 3 || folded {
+            return clip_inside(mesh, &self.exact);
         }
         let kept = clip_inside(mesh, &self.outer);
         let mut out = clip_inside(&kept, &self.inner);
-        let mut band = clip_outside(&kept, &self.inner);
-        // Vertex colours blend linearly: cut the band where the edge turns
-        // from straight to round, so a straight stretch fades across, not
-        // along, the band.
-        let [nw, ne, sw, se] = self.radii;
-        let r = self.rect;
-        let far = r.expand(r.width() + r.height() + self.half * 2.0);
-        for half_plane in [
-            Rect::from_min_max(far.min, egui::pos2(r.left() + nw.max(sw), far.max.y)),
-            Rect::from_min_max(far.min, egui::pos2(r.right() - ne.max(se), far.max.y)),
-            Rect::from_min_max(far.min, egui::pos2(far.max.x, r.top() + nw.max(ne))),
-            Rect::from_min_max(far.min, egui::pos2(far.max.x, r.bottom() - sw.max(se))),
-        ] {
-            let line = rounded_polygon(half_plane, CornerRadius::ZERO);
-            let mut split = clip_inside(&band, &line);
-            split.append(clip_outside(&band, &line));
-            band = split;
+        let band = clip_outside(&kept, &self.inner);
+        // egui feathers edge `i` over the quad between its inner and outer
+        // offsets, its colour falling linearly with the distance to the
+        // edge: cut the band into those quads, and every piece's colour is
+        // linear in it, so the vertex colours blend to egui's exactly.
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let quad = [self.outer[i], self.outer[j], self.inner[j], self.inner[i]];
+            let mut piece = clip_inside(&band, &quad);
+            for v in &mut piece.vertices {
+                let d = (v.pos - self.exact[i]).dot(self.normals[i]);
+                let cover = (0.5 - d / (self.half * 2.0)).clamp(0.0, 1.0); // behaviour-ok: full cover half a band inside the edge
+                v.color = v.color.gamma_multiply(cover);
+            }
+            out.append(piece);
         }
-        for v in &mut band.vertices {
-            let cover = (0.5 - self.distance(v.pos) / (self.half * 2.0)).clamp(0.0, 1.0); // behaviour-ok: full cover half a band inside the edge
-            v.color = v.color.gamma_multiply(cover);
-        }
-        out.append(band);
         out
     }
 }
@@ -1316,9 +1305,11 @@ mod tests {
         }
         // Inside the cap's circle (centre 6, 6; radius 6) and the sliver,
         // plus the half pixel over which the clip fades out: faded there.
+        // egui's miter puts the fade's outer vertices half a pixel off each
+        // chord of the circle, a hair past 6.5 from its centre.
         for v in &cut.vertices {
             let d = (v.pos - centre).length();
-            assert!(d <= 6.5 + 1e-3, "{:?}", v.pos);
+            assert!(d <= 6.55, "{:?}", v.pos);
             if d > 6.0 + 1e-3 {
                 assert!(v.color.a() < 128, "{:?} {:?}", v.pos, v.color);
             }
