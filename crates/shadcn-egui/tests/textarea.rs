@@ -603,3 +603,115 @@ fn textarea_snapshot() {
         resp.request_focus();
     });
 }
+
+/// Where [`host_frame`] shows the field.
+#[derive(Clone, Copy, Debug)]
+enum Host {
+    /// The pass's root `Ui`.
+    Screen,
+    /// A plain egui container: a group frame.
+    Plain,
+    /// A crate container: a card's content.
+    Card,
+    /// A raw `egui::Area`, whose first frame is an invisible sizing pass.
+    Area,
+}
+
+/// The text the host tests show: two rows in a field of the maximum width.
+const WRAPPING: &str = "A message long enough to wrap onto a second row of the field, \
+     and then some more words to be sure.";
+
+/// One frame of a textarea holding `text` in `host` under `app_loop`:
+/// how many passes it took and the field's rect.
+fn host_frame(
+    app_loop: common::Loop,
+    ctx: &egui::Context,
+    host: Host,
+    text: &mut String,
+) -> (u64, egui::Rect) {
+    use shadcn_egui::components::card::{card_content, Card};
+    let before = ctx.cumulative_pass_nr();
+    let mut rect = egui::Rect::NOTHING;
+    let _ = common::pass(app_loop, ctx, vec![], |ui| {
+        let mut add = |ui: &mut egui::Ui| ui.add(Textarea::new(text).id_salt("hosted")).rect;
+        rect = match host {
+            Host::Screen => add(ui),
+            Host::Plain => egui::Frame::group(ui.style()).show(ui, add).inner,
+            Host::Card => Card::new().show(ui, |ui| card_content(ui, add)),
+            Host::Area => {
+                egui::Area::new(egui::Id::new("area"))
+                    .fixed_pos(egui::pos2(40.0, 40.0))
+                    // egui's fade-in animates the Area itself.
+                    .fade_in(false)
+                    .show(ui.ctx(), add)
+                    .inner
+            }
+        };
+    });
+    (ctx.cumulative_pass_nr() - before, rect)
+}
+
+/// A context under vega light, as the host tests use it.
+fn vega_ctx() -> egui::Context {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    ctx
+}
+
+/// The field's settled size on the screen under `app_loop`, its text
+/// [`WRAPPING`]: in the pass window, narrower than `md`, so 16 px text.
+fn screen_size(app_loop: common::Loop) -> egui::Vec2 {
+    let ctx = vega_ctx();
+    let mut text = String::from(WRAPPING);
+    let mut size = egui::Vec2::ZERO;
+    for _ in 0..3 {
+        size = host_frame(app_loop, &ctx, Host::Screen, &mut text).1.size();
+    }
+    size
+}
+
+/// In a plain egui host and in a card's content, under both app loops,
+/// the field holds its wrapped text at the maximum width from the first
+/// frame on: every frame takes one pass, and after egui's own second
+/// frame none asks for a repaint.
+#[test]
+fn a_field_settles_in_a_card_and_in_a_plain_host_under_both_loops() {
+    for app_loop in common::Loop::BOTH {
+        let want = screen_size(app_loop);
+        for host in [Host::Plain, Host::Card] {
+            let ctx = vega_ctx();
+            let mut text = String::from(WRAPPING);
+            for frame in 0..3 {
+                let (passes, rect) = host_frame(app_loop, &ctx, host, &mut text);
+                let case = format!("{app_loop:?} {host:?} frame {frame}");
+                assert_eq!(passes, 1, "{case}");
+                assert_eq!(rect.size(), want, "{case}: {rect:?}");
+                // egui asks for a second frame after a context's first,
+                // with a plain label alone too.
+                if frame > 0 {
+                    assert!(!ctx.has_requested_repaint(), "{case}");
+                }
+            }
+        }
+    }
+}
+
+/// In an `egui::Area`, under both app loops, the frame after egui's
+/// invisible sizing pass shows the field at its screen size; the frame
+/// after that takes one pass and asks for no repaint.
+#[test]
+fn a_field_settles_in_an_area_under_both_loops() {
+    for app_loop in common::Loop::BOTH {
+        let want = screen_size(app_loop);
+        let ctx = vega_ctx();
+        let mut text = String::from(WRAPPING);
+        let _sizing = host_frame(app_loop, &ctx, Host::Area, &mut text);
+        let (_, rect) = host_frame(app_loop, &ctx, Host::Area, &mut text);
+        assert_eq!(rect.size(), want, "{app_loop:?}: after sizing: {rect:?}");
+        let (passes, rect) = host_frame(app_loop, &ctx, Host::Area, &mut text);
+        assert_eq!(passes, 1, "{app_loop:?}");
+        assert_eq!(rect.size(), want, "{app_loop:?}: settled: {rect:?}");
+        assert!(!ctx.has_requested_repaint(), "{app_loop:?}");
+    }
+}
