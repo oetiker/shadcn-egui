@@ -35,7 +35,7 @@ use crate::components::shared::{
 };
 use crate::components::text::TextLook;
 use crate::style::app::{default_variant, state_size};
-use crate::style::{pick, Paint, Prop, Recipe, Role, State};
+use crate::style::{pick, pick_len, Paint, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::{vec2, Key, Modifiers, Popup, PopupCloseBehavior, Rect, Sense, Ui, Widget};
 
@@ -163,7 +163,7 @@ impl Widget for Select<'_> {
             .with(State::PLACEHOLDER, !has_value);
         // Geometry depends on neither interaction nor the open state.
         let g = t.state(ui.ctx(), context);
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&trig, f, g).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&trig, f, g);
         let border_w = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point());
         let (pad_l, pad_r) = (
             get(|r| &r.pad_left) + border_w,
@@ -395,7 +395,7 @@ impl Widget for Select<'_> {
             let group = [v.part(&t.style, |s| &s.select_group, |r| &r.select_group)];
             let gs = t.state(ui.ctx(), State::NONE);
             let ist = t.state(ui.ctx(), State::FOCUS.with(State::SELECTED, false));
-            let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, gs).unwrap_or(0.0);
+            let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, gs);
             let (gpt, gpr, gpb, gpl) = (
                 px(&group, |r| &r.pad_top),
                 px(&group, |r| &r.pad_right),
@@ -546,8 +546,7 @@ impl Widget for Select<'_> {
                                                     pick(&ind, |r| &r.height, s)
                                                         .unwrap_or(tick_side),
                                                 );
-                                                let right = pick(&ind, |r| &r.inset_right, s)
-                                                    .unwrap_or(0.0);
+                                                let right = pick_len(&ind, |r| &r.inset_right, s);
                                                 let tick = Rect::from_center_size(
                                                     egui::pos2(
                                                         row.right() - right - w / 2.0,

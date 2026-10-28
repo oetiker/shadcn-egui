@@ -9,7 +9,7 @@ use crate::components::motion::transition;
 use crate::components::shared::{part_painter, RecipeBox};
 use crate::layout::{self, capped_width};
 use crate::style::app::default_variant;
-use crate::style::{pick, Transition};
+use crate::style::{pick_len, Transition};
 use crate::Theme;
 use egui::{Response, Sense, Ui, Vec2, Widget, WidgetInfo, WidgetType};
 
@@ -105,7 +105,7 @@ impl Widget for Progress {
         let st = t.state(ui.ctx(), v.bits());
         // `w-full`; a bar has no content width (conformance 3.1). The
         // indicator's `size-full` gives the track no height of its own.
-        let height = pick(&track, |r| &r.height, st).unwrap_or(0.0);
+        let height = pick_len(&track, |r| &r.height, st);
         let width = capped_width(ui, self.desired_width, 0.0);
         let (rect, resp) = layout::allocate_item(ui, Vec2::new(width, height), Sense::hover());
 

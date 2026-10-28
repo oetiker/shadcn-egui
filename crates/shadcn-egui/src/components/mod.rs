@@ -1,3 +1,4 @@
+pub mod alert;
 mod atom_row;
 pub mod badge;
 pub mod button;

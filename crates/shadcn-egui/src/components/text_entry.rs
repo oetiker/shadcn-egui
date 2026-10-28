@@ -10,7 +10,7 @@ use crate::components::shared::{
     inset_frame, line_width, part_opacity, part_painter, text_entry_state, RecipeBox,
 };
 use crate::components::text::{Leading, TextLook};
-use crate::style::{pick, Prop, Recipe, Role, State};
+use crate::style::{pick, pick_len, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::text_edit::TextEditOutput;
 use egui::{Color32, FontId, Galley, Sense, Shape, TextEdit, Ui, Vec2};
@@ -58,7 +58,7 @@ impl<'a> TextEntry<'a> {
     ) -> Self {
         let enabled = enabled && ui.is_enabled();
         let geometry = theme.state(ui.ctx(), context);
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(layers, f, geometry).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(layers, f, geometry);
         let border_w = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point());
         let inset = [
             get(|r| &r.pad_top),
@@ -103,7 +103,7 @@ impl<'a> TextEntry<'a> {
 
     /// The recipe's `f` in the geometry state, 0 where it sets none.
     pub(crate) fn get(&self, f: fn(&Recipe) -> &Prop<f32>) -> f32 {
-        pick(self.layers, f, self.geometry).unwrap_or(0.0)
+        pick_len(self.layers, f, self.geometry)
     }
 
     /// The width between the side insets of a box `width` wide.

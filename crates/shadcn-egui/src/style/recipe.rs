@@ -367,6 +367,12 @@ pub fn pick<T: Copy>(
     pick_props(layers.iter().map(|r| field(r)), s)
 }
 
+/// [`pick`] for a length: 0 where no layer sets it, as an unset CSS
+/// padding, gap or border width is 0.
+pub(crate) fn pick_len(layers: &[&Recipe], field: fn(&Recipe) -> &Prop<f32>, s: State) -> f32 {
+    pick(layers, field, s).unwrap_or(0.0)
+}
+
 /// Like [`pick`], but also the winner's rank and layer, for comparing the
 /// winners of two fields that set one CSS property (a side's `rounded-l-*`
 /// against `rounded-*`).

@@ -11,7 +11,7 @@ use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, shift, ActivationKeys, RecipeBox,
 };
 use crate::style::app::{default_variant, state_size};
-use crate::style::{pick, Prop, Recipe, State, Transition};
+use crate::style::{pick, pick_len, Prop, Recipe, State, Transition};
 use crate::Theme;
 use egui::{vec2, Rect, Sense, Ui, Widget};
 
@@ -99,11 +99,11 @@ impl Widget for Switch<'_> {
         let size_bit = v.bits();
         // Geometry depends on neither the value nor interaction.
         let g = t.state(ui.ctx(), size_bit.with(State::INVALID, self.invalid));
-        let get = |f: fn(&Recipe) -> &Prop<f32>| pick(&track, f, g).unwrap_or(0.0);
+        let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&track, f, g);
 
         // No size: CSS's initial `auto`, the thumb inside the border.
         let border = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point()) * 2.0;
-        let thumb_side = |f: fn(&Recipe) -> &Prop<f32>| pick(&thumb, f, g).unwrap_or(0.0);
+        let thumb_side = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&thumb, f, g);
         let size = vec2(
             pick(&track, |r| &r.width, g).unwrap_or_else(|| thumb_side(|r| &r.width) + border),
             pick(&track, |r| &r.height, g).unwrap_or_else(|| thumb_side(|r| &r.height) + border),
@@ -135,7 +135,7 @@ impl Widget for Switch<'_> {
 
         if ui.is_rect_visible(rect) {
             let border_w = line_width(
-                pick(&track, |r| &r.border_width, st).unwrap_or(0.0),
+                pick_len(&track, |r| &r.border_width, st),
                 ui.ctx().pixels_per_point(),
             );
             RecipeBox::resolve(ui.ctx(), &t, &track, st)
@@ -144,7 +144,7 @@ impl Widget for Switch<'_> {
 
             // The thumb lies inside the border, vertically centred; its
             // translate differs per value and moves as its transition says.
-            let side = |f: fn(&Recipe) -> &Prop<f32>| pick(&thumb, f, st).unwrap_or(0.0);
+            let side = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&thumb, f, st);
             let size = vec2(side(|r| &r.width), side(|r| &r.height));
             let home =
                 Rect::from_min_size(rect.left_center() + vec2(border_w, -size.y / 2.0), size);

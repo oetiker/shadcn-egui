@@ -14,7 +14,7 @@ use crate::components::shared::{
 use crate::components::text::TextLook;
 use crate::style::app::Sealed;
 use crate::style::{
-    pick, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+    pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
 use crate::{layout, Theme};
 use egui::{pos2, vec2, Key, Modifiers, Rect, Response, Sense, TextWrapMode, Ui, Widget};
@@ -159,12 +159,11 @@ impl<'a> Tabs<'a> {
     /// The gap between the list and the content below it (shadcn `Tabs` root `gap`).
     pub fn content_gap(ui: &Ui) -> f32 {
         let t = Theme::current(ui.ctx());
-        pick(
+        pick_len(
             &[&*t.style.tabs],
             |r| &r.gap,
             t.state(ui.ctx(), State::NONE),
         )
-        .unwrap_or(0.0)
     }
 }
 
@@ -186,7 +185,7 @@ impl Widget for Tabs<'_> {
 
         // Geometry depends neither on the selection nor on interaction.
         let g = t.state(ui.ctx(), State::HORIZONTAL.or(variant_bit));
-        let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
+        let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, g);
         let (pad_t, pad_r, pad_b, pad_l) = (
             geo(&list, |r| &r.pad_top),
             geo(&list, |r| &r.pad_right),
@@ -364,8 +363,7 @@ impl Widget for Tabs<'_> {
                 let tone = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.tone(p))
                 };
-                let px =
-                    |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, st).unwrap_or(0.0);
+                let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, st);
 
                 let fg = tone(&trigger, |r| &r.text)
                     .or(list_text)

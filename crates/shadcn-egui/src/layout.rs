@@ -468,10 +468,16 @@ fn at_line_start(ui: &Ui) -> bool {
 /// [`allocate_item_space`], [`allocate_overflowing`]) call this before
 /// they allocate, so that the crate, not egui, wraps a crate widget.
 fn wrap_item(ui: &mut Ui, width: f32) {
-    if context::on_frame::<WrapContext>(ui.stack()).is_some()
-        && !at_line_start(ui)
-        && width > ui.available_size_before_wrap().x
-    {
+    if context::on_frame::<WrapContext>(ui.stack()).is_some() {
+        wrap_line(ui, width);
+    }
+}
+
+/// Where an item `width` wide does not fit the rest of the line of the
+/// wrapping `ui`, starts the next line for it (see [`start_line`]): the
+/// one line break of [`wrap_item`] and [`as_flex_item`].
+fn wrap_line(ui: &mut Ui, width: f32) {
+    if !at_line_start(ui) && width > ui.available_size_before_wrap().x {
         start_line(ui);
     }
 }
@@ -694,6 +700,9 @@ fn flex_column() -> egui::UiBuilder {
 /// With `unbounded`, a column that fits its [`wrap_row`] line is laid
 /// out without a width limit, as a [`row`] measures its items, so a box
 /// that fills its room (a card) takes its content width there.
+///
+/// A content-sized container (a card: no width upstream) is laid out
+/// with this; a `w-full` container (an alert) with [`begin_block`].
 pub(crate) fn as_flex_item<R, F: FnOnce(&mut Ui) -> R>(
     ui: &mut Ui,
     id: egui::Id,
@@ -707,8 +716,8 @@ pub(crate) fn as_flex_item<R, F: FnOnce(&mut Ui) -> R>(
         return Ok(flex_item(ui, row, id, flex_column(), add));
     }
     let stored = ui.data(|d| d.get_temp::<f32>(id));
-    if !at_line_start(ui) && stored.is_some_and(|w| w > ui.available_size_before_wrap().x) {
-        start_line(ui);
+    if let Some(w) = stored {
+        wrap_line(ui, w);
     }
     let fits = stored.is_none_or(|w| w <= ui.available_size_before_wrap().x);
     let wrap = context::on_frame::<WrapContext>(ui.stack()).map(|w| w.0);
@@ -1279,6 +1288,52 @@ pub fn allocate_item(
 pub fn allocate_item_space(ui: &mut Ui, size: egui::Vec2) -> (egui::Id, egui::Rect) {
     wrap_item(ui, size.x);
     ui.allocate_space(size)
+}
+
+/// Begins a container (an alert, a card): a box that draws its content
+/// before it knows its height and allocates its box with [`end_item`]
+/// after it. Returns the box's top left corner and the container's
+/// frame, the `Ui` its content `Ui`s are made from.
+///
+/// A content-sized container (a card) begins with this inside
+/// [`as_flex_item`], which wraps it; a `w-full` container (an alert)
+/// begins with [`begin_block`].
+///
+/// The frame is the container's accessible node, made before its
+/// content's, so that the content is inside it, as upstream's children
+/// are inside its `div` (egui gives a node the nearest ancestor that has
+/// one when the node is made).
+pub(crate) fn begin_item(ui: &mut Ui) -> (egui::Pos2, Ui) {
+    let origin = ui.cursor().min;
+    let frame = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
+    ui.ctx().accesskit_node_builder(frame.unique_id(), |_| {});
+    (origin, frame)
+}
+
+/// [`begin_item`] for a `w-full` container (an alert) `width` wide: in
+/// a [`wrap_row`] it wraps from its width before its content is drawn,
+/// as [`allocate_item`] wraps a widget (rule 6 of the porting standard);
+/// in a [`row`] it fills the room the row's other items leave. A
+/// content-sized container (a card) goes through [`as_flex_item`] instead.
+pub(crate) fn begin_block(ui: &mut Ui, width: f32) -> (egui::Pos2, Ui) {
+    wrap_item(ui, width);
+    begin_item(ui)
+}
+
+/// Allocates the box `rect` of a container that [`begin_item`] began and
+/// returns the response of its `frame`, the container's accessible node.
+/// The box is an item of its own after the content, as egui's `Frame`
+/// allocates its box: a crate row measures it.
+pub(crate) fn end_item(
+    ui: &mut Ui,
+    frame: Ui,
+    rect: egui::Rect,
+    sense: egui::Sense,
+) -> egui::Response {
+    let id = frame.unique_id();
+    drop(frame);
+    let _ = ui.allocate_rect(rect, sense);
+    ui.interact(rect, id, sense)
 }
 
 /// The clamp order of [`capped_width`]: cap first, then the content

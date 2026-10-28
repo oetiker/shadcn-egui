@@ -4,6 +4,7 @@
 //! picker ([`gallery_ui`], the `gallery` example). The snapshot tests render
 //! both.
 
+use crate::components::alert::{alert_action, Alert, AlertVariant};
 use crate::components::badge::{badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::card::{card_description, card_title};
@@ -653,6 +654,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 textarea_group(ui, state);
                 controls_group(ui, state);
                 badges_group(ui);
+                alerts_group(ui);
                 tabs_group(ui, state);
             });
         });
@@ -703,6 +705,46 @@ fn badges_group(ui: &mut egui::Ui) {
             }
         });
     });
+}
+
+fn alerts_group(ui: &mut egui::Ui) {
+    use crate::icons::lucide;
+    group(
+        ui,
+        "Alert",
+        "Default with an icon, destructive, and one with an action.",
+        |ui| {
+            layout::vstack(ui, 16.0, |ui| {
+                ui.add(
+                    Alert::new()
+                        .icon(lucide::CIRCLE_CHECK)
+                        .title("Payment successful")
+                        .description(
+                            "Your payment of $29.99 has been processed. A receipt has been \
+                             sent to your email address.",
+                        ),
+                );
+                ui.add(
+                    Alert::new()
+                        .variant(AlertVariant::Destructive)
+                        .icon(lucide::CIRCLE_ALERT)
+                        .title("Payment failed")
+                        .description(
+                            "Your payment could not be processed. Please check your payment \
+                             method and try again.",
+                        ),
+                );
+                Alert::new()
+                    .title("Dark mode is now available")
+                    .description("Enable it under your profile settings to get started.")
+                    .show(ui, |ui| {
+                        alert_action(ui, |ui| {
+                            let _ = ui.add(Button::new("Enable").size(ButtonSize::Xs));
+                        });
+                    });
+            });
+        },
+    );
 }
 
 fn icons_group(ui: &mut egui::Ui) {

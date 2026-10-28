@@ -1128,6 +1128,93 @@ fn card_sm_snapshot() {
     });
 }
 
+/// A card in a `layout::wrap_row` is a flex item as wide as its content:
+/// one that does not fit the rest of the line goes onto the next line
+/// (porting rule 6), never past the row's end.
+#[test]
+fn card_wraps_in_a_wrap_row() {
+    let ctx = egui::Context::default();
+    let (mut button, mut body) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+    for _ in 0..3 {
+        let _ = common::pass(common::Loop::RunUi, &ctx, vec![], |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.set_max_width(448.0);
+            shadcn_egui::layout::wrap_row(ui, 8.0, |ui| {
+                button = ui.add(Button::new("Before")).rect;
+                body = Card::new().show(ui, |ui| {
+                    card_content(ui, |ui| {
+                        ui.label("A card body that is far too wide for the rest of the line")
+                    })
+                    .rect
+                });
+            });
+        });
+    }
+    // vega's card content is `px-6`: the card is the body plus 48.
+    let card_w = body.width() + 48.0;
+    assert!(card_w > 448.0 - button.width() - 8.0, "{body:?}");
+    assert_eq!(body.left() - 24.0, button.left(), "{button:?} {body:?}");
+    assert!(body.top() >= button.bottom() + 8.0, "{button:?} {body:?}");
+}
+
+/// A card in a `layout::row` beside a nowrap button: upstream's card sets
+/// no width, so it is a flex item as wide as its content, not the rest of
+/// the row (an alert, `w-full`, takes the rest there).
+#[test]
+fn card_is_content_wide_in_a_row() {
+    let ctx = egui::Context::default();
+    let (mut button, mut card, mut body) = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
+    for _ in 0..3 {
+        let _ = common::pass(common::Loop::RunUi, &ctx, vec![], |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.set_max_width(448.0);
+            shadcn_egui::layout::row(ui, 8.0, |ui| {
+                button = ui.add(Button::new("Before")).rect;
+                card = ui
+                    .scope(|ui| {
+                        Card::new().show(ui, |ui| {
+                            body = card_content(ui, |ui| ui.label("Card")).rect;
+                        })
+                    })
+                    .response
+                    .rect;
+            });
+        });
+    }
+    assert_eq!(card.left(), button.right() + 8.0, "{button:?} {card:?}");
+    // vega's card content is `px-6`: the card is the body plus 48.
+    assert_eq!(card.width(), body.width() + 48.0, "{body:?} {card:?}");
+    assert!(card.right() < 448.0, "{card:?}");
+}
+
+/// The card's node holds its header, content and footer, as upstream's
+/// card `div` holds its children.
+#[test]
+fn the_card_node_holds_its_sections() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut h = egui_kittest::Harness::new_ui(|ui| demo_card(ui, CardSize::Default, true));
+    h.run();
+    let card = h
+        .get_by_role(egui::accesskit::Role::Pane)
+        .accesskit_node()
+        .id();
+    for label in ["Notifications", "You have 3 unread messages.", "Save"] {
+        let node = h.get_by_label(label);
+        let mut up = node.parent();
+        while let Some(p) = up {
+            if p.accesskit_node().id() == card {
+                break;
+            }
+            up = p.parent();
+        }
+        assert!(up.is_some(), "{label} is not inside the card node");
+    }
+}
+
 #[test]
 fn card_action_snapshot() {
     common::snapshot_all("card_action", egui::vec2(360.0, 140.0), |ui| {

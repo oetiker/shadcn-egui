@@ -15,7 +15,7 @@ use crate::components::context;
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
-use crate::style::{pick, Recipe, State};
+use crate::style::{pick, pick_len, Recipe, State};
 use crate::{layout, Theme};
 use egui::{Align, Color32, Id, Layout, Rect, Shape, TextWrapMode, Ui, UiBuilder};
 
@@ -122,7 +122,7 @@ impl<'a> Dialog<'a> {
         let v = t.resolve(self.variant);
         let g = t.state(ctx, v.bits());
         let l = [v.part(&t.style, |_, s| &s.dialog_content, |r| &r.dialog_content)];
-        let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+        let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick_len(&l, f, g);
         let (pad_t, pad_r, pad_b, pad_l) = (
             px(|r| &r.pad_top),
             px(|r| &r.pad_right),
@@ -197,7 +197,7 @@ fn header(
 ) {
     let g = t.state(ui.ctx(), v.bits());
     let header_l = [v.part(&t.style, |_, s| &s.dialog_header, |r| &r.dialog_header)];
-    let gap = pick(&header_l, |r| &r.gap, g).unwrap_or(0.0);
+    let gap = pick_len(&header_l, |r| &r.gap, g);
     let heading = [v.part(&t.style, |_, s| &s.dialog_title, |r| &r.dialog_title)];
     // upstream: dialog-title carries `cn-font-heading`; without a `text-*`
     // it takes the panel's, which the content scope passes.
@@ -247,8 +247,8 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
     let close = v.part(&t.style, |_, s| &s.dialog_close, |r| &r.dialog_close);
     let at = [close];
     let (top, right) = (
-        pick(&at, |r| &r.inset_top, g).unwrap_or(0.0),
-        pick(&at, |r| &r.inset_right, g).unwrap_or(0.0),
+        pick_len(&at, |r| &r.inset_top, g),
+        pick_len(&at, |r| &r.inset_right, g),
     );
     let inner = ui.max_rect();
     let rect = Rect::from_min_max(
@@ -294,7 +294,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let v = dialog_recipes(ui, &t);
     let g = t.state(ui.ctx(), v.bits());
     let l = [v.part(&t.style, |_, s| &s.dialog_footer, |r| &r.dialog_footer)];
-    let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick(&l, f, g).unwrap_or(0.0);
+    let px = |f: fn(&Recipe) -> &crate::style::Prop<f32>| pick_len(&l, f, g);
     let (pad_t, pad_r, pad_b, pad_l) = (
         px(|r| &r.pad_top),
         px(|r| &r.pad_right),
@@ -306,7 +306,7 @@ pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
         px(|r| &r.margin_bottom),
         px(|r| &r.margin_left),
     );
-    let gap = pick(&l, |r| &r.gap, g).unwrap_or(0.0);
+    let gap = pick_len(&l, |r| &r.gap, g);
 
     let at = ui.max_rect();
     let top = ui.cursor().top();
