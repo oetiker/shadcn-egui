@@ -452,25 +452,78 @@ impl RecipeBox {
         }
     }
 
-    /// The box on `rect` inside `outer` on `outer_rect` with `overflow:
-    /// hidden`: a corner that sits on the outer box's corner takes the
-    /// rounder of the two radii. Exact while the inner box's other corners
-    /// stay clear of the outer box's rounding.
-    pub(crate) fn clipped_by(mut self, outer: &RecipeBox, outer_rect: Rect, rect: Rect) -> Self {
-        let outer_radii = clamp_radii(outer.radii, outer_rect);
-        let near = |a: f32, b: f32| (a - b).abs() < f32::EPSILON * a.abs().max(b.abs()).max(1.0); // behaviour-ok: float equality tolerance
-        let corners = [
-            (rect.left_top(), outer_rect.left_top()),
-            (rect.right_top(), outer_rect.right_top()),
-            (rect.left_bottom(), outer_rect.left_bottom()),
-            (rect.right_bottom(), outer_rect.right_bottom()),
-        ];
-        for (i, (p, q)) in corners.into_iter().enumerate() {
-            if near(p.x, q.x) && near(p.y, q.y) {
-                self.radii[i] = self.radii[i].max(outer_radii[i]);
+    /// Paint the box on `rect` cut to the inside of `outer`'s padding box
+    /// on `outer_rect`, as CSS paints a child of a part with `overflow:
+    /// hidden` (the progress indicator in its track, the slider range): the
+    /// cut follows the outer box's rounding exactly, whatever the size and
+    /// corners of this box.
+    pub(crate) fn paint_inside(
+        &self,
+        painter: &Painter,
+        rect: Rect,
+        outer: &RecipeBox,
+        outer_rect: Rect,
+    ) {
+        painter.extend(self.shapes_inside(painter.ctx(), rect, outer, outer_rect));
+    }
+
+    /// [`RecipeBox::paint_inside`]'s shapes: meshes cut to the outer box.
+    fn shapes_inside(
+        &self,
+        ctx: &egui::Context,
+        rect: Rect,
+        outer: &RecipeBox,
+        outer_rect: Rect,
+    ) -> Vec<Shape> {
+        // egui puts a painted rect on whole pixels, as the browser snaps a
+        // box; the cut follows the boxes where they are painted.
+        let snap = |r: Rect, own: Option<bool>| {
+            if own.unwrap_or_else(|| ctx.tessellation_options(|o| o.round_rects_to_pixels)) {
+                egui::emath::GuiRounding::round_to_pixels(r, ctx.pixels_per_point())
+            } else {
+                r
+            }
+        };
+        let outline = rounded_polygon(
+            snap(padding_box(outer_rect, outer.borders), None),
+            inner_radius(outer.radius_on(outer_rect), outer.borders),
+        );
+        fn cut(ctx: &egui::Context, shape: Shape, clip: &RoundedClip, out: &mut Vec<Shape>) {
+            match shape {
+                Shape::Noop => {}
+                Shape::Vec(shapes) => {
+                    for s in shapes {
+                        cut(ctx, s, clip, out);
+                    }
+                }
+                Shape::Mesh(mesh) => out.push(Shape::mesh(clip.apply(&mesh))),
+                shape => {
+                    let mut mesh = egui::Mesh::default();
+                    tessellator(ctx).tessellate_shape(shape, &mut mesh);
+                    out.push(Shape::mesh(clip.apply(&mesh)));
+                }
             }
         }
-        self
+        let shapes = self.shapes(ctx, rect);
+        // A plain fill (every style's indicator and range): the outer box's
+        // outline cut to the rect, a convex polygon egui anti-aliases as it
+        // does the outer box itself.
+        if let [Shape::Rect(r)] = shapes.as_slice() {
+            if r.stroke.width <= 0.0 && r.corner_radius == CornerRadius::ZERO {
+                let points = clip_to_rect(&outline, snap(r.rect, r.round_to_pixels));
+                return if points.len() < 3 {
+                    Vec::new()
+                } else {
+                    vec![Shape::convex_polygon(points, r.fill, Stroke::NONE)]
+                };
+            }
+        }
+        let clip = RoundedClip::new(ctx, outline);
+        let mut out = Vec::new();
+        for shape in shapes {
+            cut(ctx, shape, &clip, &mut out);
+        }
+        out
     }
 
     /// The fill colour, if the recipe sets one that is not transparent.
@@ -648,15 +701,19 @@ fn inner_radius(radius: CornerRadius, [t, r, b, l]: [f32; 4]) -> CornerRadius {
 
 /// `shape` as the mesh egui's tessellator makes of it in this context.
 fn tessellate(ctx: &egui::Context, shape: &egui::epaint::RectShape) -> egui::Mesh {
-    let mut tess = egui::epaint::Tessellator::new(
+    let mut mesh = egui::Mesh::default();
+    tessellator(ctx).tessellate_rect(shape, &mut mesh);
+    mesh
+}
+
+/// egui's tessellator as this context sets it up, for box shapes (no text).
+fn tessellator(ctx: &egui::Context) -> egui::epaint::Tessellator {
+    egui::epaint::Tessellator::new(
         ctx.pixels_per_point(),
         ctx.tessellation_options(|o| *o),
-        [1, 1], // behaviour-ok: no text in a rect, the font atlas size is unused
+        [1, 1], // behaviour-ok: no text in a box, the font atlas size is unused
         Vec::new(),
-    );
-    let mut mesh = egui::Mesh::default();
-    tess.tessellate_rect(shape, &mut mesh);
-    mesh
+    )
 }
 
 /// The convex outline of a rounded rect, as egui's tessellator traces it.
@@ -667,15 +724,155 @@ pub(crate) fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos
     points
 }
 
+/// A convex outline as an anti-aliased clip, as the browser clips to a
+/// part with `overflow: hidden` and rounded corners: inside the outline a
+/// mesh keeps its colour, and across the band egui feathers the outline
+/// over it fades out exactly as egui fades the outline's own fill.
+struct RoundedClip {
+    /// The outline as egui paints the box.
+    exact: Vec<egui::Pos2>,
+    /// Each edge's outward unit normal (edge `i` runs from point `i`).
+    normals: Vec<egui::Vec2>,
+    /// The outline moved half the feathering width out and in along
+    /// egui's miter normals, where egui puts its feathering's vertices.
+    outer: Vec<egui::Pos2>,
+    inner: Vec<egui::Pos2>,
+    /// Half the feathering width in points; 0 without feathering.
+    half: f32,
+}
+
+impl RoundedClip {
+    fn new(ctx: &egui::Context, mut exact: Vec<egui::Pos2>) -> Self {
+        let (on, px) = ctx.tessellation_options(|o| (o.feathering, o.feathering_size_in_pixels));
+        let half = if on {
+            px / ctx.pixels_per_point() / 2.0
+        } else {
+            0.0
+        };
+        while exact.len() > 1 && (exact[0] - exact[exact.len() - 1]).length_sq() < 1e-6 {
+            exact.pop();
+        }
+        let n = exact.len();
+        let centre = exact.iter().fold(egui::Vec2::ZERO, |c, p| c + p.to_vec2()) / n.max(1) as f32;
+        let mut normals: Vec<egui::Vec2> = (0..n)
+            .map(|i| (exact[(i + 1) % n] - exact[i]).normalized().rot90())
+            .collect();
+        // Outward: away from the centre of the convex outline.
+        if n >= 3 && normals[0].dot(exact[0].to_vec2() - centre) < 0.0 {
+            normals.iter_mut().for_each(|v| *v = -*v);
+        }
+        // egui's miter join (`PathBuilder::add_line_loop`): the mean of
+        // the two edges' normals over its squared length, so a vertex moved
+        // along it by `half` lies `half` off both edges.
+        let miter = |i: usize| {
+            let m = (normals[(i + n - 1) % n] + normals[i]) / 2.0;
+            m / m.length_sq()
+        };
+        let outer = (0..n).map(|i| exact[i] + miter(i) * half).collect();
+        let inner = (0..n).map(|i| exact[i] - miter(i) * half).collect();
+        Self {
+            exact,
+            normals,
+            outer,
+            inner,
+            half,
+        }
+    }
+
+    /// The part of `mesh` inside the box, faded across the edge's band.
+    fn apply(&self, mesh: &egui::Mesh) -> egui::Mesh {
+        let n = self.exact.len();
+        // An outline thinner than the band turns its inner outline inside
+        // out; it is cut hard, as egui paints without feathering.
+        let folded = (0..n).any(|i| {
+            let j = (i + 1) % n;
+            (self.inner[j] - self.inner[i]).dot(self.exact[j] - self.exact[i]) <= 0.0
+        });
+        if self.half <= 0.0 || n < 3 || folded {
+            return clip_inside(mesh, &self.exact);
+        }
+        let kept = clip_inside(mesh, &self.outer);
+        let mut out = clip_inside(&kept, &self.inner);
+        let band = clip_outside(&kept, &self.inner);
+        // egui feathers edge `i` over the quad between its inner and outer
+        // offsets, its colour falling linearly with the distance to the
+        // edge: cut the band into those quads, and every piece's colour is
+        // linear in it, so the vertex colours blend to egui's exactly.
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let quad = [self.outer[i], self.outer[j], self.inner[j], self.inner[i]];
+            let mut piece = clip_inside(&band, &quad);
+            for v in &mut piece.vertices {
+                let d = (v.pos - self.exact[i]).dot(self.normals[i]);
+                let cover = (0.5 - d / (self.half * 2.0)).clamp(0.0, 1.0); // behaviour-ok: full cover half a band inside the edge
+                v.color = v.color.gamma_multiply(cover);
+            }
+            out.append(piece);
+        }
+        out
+    }
+}
+
+/// The convex `polygon` cut to `rect` (Sutherland-Hodgman against the
+/// rect's four sides): their intersection, also convex.
+fn clip_to_rect(polygon: &[egui::Pos2], rect: Rect) -> Vec<egui::Pos2> {
+    let mut points = polygon.to_vec();
+    // (axis, position, keep the side above it): x for left and right,
+    // y for top and bottom.
+    let sides = [
+        (0, rect.left(), true),
+        (0, rect.right(), false),
+        (1, rect.top(), true),
+        (1, rect.bottom(), false),
+    ];
+    for (i, at, keep_above) in sides {
+        let axis = |p: egui::Pos2| if i == 0 { p.x } else { p.y };
+        let inside = |p: egui::Pos2| (axis(p) >= at) == keep_above || axis(p) == at;
+        let mut next = Vec::with_capacity(points.len() + 2);
+        for k in 0..points.len() {
+            let (a, b) = (points[k], points[(k + 1) % points.len()]);
+            if inside(a) {
+                next.push(a);
+            }
+            if inside(a) != inside(b) {
+                let t = (at - axis(a)) / (axis(b) - axis(a));
+                next.push(a + (b - a) * t);
+            }
+        }
+        points = next;
+        if points.len() < 3 {
+            return Vec::new();
+        }
+    }
+    points
+}
+
 /// The part of `mesh` that lies outside the convex `polygon`. A triangle
 /// that straddles an edge is cut along it, its vertex colours and texture
 /// coordinates interpolated; one wholly inside is dropped at once.
 pub(crate) fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
+    clip_convex(mesh, polygon, false)
+}
+
+/// The part of `mesh` that lies inside the convex `polygon`, as CSS's
+/// `overflow: hidden` cuts a child to its parent's rounded box. A triangle
+/// that straddles an edge is cut along it as in [`clip_outside`]; one
+/// wholly outside is dropped at once.
+pub(crate) fn clip_inside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Mesh {
+    clip_convex(mesh, polygon, true)
+}
+
+/// One Sutherland-Hodgman pass for [`clip_outside`] and [`clip_inside`]:
+/// each triangle is cut by the polygon's edges in turn; the pieces cut off
+/// lie outside, the rest inside. `keep_inside` picks which part is kept.
+fn clip_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2], keep_inside: bool) -> egui::Mesh {
     use egui::epaint::Vertex;
     let n = polygon.len();
     let mut out = egui::Mesh::with_texture(mesh.texture_id);
     if n < 3 {
-        out.append_ref(mesh);
+        if !keep_inside {
+            out.append_ref(mesh);
+        }
         return out;
     }
     let area: f32 = (0..n)
@@ -722,11 +919,10 @@ pub(crate) fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::M
             }
             all_inside &= d.iter().all(|&d| d >= 0.0);
         }
-        if outside_one {
-            emit(&tri);
-            continue;
-        }
-        if all_inside {
+        if outside_one || all_inside {
+            if outside_one != keep_inside {
+                emit(&tri);
+            }
             continue;
         }
         inside.clear();
@@ -748,11 +944,16 @@ pub(crate) fn clip_outside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::M
                     cut_off.push(v);
                 }
             }
-            emit(&cut_off);
+            if !keep_inside {
+                emit(&cut_off);
+            }
             std::mem::swap(&mut inside, &mut next);
             if inside.len() < 3 {
                 break;
             }
+        }
+        if keep_inside {
+            emit(&inside);
         }
     }
     out
@@ -1038,21 +1239,83 @@ mod tests {
     }
 
     #[test]
-    fn a_clipped_box_takes_the_outer_rounding_where_corners_meet() {
+    fn clip_inside_keeps_the_polygon() {
+        let mut quad = egui::Mesh::default();
+        quad.add_colored_rect(
+            Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(10.0, 10.0)),
+            Color32::BLACK,
+        );
+        let window = rounded_polygon(
+            Rect::from_min_size(egui::pos2(3.0, 3.0), egui::vec2(4.0, 4.0)),
+            CornerRadius::ZERO,
+        );
+        assert!((area(&clip_inside(&quad, &window)) - 16.0).abs() < 1e-3);
+        // Inside and outside part the mesh between them.
+        let round = rounded_polygon(
+            Rect::from_min_size(egui::pos2(-5.0, 2.0), egui::vec2(10.0, 6.0)),
+            CornerRadius::same(3),
+        );
+        let total = area(&clip_inside(&quad, &round)) + area(&clip_outside(&quad, &round));
+        assert!((total - 100.0).abs() < 1e-3, "{total}");
+        let all = rounded_polygon(
+            Rect::from_min_size(egui::pos2(-1.0, -1.0), egui::vec2(12.0, 12.0)),
+            CornerRadius::ZERO,
+        );
+        assert!((area(&clip_inside(&quad, &all)) - 100.0).abs() < 1e-3);
+        let beside = rounded_polygon(
+            Rect::from_min_size(egui::pos2(20.0, 0.0), egui::vec2(4.0, 4.0)),
+            CornerRadius::ZERO,
+        );
+        assert_eq!(area(&clip_inside(&quad, &beside)), 0.0);
+    }
+
+    /// A box narrower than the outer box's rounding keeps only the part
+    /// inside the outer round cap, as `overflow: hidden` cuts it.
+    #[test]
+    fn paint_inside_follows_the_outer_rounding() {
+        let ctx = egui::Context::default();
         let theme = Theme::vega().in_mode(egui::Theme::Light);
         let mut full = Recipe::default();
         full.radius.base = Some(Radius::Rung(Rung::Full));
-        let outer = RecipeBox::resolve(&egui::Context::default(), &theme, &[&full], State::NONE);
-        let inner = RecipeBox::resolve(
-            &egui::Context::default(),
-            &theme,
-            &[&Recipe::default()],
-            State::NONE,
-        );
-        let track = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 6.0));
-        let range = Rect::from_min_max(track.min, egui::pos2(40.0, 6.0));
-        let r = inner.clipped_by(&outer, track, range).radius_on(range);
-        assert_eq!((r.nw, r.sw, r.ne, r.se), (3, 3, 0, 0));
+        let outer = RecipeBox::resolve(&ctx, &theme, &[&full], State::NONE);
+        let mut fill = Recipe::default();
+        fill.bg.base = Some(crate::style::Paint::Role(crate::style::Role::Primary, 1.0));
+        let track = Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 12.0));
+        let sliver = Rect::from_min_max(track.min, egui::pos2(2.0, 12.0));
+        let centre = egui::pos2(6.0, 6.0);
+        // A plain fill: the cap's outline cut to the sliver, one polygon.
+        let plain = RecipeBox::resolve(&ctx, &theme, &[&fill], State::NONE);
+        let cut_plain = plain.shapes_inside(&ctx, sliver, &outer, track);
+        let [Shape::Path(path)] = cut_plain.as_slice() else {
+            panic!("a plain fill is one convex polygon")
+        };
+        for p in &path.points {
+            assert!((*p - centre).length() <= 6.0 + 1e-3, "{p:?}");
+            assert!(p.x <= 2.0 + 1e-3, "{p:?}");
+        }
+        // A box with a border goes through the mesh clip.
+        fill.border_width.base = Some(1.0);
+        let inner = RecipeBox::resolve(&ctx, &theme, &[&fill], State::NONE);
+        let mut cut = egui::Mesh::default();
+        for shape in inner.shapes_inside(&ctx, sliver, &outer, track) {
+            let egui::Shape::Mesh(m) = shape else {
+                panic!("a cut box is meshes")
+            };
+            cut.append_ref(&m);
+        }
+        // Inside the cap's circle (centre 6, 6; radius 6) and the sliver,
+        // plus the half pixel over which the clip fades out: faded there.
+        // egui's miter puts the fade's outer vertices half a pixel off each
+        // chord of the circle, a hair past 6.5 from its centre.
+        for v in &cut.vertices {
+            let d = (v.pos - centre).length();
+            assert!(d <= 6.55, "{:?}", v.pos);
+            if d > 6.0 + 1e-3 {
+                assert!(v.color.a() < 128, "{:?} {:?}", v.pos, v.color);
+            }
+            // egui's anti-aliasing fringe reaches half a pixel further.
+            assert!(v.pos.x <= 2.5 + 1e-3, "{:?}", v.pos);
+        }
     }
 
     fn rounded(base: Option<Rung>, left: Option<Rung>, left_rank: u128) -> RecipeBox {

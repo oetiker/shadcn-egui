@@ -12,6 +12,7 @@ pub mod input;
 pub mod label;
 pub mod motion;
 pub mod popover;
+pub mod progress;
 pub(crate) mod registry;
 pub mod select;
 pub mod separator;

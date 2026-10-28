@@ -9,7 +9,7 @@ use shadcn_egui::reference::{gallery_ui, GalleryState};
 use shadcn_egui::{Preset, Theme};
 
 /// Tall enough that nothing needs scrolling.
-const FULL: egui::Vec2 = egui::vec2(1280.0, 1420.0);
+const FULL: egui::Vec2 = egui::vec2(1280.0, 1480.0);
 
 /// The gallery in a harness, its page colour also under kittest's 8px outer
 /// margin, so no band of another colour shows.

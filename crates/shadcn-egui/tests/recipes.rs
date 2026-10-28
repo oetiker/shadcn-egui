@@ -816,11 +816,29 @@ fn slider_fade_multiplies_down_the_parts() {
                 .push(Rule::important(When::all(State::DISABLED), v));
         }
     });
+    // Fill and stroke colour of every rect and path in paint order: the
+    // range is the track's outline cut to its rect, a path.
     let rects = |enabled: bool| {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
             ui.add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(enabled))
         });
-        common::rect_shapes(&out)
+        fn walk(s: &egui::Shape, out: &mut Vec<(egui::Color32, egui::Color32)>) {
+            match s {
+                egui::Shape::Rect(r) => out.push((r.fill, r.stroke.color)),
+                egui::Shape::Path(p) => out.push((
+                    p.fill,
+                    match p.stroke.color {
+                        egui::epaint::ColorMode::Solid(c) => c,
+                        _ => egui::Color32::TRANSPARENT,
+                    },
+                )),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut found));
+        found
     };
     let (on, off) = (rects(true), rects(false));
     assert_eq!(on.len(), off.len());
@@ -833,12 +851,8 @@ fn slider_fade_multiplies_down_the_parts() {
             1 => ("range", factors[1]),
             _ => ("thumb", thumb * root),
         };
-        assert_eq!(b.fill, a.fill.gamma_multiply(f), "{part} fill");
-        assert_eq!(
-            b.stroke.color,
-            a.stroke.color.gamma_multiply(f),
-            "{part} stroke"
-        );
+        assert_eq!(b.0, a.0.gamma_multiply(f), "{part} fill");
+        assert_eq!(b.1, a.1.gamma_multiply(f), "{part} stroke");
     }
 }
 
