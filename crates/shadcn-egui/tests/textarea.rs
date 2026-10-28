@@ -286,6 +286,180 @@ fn the_field_overflows_a_narrow_column_without_widening_it() {
     assert_eq!(widths.1, 10.0, "the column keeps its width");
 }
 
+/// The box's 1 px border colour, the last one painted.
+fn border(shapes: &[egui::epaint::RectShape]) -> Option<egui::Color32> {
+    shapes
+        .iter()
+        .rev()
+        .find(|r| r.stroke.width == 1.0)
+        .map(|r| r.stroke.color)
+}
+
+/// `border-input focus-visible:border-ring focus-visible:ring-3
+/// ring-ring/50`: the border is input-coloured at rest; focus turns it
+/// ring-coloured and adds a 3 px ring at half alpha. A text field matches
+/// `:focus-visible` after a pointer press too.
+#[test]
+fn a_focused_field_shows_the_ring() {
+    for (name, theme, mode) in common::themes() {
+        let p = theme.palette_of(mode);
+        let mut text = String::new();
+        let (rect, idle) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Textarea::new(&mut text).id_salt("field"))
+        });
+        let idle = common::rect_shapes(&idle);
+        assert_eq!(border(&idle), Some(p.input), "{name} idle: {idle:?}");
+        assert!(
+            idle.iter().all(|r| r.stroke.width != 3.0),
+            "{name}: ring while idle"
+        );
+        let (_, focused) = common::measure_output(&theme, mode, |ui| {
+            let resp = ui.add(Textarea::new(&mut text).id_salt("field"));
+            resp.request_focus();
+            resp
+        });
+        let focused = common::rect_shapes(&focused);
+        assert_eq!(
+            border(&focused),
+            Some(p.ring),
+            "{name} focused: {focused:?}"
+        );
+        let ring = focused
+            .iter()
+            .find(|r| r.stroke.width == 3.0)
+            .unwrap_or_else(|| panic!("{name}: no ring in {focused:?}"));
+        assert_eq!(ring.stroke.color, p.ring.gamma_multiply(0.5), "{name}");
+        assert_eq!(ring.rect, rect, "{name}");
+    }
+
+    // A pointer press focuses the field and shows the ring.
+    let theme = Theme::vega();
+    let ring = theme.palette_of(egui::Theme::Light).ring;
+    let ctx = egui::Context::default();
+    theme.apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    ctx.all_styles_mut(|s| s.animation_time = 0.0);
+    let mut text = String::new();
+    let mut frame = |events: Vec<egui::Event>| {
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        let mut rect = egui::Rect::NOTHING;
+        let out = ctx.run_ui(input, |ui| rect = ui.add(Textarea::new(&mut text)).rect);
+        (rect, out)
+    };
+    let (rect, _) = frame(Vec::new());
+    let _ = frame(common::click(rect.center()));
+    let (_, out) = frame(Vec::new());
+    let shapes = common::rect_shapes(&out);
+    assert_eq!(border(&shapes), Some(ring), "pointer focus: {shapes:?}");
+    assert!(shapes.iter().any(|r| r.stroke.width == 3.0), "{shapes:?}");
+}
+
+/// `aria-invalid:border-destructive aria-invalid:ring-3`: dark themes use
+/// the `/50` border and `/40` ring.
+#[test]
+fn an_invalid_field_shows_the_destructive_border_and_ring() {
+    for (name, theme, mode) in common::themes() {
+        let mut text = String::new();
+        let (_, out) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Textarea::new(&mut text).invalid(true))
+        });
+        let shapes = common::rect_shapes(&out);
+        let d = theme.palette_of(mode).destructive;
+        let (border, ring) = if name.ends_with("dark") {
+            (d.gamma_multiply(0.5), d.gamma_multiply(0.4))
+        } else {
+            (d, d.gamma_multiply(0.2))
+        };
+        assert!(
+            shapes
+                .iter()
+                .any(|r| r.stroke.width == 1.0 && r.stroke.color == border),
+            "{name}: border in {shapes:?}"
+        );
+        assert!(
+            shapes
+                .iter()
+                .any(|r| r.stroke.width == 3.0 && r.stroke.color == ring),
+            "{name}: ring in {shapes:?}"
+        );
+    }
+}
+
+/// `disabled:opacity-50`, and in nova and lyra `disabled:bg-input/50`: a
+/// disabled `Ui` paints the text at the part's disabled opacity and the
+/// box in its disabled fill at the same opacity.
+#[test]
+fn a_disabled_ui_fades_the_field() {
+    use shadcn_egui::style::{pick, State};
+    for (name, theme, mode) in common::themes() {
+        let layers = [&*theme.style.textarea];
+        let dark = mode == egui::Theme::Dark;
+        let disabled = State::DISABLED.with(State::DARK, dark);
+        let opacity = pick(&layers, |r| &r.opacity, disabled).expect("disabled opacity");
+        let mut text = String::from("abc");
+        let (_, on) = common::measure_output(&theme, mode, |ui| ui.add(Textarea::new(&mut text)));
+        let (rect, off) = common::measure_output(&theme, mode, |ui| {
+            ui.add_enabled(false, Textarea::new(&mut text))
+        });
+        assert_eq!(
+            common::text_colour(&off),
+            common::text_colour(&on).gamma_multiply(opacity),
+            "{name}"
+        );
+        let r = common::resolved(&theme, mode);
+        let fill = pick(&layers, |r| &r.bg, disabled).map_or(egui::Color32::TRANSPARENT, |p| {
+            r.paint(p).gamma_multiply(opacity)
+        });
+        let painted = common::rect_shapes(&off)
+            .into_iter()
+            .find(|s| s.rect == rect && s.fill != egui::Color32::TRANSPARENT)
+            .map_or(egui::Color32::TRANSPARENT, |s| s.fill);
+        assert_eq!(painted, fill, "{name}");
+    }
+    // nova and lyra fill the disabled box; vega does not.
+    use shadcn_egui::style::Style;
+    let bg = |t: &Style, s: State| pick(&[&*t.textarea], |r| &r.bg, s);
+    let (nova, vega) = (Style::nova(), Style::vega());
+    assert_ne!(bg(&nova, State::DISABLED), bg(&nova, State::NONE));
+    assert_eq!(bg(&vega, State::DISABLED), bg(&vega, State::NONE));
+}
+
+/// shadcn textarea `text-base md:text-sm`: the field text is 16 px in a
+/// window narrower than 768 px, 14 px from 768 px up.
+#[test]
+fn the_text_follows_the_md_breakpoint() {
+    let theme = Theme::vega();
+    let text_px = |width: f32| {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        ctx.set_theme(egui::Theme::Light);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, 400.0),
+            )),
+            ..Default::default()
+        };
+        let mut text = String::from("Hello");
+        let mut out = None;
+        for _ in 0..2 {
+            out = Some(ctx.run_ui(input.clone(), |ui| {
+                ui.add(Textarea::new(&mut text));
+            }));
+        }
+        common::text_shapes(&out.unwrap())
+            .iter()
+            .map(|t| t.galley.job.sections[0].format.font_id.size)
+            .next()
+            .expect("the field's text")
+    };
+    assert_eq!(text_px(767.0), theme.metrics.text_base);
+    assert_eq!(text_px(768.0), theme.metrics.text_sm);
+}
+
 /// The empty field shows its hint in the style's placeholder colour.
 #[test]
 fn the_hint_takes_the_placeholder_colour() {
