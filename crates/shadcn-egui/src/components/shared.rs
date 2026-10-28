@@ -675,11 +675,7 @@ impl RecipeBox {
                 // edge. The cut is made on the box as egui puts it on the
                 // pixels, and stays where it is cut.
                 let half = self.borders.map(|w| w / 2.0);
-                let placed = if ctx.tessellation_options(|o| o.round_rects_to_pixels) {
-                    egui::emath::GuiRounding::round_to_pixels(rect, ctx.pixels_per_point())
-                } else {
-                    rect
-                };
+                let placed = on_pixels(ctx, rect);
                 out.push(Shape::Rect(
                     egui::epaint::RectShape::filled(
                         padding_box(placed, half),
