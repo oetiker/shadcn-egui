@@ -842,16 +842,24 @@ pub(crate) fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Respo
     ui.interact(rect, id, sense)
 }
 
-/// Whether an id names a widget [`hit_area`] registered in this pass: the
-/// pass's set, read once.
-pub(crate) fn is_hit_area(ctx: &Context) -> impl Fn(Id) -> bool {
+/// The ids among `ids` that name a widget [`hit_area`] registered in this
+/// pass of this viewport. The pass's set is read in place, not cloned:
+/// every crate row asks once per pass.
+pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) -> Vec<Id> {
     let pass = ctx.cumulative_pass_nr();
-    let ids = ctx
-        .data(|d| d.get_temp::<HitAreas>(hit_areas_id(ctx)))
-        .filter(|a| a.pass == pass)
-        .map(|a| a.ids)
-        .unwrap_or_default();
-    move |id| ids.contains(&id)
+    let key = egui::util::id_type_map::RawKey::new::<HitAreas>(hit_areas_id(ctx));
+    ctx.data(|d| {
+        match d
+            .get_temp_raw(key)
+            .and_then(|a| a.downcast_ref::<HitAreas>())
+        {
+            Some(areas) if areas.pass == pass => ids
+                .into_iter()
+                .filter(|id| areas.ids.contains(id))
+                .collect(),
+            _ => Vec::new(),
+        }
+    })
 }
 
 /// Whether `:focus-visible` holds for the focused widget, as the browser

@@ -213,10 +213,11 @@ impl RowItems {
             (added, end)
         });
         // A hit area takes no part in the row's layout.
-        let hit_area = crate::components::shared::is_hit_area(ui.ctx());
         let mut pass = pass;
-        pass.skip
-            .extend(added.iter().map(|(_, w)| w.id).filter(|&id| hit_area(id)));
+        pass.skip.extend(crate::components::shared::hit_areas_among(
+            ui.ctx(),
+            added.iter().map(|(_, w)| w.id),
+        ));
         let (lines, heights) = row_lines(&added, end, &pass, wraps);
         let changed = self.stored.as_ref().is_none_or(|old| {
             old.len() != heights.len()
