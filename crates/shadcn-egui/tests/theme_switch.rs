@@ -402,7 +402,11 @@ fn the_same_fonts_applied_every_pass_settle() {
             assert_eq!(passes, 1, "first {first}, frame {frame}: passes");
             if frame > 0 {
                 let delay = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
-                assert_eq!(delay, std::time::Duration::MAX, "first {first}, frame {frame}");
+                assert_eq!(
+                    delay,
+                    std::time::Duration::MAX,
+                    "first {first}, frame {frame}"
+                );
             }
         }
     }
