@@ -1484,6 +1484,37 @@ fn a_long_word_stays_on_one_line_in_the_input() {
     }
 }
 
+/// A glyph wider than the content minimum's `M` keeps the input's
+/// response at its allocated box (typed text and hint text).
+#[test]
+fn a_glyph_wider_than_the_content_minimum_keeps_the_input_response_in_the_box() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    for (typed, hint) in [("W", ""), ("WWW", ""), ("", "W")] {
+        let mut text = String::from(typed);
+        let mut start = egui::Pos2::ZERO;
+        let mut narrow = 0.0;
+        let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            start = ui.cursor().min;
+            narrow = common::measure(&theme, egui::Theme::Light, |ui| {
+                let mut m = String::from("M");
+                ui.add(Input::new(&mut m).max_width(0.0))
+            })
+            .width();
+            ui.add(Input::new(&mut text).hint(hint).max_width(0.0))
+        });
+        assert_eq!(rect.left(), start.x, "{typed:?}/{hint:?}: {rect:?}");
+        assert_eq!(rect.width(), narrow, "{typed:?}/{hint:?}: {rect:?}");
+        for r in common::rect_shapes(&out) {
+            assert!(
+                r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+                "{typed:?}/{hint:?}: box {:?} outside {rect:?}",
+                r.rect
+            );
+        }
+    }
+}
+
 /// A recipe without a placeholder colour shows the hint in upstream's
 /// `placeholder:text-muted-foreground`, never in an egui colour
 /// (conformance 2.1).

@@ -4,7 +4,7 @@
 //! paints.
 
 use crate::components::text::Leading;
-use crate::components::text_entry::TextEntry;
+use crate::components::text_entry::{within, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::{layout, Theme};
@@ -135,14 +135,15 @@ impl<'a> Widget for Input<'a> {
         if !self.hint.is_empty() {
             // The placeholder is laid out in the field's look, cut to the
             // content box as egui cuts its hint text.
+            let content = frame.content_width(width);
             let hint = frame.look.layout_colored(
                 ui,
                 self.hint.as_str(),
                 TextWrapMode::Truncate,
-                frame.content_width(width),
+                content,
                 frame.placeholder,
             );
-            edit = edit.hint_text(hint);
+            edit = edit.hint_text(within(hint, content));
         }
         let edit = edit
             .layouter(&mut layouter)

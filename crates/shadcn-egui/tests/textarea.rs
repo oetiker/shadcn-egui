@@ -225,6 +225,37 @@ fn a_word_breaks_at_the_content_minimum() {
     }
 }
 
+/// A glyph wider than the content minimum's `M` stays inside the field:
+/// the response is the allocated box, as Chrome clips the glyph inside
+/// the field. Typed text and hint text alike.
+#[test]
+fn a_glyph_wider_than_the_content_minimum_keeps_the_response_in_the_box() {
+    let theme = Theme::vega();
+    for (typed, hint) in [("W", ""), ("WWW", ""), ("", "W")] {
+        let mut text = String::from(typed);
+        let mut start = egui::Pos2::ZERO;
+        let mut narrow = 0.0;
+        let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            start = ui.cursor().min;
+            narrow = common::measure(&theme, egui::Theme::Light, |ui| {
+                let mut m = String::from("M");
+                ui.add(Textarea::new(&mut m).desired_width(0.0))
+            })
+            .width();
+            ui.add(Textarea::new(&mut text).hint_text(hint).desired_width(0.0))
+        });
+        assert_eq!(rect.left(), start.x, "{typed:?}/{hint:?}: {rect:?}");
+        assert_eq!(rect.width(), narrow, "{typed:?}/{hint:?}: {rect:?}");
+        for r in common::rect_shapes(&out) {
+            assert!(
+                r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+                "{typed:?}/{hint:?}: box {:?} outside {rect:?}",
+                r.rect
+            );
+        }
+    }
+}
+
 /// While empty, the field grows to hold its wrapped hint text, as Chrome's
 /// `field-sizing: content` sizes an empty field by its placeholder.
 #[test]

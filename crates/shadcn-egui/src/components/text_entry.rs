@@ -13,7 +13,8 @@ use crate::components::text::{Leading, TextLook};
 use crate::style::{pick, Prop, Recipe, Role, State};
 use crate::{layout, Theme};
 use egui::text_edit::TextEditOutput;
-use egui::{Color32, FontId, Sense, Shape, TextEdit, Ui, Vec2};
+use egui::{Color32, FontId, Galley, Sense, Shape, TextEdit, Ui, Vec2};
+use std::sync::Arc;
 
 /// A text-entry field's resolved frame. Build it with
 /// [`TextEntry::resolve`], size the box from its fields, then
@@ -179,6 +180,21 @@ impl<'a> TextEntry<'a> {
         part_painter(ui, resp.id, &[l], st).set(slot, Shape::Vec(shapes));
         out
     }
+}
+
+/// `galley`, measured at most `width` wide: the text the field shows or
+/// hints. A glyph wider than the content box (a `W` in a field at its
+/// one-`M` content minimum) would widen the `TextEdit` past the box and
+/// move its response outside the allocation; Chrome keeps the field and
+/// clips the glyph inside it. Only the measured rect shrinks: the rows
+/// and the glyphs stay where they were laid out.
+pub(crate) fn within(galley: Arc<Galley>, width: f32) -> Arc<Galley> {
+    if galley.rect.width() <= width {
+        return galley;
+    }
+    let mut fit = (*galley).clone();
+    fit.rect.max.x = fit.rect.min.x + width.max(0.0);
+    Arc::new(fit)
 }
 
 /// The caret as Blink paints it in a text field: 1 css px wide, from the

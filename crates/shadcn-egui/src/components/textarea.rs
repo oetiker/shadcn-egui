@@ -24,7 +24,7 @@
 
 use crate::components::icon_atom::retint;
 use crate::components::text::Leading;
-use crate::components::text_entry::TextEntry;
+use crate::components::text_entry::{within, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::{layout, Theme};
@@ -159,7 +159,7 @@ impl<'t> Textarea<'t> {
                 AtomKind::Text(text) => {
                     let galley = look.layout_colored(ui, text, TextWrapMode::Wrap, wrap, color);
                     hint_height = hint_height.max(galley.size().y);
-                    AtomKind::Text(WidgetText::Galley(galley))
+                    AtomKind::Text(WidgetText::Galley(within(galley, wrap)))
                 }
                 AtomKind::Image(image) => AtomKind::Image(retint(image, color)),
                 other => other,
@@ -171,9 +171,8 @@ impl<'t> Textarea<'t> {
             .max(frame.get(|r| &r.min_height));
 
         let mut layouter = |ui: &Ui, text: &dyn TextBuffer, wrap_width: f32| {
-            look.layout(ui, text.as_str(), TextWrapMode::Wrap, wrap_width)
-                .galley()
-                .clone()
+            let block = look.layout(ui, text.as_str(), TextWrapMode::Wrap, wrap_width);
+            within(block.galley().clone(), wrap_width)
         };
         let mut edit = TextEdit::multiline(self.text);
         if !hint.is_empty() {
