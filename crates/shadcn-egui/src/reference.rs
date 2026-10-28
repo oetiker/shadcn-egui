@@ -19,6 +19,7 @@ use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
+use crate::components::textarea::Textarea;
 use crate::components::tooltip::tooltip;
 use crate::preset::{
     BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, RadiusChoice,
@@ -261,6 +262,8 @@ pub struct GalleryState {
     tab: usize,
     name: String,
     email: String,
+    message: String,
+    message_invalid: String,
     checked: bool,
     switch_on: bool,
     volume: f32,
@@ -285,6 +288,8 @@ impl GalleryState {
             tab: 0,
             name: String::new(),
             email: "ada@example".into(),
+            message: String::new(),
+            message_invalid: String::new(),
             checked: true,
             switch_on: true,
             volume: 50.0,
@@ -645,6 +650,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
             });
             layout::vstack(right, 24.0, |ui| {
                 inputs_group(ui, state);
+                textarea_group(ui, state);
                 controls_group(ui, state);
                 badges_group(ui);
                 tabs_group(ui, state);
@@ -749,6 +755,39 @@ fn inputs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                         .max_width(f32::INFINITY),
                 )
             });
+        },
+    );
+}
+
+/// shadcn-svelte's textarea-demo and textarea-button, and the field's
+/// disabled and invalid states.
+fn textarea_group(ui: &mut egui::Ui, state: &mut GalleryState) {
+    const HINT: &str = "Type your message here.";
+    group(
+        ui,
+        "Textarea",
+        "Multi-line text that grows with its content; disabled; invalid.",
+        |ui| {
+            layout::vstack(ui, 8.0, |ui| {
+                ui.add(
+                    Textarea::new(&mut state.message)
+                        .hint_text(HINT)
+                        .desired_width(f32::INFINITY),
+                );
+                let _ = ui.add(Button::new("Send message"));
+            });
+            ui.add_enabled(
+                false,
+                Textarea::new(&mut String::new())
+                    .hint_text(HINT)
+                    .desired_width(f32::INFINITY),
+            );
+            ui.add(
+                Textarea::new(&mut state.message_invalid)
+                    .hint_text(HINT)
+                    .invalid(true)
+                    .desired_width(f32::INFINITY),
+            );
         },
     );
 }

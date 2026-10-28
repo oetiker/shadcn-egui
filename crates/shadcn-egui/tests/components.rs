@@ -1456,6 +1456,84 @@ fn invalid_input_border_is_destructive() {
     }
 }
 
+/// A word wider than the field stays on one line, as in Chrome's
+/// `<input>`, which scrolls its text sideways and never wraps: the field
+/// keeps its allocated width, and its text is clipped to the field.
+#[test]
+fn a_long_word_stays_on_one_line_in_the_input() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    let mut text = format!("see https://{}", "x".repeat(80));
+    let mut start = egui::Pos2::ZERO;
+    let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        start = ui.cursor().min;
+        ui.add(Input::new(&mut text).max_width(200.0))
+    });
+    assert_eq!(rect.left(), start.x, "{rect:?}");
+    assert_eq!(rect.width(), 200.0, "{rect:?}");
+    let shapes = common::text_shapes(&out);
+    let galley = &shapes.first().expect("the field's text").galley;
+    assert_eq!(galley.rows.len(), 1);
+    assert!(galley.size().x > 200.0, "{:?}", galley.size());
+    for r in common::rect_shapes(&out) {
+        assert!(
+            r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+            "box {:?} outside {rect:?}",
+            r.rect
+        );
+    }
+}
+
+/// A glyph wider than the content minimum's `M` keeps the input's
+/// response at its allocated box (typed text and hint text).
+#[test]
+fn a_glyph_wider_than_the_content_minimum_keeps_the_input_response_in_the_box() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    for (typed, hint) in [("W", ""), ("WWW", ""), ("", "W")] {
+        let mut text = String::from(typed);
+        let mut start = egui::Pos2::ZERO;
+        let mut narrow = 0.0;
+        let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            start = ui.cursor().min;
+            narrow = common::measure(&theme, egui::Theme::Light, |ui| {
+                let mut m = String::from("M");
+                ui.add(Input::new(&mut m).max_width(0.0))
+            })
+            .width();
+            ui.add(Input::new(&mut text).hint(hint).max_width(0.0))
+        });
+        assert_eq!(rect.left(), start.x, "{typed:?}/{hint:?}: {rect:?}");
+        assert_eq!(rect.width(), narrow, "{typed:?}/{hint:?}: {rect:?}");
+        for r in common::rect_shapes(&out) {
+            assert!(
+                r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+                "{typed:?}/{hint:?}: box {:?} outside {rect:?}",
+                r.rect
+            );
+        }
+    }
+}
+
+/// A recipe without a placeholder colour shows the hint in upstream's
+/// `placeholder:text-muted-foreground`, never in an egui colour
+/// (conformance 2.1).
+#[test]
+fn input_hint_without_a_recipe_colour_is_muted() {
+    use shadcn_egui::components::input::{Input, InputVariant};
+    use shadcn_egui::style::{AppVariant, Prop, Role};
+    const PLAIN: AppVariant<InputVariant> = InputVariant::app("plain");
+    let theme = Theme::vega().variant(PLAIN, InputVariant::Default, |r, _| {
+        r.input.text = Prop::default();
+    });
+    let mut text = String::new();
+    let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        ui.add(Input::new(&mut text).hint("Type here").variant(PLAIN))
+    });
+    let want = common::resolved(&theme, egui::Theme::Light).role(Role::MutedForeground);
+    assert_eq!(common::text_colour(&out), want);
+}
+
 /// `Input::id_salt` gives the field an id that does not depend on how many
 /// widgets precede it, so callers can address it from outside.
 #[test]

@@ -19,6 +19,7 @@ use shadcn_egui::components::separator::{Separator, SeparatorVariant};
 use shadcn_egui::components::slider::{Slider, SliderVariant};
 use shadcn_egui::components::switch::{Switch, SwitchVariant};
 use shadcn_egui::components::tabs::{Tabs, TabsVariant};
+use shadcn_egui::components::textarea::{Textarea, TextareaVariant};
 use shadcn_egui::components::tooltip::{Tooltip, TooltipVariant};
 use shadcn_egui::style::{AppVariant, Paint, Role, State};
 use shadcn_egui::Theme;
@@ -42,6 +43,7 @@ const LABEL: AppVariant<LabelVariant> = LabelVariant::app("brand");
 const SEPARATOR: AppVariant<SeparatorVariant> = SeparatorVariant::app("brand");
 const SLIDER: AppVariant<SliderVariant> = SliderVariant::app("brand");
 const SWITCH: AppVariant<SwitchVariant> = SwitchVariant::app("brand");
+const TEXTAREA: AppVariant<TextareaVariant> = TextareaVariant::app("brand");
 
 /// One component: the theme defines its app variant, `ui` draws it, and
 /// `prepare` opens it where it shows only on a pointer action.
@@ -172,6 +174,18 @@ fn cases() -> Vec<Case> {
             prepare: |_| {},
         },
         Case {
+            name: "textarea",
+            theme: |t| {
+                t.variant(TEXTAREA, TextareaVariant::Default, |r, _| {
+                    r.textarea.bg.set(P)
+                })
+            },
+            ui: |ui| {
+                ui.add(Textarea::new(&mut String::from("text")).variant(TEXTAREA));
+            },
+            prepare: |_| {},
+        },
+        Case {
             name: "label",
             theme: |t| t.variant(LABEL, LabelVariant::Default, |r, _| r.label.text.set(P)),
             ui: |ui| {
@@ -258,7 +272,7 @@ fn harness(theme: Theme, ui_fn: impl FnMut(&mut egui::Ui) + 'static) -> Harness<
 #[test]
 fn an_app_variant_reaches_the_painted_colour_of_every_component() {
     let cases = cases();
-    assert_eq!(cases.len(), 14);
+    assert_eq!(cases.len(), 15);
     let mut missing = Vec::new();
     for case in cases {
         let theme = (case.theme)(Theme::vega().color(BRAND, BRAND_RGB, BRAND_RGB));
