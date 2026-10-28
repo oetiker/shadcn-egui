@@ -11,6 +11,17 @@ struct GalleryApp {
     state: GalleryState,
 }
 
+impl GalleryApp {
+    /// The app for `state`, its preset and mode applied before the first
+    /// pass, so the first frame is in the preset's fonts. `gallery_ui`
+    /// applies them again in its first pass, which then changes nothing.
+    fn new(ctx: &egui::Context, state: GalleryState) -> Self {
+        state.preset.apply(ctx);
+        ctx.set_theme(state.mode);
+        Self { state }
+    }
+}
+
 impl eframe::App for GalleryApp {
     // gallery_ui applies the preset itself, only when a picker changed it.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -54,7 +65,7 @@ fn main() -> eframe::Result<()> {
             viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 900.0]),
             ..Default::default()
         },
-        Box::new(move |_cc| Ok(Box::new(GalleryApp { state }))),
+        Box::new(move |cc| Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))),
     )
 }
 
@@ -94,7 +105,7 @@ fn main() {
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(move |_cc| Ok(Box::new(GalleryApp { state }))),
+                Box::new(move |cc| Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))),
             )
             .await;
         match started {

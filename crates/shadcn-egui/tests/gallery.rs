@@ -115,3 +115,35 @@ fn gallery_after_applying_a_code() {
     h.run();
     common::snapshot(&mut h, "gallery_code_b2D0wqNxT_light");
 }
+
+/// The passes of the gallery's first three frames, its preset and mode
+/// applied before the first pass (the `gallery` example's app creator) or
+/// only by `gallery_ui` in its first pass.
+fn first_frames(before: bool) -> Vec<usize> {
+    let ctx = egui::Context::default();
+    let mut state = GalleryState::new(Preset::default(), egui::Theme::Light);
+    if before {
+        state.preset.apply(&ctx);
+        ctx.set_theme(state.mode);
+    }
+    (0..3)
+        .map(|_| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, FULL)),
+                ..Default::default()
+            };
+            let out = ctx.run_ui(input, |ui| gallery_ui(ui, &mut state));
+            out.platform_output.num_completed_passes
+        })
+        .collect()
+}
+
+/// Applied before the first pass, the gallery's first frame is in the
+/// preset's fonts and settles in that frame: the second frame takes one
+/// pass. Applied only in the first pass, the fonts arrive a pass late and
+/// the second frame still redoes a pass.
+#[test]
+fn the_gallery_applied_before_the_first_pass_settles_in_its_first_frame() {
+    assert_eq!(first_frames(true)[1..], [1, 1]);
+    assert_eq!(first_frames(false)[1..], [2, 1]);
+}

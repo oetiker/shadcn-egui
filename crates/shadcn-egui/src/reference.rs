@@ -305,8 +305,8 @@ impl GalleryState {
     }
 
     /// Apply the preset when it changed since the last apply, never every
-    /// frame (a preset logs its fallback warnings per apply), and switch
-    /// the context's mode when the mode changed.
+    /// frame (each apply rebuilds the theme), and switch the context's mode
+    /// when the mode changed.
     fn apply_if_changed(&mut self, ctx: &egui::Context) {
         let last = self.applied;
         if last.map(|(p, _)| p) != Some(self.preset) {
@@ -340,9 +340,12 @@ impl Default for GalleryState {
 
 /// Render the gallery into the given root `Ui`: a preset bar on top (a
 /// preset code field and one select per preset part, and the mode) and every
-/// component below it in a scroll area. It applies `state.preset` itself,
-/// on the first pass and whenever a picker changed it; the caller applies
-/// no theme. Fonts and icon libraries whose feature is off are not offered.
+/// component below it in a scroll area. It applies `state.preset` and
+/// `state.mode` itself, on its first pass and whenever a picker changed
+/// them. Applied in the first pass, the preset's fonts arrive a pass late
+/// and the first frame shows the layout unsettled; an app applies both
+/// before the first pass too, as the `gallery` example does. Fonts and
+/// icon libraries whose feature is off are not offered.
 pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     // Apply before anything reads the theme.
     state.apply_if_changed(ui.ctx());
