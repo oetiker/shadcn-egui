@@ -197,7 +197,7 @@ impl<'a> Card<'a> {
         let bounded = ui.available_width().is_finite();
         let fill = layout::capped_width(ui, f32::INFINITY, side_l + side_r);
         let outer_w = if bounded { fill } else { f32::INFINITY };
-        let (origin, mut frame) = crate::layout::begin_item(ui);
+        let (origin, mut frame) = crate::layout::begin_item(ui, fill);
         let back = ui.painter().add(Shape::Noop);
         // Every style's card is `overflow-hidden`: content wider than a
         // bounded card is cut at its box (no style gives it a border, so

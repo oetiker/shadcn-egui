@@ -1128,6 +1128,35 @@ fn card_sm_snapshot() {
     });
 }
 
+/// A card in a `layout::wrap_row` is a flex item as wide as its content:
+/// one that does not fit the rest of the line goes onto the next line
+/// (porting rule 6), never past the row's end.
+#[test]
+fn card_wraps_in_a_wrap_row() {
+    let ctx = egui::Context::default();
+    let (mut button, mut body) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+    for _ in 0..3 {
+        let _ = common::pass(common::Loop::RunUi, &ctx, vec![], |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.set_max_width(448.0);
+            shadcn_egui::layout::wrap_row(ui, 8.0, |ui| {
+                button = ui.add(Button::new("Before")).rect;
+                body = Card::new().show(ui, |ui| {
+                    card_content(ui, |ui| {
+                        ui.label("A card body that is far too wide for the rest of the line")
+                    })
+                    .rect
+                });
+            });
+        });
+    }
+    // vega's card content is `px-6`: the card is the body plus 48.
+    let card_w = body.width() + 48.0;
+    assert!(card_w > 448.0 - button.width() - 8.0, "{body:?}");
+    assert_eq!(body.left() - 24.0, button.left(), "{button:?} {body:?}");
+    assert!(body.top() >= button.bottom() + 8.0, "{button:?} {body:?}");
+}
+
 /// The card's node holds its header, content and footer, as upstream's
 /// card `div` holds its children.
 #[test]

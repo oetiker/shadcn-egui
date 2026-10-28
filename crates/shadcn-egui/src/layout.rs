@@ -1281,16 +1281,21 @@ pub fn allocate_item_space(ui: &mut Ui, size: egui::Vec2) -> (egui::Id, egui::Re
     ui.allocate_space(size)
 }
 
-/// Begins a container (an alert, a card): a box that draws its content
-/// before it knows its height and allocates its box with [`end_item`]
-/// after it. Returns the box's top left corner and the container's frame,
-/// the `Ui` its content `Ui`s are made from.
+/// Begins a container (an alert, a card): a box `width` wide that draws
+/// its content before it knows its height and allocates its box with
+/// [`end_item`] after it. Returns the box's top left corner and the
+/// container's frame, the `Ui` its content `Ui`s are made from.
+///
+/// In a [`wrap_row`] the container wraps from its width before its
+/// content is drawn, as [`allocate_item`] wraps a widget (rule 6 of the
+/// porting standard).
 ///
 /// The frame is the container's accessible node, made before its
 /// content's, so that the content is inside it, as upstream's children
 /// are inside its `div` (egui gives a node the nearest ancestor that has
 /// one when the node is made).
-pub(crate) fn begin_item(ui: &mut Ui) -> (egui::Pos2, Ui) {
+pub(crate) fn begin_item(ui: &mut Ui, width: f32) -> (egui::Pos2, Ui) {
+    wrap_item(ui, width);
     let origin = ui.cursor().min;
     let frame = ui.new_child(egui::UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
     ui.ctx().accesskit_node_builder(frame.unique_id(), |_| {});

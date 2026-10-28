@@ -76,6 +76,24 @@ fn fills_the_width_and_insets_the_text() {
     assert_eq!(text.top() - alert.top(), 1.0 + 12.0);
 }
 
+/// `w-full` in a `layout::wrap_row`: a flex item as wide as the line goes
+/// onto a line of its own (porting rule 6), never past the row's end.
+#[test]
+fn wraps_to_its_own_line_in_a_wrap_row() {
+    let t = vega();
+    let (button, alert) = settle(&t, 900.0, |ui| {
+        ui.set_max_width(448.0);
+        shadcn_egui::layout::wrap_row(ui, 8.0, |ui| {
+            let b = ui.add(Button::new("Before")).rect;
+            let a = ui.add(Alert::new().title("Alert in a row")).rect;
+            (b, a)
+        })
+    });
+    assert_eq!(alert.left(), button.left(), "{button:?} {alert:?}");
+    assert!(alert.top() >= button.bottom() + 8.0, "{button:?} {alert:?}");
+    assert_eq!(alert.width(), 448.0);
+}
+
 /// In unbounded room the alert is as wide as its content plus its padding,
 /// never infinite.
 #[test]
