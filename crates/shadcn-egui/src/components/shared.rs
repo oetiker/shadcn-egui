@@ -1540,8 +1540,30 @@ fn hit_areas_id(ctx: &Context) -> Id {
 /// widget at `rect` that takes the pointer with `sense`, but no part in
 /// the layout of a crate row (its height, a `self-stretch` item's
 /// height), as an absolute box takes none in a flex row (conformance
-/// 3.3).
-pub(crate) fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
+/// 3.3). Allocate the control's box first (with
+/// [`layout::allocate_item`](crate::layout::allocate_item)), then take
+/// the hit area around it and read clicks, drags and hover from the
+/// returned response. An `egui::Ui::interact` on the same rect would
+/// make a crate row as high as the hit area.
+///
+/// ```
+/// # egui::__run_test_ui(|ui| {
+/// use shadcn_egui::components::shared::hit_area;
+/// shadcn_egui::layout::row(ui, 8.0, |ui| {
+///     ui.label("Accept");
+///     // A 16 px box with `after:-inset-x-3 after:-inset-y-2`.
+///     let (rect, base) =
+///         shadcn_egui::layout::allocate_item(ui, egui::vec2(16.0, 16.0), egui::Sense::hover());
+///     let hit = rect.expand2(egui::vec2(12.0, 8.0));
+///     let resp = hit_area(ui, hit, base.id.with("hit"), egui::Sense::click());
+///     if resp.clicked() {
+///         // toggle the app's value
+///     }
+/// });
+/// # });
+/// ```
+#[must_use]
+pub fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
     let pass = ui.ctx().cumulative_pass_nr();
     let key = hit_areas_id(ui.ctx());
     ui.data_mut(|d| {

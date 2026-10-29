@@ -2712,6 +2712,42 @@ fn a_row_of_a_slider_is_as_high_as_the_slider() {
     }
 }
 
+/// An app's own control, built on the public API only, keeps a crate row
+/// content-high with a hit target larger than its box
+/// (`after:absolute after:-inset-*`): the row and a stretch item beside
+/// the control are as high as the label or the box, not as the target.
+#[test]
+fn an_app_control_with_a_hit_area_keeps_a_crate_row_content_high() {
+    use shadcn_egui::components::{label::label, shared::hit_area};
+    let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
+        let mut items = Vec::new();
+        let row = ui
+            .scope(|ui| {
+                layout::row(ui, 8.0, |ui| {
+                    items.push(label(ui, "Email").rect);
+                    let (rect, base) =
+                        layout::allocate_item(ui, egui::vec2(16.0, 16.0), egui::Sense::hover());
+                    let hit = rect.expand2(egui::vec2(12.0, 8.0));
+                    let resp = hit_area(ui, hit, base.id.with("hit"), egui::Sense::click());
+                    items.extend([rect, resp.rect, stretch_rule(ui)]);
+                })
+            })
+            .response
+            .rect;
+        out.push(row);
+        out.extend(items);
+    });
+    let case = format!("{r:?}");
+    let [row, label, control, hit, rule] = r[..] else {
+        panic!("{case}")
+    };
+    assert_eq!(hit.height(), control.height() + 16.0, "{case}");
+    let content = label.height().max(control.height());
+    assert_eq!(row.height(), content, "{case}");
+    assert_eq!(rule.height(), content, "{case}");
+    assert_eq!(passes, 1, "{case}");
+}
+
 /// The hit areas a crate row skips are kept per viewport: an immediate
 /// viewport shown inside a row, with its own checkbox, leaves the parent
 /// row's checkbox target out of the row's height.

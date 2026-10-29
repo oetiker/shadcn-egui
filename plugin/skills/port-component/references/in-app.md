@@ -21,7 +21,10 @@ the crate.
   `RecipeBox` for a part's fill, border, shadow, ring and outline,
   `opacity`, `part_opacity` and `part_painter` for a part's fade, `part_ui`
   and `content_ui` for a crate part or caller content drawn through egui,
-  `widget_info_with_role` for an accessible role egui's `WidgetType` lacks.
+  `widget_info_with_role` for an accessible role egui's `WidgetType` lacks,
+  `hit_area` for a hit target larger than the part's box
+  (`after:absolute after:-inset-*`, a thumb), which leaves a crate row as
+  high as the box.
 - `shadcn_egui::components::text::{TextLook, content_scope, Leading}` for
   every piece of text a widget lays out or paints:
   `TextLook::resolve(ui, &recipes, state)` resolves size, weight, colour

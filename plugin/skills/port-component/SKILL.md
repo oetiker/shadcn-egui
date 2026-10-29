@@ -96,7 +96,11 @@ drawing code holds no style value of its own.
    gives that line its own height. A content-sized widget (no width or
    `w-fit`) allocates with `layout::allocate_item_space` and senses its
    rect with `ui.interact`: in a justified layout (`ui.add_sized`) it
-   then takes the layout's width, as egui's `Button` does. A breakpoint reads the window through
+   then takes the layout's width, as egui's `Button` does. A hit target
+   larger than the box (`after:absolute after:-inset-*`, a checkbox, a
+   slider thumb) is sensed with `shared::hit_area(ui, rect, id, sense)`
+   after the box is allocated, never with `ui.interact`, so a crate row
+   stays as high as the box. A breakpoint reads the window through
    `layout::window_at_least` (`sm:`, `md:`; `theme.state` sets `SM` and
    `MD`) or its container through `layout::container_at_least`. Resolve
    geometry without interaction states: the size does not change on hover.
