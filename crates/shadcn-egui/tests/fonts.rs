@@ -713,3 +713,96 @@ fn a_mono_body_lists_its_face_once_in_monospace() {
         reapply_over_current(&ctx, &mono);
     }
 }
+
+/// Every family a theme installs (body and heading, every weight,
+/// Monospace for a mono body).
+fn theme_families() -> Vec<FontFamily> {
+    let mut all = vec![FontFamily::Proportional, FontFamily::Monospace];
+    all.extend(
+        [
+            FAMILY_MEDIUM,
+            FAMILY_SEMIBOLD,
+            FAMILY_BOLD,
+            FAMILY_HEADING,
+            FAMILY_HEADING_MEDIUM,
+            FAMILY_HEADING_SEMIBOLD,
+            FAMILY_HEADING_BOLD,
+        ]
+        .map(|n| FontFamily::Name(n.into())),
+    );
+    all
+}
+
+/// Whether `c` maps to a real glyph in `family` of `ctx`, not to the
+/// replacement glyph.
+fn has_glyph(ctx: &egui::Context, family: &FontFamily, c: char) -> bool {
+    ctx.fonts_mut(|f| f.has_glyph(&egui::FontId::new(14.0, family.clone()), c))
+}
+
+/// A glyph the theme's font lacks falls back to Inter, as Chrome falls
+/// back to another font: the Kbd keys ⌥ and ⌃, which Inter has and
+/// Oxanium lacks, draw in every family of an Oxanium theme, body and
+/// heading alike, and in Monospace for a mono body; a reinstall adds the
+/// fallback no second time.
+#[test]
+fn a_glyph_the_font_lacks_falls_back_to_inter() {
+    let mono: &'static shadcn_egui::FontFiles = Box::leak(Box::new(shadcn_egui::FontFiles {
+        kind: FontKind::Mono,
+        ..OXANIUM.clone()
+    }));
+    let themes = [
+        ("oxanium", Theme::vega().fonts(OXANIUM, None)),
+        (
+            "inter + oxanium heading",
+            Theme::vega().fonts(&shadcn_egui_font_inter::FONT, Some(OXANIUM)),
+        ),
+        ("mono oxanium", Theme::vega().fonts(mono, Some(OXANIUM))),
+    ];
+    for (name, theme) in themes {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+        for family in theme_families() {
+            if family == FontFamily::Monospace && name != "mono oxanium" {
+                continue;
+            }
+            for c in ['⌥', '⌃'] {
+                assert!(has_glyph(&ctx, &family, c), "{name} {family:?}: {c}");
+            }
+        }
+        // A reinstall over the current fonts lists the fallback once.
+        let first = ctx.fonts(|f| f.definitions().clone());
+        let again = reapply_over_current(&ctx, &theme);
+        assert_eq!(again.families, first.families, "{name}");
+    }
+}
+
+/// Preset b2D0wqNxT (luma, geist) draws the Kbd keys ⌥ and ⌃ through the
+/// Inter fallback; a mono Geist body does so in Monospace too.
+#[cfg(all(feature = "font-geist", feature = "font-geist-mono"))]
+#[test]
+fn geist_draws_the_option_and_control_keys() {
+    let themes = [
+        (
+            false,
+            Theme::vega().fonts(&shadcn_egui_font_geist::FONT, None),
+        ),
+        (
+            true,
+            Theme::vega().fonts(&shadcn_egui_font_geist_mono::FONT, None),
+        ),
+    ];
+    for (mono, theme) in themes {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+        for family in theme_families() {
+            if family == FontFamily::Monospace && !mono {
+                continue;
+            }
+            for c in ['⌥', '⌃'] {
+                assert!(has_glyph(&ctx, &family, c), "mono {mono} {family:?}: {c}");
+            }
+        }
+    }
+}

@@ -699,9 +699,27 @@ fn face_key(role: &str, weight: u16) -> String {
     format!("shadcn-{role}-{weight}")
 }
 
+/// One face of `files` at weight `w`, with its `wght` coordinate and
+/// baseline correction.
+fn face_data(files: &FontFiles, w: u16) -> Arc<FontData> {
+    let face = files.face(w);
+    let mut tweak = egui::FontTweak {
+        y_offset_factor: files.y_offset_factor,
+        ..Default::default()
+    };
+    if let Some(v) = face.wght {
+        tweak.coords = VariationCoords::new([(b"wght", v)]);
+    }
+    Arc::new(FontData::from_static(face.data).tweak(tweak))
+}
+
 /// `base` plus the theme's fonts: one registration per weight with the
-/// `wght` coordinate, each family followed by `base`'s Proportional list so
-/// glyphs the font lacks (emoji, CJK, symbols) still render. A theme's
+/// `wght` coordinate, each family followed by Inter at its weight (a face
+/// `shadcn-fallback-{weight}`, unless the family's font is Inter) and then
+/// `base`'s Proportional list, so a glyph the font lacks takes Inter's, as
+/// Chrome takes another font's (P4), and glyphs Inter lacks too (emoji,
+/// CJK) still render. A mono body's face in Monospace is followed by
+/// Inter's regular face the same way. A theme's
 /// faces and families already in `base` (the context's current
 /// definitions) are replaced, so a reinstall neither stacks them nor keeps
 /// an earlier theme's. Only the exact keys and families a theme installs
@@ -717,22 +735,36 @@ fn font_definitions(
     mono_installed: bool,
 ) -> FontDefinitions {
     let inherit = fonts.heading == fonts.body;
-    let theme_keys: Vec<String> = ["body", "heading"]
+    let theme_keys: Vec<String> = ["body", "heading", "fallback"]
         .into_iter()
         .flat_map(|role| WEIGHTS.map(|w| face_key(role, w)))
         .collect();
     let is_theme_key = |key: &str| theme_keys.iter().any(|k| k == key);
-    // An inherited heading registers no faces of its own.
-    let defined = |key: &str| !inherit || key.starts_with("shadcn-body-");
+    let inter = &shadcn_egui_font_inter::FONT;
+    let needs_fallback = |files: &FontFiles| files.name != inter.name;
+    let fallback_used = needs_fallback(fonts.body) || needs_fallback(fonts.heading);
+    // An inherited heading registers no faces of its own, and only a font
+    // other than Inter registers Inter's faces as its fallback.
+    let defined = |key: &str| {
+        if key.starts_with("shadcn-fallback-") {
+            fallback_used
+        } else {
+            !inherit || key.starts_with("shadcn-body-")
+        }
+    };
     base.font_data.retain(|key, _| !is_theme_key(key));
     let is_theme_family =
         |name: &str| BODY_FAMILIES.contains(&Some(name)) || HEADING_FAMILIES.contains(&name);
     base.families
         .retain(|family, _| !matches!(family, FontFamily::Name(name) if is_theme_family(name)));
     let mono_key = face_key("body", WEIGHTS[0]);
+    let mono_fallback = face_key("fallback", WEIGHTS[0]);
     if let Some(mono) = base.families.get_mut(&FontFamily::Monospace) {
         if mono_installed && mono.first() == Some(&mono_key) {
             mono.remove(0);
+            if mono.first() == Some(&mono_fallback) {
+                mono.remove(0);
+            }
         }
     }
     for list in base.families.values_mut() {
@@ -753,18 +785,7 @@ fn font_definitions(
         for (i, w) in WEIGHTS.into_iter().enumerate() {
             let key = face_key(data_role, w);
             if data_role == role {
-                let face = files.face(w);
-                let mut tweak = egui::FontTweak {
-                    y_offset_factor: files.y_offset_factor,
-                    ..Default::default()
-                };
-                if let Some(v) = face.wght {
-                    tweak.coords = VariationCoords::new([(b"wght", v)]);
-                }
-                base.font_data.insert(
-                    key.clone(),
-                    Arc::new(FontData::from_static(face.data).tweak(tweak)),
-                );
+                base.font_data.insert(key.clone(), face_data(files, w));
             }
             let family = match (role, i) {
                 ("body", 0) => FontFamily::Proportional,
@@ -774,14 +795,25 @@ fn font_definitions(
                 _ => FontFamily::Name(HEADING_FAMILIES[i].into()),
             };
             let mut list = vec![key];
+            if needs_fallback(files) {
+                let inter_key = face_key("fallback", w);
+                base.font_data
+                    .entry(inter_key.clone())
+                    .or_insert_with(|| face_data(inter, w));
+                list.push(inter_key);
+            }
             list.extend(fallback.iter().cloned());
             base.families.insert(family, list);
         }
     }
     if fonts.body.kind == FontKind::Mono {
         let mono = base.families.entry(FontFamily::Monospace).or_default();
-        mono.retain(|key| *key != mono_key);
-        mono.insert(0, mono_key);
+        mono.retain(|key| *key != mono_key && *key != mono_fallback);
+        let mut lead = vec![mono_key];
+        if needs_fallback(fonts.body) {
+            lead.push(mono_fallback);
+        }
+        mono.splice(0..0, lead);
     }
     base
 }

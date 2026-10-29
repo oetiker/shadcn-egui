@@ -50,6 +50,7 @@ are recorded here. The format is based on
 - `components::text::content_scope` hands a container's text size, line height, colour, font weight, letter spacing and upper case to the crate text inside it; text that sets its own keeps it.
 
 ### Fixed
+- A character the theme's font lacks now draws in Inter, as the browser falls back to another font: with Geist (preset b2D0wqNxT) the Kbd keys ⌥ and ⌃ showed as empty boxes. This holds for body and heading text at every weight, and for Monospace text when the body font is a mono font.
 - A theme or preset with other fonts, applied while the app draws (a preset picker, a theme switch in app code), now redraws the window in its fonts right away; before, the screen kept the old fonts until the next mouse move or key press. Applied before the first frame (in eframe's app creator, on `cc.egui_ctx`), the first frame already shows them.
 - `Preset::apply` logs each fallback warning (such as `shadcn-egui: font "geist" needs the "font-geist" feature; using "inter"`) once per egui context; before, every apply of the same preset logged the same lines again. `Preset::theme` still logs them on every call.
 - The gallery example starts in its preset's fonts; before, its first frame showed the labels of the "Checkbox, Switch, Slider and Select" group on two lines, which made the group jump in height on start-up.
