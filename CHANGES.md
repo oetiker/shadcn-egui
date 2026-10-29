@@ -7,6 +7,13 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+
+### Changed
+
+### Fixed
+
+## 0.7.0 - 2026-10-29
+### New
 - `ui.add(Progress::new(0.4))` draws a shadcn progress bar, or `Progress::from_value(value, max)` with shadcn's `value` and `max`; `progress(ui, fraction)` is the shortcut. It fills its column at the style's height, takes `.desired_width(..)` and `.variant(..)`, and a new value slides to its place over 150 ms as on the shadcn page.
 - `ui.add(Textarea::new(&mut text))` draws shadcn's multi-line text field, also as `textarea(ui, &mut text)`, with `.hint_text(..)` for the placeholder, `.invalid(..)`, `.desired_width(..)` and `.variant(..)`; `.show(ui)` returns egui's `TextEditOutput`. It grows with its text from the style's minimum height and shows no resize handle; Enter starts a new line and Tab moves on to the next field, as in the browser.
 - Alert: `ui.add(Alert::new().icon(..).title(..).description(..))` shows shadcn's alert, with `.variant(AlertVariant::Destructive)`, and `Alert::new().show(ui, |ui| ..)` takes content of its own, with `alert_title`, `alert_description` and `alert_action` (a button or other widgets in the alert's top right corner); your own widgets in the closure take the description's place and look (muted text, stacked with no gap) and come before `alert_action`. Screen readers announce it as an alert.
