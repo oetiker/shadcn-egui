@@ -11,7 +11,7 @@ maia, lyra, mira, luma, rhea), their colour themes, fonts, icon sets and
 presets, and components drawn as plain egui widgets. It works with any egui
 backend (eframe, egui-winit, glow, wgpu).
 
-![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.6.0/docs/gallery-screen.png)
+![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.7.0/docs/gallery-screen.png)
 
 [Try the gallery in your browser](https://oetiker.github.io/shadcn-egui/):
 every component under the preset pickers, with all fonts and icon sets. The
@@ -77,7 +77,7 @@ Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
 Tabs, with a toolbar that switches style, mode and radius. The image shows
 it at a desktop width (1280 px) and at a phone width (390 px).
 
-![shadcn-egui settings screen at 1280 px and at 390 px wide](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.6.0/docs/settings-screen.png)
+![shadcn-egui settings screen at 1280 px and at 390 px wide](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.7.0/docs/settings-screen.png)
 
 ## Features
 

@@ -6,7 +6,7 @@ members = ["crates/*"]
 exclude = ["tools"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.92"
 license = "MIT"
@@ -20,37 +20,37 @@ log = "0.4"
 # location and GPOS kerning, which egui does not apply. Pinned to the
 # version egui's epaint uses, so no second copy enters the build.
 skrifa = { version = "=0.40.0", default-features = false, features = ["std"] }
-shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.6.0" }
+shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.7.0" }
 # BEGIN fontgen
-shadcn-egui-font-inter = { path = "crates/shadcn-egui-font-inter", version = "0.6.0" }
-shadcn-egui-font-noto-sans = { path = "crates/shadcn-egui-font-noto-sans", version = "0.6.0" }
-shadcn-egui-font-nunito-sans = { path = "crates/shadcn-egui-font-nunito-sans", version = "0.6.0" }
-shadcn-egui-font-figtree = { path = "crates/shadcn-egui-font-figtree", version = "0.6.0" }
-shadcn-egui-font-roboto = { path = "crates/shadcn-egui-font-roboto", version = "0.6.0" }
-shadcn-egui-font-raleway = { path = "crates/shadcn-egui-font-raleway", version = "0.6.0" }
-shadcn-egui-font-dm-sans = { path = "crates/shadcn-egui-font-dm-sans", version = "0.6.0" }
-shadcn-egui-font-public-sans = { path = "crates/shadcn-egui-font-public-sans", version = "0.6.0" }
-shadcn-egui-font-outfit = { path = "crates/shadcn-egui-font-outfit", version = "0.6.0" }
-shadcn-egui-font-jetbrains-mono = { path = "crates/shadcn-egui-font-jetbrains-mono", version = "0.6.0" }
-shadcn-egui-font-geist = { path = "crates/shadcn-egui-font-geist", version = "0.6.0" }
-shadcn-egui-font-geist-mono = { path = "crates/shadcn-egui-font-geist-mono", version = "0.6.0" }
-shadcn-egui-font-lora = { path = "crates/shadcn-egui-font-lora", version = "0.6.0" }
-shadcn-egui-font-merriweather = { path = "crates/shadcn-egui-font-merriweather", version = "0.6.0" }
-shadcn-egui-font-playfair-display = { path = "crates/shadcn-egui-font-playfair-display", version = "0.6.0" }
-shadcn-egui-font-noto-serif = { path = "crates/shadcn-egui-font-noto-serif", version = "0.6.0" }
-shadcn-egui-font-roboto-slab = { path = "crates/shadcn-egui-font-roboto-slab", version = "0.6.0" }
-shadcn-egui-font-oxanium = { path = "crates/shadcn-egui-font-oxanium", version = "0.6.0" }
-shadcn-egui-font-manrope = { path = "crates/shadcn-egui-font-manrope", version = "0.6.0" }
-shadcn-egui-font-space-grotesk = { path = "crates/shadcn-egui-font-space-grotesk", version = "0.6.0" }
-shadcn-egui-font-montserrat = { path = "crates/shadcn-egui-font-montserrat", version = "0.6.0" }
-shadcn-egui-font-ibm-plex-sans = { path = "crates/shadcn-egui-font-ibm-plex-sans", version = "0.6.0" }
-shadcn-egui-font-source-sans-3 = { path = "crates/shadcn-egui-font-source-sans-3", version = "0.6.0" }
-shadcn-egui-font-instrument-sans = { path = "crates/shadcn-egui-font-instrument-sans", version = "0.6.0" }
-shadcn-egui-font-eb-garamond = { path = "crates/shadcn-egui-font-eb-garamond", version = "0.6.0" }
-shadcn-egui-font-instrument-serif = { path = "crates/shadcn-egui-font-instrument-serif", version = "0.6.0" }
+shadcn-egui-font-inter = { path = "crates/shadcn-egui-font-inter", version = "0.7.0" }
+shadcn-egui-font-noto-sans = { path = "crates/shadcn-egui-font-noto-sans", version = "0.7.0" }
+shadcn-egui-font-nunito-sans = { path = "crates/shadcn-egui-font-nunito-sans", version = "0.7.0" }
+shadcn-egui-font-figtree = { path = "crates/shadcn-egui-font-figtree", version = "0.7.0" }
+shadcn-egui-font-roboto = { path = "crates/shadcn-egui-font-roboto", version = "0.7.0" }
+shadcn-egui-font-raleway = { path = "crates/shadcn-egui-font-raleway", version = "0.7.0" }
+shadcn-egui-font-dm-sans = { path = "crates/shadcn-egui-font-dm-sans", version = "0.7.0" }
+shadcn-egui-font-public-sans = { path = "crates/shadcn-egui-font-public-sans", version = "0.7.0" }
+shadcn-egui-font-outfit = { path = "crates/shadcn-egui-font-outfit", version = "0.7.0" }
+shadcn-egui-font-jetbrains-mono = { path = "crates/shadcn-egui-font-jetbrains-mono", version = "0.7.0" }
+shadcn-egui-font-geist = { path = "crates/shadcn-egui-font-geist", version = "0.7.0" }
+shadcn-egui-font-geist-mono = { path = "crates/shadcn-egui-font-geist-mono", version = "0.7.0" }
+shadcn-egui-font-lora = { path = "crates/shadcn-egui-font-lora", version = "0.7.0" }
+shadcn-egui-font-merriweather = { path = "crates/shadcn-egui-font-merriweather", version = "0.7.0" }
+shadcn-egui-font-playfair-display = { path = "crates/shadcn-egui-font-playfair-display", version = "0.7.0" }
+shadcn-egui-font-noto-serif = { path = "crates/shadcn-egui-font-noto-serif", version = "0.7.0" }
+shadcn-egui-font-roboto-slab = { path = "crates/shadcn-egui-font-roboto-slab", version = "0.7.0" }
+shadcn-egui-font-oxanium = { path = "crates/shadcn-egui-font-oxanium", version = "0.7.0" }
+shadcn-egui-font-manrope = { path = "crates/shadcn-egui-font-manrope", version = "0.7.0" }
+shadcn-egui-font-space-grotesk = { path = "crates/shadcn-egui-font-space-grotesk", version = "0.7.0" }
+shadcn-egui-font-montserrat = { path = "crates/shadcn-egui-font-montserrat", version = "0.7.0" }
+shadcn-egui-font-ibm-plex-sans = { path = "crates/shadcn-egui-font-ibm-plex-sans", version = "0.7.0" }
+shadcn-egui-font-source-sans-3 = { path = "crates/shadcn-egui-font-source-sans-3", version = "0.7.0" }
+shadcn-egui-font-instrument-sans = { path = "crates/shadcn-egui-font-instrument-sans", version = "0.7.0" }
+shadcn-egui-font-eb-garamond = { path = "crates/shadcn-egui-font-eb-garamond", version = "0.7.0" }
+shadcn-egui-font-instrument-serif = { path = "crates/shadcn-egui-font-instrument-serif", version = "0.7.0" }
 # END fontgen
-shadcn-egui-icons-lucide = { path = "crates/shadcn-egui-icons-lucide", version = "0.6.0" }
-shadcn-egui-icons-tabler = { path = "crates/shadcn-egui-icons-tabler", version = "0.6.0" }
-shadcn-egui-icons-phosphor = { path = "crates/shadcn-egui-icons-phosphor", version = "0.6.0" }
-shadcn-egui-icons-remixicon = { path = "crates/shadcn-egui-icons-remixicon", version = "0.6.0" }
-shadcn-egui-icons-hugeicons = { path = "crates/shadcn-egui-icons-hugeicons", version = "0.6.0" }
+shadcn-egui-icons-lucide = { path = "crates/shadcn-egui-icons-lucide", version = "0.7.0" }
+shadcn-egui-icons-tabler = { path = "crates/shadcn-egui-icons-tabler", version = "0.7.0" }
+shadcn-egui-icons-phosphor = { path = "crates/shadcn-egui-icons-phosphor", version = "0.7.0" }
+shadcn-egui-icons-remixicon = { path = "crates/shadcn-egui-icons-remixicon", version = "0.7.0" }
+shadcn-egui-icons-hugeicons = { path = "crates/shadcn-egui-icons-hugeicons", version = "0.7.0" }
