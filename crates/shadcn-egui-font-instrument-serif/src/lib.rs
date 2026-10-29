@@ -13,6 +13,6 @@ pub static FONT: FontFiles = FontFiles {
         semibold: None,
         bold: None,
     },
-    y_offset_factor: 0.07,
+    y_offset_factor: 0.0,
     license: include_str!("../LICENSE-FONT.txt"),
 };

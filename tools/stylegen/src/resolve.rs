@@ -4,15 +4,15 @@
 use crate::class::split;
 use crate::model::{Field, Value};
 use crate::utility::{utility, U};
-use crate::variant::{class_variants, rank, Skip};
+use crate::variant::{class_variants, rank, ChildSel, Skip};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Decl {
     pub field: Field,
     pub value: Value,
-    pub all: u32,
-    pub none: u32,
+    pub all: u128,
+    pub none: u128,
     /// Cascade rank: important, specificity, Tailwind variant order (see
     /// `variant.rs`).
     pub rank: u128,
@@ -25,14 +25,31 @@ pub struct Marker {
     pub decls: Vec<Decl>,
     /// Decls of the part's `after:` pseudo-element.
     pub after: Vec<Decl>,
+    /// Decls of caller content without a crate part (`*:` with no crate
+    /// child to take it): the part's `_child` recipe.
+    pub child: Vec<Decl>,
+    /// Decls a child target moves to another part, before routing.
+    pub moved: Vec<Moved>,
     pub ignored: Vec<(String, &'static str)>,
     pub unsupported: Vec<(String, String)>,
+    /// One line per class moved to or from this part (`parts` routes them).
+    pub routed: Vec<String>,
+}
+
+/// A decl of a child-target class, before [`route`] gives it its part.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Moved {
+    pub raw: String,
+    pub child: ChildSel,
+    /// The decl lands on the child's `after:` pseudo-element.
+    pub after: bool,
+    pub decl: Decl,
 }
 
 #[derive(Clone, Debug)]
 pub struct VarDef {
-    pub all: u32,
-    pub none: u32,
+    pub all: u128,
+    pub none: u128,
     /// The defining class's variants and `!important` flag, for the rank
     /// of the rules that use the variable.
     pub variants: Vec<String>,
@@ -64,8 +81,21 @@ pub fn collect_vars(css: &[(String, Vec<String>)]) -> Vars {
     vars
 }
 
+/// Why a `line-clamp-N` under a display class clamps nothing.
+pub const CLAMP_CANCELLED: &str = "line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text";
+/// Why a `line-clamp-N` that Chrome applies is not translated.
+pub const CLAMP_EFFECTIVE: &str =
+    "line clamp: the crate does not clamp lines yet (no ported part has one)";
+
 pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     let mut m = Marker::default();
+    type Show = (String, &'static str, u128, u128, u128, usize);
+    let mut shows: Vec<Show> = Vec::new();
+    // Line clamps and display classes, by target and variants: a display
+    // class of the same target and at least the clamp's rank cancels it.
+    type Target = (Option<ChildSel>, u128, u128, u128);
+    let mut clamps: Vec<(String, Target)> = Vec::new();
+    let mut displays: Vec<Target> = Vec::new();
     for (idx, raw) in classes.iter().enumerate() {
         let c = split(raw);
         let v = match class_variants(&c) {
@@ -79,31 +109,43 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                 continue;
             }
         };
+        let set = |list: Vec<(Field, Value)>, after: bool, m: &mut Marker| {
+            for (field, value) in list {
+                let decl = Decl {
+                    field,
+                    value,
+                    all: v.all,
+                    none: v.none,
+                    rank: v.rank,
+                    idx,
+                };
+                match (&v.child, after) {
+                    (Some(child), _) => m.moved.push(Moved {
+                        raw: raw.clone(),
+                        child: child.clone(),
+                        after,
+                        decl,
+                    }),
+                    (None, false) => m.decls.push(decl),
+                    (None, true) => m.after.push(decl),
+                }
+            }
+        };
         match utility(&c.utility, v.pseudo) {
-            U::Set(list) => {
-                for (field, value) in list {
-                    m.decls.push(Decl {
-                        field,
-                        value,
-                        all: v.all,
-                        none: v.none,
-                        rank: v.rank,
-                        idx,
-                    });
+            U::Set(list) => set(list, false, &mut m),
+            U::After(list) => set(list, true, &mut m),
+            U::Clamp(_) => clamps.push((raw.clone(), (v.child.clone(), v.all, v.none, v.rank))),
+            _ if v.child.is_some() => match utility(&c.utility, v.pseudo) {
+                U::Ignore(why) => m.ignored.push((raw.clone(), why)),
+                U::Show(why) => {
+                    displays.push((v.child.clone(), v.all, v.none, v.rank));
+                    m.ignored.push((raw.clone(), why));
                 }
-            }
-            U::After(list) => {
-                for (field, value) in list {
-                    m.after.push(Decl {
-                        field,
-                        value,
-                        all: v.all,
-                        none: v.none,
-                        rank: v.rank,
-                        idx,
-                    });
-                }
-            }
+                _ => m.unsupported.push((
+                    raw.clone(),
+                    "CSS variable or inherited value on a child target".into(),
+                )),
+            },
             // Approximation of CSS: a rule derived from a variable is ranked
             // as one class with the variants of both the using and the
             // defining class, not by the specificity of the element the
@@ -140,8 +182,39 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
                 });
                 m.ignored.push((raw.clone(), why));
             }
+            U::Show(why) => {
+                displays.push((None, v.all, v.none, v.rank));
+                shows.push((raw.clone(), why, v.all, v.none, v.rank, idx));
+            }
             U::Ignore(why) => m.ignored.push((raw.clone(), why)),
             U::Unsupported(why) => m.unsupported.push((raw.clone(), why.to_owned())),
+        }
+    }
+    // A display class shows a part that a `hidden` class hides (`hidden
+    // sm:flex`); on a part that is never hidden it is structure.
+    let hides = m.decls.iter().any(|d| d.field == Field::Hidden);
+    for (raw, why, all, none, rank, idx) in shows {
+        if hides {
+            m.decls.push(Decl {
+                field: Field::Hidden,
+                value: Value::Bool(false),
+                all,
+                none,
+                rank,
+                idx,
+            });
+        } else {
+            m.ignored.push((raw, why));
+        }
+    }
+    for (raw, (child, all, none, rank)) in clamps {
+        let cancelled = displays
+            .iter()
+            .any(|d| d.0 == child && d.1 == all && d.2 == none && d.3 >= rank);
+        if cancelled {
+            m.ignored.push((raw, CLAMP_CANCELLED));
+        } else {
+            m.unsupported.push((raw, CLAMP_EFFECTIVE.into()));
         }
     }
     m.decls = merge(std::mem::take(&mut m.decls));
@@ -367,7 +440,194 @@ pub fn parts(
                 corrections,
             })
         })
-        .collect()
+        .collect::<Result<Vec<Part>, String>>()
+        .map(|mut ps| {
+            route(&mut ps);
+            ps
+        })
+}
+
+/// The context a crate parent hands its children (rules axiom 5, "Context
+/// flows down"): the flags a child of `parent` carries while it sits in
+/// it, and, for `*:` rules that name no child slot, the crate parts that
+/// can be its children. A parent missing here hands no context: a child
+/// target on it is unsupported.
+pub struct Context {
+    pub parent: &'static str,
+    pub flags: &'static [&'static str],
+    /// The crate parts a `*:` rule of `parent` reaches. Empty: the rule
+    /// styles caller content, which takes the part's `_child` recipe.
+    pub children: &'static [&'static str],
+}
+
+/// Children of a button group: the crate parts upstream's demos place in
+/// one, textarea (a field like input) and the group's separator. A nested
+/// group draws no fill, border or ring, so the position rules
+/// (`[&>*:not(:first-child)]:rounded-l-none`) change no pixel of it. The
+/// group's orientation reaches its children as `IN_GROUP_HORIZONTAL` or
+/// `IN_GROUP_VERTICAL`, apart from a child's own `data-orientation`
+/// (`HORIZONTAL`, `VERTICAL`): a separator is perpendicular to its group,
+/// and a separator that ends the group takes the group's last-child corner.
+const BUTTON_GROUP_CHILDREN: &[&str] = &[
+    "cn-button",
+    "cn-input",
+    "cn-textarea",
+    "cn-select-trigger",
+    "cn-button-group-separator",
+    "cn-button-group-text",
+];
+
+pub const CONTEXTS: &[Context] = &[
+    // The value (`select-value`) the trigger shows.
+    Context {
+        parent: "cn-select-trigger",
+        flags: &[],
+        children: &[],
+    },
+    Context {
+        parent: "cn-tooltip-content",
+        flags: &["IN_TOOLTIP_CONTENT"],
+        children: &[],
+    },
+    Context {
+        parent: "cn-avatar-group",
+        flags: &["IN_AVATAR_GROUP"],
+        children: &[],
+    },
+    Context {
+        parent: "cn-alert-variant-destructive",
+        flags: &["VARIANT_DESTRUCTIVE"],
+        children: &[],
+    },
+    Context {
+        parent: "cn-button-group",
+        flags: &["IN_BUTTON_GROUP"],
+        children: BUTTON_GROUP_CHILDREN,
+    },
+    Context {
+        parent: "cn-button-group-orientation-horizontal",
+        flags: &["IN_BUTTON_GROUP", "IN_GROUP_HORIZONTAL"],
+        children: BUTTON_GROUP_CHILDREN,
+    },
+    Context {
+        parent: "cn-button-group-orientation-vertical",
+        flags: &["IN_BUTTON_GROUP", "IN_GROUP_VERTICAL"],
+        children: BUTTON_GROUP_CHILDREN,
+    },
+];
+
+/// Upstream slots of components the crate does not ship, with the reason.
+/// A rule a parent gives such a slot has no part to draw it; any other
+/// slot without a crate part makes the rule unsupported, never ignored, as
+/// the rule gives a look (axiom 8).
+const UNSHIPPED_SLOTS: &[(&str, &str)] = &[("input-group", crate::variant::INPUT_GROUP)];
+
+/// Move every child-target decl to the part that draws the child, under
+/// the parent's [`Context`] flags: a named slot to that slot's part, `*:`
+/// to each crate child, or to the parent's `_child` recipe where it has
+/// none. A slot without a crate part is ignored where the crate does not
+/// ship its component ([`UNSHIPPED_SLOTS`]), else unsupported.
+pub fn route(parts: &mut [Part]) {
+    for i in 0..parts.len() {
+        let moved = std::mem::take(&mut parts[i].marker.moved);
+        let parent = parts[i].name.clone();
+        let ctx = CONTEXTS.iter().find(|c| c.parent == parent);
+        for mv in moved {
+            // A slot without a crate part: nothing to route to.
+            if let ChildSel::Slot(s) = &mv.child {
+                let names = [format!("cn-{s}"), format!("slot:{s}")];
+                if !parts.iter().any(|p| names.contains(&p.name)) {
+                    match UNSHIPPED_SLOTS.iter().find(|(n, _)| n == s) {
+                        Some((_, why)) => {
+                            let line = (mv.raw, *why);
+                            if !parts[i].marker.ignored.contains(&line) {
+                                parts[i].marker.ignored.push(line);
+                            }
+                        }
+                        None => parts[i]
+                            .marker
+                            .unsupported
+                            .push((mv.raw, format!("child slot `{s}` has no crate part"))),
+                    }
+                    continue;
+                }
+            }
+            let Some(ctx) = ctx else {
+                parts[i].marker.unsupported.push((
+                    mv.raw.clone(),
+                    format!("child target on `{parent}`, which hands its children no context"),
+                ));
+                continue;
+            };
+            let flags = ctx
+                .flags
+                .iter()
+                .fold(0, |acc, f| acc | crate::model::flag(f));
+            let decl = Decl {
+                all: mv.decl.all | flags,
+                ..mv.decl
+            };
+            let under = crate::model::state_expr(decl.all);
+            let targets: Vec<String> = match &mv.child {
+                ChildSel::Slot(s) => {
+                    let names = [format!("cn-{s}"), format!("slot:{s}")];
+                    parts
+                        .iter()
+                        .filter(|p| names.contains(&p.name))
+                        .map(|p| p.name.clone())
+                        .collect()
+                }
+                ChildSel::Any => ctx.children.iter().map(|c| (*c).to_owned()).collect(),
+            };
+            if targets.is_empty() {
+                if mv.after {
+                    parts[i]
+                        .marker
+                        .unsupported
+                        .push((mv.raw, "`after:` on caller content".into()));
+                    continue;
+                }
+                parts[i].marker.child.push(decl);
+                let line = format!("`{}` to `{parent}` `_child` under {under}", mv.raw);
+                push_unique(&mut parts[i].marker.routed, format!("moved {line}"));
+                continue;
+            }
+            for t in &targets {
+                let Some(p) = parts.iter_mut().find(|p| &p.name == t) else {
+                    panic!("context child `{t}` of `{parent}` is not a part");
+                };
+                if mv.after {
+                    p.marker.after.push(decl);
+                } else {
+                    p.marker.decls.push(decl);
+                }
+                push_unique(
+                    &mut p.marker.routed,
+                    format!("from `{parent}`: `{}` under {under}", mv.raw),
+                );
+            }
+            push_unique(
+                &mut parts[i].marker.routed,
+                format!("moved `{}` to {} under {under}", mv.raw, list(&targets)),
+            );
+        }
+        let m = &mut parts[i].marker;
+        m.child = merge(std::mem::take(&mut m.child));
+    }
+}
+
+fn push_unique(v: &mut Vec<String>, line: String) {
+    if !v.contains(&line) {
+        v.push(line);
+    }
+}
+
+fn list(names: &[String]) -> String {
+    names
+        .iter()
+        .map(|n| format!("`{n}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// tailwind-merge inside one marker: for one field under one exact variant

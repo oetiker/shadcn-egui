@@ -382,11 +382,17 @@ A separate spec after B. Settled so far:
   a map in `Style` from it to a `Recipe` that takes the built-in variant's
   place in the stack. Tabs are left out, because the trigger takes its
   variant look from state bits, not from a variant recipe.
+- Superseded by the rules (axiom 8, App variants): every component has app
+  variants and app sizes, tabs included (the trigger gets an edited copy
+  of its recipe and draws with the base's state bits); the map lives on
+  the theme beside the app colours and builds the recipes from the
+  current style, so an app variant survives a style change.
 - The benchmark measures the colour map.
 
 ## Out of scope
 
-- A per-instance or per-region style override.
+- A per-instance or per-region style override: looks are defined
+  centrally, in the theme, and used by name (rules, axiom 8).
 - Tabs keyboard focus (every trigger is a tab stop; upstream has one tab
   stop and arrow keys). A separate pull request after B.
 - Snapshots of sera (not an exported style).

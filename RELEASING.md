@@ -12,8 +12,9 @@ version in the root `Cargo.toml`.
    bugfix, feature or major. Before 1.0, a breaking change is a feature
    release. The workflow rolls `## [Unreleased]` in `CHANGES.md` into the
    new version, writes the version into `Cargo.toml` (`[workspace.package]`
-   and every `version = "..."` in `[workspace.dependencies]`) and
-   `Cargo.lock`, runs CI and opens a pull request.
+   and every `version = "..."` in `[workspace.dependencies]`),
+   `Cargo.lock` and the README's image links (to `docs/*.png` at the tag
+   `vX.Y.Z`), runs CI and opens a pull request.
 3. Merge that pull request. The publish workflow tags `vX.Y.Z`, publishes
    the crates and then makes the GitHub release public.
 
@@ -106,7 +107,7 @@ The CI runs them; to run them locally:
 scripts/check-version-files.sh
 scripts/check-packages.sh
 scripts/check-package-size.sh
-cargo publish --dry-run --workspace --jobs 4
+scripts/check-publish.sh --jobs 4
 ```
 
 ## Adding a font or an icon set
@@ -124,6 +125,15 @@ then regenerate), a new icon set from `tools/icongen` (row in
 `scripts/check-version-files.sh` and the CI name a crate that lacks them.
 The crate is new on crates.io, so the next release publishes it from your
 machine: see "Publishing to crates.io".
+
+## README images
+
+The README shows `docs/*.png` from the tag of the current version, so
+crates.io and GitHub show the images of that release. Each such link has
+its `README.md` entry under `version_files` in `.github/repo-infra.json`,
+which Create release PR moves to the new tag.
+`scripts/check-version-files.sh` fails when a link names another version
+or lacks its entry.
 
 ## The Claude Code plugin
 

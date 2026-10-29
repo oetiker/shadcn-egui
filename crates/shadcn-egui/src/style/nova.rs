@@ -7,84 +7,126 @@ use super::Style;
 pub(super) fn style() -> Style {
     Style {
         name: "nova",
-        button: Box::new(button()),
-        button_variant_default: Box::new(button_variant_default()),
-        button_variant_outline: Box::new(button_variant_outline()),
-        button_variant_secondary: Box::new(button_variant_secondary()),
-        button_variant_ghost: Box::new(button_variant_ghost()),
-        button_variant_destructive: Box::new(button_variant_destructive()),
-        button_variant_link: Box::new(button_variant_link()),
-        button_size_xs: Box::new(button_size_xs()),
-        button_size_sm: Box::new(button_size_sm()),
-        button_size_default: Box::new(button_size_default()),
-        button_size_lg: Box::new(button_size_lg()),
-        button_size_icon_xs: Box::new(button_size_icon_xs()),
-        button_size_icon_sm: Box::new(button_size_icon_sm()),
-        button_size_icon: Box::new(button_size_icon()),
-        button_size_icon_lg: Box::new(button_size_icon_lg()),
-        badge: Box::new(badge()),
-        badge_variant_default: Box::new(badge_variant_default()),
-        badge_variant_secondary: Box::new(badge_variant_secondary()),
-        badge_variant_destructive: Box::new(badge_variant_destructive()),
-        badge_variant_outline: Box::new(badge_variant_outline()),
-        badge_variant_ghost: Box::new(badge_variant_ghost()),
-        badge_variant_link: Box::new(badge_variant_link()),
-        card: Box::new(card()),
-        card_header: Box::new(card_header()),
-        card_title: Box::new(card_title()),
-        card_description: Box::new(card_description()),
+        button: button(),
+        button_variant_default: button_variant_default(),
+        button_variant_outline: button_variant_outline(),
+        button_variant_secondary: button_variant_secondary(),
+        button_variant_ghost: button_variant_ghost(),
+        button_variant_destructive: button_variant_destructive(),
+        button_variant_link: button_variant_link(),
+        button_size_xs: button_size_xs(),
+        button_size_sm: button_size_sm(),
+        button_size_default: button_size_default(),
+        button_size_lg: button_size_lg(),
+        button_size_icon_xs: button_size_icon_xs(),
+        button_size_icon_sm: button_size_icon_sm(),
+        button_size_icon: button_size_icon(),
+        button_size_icon_lg: button_size_icon_lg(),
+        badge: badge(),
+        badge_variant_default: badge_variant_default(),
+        badge_variant_secondary: badge_variant_secondary(),
+        badge_variant_destructive: badge_variant_destructive(),
+        badge_variant_outline: badge_variant_outline(),
+        badge_variant_ghost: badge_variant_ghost(),
+        badge_variant_link: badge_variant_link(),
+        card: card(),
+        card_header: card_header(),
+        card_title: card_title(),
+        card_description: card_description(),
         card_action: Box::default(),
-        card_content: Box::new(card_content()),
-        card_footer: Box::new(card_footer()),
-        checkbox: Box::new(checkbox()),
-        checkbox_indicator: Box::new(checkbox_indicator()),
-        dialog_overlay: Box::new(dialog_overlay()),
-        dialog_content: Box::new(dialog_content()),
-        dialog_close: Box::new(dialog_close()),
-        dialog_header: Box::new(dialog_header()),
-        dialog_footer: Box::new(dialog_footer()),
-        dialog_title: Box::new(dialog_title()),
-        dialog_description: Box::new(dialog_description()),
-        input: Box::new(input()),
-        label: Box::new(label()),
-        popover_content: Box::new(popover_content()),
-        popover_header: Box::new(popover_header()),
-        popover_title: Box::new(popover_title()),
-        popover_description: Box::new(popover_description()),
-        select_trigger: Box::new(select_trigger()),
-        select_trigger_icon: Box::new(select_trigger_icon()),
-        select_content: Box::new(select_content()),
+        card_content: card_content(),
+        card_footer: card_footer(),
+        checkbox: checkbox(),
+        checkbox_indicator: checkbox_indicator(),
+        dialog_overlay: dialog_overlay(),
+        dialog_content: dialog_content(),
+        dialog_close: dialog_close(),
+        dialog_header: dialog_header(),
+        dialog_footer: dialog_footer(),
+        dialog_title: dialog_title(),
+        dialog_description: dialog_description(),
+        input: input(),
+        label: label(),
+        popover_content: popover_content(),
+        popover_header: popover_header(),
+        popover_title: popover_title(),
+        popover_description: popover_description(),
+        select_trigger: select_trigger(),
+        select_trigger_icon: select_trigger_icon(),
+        select_content: select_content(),
         select_viewport: Box::default(),
-        select_group: Box::new(select_group()),
-        select_label: Box::new(select_label()),
-        select_item: Box::new(select_item()),
-        select_item_indicator: Box::new(select_item_indicator()),
+        select_group: select_group(),
+        select_label: select_label(),
+        select_item: select_item(),
+        select_item_indicator: select_item_indicator(),
         select_item_indicator_icon: Box::default(),
-        select_item_text: Box::new(select_item_text()),
-        select_separator: Box::new(select_separator()),
-        select_scroll_up_button: Box::new(select_scroll_up_button()),
-        select_scroll_down_button: Box::new(select_scroll_down_button()),
-        separator: Box::new(separator()),
-        slider: Box::new(slider()),
-        slider_track: Box::new(slider_track()),
-        slider_range: Box::new(slider_range()),
-        slider_thumb: Box::new(slider_thumb()),
-        switch: Box::new(switch()),
-        switch_thumb: Box::new(switch_thumb()),
-        tabs: Box::new(tabs()),
-        tabs_list: Box::new(tabs_list()),
-        tabs_list_variant_default: Box::new(tabs_list_variant_default()),
-        tabs_list_variant_line: Box::new(tabs_list_variant_line()),
-        tabs_trigger: Box::new(tabs_trigger()),
-        tabs_trigger_after: Box::new(tabs_trigger_after()),
-        tabs_content: Box::new(tabs_content()),
-        tooltip_content: Box::new(tooltip_content()),
-        tooltip_arrow: Box::new(tooltip_arrow()),
+        select_item_text: select_item_text(),
+        select_separator: select_separator(),
+        select_scroll_up_button: select_scroll_up_button(),
+        select_scroll_down_button: select_scroll_down_button(),
+        select_value: select_value(),
+        separator: separator(),
+        slider: slider(),
+        slider_track: slider_track(),
+        slider_range: slider_range(),
+        slider_thumb: slider_thumb(),
+        switch: switch(),
+        switch_thumb: switch_thumb(),
+        tabs: tabs(),
+        tabs_list: tabs_list(),
+        tabs_list_variant_default: tabs_list_variant_default(),
+        tabs_list_variant_line: tabs_list_variant_line(),
+        tabs_trigger: tabs_trigger(),
+        tabs_trigger_after: tabs_trigger_after(),
+        tabs_content: tabs_content(),
+        tooltip_content: tooltip_content(),
+        tooltip_arrow: tooltip_arrow(),
+        kbd: kbd(),
+        kbd_group: kbd_group(),
+        progress: progress(),
+        progress_indicator: progress_indicator(),
+        alert: alert(),
+        alert_variant_default: alert_variant_default(),
+        alert_variant_destructive: alert_variant_destructive(),
+        alert_title: alert_title(),
+        alert_description: alert_description(),
+        alert_action: alert_action(),
+        avatar: avatar(),
+        avatar_after: avatar_after(),
+        avatar_image: avatar_image(),
+        avatar_fallback: avatar_fallback(),
+        avatar_badge: avatar_badge(),
+        avatar_group: avatar_group(),
+        avatar_group_count: avatar_group_count(),
+        button_group: button_group(),
+        button_group_orientation_horizontal: Box::default(),
+        button_group_orientation_vertical: Box::default(),
+        button_group_separator: button_group_separator(),
+        button_group_text: button_group_text(),
+        textarea: textarea(),
+        hover_card_content: hover_card_content(),
+        alert_dialog_overlay: alert_dialog_overlay(),
+        alert_dialog_content: alert_dialog_content(),
+        alert_dialog_header: alert_dialog_header(),
+        alert_dialog_media: alert_dialog_media(),
+        alert_dialog_title: alert_dialog_title(),
+        alert_dialog_description: alert_dialog_description(),
+        alert_dialog_footer: alert_dialog_footer(),
+        alert_dialog_cancel: Box::default(),
+        alert_dialog_action: Box::default(),
+        pagination: Box::default(),
+        pagination_content: pagination_content(),
+        pagination_link: Box::default(),
+        pagination_previous: pagination_previous(),
+        pagination_previous_text: pagination_previous_text(),
+        pagination_next: pagination_next(),
+        pagination_next_text: pagination_next_text(),
+        pagination_ellipsis: pagination_ellipsis(),
     }
 }
 
-fn button() -> Recipe {
-    Recipe {
+fn button() -> Box<Recipe> {
+    Box::new(Recipe {
         icon_size: Prop {
             base: None,
             rules: vec![
@@ -94,183 +136,223 @@ fn button() -> Recipe {
         text_size: Prop::fixed(TextSize::Sm),
         weight: Prop::fixed(Weight::Medium),
         radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
         bg_clip_padding: Prop::fixed(true),
         border_width: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
         border_color: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         outline_width: Prop::fixed(0.0),
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 22) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: 0.5 },
             ],
         },
         shift_y: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::ACTIVE, State::HAS_POPUP), rank: (1 << 0) | (1 << 21) | (2 << 122), value: Shift::Px(1.0) },
+                Rule { when: When::new(State::ACTIVE, State::HAS_POPUP), rank: (1 << 0) | (1 << 30) | (2 << 122), value: Shift::Px(1.0) },
             ],
         },
+        transition: Prop::fixed(Transition::ALL),
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_variant_default() -> Recipe {
-    Recipe {
+fn button_variant_default() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: Some(Paint::Role(Role::Primary, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Primary, 0.8) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Primary, 0.8) },
             ],
         },
         text: Prop::fixed(Paint::Role(Role::PrimaryForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_variant_outline() -> Recipe {
-    Recipe {
+fn button_variant_outline() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: Some(Paint::Role(Role::Background, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
-                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 18) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Input, 0.5) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 44) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 27) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Input, 0.5) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 44) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
             ],
         },
         border_color: Prop {
             base: Some(Paint::Role(Role::Border, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 1.0) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 1.0) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_variant_secondary() -> Recipe {
-    Recipe {
+fn button_variant_secondary() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: Some(Paint::Role(Role::Secondary, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Mix(Role::Secondary, Role::Foreground, 0.05) },
-                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::Secondary, 1.0) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Mix(Role::Secondary, Role::Foreground, 0.05) },
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 44) | (1 << 122), value: Paint::Role(Role::Secondary, 1.0) },
             ],
         },
         text: Prop {
             base: Some(Paint::Role(Role::SecondaryForeground, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::SecondaryForeground, 1.0) },
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 44) | (1 << 122), value: Paint::Role(Role::SecondaryForeground, 1.0) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_variant_ghost() -> Recipe {
-    Recipe {
+fn button_variant_ghost() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
-                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 18) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Muted, 0.5) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 44) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 27) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Muted, 0.5) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: (1 << 44) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_variant_destructive() -> Recipe {
-    Recipe {
+fn button_variant_destructive() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: Some(Paint::Role(Role::Destructive, 0.1)),
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 18) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.3) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 27) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.3) },
             ],
         },
         text: Prop::fixed(Paint::Role(Role::Destructive, 1.0)),
         border_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::FOCUS_VISIBLE), State::NONE), rank: (1 << 20) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::FOCUS_VISIBLE), State::NONE), rank: (1 << 29) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_variant_link() -> Recipe {
-    Recipe {
+fn button_variant_link() -> Box<Recipe> {
+    Box::new(Recipe {
         underline: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: true },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: true },
             ],
         },
+        underline_offset: Prop::fixed(4.0),
         text: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_xs() -> Recipe {
-    Recipe {
+fn button_size_xs() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(24.0),
         pad_right: Prop {
             base: Some(8.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 24) | (1 << 122), value: 6.0 },
+                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 34) | (1 << 122), value: 6.0 },
             ],
         },
         pad_left: Prop {
             base: Some(8.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 25) | (1 << 122), value: 6.0 },
+                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 35) | (1 << 122), value: 6.0 },
             ],
         },
         gap: Prop::fixed(4.0),
@@ -284,26 +366,26 @@ fn button_size_xs() -> Recipe {
         radius: Prop {
             base: Some(Radius::Min(Rung::Md, 10.0)),
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 23, value: Radius::Rung(Rung::Lg) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 32, value: Radius::Rung(Rung::Lg) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_sm() -> Recipe {
-    Recipe {
+fn button_size_sm() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(28.0),
         pad_right: Prop {
             base: Some(10.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 24) | (1 << 122), value: 6.0 },
+                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 34) | (1 << 122), value: 6.0 },
             ],
         },
         pad_left: Prop {
             base: Some(10.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 25) | (1 << 122), value: 6.0 },
+                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 35) | (1 << 122), value: 6.0 },
             ],
         },
         gap: Prop::fixed(4.0),
@@ -317,55 +399,55 @@ fn button_size_sm() -> Recipe {
         radius: Prop {
             base: Some(Radius::Min(Rung::Md, 12.0)),
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 23, value: Radius::Rung(Rung::Lg) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 32, value: Radius::Rung(Rung::Lg) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_default() -> Recipe {
-    Recipe {
+fn button_size_default() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(32.0),
         pad_right: Prop {
             base: Some(10.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 24) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 34) | (1 << 122), value: 8.0 },
             ],
         },
         pad_left: Prop {
             base: Some(10.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 25) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 35) | (1 << 122), value: 8.0 },
             ],
         },
         gap: Prop::fixed(6.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_lg() -> Recipe {
-    Recipe {
+fn button_size_lg() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(36.0),
         pad_right: Prop {
             base: Some(10.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 24) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 34) | (1 << 122), value: 8.0 },
             ],
         },
         pad_left: Prop {
             base: Some(10.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 25) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 35) | (1 << 122), value: 8.0 },
             ],
         },
         gap: Prop::fixed(6.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_icon_xs() -> Recipe {
-    Recipe {
+fn button_size_icon_xs() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(24.0),
         width: Prop::fixed(24.0),
         icon_size: Prop {
@@ -377,58 +459,58 @@ fn button_size_icon_xs() -> Recipe {
         radius: Prop {
             base: Some(Radius::Min(Rung::Md, 10.0)),
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 23, value: Radius::Rung(Rung::Lg) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 32, value: Radius::Rung(Rung::Lg) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_icon_sm() -> Recipe {
-    Recipe {
+fn button_size_icon_sm() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(28.0),
         width: Prop::fixed(28.0),
         radius: Prop {
             base: Some(Radius::Min(Rung::Md, 12.0)),
             rules: vec![
-                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 23, value: Radius::Rung(Rung::Lg) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP, State::NONE), rank: 1 << 32, value: Radius::Rung(Rung::Lg) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_icon() -> Recipe {
-    Recipe {
+fn button_size_icon() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(32.0),
         width: Prop::fixed(32.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn button_size_icon_lg() -> Recipe {
-    Recipe {
+fn button_size_icon_lg() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(36.0),
         width: Prop::fixed(36.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge() -> Recipe {
-    Recipe {
+fn badge() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(20.0),
         pad_top: Prop::fixed(2.0),
         pad_right: Prop {
             base: Some(8.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 24) | (1 << 122), value: 6.0 },
+                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 34) | (1 << 122), value: 6.0 },
             ],
         },
         pad_bottom: Prop::fixed(2.0),
         pad_left: Prop {
             base: Some(8.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 25) | (1 << 122), value: 6.0 },
+                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 35) | (1 << 122), value: 6.0 },
             ],
         },
         gap: Prop::fixed(4.0),
@@ -445,124 +527,126 @@ fn badge() -> Recipe {
         border_color: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
+        transition: Prop::fixed(Transition::ALL),
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge_variant_default() -> Recipe {
-    Recipe {
+fn badge_variant_default() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
         text: Prop::fixed(Paint::Role(Role::PrimaryForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge_variant_secondary() -> Recipe {
-    Recipe {
+fn badge_variant_secondary() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop::fixed(Paint::Role(Role::Secondary, 1.0)),
         text: Prop::fixed(Paint::Role(Role::SecondaryForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge_variant_destructive() -> Recipe {
-    Recipe {
+fn badge_variant_destructive() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: Some(Paint::Role(Role::Destructive, 0.1)),
             rules: vec![
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
             ],
         },
         text: Prop::fixed(Paint::Role(Role::Destructive, 1.0)),
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::FOCUS_VISIBLE), State::NONE), rank: (1 << 20) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::FOCUS_VISIBLE), State::NONE), rank: (1 << 29) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge_variant_outline() -> Recipe {
-    Recipe {
+fn badge_variant_outline() -> Box<Recipe> {
+    Box::new(Recipe {
         text: Prop::fixed(Paint::Role(Role::Foreground, 1.0)),
         border_color: Prop::fixed(Paint::Role(Role::Border, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge_variant_ghost() -> Recipe {
-    Recipe {
+fn badge_variant_ghost() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 18) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Muted, 0.5) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Muted, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 27) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Muted, 0.5) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::MutedForeground, 1.0) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::MutedForeground, 1.0) },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn badge_variant_link() -> Recipe {
-    Recipe {
+fn badge_variant_link() -> Box<Recipe> {
+    Box::new(Recipe {
         underline: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: true },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: true },
             ],
         },
+        underline_offset: Prop::fixed(4.0),
         text: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn card() -> Recipe {
-    Recipe {
+fn card() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         pad_bottom: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::HAS_FOOTER, State::NONE), rank: (1 << 26) | (1 << 122), value: 0.0 },
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
-                Rule { when: When::new(State::SIZE_SM.or(State::HAS_FOOTER), State::NONE), rank: (1 << 26) | (1 << 45) | (2 << 122), value: 0.0 },
+                Rule { when: When::new(State::HAS_FOOTER, State::NONE), rank: (1 << 38) | (1 << 122), value: 0.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM.or(State::HAS_FOOTER), State::NONE), rank: (1 << 38) | (1 << 60) | (2 << 122), value: 0.0 },
             ],
         },
         gap: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         text_size: Prop::fixed(TextSize::Sm),
@@ -572,145 +656,145 @@ fn card() -> Recipe {
         ring_width: Prop::fixed(1.0),
         ring_color: Prop::fixed(Paint::Role(Role::Foreground, 0.1)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn card_header() -> Recipe {
-    Recipe {
+fn card_header() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_right: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         pad_left: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         gap: Prop::fixed(4.0),
         radius_top: Prop::fixed(Radius::Rung(Rung::Xl)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn card_title() -> Recipe {
-    Recipe {
+fn card_title() -> Box<Recipe> {
+    Box::new(Recipe {
         text_size: Prop {
             base: Some(TextSize::Base),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 10) | (1 << 122), value: TextSize::Sm },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 17) | (1 << 122), value: TextSize::Sm },
             ],
         },
         line_height: Prop::fixed(1.375),
         weight: Prop::fixed(Weight::Medium),
         ..Recipe::default()
-    }
+    })
 }
 
-fn card_description() -> Recipe {
-    Recipe {
+fn card_description() -> Box<Recipe> {
+    Box::new(Recipe {
         text_size: Prop::fixed(TextSize::Sm),
         text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn card_content() -> Recipe {
-    Recipe {
+fn card_content() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_right: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         pad_left: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn card_footer() -> Recipe {
-    Recipe {
+fn card_footer() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         pad_right: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         pad_bottom: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         pad_left: Prop {
             base: Some(16.0),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 12.0 },
             ],
         },
         radius_bottom: Prop::fixed(Radius::Rung(Rung::Xl)),
         bg: Prop::fixed(Paint::Role(Role::Muted, 0.5)),
         border_top_width: Prop::fixed(1.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn checkbox() -> Recipe {
-    Recipe {
+fn checkbox() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(16.0),
         width: Prop::fixed(16.0),
         radius: Prop::fixed(Radius::Px(4.0)),
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::CHECKED, State::NONE), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: When::new(State::DARK.or(State::CHECKED), State::NONE), rank: (1 << 31) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: When::new(State::CHECKED, State::NONE), rank: 1 << 71, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: When::new(State::DARK.or(State::CHECKED), State::NONE), rank: (1 << 68) | (1 << 71) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::CHECKED, State::NONE), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::PrimaryForeground, 1.0) },
+                Rule { when: When::new(State::CHECKED, State::NONE), rank: 1 << 71, value: Paint::Role(Role::PrimaryForeground, 1.0) },
             ],
         },
         border_width: Prop::fixed(1.0),
         border_color: Prop {
             base: Some(Paint::Role(Role::Input, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: When::new(State::CHECKED, State::NONE), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: When::new(State::INVALID.or(State::CHECKED), State::NONE), rank: (1 << 27) | (1 << 29) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: When::new(State::CHECKED, State::NONE), rank: 1 << 71, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::INVALID.or(State::CHECKED), State::NONE), rank: (1 << 43) | (1 << 45) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         outline_width: Prop::fixed(0.0),
@@ -718,24 +802,26 @@ fn checkbox() -> Recipe {
             base: None,
             rules: vec![
                 Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 5) | (1 << 122), value: 0.5 },
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 22) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: 0.5 },
             ],
         },
         hit_inset_x: Prop::fixed(12.0),
         hit_inset_y: Prop::fixed(8.0),
+        transition: Prop::fixed(Transition::COLORS),
         ..Recipe::default()
-    }
+    })
 }
 
-fn checkbox_indicator() -> Recipe {
-    Recipe {
+fn checkbox_indicator() -> Box<Recipe> {
+    Box::new(Recipe {
         icon_size: Prop::fixed(14.0),
+        transition: Prop::fixed(Transition::NONE),
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_overlay() -> Recipe {
-    Recipe {
+fn dialog_overlay() -> Box<Recipe> {
+    Box::new(Recipe {
         inset_top: Prop::fixed(0.0),
         inset_right: Prop::fixed(0.0),
         inset_bottom: Prop::fixed(0.0),
@@ -744,19 +830,44 @@ fn dialog_overlay() -> Recipe {
         backdrop_blur: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::ALWAYS, rank: 1 << 49, value: 4.0 },
+                Rule { when: When::ALWAYS, rank: 1 << 65, value: 4.0 },
+            ],
+        },
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_content() -> Recipe {
-    Recipe {
+fn dialog_content() -> Box<Recipe> {
+    Box::new(Recipe {
         max_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::ALWAYS, rank: 1 << 50, value: 384.0 },
+                Rule { when: When::new(State::SM, State::NONE), rank: 1 << 66, value: 384.0 },
             ],
         },
         max_width_inset: Prop::fixed(32.0),
@@ -772,27 +883,66 @@ fn dialog_content() -> Recipe {
         ring_width: Prop::fixed(1.0),
         ring_color: Prop::fixed(Paint::Role(Role::Foreground, 0.1)),
         outline_width: Prop::fixed(0.0),
+        shift_x: Prop::fixed(Shift::Calc(-0.5, 0.0)),
+        shift_y: Prop::fixed(Shift::Calc(-0.5, 0.0)),
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        enter_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.95 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        exit_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.95 },
+            ],
+        },
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_close() -> Recipe {
-    Recipe {
+fn dialog_close() -> Box<Recipe> {
+    Box::new(Recipe {
         inset_top: Prop::fixed(8.0),
         inset_right: Prop::fixed(8.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_header() -> Recipe {
-    Recipe {
+fn dialog_header() -> Box<Recipe> {
+    Box::new(Recipe {
         gap: Prop::fixed(8.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_footer() -> Recipe {
-    Recipe {
+fn dialog_footer() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop::fixed(16.0),
         pad_right: Prop::fixed(16.0),
         pad_bottom: Prop::fixed(16.0),
@@ -805,28 +955,28 @@ fn dialog_footer() -> Recipe {
         bg: Prop::fixed(Paint::Role(Role::Muted, 0.5)),
         border_top_width: Prop::fixed(1.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_title() -> Recipe {
-    Recipe {
+fn dialog_title() -> Box<Recipe> {
+    Box::new(Recipe {
         text_size: Prop::fixed(TextSize::Base),
         line_height: Prop::fixed(1.0),
         weight: Prop::fixed(Weight::Medium),
         ..Recipe::default()
-    }
+    })
 }
 
-fn dialog_description() -> Recipe {
-    Recipe {
+fn dialog_description() -> Box<Recipe> {
+    Box::new(Recipe {
         text_size: Prop::fixed(TextSize::Sm),
         text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn input() -> Recipe {
-    Recipe {
+fn input() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(32.0),
         min_width: Prop::fixed(0.0),
         pad_top: Prop::fixed(4.0),
@@ -836,61 +986,100 @@ fn input() -> Recipe {
         text_size: Prop {
             base: Some(TextSize::Base),
             rules: vec![
-                Rule { when: When::ALWAYS, rank: 1 << 51, value: TextSize::Sm },
+                Rule { when: When::new(State::MD, State::NONE), rank: 1 << 67, value: TextSize::Sm },
             ],
         },
         radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
         bg: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 22) | (1 << 122), value: Paint::Role(Role::Input, 0.5) },
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: When::new(State::DARK.or(State::DISABLED), State::NONE), rank: (1 << 22) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Input, 0.8) },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Input, 0.5) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: When::new(State::DARK.or(State::DISABLED), State::NONE), rank: (1 << 31) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Input, 0.8) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::PLACEHOLDER, State::NONE), rank: (1 << 16) | (1 << 126), value: Paint::Role(Role::MutedForeground, 1.0) },
+                Rule { when: When::new(State::PLACEHOLDER, State::NONE), rank: (1 << 25) | (1 << 126), value: Paint::Role(Role::MutedForeground, 1.0) },
             ],
         },
         border_width: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
         border_color: Prop {
             base: Some(Paint::Role(Role::Input, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         outline_width: Prop::fixed(0.0),
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 22) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: 0.5 },
             ],
         },
+        transition: Prop::fixed(Transition::COLORS),
         ..Recipe::default()
-    }
+    })
 }
 
-fn label() -> Recipe {
-    Recipe {
+fn label() -> Box<Recipe> {
+    Box::new(Recipe {
         gap: Prop::fixed(8.0),
         text_size: Prop::fixed(TextSize::Sm),
         line_height: Prop::fixed(1.0),
@@ -898,16 +1087,16 @@ fn label() -> Recipe {
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 8) | (1 << 122), value: 0.5 },
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 14) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 10) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 23) | (1 << 122), value: 0.5 },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn popover_content() -> Recipe {
-    Recipe {
+fn popover_content() -> Box<Recipe> {
+    Box::new(Recipe {
         width: Prop::fixed(288.0),
         pad_top: Prop::fixed(10.0),
         pad_right: Prop::fixed(10.0),
@@ -922,39 +1111,90 @@ fn popover_content() -> Recipe {
         ring_color: Prop::fixed(Paint::Role(Role::Foreground, 0.1)),
         outline_width: Prop::fixed(0.0),
         shadow: Prop::fixed(ShadowLevel::Md),
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        enter_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.95 },
+            ],
+        },
+        enter_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_LEFT, State::NONE), rank: (1 << 55) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::SIDE_RIGHT, State::NONE), rank: (1 << 56) | (1 << 122), value: -8.0 },
+            ],
+        },
+        enter_y: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_BOTTOM, State::NONE), rank: (1 << 54) | (1 << 122), value: -8.0 },
+                Rule { when: When::new(State::SIDE_TOP, State::NONE), rank: (1 << 57) | (1 << 122), value: 8.0 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        exit_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.95 },
+            ],
+        },
         ..Recipe::default()
-    }
+    })
 }
 
-fn popover_header() -> Recipe {
-    Recipe {
+fn popover_header() -> Box<Recipe> {
+    Box::new(Recipe {
         gap: Prop::fixed(2.0),
         text_size: Prop::fixed(TextSize::Sm),
         ..Recipe::default()
-    }
+    })
 }
 
-fn popover_title() -> Recipe {
-    Recipe {
+fn popover_title() -> Box<Recipe> {
+    Box::new(Recipe {
         weight: Prop::fixed(Weight::Medium),
         ..Recipe::default()
-    }
+    })
 }
 
-fn popover_description() -> Recipe {
-    Recipe {
+fn popover_description() -> Box<Recipe> {
+    Box::new(Recipe {
         text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_trigger() -> Recipe {
-    Recipe {
+fn select_trigger() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 44) | (1 << 122), value: 32.0 },
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 28.0 },
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 58) | (1 << 122), value: 32.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 28.0 },
             ],
         },
         pad_top: Prop::fixed(8.0),
@@ -972,68 +1212,107 @@ fn select_trigger() -> Recipe {
         radius: Prop {
             base: Some(Radius::Rung(Rung::Lg)),
             rules: vec![
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: Radius::Min(Rung::Md, 10.0) },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: Radius::Min(Rung::Md, 10.0) },
+            ],
+        },
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
             ],
         },
         bg: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 18) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Input, 0.5) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 27) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Input, 0.5) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::PLACEHOLDER, State::NONE), rank: (1 << 36) | (1 << 122), value: Paint::Role(Role::MutedForeground, 1.0) },
+                Rule { when: When::new(State::PLACEHOLDER, State::NONE), rank: (1 << 48) | (1 << 122), value: Paint::Role(Role::MutedForeground, 1.0) },
             ],
         },
         border_width: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
         border_color: Prop {
             base: Some(Paint::Role(Role::Input, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         outline_width: Prop::fixed(0.0),
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 22) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: 0.5 },
             ],
         },
+        transition: Prop::fixed(Transition::COLORS),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_trigger_icon() -> Recipe {
-    Recipe {
+fn select_trigger_icon() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(16.0),
         width: Prop::fixed(16.0),
         text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_content() -> Recipe {
-    Recipe {
+fn select_content() -> Box<Recipe> {
+    Box::new(Recipe {
         min_width: Prop::fixed(144.0),
         radius: Prop::fixed(Radius::Rung(Rung::Lg)),
         bg: Prop::fixed(Paint::Role(Role::Popover, 1.0)),
@@ -1041,22 +1320,73 @@ fn select_content() -> Recipe {
         ring_width: Prop::fixed(1.0),
         ring_color: Prop::fixed(Paint::Role(Role::Foreground, 0.1)),
         shadow: Prop::fixed(ShadowLevel::Md),
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        enter_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.95 },
+            ],
+        },
+        enter_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_LEFT, State::NONE), rank: (1 << 55) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::SIDE_RIGHT, State::NONE), rank: (1 << 56) | (1 << 122), value: -8.0 },
+            ],
+        },
+        enter_y: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_BOTTOM, State::NONE), rank: (1 << 54) | (1 << 122), value: -8.0 },
+                Rule { when: When::new(State::SIDE_TOP, State::NONE), rank: (1 << 57) | (1 << 122), value: 8.0 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        exit_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.95 },
+            ],
+        },
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_group() -> Recipe {
-    Recipe {
+fn select_group() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop::fixed(4.0),
         pad_right: Prop::fixed(4.0),
         pad_bottom: Prop::fixed(4.0),
         pad_left: Prop::fixed(4.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_label() -> Recipe {
-    Recipe {
+fn select_label() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop::fixed(4.0),
         pad_right: Prop::fixed(6.0),
         pad_bottom: Prop::fixed(4.0),
@@ -1064,11 +1394,11 @@ fn select_label() -> Recipe {
         text_size: Prop::fixed(TextSize::Xs),
         text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_item() -> Recipe {
-    Recipe {
+fn select_item() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop::fixed(4.0),
         pad_right: Prop::fixed(32.0),
         pad_bottom: Prop::fixed(4.0),
@@ -1085,46 +1415,46 @@ fn select_item() -> Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 19) | (1 << 122), value: Paint::Role(Role::Accent, 1.0) },
-                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 33) | (1 << 122), value: Paint::Role(Role::Accent, 1.0) },
+                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::Accent, 1.0) },
+                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 46) | (1 << 122), value: Paint::Role(Role::Accent, 1.0) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 19) | (1 << 122), value: Paint::Role(Role::AccentForeground, 1.0) },
-                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 33) | (1 << 122), value: Paint::Role(Role::AccentForeground, 1.0) },
+                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 28) | (1 << 122), value: Paint::Role(Role::AccentForeground, 1.0) },
+                Rule { when: When::new(State::FOCUS, State::NONE), rank: (1 << 46) | (1 << 122), value: Paint::Role(Role::AccentForeground, 1.0) },
             ],
         },
         outline_width: Prop::fixed(0.0),
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 32) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: 1 << 73, value: 0.5 },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_item_indicator() -> Recipe {
-    Recipe {
+fn select_item_indicator() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(16.0),
         width: Prop::fixed(16.0),
         inset_right: Prop::fixed(8.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_item_text() -> Recipe {
-    Recipe {
+fn select_item_text() -> Box<Recipe> {
+    Box::new(Recipe {
         gap: Prop::fixed(8.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_separator() -> Recipe {
-    Recipe {
+fn select_separator() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(1.0),
         margin_top: Prop::fixed(4.0),
         margin_right: Prop::fixed(-4.0),
@@ -1132,11 +1462,11 @@ fn select_separator() -> Recipe {
         margin_left: Prop::fixed(-4.0),
         bg: Prop::fixed(Paint::Role(Role::Border, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_scroll_up_button() -> Recipe {
-    Recipe {
+fn select_scroll_up_button() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop::fixed(4.0),
         pad_bottom: Prop::fixed(4.0),
         icon_size: Prop {
@@ -1147,11 +1477,11 @@ fn select_scroll_up_button() -> Recipe {
         },
         bg: Prop::fixed(Paint::Role(Role::Popover, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn select_scroll_down_button() -> Recipe {
-    Recipe {
+fn select_scroll_down_button() -> Box<Recipe> {
+    Box::new(Recipe {
         pad_top: Prop::fixed(4.0),
         pad_bottom: Prop::fixed(4.0),
         icon_size: Prop {
@@ -1162,75 +1492,87 @@ fn select_scroll_down_button() -> Recipe {
         },
         bg: Prop::fixed(Paint::Role(Role::Popover, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn separator() -> Recipe {
-    Recipe {
+fn select_value() -> Box<Recipe> {
+    Box::new(Recipe {
+        gap: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 122, value: 6.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn separator() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 34) | (1 << 122), value: 1.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 1.0 },
             ],
         },
         width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 39) | (1 << 122), value: 1.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 1.0 },
             ],
         },
         bg: Prop::fixed(Paint::Role(Role::Border, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn slider() -> Recipe {
-    Recipe {
+fn slider() -> Box<Recipe> {
+    Box::new(Recipe {
         min_height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 39) | (1 << 122), value: 160.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 160.0 },
             ],
         },
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 32) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: 1 << 73, value: 0.5 },
             ],
         },
         ..Recipe::default()
-    }
+    })
 }
 
-fn slider_track() -> Recipe {
-    Recipe {
+fn slider_track() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 34) | (1 << 122), value: 4.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 4.0 },
             ],
         },
         width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 39) | (1 << 122), value: 4.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 4.0 },
             ],
         },
         radius: Prop::fixed(Radius::Rung(Rung::Full)),
         bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn slider_range() -> Recipe {
-    Recipe {
+fn slider_range() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn slider_thumb() -> Recipe {
-    Recipe {
+fn slider_thumb() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(12.0),
         width: Prop::fixed(12.0),
         radius: Prop::fixed(Radius::Rung(Rung::Full)),
@@ -1240,137 +1582,140 @@ fn slider_thumb() -> Recipe {
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::ACTIVE, State::NONE), rank: (1 << 21) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::ACTIVE, State::NONE), rank: (1 << 30) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop::fixed(Paint::Role(Role::Ring, 0.5)),
         outline_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 0.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 0.0 },
             ],
         },
         hit_inset_x: Prop::fixed(8.0),
         hit_inset_y: Prop::fixed(8.0),
+        transition: Prop::fixed(Transition::COLOR.or(Transition::SHADOW)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn switch() -> Recipe {
-    Recipe {
+fn switch() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 44) | (1 << 122), value: 18.4 },
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 14.0 },
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 58) | (1 << 122), value: 18.4 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 14.0 },
             ],
         },
         width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 44) | (1 << 122), value: 32.0 },
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 45) | (1 << 122), value: 24.0 },
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 58) | (1 << 122), value: 32.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 24.0 },
             ],
         },
         radius: Prop::fixed(Radius::Rung(Rung::Full)),
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::CHECKED, State::NONE), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: When::new(State::UNCHECKED, State::NONE), rank: (1 << 38) | (1 << 122), value: Paint::Role(Role::Input, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::UNCHECKED), State::NONE), rank: (1 << 38) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Input, 0.8) },
+                Rule { when: When::new(State::CHECKED, State::NONE), rank: 1 << 71, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: When::new(State::UNCHECKED, State::NONE), rank: 1 << 72, value: Paint::Role(Role::Input, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::UNCHECKED), State::NONE), rank: (1 << 68) | (1 << 72) | (1 << 122), value: Paint::Role(Role::Input, 0.8) },
             ],
         },
         border_width: Prop::fixed(1.0),
         border_color: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         outline_width: Prop::fixed(0.0),
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 32) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: 1 << 73, value: 0.5 },
             ],
         },
         hit_inset_x: Prop::fixed(12.0),
         hit_inset_y: Prop::fixed(8.0),
+        transition: Prop::fixed(Transition::ALL),
         ..Recipe::default()
-    }
+    })
 }
 
-fn switch_thumb() -> Recipe {
-    Recipe {
+fn switch_thumb() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 9) | (1 << 122), value: 16.0 },
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 11) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 13) | (1 << 122), value: 16.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 18) | (1 << 122), value: 12.0 },
             ],
         },
         width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 9) | (1 << 122), value: 16.0 },
-                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 11) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 13) | (1 << 122), value: 16.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 18) | (1 << 122), value: 12.0 },
             ],
         },
         radius: Prop::fixed(Radius::Rung(Rung::Full)),
         bg: Prop {
             base: Some(Paint::Role(Role::Background, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::DARK.or(State::CHECKED), State::NONE), rank: (1 << 31) | (1 << 52) | (2 << 122), value: Paint::Role(Role::PrimaryForeground, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::UNCHECKED), State::NONE), rank: (1 << 38) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::CHECKED), State::NONE), rank: (1 << 68) | (1 << 71) | (1 << 122), value: Paint::Role(Role::PrimaryForeground, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::UNCHECKED), State::NONE), rank: (1 << 68) | (1 << 72) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
             ],
         },
         ring_width: Prop::fixed(0.0),
         shift_x: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::CHECKED.or(State::SIZE_DEFAULT), State::NONE), rank: (1 << 9) | (1 << 31) | (2 << 122), value: Shift::SelfMinus(2.0) },
-                Rule { when: When::new(State::CHECKED.or(State::SIZE_SM), State::NONE), rank: (1 << 11) | (1 << 31) | (2 << 122), value: Shift::SelfMinus(2.0) },
-                Rule { when: When::new(State::UNCHECKED.or(State::SIZE_DEFAULT), State::NONE), rank: (1 << 9) | (1 << 38) | (2 << 122), value: Shift::Px(0.0) },
-                Rule { when: When::new(State::UNCHECKED.or(State::SIZE_SM), State::NONE), rank: (1 << 11) | (1 << 38) | (2 << 122), value: Shift::Px(0.0) },
+                Rule { when: When::new(State::CHECKED.or(State::SIZE_DEFAULT), State::NONE), rank: (1 << 13) | (1 << 71) | (1 << 122), value: Shift::Calc(1.0, -2.0) },
+                Rule { when: When::new(State::CHECKED.or(State::SIZE_SM), State::NONE), rank: (1 << 18) | (1 << 71) | (1 << 122), value: Shift::Calc(1.0, -2.0) },
+                Rule { when: When::new(State::UNCHECKED.or(State::SIZE_DEFAULT), State::NONE), rank: (1 << 13) | (1 << 72) | (1 << 122), value: Shift::Px(0.0) },
+                Rule { when: When::new(State::UNCHECKED.or(State::SIZE_SM), State::NONE), rank: (1 << 18) | (1 << 72) | (1 << 122), value: Shift::Px(0.0) },
             ],
         },
+        transition: Prop::fixed(Transition::TRANSFORM),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs() -> Recipe {
-    Recipe {
+fn tabs() -> Box<Recipe> {
+    Box::new(Recipe {
         gap: Prop::fixed(8.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs_list() -> Recipe {
-    Recipe {
+fn tabs_list() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 6) | (1 << 122), value: 32.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 21, value: 32.0 },
             ],
         },
         pad_top: Prop::fixed(3.0),
@@ -1380,44 +1725,44 @@ fn tabs_list() -> Recipe {
         radius: Prop {
             base: Some(Radius::Rung(Rung::Lg)),
             rules: vec![
-                Rule { when: When::new(State::VARIANT_LINE, State::NONE), rank: (1 << 48) | (1 << 122), value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::VARIANT_LINE, State::NONE), rank: (1 << 64) | (1 << 122), value: Radius::Rung(Rung::None) },
             ],
         },
         text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs_list_variant_default() -> Recipe {
-    Recipe {
+fn tabs_list_variant_default() -> Box<Recipe> {
+    Box::new(Recipe {
         bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs_list_variant_line() -> Recipe {
-    Recipe {
+fn tabs_list_variant_line() -> Box<Recipe> {
+    Box::new(Recipe {
         gap: Prop::fixed(4.0),
         bg: Prop::fixed(Paint::Role(Role::Transparent, 1.0)),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs_trigger() -> Recipe {
-    Recipe {
+fn tabs_trigger() -> Box<Recipe> {
+    Box::new(Recipe {
         height_inset: Prop::fixed(1.0),
         pad_top: Prop::fixed(2.0),
         pad_right: Prop {
             base: Some(6.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 24) | (1 << 122), value: 4.0 },
+                Rule { when: When::new(State::ICON_END, State::NONE), rank: (1 << 34) | (1 << 122), value: 4.0 },
             ],
         },
         pad_bottom: Prop::fixed(2.0),
         pad_left: Prop {
             base: Some(6.0),
             rules: vec![
-                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 25) | (1 << 122), value: 4.0 },
+                Rule { when: When::new(State::ICON_START, State::NONE), rank: (1 << 35) | (1 << 122), value: 4.0 },
             ],
         },
         gap: Prop::fixed(6.0),
@@ -1433,149 +1778,156 @@ fn tabs_trigger() -> Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::VARIANT_LINE, State::NONE), rank: (1 << 13) | (1 << 122), value: Paint::Role(Role::Transparent, 1.0) },
-                Rule { when: When::new(State::SELECTED, State::NONE), rank: (1 << 30) | (1 << 122), value: Paint::Role(Role::Background, 1.0) },
-                Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30) | (2 << 122), value: Paint::Role(Role::Transparent, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 30) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: When::new(State::DARK.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30) | (1 << 52) | (3 << 122), value: Paint::Role(Role::Transparent, 1.0) },
+                Rule { when: When::new(State::SELECTED, State::NONE), rank: 1 << 74, value: Paint::Role(Role::Background, 1.0) },
+                Rule { when: When::new(State::VARIANT_LINE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Transparent, 1.0) },
+                Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 74) | (1 << 122), value: Paint::Role(Role::Transparent, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 68) | (1 << 74) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: When::new(State::DARK.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 68) | (1 << 74) | (2 << 122), value: Paint::Role(Role::Transparent, 1.0) },
             ],
         },
         text: Prop {
             base: Some(Paint::Role(Role::Foreground, 0.6)),
             rules: vec![
-                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 18) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::SELECTED, State::NONE), rank: (1 << 30) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::MutedForeground, 1.0) },
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 18) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 30) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::FOCUS_VISIBLE).or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (1 << 52) | (3 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::SELECTED, State::NONE), rank: 1 << 74, value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::HOVER, State::NONE), rank: (1 << 27) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::MutedForeground, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 68) | (1 << 74) | (1 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::HOVER), State::NONE), rank: (1 << 27) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::FOCUS_VISIBLE).or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (1 << 68) | (3 << 122), value: Paint::Role(Role::Foreground, 1.0) },
             ],
         },
         border_width: Prop::fixed(1.0),
         border_color: Prop {
             base: Some(Paint::Role(Role::Transparent, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (2 << 122), value: Paint::Role(Role::Transparent, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 30) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Input, 1.0) },
-                Rule { when: When::new(State::DARK.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30) | (1 << 52) | (3 << 122), value: Paint::Role(Role::Transparent, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::SELECTED), State::NONE), rank: (1 << 68) | (1 << 74) | (1 << 122), value: Paint::Role(Role::Input, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (2 << 122), value: Paint::Role(Role::Transparent, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 68) | (1 << 74) | (2 << 122), value: Paint::Role(Role::Transparent, 1.0) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (2 << 122), value: 0.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (2 << 122), value: 0.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
             ],
         },
         outline_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: 1.0 },
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (2 << 122), value: 0.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 1.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (2 << 122), value: 0.0 },
             ],
         },
         outline_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
             ],
         },
         shadow: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::SELECTED.or(State::VARIANT_DEFAULT), State::NONE), rank: (1 << 12) | (1 << 30) | (2 << 122), value: ShadowLevel::Sm },
-                Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30) | (2 << 122), value: ShadowLevel::None },
+                Rule { when: When::new(State::SELECTED.or(State::VARIANT_DEFAULT), State::NONE), rank: (1 << 19) | (1 << 74) | (1 << 122), value: ShadowLevel::Sm },
+                Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 74) | (1 << 122), value: ShadowLevel::None },
             ],
         },
         opacity: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 22) | (1 << 122), value: 0.5 },
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: 0.5 },
             ],
         },
+        transition: Prop::fixed(Transition::ALL),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs_trigger_after() -> Recipe {
-    Recipe {
+fn tabs_trigger_after() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 6) | (1 << 122), value: 2.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 21, value: 2.0 },
             ],
         },
         width: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 7) | (1 << 122), value: 2.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 22, value: 2.0 },
             ],
         },
         inset_top: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 7) | (1 << 122), value: 0.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 22, value: 0.0 },
             ],
         },
         inset_right: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 6) | (1 << 122), value: 0.0 },
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 7) | (1 << 122), value: -4.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 21, value: 0.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 22, value: -4.0 },
             ],
         },
         inset_bottom: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 6) | (1 << 122), value: -5.0 },
-                Rule { when: When::new(State::VERTICAL, State::NONE), rank: (1 << 7) | (1 << 122), value: 0.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 21, value: -5.0 },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 22, value: 0.0 },
             ],
         },
         inset_left: Prop {
             base: None,
             rules: vec![
-                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: (1 << 6) | (1 << 122), value: 0.0 },
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 21, value: 0.0 },
             ],
         },
         bg: Prop {
             base: Some(Paint::Role(Role::Foreground, 1.0)),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (2 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (1 << 30) | (3 << 122), value: Paint::Role(Role::Foreground, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (2 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::SELECTED).or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (1 << 74) | (2 << 122), value: Paint::Role(Role::Foreground, 1.0) },
             ],
         },
         opacity: Prop {
             base: Some(0.0),
             rules: vec![
-                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 20) | (2 << 122), value: 1.0 },
-                Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 13) | (1 << 30) | (2 << 122), value: 1.0 },
+                Rule { when: When::new(State::SELECTED.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 74) | (1 << 122), value: 1.0 },
+                Rule { when: When::new(State::FOCUS_VISIBLE.or(State::VARIANT_LINE), State::NONE), rank: (1 << 20) | (1 << 29) | (2 << 122), value: 1.0 },
             ],
         },
+        transition: Prop::fixed(Transition::OPACITY),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tabs_content() -> Recipe {
-    Recipe {
+fn tabs_content() -> Box<Recipe> {
+    Box::new(Recipe {
         text_size: Prop::fixed(TextSize::Sm),
         outline_width: Prop::fixed(0.0),
         ..Recipe::default()
-    }
+    })
 }
 
-fn tooltip_content() -> Recipe {
-    Recipe {
+fn tooltip_content() -> Box<Recipe> {
+    Box::new(Recipe {
         max_width: Prop::fixed(320.0),
         pad_top: Prop::fixed(6.0),
-        pad_right: Prop::fixed(12.0),
+        pad_right: Prop {
+            base: Some(12.0),
+            rules: vec![
+                Rule { when: When::new(State::HAS_KBD, State::NONE), rank: (1 << 39) | (1 << 122), value: 6.0 },
+            ],
+        },
         pad_bottom: Prop::fixed(6.0),
         pad_left: Prop::fixed(12.0),
         gap: Prop::fixed(6.0),
@@ -1583,16 +1935,951 @@ fn tooltip_content() -> Recipe {
         radius: Prop::fixed(Radius::Rung(Rung::Md)),
         bg: Prop::fixed(Paint::Role(Role::Foreground, 1.0)),
         text: Prop::fixed(Paint::Role(Role::Background, 1.0)),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+                Rule { when: When::new(State::DELAYED_OPEN, State::NONE), rank: (1 << 62) | (1 << 122), value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+                Rule { when: When::new(State::DELAYED_OPEN, State::NONE), rank: (1 << 62) | (1 << 122), value: 0.0 },
+            ],
+        },
+        enter_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.95 },
+                Rule { when: When::new(State::DELAYED_OPEN, State::NONE), rank: (1 << 62) | (1 << 122), value: 0.95 },
+            ],
+        },
+        enter_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_LEFT, State::NONE), rank: (1 << 55) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::SIDE_RIGHT, State::NONE), rank: (1 << 56) | (1 << 122), value: -8.0 },
+            ],
+        },
+        enter_y: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_BOTTOM, State::NONE), rank: (1 << 54) | (1 << 122), value: -8.0 },
+                Rule { when: When::new(State::SIDE_TOP, State::NONE), rank: (1 << 57) | (1 << 122), value: 8.0 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        exit_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.95 },
+            ],
+        },
         ..Recipe::default()
-    }
+    })
 }
 
-fn tooltip_arrow() -> Recipe {
-    Recipe {
+fn tooltip_arrow() -> Box<Recipe> {
+    Box::new(Recipe {
         height: Prop::fixed(10.0),
         width: Prop::fixed(10.0),
         radius: Prop::fixed(Radius::Px(2.0)),
         bg: Prop::fixed(Paint::Role(Role::Foreground, 1.0)),
+        shift_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_BOTTOM, State::NONE), rank: (1 << 54) | (1 << 122), value: Shift::Calc(-0.5, 0.0) },
+                Rule { when: When::new(State::SIDE_RIGHT, State::NONE), rank: (1 << 56) | (1 << 122), value: Shift::Calc(0.5, 2.0) },
+                Rule { when: When::new(State::SIDE_TOP, State::NONE), rank: (1 << 57) | (1 << 122), value: Shift::Calc(0.5, 0.0) },
+            ],
+        },
+        shift_y: Prop {
+            base: Some(Shift::Calc(-0.5, -2.0)),
+            rules: vec![
+                Rule { when: When::new(State::SIDE_BOTTOM, State::NONE), rank: (1 << 54) | (1 << 122), value: Shift::Calc(0.5, -1.0) },
+                Rule { when: When::new(State::SIDE_LEFT, State::NONE), rank: (1 << 55) | (1 << 122), value: Shift::Calc(-0.5, 3.0) },
+                Rule { when: When::new(State::SIDE_RIGHT, State::NONE), rank: (1 << 56) | (1 << 122), value: Shift::Calc(0.5, 0.0) },
+                Rule { when: When::new(State::SIDE_TOP, State::NONE), rank: (1 << 57) | (1 << 122), value: Shift::Calc(-0.5, 2.0) },
+            ],
+        },
         ..Recipe::default()
-    }
+    })
+}
+
+fn kbd() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop::fixed(20.0),
+        min_width: Prop::fixed(20.0),
+        pad_right: Prop::fixed(4.0),
+        pad_left: Prop::fixed(4.0),
+        gap: Prop::fixed(4.0),
+        icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 121, value: 12.0 },
+            ],
+        },
+        text_size: Prop::fixed(TextSize::Xs),
+        weight: Prop::fixed(Weight::Medium),
+        radius: Prop {
+            base: Some(Radius::Rung(Rung::Sm)),
+            rules: vec![
+                Rule { when: When::new(State::IN_TOOLTIP_CONTENT, State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::Sm) },
+            ],
+        },
+        bg: Prop {
+            base: Some(Paint::Role(Role::Muted, 1.0)),
+            rules: vec![
+                Rule { when: When::new(State::IN_TOOLTIP_CONTENT, State::NONE), rank: 1 << 33, value: Paint::Role(Role::Background, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::IN_TOOLTIP_CONTENT), State::NONE), rank: (1 << 33) | (1 << 68) | (1 << 122), value: Paint::Role(Role::Background, 0.1) },
+            ],
+        },
+        text: Prop {
+            base: Some(Paint::Role(Role::MutedForeground, 1.0)),
+            rules: vec![
+                Rule { when: When::new(State::IN_TOOLTIP_CONTENT, State::NONE), rank: 1 << 33, value: Paint::Role(Role::Background, 1.0) },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn kbd_group() -> Box<Recipe> {
+    Box::new(Recipe {
+        gap: Prop::fixed(4.0),
+        ..Recipe::default()
+    })
+}
+
+fn progress() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop::fixed(4.0),
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn progress_indicator() -> Box<Recipe> {
+    Box::new(Recipe {
+        bg: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
+        transition: Prop::fixed(Transition::ALL),
+        ..Recipe::default()
+    })
+}
+
+fn alert() -> Box<Recipe> {
+    Box::new(Recipe {
+        pad_top: Prop::fixed(8.0),
+        pad_right: Prop {
+            base: Some(10.0),
+            rules: vec![
+                Rule { when: When::new(State::HAS_ACTION, State::NONE), rank: (1 << 36) | (1 << 122), value: 72.0 },
+            ],
+        },
+        pad_bottom: Prop::fixed(8.0),
+        pad_left: Prop::fixed(10.0),
+        gap: Prop::fixed(2.0),
+        gap_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HAS_ICON, State::NONE), rank: (1 << 42) | (1 << 121), value: 8.0 },
+            ],
+        },
+        icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 121, value: 16.0 },
+            ],
+        },
+        icon_shift_y: Prop::fixed(Shift::Px(2.0)),
+        text_size: Prop::fixed(TextSize::Sm),
+        text_align: Prop::fixed(TextAlign::Left),
+        radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+        border_width: Prop::fixed(1.0),
+        ..Recipe::default()
+    })
+}
+
+fn alert_variant_default() -> Box<Recipe> {
+    Box::new(Recipe {
+        bg: Prop::fixed(Paint::Role(Role::Card, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::CardForeground, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn alert_variant_destructive() -> Box<Recipe> {
+    Box::new(Recipe {
+        bg: Prop::fixed(Paint::Role(Role::Card, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::Destructive, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn alert_title() -> Box<Recipe> {
+    Box::new(Recipe {
+        weight: Prop::fixed(Weight::Medium),
+        ..Recipe::default()
+    })
+}
+
+fn alert_description() -> Box<Recipe> {
+    Box::new(Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text_wrap: Prop {
+            base: Some(TextWrap::Balance),
+            rules: vec![
+                Rule { when: When::new(State::MD, State::NONE), rank: 1 << 67, value: TextWrap::Pretty },
+            ],
+        },
+        text: Prop {
+            base: Some(Paint::Role(Role::MutedForeground, 1.0)),
+            rules: vec![
+                Rule { when: When::new(State::VARIANT_DESTRUCTIVE, State::NONE), rank: 1 << 122, value: Paint::Role(Role::Destructive, 0.9) },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn alert_action() -> Box<Recipe> {
+    Box::new(Recipe {
+        inset_top: Prop::fixed(8.0),
+        inset_right: Prop::fixed(8.0),
+        ..Recipe::default()
+    })
+}
+
+fn avatar() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop {
+            base: Some(32.0),
+            rules: vec![
+                Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 59) | (1 << 122), value: 40.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 24.0 },
+            ],
+        },
+        width: Prop {
+            base: Some(32.0),
+            rules: vec![
+                Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 59) | (1 << 122), value: 40.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 24.0 },
+            ],
+        },
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        ring_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_AVATAR_GROUP, State::NONE), rank: 1 << 122, value: 2.0 },
+            ],
+        },
+        ring_color: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_AVATAR_GROUP, State::NONE), rank: 1 << 122, value: Paint::Role(Role::Background, 1.0) },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn avatar_after() -> Box<Recipe> {
+    Box::new(Recipe {
+        inset_top: Prop::fixed(0.0),
+        inset_right: Prop::fixed(0.0),
+        inset_bottom: Prop::fixed(0.0),
+        inset_left: Prop::fixed(0.0),
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        border_width: Prop::fixed(1.0),
+        border_color: Prop::fixed(Paint::Role(Role::Border, 1.0)),
+        blend: Prop {
+            base: Some(Blend::Darken),
+            rules: vec![
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Blend::Lighten },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn avatar_image() -> Box<Recipe> {
+    Box::new(Recipe {
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        aspect_ratio: Prop::fixed(1.0),
+        object_cover: Prop::fixed(true),
+        ..Recipe::default()
+    })
+}
+
+fn avatar_fallback() -> Box<Recipe> {
+    Box::new(Recipe {
+        text_size: Prop {
+            base: Some(TextSize::Sm),
+            rules: vec![
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 16) | (1 << 122), value: TextSize::Xs },
+            ],
+        },
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn avatar_badge() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 12) | (1 << 122), value: 10.0 },
+                Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 14) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 16) | (1 << 122), value: 8.0 },
+            ],
+        },
+        width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 12) | (1 << 122), value: 10.0 },
+                Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 14) | (1 << 122), value: 12.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 16) | (1 << 122), value: 8.0 },
+            ],
+        },
+        inset_right: Prop::fixed(0.0),
+        inset_bottom: Prop::fixed(0.0),
+        icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 12) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 14) | (1 << 122), value: 8.0 },
+            ],
+        },
+        icon_hidden: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 16) | (1 << 122), value: true },
+            ],
+        },
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        bg: Prop::fixed(Paint::Role(Role::Primary, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::PrimaryForeground, 1.0)),
+        ring_width: Prop::fixed(2.0),
+        ring_color: Prop::fixed(Paint::Role(Role::Background, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn avatar_group() -> Box<Recipe> {
+    Box::new(Recipe {
+        space_x: Prop::fixed(-8.0),
+        ..Recipe::default()
+    })
+}
+
+fn avatar_group_count() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop {
+            base: Some(32.0),
+            rules: vec![
+                Rule { when: When::new(State::HAS_SIZE_LG, State::NONE), rank: (1 << 6) | (1 << 122), value: 40.0 },
+                Rule { when: When::new(State::HAS_SIZE_SM, State::NONE), rank: (1 << 7) | (1 << 122), value: 24.0 },
+            ],
+        },
+        width: Prop {
+            base: Some(32.0),
+            rules: vec![
+                Rule { when: When::new(State::HAS_SIZE_LG, State::NONE), rank: (1 << 6) | (1 << 122), value: 40.0 },
+                Rule { when: When::new(State::HAS_SIZE_SM, State::NONE), rank: (1 << 7) | (1 << 122), value: 24.0 },
+            ],
+        },
+        icon_size: Prop {
+            base: Some(16.0),
+            rules: vec![
+                Rule { when: When::new(State::HAS_SIZE_LG, State::NONE), rank: (1 << 6) | (1 << 122), value: 20.0 },
+                Rule { when: When::new(State::HAS_SIZE_SM, State::NONE), rank: (1 << 7) | (1 << 122), value: 12.0 },
+            ],
+        },
+        text_size: Prop::fixed(TextSize::Sm),
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ring_width: Prop::fixed(2.0),
+        ring_color: Prop::fixed(Paint::Role(Role::Background, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn button_group() -> Box<Recipe> {
+    Box::new(Recipe {
+        gap: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HAS_BUTTON_GROUP, State::NONE), rank: (1 << 40) | (1 << 122), value: 8.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn button_group_separator() -> Box<Recipe> {
+    Box::new(Recipe {
+        margin_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 1.0 },
+            ],
+        },
+        margin_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 1.0 },
+            ],
+        },
+        margin_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 1.0 },
+            ],
+        },
+        margin_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 1.0 },
+            ],
+        },
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        bg: Prop::fixed(Paint::Role(Role::Input, 1.0)),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn button_group_text() -> Box<Recipe> {
+    Box::new(Recipe {
+        pad_right: Prop::fixed(10.0),
+        pad_left: Prop::fixed(10.0),
+        gap: Prop::fixed(8.0),
+        icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 121, value: 16.0 },
+            ],
+        },
+        text_size: Prop::fixed(TextSize::Sm),
+        weight: Prop::fixed(Weight::Medium),
+        radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
+        border_width: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn textarea() -> Box<Recipe> {
+    Box::new(Recipe {
+        min_height: Prop::fixed(64.0),
+        pad_top: Prop::fixed(8.0),
+        pad_right: Prop::fixed(10.0),
+        pad_bottom: Prop::fixed(8.0),
+        pad_left: Prop::fixed(10.0),
+        text_size: Prop {
+            base: Some(TextSize::Base),
+            rules: vec![
+                Rule { when: When::new(State::MD, State::NONE), rank: 1 << 67, value: TextSize::Sm },
+            ],
+        },
+        radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+        radius_top: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_bottom: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        radius_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+            ],
+        },
+        radius_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: Radius::Rung(Rung::None) },
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: (2 << 122) | (1 << 127), value: Radius::Rung(Rung::Lg) },
+            ],
+        },
+        bg: Prop {
+            base: Some(Paint::Role(Role::Transparent, 1.0)),
+            rules: vec![
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Input, 0.5) },
+                Rule { when: When::new(State::DARK, State::NONE), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: When::new(State::DARK.or(State::DISABLED), State::NONE), rank: (1 << 31) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Input, 0.8) },
+            ],
+        },
+        text: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::PLACEHOLDER, State::NONE), rank: (1 << 25) | (1 << 126), value: Paint::Role(Role::MutedForeground, 1.0) },
+            ],
+        },
+        border_width: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL), State::NONE), rank: 1 << 122, value: 0.0 },
+            ],
+        },
+        border_color: Prop {
+            base: Some(Paint::Role(Role::Input, 1.0)),
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+            ],
+        },
+        ring_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: 3.0 },
+            ],
+        },
+        ring_color: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: When::new(State::INVALID, State::NONE), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: When::new(State::DARK.or(State::INVALID), State::NONE), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+            ],
+        },
+        outline_width: Prop::fixed(0.0),
+        opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::DISABLED, State::NONE), rank: (1 << 31) | (1 << 122), value: 0.5 },
+            ],
+        },
+        field_sizing_content: Prop::fixed(true),
+        transition: Prop::fixed(Transition::COLORS),
+        ..Recipe::default()
+    })
+}
+
+fn hover_card_content() -> Box<Recipe> {
+    Box::new(Recipe {
+        width: Prop::fixed(256.0),
+        pad_top: Prop::fixed(10.0),
+        pad_right: Prop::fixed(10.0),
+        pad_bottom: Prop::fixed(10.0),
+        pad_left: Prop::fixed(10.0),
+        text_size: Prop::fixed(TextSize::Sm),
+        radius: Prop::fixed(Radius::Rung(Rung::Lg)),
+        bg: Prop::fixed(Paint::Role(Role::Popover, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::PopoverForeground, 1.0)),
+        ring_width: Prop::fixed(1.0),
+        ring_color: Prop::fixed(Paint::Role(Role::Foreground, 0.1)),
+        outline_width: Prop::fixed(0.0),
+        shadow: Prop::fixed(ShadowLevel::Md),
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        enter_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.95 },
+            ],
+        },
+        enter_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_LEFT, State::NONE), rank: (1 << 55) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::SIDE_RIGHT, State::NONE), rank: (1 << 56) | (1 << 122), value: -8.0 },
+            ],
+        },
+        enter_y: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIDE_BOTTOM, State::NONE), rank: (1 << 54) | (1 << 122), value: -8.0 },
+                Rule { when: When::new(State::SIDE_TOP, State::NONE), rank: (1 << 57) | (1 << 122), value: 8.0 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        exit_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.95 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_overlay() -> Box<Recipe> {
+    Box::new(Recipe {
+        inset_top: Prop::fixed(0.0),
+        inset_right: Prop::fixed(0.0),
+        inset_bottom: Prop::fixed(0.0),
+        inset_left: Prop::fixed(0.0),
+        bg: Prop::fixed(Paint::Role(Role::Black, 0.1)),
+        backdrop_blur: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 65, value: 4.0 },
+            ],
+        },
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_content() -> Box<Recipe> {
+    Box::new(Recipe {
+        max_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 58) | (1 << 122), value: 320.0 },
+                Rule { when: When::new(State::SIZE_SM, State::NONE), rank: (1 << 60) | (1 << 122), value: 320.0 },
+                Rule { when: When::new(State::SIZE_DEFAULT.or(State::SM), State::NONE), rank: (1 << 58) | (1 << 66) | (1 << 122), value: 384.0 },
+            ],
+        },
+        pad_top: Prop::fixed(16.0),
+        pad_right: Prop::fixed(16.0),
+        pad_bottom: Prop::fixed(16.0),
+        pad_left: Prop::fixed(16.0),
+        gap: Prop::fixed(16.0),
+        radius: Prop::fixed(Radius::Rung(Rung::Xl)),
+        bg: Prop::fixed(Paint::Role(Role::Popover, 1.0)),
+        text: Prop::fixed(Paint::Role(Role::PopoverForeground, 1.0)),
+        ring_width: Prop::fixed(1.0),
+        ring_color: Prop::fixed(Paint::Role(Role::Foreground, 0.1)),
+        outline_width: Prop::fixed(0.0),
+        shift_x: Prop::fixed(Shift::Calc(-0.5, 0.0)),
+        shift_y: Prop::fixed(Shift::Calc(-0.5, 0.0)),
+        duration: Prop::fixed(0.1),
+        animate_in: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: true },
+            ],
+        },
+        animate_out: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: true },
+            ],
+        },
+        enter_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.0 },
+            ],
+        },
+        enter_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::EXPANDED, State::NONE), rank: 1 << 69, value: 0.95 },
+            ],
+        },
+        exit_opacity: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.0 },
+            ],
+        },
+        exit_scale: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::CLOSED, State::NONE), rank: 1 << 70, value: 0.95 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_header() -> Box<Recipe> {
+    Box::new(Recipe {
+        gap: Prop::fixed(6.0),
+        gap_x: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HAS_MEDIA, State::NONE), rank: (1 << 37) | (1 << 122), value: 16.0 },
+            ],
+        },
+        text_align: Prop {
+            base: Some(TextAlign::Center),
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT.or(State::SM), State::NONE), rank: (1 << 11) | (1 << 66) | (1 << 122), value: TextAlign::Left },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_media() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop::fixed(40.0),
+        width: Prop::fixed(40.0),
+        margin_bottom: Prop::fixed(8.0),
+        icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 121, value: 24.0 },
+            ],
+        },
+        radius: Prop::fixed(Radius::Rung(Rung::Md)),
+        bg: Prop::fixed(Paint::Role(Role::Muted, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_title() -> Box<Recipe> {
+    Box::new(Recipe {
+        text_size: Prop::fixed(TextSize::Base),
+        weight: Prop::fixed(Weight::Medium),
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_description() -> Box<Recipe> {
+    Box::new(Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text_wrap: Prop {
+            base: Some(TextWrap::Balance),
+            rules: vec![
+                Rule { when: When::new(State::MD, State::NONE), rank: 1 << 67, value: TextWrap::Pretty },
+            ],
+        },
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn alert_dialog_footer() -> Box<Recipe> {
+    Box::new(Recipe {
+        pad_top: Prop::fixed(16.0),
+        pad_right: Prop::fixed(16.0),
+        pad_bottom: Prop::fixed(16.0),
+        pad_left: Prop::fixed(16.0),
+        margin_right: Prop::fixed(-16.0),
+        margin_bottom: Prop::fixed(-16.0),
+        margin_left: Prop::fixed(-16.0),
+        gap: Prop::fixed(8.0),
+        radius_bottom: Prop::fixed(Radius::Rung(Rung::Xl)),
+        bg: Prop::fixed(Paint::Role(Role::Muted, 0.5)),
+        border_top_width: Prop::fixed(1.0),
+        ..Recipe::default()
+    })
+}
+
+fn pagination_content() -> Box<Recipe> {
+    Box::new(Recipe {
+        gap: Prop::fixed(2.0),
+        ..Recipe::default()
+    })
+}
+
+fn pagination_previous() -> Box<Recipe> {
+    Box::new(Recipe {
+        pad_left: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 127, value: 6.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn pagination_previous_text() -> Box<Recipe> {
+    Box::new(Recipe {
+        hidden: Prop {
+            base: Some(true),
+            rules: vec![
+                Rule { when: When::new(State::SM, State::NONE), rank: 1 << 66, value: false },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn pagination_next() -> Box<Recipe> {
+    Box::new(Recipe {
+        pad_right: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 127, value: 6.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn pagination_next_text() -> Box<Recipe> {
+    Box::new(Recipe {
+        hidden: Prop {
+            base: Some(true),
+            rules: vec![
+                Rule { when: When::new(State::SM, State::NONE), rank: 1 << 66, value: false },
+            ],
+        },
+        ..Recipe::default()
+    })
+}
+
+fn pagination_ellipsis() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop::fixed(32.0),
+        width: Prop::fixed(32.0),
+        icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 121, value: 16.0 },
+            ],
+        },
+        ..Recipe::default()
+    })
 }

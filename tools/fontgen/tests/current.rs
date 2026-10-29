@@ -67,15 +67,16 @@ fn committed_font_crates_are_current() {
 }
 
 #[test]
-fn shipped_fonts_are_measured() {
-    let unmeasured: Vec<String> = rows()
+fn shipped_fonts_set_their_baseline_correction() {
+    let unset: Vec<String> = rows()
         .into_iter()
         .filter(|r| r.shipped() && r.y_offset_factor.is_none())
         .map(|r| r.name)
         .collect();
     assert!(
-        unmeasured.is_empty(),
-        "measure with tests/font_offset.rs: {unmeasured:?}"
+        unset.is_empty(),
+        "set y_offset_factor to 0, or to the correction a font still needs after \
+         crates/shadcn-egui/tests/text_placement.rs: {unset:?}"
     );
 }
 

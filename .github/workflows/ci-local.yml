@@ -64,8 +64,9 @@ jobs:
       - name: Doctests with all features
         run: cargo test --locked -p shadcn-egui --doc --all-features -- --test-threads 4
 
-      # egui_kittest writes <name>.new.png and <name>.diff.png next to a
-      # snapshot that does not match. The gallery test keeps the README's
+      # egui_kittest and the strict check (tests/common/strict.rs) write
+      # <name>.new.png and <name>.diff.png next to a snapshot that does not
+      # match. The gallery test keeps the README's
       # docs/gallery-screen.png that way too.
       - name: Keep the failed snapshot images
         if: failure()
@@ -280,7 +281,9 @@ jobs:
       # Not ~/.cargo/registry/src or target/package: the dry run unpacks the
       # workspace's own crates there under their current version, and cargo
       # reuses an unpacked copy left by an earlier run of the same version,
-      # so a changed crate would be verified against its old source.
+      # so a changed crate would be verified against its old source. The
+      # libraries it built from them stay in target; check-publish.sh
+      # removes those before the run.
       - uses: actions/cache@v6
         with:
           path: |
@@ -296,4 +299,4 @@ jobs:
       - run: scripts/check-version-files.sh
       - run: scripts/check-packages.sh
       - run: scripts/check-package-size.sh
-      - run: cargo publish --locked --dry-run --workspace
+      - run: scripts/check-publish.sh

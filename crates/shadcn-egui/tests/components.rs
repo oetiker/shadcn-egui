@@ -17,7 +17,7 @@ fn button_click_sets_flag() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         if ui.add(Button::new("Save")).clicked() {
             clicked.set(true);
         }
@@ -30,9 +30,9 @@ fn button_click_sets_flag() {
 #[test]
 fn button_height_follows_style() {
     use shadcn_egui::components::button::Button;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let want = if name.starts_with("nova") { 32.0 } else { 36.0 };
-        let h = common::measure(&theme, |ui| ui.add(Button::new("Save"))).height();
+        let h = common::measure(&theme, mode, |ui| ui.add(Button::new("Save"))).height();
         assert_eq!(h, want, "{name}");
     }
 }
@@ -46,8 +46,9 @@ fn button_override_from_theme_setup() {
     use shadcn_egui::{Palette, Theme};
     let mut s = Style::nova();
     s.button_size_default.height.base = Some(40.0);
-    let theme = Theme::new(s, Palette::dark(), 10.0);
-    let h = common::measure(&theme, |ui| ui.add(Button::new("Save"))).height();
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(s, Palette::light(), Palette::dark(), 10.0);
+    let h = common::measure(&theme, mode, |ui| ui.add(Button::new("Save"))).height();
     assert_eq!(h, 40.0);
 }
 
@@ -96,6 +97,76 @@ fn button_snapshot() {
     });
 }
 
+/// App variants and an app size of Button and an app variant of Badge, in
+/// vega light and dark: the app colour follows the mode. "Remove" is
+/// hovered: Outline sets its text colour only on hover.
+#[test]
+fn app_variant_snapshot() {
+    use egui_kittest::kittest::Queryable;
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::button::{ButtonSize, ButtonVariant};
+    use shadcn_egui::layout;
+    use shadcn_egui::style::{AppVariant, Paint, Role};
+    const BRAND: Role = Role::custom("brand");
+    const DANGER_GHOST: AppVariant<ButtonVariant> = ButtonVariant::app("danger-ghost");
+    const DANGER_OUTLINE: AppVariant<ButtonVariant> = ButtonVariant::app("danger-outline");
+    const ROOMY: AppVariant<ButtonSize> = ButtonSize::app("roomy");
+    const BRAND_BADGE: AppVariant<BadgeVariant> = BadgeVariant::app("brand");
+    let theme = |mode| {
+        let t = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0)
+            .color(
+                BRAND,
+                egui::Color32::from_rgb(0x25, 0x63, 0xeb),
+                egui::Color32::from_rgb(0x93, 0xc5, 0xfd),
+            )
+            .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
+                r.button.text.set(Paint::Role(Role::Destructive, 1.0))
+            })
+            .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| {
+                r.button.recolor(Role::Foreground, Role::Destructive)
+            })
+            .size(ROOMY, ButtonSize::Default, |r, _| {
+                r.button.height.set(44.0);
+                r.button.pad_left.set(24.0);
+                r.button.pad_right.set(24.0);
+            })
+            .variant(BRAND_BADGE, BadgeVariant::Default, |r, _| {
+                r.badge.recolor(Role::Primary, BRAND)
+            });
+        (t, mode)
+    };
+    let themes = vec![
+        ("vega_dark", theme(egui::Theme::Dark)),
+        ("vega_light", theme(egui::Theme::Light)),
+    ]
+    .into_iter()
+    .map(|(n, (t, m))| (n, t, m))
+    .collect();
+    common::snapshot_with_themes(
+        "app_variant",
+        egui::vec2(560.0, 120.0),
+        themes,
+        |ui| {
+            layout::vstack(ui, 12.0, |ui| {
+                layout::row(ui, 8.0, |ui| {
+                    ui.add(Button::new("Delete").variant(DANGER_GHOST));
+                    ui.add(Button::new("Remove").variant(DANGER_OUTLINE));
+                    ui.add(Button::new("Roomy").size(ROOMY));
+                    ui.add(Button::new("Both").variant(DANGER_OUTLINE).size(ROOMY));
+                });
+                layout::row(ui, 8.0, |ui| {
+                    ui.add(Badge::new("Brand").variant(BRAND_BADGE));
+                    badge(ui, "Default", BadgeVariant::Default);
+                });
+            });
+        },
+        |h| {
+            h.get_by_label("Remove").hover();
+            h.run();
+        },
+    );
+}
+
 /// The shared Response-to-State mapping: a disabled widget gets `DISABLED`
 /// and loses every pointer and focus bit, also one its caller passed in.
 #[test]
@@ -103,11 +174,11 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     use shadcn_egui::components::shared::interaction_state;
     use shadcn_egui::style::State;
     use shadcn_egui::Theme;
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let target = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(80.0, 30.0));
     let ctx = egui::Context::default();
     let (mut live, mut disabled) = (State::NONE, State::NONE);
-    for events in [vec![], pointer_down(target.center()), vec![]] {
+    for events in [vec![], common::pointer_down(target.center()), vec![]] {
         let _ = ctx.run_ui(
             egui::RawInput {
                 events,
@@ -115,16 +186,26 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
             },
             |ui| {
                 let resp = ui.interact(target, egui::Id::new("target"), egui::Sense::click());
-                resp.request_focus();
-                live = interaction_state(&theme, &resp, true, State::INVALID);
-                disabled = interaction_state(&theme, &resp, false, State::INVALID | State::FOCUS);
+                // The press focuses it.
+                if ui.input(|i| i.pointer.any_pressed()) {
+                    resp.request_focus();
+                }
+                live = interaction_state(&theme, &resp, State::INVALID);
+                disabled = interaction_state(
+                    &theme,
+                    &resp,
+                    State::INVALID | State::FOCUS | State::DISABLED,
+                );
             },
         );
     }
-    // Control: the same response, enabled, is hovered, pressed and focused.
-    let pointer = State::HOVER | State::ACTIVE | State::FOCUS_VISIBLE;
-    assert_eq!(live, pointer | State::INVALID | State::DARK);
-    assert_eq!(disabled, State::INVALID | State::DISABLED | State::DARK);
+    // Control: the same response, enabled, is hovered, pressed and focused,
+    // without a ring: a pointer press moved focus.
+    let pointer = State::HOVER | State::ACTIVE | State::FOCUS;
+    // egui's default window is wider than `md`.
+    let theme_flags = State::DARK | State::SM | State::MD;
+    assert_eq!(live, pointer | State::INVALID | theme_flags);
+    assert_eq!(disabled, State::INVALID | State::DISABLED | theme_flags);
 }
 
 /// shadcn `bg-clip-padding` with `border border-transparent`: a solid
@@ -133,9 +214,10 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
 fn button_fill_stops_inside_transparent_border() {
     use shadcn_egui::components::button::Button;
     use shadcn_egui::Theme;
-    let theme = Theme::vega_light();
-    let (rect, out) = common::measure_output(&theme, |ui| ui.add(Button::new("Save")));
-    let fill = theme.palette.primary;
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let (rect, out) = common::measure_output(&theme, mode, |ui| ui.add(Button::new("Save")));
+    let fill = theme.palette_of(mode).primary;
     let fills: Vec<_> = common::rect_shapes(&out)
         .into_iter()
         .filter(|r| r.fill == fill)
@@ -150,13 +232,14 @@ fn button_fill_stops_inside_transparent_border() {
 fn focused_button_shows_ring_and_ring_border() {
     use shadcn_egui::components::button::Button;
     use shadcn_egui::Theme;
-    let theme = Theme::vega_light();
-    let (rect, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let (rect, out) = common::measure_output(&theme, mode, |ui| {
         let resp = ui.add(Button::new("Save"));
         resp.request_focus();
         resp
     });
-    let ring = theme.palette.ring;
+    let ring = theme.palette_of(mode).ring;
     let shapes = common::rect_shapes(&out);
     let ring_shape = shapes.iter().find(|r| r.stroke.width == 3.0);
     let ring_shape = ring_shape.unwrap_or_else(|| panic!("no 3px ring in {shapes:?}"));
@@ -171,19 +254,6 @@ fn focused_button_shows_ring_and_ring_border() {
     );
 }
 
-/// Move the pointer to `pos` and press the primary button there.
-fn pointer_down(pos: egui::Pos2) -> Vec<egui::Event> {
-    vec![
-        egui::Event::PointerMoved(pos),
-        egui::Event::PointerButton {
-            pos,
-            button: egui::PointerButton::Primary,
-            pressed: true,
-            modifiers: egui::Modifiers::NONE,
-        },
-    ]
-}
-
 #[test]
 fn input_accepts_text() {
     use egui_kittest::kittest::Queryable;
@@ -193,7 +263,7 @@ fn input_accepts_text() {
     let mut text = String::new();
     let mut h = Harness::new_ui_state(
         |ui, text: &mut String| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add(Input::new(text).hint("Email"));
         },
         std::mem::take(&mut text),
@@ -216,7 +286,7 @@ fn disabled_input_ignores_typing() {
     use shadcn_egui::Theme;
     let mut h = Harness::new_ui_state(
         |ui, text: &mut String| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add(Input::new(text).enabled(false));
         },
         String::new(),
@@ -231,13 +301,45 @@ fn disabled_input_ignores_typing() {
     assert_eq!(h.state(), "");
 }
 
+/// A field raised to its content minimum overflows a column narrower than
+/// that minimum without widening the column (conformance 3.6), and still
+/// takes typed text.
+#[test]
+fn input_overflows_a_narrow_column_without_widening_it() {
+    use shadcn_egui::components::input::Input;
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let mut text = String::new();
+    let mut widths = (0.0, 0.0);
+    for events in [vec![], vec![], vec![egui::Event::Text("ab".into())]] {
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                ui.allocate_ui(egui::vec2(10.0, 100.0), |ui| {
+                    ui.set_max_width(10.0);
+                    let field = ui.add(Input::new(&mut text).id_salt("narrow"));
+                    field.request_focus();
+                    widths = (field.rect.width(), ui.min_rect().width());
+                });
+            },
+        );
+    }
+    assert!(widths.0 > 10.0, "the field keeps its minimum: {widths:?}");
+    assert_eq!(widths.1, 10.0, "the column keeps its width");
+    assert_eq!(text, "ab");
+}
+
 #[test]
 fn input_height_follows_style() {
     use shadcn_egui::components::input::Input;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let want = if name.starts_with("nova") { 32.0 } else { 36.0 };
         let mut text = String::new();
-        let h = common::measure(&theme, |ui| ui.add(Input::new(&mut text))).height();
+        let h = common::measure(&theme, mode, |ui| ui.add(Input::new(&mut text))).height();
         assert_eq!(h, want, "{name}");
     }
 }
@@ -246,7 +348,8 @@ fn input_height_follows_style() {
 fn input_snapshot() {
     use shadcn_egui::components::input::Input;
     use shadcn_egui::components::label::label;
-    common::snapshot_all("input", egui::vec2(300.0, 390.0), |ui| {
+    // `text-base md:text-sm`: the phone and the desktop text size.
+    common::snapshot_widths("input", 390.0, common::snapshot_themes(), |ui| {
         let mut empty = String::new();
         let mut filled = String::from("you@example.com");
         let mut invalid = String::from("not an email");
@@ -282,7 +385,7 @@ fn tabs_harness(
     let active = std::rc::Rc::new(std::cell::Cell::new(start));
     let seen = active.clone();
     let h = egui_kittest::Harness::new_ui(move |ui| {
-        shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+        shadcn_egui::Theme::vega().apply(ui.ctx());
         let mut sel = seen.get();
         ui.add(Tabs::new(&mut sel, labels));
         seen.set(sel);
@@ -336,7 +439,7 @@ fn focused_label(h: &egui_kittest::Harness<'_>) -> Option<String> {
 fn tabs_are_one_tab_stop() {
     use shadcn_egui::components::tabs::Tabs;
     let mut h = egui_kittest::Harness::new_ui(|ui| {
-        shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+        shadcn_egui::Theme::vega().apply(ui.ctx());
         ui.add(egui::Button::new("Before"));
         let mut sel = 1;
         ui.add(Tabs::new(
@@ -403,9 +506,9 @@ fn tabs_report_the_selected_trigger() {
 #[test]
 fn tabs_are_as_wide_as_their_labels() {
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
-    for (name, theme) in common::themes() {
-        let short = common::measure(&theme, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
-        let long = common::measure(&theme, |ui| {
+    for (name, theme, mode) in common::themes() {
+        let short = common::measure(&theme, mode, |ui| ui.add(Tabs::new(&mut 0, &["A", "B"])));
+        let long = common::measure(&theme, mode, |ui| {
             ui.add(Tabs::new(&mut 0, &["Account", "Notifications"]))
         });
         assert!(
@@ -415,19 +518,20 @@ fn tabs_are_as_wide_as_their_labels() {
             short.width()
         );
         // Line triggers are 4px apart (gap-1); the default ones touch.
-        let line = common::measure(&theme, |ui| {
+        let line = common::measure(&theme, mode, |ui| {
             ui.add(Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line))
         });
         assert_eq!(line.width() - short.width(), 4.0, "{name}");
     }
     let vega = &common::themes()[0].1;
     let nova = &common::themes()[2].1;
+    let dark = egui::Theme::Dark;
     assert_eq!(
-        common::measure(vega, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
+        common::measure(vega, dark, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
         36.0
     );
     assert_eq!(
-        common::measure(nova, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
+        common::measure(nova, dark, |ui| ui.add(Tabs::new(&mut 0, &["A"]))).height(),
         32.0
     );
 }
@@ -436,6 +540,7 @@ fn tabs_are_as_wide_as_their_labels() {
 /// each trigger, of a tab list `add` places on a page `page_w` wide.
 fn tabs_layout(
     theme: &shadcn_egui::Theme,
+    mode: egui::Theme,
     page_w: f32,
     labels: &[&str],
     add: impl Fn(&mut egui::Ui) -> egui::Response + 'static,
@@ -445,7 +550,7 @@ fn tabs_layout(
     use std::rc::Rc;
     let out = Rc::new(Cell::new((egui::Rect::NOTHING, 0.0)));
     let sink = out.clone();
-    let h = common::page_harness(egui::vec2(page_w, 120.0), theme.clone(), move |ui| {
+    let h = common::page_harness(egui::vec2(page_w, 120.0), theme.clone(), mode, move |ui| {
         let avail = ui.available_width();
         sink.set((add(ui).rect, avail));
     });
@@ -458,9 +563,9 @@ fn tabs_layout(
 fn tabs_width_infinity_fills_the_row_and_shares_it_equally() {
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
     let labels = ["Display", "Audio", "Camera", "Folders"];
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         for variant in [TabsVariant::Default, TabsVariant::Line] {
-            let (list, avail, triggers) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            let (list, avail, triggers) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
                 ui.add(
                     Tabs::new(&mut 0, &labels)
                         .variant(variant)
@@ -492,11 +597,11 @@ fn tabs_width_infinity_fills_the_row_and_shares_it_equally() {
 fn tabs_width_keeps_a_long_label_at_its_own_width() {
     use shadcn_egui::components::tabs::Tabs;
     let labels = ["A", "B", "A rather long tab label"];
-    for (name, theme) in common::themes() {
-        let (_, _, hug) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+    for (name, theme, mode) in common::themes() {
+        let (_, _, hug) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels))
         });
-        let (list, avail, wide) = tabs_layout(&theme, 360.0, &labels, move |ui| {
+        let (list, avail, wide) = tabs_layout(&theme, mode, 360.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels).width(f32::INFINITY))
         });
         assert_eq!(list.width(), avail, "{name}");
@@ -513,21 +618,21 @@ fn tabs_width_keeps_a_long_label_at_its_own_width() {
 fn tabs_width_is_at_least_the_content_and_at_most_the_row() {
     use shadcn_egui::components::tabs::Tabs;
     let labels = ["Account", "Notifications"];
-    for (name, theme) in common::themes() {
-        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+    for (name, theme, mode) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels))
         });
-        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+        let (fixed, _, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             ui.add(Tabs::new(&mut 0, &labels).width(400.0))
         });
         assert_eq!(fixed.width(), 400.0, "{name}");
         for w in [10.0, 0.0, -5.0, f32::NAN] {
-            let (small, _, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+            let (small, _, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
                 ui.add(Tabs::new(&mut 0, &labels).width(w))
             });
             assert_eq!(small.width(), hug.width(), "{name} {w}");
         }
-        let (capped, avail, _) = tabs_layout(&theme, 300.0, &["A", "B"], move |ui| {
+        let (capped, avail, _) = tabs_layout(&theme, mode, 300.0, &["A", "B"], move |ui| {
             ui.add(Tabs::new(&mut 0, &["A", "B"]).width(5000.0))
         });
         assert_eq!(capped.width(), avail, "{name}");
@@ -548,8 +653,8 @@ fn add_tabs(ui: &mut egui::Ui, labels: &[&str], w: Option<f32>) -> egui::Respons
 #[test]
 fn tabs_width_infinity_in_a_scroll_area_fills_the_visible_width() {
     let labels = ["Account", "Notifications"];
-    for (name, theme) in common::themes() {
-        let (list, avail, _) = tabs_layout(&theme, 600.0, &labels, move |ui| {
+    for (name, theme, mode) in common::themes() {
+        let (list, avail, _) = tabs_layout(&theme, mode, 600.0, &labels, move |ui| {
             egui::ScrollArea::horizontal()
                 .show(ui, |ui| add_tabs(ui, &labels, Some(f32::INFINITY)))
                 .inner
@@ -571,11 +676,11 @@ fn tabs_width_in_an_unbounded_ui_hugs_or_keeps_a_finite_width() {
             .inner
         }
     };
-    for (name, theme) in common::themes() {
-        let (hug, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(None));
-        let (inf, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(f32::INFINITY)));
+    for (name, theme, mode) in common::themes() {
+        let (hug, _, _) = tabs_layout(&theme, mode, 600.0, &labels, unbounded(None));
+        let (inf, _, _) = tabs_layout(&theme, mode, 600.0, &labels, unbounded(Some(f32::INFINITY)));
         assert_eq!(inf.width(), hug.width(), "{name}");
-        let (fixed, _, _) = tabs_layout(&theme, 600.0, &labels, unbounded(Some(400.0)));
+        let (fixed, _, _) = tabs_layout(&theme, mode, 600.0, &labels, unbounded(Some(400.0)));
         assert_eq!(fixed.width(), 400.0, "{name}");
     }
 }
@@ -765,10 +870,10 @@ fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) 
     let size = egui::vec2(520.0, page_h as f32);
 
     let mut results = egui_kittest::SnapshotResults::new();
-    for (suffix, theme) in common::snapshot_themes() {
+    for (suffix, theme, mode) in common::snapshot_themes() {
         let mut stacked = None;
         for (i, r) in rows.iter().enumerate() {
-            let mut h = common::page_harness(size, theme.clone(), |ui| {
+            let mut h = common::page_harness(size, theme.clone(), mode, |ui| {
                 ui.add_space((i * ROW_H) as f32);
                 let mut sel = r.selected;
                 let resp = ui.add(
@@ -800,10 +905,7 @@ fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) 
             }
         }
         let img = stacked.expect("at least one row");
-        results.add(egui_kittest::try_image_snapshot(
-            &img,
-            format!("{name}_{suffix}"),
-        ));
+        results.add(common::try_image_snapshot(&img, format!("{name}_{suffix}")));
     }
 }
 
@@ -826,8 +928,9 @@ fn tabs_states_line_snapshot() {
 #[test]
 fn badge_is_h5_in_both_styles() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
-    for (name, theme) in common::themes() {
-        let h = common::measure(&theme, |ui| badge(ui, "New", BadgeVariant::Default)).height();
+    for (name, theme, mode) in common::themes() {
+        let h =
+            common::measure(&theme, mode, |ui| badge(ui, "New", BadgeVariant::Default)).height();
         assert_eq!(h, 20.0, "{name}");
     }
 }
@@ -857,11 +960,12 @@ fn badge_snapshot() {
 fn disabled_label_paints_half_alpha_text() {
     use shadcn_egui::components::label::Label;
     use shadcn_egui::style::{pick, State};
-    for (name, theme) in common::themes() {
-        let (rect, on) = common::measure_output(&theme, |ui| ui.add(Label::new("Email")));
-        let (_, off) =
-            common::measure_output(&theme, |ui| ui.add(Label::new("Email").enabled(false)));
-        let fg = theme.palette.foreground;
+    for (name, theme, mode) in common::themes() {
+        let (rect, on) = common::measure_output(&theme, mode, |ui| ui.add(Label::new("Email")));
+        let (_, off) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Label::new("Email").enabled(false))
+        });
+        let fg = theme.palette_of(mode).foreground;
         assert_eq!(common::text_colour(&on), fg, "{name}");
         assert_eq!(common::text_colour(&off), fg.gamma_multiply(0.5), "{name}");
         assert_eq!(rect.height(), 14.0, "{name}");
@@ -878,20 +982,21 @@ fn disabled_label_paints_half_alpha_text() {
 #[test]
 fn separators_are_one_pixel_border_lines() {
     use shadcn_egui::components::separator::{separator, separator_vertical};
-    let theme = shadcn_egui::Theme::vega_light();
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Light;
+    let theme = shadcn_egui::Theme::vega();
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.allocate_response(egui::vec2(200.0, 0.0), egui::Sense::hover());
         separator(ui);
         ui.allocate_response(egui::vec2(0.0, 0.0), egui::Sense::hover())
     });
     let lines: Vec<_> = common::rect_shapes(&out)
         .into_iter()
-        .filter(|r| r.fill == theme.palette.border)
+        .filter(|r| r.fill == theme.palette_of(mode).border)
         .collect();
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert_eq!(lines[0].rect.height(), 1.0);
     assert!(lines[0].rect.width() >= 200.0);
-    let (_, out) = common::measure_output(&theme, |ui| {
+    let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.horizontal(|ui| {
             ui.set_height(24.0);
             separator_vertical(ui);
@@ -900,7 +1005,7 @@ fn separators_are_one_pixel_border_lines() {
     });
     let v: Vec<_> = common::rect_shapes(&out)
         .into_iter()
-        .filter(|r| r.fill == theme.palette.border)
+        .filter(|r| r.fill == theme.palette_of(mode).border)
         .collect();
     assert_eq!(v.len(), 1, "{v:?}");
     assert_eq!(v[0].rect.width(), 1.0);
@@ -927,6 +1032,39 @@ fn label_separator_snapshot() {
     });
 }
 
+/// Vertical separators in a `layout::row` of items of different heights
+/// (a label, a button, a badge, a two-line stack): each spans the tallest
+/// other item (`self-stretch`).
+#[test]
+fn separator_vertical_row_snapshot() {
+    use shadcn_egui::components::badge::{badge, BadgeVariant};
+    use shadcn_egui::components::button::Button;
+    use shadcn_egui::components::label::{description, Label};
+    use shadcn_egui::components::separator::separator_vertical;
+    use shadcn_egui::layout;
+    let themes = common::themes().into_iter().take(2).collect();
+    common::snapshot_with_themes(
+        "separator_vertical_row",
+        egui::vec2(420.0, 100.0),
+        themes,
+        |ui| {
+            layout::row(ui, 12.0, |ui| {
+                ui.add(Label::new("Docs"));
+                separator_vertical(ui);
+                ui.add(Button::new("Open"));
+                separator_vertical(ui);
+                badge(ui, "New", BadgeVariant::Secondary);
+                separator_vertical(ui);
+                layout::vstack(ui, 2.0, |ui| {
+                    ui.add(Label::new("Account"));
+                    description(ui, "Signed in");
+                });
+            });
+        },
+        |_| {},
+    );
+}
+
 /// The `select` and `badge` shorthands; their sizes are asserted with the
 /// widgets they wrap.
 #[test]
@@ -936,7 +1074,7 @@ fn select_and_badge_shorthands_do_not_panic() {
     use shadcn_egui::components::select::select;
     use shadcn_egui::Theme;
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         let mut choice = 0usize;
         select(ui, "lang", &mut choice, &["English", "German"]);
         badge(ui, "New", BadgeVariant::Default);
@@ -969,6 +1107,48 @@ fn demo_card(ui: &mut egui::Ui, size: CardSize, footer: bool) {
     });
 }
 
+/// Free content in a card's closure stands for a `card-content` (rules,
+/// Container; G4): its widgets are `cn-card-content`'s gap apart (vega
+/// 12 px, nova none), and the card's gap stays between it and the
+/// sections around it.
+#[test]
+fn free_card_content_is_one_card_content() {
+    for (theme, content_gap, gap) in [
+        (Theme::vega(), 12.0, 24.0),
+        (
+            Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0),
+            0.0,
+            16.0,
+        ),
+    ] {
+        let boxed = |ui: &mut egui::Ui| {
+            ui.allocate_exact_size(egui::vec2(40.0, 10.0), egui::Sense::hover())
+                .0
+        };
+        let mut seen = (
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+        );
+        let _ = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            let inner = ui.scope(|ui| {
+                Card::new().show(ui, |ui| {
+                    let h = card_content(ui, |ui| boxed(ui));
+                    let (a, b) = (boxed(ui), boxed(ui));
+                    let c = card_content(ui, |ui| boxed(ui));
+                    seen = (h, a, b, c);
+                });
+            });
+            inner.response
+        });
+        let (h, a, b, c) = seen;
+        assert_eq!(a.top(), h.bottom() + gap, "{h:?} {a:?}");
+        assert_eq!(b.top(), a.bottom() + content_gap, "{a:?} {b:?}");
+        assert_eq!(c.top(), b.bottom() + gap, "{b:?} {c:?}");
+    }
+}
+
 #[test]
 fn card_default_snapshot() {
     common::snapshot_all("card_default", egui::vec2(360.0, 200.0), |ui| {
@@ -988,6 +1168,93 @@ fn card_sm_snapshot() {
     common::snapshot_all("card_sm", egui::vec2(360.0, 300.0), |ui| {
         demo_card(ui, CardSize::Sm, true)
     });
+}
+
+/// A card in a `layout::wrap_row` is a flex item as wide as its content:
+/// one that does not fit the rest of the line goes onto the next line
+/// (porting rule 6), never past the row's end.
+#[test]
+fn card_wraps_in_a_wrap_row() {
+    let ctx = egui::Context::default();
+    let (mut button, mut body) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+    for _ in 0..3 {
+        let _ = common::pass(common::Loop::RunUi, &ctx, vec![], |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.set_max_width(448.0);
+            shadcn_egui::layout::wrap_row(ui, 8.0, |ui| {
+                button = ui.add(Button::new("Before")).rect;
+                body = Card::new().show(ui, |ui| {
+                    card_content(ui, |ui| {
+                        ui.label("A card body that is far too wide for the rest of the line")
+                    })
+                    .rect
+                });
+            });
+        });
+    }
+    // vega's card content is `px-6`: the card is the body plus 48.
+    let card_w = body.width() + 48.0;
+    assert!(card_w > 448.0 - button.width() - 8.0, "{body:?}");
+    assert_eq!(body.left() - 24.0, button.left(), "{button:?} {body:?}");
+    assert!(body.top() >= button.bottom() + 8.0, "{button:?} {body:?}");
+}
+
+/// A card in a `layout::row` beside a nowrap button: upstream's card sets
+/// no width, so it is a flex item as wide as its content, not the rest of
+/// the row (an alert, `w-full`, takes the rest there).
+#[test]
+fn card_is_content_wide_in_a_row() {
+    let ctx = egui::Context::default();
+    let (mut button, mut card, mut body) = (
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+        egui::Rect::NOTHING,
+    );
+    for _ in 0..3 {
+        let _ = common::pass(common::Loop::RunUi, &ctx, vec![], |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.set_max_width(448.0);
+            shadcn_egui::layout::row(ui, 8.0, |ui| {
+                button = ui.add(Button::new("Before")).rect;
+                card = ui
+                    .scope(|ui| {
+                        Card::new().show(ui, |ui| {
+                            body = card_content(ui, |ui| ui.label("Card")).rect;
+                        })
+                    })
+                    .response
+                    .rect;
+            });
+        });
+    }
+    assert_eq!(card.left(), button.right() + 8.0, "{button:?} {card:?}");
+    // vega's card content is `px-6`: the card is the body plus 48.
+    assert_eq!(card.width(), body.width() + 48.0, "{body:?} {card:?}");
+    assert!(card.right() < 448.0, "{card:?}");
+}
+
+/// The card's node holds its header, content and footer, as upstream's
+/// card `div` holds its children.
+#[test]
+fn the_card_node_holds_its_sections() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut h = egui_kittest::Harness::new_ui(|ui| demo_card(ui, CardSize::Default, true));
+    h.run();
+    let card = h
+        .get_by_role(egui::accesskit::Role::Pane)
+        .accesskit_node()
+        .id();
+    for label in ["Notifications", "You have 3 unread messages.", "Save"] {
+        let node = h.get_by_label(label);
+        let mut up = node.parent();
+        while let Some(p) = up {
+            if p.accesskit_node().id() == card {
+                break;
+            }
+            up = p.parent();
+        }
+        assert!(up.is_some(), "{label} is not inside the card node");
+    }
 }
 
 #[test]
@@ -1011,8 +1278,9 @@ fn card_action_snapshot() {
 /// edge: the card adds no padding below it.
 #[test]
 fn nova_footer_strip_reaches_card_bottom() {
-    let theme = Theme::new(Style::nova(), Palette::dark(), 10.0);
-    let (card, out) = common::measure_output(&theme, |ui| {
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0);
+    let (card, out) = common::measure_output(&theme, mode, |ui| {
         ui.scope(|ui| demo_card(ui, CardSize::Default, true))
             .response
     });
@@ -1035,9 +1303,10 @@ fn nova_footer_strip_reaches_card_bottom() {
 /// vega has no footer strip: the card's own bottom padding stays below the footer.
 #[test]
 fn vega_footer_keeps_card_padding_below() {
-    let theme = Theme::new(Style::vega(), Palette::dark(), 10.0);
+    let mode = egui::Theme::Dark;
+    let theme = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
     let mut button = egui::Rect::NOTHING;
-    let card = common::measure(&theme, |ui| {
+    let card = common::measure(&theme, mode, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new()
@@ -1057,10 +1326,11 @@ fn card_side_padding_follows_size() {
         (Style::nova as fn() -> Style, 16.0, 12.0),
         (Style::vega, 24.0, 16.0),
     ] {
-        let theme = Theme::new(style(), Palette::dark(), 10.0);
+        let mode = egui::Theme::Dark;
+        let theme = Theme::new(style(), Palette::light(), Palette::dark(), 10.0);
         for (size, want) in [(CardSize::Default, default), (CardSize::Sm, sm)] {
             let mut label = egui::Rect::NOTHING;
-            let card = common::measure(&theme, |ui| {
+            let card = common::measure(&theme, mode, |ui| {
                 ui.scope(|ui| {
                     ui.set_max_width(320.0);
                     Card::new()
@@ -1077,8 +1347,8 @@ fn card_side_padding_follows_size() {
 /// A card fills the available width, like a block element.
 #[test]
 fn card_fills_available_width() {
-    let theme = Theme::vega_dark();
-    let card = common::measure(&theme, |ui| {
+    let theme = Theme::vega();
+    let card = common::measure(&theme, egui::Theme::Dark, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new().show(ui, |ui| {
@@ -1098,10 +1368,11 @@ fn card_title_row_height_follows_style_and_size() {
         (Style::vega as fn() -> Style, 24.0, 21.0),
         (Style::nova, 22.0, 19.25),
     ] {
-        let theme = Theme::new(style(), Palette::dark(), 10.0);
+        let mode = egui::Theme::Dark;
+        let theme = Theme::new(style(), Palette::light(), Palette::dark(), 10.0);
         for (size, want) in [(CardSize::Default, default), (CardSize::Sm, sm)] {
             let mut title = egui::Rect::NOTHING;
-            common::measure(&theme, |ui| {
+            common::measure(&theme, mode, |ui| {
                 ui.scope(|ui| {
                     Card::new()
                         .size(size)
@@ -1121,10 +1392,10 @@ fn card_title_row_height_follows_style_and_size() {
 /// The action sits at the right edge of the header, the text to its left.
 #[test]
 fn card_action_is_right_aligned() {
-    let theme = Theme::vega_dark();
+    let theme = Theme::vega();
     let mut action = egui::Rect::NOTHING;
     let mut title = egui::Rect::NOTHING;
-    let card = common::measure(&theme, |ui| {
+    let card = common::measure(&theme, egui::Theme::Dark, |ui| {
         ui.scope(|ui| {
             ui.set_max_width(320.0);
             Card::new().show(ui, |ui| {
@@ -1163,10 +1434,10 @@ fn card_header_and_content_share_side_padding() {
 #[test]
 fn only_vega_sets_a_card_content_gap() {
     use shadcn_egui::style::State;
-    use shadcn_egui::{Mode, Preset, StyleName};
+    use shadcn_egui::{Preset, StyleName};
     // Sera is not exported: a preset naming it falls back to nova.
     for name in StyleName::ALL.iter().filter(|s| **s != StyleName::Sera) {
-        let theme = Preset::default().style(*name).theme(Mode::Light);
+        let theme = Preset::default().style(*name).theme();
         let (name, style) = (name.id(), &theme.style);
         assert_eq!(style.name, name, "the preset builds its own style");
         for st in [State::SIZE_DEFAULT, State::SIZE_SM] {
@@ -1188,7 +1459,7 @@ fn disabled_button_ignores_clicks() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         if ui.add(Button::new("Save").enabled(false)).clicked() {
             clicked.set(true);
         }
@@ -1213,7 +1484,7 @@ fn disabled_button_ignores_clicks() {
                     ..Default::default()
                 },
                 |ui| {
-                    Theme::vega_dark().apply(ui.ctx());
+                    Theme::vega().apply(ui.ctx());
                     rect = ui.add(Button::new("Save").enabled(enabled)).rect;
                 },
             );
@@ -1222,7 +1493,7 @@ fn disabled_button_ignores_clicks() {
         let ctx = egui::Context::default();
         frame(&ctx, enabled, vec![]);
         let (rect, rest) = frame(&ctx, enabled, vec![]);
-        frame(&ctx, enabled, pointer_down(rect.center()));
+        frame(&ctx, enabled, common::pointer_down(rect.center()));
         (rest, frame(&ctx, enabled, vec![]).1)
     }
     // Control: an enabled button does change under a pressed pointer.
@@ -1242,11 +1513,11 @@ fn disabled_button_ignores_clicks() {
 fn focused_input_border_turns_ring_colored() {
     use shadcn_egui::components::input::Input;
 
-    for (name, theme) in common::themes() {
-        let p = &theme.palette;
+    for (name, theme, mode) in common::themes() {
+        let p = theme.palette_of(mode);
         let shapes = |focus: bool| {
             let mut text = String::new();
-            let (rect, out) = common::measure_output(&theme, |ui| {
+            let (rect, out) = common::measure_output(&theme, mode, |ui| {
                 let resp = ui.add(Input::new(&mut text).id_salt("field"));
                 if focus {
                     resp.request_focus();
@@ -1287,12 +1558,13 @@ fn focused_input_border_turns_ring_colored() {
 #[test]
 fn invalid_input_border_is_destructive() {
     use shadcn_egui::components::input::Input;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut text = String::new();
-        let (_, out) =
-            common::measure_output(&theme, |ui| ui.add(Input::new(&mut text).invalid(true)));
+        let (_, out) = common::measure_output(&theme, mode, |ui| {
+            ui.add(Input::new(&mut text).invalid(true))
+        });
         let shapes = common::rect_shapes(&out);
-        let d = theme.palette.destructive;
+        let d = theme.palette_of(mode).destructive;
         let (border, ring) = if name.ends_with("dark") {
             (d.gamma_multiply(0.5), d.gamma_multiply(0.4))
         } else {
@@ -1311,6 +1583,84 @@ fn invalid_input_border_is_destructive() {
             "{name}: ring in {shapes:?}"
         );
     }
+}
+
+/// A word wider than the field stays on one line, as in Chrome's
+/// `<input>`, which scrolls its text sideways and never wraps: the field
+/// keeps its allocated width, and its text is clipped to the field.
+#[test]
+fn a_long_word_stays_on_one_line_in_the_input() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    let mut text = format!("see https://{}", "x".repeat(80));
+    let mut start = egui::Pos2::ZERO;
+    let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        start = ui.cursor().min;
+        ui.add(Input::new(&mut text).max_width(200.0))
+    });
+    assert_eq!(rect.left(), start.x, "{rect:?}");
+    assert_eq!(rect.width(), 200.0, "{rect:?}");
+    let shapes = common::text_shapes(&out);
+    let galley = &shapes.first().expect("the field's text").galley;
+    assert_eq!(galley.rows.len(), 1);
+    assert!(galley.size().x > 200.0, "{:?}", galley.size());
+    for r in common::rect_shapes(&out) {
+        assert!(
+            r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+            "box {:?} outside {rect:?}",
+            r.rect
+        );
+    }
+}
+
+/// A glyph wider than the content minimum's `M` keeps the input's
+/// response at its allocated box (typed text and hint text).
+#[test]
+fn a_glyph_wider_than_the_content_minimum_keeps_the_input_response_in_the_box() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    for (typed, hint) in [("W", ""), ("WWW", ""), ("", "W")] {
+        let mut text = String::from(typed);
+        let mut start = egui::Pos2::ZERO;
+        let mut narrow = 0.0;
+        let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            start = ui.cursor().min;
+            narrow = common::measure(&theme, egui::Theme::Light, |ui| {
+                let mut m = String::from("M");
+                ui.add(Input::new(&mut m).max_width(0.0))
+            })
+            .width();
+            ui.add(Input::new(&mut text).hint(hint).max_width(0.0))
+        });
+        assert_eq!(rect.left(), start.x, "{typed:?}/{hint:?}: {rect:?}");
+        assert_eq!(rect.width(), narrow, "{typed:?}/{hint:?}: {rect:?}");
+        for r in common::rect_shapes(&out) {
+            assert!(
+                r.rect.left() >= rect.left() && r.rect.right() <= rect.right(),
+                "{typed:?}/{hint:?}: box {:?} outside {rect:?}",
+                r.rect
+            );
+        }
+    }
+}
+
+/// A recipe without a placeholder colour shows the hint in upstream's
+/// `placeholder:text-muted-foreground`, never in an egui colour
+/// (conformance 2.1).
+#[test]
+fn input_hint_without_a_recipe_colour_is_muted() {
+    use shadcn_egui::components::input::{Input, InputVariant};
+    use shadcn_egui::style::{AppVariant, Prop, Role};
+    const PLAIN: AppVariant<InputVariant> = InputVariant::app("plain");
+    let theme = Theme::vega().variant(PLAIN, InputVariant::Default, |r, _| {
+        r.input.text = Prop::default();
+    });
+    let mut text = String::new();
+    let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        ui.add(Input::new(&mut text).hint("Type here").variant(PLAIN))
+    });
+    let want = common::resolved(&theme, egui::Theme::Light).role(Role::MutedForeground);
+    assert_eq!(common::text_colour(&out), want);
 }
 
 /// `Input::id_salt` gives the field an id that does not depend on how many
@@ -1369,7 +1719,7 @@ fn input_id_salt_takes_runtime_salts() {
 
 /// A string salt gives the field the id it had in 0.4, where `Input` passed
 /// the salt to egui's own `TextEdit::id_salt` inside a scope and
-/// `add_sized`; the deprecated `id_source` gives the same id.
+/// `add_sized`.
 #[test]
 fn input_id_salt_keeps_the_0_4_id() {
     use shadcn_egui::components::input::Input;
@@ -1391,10 +1741,7 @@ fn input_id_salt_keeps_the_0_4_id() {
         .id
     });
     let salted = id_of(&mut |ui| ui.add(Input::new(&mut text).id_salt("login-user")).id);
-    #[allow(deprecated)]
-    let sourced = id_of(&mut |ui| ui.add(Input::new(&mut text).id_source("login-user")).id);
     assert_eq!(salted, reference, "id_salt");
-    assert_eq!(sourced, reference, "id_source");
 }
 
 /// A badge takes any icon, also one borrowed from the theme for a moment.
@@ -1420,7 +1767,7 @@ fn checkbox_harness(enabled: bool, checked: bool) -> egui_kittest::Harness<'stat
     use shadcn_egui::Theme;
     let mut h = egui_kittest::Harness::new_ui_state(
         move |ui, s: &mut CheckboxState| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add_space(20.0);
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
@@ -1517,9 +1864,9 @@ fn checkbox_reports_toggled_state() {
 #[test]
 fn checkbox_box_follows_style() {
     use shadcn_egui::components::checkbox::Checkbox;
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut on = true;
-        let r = common::measure(&theme, |ui| ui.add(Checkbox::new(&mut on)));
+        let r = common::measure(&theme, mode, |ui| ui.add(Checkbox::new(&mut on)));
         assert_eq!(r.size(), egui::vec2(16.0, 16.0), "{name}");
     }
 }
@@ -1559,7 +1906,7 @@ fn switch_harness(enabled: bool, on: bool) -> egui_kittest::Harness<'static, Swi
     use shadcn_egui::Theme;
     let mut h = egui_kittest::Harness::new_ui_state(
         move |ui, s: &mut SwitchState| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             ui.add_space(20.0);
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
@@ -1591,15 +1938,15 @@ fn click_switch(h: &mut egui_kittest::Harness<'_, SwitchState>, pos: egui::Pos2)
 fn switch_track_size_and_hit_area() {
     use egui_kittest::kittest::Queryable;
     use shadcn_egui::components::switch::{Switch, SwitchSize};
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut on = false;
-        let r = common::measure(&theme, |ui| ui.add(Switch::new(&mut on)));
+        let r = common::measure(&theme, mode, |ui| ui.add(Switch::new(&mut on)));
         assert!(
             (r.size() - egui::vec2(32.0, 18.4)).abs().max_elem() < 0.5,
             "{name} default {:?}",
             r.size()
         );
-        let r = common::measure(&theme, |ui| {
+        let r = common::measure(&theme, mode, |ui| {
             ui.add(Switch::new(&mut on).size(SwitchSize::Sm))
         });
         assert!(
@@ -1629,9 +1976,11 @@ fn thumb_rect(
     size: shadcn_egui::components::switch::SwitchSize,
 ) -> (egui::Rect, egui::Rect) {
     use shadcn_egui::components::switch::Switch;
-    let theme = shadcn_egui::Theme::vega_light();
+    let mode = egui::Theme::Light;
+    let theme = shadcn_egui::Theme::vega();
     let ctx = egui::Context::default();
     theme.apply(&ctx);
+    ctx.set_theme(mode);
     let mut value = on;
     let mut track = egui::Rect::NOTHING;
     let mut out = None;
@@ -1643,7 +1992,7 @@ fn thumb_rect(
     let mut thumb = None;
     for clipped in out.unwrap().shapes {
         if let egui::Shape::Rect(r) = clipped.shape {
-            if r.fill == theme.palette.background {
+            if r.fill == theme.palette_of(mode).background {
                 thumb = Some(r.rect);
             }
         }
@@ -1766,7 +2115,7 @@ fn run_slider(
         let mut h = egui_kittest::Harness::builder()
             .with_size(egui::vec2(240.0, 40.0))
             .build_ui(|ui| {
-                shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+                shadcn_egui::Theme::vega().apply(ui.ctx());
                 let mut value = cell.get();
                 rect.set(
                     ui.add(
@@ -1863,7 +2212,7 @@ fn slider_vertical_has_minimum_at_the_bottom() {
     use shadcn_egui::components::slider::{Slider, SliderOrientation};
     let mut h = egui_kittest::Harness::new_ui_state(
         |ui, s: &mut (f32, egui::Rect)| {
-            shadcn_egui::Theme::vega_dark().apply(ui.ctx());
+            shadcn_egui::Theme::vega().apply(ui.ctx());
             s.1 = ui
                 .add(
                     Slider::new(&mut s.0, 0.0..=100.0)
@@ -2035,13 +2384,14 @@ fn disabled_widgets_fade_once() {
             )
         }),
     ];
-    let theme = Theme::vega_light();
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
     for (name, add) in widgets {
-        let (_, own) = common::measure_output(&theme, |ui| add(ui, false));
-        let (_, by_ui) = common::measure_output(&theme, |ui| {
+        let (_, own) = common::measure_output(&theme, mode, |ui| add(ui, false));
+        let (_, by_ui) = common::measure_output(&theme, mode, |ui| {
             ui.add_enabled_ui(false, |ui| add(ui, true)).inner
         });
-        let (_, both) = common::measure_output(&theme, |ui| {
+        let (_, both) = common::measure_output(&theme, mode, |ui| {
             ui.add_enabled_ui(false, |ui| add(ui, false)).inner
         });
         assert_eq!(
@@ -2066,14 +2416,15 @@ fn disabled_widgets_fade_once() {
         );
     }
     // And the fade is a half: a solid button's fill.
-    let (rect, out) =
-        common::measure_output(&theme, |ui| ui.add_enabled(false, Button::new("Save")));
+    let (rect, out) = common::measure_output(&theme, mode, |ui| {
+        ui.add_enabled(false, Button::new("Save"))
+    });
     let fill = common::rect_shapes(&out)
         .into_iter()
         .find(|r| r.rect == rect.shrink(1.0))
         .expect("button fill")
         .fill;
-    assert_eq!(fill, theme.palette.primary.gamma_multiply(0.5));
+    assert_eq!(fill, theme.palette_of(mode).primary.gamma_multiply(0.5));
 }
 
 /// A click selects a tab without the keyboard focus ring; the arrow keys
@@ -2111,10 +2462,10 @@ fn tab_click_shows_no_focus_ring() {
 #[test]
 fn description_lines_are_text_sm_line_height() {
     use shadcn_egui::components::label::description;
-    for (name, theme) in common::themes() {
-        let one = common::measure(&theme, |ui| description(ui, "Short."));
+    for (name, theme, mode) in common::themes() {
+        let one = common::measure(&theme, mode, |ui| description(ui, "Short."));
         assert_eq!(one.height(), 20.0, "{name}");
-        let wrapped = common::measure(&theme, |ui| {
+        let wrapped = common::measure(&theme, mode, |ui| {
             ui.set_max_width(120.0);
             description(
                 ui,
@@ -2132,36 +2483,245 @@ fn description_lines_are_text_sm_line_height() {
 fn switch_paints_its_style_shadow() {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::style::{pick, State};
-    let theme = Theme::vega_light();
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
     assert!(pick(&[&*theme.style.switch], |r| &r.shadow, State::NONE).is_some());
-    let (_, out) = common::measure_output(&theme, |ui| ui.add(Switch::new(&mut false)));
-    // egui paints a shadow as a blurred rect.
+    let (_, out) = common::measure_output(&theme, mode, |ui| ui.add(Switch::new(&mut false)));
+    // The shadow is egui's blurred rect, cut to a mesh outside the box.
     assert!(
-        common::rect_shapes(&out).iter().any(|r| r.blur_width > 0.0),
+        common::mesh_shapes(&out)
+            .iter()
+            .any(|m| m.vertices.iter().any(|v| v.color.a() > 0)),
         "no shadow painted"
     );
+}
+
+/// An outer `box-shadow` paints only outside the border box (conformance
+/// 2.5): vega's light input has a transparent fill and `shadow-xs`, and no
+/// part of the shadow lies under it.
+#[test]
+fn shadow_paints_only_outside_the_border_box() {
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let mut text = String::new();
+    let (rect, out) = common::measure_output(&theme, mode, |ui| {
+        ui.add(shadcn_egui::components::input::Input::new(&mut text))
+    });
+    let meshes = common::mesh_shapes(&out);
+    assert!(!meshes.is_empty(), "no shadow painted");
+    // Inside the box: the rect minus its rounded corners, with a hair of slack.
+    let r = 12.0;
+    let inside = |p: egui::Pos2| {
+        let a = rect.shrink2(egui::vec2(r, 0.01));
+        let b = rect.shrink2(egui::vec2(0.01, r));
+        a.contains(p) || b.contains(p)
+    };
+    for m in &meshes {
+        for tri in m.indices.as_chunks::<3>().0 {
+            let c = tri
+                .iter()
+                .map(|&i| m.vertices[i as usize].pos.to_vec2())
+                .fold(egui::Vec2::ZERO, |a, b| a + b)
+                / 3.0;
+            assert!(
+                !inside(c.to_pos2()),
+                "shadow triangle at {c:?} under {rect:?}"
+            );
+        }
+    }
 }
 
 /// A container's fade ends with its content, but a `Ui::disable` inside
 /// the content (for example a disabled card action) keeps egui's disabled
 /// fade for what the `Ui` paints afterwards, as the `Ui` stays disabled.
 #[test]
-fn faded_keeps_a_disable_inside_its_content() {
-    use shadcn_egui::components::shared::faded;
+fn content_ui_keeps_a_disable_inside_its_content() {
+    use shadcn_egui::components::shared::content_ui;
+    use shadcn_egui::style::{Recipe, State};
+    let mut half = Recipe::default();
+    half.opacity.base = Some(0.5);
+    let chain: &[&[&Recipe]] = &[&[&half]];
     let ctx = egui::Context::default();
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
         let alpha = ui.visuals().disabled_alpha();
-        faded(ui, 0.5, |ui| ui.disable());
+        content_ui(ui, egui::Id::new("part"), chain, State::NONE, |ui| {
+            assert_eq!(ui.opacity(), 0.5);
+            ui.disable()
+        });
         assert!(!ui.is_enabled());
         assert!(
             (ui.opacity() - alpha).abs() < 1e-6,
-            "opacity {} after a disable inside faded, egui's fade is {alpha}",
+            "opacity {} after a disable inside content_ui, egui's fade is {alpha}",
             ui.opacity()
         );
-        faded(ui, 0.5, |_| {});
+        content_ui(ui, egui::Id::new("part"), chain, State::NONE, |_| {});
         assert!(
             (ui.opacity() - alpha).abs() < 1e-6,
             "an already disabled Ui"
         );
     });
+}
+
+/// A crate part paints at the `Ui`'s opacity with one egui disabled fade
+/// taken out, times its own value (conformance 2.2, implementation notes
+/// 3): its `disabled:opacity-25` gives 25 %, not 25 % of egui's fade, and a
+/// part without a `disabled:` rule stays opaque in a disabled `Ui`.
+#[test]
+fn part_opacity_takes_one_egui_fade_out() {
+    use shadcn_egui::components::shared::part_opacity;
+    use shadcn_egui::style::{Recipe, Rule, State, When};
+    let mut quarter = Recipe::default();
+    quarter.opacity.rules.push(Rule {
+        when: When::new(State::DISABLED, State::NONE),
+        rank: 1,
+        value: 0.25,
+    });
+    let plain = Recipe::default();
+    let ctx = egui::Context::default();
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        assert_eq!(
+            part_opacity(ui, egui::Id::new("part"), &[&[&quarter]], State::NONE),
+            1.0
+        );
+        ui.add_enabled_ui(false, |ui| {
+            assert!(
+                (part_opacity(ui, egui::Id::new("part"), &[&[&quarter]], State::NONE) - 0.25).abs()
+                    < 1e-6
+            );
+            assert!(
+                (part_opacity(ui, egui::Id::new("part"), &[&[&plain]], State::NONE) - 1.0).abs()
+                    < 1e-6
+            );
+            // A nested disable fades twice in egui; one fade only comes out.
+            ui.add_enabled_ui(false, |ui| {
+                let fade = ui.visuals().disabled_alpha();
+                let got = part_opacity(ui, egui::Id::new("part"), &[&[&plain]], State::NONE);
+                assert!((got - fade).abs() < 1e-6, "{got}");
+            });
+        });
+    });
+}
+
+/// `Theme::apply` gives plain egui widgets the style's control opacity.
+#[test]
+fn theme_sets_disabled_alpha_from_the_style() {
+    use shadcn_egui::style::{pick, State};
+    for (name, theme, mode) in common::themes() {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        ctx.set_theme(mode);
+        let want = pick(&[&*theme.style.button], |r| &r.opacity, State::DISABLED).unwrap();
+        assert_eq!(ctx.global_style().visuals.disabled_alpha, want, "{name}");
+    }
+}
+
+/// shadcn input `text-base md:text-sm`: the field text is 16 px in a window
+/// narrower than 768 px, 14 px from 768 px up.
+#[test]
+fn input_text_follows_md_breakpoint() {
+    use shadcn_egui::components::input::Input;
+    let mode = egui::Theme::Light;
+    let theme = Theme::vega();
+    let text_px = |width: f32| {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        ctx.set_theme(mode);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, 400.0),
+            )),
+            ..Default::default()
+        };
+        let mut text = String::from("Hello");
+        let mut out = None;
+        for _ in 0..2 {
+            out = Some(ctx.run_ui(input.clone(), |ui| {
+                ui.add(Input::new(&mut text));
+            }));
+        }
+        common::text_shapes(&out.unwrap())
+            .iter()
+            .map(|t| t.galley.job.sections[0].format.font_id.size)
+            .next()
+            .expect("the field's text")
+    };
+    assert_eq!(text_px(767.0), theme.metrics.text_base);
+    assert_eq!(text_px(768.0), theme.metrics.text_sm);
+}
+
+/// In a crate row, a slider's thumb still drags from inside its larger
+/// target above the track (mira: 8 px), though the target takes no part
+/// in the row's height.
+#[test]
+fn slider_in_a_row_drags_from_inside_its_target() {
+    use shadcn_egui::components::slider::Slider;
+    let theme = shadcn_egui::Theme::new(
+        shadcn_egui::style::Style::mira(),
+        shadcn_egui::Palette::light(),
+        shadcn_egui::Palette::dark(),
+        10.0,
+    );
+    let mut h = egui_kittest::Harness::new_ui_state(
+        move |ui, s: &mut (f32, egui::Rect)| {
+            theme.apply(ui.ctx());
+            ui.add_space(20.0);
+            shadcn_egui::layout::row(ui, 8.0, |ui| {
+                ui.set_width(200.0);
+                s.1 = ui.add(Slider::new(&mut s.0, 0.0..=100.0).label("V")).rect;
+            });
+        },
+        (50.0, egui::Rect::NOTHING),
+    );
+    h.run();
+    let r = h.state().1;
+    // Above the track, beside the thumb's centre, inside its target.
+    let start = egui::pos2(r.center().x, r.top() - 5.0);
+    h.hover_at(start);
+    h.run();
+    h.drag_at(start);
+    h.run();
+    h.hover_at(egui::pos2(r.right(), start.y));
+    h.run();
+    h.drop_at(egui::pos2(r.right(), start.y));
+    h.run();
+    assert_eq!(h.state().0, 100.0, "{r:?}");
+}
+
+/// The input takes egui's types where it mirrors `TextEdit` (rules,
+/// Parameter types; axiom 2): any `TextBuffer` as its text and
+/// `impl IntoAtoms<'static>` as its hint, which draws as the same hint
+/// as a plain string.
+#[test]
+fn the_input_takes_egui_text_edit_types() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    let texts = |hint: &dyn Fn() -> Input<'static>| {
+        let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| ui.add(hint()));
+        common::text_shapes(&out)
+            .iter()
+            .map(|t| (t.pos, t.galley.text().to_owned()))
+            .collect::<Vec<_>>()
+    };
+    fn buffer() -> &'static mut dyn egui::TextBuffer {
+        Box::leak(Box::new(""))
+    }
+    let plain = texts(&|| Input::new(buffer()).hint("Email").id_salt("a"));
+    let rich = texts(&|| {
+        Input::new(buffer())
+            .hint(egui::RichText::new("Email"))
+            .id_salt("a")
+    });
+    assert!(plain.iter().any(|(_, t)| t == "Email"), "{plain:?}");
+    assert_eq!(plain, rich);
+
+    // A read-only buffer shows its text and keeps it.
+    let mut fixed: &str = "fixed";
+    let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        ui.add(Input::new(&mut fixed))
+    });
+    assert!(common::text_shapes(&out)
+        .iter()
+        .any(|t| t.galley.text() == "fixed"));
+    assert_eq!(fixed, "fixed");
 }

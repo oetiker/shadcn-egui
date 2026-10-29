@@ -5,8 +5,9 @@ draws itself from the active style's recipes; it does not hard-code a look.
 
 ## The style model
 
-- **Theme = Style × Palette × radius** (plus `Metrics`, the text-size scale).
-  `Theme { style: Arc<Style>, palette, radius, metrics, dark }`. `Theme` is
+- **Theme = Style × Palettes × radius** (plus `Metrics`, the text-size scale).
+  `Theme { style: Arc<Style>, light, dark, radius, metrics, .. }`: both
+  palettes; `Theme::current(ctx)` resolves `palette()` in the context's mode. `Theme` is
   `Clone` (the style sits behind an `Arc`), not `Copy`.
 - **A style is a class map.** upstream `style-<name>.css` binds Tailwind classes
   to marker classes (`cn-button`, `cn-button-size-sm`, …). `Style` has one
@@ -52,7 +53,10 @@ draws itself from the active style's recipes; it does not hard-code a look.
   from the input. Then the specificity the variants add to the class: the
   count of classes, attributes and pseudo-classes, `1 << 122` each (`dark:`,
   `hover:`, `data-[size=sm]:`; `sm:`, `md:`, `supports-*:`, `in-*:`, `after:`
-  and `[&>svg]:` add none), and bit 121 for `[&_svg:not([class*='size-'])]:`,
+  and `[&>svg]:` add none, and so do shadcn-svelte's own `data-open:`,
+  `data-closed:`, `data-checked:`, `data-unchecked:`, `data-disabled:`,
+  `data-active:`, `data-horizontal:` and `data-vertical:`, which are
+  `:where()`; an element selector such as `has-[>svg]:` adds a half step), and bit 121 for `[&_svg:not([class*='size-'])]:`,
   a half step: one class more specific than `[&>svg]:`, but Tailwind sorts it
   first, so at equal specificity the `[&>svg]:` rule wins. The lowest bits
   hold one bit per Tailwind variant the class uses (targets have none), in
@@ -78,7 +82,7 @@ draws itself from the active style's recipes; it does not hard-code a look.
       let mut s = Style::vega();
       s.button_size_default.height.base = Some(40.0);
       s.button.icon_size = Prop::fixed(20.0);
-      Theme::new(s, Palette::dark(), 10.0)
+      Theme::new(s, Palette::light(), Palette::dark(), 10.0)
   }
 
   let theme = tall_buttons();
@@ -108,10 +112,11 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `tracking` | `tracking-*` |
 | `weight` | `font-normal`, `font-medium`, `font-semibold`, `font-bold` |
 | `uppercase`, `underline` | `uppercase`, `underline` |
-| `radius`, `radius_top`, `radius_bottom` | `rounded-*`, `rounded-t-*`, `rounded-b-*` |
+| `underline_offset` | `underline-offset-*` (px); the text path draws the underline as Chrome does, its thickness a tenth of the font size |
+| `radius`, `radius_top`, `radius_right`, `radius_bottom`, `radius_left` | `rounded-*`, `rounded-t-*`, `rounded-r-*`, `rounded-b-*`, `rounded-l-*` |
 | `bg`, `text` | `bg-*`, `text-*` (with `/alpha` and `color-mix`) |
-| `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::paint_box`) |
-| `border_width`, `border_top_width` | `border`, `border-t`, `border-N` |
+| `bg_clip_padding` | `bg-clip-padding`: the fill stops inside the border (`shared::RecipeBox`) |
+| `border_width`, `border_top_width`, `border_left_width` | `border`, `border-t`, `border-l`, `border-N` |
 | `border_color` | `border-*` colour |
 | `ring_width`, `ring_color` | `ring-N`, `ring-*` |
 | `outline_width`, `outline_color` | `outline-N`, `outline-*`; `outline-none` and `outline-hidden` are 0 |
@@ -120,6 +125,8 @@ draws itself from the active style's recipes; it does not hard-code a look.
 | `shift_x`, `shift_y` | `translate-x-*`, `translate-y-*` (`active:translate-y-px` is the press nudge) |
 | `hit_inset_x`, `hit_inset_y` | `after:-inset-x-*`, `after:-inset-y-*` (a larger hit area) |
 | `backdrop_blur` | `backdrop-blur-*` |
+| `transition`, `duration`, `easing` | `transition`, `transition-*` (the properties that move), `duration-*` (seconds), `ease-linear`, `ease-in`, `ease-out`, `ease-in-out`; `components::motion::transition` moves a changed value with them |
+| `animate_in`, `animate_out`, `enter_*`, `exit_*` | `animate-in`, `animate-out`, `fade-in-*`, `zoom-in-*`, `slide-in-from-*`, `fade-out-*`, `zoom-out-*` (an overlay's enter and exit) |
 
 `disabled:opacity-50` fades each shape of the part (fill, text, border,
 ring, shadow) to half alpha, the way egui fades a disabled `Ui`, because egui
@@ -128,13 +135,17 @@ therefore shows a little less contrast than in the browser, and where one
 part lies on another (a switch or slider thumb on its track) the lower part
 shows through. The value comes from the recipe's `opacity` prop
 (`shared::opacity` multiplies it down the part tree, so the line underline
-of a disabled tab fades with the tab), and `shared::style_painter` applies
-it once: inside a disabled `Ui`, which egui fades already, a part whose
-`disabled:` rule wins paints at egui's fade alone, and a part without one
-keeps its other opacity on top of that fade.
+of a disabled tab fades with the tab), and `shared::part_painter` applies
+it once, moving it as the part's `transition` says: inside a disabled `Ui`, which egui fades already, the part paints
+at the `Ui`'s opacity with egui's fade taken out, times its own value under
+`DISABLED`, so a part fades by its style's `disabled:` rule, not by egui's
+fade.
 
 `State` flags (`crates/shadcn-egui/src/style/recipe.rs`) and the variants they stand for.
-`Theme::state(s)` adds `DARK`.
+`Theme::state(ctx, s)` adds `DARK` and the window's `SM` and `MD`. A flag
+means the upstream attribute it stands for wherever it sits: `SIZE_SM` is
+`data-size="sm"` on the part or, through `group-data-[size=sm]/…:`, on its
+group.
 
 | Flag | Variants |
 |---|---|
@@ -147,16 +158,32 @@ keeps its other opacity on top of that fade.
 | `INVALID` | `aria-invalid:`, `data-invalid:` |
 | `CHECKED` | `data-checked:`, `aria-checked:`, `data-[state=checked]:` |
 | `UNCHECKED` | `data-unchecked:`, `data-[state=unchecked]:` |
-| `EXPANDED` | `aria-expanded:` |
+| `EXPANDED` | `aria-expanded:`, `data-open:` |
+| `CLOSED` | `data-closed:` (a closed panel) |
+| `DELAYED_OPEN` | `data-[state=delayed-open]:` (a tooltip opened after its delay) |
 | `HAS_POPUP` | `aria-[haspopup]:` (used negated: `not-aria-[haspopup]:`) |
 | `SELECTED` | `data-active:`, `data-[active=true]:`, `data-selected:` |
 | `PLACEHOLDER` | `data-placeholder:`, `placeholder:` (placeholder text shows) |
 | `ICON_START` / `ICON_END` | `has-data-[icon=inline-start]:` / `has-data-[icon=inline-end]:` |
-| `IN_BUTTON_GROUP` | `in-data-[slot=button-group]:` |
-| `SIZE_SM` / `SIZE_DEFAULT` | `data-[size=sm]:` / `data-[size=default]:`, `group-data-[size=…]/…:` |
-| `VERTICAL` / `HORIZONTAL` | `data-vertical:`, `data-[orientation=vertical]:`, `group-data-vertical/…:` and the horizontal forms |
+| `HAS_ICON` | `has-[>svg]:`, `group-has-[>svg]/…:` (the part shows an icon) |
+| `SIZE_SM` / `SIZE_DEFAULT` / `SIZE_LG` | `data-[size=sm]:` / `data-[size=default]:` / `data-[size=lg]:`, and `group-data-[size=…]/…:` |
+| `HAS_SIZE_SM` / `HAS_SIZE_LG` | `group-has-data-[size=sm]/…:` / `group-has-data-[size=lg]/…:` (the group holds a small or large child) |
+| `VERTICAL` / `HORIZONTAL` | the part's own orientation: `data-vertical:`, `data-[orientation=vertical]:`, `group-data-vertical/…:` and the horizontal forms |
 | `VARIANT_LINE` / `VARIANT_DEFAULT` | `data-[variant=line]:` / `group-data-[variant=default]/…:` |
+| `VARIANT_DESTRUCTIVE` | a part of the destructive variant (`cn-alert-variant-destructive`'s `*:data-[slot=alert-description]:`) |
+| `SIDE_TOP` / `SIDE_RIGHT` / `SIDE_BOTTOM` / `SIDE_LEFT` | `data-[side=top]:` and the other sides (where a panel sits against its trigger) |
+| `SM` / `MD` | `sm:` / `md:` (the window is at least 640 / 768 points wide) |
 | `HAS_FOOTER` | `has-data-[slot=card-footer]:` |
+| `HAS_ACTION` | `has-data-[slot=alert-action]:` |
+| `HAS_MEDIA` | `has-data-[slot=alert-dialog-media]:`, `group-has-data-[slot=alert-dialog-media]/…:` |
+| `HAS_KBD` | `has-data-[slot=kbd]:` |
+| `HAS_BUTTON_GROUP` | `has-[>[data-slot=button-group]]:` (a nested button group) |
+| `HAS_OUTLINE` | `has-[>[data-variant=outline]]:` (a child with the outline variant) |
+| `IN_BUTTON_GROUP` | `in-data-[slot=button-group]:`, and every child rule of a button group |
+| `IN_GROUP_HORIZONTAL` / `IN_GROUP_VERTICAL` | a child of a group whose `data-orientation` is horizontal / vertical (the group's `[&>*]` rules), apart from the child's own orientation |
+| `FIRST` / `LAST` / `NOT_FIRST` / `NOT_LAST` | a group child's position: `:first-child`, `:last-child` (the last `[data-slot]` child), `:not(:first-child)`, `:not(:last-child)` |
+| `IN_TOOLTIP_CONTENT` | `in-data-[slot=tooltip-content]:`, and a tooltip's `**:data-[slot=kbd]:` |
+| `IN_AVATAR_GROUP` | an avatar in an avatar group (the group's `*:data-[slot=avatar]:`) |
 
 A rule's `When` is `all` (flags that must be set) plus `none` (flags that must
 not be set; this is how a negated variant works). A component sets only the
@@ -169,7 +196,12 @@ line height for a recipe's `text_size`.
 
 ## Breakpoints
 
-`sm:` and `md:` count as **matched**: an egui desktop window is wider than both.
+`sm:` and `md:` are media queries on the window width, as in the browser:
+`Theme::state(ctx, s)` sets `SM` when the window is at least 640 points wide
+and `MD` at 768, so a component that builds its state there follows the
+window by itself. A layout or a screen reads the same test through
+`layout::window_at_least(ctx, px)`, and a container query (`@md/…`) through
+`layout::container_at_least(ui, px)`; never with width arithmetic of its own.
 Larger breakpoints (`lg:` and up) are unsupported, so a marker that uses one
 cannot be exported.
 
@@ -232,7 +264,7 @@ web project's `--radius` in px:
 use shadcn_egui::{Palette, Style, Theme};
 
 fn setup(ctx: &egui::Context) {
-    Theme::new(Style::nova(), Palette::dark(), 10.0).apply(ctx);
+    Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0).apply(ctx);
 }
 ```
 
@@ -251,6 +283,9 @@ it changes.
 4. Re-port every component that `drift` lists (a marker that appeared or
    disappeared), following the standard in
    `SKILL.md` and `references/upstream.md`.
-5. Re-baseline the snapshots (`UPDATE_SNAPSHOTS=1 cargo test`) and look at the
-   PNGs that changed.
+5. Re-baseline the snapshots: delete `crates/shadcn-egui/tests/snapshots/*.png`,
+   run `UPDATE_SNAPSHOTS=1 cargo test`, and look at the PNGs that changed.
+   kittest ignores a change on anti-aliased pixels, so a baseline that is not
+   deleted can keep stale pixels; the strict check then fails the next test
+   run (`references/upstream.md`, Snapshots).
 6. Commit the generated files, the reports and the PNGs together.

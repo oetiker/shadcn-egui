@@ -2,39 +2,83 @@
 
 Every widget lives in `shadcn_egui::components::<module>`. Builders go
 through `ui.add(..)` and return an `egui::Response`. The markers are the
-`cn-*` classes of the style CSS whose recipes the widget reads.
+`cn-*` classes of the style CSS whose recipes the widget reads. Every
+component also takes `.variant(..)` with an app variant (SKILL.md, "App
+variants"), and its parts follow it.
 
 | shadcn | shadcn-egui |
 |---|---|
 | `<Button variant size>` | `shadcn_egui::components::button::Button::new(text)` with `.variant(ButtonVariant::…)` (`Default`, `Outline`, `Secondary`, `Ghost`, `Destructive`, `Link`), `.size(ButtonSize::…)` (`Xs`, `Sm`, `Default`, `Lg`, `Icon`, `IconXs`, `IconSm`, `IconLg`), `.enabled(..)`, `.expanded(..)` (aria-expanded), `.invalid(..)` (aria-invalid), `.has_popup(..)` (aria-haspopup). Markers: `cn-button`, `cn-button-variant-*`, `cn-button-size-*` |
 | `<Button><Mic />Mute</Button>` | `Button::new("Mute").icon(&MIC)` (`data-icon="inline-start"`), `.icon_end(&MIC)` (`inline-end`). Icon only: `.size(ButtonSize::Icon)`; the text becomes the accessible name |
 | `<Badge variant>` | `shadcn_egui::components::badge::Badge::new(text)` with `.variant(BadgeVariant::…)` (`Default`, `Secondary`, `Destructive`, `Outline`, `Ghost`, `Link`), `.icon(..)`, `.icon_end(..)`; or `badge(ui, text, variant)`. Markers: `cn-badge`, `cn-badge-variant-*` |
-| `<Input>` | `shadcn_egui::components::input::Input::new(&mut text)` with `.hint(..)`, `.password(..)`, `.max_width(..)`, `.id_salt(..)`, `.enabled(..)`, `.invalid(..)` (aria-invalid). Marker: `cn-input` |
+| `<Input>` | `shadcn_egui::components::input::Input::new(&mut text)` (any egui `TextBuffer`, as `TextEdit::singleline`) with `.hint(..)` (placeholder; egui's hint types: text, `RichText`, an image), `.password(..)`, `.max_width(..)`, `.id_salt(..)`, `.enabled(..)`, `.invalid(..)` (aria-invalid). Marker: `cn-input` |
+| `<Textarea>` | `shadcn_egui::components::textarea::Textarea::new(&mut text)` with `.hint_text(..)` (placeholder), `.desired_width(..)` (default `Metrics::field_max_width`, `f32::INFINITY` fills), `.id_salt(..)`, `.invalid(..)` (aria-invalid); or `textarea(ui, &mut text)`. `.show(ui)` returns egui's `TextEditOutput`. Grows with its text from the style's minimum height (`field-sizing-content`), no resize handle; Enter starts a line, Tab moves the focus on. Disable it with `ui.add_enabled(false, ..)`. Marker: `cn-textarea` |
 | `<Label>` | `shadcn_egui::components::label::label(ui, text)`, or `Label::new(text).enabled(..)` (`peer-disabled:opacity-50`). Marker: `cn-label` |
 | description text | `shadcn_egui::components::label::description(ui, text)`; reads `cn-card-description` (no marker of its own) |
 | `<Label for="x">` + control | Name the control after the label: `let l = label(ui, "Email"); ui.add(Input::new(&mut s)).labelled_by(l.id);` (egui's `Response::labelled_by`). Switch, Checkbox and Select have no accessible name of their own (a Select reports its shown text as the value), so do this for each of them |
-| `<Card size>` + Header/Title/Description/Action/Content/Footer | `shadcn_egui::components::card::Card::new().size(CardSize::Sm).footer(\|ui\| ..).show(ui, \|ui\| ..)`, or `shadcn_egui::layout::card(ui, \|ui\| ..)`. Inside: `card_header(ui, title, description)`, `card_header_with_action(ui, title, description, \|ui\| ..)`, `card_content(ui, \|ui\| ..)`, `card_title(ui, text)`, `card_description(ui, text)`. `card_content` adds only the style's `cn-card-content` gap, which only vega sets (nova, maia, lyra, mira, luma and rhea leave it out): wrap its children in `layout::vstack(ui, GAP, ..)` with the design's gap. The card fills the available width. Markers: `cn-card`, `cn-card-header`, `cn-card-title`, `cn-card-description`, `cn-card-action`, `cn-card-content`, `cn-card-footer` |
+| `<Card size>` + Header/Title/Description/Action/Content/Footer | `shadcn_egui::components::card::Card::new().size(CardSize::Sm).footer(\|ui\| ..).show(ui, \|ui\| ..)`, or `shadcn_egui::layout::card(ui, \|ui\| ..)`. Inside: `card_header(ui, title, description)`, `card_header_with_action(ui, title, description, \|ui\| ..)`, `card_content(ui, \|ui\| ..)`, `card_title(ui, text)`, `card_description(ui, text)`. Your own widgets between sections count as one more `card_content`. `card_content` adds only the style's `cn-card-content` gap, which only vega sets (nova, maia, lyra, mira, luma and rhea leave it out): wrap its children in `layout::vstack(ui, GAP, ..)` with the design's gap. The card fills the available width of a column; in a crate row (`layout::row`, `wrap_row`, `space_between`) it is as wide as its content and shrinks as a `vstack` does, as upstream's card, which sets no width, does in a flex row. Being `overflow-hidden` upstream, it shrinks below its longest word and clips content wider than itself, in a row as in a column. Markers: `cn-card`, `cn-card-header`, `cn-card-title`, `cn-card-description`, `cn-card-action`, `cn-card-content`, `cn-card-footer` |
+| `<Alert variant>` + `<svg>`/Title/Description/Action | `ui.add(shadcn_egui::components::alert::Alert::new().icon(lucide::CIRCLE_ALERT).title(..).description(..))` with `.variant(AlertVariant::Destructive)`; with caller content `Alert::new().title(..).show(ui, \|ui\| ..)`, whose closure holds the parts in upstream's order: `alert_title(ui, text)`, `alert_description(ui, text)`, your own widgets (one row in the description's slot, in its muted look, stacked with no gap), then `alert_action(ui, \|ui\| ..)` (top right, at the style's `cn-alert-action` inset, `top-2.5 right-3` in vega; the alert reserves `pr-18` for it from the next pass on). Fills the `Ui`'s width (`w-full`): put it in a narrower `Ui` for the docs' `max-w-md`. `.id_salt(..)` where two alerts' parts change between passes. Demo colours (`alert-colors`) are an app variant with app colours. Reports `role="alert"`. Markers: `cn-alert`, `cn-alert-variant-*`, `cn-alert-title`, `cn-alert-description`, `cn-alert-action` |
 | `<Tabs>` + List/Trigger | `shadcn_egui::components::tabs::tab_bar(ui, &mut active, &labels)`, or `Tabs::new(&mut active, &labels)` with `.variant(TabsVariant::Line)`, `.enabled(..)`, `.width(f32::INFINITY)` for `<TabsList class="w-full">` (or a width in points; the triggers share it as `flex-1`); the content sits `Tabs::content_gap(ui)` below. Horizontal only (`TabsOrientation::Horizontal`). Markers: `cn-tabs`, `cn-tabs-list`, `cn-tabs-list-variant-default`, `cn-tabs-list-variant-line`, `cn-tabs-trigger` (its line underline is the `tabs_trigger_after` recipe), `cn-tabs-content` |
 | `<Switch size>` | `shadcn_egui::components::switch::toggle(ui, &mut on)`, or `Switch::new(&mut on)` with `.size(SwitchSize::Sm)`, `.enabled(..)`, `.invalid(..)`. Markers: `cn-switch`, `cn-switch-thumb` |
 | `<Checkbox>` | `shadcn_egui::components::checkbox::checkbox(ui, &mut checked)`, or `Checkbox::new(&mut checked)` with `.enabled(..)`, `.invalid(..)`. No indeterminate state. Markers: `cn-checkbox`, `cn-checkbox-indicator` |
 | `<Slider orientation>` | `shadcn_egui::components::slider::Slider::new(&mut v, 0.0..=100.0)` with `.step(5.0)`, `.orientation(SliderOrientation::Vertical)`, `.enabled(..)`, `.label(..)`. One thumb. Markers: `cn-slider`, `cn-slider-track`, `cn-slider-range`, `cn-slider-thumb` |
 | `<Select>` + Trigger/Content/Item | `shadcn_egui::components::select::Select::new("id", &mut index, &options)` with `.size(SelectSize::Sm)`, `.placeholder(..)`, `.enabled(..)`, `.invalid(..)`, `.width(..)`, `.side_offset(..)` (gap between trigger and list, default 4); or `select(ui, "id", &mut index, &options)`, which returns whether the choice changed. Markers: `cn-select-trigger`, `cn-select-trigger-icon`, `cn-select-content`, `cn-select-group` (its padding frames the rows), `cn-select-item`, `cn-select-item-indicator`. Not offered (options-list API): `cn-select-label`, `cn-select-separator`, per-option disabled; `cn-select-scroll-*` are resolved but unused (an egui `ScrollArea` scrolls) |
-| `<Separator>` | `shadcn_egui::components::separator::separator(ui)`, `separator_vertical(ui)`. No marker: the `separator` recipe (`data-slot`); its colour is `separator.bg`, its thickness `separator.height` (horizontal) or `separator.width` (vertical), `Metrics.border` where the recipe sets none |
-| `<Dialog>` + Header/Title/Description/Footer | `shadcn_egui::components::dialog::Dialog::new("id", "Title")` with `.description(..)`, `.width(..)`, `.backdrop(..)`, `.show_close_button(..)`, then `.show(ctx, &mut open, \|ui\| { ..; footer(ui, \|ui\| { primary; secondary }) })`. Closes on Esc, a backdrop click or the close button; the footer runs right to left, and in nova its muted strip reaches the panel edges. The width is the style's `sm:max-w-*`, capped to the window minus 32. The overlay blur is not drawn. Markers: `cn-dialog-overlay`, `cn-dialog-content`, `cn-dialog-close`, `cn-dialog-header`, `cn-dialog-footer`, `cn-dialog-title`, `cn-dialog-description` |
-| `<Popover>` + Trigger/Content | `let t = ui.add(Button::new("Open")); shadcn_egui::components::popover::Popover::new(&t).width(..).side_offset(..).show(\|ui\| ..)`; `side_offset` is the gap between the trigger and the popup, default 4. A click on the trigger toggles it; Esc or a click outside closes it. `popover_header(ui, title, description)` inside. Markers: `cn-popover-content`, `cn-popover-header`, `cn-popover-title`, `cn-popover-description` |
-| `<Tooltip>` | `shadcn_egui::components::tooltip::tooltip(ui.add(..), "text")`. Markers: `cn-tooltip-content`, `cn-tooltip-arrow` |
+| `<Progress value max>` | `shadcn_egui::components::progress::progress(ui, fraction)`, or `ui.add(Progress::from_value(value, max))` (`Progress::new(fraction)` for `0.0..=1.0`) with `.desired_width(..)` (a width in points, capped by the room; fills by default, as `w-full`; a `w-[60%]` class is `.desired_width(ui.available_width() * 0.6)`). No text of its own: put a label next to it. Not egui's `ProgressBar`, which keeps egui's look. Markers: `cn-progress` (the track), `cn-progress-indicator` |
+| `<Separator>` | `shadcn_egui::components::separator::separator(ui)`, `separator_vertical(ui)`, or `ui.add(Separator::new())` with `.orientation(SeparatorOrientation::Vertical)`. No marker: the `separator` recipe (`data-slot`); its colour is `separator.bg`, its thickness `separator.height` (horizontal) or `separator.width` (vertical), `Metrics.border` where the recipe sets none |
+| `<Dialog>` + Header/Title/Description/Footer | `shadcn_egui::components::dialog::Dialog::new("id", "Title")` with `.description(..)`, `.width(..)`, `.backdrop(..)`, `.show_close_button(..)`, then `.show(ctx, &mut open, \|ui\| { ..; footer(ui, \|ui\| { secondary; primary }) })`. Your own widgets before the footer are one block: they stack with no gap, the dialog's gap from the header and footer; wrap them in `layout::vstack(ui, GAP, ..)` for the design's gap (upstream's demos use a field group). Closes on Esc, a backdrop click or the close button; the footer shows its actions right-aligned in the order the code adds them (primary last); in a window narrower than `sm` (640) it stacks them full width, the primary on top; in nova its muted strip reaches the panel edges. The width is the style's `sm:max-w-*`, capped to the window minus 32. The overlay blur is not drawn. Markers: `cn-dialog-overlay`, `cn-dialog-content`, `cn-dialog-close`, `cn-dialog-header`, `cn-dialog-footer`, `cn-dialog-title`, `cn-dialog-description` |
+| `<Popover>` + Trigger/Content | `let t = ui.add(Button::new("Open")); shadcn_egui::components::popover::Popover::new(&t).width(..).side_offset(..).show(\|ui\| ..)`; `side_offset` is the gap between the trigger and the popup, default 4. A click on the trigger toggles it; Esc or a click outside closes it. `popover_header(ui, title, description)` inside. Your own widgets are one block: they stack with no gap, the popover's gap from the header; wrap them in `layout::vstack(ui, GAP, ..)` for the design's gap. Markers: `cn-popover-content`, `cn-popover-header`, `cn-popover-title`, `cn-popover-description` |
+| `<Tooltip>` | `shadcn_egui::components::tooltip::tooltip(ui.add(..), "text")`, or `Tooltip::new(&resp).show(ui, \|ui\| ..)` for other content; text inside takes the tooltip's look. Markers: `cn-tooltip-content`, `cn-tooltip-arrow` |
+| `<Kbd>` + `<Kbd.Group>` | `shadcn_egui::components::kbd::kbd(ui, "Ctrl")`, or `ui.add(Kbd::new(content))` with any `IntoAtoms` content (text, `IconAtom`s); `Kbd::icon_only(icon, name)` for an icon alone, `name` its accessible name. A shortcut of several keys: `KbdGroup::new().show(ui, \|ui\| ..)`, which lays its chips and any text between them out in one row (plain text such as a `+` as body text: `TextLook::resolve(ui, &[], State::NONE).label(ui, "+", TextWrapMode::Extend)`, centred on the chips as in the browser; `ui.label` sits low); its `.variant(..)` reaches the chips. A chip in a tooltip does not yet take the tooltip's look. Markers: `cn-kbd`, `cn-kbd-group` |
 | Lucide `<Mic />` | `shadcn_egui::components::icon::IconView::new(&shadcn_egui::icons::lucide::MIC)` with `.size(..)`, `.color(..)`; `paint_icon(painter, rect, icon, color, stroke)` for custom widgets. See `icons.md` |
+| An icon inside `IntoAtoms` content (`egui::Button`, a crate widget's content) | `shadcn_egui::components::icon_atom::IconAtom::new(icon)`, with `.size(..)` and `.tint(..)`. Without a size it is a crate widget's icon size (12 px in a `Kbd`), `Metrics::icon` in a plain egui widget. Without a tint it draws in the theme's text colour, and a crate widget draws it in its state colour, as its `.icon` slot; a tinted one keeps its colour everywhere. A text colour a host `Ui` overrides does not reach an untinted atom in a plain egui widget (egui gives image atoms no `Ui` colour), so tint it there. Needs `Theme::apply` |
+| `transition-*` (`transition-all duration-200 ease-in-out`) on a value of your own widget | `shadcn_egui::components::motion::transition(ui.ctx(), id, target, &stack, Transition::OTHER, state)` with the part's recipe stack: the value moves over the recipe's `duration` along its `easing` (150 ms `ease-in-out` where it sets none) when its `transition` names the property, and jumps under `animation_time == 0` |
+| Text of an app's own part in a recipe's look (`text-*`, `leading-*`, `font-*`, text colour) | `shadcn_egui::components::text::TextLook::resolve(ui, &recipes, state)`, then `.label(ui, text, wrap)` for an egui label, or `.layout(ui, text, wrap, width)` and `TextBlock::paint(painter, line_top_left, look.resolved_color(ui))` for painted text; the block is as tall as its line boxes and each baseline sits where the browser puts it. Letters are spaced and kerned as in Chrome, and lines break where Chrome breaks them, both for normal wrapping and for `text-balance` / `text-pretty` (the recipe's `text_wrap`: `TextWrap::Balance`, `TextWrap::Pretty`). Crate text draws no ligatures or contextual alternates: "fi" stays two letters where the browser joins them. `.heading(true)` for `cn-font-heading`, `.leading(Leading::Field)` for a text-entry field. `content_scope(ui, &look, \|ui\| ..)` hands a container's text size, line height, colour, weight, letter spacing and upper case to its content |
 
 Not yet ported: RadioGroup, Tags or Chips, Menubar, Table, DropdownMenu,
 Accordion, gradients. Port a missing one with `shadcn-egui:port-component`
 before using it; do not paint it ad hoc in the screen.
 
 ```rust
+use shadcn_egui::components::kbd::{kbd, KbdGroup};
+use shadcn_egui::components::text::TextLook;
+use shadcn_egui::style::State;
+
+fn shortcut(ui: &mut egui::Ui) {
+    KbdGroup::new().show(ui, |ui| {
+        kbd(ui, "Ctrl");
+        TextLook::resolve(ui, &[], State::NONE).label(ui, "+", egui::TextWrapMode::Extend);
+        kbd(ui, "B");
+    });
+}
+```
+
+```rust
+use shadcn_egui::components::alert::{alert_action, Alert, AlertVariant};
 use shadcn_egui::components::badge::{Badge, BadgeVariant};
+use shadcn_egui::components::button::{Button, ButtonSize};
 use shadcn_egui::components::switch::Switch;
+use shadcn_egui::icons::lucide;
 
 fn row(ui: &mut egui::Ui, on: &mut bool) {
     ui.add(Badge::new("Beta").variant(BadgeVariant::Secondary));
     ui.add(Switch::new(on));
+}
+
+fn alerts(ui: &mut egui::Ui) -> bool {
+    ui.add(
+        Alert::new()
+            .variant(AlertVariant::Destructive)
+            .icon(lucide::CIRCLE_ALERT)
+            .title("Payment failed")
+            .description("Your payment could not be processed."),
+    );
+    Alert::new()
+        .title("Dark mode is now available")
+        .description("Enable it under your profile settings to get started.")
+        .show(ui, |ui| {
+            alert_action(ui, |ui| ui.add(Button::new("Enable").size(ButtonSize::Xs)).clicked())
+                .inner
+        })
+        .inner
 }
 ```

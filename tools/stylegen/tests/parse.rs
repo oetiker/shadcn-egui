@@ -113,7 +113,7 @@ fn shipped_markers_file_parses() {
     let lines = parse_markers(
         &std::fs::read_to_string(format!("{}/markers.txt", env!("CARGO_MANIFEST_DIR"))).unwrap(),
     );
-    assert_eq!(lines.len(), 15);
+    assert_eq!(lines.len(), 24);
 }
 
 #[test]

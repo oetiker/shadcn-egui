@@ -1,7 +1,11 @@
 //! shadcn v4 (OKLCH) design tokens and the `Theme` (style x palette x radius), materialized for egui.
 
-use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca};
-use crate::style::{pick, Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize, Weight};
+use crate::color::{oklch_to_srgb as c, oklch_to_srgb_a as ca, Tone};
+use crate::style::app::{AppMap, Resolved, ResolvedPair};
+use crate::style::{
+    pick, AppEnum, AppVariant, Edit, Paint, Radius, Role, Rung, ShadowLevel, SizeEnum, State,
+    Style, TextSize, VariantEnum, Weight,
+};
 use egui::Color32;
 use shadcn_egui_core::IconSlots;
 
@@ -114,32 +118,33 @@ impl Palette {
     }
 }
 
-/// How menu content is coloured (upstream `menuColor`): today the Select
-/// list. `None` keeps the theme's own palette or dark flag.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct MenuColors {
-    /// The menu's palette; an inverted menu passes the dark palette.
-    pub palette: Option<Palette>,
-    /// The menu's dark flag; `Some(true)` for an inverted menu, so `dark:`
-    /// rules resolve as in dark mode.
-    pub dark: Option<bool>,
-}
-
+/// A shadcn theme: a style, the light and the dark palette, the radius,
+/// fonts and icons. [`Theme::apply`] installs both modes; the crate follows
+/// egui's light/dark choice (`ctx.set_theme(ThemePreference::Light)`, or the
+/// system's), and [`Theme::current`] resolves in the context's mode.
+/// Cloning is cheap: the style sits behind an `Arc`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     /// The shadcn style (vega, nova, …): every component part's recipe.
     pub style: Arc<Style>,
-    pub palette: Palette,
+    /// The light mode's colours.
+    pub light: Palette,
+    /// The dark mode's colours.
+    pub dark: Palette,
     /// shadcn `--radius`; the radius scale multiplies from it.
     pub radius: f32,
     pub metrics: Metrics,
-    pub dark: bool,
     /// Body and heading font; [`Theme::apply`] installs them.
     pub fonts: ThemeFonts,
     /// The icons components draw (default: built-in Lucide).
     pub icons: IconSlots,
-    /// Menu content colours (default: the theme's own).
-    pub menu: MenuColors,
+    /// Menu content draws in dark mode in both modes (upstream
+    /// `menuColor: "inverted"`; today the Select list).
+    pub menu_inverted: bool,
+    /// The mode colours and `dark:` rules resolve in.
+    mode: egui::Theme,
+    /// App variants, app sizes and app colours, shared by every clone.
+    pub(crate) apps: Arc<AppMap>,
 }
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the
@@ -148,8 +153,16 @@ pub struct Theme {
 /// paddings and gaps belong to the [`Style`]. Geometry that belongs to
 /// a single widget's drawing (a checkmark path, a knob inset) stays local.
 ///
-/// Override with struct update syntax:
-/// `Theme { metrics: Metrics { icon: 20.0, ..Metrics::default() }, ..Theme::vega_dark() }`.
+/// Override them on a theme value, with struct update syntax for the
+/// `Metrics` (a `Theme { .. }` literal does not compile: some fields are
+/// private):
+///
+/// ```
+/// use shadcn_egui::{Metrics, Theme};
+/// let mut theme = Theme::vega();
+/// theme.metrics = Metrics { icon: 20.0, ..Metrics::default() };
+/// assert_eq!(theme.metrics.icon, 20.0);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Metrics {
     /// `text-xs`: badges, captions (`TextStyle::Small`).
@@ -204,29 +217,62 @@ impl Default for Metrics {
 }
 
 impl Theme {
-    /// `dark` follows the palette's background (OKLCH lightness below 0.5);
-    /// set `theme.dark` afterwards to override.
-    pub fn new(style: Style, palette: Palette, radius: f32) -> Self {
-        let dark = crate::color::srgb_to_oklch(palette.background).0 < 0.5;
+    /// A theme from a style, the light and the dark palette and the radius
+    /// (`--radius` in px). It resolves in dark mode, egui's fallback, until
+    /// [`Theme::current`] gives it the context's mode.
+    pub fn new(style: Style, light: Palette, dark: Palette, radius: f32) -> Self {
         // `Arc::new` copies the large `Style` through two stack frames in a
         // debug build; a box moves it to the heap once.
         let style = Arc::from(Box::new(style));
         Self {
             style,
-            palette,
+            light,
+            dark,
             radius,
             metrics: Metrics::default(),
-            dark,
             fonts: ThemeFonts::inherit(&shadcn_egui_font_inter::FONT),
             icons: crate::icons::lucide::SLOTS,
-            menu: MenuColors::default(),
+            menu_inverted: false,
+            mode: egui::Theme::Dark,
+            apps: Arc::default(),
         }
     }
-    pub fn vega_dark() -> Self {
-        Self::new(Style::vega(), Palette::dark(), 10.0)
+    /// The vega style with the neutral palettes and a 10 px radius.
+    pub fn vega() -> Self {
+        Self::new(Style::vega(), Palette::light(), Palette::dark(), 10.0)
     }
-    pub fn vega_light() -> Self {
-        Self::new(Style::vega(), Palette::light(), 10.0)
+
+    /// This theme resolving colours and `dark:` rules in `mode`: how
+    /// [`Theme::current`] gives it the context's mode, and how the crate's
+    /// unit tests pick one without a context. Apps switch modes with
+    /// `ctx.set_theme(..)`; [`Theme::apply`] installs both modes whatever
+    /// this says.
+    pub(crate) fn in_mode(mut self, mode: egui::Theme) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// The mode this theme resolves in.
+    pub fn mode(&self) -> egui::Theme {
+        self.mode
+    }
+
+    /// Whether this theme resolves in dark mode.
+    pub fn is_dark(&self) -> bool {
+        self.mode == egui::Theme::Dark
+    }
+
+    /// The palette of the mode this theme resolves in.
+    pub fn palette(&self) -> &Palette {
+        self.palette_of(self.mode)
+    }
+
+    /// The palette of `mode`.
+    pub fn palette_of(&self, mode: egui::Theme) -> &Palette {
+        match mode {
+            egui::Theme::Dark => &self.dark,
+            egui::Theme::Light => &self.light,
+        }
     }
 
     /// Body font and heading font (`None`: headings use the body font,
@@ -245,29 +291,100 @@ impl Theme {
         self
     }
 
-    /// Menu content colours (upstream `menuColor`). An inverted menu needs
-    /// the dark palette: `MenuColors { palette: Some(dark), dark: Some(true), .. }`.
-    pub fn menu(mut self, menu: MenuColors) -> Self {
-        self.menu = menu;
+    /// Menu content in dark mode in both modes (upstream
+    /// `menuColor: "inverted"`).
+    pub fn menu_inverted(mut self, inverted: bool) -> Self {
+        self.menu_inverted = inverted;
         self
     }
 
-    /// The theme menu content draws with: this one, with palette and dark
-    /// flag replaced by the menu's where set.
+    /// The theme menu content draws with: this one, in dark mode when the
+    /// menu is inverted.
     pub fn menu_theme(&self) -> Theme {
         let mut t = self.clone();
-        if let Some(p) = self.menu.palette {
-            t.palette = p;
-        }
-        if let Some(d) = self.menu.dark {
-            t.dark = d;
+        if self.menu_inverted {
+            t.mode = egui::Theme::Dark;
         }
         t
     }
 
-    /// The component state `s` plus this theme's [`State::DARK`].
-    pub fn state(&self, s: State) -> State {
-        s.with(State::DARK, self.dark)
+    /// Define the app variant `app` from the built-in variant `base`: the
+    /// edit gets copies of `base`'s recipes and the style the theme builds
+    /// for, and changes what it names; the rest stays `base`'s, in every
+    /// state, mode and style. Both modes share it; a later definition of
+    /// the same name replaces it.
+    ///
+    /// ```
+    /// use shadcn_egui::components::button::{Button, ButtonVariant};
+    /// use shadcn_egui::style::{AppVariant, Paint, Role};
+    /// use shadcn_egui::Theme;
+    /// # fn f(ui: &mut egui::Ui) {
+    /// const DANGER_GHOST: AppVariant<ButtonVariant> = ButtonVariant::app("danger-ghost");
+    /// const DANGER_OUTLINE: AppVariant<ButtonVariant> = ButtonVariant::app("danger-outline");
+    /// let theme = Theme::vega()
+    ///     .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
+    ///         r.button.text.set(Paint::Role(Role::Destructive, 1.0)); // Ghost's hover colours stay
+    ///     })
+    ///     // Red where Outline sets a text colour: on hover and when expanded.
+    ///     .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| r.button.recolor(Role::Foreground, Role::Destructive));
+    /// ui.add(Button::new("Delete").variant(DANGER_GHOST));
+    /// # }
+    /// ```
+    ///
+    /// A size is no variant:
+    ///
+    /// ```compile_fail,E0277
+    /// use shadcn_egui::components::button::ButtonVariant;
+    /// const WIDE: shadcn_egui::style::AppVariant<ButtonVariant> = ButtonVariant::app("wide");
+    /// let _ = shadcn_egui::Theme::vega().size(WIDE, ButtonVariant::Default, |_, _| {});
+    /// ```
+    pub fn variant<V: VariantEnum>(mut self, app: AppVariant<V>, base: V, edit: Edit<V>) -> Self {
+        Arc::make_mut(&mut self.apps).insert(app, base, edit);
+        self
+    }
+
+    /// Define the app size `app` from the built-in size `base`, as
+    /// [`Theme::variant`] does for a variant.
+    pub fn size<Z: SizeEnum>(mut self, app: AppVariant<Z>, base: Z, edit: Edit<Z>) -> Self {
+        Arc::make_mut(&mut self.apps).insert(app, base, edit);
+        self
+    }
+
+    /// Define the app colour `role` ([`Role::custom`]) as `light` in light
+    /// mode and `dark` in dark mode.
+    pub fn color(mut self, role: Role, light: Color32, dark: Color32) -> Self {
+        match role {
+            Role::Custom(name) => Arc::make_mut(&mut self.apps).set_color(name.name(), light, dark),
+            _ => debug_assert!(
+                false,
+                "Theme::color({role:?}): a palette role, not Role::custom"
+            ),
+        }
+        self
+    }
+
+    /// What a component draws a variant or size with: the recipes and state
+    /// bits of the built-in case, or of the app case's edited copies.
+    pub(crate) fn resolve<X: AppEnum>(&self, x: X) -> Resolved<X> {
+        self.apps.resolve(&self.style, x)
+    }
+
+    /// The recipes and state bits of a variant and a size that edit the
+    /// same parts ([`crate::style::app::AppMap::resolve_pair`]).
+    pub(crate) fn resolve_pair<V: AppEnum, Z: AppEnum<Recipes = V::Recipes>>(
+        &self,
+        v: V,
+        z: Z,
+    ) -> ResolvedPair<V, Z> {
+        self.apps.resolve_pair(&self.style, v, z)
+    }
+
+    /// The component state `s` plus this theme's [`State::DARK`], and the
+    /// `sm:` flag (the window is at least 640 points wide) and `md:` flag
+    /// (768 points), as [`crate::layout::window_at_least`] tests them.
+    pub fn state(&self, ctx: &egui::Context, s: State) -> State {
+        s.with(State::DARK, self.is_dark())
+            .or(crate::layout::breakpoints(ctx))
     }
 
     /// A radius rung in px: shadcn's scale multiplies `--radius`.
@@ -310,7 +427,7 @@ impl Theme {
 
     /// The palette colour of a style role.
     pub fn role(&self, r: Role) -> Color32 {
-        let p = &self.palette;
+        let p = self.palette();
         match r {
             Role::Background => p.background,
             Role::Foreground => p.foreground,
@@ -334,15 +451,30 @@ impl Theme {
             Role::White => Color32::WHITE,
             Role::Black => Color32::BLACK,
             Role::Transparent => Color32::TRANSPARENT,
+            Role::Custom(name) => {
+                let c = self.apps.color(name.name(), self.is_dark());
+                debug_assert!(
+                    c.is_some(),
+                    "app colour {name:?} is not defined in the theme"
+                );
+                c.unwrap_or(p.foreground)
+            }
         }
     }
     /// A style colour as egui paints it. Alpha scales the premultiplied colour,
     /// which matches CSS `/alpha` compositing in sRGB.
     pub fn paint(&self, p: Paint) -> Color32 {
+        self.tone(p).color
+    }
+    /// [`Theme::paint`] with the unclipped colour it stands for, which a
+    /// fade or mix takes: the role's token at the paint's alpha.
+    pub(crate) fn tone(&self, p: Paint) -> Tone {
         match p {
-            Paint::Role(r, a) if a >= 1.0 => self.role(r),
-            Paint::Role(r, a) => self.role(r).gamma_multiply(a.max(0.0)),
-            Paint::Mix(a, b, t) => crate::color::mix_oklch(self.role(a), self.role(b), t),
+            Paint::Role(r, a) if a >= 1.0 => Tone::of(self.role(r)),
+            Paint::Role(r, a) => Tone::of(self.role(r)).faded(a),
+            Paint::Mix(a, b, t) => {
+                Tone::mix_oklch(Tone::of(self.role(a)), Tone::of(self.role(b)), t)
+            }
         }
     }
     /// A text size in px, from [`Metrics`].
@@ -368,25 +500,90 @@ impl Theme {
             TextSize::Px(v) => v * m.line_base / m.text_base,
         }
     }
-    /// Tailwind v4 shadows, first layer only (egui draws one); egui's spread
-    /// is unsigned, so Tailwind's negative spreads become 0.
-    pub fn shadow(&self, s: ShadowLevel) -> egui::epaint::Shadow {
-        let (y, blur, a) = match s {
-            ShadowLevel::None => return egui::epaint::Shadow::NONE,
-            ShadowLevel::Xs2 => (1, 0, 0.05),
-            ShadowLevel::Xs => (1, 2, 0.05),
-            ShadowLevel::Sm => (1, 3, 0.10),
-            ShadowLevel::Md => (4, 6, 0.10),
-            ShadowLevel::Lg => (10, 15, 0.10),
-            ShadowLevel::Xl => (20, 25, 0.10),
-            ShadowLevel::Xl2 => (25, 50, 0.25),
-        };
-        egui::epaint::Shadow {
-            offset: [0, y],
-            blur,
-            spread: 0,
-            color: Color32::from_black_alpha((a * 255.0_f32).round() as u8),
+    /// Tailwind v4's `shadow-*` scale with every layer, first layer on top
+    /// as CSS paints it. [`RecipeBox`](crate::components::shared::RecipeBox)
+    /// draws them to the browser's pixels.
+    pub fn shadow(&self, s: ShadowLevel) -> &'static [ShadowLayer] {
+        const fn l(y: f32, blur: f32, spread: f32, alpha: f32) -> ShadowLayer {
+            ShadowLayer::new(egui::vec2(0.0, y), blur, spread, Color32::BLACK, alpha)
         }
+        // Tailwind v4 theme.css `--shadow-*`.
+        const XS2: &[ShadowLayer] = &[l(1.0, 0.0, 0.0, 0.05)];
+        const XS: &[ShadowLayer] = &[l(1.0, 2.0, 0.0, 0.05)];
+        const SM: &[ShadowLayer] = &[l(1.0, 3.0, 0.0, 0.1), l(1.0, 2.0, -1.0, 0.1)];
+        const MD: &[ShadowLayer] = &[l(4.0, 6.0, -1.0, 0.1), l(2.0, 4.0, -2.0, 0.1)];
+        const LG: &[ShadowLayer] = &[l(10.0, 15.0, -3.0, 0.1), l(4.0, 6.0, -4.0, 0.1)];
+        const XL: &[ShadowLayer] = &[l(20.0, 25.0, -5.0, 0.1), l(8.0, 10.0, -6.0, 0.1)];
+        const XL2: &[ShadowLayer] = &[l(25.0, 50.0, -12.0, 0.25)];
+        match s {
+            ShadowLevel::None => &[],
+            ShadowLevel::Xs2 => XS2,
+            ShadowLevel::Xs => XS,
+            ShadowLevel::Sm => SM,
+            ShadowLevel::Md => MD,
+            ShadowLevel::Lg => LG,
+            ShadowLevel::Xl => XL,
+            ShadowLevel::Xl2 => XL2,
+        }
+    }
+}
+
+/// One layer of a CSS `box-shadow` (outer): offset, blur radius and spread
+/// in px, colour and alpha. The blur is CSS's: a Gaussian with a standard
+/// deviation of half the blur radius. The alpha is kept apart from the
+/// colour so `0.1` stays exact (egui's colours have 8-bit alpha).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ShadowLayer {
+    offset: egui::Vec2,
+    blur: f32,
+    spread: f32,
+    color: Color32,
+    alpha: f32,
+}
+
+impl ShadowLayer {
+    /// A layer as CSS writes it: `<x> <y> <blur> <spread> <color> / <alpha>`.
+    /// `color`'s own alpha is ignored.
+    pub const fn new(
+        offset: egui::Vec2,
+        blur: f32,
+        spread: f32,
+        color: Color32,
+        alpha: f32,
+    ) -> Self {
+        Self {
+            offset,
+            blur,
+            spread,
+            color,
+            alpha,
+        }
+    }
+    /// The x and y offset in px.
+    #[inline]
+    pub fn offset(&self) -> egui::Vec2 {
+        self.offset
+    }
+    /// The blur radius in px (CSS's; the Gaussian's deviation is half).
+    #[inline]
+    pub fn blur(&self) -> f32 {
+        self.blur
+    }
+    /// The spread in px; negative shrinks the shadow.
+    #[inline]
+    pub fn spread(&self) -> f32 {
+        self.spread
+    }
+    /// The colour; its alpha is not used.
+    #[inline]
+    pub fn color(&self) -> Color32 {
+        self.color
+    }
+    /// The alpha, 0 to 1.
+    #[inline]
+    pub fn alpha(&self) -> f32 {
+        self.alpha
     }
 }
 
@@ -502,9 +699,27 @@ fn face_key(role: &str, weight: u16) -> String {
     format!("shadcn-{role}-{weight}")
 }
 
+/// One face of `files` at weight `w`, with its `wght` coordinate and
+/// baseline correction.
+fn face_data(files: &FontFiles, w: u16) -> Arc<FontData> {
+    let face = files.face(w);
+    let mut tweak = egui::FontTweak {
+        y_offset_factor: files.y_offset_factor,
+        ..Default::default()
+    };
+    if let Some(v) = face.wght {
+        tweak.coords = VariationCoords::new([(b"wght", v)]);
+    }
+    Arc::new(FontData::from_static(face.data).tweak(tweak))
+}
+
 /// `base` plus the theme's fonts: one registration per weight with the
-/// `wght` coordinate, each family followed by `base`'s Proportional list so
-/// glyphs the font lacks (emoji, CJK, symbols) still render. A theme's
+/// `wght` coordinate, each family followed by Inter at its weight (a face
+/// `shadcn-fallback-{weight}`, unless the family's font is Inter) and then
+/// `base`'s Proportional list, so a glyph the font lacks takes Inter's, as
+/// Chrome takes another font's (P4), and glyphs Inter lacks too (emoji,
+/// CJK) still render. A mono body's face in Monospace is followed by
+/// Inter's regular face the same way. A theme's
 /// faces and families already in `base` (the context's current
 /// definitions) are replaced, so a reinstall neither stacks them nor keeps
 /// an earlier theme's. Only the exact keys and families a theme installs
@@ -520,22 +735,36 @@ fn font_definitions(
     mono_installed: bool,
 ) -> FontDefinitions {
     let inherit = fonts.heading == fonts.body;
-    let theme_keys: Vec<String> = ["body", "heading"]
+    let theme_keys: Vec<String> = ["body", "heading", "fallback"]
         .into_iter()
         .flat_map(|role| WEIGHTS.map(|w| face_key(role, w)))
         .collect();
     let is_theme_key = |key: &str| theme_keys.iter().any(|k| k == key);
-    // An inherited heading registers no faces of its own.
-    let defined = |key: &str| !inherit || key.starts_with("shadcn-body-");
+    let inter = &shadcn_egui_font_inter::FONT;
+    let needs_fallback = |files: &FontFiles| files.name != inter.name;
+    let fallback_used = needs_fallback(fonts.body) || needs_fallback(fonts.heading);
+    // An inherited heading registers no faces of its own, and only a font
+    // other than Inter registers Inter's faces as its fallback.
+    let defined = |key: &str| {
+        if key.starts_with("shadcn-fallback-") {
+            fallback_used
+        } else {
+            !inherit || key.starts_with("shadcn-body-")
+        }
+    };
     base.font_data.retain(|key, _| !is_theme_key(key));
     let is_theme_family =
         |name: &str| BODY_FAMILIES.contains(&Some(name)) || HEADING_FAMILIES.contains(&name);
     base.families
         .retain(|family, _| !matches!(family, FontFamily::Name(name) if is_theme_family(name)));
     let mono_key = face_key("body", WEIGHTS[0]);
+    let mono_fallback = face_key("fallback", WEIGHTS[0]);
     if let Some(mono) = base.families.get_mut(&FontFamily::Monospace) {
         if mono_installed && mono.first() == Some(&mono_key) {
             mono.remove(0);
+            if mono.first() == Some(&mono_fallback) {
+                mono.remove(0);
+            }
         }
     }
     for list in base.families.values_mut() {
@@ -556,18 +785,7 @@ fn font_definitions(
         for (i, w) in WEIGHTS.into_iter().enumerate() {
             let key = face_key(data_role, w);
             if data_role == role {
-                let face = files.face(w);
-                let mut tweak = egui::FontTweak {
-                    y_offset_factor: files.y_offset_factor,
-                    ..Default::default()
-                };
-                if let Some(v) = face.wght {
-                    tweak.coords = VariationCoords::new([(b"wght", v)]);
-                }
-                base.font_data.insert(
-                    key.clone(),
-                    Arc::new(FontData::from_static(face.data).tweak(tweak)),
-                );
+                base.font_data.insert(key.clone(), face_data(files, w));
             }
             let family = match (role, i) {
                 ("body", 0) => FontFamily::Proportional,
@@ -577,14 +795,25 @@ fn font_definitions(
                 _ => FontFamily::Name(HEADING_FAMILIES[i].into()),
             };
             let mut list = vec![key];
+            if needs_fallback(files) {
+                let inter_key = face_key("fallback", w);
+                base.font_data
+                    .entry(inter_key.clone())
+                    .or_insert_with(|| face_data(inter, w));
+                list.push(inter_key);
+            }
             list.extend(fallback.iter().cloned());
             base.families.insert(family, list);
         }
     }
     if fonts.body.kind == FontKind::Mono {
         let mono = base.families.entry(FontFamily::Monospace).or_default();
-        mono.retain(|key| *key != mono_key);
-        mono.insert(0, mono_key);
+        mono.retain(|key| *key != mono_key && *key != mono_fallback);
+        let mut lead = vec![mono_key];
+        if needs_fallback(fonts.body) {
+            lead.push(mono_fallback);
+        }
+        mono.splice(0..0, lead);
     }
     base
 }
@@ -633,8 +862,44 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
         }
     };
     let mono_installed = last.is_some_and(|f| f.mono_body);
-    ctx.set_fonts(font_definitions(fonts, base, mono_installed));
+    let defs = Arc::new(font_definitions(fonts, base, mono_installed));
+    let pass = ctx.cumulative_pass_nr();
+    // Fonts that change nothing count as no install, or an app that
+    // applies the same theme in every pass gets every pass discarded. After
+    // the first pass this is egui's own test in `set_fonts`, which then does
+    // nothing; before and in the first pass egui may have no fonts yet, so
+    // the comparison is with the last install.
+    let unchanged = if pass > 0 {
+        ctx.fonts(|f| f.definitions() == &*defs)
+    } else {
+        ctx.data(|d| d.get_temp::<Arc<FontDefinitions>>(last_defs_id()))
+            .is_some_and(|last| *last == *defs)
+    };
     ctx.data_mut(|d| d.insert_temp(id, key));
+    if unchanged {
+        if pass == 0 {
+            ctx.set_fonts((*defs).clone());
+        }
+        return;
+    }
+    ctx.set_fonts((*defs).clone());
+    ctx.data_mut(|d| d.insert_temp(last_defs_id(), defs));
+    // A pass that has started sees the count change (`check_mode_switch`)
+    // and is redone. Where no crate call has seen this pass yet, a call
+    // between two passes cannot be told from the first call of a pass:
+    // repaint, so a pass that drew in the old fonts is not the last one.
+    // egui repaints after the first pass anyway.
+    let seen = ctx.data(|d| {
+        d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())
+            .is_some_and(|(p, ..)| p == pass)
+    });
+    if pass > 0 && !seen {
+        ctx.request_repaint();
+    }
+    ctx.data_mut(|d| {
+        let n = d.get_temp::<u64>(font_installs_id()).unwrap_or(0);
+        d.insert_temp(font_installs_id(), n + 1);
+    });
 }
 
 /// `TextStyle::Heading` waits in `Proportional` until the heading family is
@@ -800,8 +1065,9 @@ fn bind_heading(ctx: &egui::Context) -> Option<FontId> {
 }
 
 impl Theme {
-    /// Read the active theme stored by [`Theme::apply`]. Falls back to vega
-    /// dark, shared so the fallback does not build a [`Style`] per call.
+    /// Read the active theme stored by [`Theme::apply`], resolving in the
+    /// context's mode (`ctx.theme()`). Falls back to [`Theme::vega`],
+    /// shared so the fallback does not build a [`Style`] per call.
     ///
     /// Also binds a heading that still waits for its fonts, and lets one
     /// whose family the app's own fonts dropped fall back, for apps whose
@@ -810,17 +1076,27 @@ impl Theme {
     /// such a loop, a heading in a `Ui` built before the first shadcn
     /// component of the pass can still panic after an app's own
     /// `ctx.set_fonts`; use [`Theme::apply_with_fonts`].
+    ///
+    /// A `ctx.set_theme(..)` in the middle of a pass asks egui to discard
+    /// that pass (`Context::run_ui` runs it again) and to repaint, so no
+    /// frame shows widgets of both modes. A pass hook checks this at the
+    /// end of the pass too; an app's own `begin_pass`/`end_pass` loop runs
+    /// no hook, so there only a crate widget after the call catches it.
     pub fn current(ctx: &egui::Context) -> Theme {
-        static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega_dark);
+        static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
         if ctx.cumulative_pass_nr() > 0 {
             let _ = check_heading(ctx);
         }
-        ctx.data(|d| d.get_temp::<Theme>(theme_id()))
-            .unwrap_or_else(|| FALLBACK.clone())
+        let mode = check_mode_switch(ctx);
+        let theme = ctx.data(|d| d.get_temp::<Theme>(theme_id()));
+        theme.unwrap_or_else(|| FALLBACK.clone()).in_mode(mode)
     }
 
-    /// Push this theme into the egui context: fonts, type scale, spacing, colors.
+    /// Push this theme into the egui context: fonts, type scale, spacing,
+    /// and the colors of both modes (egui's dark and light style). The
+    /// crate's widgets and plain egui widgets then follow
+    /// `ctx.set_theme(..)` and the system's mode.
     ///
     /// Call once, right after the context is created, and again only when the
     /// theme changes. Not every frame: that would silently undo any other
@@ -835,21 +1111,36 @@ impl Theme {
     /// heading in a `Ui` built before the first shadcn component of that pass
     /// can still panic. Calling `apply` and `set_fonts` every frame rebuilds
     /// the font atlas on every other frame.
+    ///
+    /// egui swaps in new fonts only at the next pass. Called in the middle
+    /// of a pass, `apply` of other fonts asks egui to discard that pass and
+    /// to repaint, as a mid-pass `ctx.set_theme(..)` does; layout that the
+    /// crate takes from the previous pass then needs one more pass, so the
+    /// first frame of such a change can show it unsettled. Called before
+    /// the first pass (in eframe's app creator, on `cc.egui_ctx`), the
+    /// first frame is in the theme's fonts. An app's own `ctx.set_fonts`
+    /// in a pass is not seen: egui asks for no repaint, so the screen keeps
+    /// the old fonts until the next input. Install the fonts through
+    /// [`Theme::apply_with_fonts`] instead, or call `ctx.request_repaint()`
+    /// after `set_fonts`.
     pub fn apply(&self, ctx: &egui::Context) {
         self.apply_inner(ctx, None);
     }
 
     /// Like [`Theme::apply`], starting from the app's own font definitions
-    /// instead of egui's defaults. Always reinstalls the fonts.
+    /// instead of egui's defaults. Always builds the fonts again from
+    /// `base`; egui takes them only when they differ from its own, so the
+    /// same call in every pass costs no extra pass.
     pub fn apply_with_fonts(&self, ctx: &egui::Context, base: FontDefinitions) {
         self.apply_inner(ctx, Some(base));
     }
 
     fn apply_inner(&self, ctx: &egui::Context, base: Option<FontDefinitions>) {
         install_fonts(ctx, self.fonts, base);
-        let p = &self.palette;
+        crate::components::icon_atom::install(ctx);
+        crate::components::shared::install_focus_modality(ctx);
         let m = &self.metrics;
-        let hairline = m.border;
+        let hairline = crate::components::shared::line_width(m.border, ctx.pixels_per_point());
         let heading = FontId::new(m.text_heading, heading_family_now(ctx));
         if heading.family == FontFamily::Proportional {
             ctx.data_mut(|d| {
@@ -857,77 +1148,256 @@ impl Theme {
             });
         }
 
-        ctx.all_styles_mut(|s| {
-            use FontFamily::Proportional;
-            s.text_styles = [
-                (TextStyle::Small, FontId::new(m.text_xs, Proportional)),
-                (TextStyle::Body, FontId::new(m.text_sm, Proportional)),
-                (TextStyle::Button, FontId::new(m.text_sm, Proportional)),
-                (
-                    TextStyle::Monospace,
-                    FontId::new(m.text_mono, FontFamily::Monospace),
-                ),
-                (TextStyle::Heading, heading.clone()),
-            ]
-            .into();
+        for mode in [egui::Theme::Dark, egui::Theme::Light] {
+            let dark = mode == egui::Theme::Dark;
+            let p = self.palette_of(mode);
+            ctx.style_mut_of(mode, |s| self.style_egui(s, p, dark, hairline, &heading));
+        }
 
-            // egui-native widgets follow the style's default button: its
-            // height and horizontal padding, and the tabs gap between items.
-            // A style without a value gets egui's default, also when an
-            // earlier theme had set one.
-            let egui_default = egui::style::Spacing::default();
-            let button = [&*self.style.button_size_default];
-            let none = self.state(State::NONE);
-            let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
-            let pad_x =
-                pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
-            let height = pick(&button, |r| &r.height, none);
-            // egui's button is its text row plus twice `button_padding.y`, and
-            // at least `interact_size.y`: keep the padding within the height.
-            let pad_y = height.map_or(egui_default.button_padding.y, |h| {
-                ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0)
-            });
-            s.spacing.item_spacing = egui::vec2(gap, gap);
-            s.spacing.button_padding = egui::vec2(pad_x, pad_y);
-            s.spacing.window_margin = egui::Margin::same(0);
-            s.spacing.interact_size.y = height.unwrap_or(egui_default.interact_size.y);
-
-            let v = &mut s.visuals;
-            v.dark_mode = self.dark;
-            v.panel_fill = p.background;
-            v.window_fill = p.card;
-            v.window_stroke = Stroke::new(hairline, p.border);
-            v.extreme_bg_color = p.input;
-            v.faint_bg_color = p.muted;
-            v.override_text_color = Some(p.foreground);
-            v.hyperlink_color = p.primary;
-            v.selection.bg_fill = p.primary.gamma_multiply(0.35);
-            v.selection.stroke = Stroke::new(hairline, p.ring);
-            v.widgets.noninteractive.bg_fill = p.background;
-            v.widgets.noninteractive.bg_stroke = Stroke::new(hairline, p.border);
-            v.widgets.noninteractive.fg_stroke = Stroke::new(hairline, p.foreground);
-            for w in [
-                &mut v.widgets.inactive,
-                &mut v.widgets.hovered,
-                &mut v.widgets.active,
-                &mut v.widgets.open,
-            ] {
-                w.bg_fill = p.secondary;
-                w.weak_bg_fill = p.secondary;
-                w.bg_stroke = Stroke::new(hairline, p.border);
-                w.fg_stroke = Stroke::new(hairline, p.foreground);
-                w.corner_radius = egui::CornerRadius::same(self.radius_md() as u8);
+        ctx.data_mut(|d| {
+            if d.get_temp::<Theme>(theme_id()).as_ref() != Some(self) {
+                let generation = d.get_temp::<u64>(generation_id()).unwrap_or(0);
+                d.insert_temp(generation_id(), generation + 1);
             }
-            // shadcn uses the `accent` token for hover/active feedback so
-            // native widgets (e.g. ComboBox dropdown items) don't look inert.
-            for w in [&mut v.widgets.hovered, &mut v.widgets.active] {
-                w.bg_fill = p.accent;
-                w.weak_bg_fill = p.accent;
-            }
+            d.insert_temp(theme_id(), self.clone());
+            d.insert_temp(hairline_id(), hairline);
         });
-
-        ctx.data_mut(|d| d.insert_temp(theme_id(), self.clone()));
+        install_hairline_hook(ctx);
+        install_mode_switch_hook(ctx);
     }
+
+    /// One mode's egui style: type scale, spacing and colours.
+    fn style_egui(
+        &self,
+        s: &mut egui::Style,
+        p: &Palette,
+        dark: bool,
+        hairline: f32,
+        heading: &FontId,
+    ) {
+        let m = &self.metrics;
+        use FontFamily::Proportional;
+        s.text_styles = [
+            (TextStyle::Small, FontId::new(m.text_xs, Proportional)),
+            (TextStyle::Body, FontId::new(m.text_sm, Proportional)),
+            (TextStyle::Button, FontId::new(m.text_sm, Proportional)),
+            (
+                TextStyle::Monospace,
+                FontId::new(m.text_mono, FontFamily::Monospace),
+            ),
+            (TextStyle::Heading, heading.clone()),
+        ]
+        .into();
+
+        // egui-native widgets follow the style's default button: its
+        // height and horizontal padding, and the tabs gap between items.
+        // A style without a value gets egui's default, also when an
+        // earlier theme had set one.
+        let egui_default = egui::style::Spacing::default();
+        let button = [&*self.style.button_size_default];
+        // Set once, not per pass: no window breakpoint applies.
+        let none = State::NONE.with(State::DARK, dark);
+        let gap = pick(&[&*self.style.tabs], |r| &r.gap, none).unwrap_or(DEFAULT_ITEM_GAP);
+        let pad_x = pick(&button, |r| &r.pad_left, none).unwrap_or(egui_default.button_padding.x);
+        let height = pick(&button, |r| &r.height, none);
+        // egui's button is its text row plus twice `button_padding.y`, and
+        // at least `interact_size.y`: keep the padding within the height.
+        let pad_y = height.map_or(egui_default.button_padding.y, |h| {
+            ((h - self.line_px(TextSize::Sm)) / 2.0).max(0.0)
+        });
+        s.spacing.item_spacing = egui::vec2(gap, gap);
+        s.spacing.button_padding = egui::vec2(pad_x, pad_y);
+        s.spacing.window_margin = egui::Margin::same(0);
+        s.spacing.interact_size.y = height.unwrap_or(egui_default.interact_size.y);
+
+        // Plain egui widgets fade as the style's controls do
+        // (`disabled:opacity-50` on the button).
+        let control = State::NONE.with(State::DARK, dark).or(State::DISABLED);
+        let disabled_alpha = pick(&[&*self.style.button], |r| &r.opacity, control);
+        let v = &mut s.visuals;
+        v.disabled_alpha = disabled_alpha.unwrap_or(v.disabled_alpha);
+        v.dark_mode = dark;
+        // The ink of Chrome's grayscale anti-aliasing: light text on dark
+        // takes `coverage^0.81`, dark text on light the plain coverage
+        // (tests/text_coverage.rs). egui's dark default (`2c - c²`) draws
+        // 3 to 25 % more.
+        v.text_options.alpha_from_coverage = if dark {
+            egui::epaint::AlphaFromCoverage::Gamma(0.81)
+        } else {
+            egui::epaint::AlphaFromCoverage::Linear
+        };
+        v.panel_fill = p.background;
+        v.window_fill = p.card;
+        v.window_stroke = Stroke::new(hairline, p.border);
+        v.extreme_bg_color = p.input;
+        v.faint_bg_color = p.muted;
+        v.override_text_color = Some(p.foreground);
+        v.hyperlink_color = p.primary;
+        v.selection.bg_fill = p.primary.gamma_multiply(0.35);
+        v.selection.stroke = Stroke::new(hairline, p.ring);
+        // Chrome's caret: 1 css px of the text colour (`caret-color: auto`).
+        v.text_cursor.stroke = Stroke::new(1.0_f32, p.foreground);
+        v.widgets.noninteractive.bg_fill = p.background;
+        v.widgets.noninteractive.bg_stroke = Stroke::new(hairline, p.border);
+        v.widgets.noninteractive.fg_stroke = Stroke::new(hairline, p.foreground);
+        for w in [
+            &mut v.widgets.inactive,
+            &mut v.widgets.hovered,
+            &mut v.widgets.active,
+            &mut v.widgets.open,
+        ] {
+            w.bg_fill = p.secondary;
+            w.weak_bg_fill = p.secondary;
+            w.bg_stroke = Stroke::new(hairline, p.border);
+            w.fg_stroke = Stroke::new(hairline, p.foreground);
+            w.corner_radius = egui::CornerRadius::same(self.radius_md() as u8);
+        }
+        // shadcn uses the `accent` token for hover/active feedback so
+        // native widgets (e.g. ComboBox dropdown items) don't look inert.
+        for w in [&mut v.widgets.hovered, &mut v.widgets.active] {
+            w.bg_fill = p.accent;
+            w.weak_bg_fill = p.accent;
+        }
+    }
+}
+
+fn hairline_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::hairline")
+}
+
+/// The pass number, and the mode and the font install the pass started
+/// with, as first seen by [`check_mode_switch`].
+fn pass_mode_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::pass_mode")
+}
+
+/// The font definitions [`install_fonts`] installed last.
+fn last_defs_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::last_font_definitions")
+}
+
+/// How many times [`install_fonts`] has installed fonts that differ from
+/// the ones egui has.
+fn font_installs_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::font_installs")
+}
+
+fn font_installs(ctx: &egui::Context) -> u64 {
+    ctx.data(|d| d.get_temp::<u64>(font_installs_id()).unwrap_or(0))
+}
+
+/// The context's mode, checked against the mode its pass started in. A
+/// `ctx.set_theme(..)` since then leaves the widgets drawn before it in the
+/// other mode: discard the pass, as the browser restyles the whole page at
+/// once, and repaint for a loop that cannot redo it. A font install since
+/// the pass started does the same: egui swaps in new fonts only at the
+/// next pass, so the whole pass is in the old fonts. Runs at the start and
+/// end of every pass ([`install_mode_switch_hook`]) and in every
+/// [`Theme::current`], so an app's own loop, which runs no pass hook, is
+/// caught by the next crate widget.
+fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
+    let mode = ctx.theme();
+    let pass = ctx.cumulative_pass_nr();
+    let fonts = font_installs(ctx);
+    match ctx.data(|d| d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())) {
+        Some((p, start, start_fonts)) if p == pass => {
+            if start != mode {
+                ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
+                ctx.request_repaint();
+            }
+            if start_fonts != fonts {
+                ctx.request_discard("shadcn-egui: the theme's fonts changed in the pass");
+                ctx.request_repaint();
+            }
+        }
+        _ => {
+            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode, fonts)));
+        }
+    }
+    mode
+}
+
+/// Run [`check_mode_switch`] at the start and end of every pass of `ctx`,
+/// so a switch after the pass's last crate widget, or before a plain egui
+/// `Area`, does not leave a mixed or stale frame; installed once.
+fn install_mode_switch_hook(ctx: &egui::Context) {
+    let hook_id = egui::Id::new("shadcn_egui::mode_switch_hook");
+    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(hook_id, true));
+    let check = |ui: &mut egui::Ui| {
+        check_mode_switch(ui.ctx());
+    };
+    ctx.on_begin_pass("shadcn_egui::mode_switch", Arc::new(check));
+    ctx.on_end_pass("shadcn_egui::mode_switch", Arc::new(check));
+}
+
+fn generation_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::theme_generation")
+}
+
+/// What the colours of the context's pass resolve from: the applied
+/// theme (counted up by each [`Theme::apply`] of a different theme) and
+/// the mode. A transition that sees it change jumps.
+pub(crate) fn theme_stamp(ctx: &egui::Context) -> u64 {
+    let generation = ctx.data(|d| d.get_temp::<u64>(generation_id()).unwrap_or(0));
+    generation * 2 + u64::from(ctx.theme() == egui::Theme::Dark)
+}
+
+/// Every stroke [`Theme::apply`] gives the theme's hairline (`border`).
+fn set_hairline(v: &mut egui::Visuals, width: f32) {
+    v.window_stroke.width = width;
+    v.selection.stroke.width = width;
+    v.widgets.noninteractive.bg_stroke.width = width;
+    v.widgets.noninteractive.fg_stroke.width = width;
+    for w in [
+        &mut v.widgets.inactive,
+        &mut v.widgets.hovered,
+        &mut v.widgets.active,
+        &mut v.widgets.open,
+    ] {
+        w.bg_stroke.width = width;
+        w.fg_stroke.width = width;
+    }
+}
+
+/// Keep the hairline of plain egui widgets on whole device pixels, as the
+/// crate's own borders: `Theme::apply` runs once, often before the window's
+/// scale is known, and the scale can change later (zoom, another monitor).
+/// Each pass checks the scale and rewrites the stroke widths only when the
+/// snapped width changes, so style writes of the app's own stay.
+fn install_hairline_hook(ctx: &egui::Context) {
+    let hook_id = egui::Id::new("shadcn_egui::hairline_hook");
+    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(hook_id, true));
+    ctx.on_begin_pass(
+        "shadcn_egui::hairline",
+        Arc::new(|ui: &mut egui::Ui| {
+            if let Some(width) = snap_hairline(ui.ctx()) {
+                // The root ui was built before this hook ran.
+                set_hairline(&mut ui.style_mut().visuals, width);
+            }
+        }),
+    );
+}
+
+/// The hairline for the context's current scale, written to both styles
+/// when it differs from the last one written. Returns the new width then.
+fn snap_hairline(ctx: &egui::Context) -> Option<f32> {
+    let border = ctx
+        .data(|d| d.get_temp::<Theme>(theme_id()))?
+        .metrics
+        .border;
+    let width = crate::components::shared::line_width(border, ctx.pixels_per_point());
+    if ctx.data(|d| d.get_temp::<f32>(hairline_id())) == Some(width) {
+        return None;
+    }
+    ctx.data_mut(|d| d.insert_temp(hairline_id(), width));
+    ctx.all_styles_mut(|s| set_hairline(&mut s.visuals, width));
+    Some(width)
 }
 
 /// Convenience accessor for components.

@@ -8,10 +8,13 @@
 //! The thumb stays inside the track: its centre travels from half a thumb
 //! after the track start to half a thumb before its end, as in bits-ui.
 
-use crate::components::shared::{box_shapes, interaction_state, ring_shape, style_painter};
-use crate::style::{pick, Paint, Prop, Recipe, State};
-use crate::Theme;
-use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Shape, Stroke, Ui, Widget};
+use crate::components::shared::{
+    interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
+};
+use crate::style::app::default_variant;
+use crate::style::{pick_len, Recipe, State};
+use crate::{layout, Theme};
+use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
 
 /// shadcn `orientation` of the slider.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -20,6 +23,23 @@ pub enum SliderOrientation {
     Horizontal,
     Vertical,
 }
+
+default_variant!(
+    /// The slider's variant: upstream has none, so only app variants
+    /// ([`SliderVariant::app`]) differ from `Default`.
+    SliderVariant,
+    /// The slider's recipes an app variant's edit changes.
+    SliderRecipes {
+        /// `data-slot="slider"`: the root.
+        slider,
+        /// `data-slot="slider-track"`.
+        slider_track,
+        /// `data-slot="slider-range"`: the filled part of the track.
+        slider_range,
+        /// `data-slot="slider-thumb"`.
+        slider_thumb,
+    }
+);
 
 /// A slider with one thumb (bits-ui also supports several; this port does
 /// not). The value is clamped to the range on every frame and snapped to
@@ -37,6 +57,7 @@ pub struct Slider<'a> {
     orientation: SliderOrientation,
     enabled: bool,
     label: String,
+    variant: SliderVariant,
 }
 
 impl<'a> Slider<'a> {
@@ -48,6 +69,7 @@ impl<'a> Slider<'a> {
             orientation: SliderOrientation::Horizontal,
             enabled: true,
             label: String::new(),
+            variant: SliderVariant::Default,
         }
     }
     /// Snap to multiples of `step` from the range start; 0 = continuous.
@@ -69,6 +91,11 @@ impl<'a> Slider<'a> {
         self.label = text.into();
         self
     }
+    /// An app variant ([`SliderVariant::app`]).
+    pub fn variant(mut self, v: impl Into<SliderVariant>) -> Self {
+        self.variant = v.into();
+        self
+    }
 }
 
 /// Snap `v` to the step grid starting at `lo`, then clamp into `lo..=hi`.
@@ -85,17 +112,19 @@ fn snap(v: f32, lo: f32, hi: f32, step: f32) -> f32 {
 impl Widget for Slider<'_> {
     fn ui(self, ui: &mut Ui) -> egui::Response {
         let t = Theme::current(ui.ctx());
-        let root = [&*t.style.slider];
-        let track = [&*t.style.slider_track];
-        let range = [&*t.style.slider_range];
-        let thumb = [&*t.style.slider_thumb];
+        let v = t.resolve(self.variant);
+        let root = [v.part(&t.style, |_, s| &s.slider, |r| &r.slider)];
+        let track = [v.part(&t.style, |_, s| &s.slider_track, |r| &r.slider_track)];
+        let range = [v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range)];
+        let thumb = [v.part(&t.style, |_, s| &s.slider_thumb, |r| &r.slider_thumb)];
         let enabled = self.enabled && ui.is_enabled();
         let vertical = self.orientation == SliderOrientation::Vertical;
         let orient = if vertical {
             State::VERTICAL
         } else {
             State::HORIZONTAL
-        };
+        }
+        .or(v.bits());
 
         // A degenerate range is a slider that cannot move.
         let lo = if self.range.start().is_finite() {
@@ -111,13 +140,9 @@ impl Widget for Slider<'_> {
         let step = self.step;
 
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(orient);
-        let size_of = |l: &[&Recipe]| {
-            vec2(
-                pick(l, |r| &r.width, g).unwrap_or(0.0),
-                pick(l, |r| &r.height, g).unwrap_or(0.0),
-            )
-        };
+        let g = t.state(ui.ctx(), orient);
+        let size_of =
+            |l: &[&Recipe]| vec2(pick_len(l, |r| &r.width, g), pick_len(l, |r| &r.height, g));
         let thumb_size = size_of(&thumb);
         let thickness = if vertical {
             size_of(&track).x
@@ -131,22 +156,11 @@ impl Widget for Slider<'_> {
         };
         let cross = cross.max(thickness);
         let size = if vertical {
-            vec2(
-                cross,
-                pick(&root, |r| &r.min_height, g).unwrap_or(0.0).max(along),
-            )
+            vec2(cross, pick_len(&root, |r| &r.min_height, g).max(along))
         } else {
-            let width = ui.available_width();
-            vec2(
-                if width.is_finite() {
-                    width.max(along)
-                } else {
-                    along
-                },
-                cross,
-            )
+            vec2(layout::capped_width(ui, f32::INFINITY, along), cross)
         };
-        let (rect, base) = ui.allocate_exact_size(size, Sense::hover());
+        let (rect, base) = layout::allocate_overflowing(ui, size, Sense::hover());
 
         // Axis helpers: `a` runs along the slider from the minimum end.
         let (start, len) = if vertical {
@@ -177,8 +191,8 @@ impl Widget for Slider<'_> {
         // The value is always clamped; NaN becomes the minimum.
         let mut value = snap(*self.value, lo, hi, 0.0);
         let hit_inset = vec2(
-            pick(&thumb, |r| &r.hit_inset_x, g).unwrap_or(0.0),
-            pick(&thumb, |r| &r.hit_inset_y, g).unwrap_or(0.0),
+            pick_len(&thumb, |r| &r.hit_inset_x, g),
+            pick_len(&thumb, |r| &r.hit_inset_y, g),
         );
         let hit = rect.union(thumb_at(frac_of(value)).expand2(hit_inset));
         let sense = if enabled {
@@ -186,7 +200,8 @@ impl Widget for Slider<'_> {
         } else {
             Sense::hover()
         };
-        let mut resp = ui.interact(hit, base.id.with("hit"), sense);
+        let mut resp = crate::components::shared::hit_area(ui, hit, base.id.with("hit"), sense);
+        pressable(&mut resp, ActivationKeys::None);
 
         let mut moved = false;
         if enabled && hi > lo {
@@ -255,80 +270,97 @@ impl Widget for Slider<'_> {
         let pointer_on_thumb = ui
             .input(|i| i.pointer.hover_pos())
             .is_some_and(|p| thumb_rect.expand2(hit_inset).contains(p));
-        let st = interaction_state(&t, &resp, enabled, orient);
+        let st = interaction_state(&t, &resp, orient.with(State::DISABLED, !enabled));
         let st = st.with(
             State::HOVER,
             st.contains(State::HOVER) && (pointer_on_thumb || resp.dragged()),
         );
 
         if ui.is_rect_visible(hit) {
-            let track_painter = style_painter(ui, &[&track[..], &root[..]], st);
-            let range_painter = style_painter(ui, &[&range[..], &track[..], &root[..]], st);
-            let thumb_painter = style_painter(ui, &[&thumb[..], &root[..]], st);
-            let paint =
-                |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| pick(l, f, st).map(|p| t.paint(p));
+            let track_painter =
+                part_painter(ui, resp.id.with("track"), &[&track[..], &root[..]], st);
+            let range_painter = part_painter(
+                ui,
+                resp.id.with("range"),
+                &[&range[..], &track[..], &root[..]],
+                st,
+            );
+            let thumb_painter =
+                part_painter(ui, resp.id.with("thumb"), &[&thumb[..], &root[..]], st);
 
             let track_rect = if vertical {
                 Rect::from_center_size(rect.center(), vec2(thickness, rect.height()))
             } else {
                 Rect::from_center_size(rect.center(), vec2(rect.width(), thickness))
             };
-            let track_radius =
-                pick(&track, |r| &r.radius, st).map_or(0.0, |r| t.radius_px(r, thickness / 2.0));
-            track_painter.extend(box_shapes(
-                track_rect,
-                track_radius,
-                paint(&track, |r| &r.bg),
-                None,
-                false,
-            ));
-
+            // The thumb hides what lies under it, as in the root's faded
+            // group.
+            let thumb_box = RecipeBox::resolve(ui.ctx(), &t, &thumb, st).transitioned(
+                ui.ctx(),
+                resp.id.with("thumb"),
+                &thumb,
+                st,
+            );
+            let under_thumb =
+                |shapes| thumb_box.hiding(ui.ctx(), thumb_rect, thumb_painter.opacity(), shapes);
+            let track_box = RecipeBox::resolve(ui.ctx(), &t, &track, st);
+            let range_box = RecipeBox::resolve(ui.ctx(), &t, &range, st);
             let c = centre_of(frac_of(value));
             let range_rect = if vertical {
                 Rect::from_min_max(pos2(track_rect.left(), c), track_rect.right_bottom())
             } else {
                 Rect::from_min_max(track_rect.left_top(), pos2(c, track_rect.bottom()))
             };
-            range_painter.extend(box_shapes(
+            // The range hides the track under it as the thumb does.
+            track_painter.extend(under_thumb(range_box.hiding_inside(
+                ui.ctx(),
                 range_rect,
-                track_radius,
-                paint(&range, |r| &r.bg),
-                None,
-                false,
-            ));
+                &track_box,
+                track_rect,
+                range_painter.opacity(),
+                track_box.shapes_at(ui.ctx(), track_rect, track_painter.opacity()),
+            )));
 
-            let mut shapes = Vec::new();
-            if let Some(s) = pick(&thumb, |r| &r.shadow, st) {
-                shapes.push(Shape::from(
-                    t.shadow(s)
-                        .as_shape(thumb_rect, thumb_size.min_elem() / 2.0),
-                ));
-            }
-            let border_w = pick(&thumb, |r| &r.border_width, st).unwrap_or(0.0);
-            let border = paint(&thumb, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
-            let thumb_radius = pick(&thumb, |r| &r.radius, st)
-                .map_or(0.0, |r| t.radius_px(r, thumb_size.min_elem() / 2.0));
-            let clip_padding = pick(&thumb, |r| &r.bg_clip_padding, st) == Some(true);
-            shapes.extend(box_shapes(
-                thumb_rect,
-                thumb_radius,
-                paint(&thumb, |r| &r.bg),
-                border,
-                clip_padding,
-            ));
-            if let Some(c) = paint(&thumb, |r| &r.ring_color) {
-                shapes.extend(ring_shape(
-                    thumb_rect,
-                    thumb_radius,
-                    pick(&thumb, |r| &r.ring_width, st).unwrap_or(0.0),
-                    c,
-                ));
-            }
-            thumb_painter.extend(shapes);
+            // The track's `overflow-hidden` cuts the range to its rounded box.
+            range_painter.extend(under_thumb(range_box.shapes_inside(
+                ui.ctx(),
+                range_rect,
+                &track_box,
+                track_rect,
+                range_painter.opacity(),
+            )));
+
+            thumb_box.paint(&thumb_painter, thumb_rect);
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));
         resp.rect = rect;
         resp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::{AppVariant, Paint, Role};
+
+    /// An app variant's edit gets `SliderRecipes` and changes only what it
+    /// names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const DANGER: AppVariant<SliderVariant> = SliderVariant::app("danger");
+        let t = Theme::vega().variant(
+            DANGER,
+            SliderVariant::Default,
+            |r: &mut SliderRecipes, _| r.slider_range.recolor(Role::Primary, Role::Destructive),
+        );
+        let v = t.resolve(SliderVariant::from(DANGER));
+        let range = v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range);
+        assert_eq!(
+            range.bg.get(State::NONE),
+            Some(Paint::Role(Role::Destructive, 1.0))
+        );
+        let track = v.part(&t.style, |_, s| &s.slider_track, |r| &r.slider_track);
+        assert_eq!(track, &*t.style.slider_track);
     }
 }

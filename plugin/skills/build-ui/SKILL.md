@@ -55,10 +55,11 @@ gives:
 - A preset code from ui.shadcn.com (the create page):
 
   ```rust
-  use shadcn_egui::{Mode, Preset, PresetCodeError};
+  use shadcn_egui::{Preset, PresetCodeError};
 
   fn setup(ctx: &egui::Context) -> Result<(), PresetCodeError> {
-      Preset::from_code("b2D0wqNxT")?.apply(ctx, Mode::Dark);
+      Preset::from_code("b2D0wqNxT")?.apply(ctx);
+      ctx.set_theme(egui::Theme::Dark);
       Ok(())
   }
   ```
@@ -74,7 +75,7 @@ gives:
   and `iconLibrary`:
 
   ```rust
-  use shadcn_egui::{BaseColor, IconLibrary, Mode, Preset, RadiusChoice, StyleName};
+  use shadcn_egui::{BaseColor, IconLibrary, Preset, RadiusChoice, StyleName};
 
   /// components.json: "style": "nova", "tailwind.baseColor": "neutral",
   /// "iconLibrary": "lucide"; no --radius in the CSS.
@@ -84,7 +85,8 @@ gives:
           .base_color(BaseColor::Neutral)
           .icons(IconLibrary::Lucide)
           .radius(RadiusChoice::Default)
-          .apply(ctx, Mode::Light);
+          .apply(ctx);
+      ctx.set_theme(egui::Theme::Light);
   }
   ```
 
@@ -97,7 +99,7 @@ gives:
 
   ```rust
   fn setup(ctx: &egui::Context) {
-      shadcn_egui::Theme::vega_dark().apply(ctx);
+      shadcn_egui::Theme::vega().apply(ctx);
   }
   ```
 
@@ -105,8 +107,13 @@ A preset that names a font or icon set whose feature is off falls back to
 Inter or Lucide and says so through the `log` crate. Install a logger in the
 app (for example `env_logger`) to see these warnings. An app with fonts of its
 own uses `Theme::apply_with_fonts` (see `references/presets.md`). Apply again
-only when the mode or the preset changes; widgets read the tokens with
+only when the preset changes; widgets read the tokens with
 `Theme::current(ctx)`.
+
+A theme holds a light and a dark palette, and the mode lives in the egui
+context: `ctx.set_theme(egui::Theme::Light)` switches crate and egui widgets
+without another `apply`, and `egui::ThemePreference::System` follows the
+system. Never build a theme per mode.
 
 ## Restyle a component part
 
@@ -123,10 +130,10 @@ later.
 ```rust
 use std::sync::Arc;
 use shadcn_egui::style::{Paint, Role, Rule, State, When};
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 fn setup(ctx: &egui::Context) {
-    let mut theme = Preset::default().theme(Mode::Light);
+    let mut theme = Preset::default().theme();
     let style = Arc::make_mut(&mut theme.style);
     style.tabs_trigger.bg.rules.push(Rule::important(
         When::all(State::SELECTED),
@@ -148,6 +155,106 @@ the Tailwind variants they stand for are listed in the
 `shadcn-egui:port-component` skill (`references/styles.md`). The recipes sit
 in `Box`es: a field reaches through (`style.separator.height`), and a whole
 replacement writes `*style.separator = Recipe { .. }`.
+
+## App variants
+
+A design whose component has a look upstream lacks (a destructive ghost
+button, a roomy card) gets an app variant: a name the theme defines once from
+a built-in variant, used like a built-in one. Name it through a constant, so
+a misspelling does not compile:
+
+```rust
+use shadcn_egui::components::button::{Button, ButtonVariant};
+use shadcn_egui::style::{AppVariant, Paint, Role};
+use shadcn_egui::Theme;
+
+const DANGER_GHOST: AppVariant<ButtonVariant> = ButtonVariant::app("danger-ghost");
+const DANGER_OUTLINE: AppVariant<ButtonVariant> = ButtonVariant::app("danger-outline");
+
+fn setup(ctx: &egui::Context) {
+    Theme::vega()
+        .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _style| {
+            r.button.text.set(Paint::Role(Role::Destructive, 1.0)); // Ghost's hover colours stay
+        })
+        .variant(DANGER_OUTLINE, ButtonVariant::Outline, |r, _| {
+            // Red where Outline sets a text colour: on hover and when expanded.
+            r.button.recolor(Role::Foreground, Role::Destructive)
+        })
+        .apply(ctx);
+}
+
+fn delete(ui: &mut egui::Ui) -> egui::Response {
+    ui.add(Button::new("Delete").variant(DANGER_GHOST))
+}
+```
+
+- The edit is a `fn` that captures nothing. It gets copies of the base's
+  recipes, one field per part of the component (`ButtonRecipes { button }`,
+  `CardRecipes { card, card_header, card_title, .. }`), and the `StyleName`
+  the theme builds for, so a look may differ per style. What it leaves alone
+  stays the base's in every state, style and mode.
+- `prop.set(v)` replaces the unconditional value and keeps the base's state
+  rules (hover, dark, focus); `prop.on(State::HOVER, v)` replaces the rules
+  of that one state; `recipe.recolor(from, to)` swaps a colour role in every
+  value and rule of the part, opacity kept.
+- Every component has a `.variant(..)`. One without built-in variants
+  (`CheckboxVariant`, `InputVariant`, `CardVariant`, …) has only `Default`,
+  which an app variant starts from.
+- Button, Card, Switch and Select also take app sizes, defined by
+  `Theme::size` from a built-in size; a size passed to `Theme::variant`
+  does not compile. A card, switch or select size edits the same parts as its
+  variant, and `set` replaces the base size's value:
+
+  ```rust
+  use shadcn_egui::components::card::{Card, CardSize};
+  use shadcn_egui::style::AppVariant;
+  use shadcn_egui::Theme;
+
+  const ROOMY: AppVariant<CardSize> = CardSize::app("roomy");
+
+  fn setup(ctx: &egui::Context) {
+      Theme::vega()
+          .size(ROOMY, CardSize::Sm, |r, _| r.card.gap.set(20.0)) // gap-5
+          .apply(ctx);
+  }
+
+  fn panel(ui: &mut egui::Ui) {
+      Card::new().size(ROOMY).show(ui, |ui| ui.label("Roomy"));
+  }
+  ```
+
+- App colours give an app variant a colour no palette role has, as a light
+  and dark pair. Name it through a constant too:
+
+  ```rust
+  use shadcn_egui::color::oklch_to_srgb;
+  use shadcn_egui::components::button::ButtonVariant;
+  use shadcn_egui::style::{AppVariant, Role};
+  use shadcn_egui::Theme;
+
+  const BRAND: Role = Role::custom("brand");
+  const BRAND_BUTTON: AppVariant<ButtonVariant> = ButtonVariant::app("brand");
+
+  fn setup(ctx: &egui::Context) {
+      Theme::vega()
+          .color(BRAND, oklch_to_srgb(0.55, 0.2, 260.0), oklch_to_srgb(0.7, 0.16, 260.0))
+          .variant(BRAND_BUTTON, ButtonVariant::Default, |r, _| {
+              r.button.recolor(Role::Primary, BRAND)
+          })
+          .apply(ctx);
+  }
+  ```
+
+- Light and dark share every app variant; the mode comes from the context
+  (`ctx.set_theme(..)`), as for built-in variants.
+- Parts follow their parent's variant: `card_title` in a
+  `Card::new().variant(..)`, `dialog::footer` in a dialog, `popover_header`
+  in a popover draw the parent's app variant without a setter of their own.
+- An app variant or app size the theme does not define stops a debug build
+  with an assertion and draws as `Default` in a release build. An app colour
+  the theme does not define stops a debug build too; in a release build the
+  edit that uses it is skipped, so the part keeps the base variant's value
+  there.
 
 ## Decompose and map
 
@@ -199,17 +306,19 @@ use egui_kittest::Harness;
 fn settings_screen_dark() {
     let mut h = Harness::builder()
         .with_size(egui::vec2(800.0, 600.0))
+        .with_theme(egui::Theme::Dark)
         .build_ui(|ui| my_app::ui::settings(ui));
     // Once, on the harness's context, like an app right after startup.
-    shadcn_egui::Theme::vega_dark().apply(&h.ctx);
+    shadcn_egui::Theme::vega().apply(&h.ctx);
     h.run();
     h.snapshot("settings_dark");
 }
 ```
 
 `Harness.ctx` is the harness's `egui::Context`; apply the theme (or
-`preset.apply(&h.ctx, mode)`) there once, before `h.run()`. Applying it
-inside `build_ui` would apply it every frame, which the hard rules forbid.
+`preset.apply(&h.ctx)`) there once, before `h.run()`, and set the mode with
+the builder's `.with_theme(..)`. Applying it inside `build_ui` would apply it
+every frame, which the hard rules forbid.
 
 Each test holds one harness that takes snapshots. A second harness in the
 same test (for example dark and light) fails with "Multiple SnapshotResults
@@ -217,13 +326,18 @@ were dropped without being handled": write one test per mode, or merge the
 results with `h.take_snapshot_results()` and `SnapshotResults::extend`.
 
 Generate the PNG with `UPDATE_SNAPSHOTS=1 cargo test`; it lands in
-`tests/snapshots/`. Open it, compare it with the design, change the code, and
-render again. An update run leaves `<name>.old.png` (the previous baseline)
-and a failing comparison leaves `<name>.new.png` and `<name>.diff.png` beside
-the baselines.
+`tests/snapshots/`. Delete the PNG before each such run: kittest ignores a
+change on anti-aliased pixels (1 px borders, rounded corners), even with
+`UPDATE_SNAPSHOTS=force`, so an existing PNG can keep the old edges. Open the
+PNG, compare it with the design, change the code, and render again. An update
+run leaves `<name>.old.png` (the previous baseline) and a failing comparison
+leaves `<name>.new.png` and `<name>.diff.png` beside the baselines.
 Never commit them: delete them after looking, and add
 `tests/snapshots/*.old.png`, `*.new.png` and `*.diff.png` to
-`.gitignore`. An app with its own render or screenshot path (for example a
+`.gitignore`. To catch such edge changes in the test run too, compare
+`h.render()` with the PNG again after `h.snapshot(..)` passes, every pixel,
+each channel within 2 levels: shadcn-egui's own tests do that in
+`crates/shadcn-egui/tests/common/strict.rs`. An app with its own render or screenshot path (for example a
 softbuffer rasterizer) may capture the PNG there instead: the point is to look
 at a real render.
 
@@ -248,10 +362,13 @@ See `references/gotchas.md` for the reasons.
   12 px). Write each as a named constant (`const FIELD_GAP: f32 = 12.0;`
   with the class in a comment), not as a bare number at the call.
 - Project-specific deviations go into the theme construction
-  (`let mut s = Style::nova(); s.<part>.<field> = …;`, or an important rule
-  as in "Restyle a component part"), never into copies of crate code.
+  (`let mut s = Style::nova(); s.<part>.<field> = …;`, an important rule
+  as in "Restyle a component part", or an app variant), never into copies
+  of crate code.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`
-  (role, label, enabled, selected), or screen readers see nothing.
+  (role, label, enabled, selected), or screen readers see nothing; a role
+  egui's `WidgetType` lacks goes through
+  `shadcn_egui::components::shared::widget_info_with_role`.
 
 ## Acceptance bar
 

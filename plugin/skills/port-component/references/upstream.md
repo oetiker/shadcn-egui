@@ -4,6 +4,13 @@ The component goes into `crates/shadcn-egui/src/components/<name>.rs` of a
 shadcn-egui checkout and follows the standard in `SKILL.md`. This file lists
 the repository tooling the port uses and what "done" means there.
 
+A part that lays out one row of content between icon slots (button,
+badge, kbd, toggle, toggle-group item, tab trigger) draws it through the
+crate-internal `components::atom_row::AtomRow`, as `Button` and `Badge`
+do: it lays out text atoms through `TextLook`, paints the typed icon
+slots and untinted `IconAtom`s in the part's state colour, and leaves out
+an empty text as the browser does.
+
 ## Checkouts
 
 The generators read upstream source from two checkouts, kept in a scratch
@@ -99,8 +106,25 @@ inside a multi-line block comment are. Neither are Lucide icon data blocks
 
 Render with `common::snapshot_all(name, size, ui_fn)` from
 `crates/shadcn-egui/tests/common/mod.rs`: one PNG per style and mode
-(`<name>_vega_dark.png`, `<name>_nova_light.png`, …). Generate them with
+(`<name>_vega_dark.png`, `<name>_nova_light.png`, …). Delete the baselines
+the change touches, then generate them with
 `UPDATE_SNAPSHOTS=1 cargo test -p shadcn-egui --jobs 4 -- --test-threads 4`.
+kittest ignores a change on anti-aliased pixels (1 px borders, rounded
+corners, the end of a line), even with `UPDATE_SNAPSHOTS=force`, so a baseline
+that is not deleted can keep stale pixels while the test passes. When in
+doubt, delete `crates/shadcn-egui/tests/snapshots/*.png` and regenerate all:
+`git status` then lists the PNGs that changed, and a deleted PNG that does not
+come back belongs to no test any more.
+
+Every snapshot goes through `tests/common/strict.rs` (`common::snapshot`,
+`common::try_snapshot`, `common::try_image_snapshot`; `clippy.toml` forbids
+kittest's own calls). After kittest's comparison passes, it compares the render
+with the PNG again, anti-aliased pixels included, each channel within
+`common::TOLERANCE` levels. A failure names the strict check and leaves
+`<name>.new.png` and `<name>.diff.png` (failing pixels in red) beside the
+baseline. `UPDATE_SNAPSHOTS=1` does not fix it, because kittest does not
+rewrite that PNG: delete the PNG and regenerate. In update mode the strict
+check does not run.
 
 Open every PNG the component appears in, also those of other tests (the
 gallery, forms) that now look different, and compare each with the
@@ -142,10 +166,12 @@ tools/icongen/scripts/generate-crates.sh <scratch dir> [lib...]
 ```
 
 Each crate holds every icon as a `pub const` (a range into one `icons.bin`
-blob), `ALL`, and `SLOTS` for the checkbox tick, the select trigger and the
-close button. Remix Icon stays at its last Apache-2.0 release. A component
-that needs a new slot icon adds it to `IconSlots` in `shadcn-egui-core` and
-to the `slots()` table in `generate-crates.sh`.
+blob), `ALL`, and `SLOTS`, one icon per `IconSlots` field (checkbox tick, select
+trigger, chevrons, close button, ...). Remix Icon stays at its last Apache-2.0 release. A component
+that needs a new slot icon adds it to `IconSlots` and `IconSlots::all` in
+`shadcn-egui-core`, to `SLOT_NAMES` in `tools/icongen/src/lib.rs` and to the
+`slots()` table in `generate-crates.sh`, with the icon upstream's
+`IconPlaceholder` names for each library.
 
 After changing icongen, regenerate the test fixtures:
 
@@ -157,7 +183,7 @@ cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   tools/icongen/tests/fixtures/{mic,circle-alert,settings,x,power,monitor}.svg
 cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   --crate-dir crates/shadcn-egui/tests/icons/fixture \
-  --slots check=mixed,chevron_down=ring,close=x \
+  --slots check=mixed,select_trigger=ring,chevron_down_plain=ring,chevron_up=ring,chevron_left=ring,chevron_right=ring,more_horizontal=ring,close=x \
   --provenance "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)" \
   tools/icongen/tests/fixtures/{big-box,faded,mixed,ring,square-hole,star-evenodd,x}.svg
 ```

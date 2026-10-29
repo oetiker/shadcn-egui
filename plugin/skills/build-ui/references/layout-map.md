@@ -6,22 +6,32 @@ The helpers live in `shadcn_egui::layout`.
 | Web intent | egui approach |
 |---|---|
 | `display:flex; flex-direction:row; gap:N` | `shadcn_egui::layout::row(ui, N, \|ui\| ...)` |
-| `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)` |
+| `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)`; a custom widget in it allocates with `layout::allocate_item(ui, size, sense)` (or `layout::allocate_item_space`), so that it starts a line as a crate widget does |
 | `flex-direction:column; gap:N` | `shadcn_egui::layout::vstack(ui, N, \|ui\| ...)` |
+| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer, a dialog footer from `sm` up; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; `separator_vertical` stretches there too (in a plain egui `ui.horizontal` to that row's height), and in a column has no height |
+| `after:absolute after:-inset-*` (a hit target larger than a custom widget's box) | `shadcn_egui::components::shared::hit_area(ui, rect, id, sense)` after `layout::allocate_item`: it takes the pointer but no part in a crate row's height |
 | `justify-content:space-between` | `shadcn_egui::layout::space_between(ui, \|ui\| {left}, \|ui\| {right})` |
 | `flex:1` / `flex-grow` across siblings | `egui_extras::StripBuilder` with `Size::remainder()` per growing cell |
 | fixed + fluid columns | `StripBuilder` `Size::exact(w)` + `Size::remainder()` |
 | proportional columns (`fr`) | `StripBuilder` `Size::relative(frac)` |
 | a `.card` block | `shadcn_egui::layout::card(ui, \|ui\| ...)`, or `components::card::Card` for sizes and a footer |
+| `w-full max-w-*` on a custom-painted widget, `max-w-[calc(100%-Npx)]` on a floating panel | `shadcn_egui::layout::capped_width(ui, max, content_min)`, `layout::overlay_width(ctx, max, inset, content_min)`; allocate with `layout::allocate_overflowing` so a widget wider than its room overflows instead of widening its column |
 | label + control form row | `shadcn_egui::layout::form_row(ui, label_w, "Label", \|ui\| ...)` |
 | app shell (sidebar/topbar/main) | `SidePanel` / `TopBottomPanel` / `CentralPanel` |
-| responsive breakpoints | branch on `ui.available_width()` each frame |
+| responsive breakpoints (`sm:`, `md:`, `@container`) | branch on `shadcn_egui::layout::window_at_least(ui.ctx(), px)` (media query) or `layout::container_at_least(ui, px)` (container query); components apply their own |
 | CSS Grid tracks | `StripBuilder` rows × cells (no named lines) |
 
 Every gap `N` here is a named constant from the design (Tailwind `gap-N` is
 N×4 px); see the hard rules in SKILL.md. `StripBuilder` comes from
 `egui_extras`; an app that uses it directly adds
 `egui_extras = { version = "0.34", default-features = false }`.
+
+`StripBuilder` puts `ui.spacing().item_spacing.x` between its cells
+(`.y` in a vertical strip), 8 px by default, where a grid or flex row
+without `gap` has none. Set it to the design's gap in a scope around the
+strip: `gap-N` is N×4 px, no gap is `0.0`. A `layout::vstack` in a strip
+cell takes the cell's width, as a grid item does, and its text wraps
+there.
 
 ```rust
 use shadcn_egui::components::button::{Button, ButtonVariant};
@@ -46,11 +56,31 @@ fn footer(ui: &mut egui::Ui) {
 }
 ```
 
-- `layout::row` is at least `ui.spacing().interact_size.y` tall (36 px in
-  luma), whatever its children need. For a tight list (radio rows,
-  checkbox rows), lower `interact_size.y` in a scope around the list:
-  `ui.scope(|ui| { ui.spacing_mut().interact_size.y = ROW_H; … })`, with
-  `ROW_H` the design's row height.
+- `layout::space_between` shows the widgets of each side left to right
+  in the order the code adds them, as `justify-between` does; add the
+  primary action last.
+- `layout::row`, `space_between`, `form_row` and a card footer are as
+  high as their tallest child, never `ui.spacing().interact_size.y`. A
+  checkbox's, switch's or slider's larger click target does not count, as an
+  absolute box in a flex row: a row of a label and a checkbox is 16 px
+  high in vega. For a taller row, give the design's height to a child (`add_sized`), not to
+  `interact_size`.
+- In `layout::row`, `wrap_row` and `space_between` a child wider than the
+  room left (an input or select raised to its content minimum, a long
+  egui label) pushes the children after it past its whole width, and the row
+  does not widen its parent, as a flex row in the browser. A
+  `layout::vstack` in such a row grows to its widest child, as a flex
+  column does, and pushes the row's next children too. A crate `Label`
+  or a vstack of wrapping text in `row`, `space_between`, a card footer
+  or a dialog footer
+  shrinks to the room the other children leave, never below its longest
+  word, and its text wraps there; several such items share the room in
+  proportion to their unwrapped widths, as flex items with
+  `flex-shrink: 1`. In a column a crate `Label` wraps at the column's
+  width. A plain
+  `ui.horizontal` cannot: the next child covers the overflow, and a child
+  that runs past the room widens the parent. Use the crate rows for rows of
+  controls.
 - `card_content` spaces its children with the gap of the style's
   `cn-card-content` recipe, and only vega sets one (nova, maia, lyra, mira,
   luma and rhea set none). Put the

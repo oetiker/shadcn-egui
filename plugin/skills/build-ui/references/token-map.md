@@ -17,13 +17,13 @@
 | `--radius` (10px) | `Theme.radius`; `radius_sm/md/lg/xl` |
 | 4px spacing grid | `Spacing.item_spacing`, margins |
 | 14px / medium | `text_styles[Body]` + `shadcn_egui::theme::family_for(ctx, Weight::Medium)` |
-| `shadow-*` | `Theme::shadow(ShadowLevel)`; the style's recipes pick the level |
+| `shadow-*` | `Theme::shadow(ShadowLevel)` gives every layer as a `ShadowLayer`; the style's recipes pick the level and `RecipeBox` paints it |
 | dialog overlay `bg-black/50` | the style's `dialog_overlay` recipe (`bg`) |
 | `text-xs` / `text-sm` / `text-base` / `text-lg` | `Metrics.text_xs` / `text_sm` / `text_base` / `text_lg` |
 | control heights, paddings, gaps, card padding, dialog and popover widths | the style's recipes (`button_size_*`, `card`, `dialog_content`, ...), not `Metrics` |
 | `text-*` line heights (Tailwind's implicit `leading`) | `Metrics.line_xs` / `line_sm` / `line_base` / `line_lg`; `Theme::line_px(TextSize)` |
 | `size-4` (icons, checkbox) | `Metrics.icon` |
-| `border` width | the style's `border_width` props; `Metrics.border` where a recipe sets none (link underlines, the separator fallback) |
+| `border` width | the style's `border_width` props; `Metrics.border` where a recipe sets none (the separator fallback) |
 | `h-px` / `w-px` separator | `separator.height` / `separator.width` |
 | `ring-[3px]` | the style's `ring_width` / `ring_color` props |
 
@@ -39,7 +39,9 @@ use shadcn_egui::Theme;
 /// A brand primary on top of whatever preset is active.
 fn brand(ctx: &egui::Context) {
     let mut t = Theme::current(ctx);
-    t.palette.primary = oklch_to_srgb(0.55, 0.2, 260.0);
+    let brand = oklch_to_srgb(0.55, 0.2, 260.0);
+    t.light.primary = brand;
+    t.dark.primary = brand;
     t.metrics.icon = 20.0;
     t.apply(ctx);
 }

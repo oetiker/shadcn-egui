@@ -111,7 +111,7 @@ fn icon_widgets_are_labelled() {
     use std::cell::Cell;
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
-        Theme::vega_dark().apply(ui.ctx());
+        Theme::vega().apply(ui.ctx());
         // No name of its own: a visible label names it.
         let label = ui.label("Microphone");
         ui.add(IconView::new(&lucide::MIC)).labelled_by(label.id);

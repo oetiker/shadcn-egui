@@ -1,23 +1,25 @@
+mod common;
+
 use shadcn_egui::theme::Theme;
 
 #[test]
 fn apply_sets_panel_fill_and_stores_theme() {
     use shadcn_egui::theme::{theme, Theme};
     let ctx = egui::Context::default();
-    Theme::vega_dark().apply(&ctx);
+    Theme::vega().apply(&ctx);
     // run one frame so style takes effect
     let _ = ctx.run_ui(Default::default(), |_ui| {});
     let got = theme(&ctx);
-    assert!(got.dark);
+    assert!(got.is_dark());
     assert_eq!(
         ctx.global_style().visuals.panel_fill,
-        Theme::vega_dark().palette.background
+        Theme::vega().dark.background
     );
 }
 
 #[test]
 fn radius_scale_is_derived() {
-    let t = Theme::vega_dark();
+    let t = Theme::vega();
     assert_eq!(t.radius, 10.0);
     assert_eq!(t.radius_sm(), 6.0);
     assert_eq!(t.radius_md(), 8.0);
@@ -27,40 +29,65 @@ fn radius_scale_is_derived() {
 
 #[test]
 fn light_and_dark_differ() {
-    let l = Theme::vega_light();
-    let d = Theme::vega_dark();
-    assert!(!l.dark && d.dark);
-    assert_ne!(l.palette.background, d.palette.background);
+    let l = common::resolved(&Theme::vega(), egui::Theme::Light);
+    let d = common::resolved(&Theme::vega(), egui::Theme::Dark);
+    assert!(!l.is_dark() && d.is_dark());
+    assert_ne!(l.palette().background, d.palette().background);
+}
+
+/// One `apply` installs both modes: `ctx.set_theme` alone flips the
+/// palette components read and egui's own visuals.
+#[test]
+fn set_theme_flips_the_palette_after_one_apply() {
+    let ctx = egui::Context::default();
+    let t = Theme::vega();
+    t.apply(&ctx);
+    for mode in [egui::Theme::Light, egui::Theme::Dark, egui::Theme::Light] {
+        ctx.set_theme(mode);
+        let _ = ctx.run_ui(Default::default(), |_ui| {});
+        assert_eq!(
+            Theme::current(&ctx).palette(),
+            t.palette_of(mode),
+            "{mode:?}"
+        );
+        assert_eq!(
+            ctx.global_style().visuals.dark_mode,
+            mode == egui::Theme::Dark,
+            "{mode:?}"
+        );
+    }
 }
 
 #[test]
 fn dark_border_is_low_alpha_white() {
-    let d = Theme::vega_dark();
+    let d = Theme::vega();
     // dark --border is oklch(1 0 0 / 10%) -> white at ~26 alpha
-    assert_eq!(d.palette.border.a(), 26);
+    assert_eq!(d.dark.border.a(), 26);
 }
 
 use shadcn_egui::style::{Paint, Radius, Role, Rung, ShadowLevel, State, Style, TextSize};
 use shadcn_egui::Palette;
 
 #[test]
-fn new_detects_dark_from_palette() {
-    assert!(Theme::new(Style::vega(), Palette::dark(), 10.0).dark);
-    assert!(!Theme::new(Style::vega(), Palette::light(), 10.0).dark);
-    assert_eq!(Theme::vega_dark().style.name, "vega");
+fn new_holds_both_palettes() {
+    let t = Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0);
+    assert_eq!((t.light, t.dark), (Palette::light(), Palette::dark()));
+    assert_eq!(Theme::vega().style.name, "vega");
 }
 
 #[test]
 fn state_adds_dark() {
-    assert!(Theme::vega_dark().state(State::HOVER).contains(State::DARK));
-    assert!(!Theme::vega_light()
-        .state(State::HOVER)
+    assert!(Theme::vega()
+        .state(&egui::Context::default(), State::HOVER)
+        .contains(State::DARK));
+    assert!(!common::resolved(&Theme::vega(), egui::Theme::Light)
+        .state(&egui::Context::default(), State::HOVER)
         .contains(State::DARK));
 }
 
 #[test]
 fn radius_scale_multiplies() {
-    let t = Theme::vega_dark();
+    let t = Theme::vega();
     assert_eq!(t.rung(Rung::Sm), 6.0);
     assert_eq!(t.rung(Rung::Md), 8.0);
     assert_eq!(t.rung(Rung::Xl), 14.0);
@@ -71,7 +98,7 @@ fn radius_scale_multiplies() {
 
 #[test]
 fn radius_clamps() {
-    let mut t = Theme::vega_dark();
+    let mut t = Theme::vega();
     t.radius = 0.0;
     assert_eq!(t.radius_px(Radius::Rung(Rung::Xl4), 50.0), 0.0);
     t.radius = 400.0;
@@ -82,41 +109,58 @@ fn radius_clamps() {
 
 #[test]
 fn paint_alpha_and_mix() {
-    let t = Theme::vega_light();
+    let t = common::resolved(&Theme::vega(), egui::Theme::Light);
     let p = t.paint(Paint::Role(Role::Primary, 1.0));
-    assert_eq!(p, t.palette.primary);
+    assert_eq!(p, t.palette().primary);
     let half = t.paint(Paint::Role(Role::Primary, 0.5));
     assert!((half.a() as i32 - 128).abs() <= 1, "{half:?}");
-    assert_eq!(half, t.palette.primary.gamma_multiply(0.5));
+    assert_eq!(half, t.palette().primary.gamma_multiply(0.5));
     assert_eq!(
         t.paint(Paint::Role(Role::Transparent, 1.0)),
         egui::Color32::TRANSPARENT
     );
     let mix = t.paint(Paint::Mix(Role::Secondary, Role::Foreground, 0.05));
-    assert_ne!(mix, t.palette.secondary);
+    assert_ne!(mix, t.palette().secondary);
 }
 
 #[test]
 fn text_and_shadow() {
-    let t = Theme::vega_dark();
+    let t = Theme::vega();
     assert_eq!(t.text_px(TextSize::Sm), 14.0);
     assert_eq!(t.text_px(TextSize::Px(12.8)), 12.8);
-    assert_eq!(t.shadow(ShadowLevel::None), egui::epaint::Shadow::NONE);
-    // (level, y offset, blur, black alpha) from the Tailwind v4 shadow scale.
-    for (level, y, blur, a) in [
-        (ShadowLevel::Xs2, 1, 0, 13),
-        (ShadowLevel::Xs, 1, 2, 13),
-        (ShadowLevel::Sm, 1, 3, 26),
-        (ShadowLevel::Md, 4, 6, 26),
-        (ShadowLevel::Lg, 10, 15, 26),
-        (ShadowLevel::Xl, 20, 25, 26),
-        (ShadowLevel::Xl2, 25, 50, 64),
+    assert!(t.shadow(ShadowLevel::None).is_empty());
+    // Tailwind v4 theme.css: (level, [(y offset, blur, spread, alpha)]).
+    for (level, want) in [
+        (ShadowLevel::Xs2, &[(1.0, 0.0, 0.0, 0.05)][..]),
+        (ShadowLevel::Xs, &[(1.0, 2.0, 0.0, 0.05)]),
+        (
+            ShadowLevel::Sm,
+            &[(1.0, 3.0, 0.0, 0.1), (1.0, 2.0, -1.0, 0.1)],
+        ),
+        (
+            ShadowLevel::Md,
+            &[(4.0, 6.0, -1.0, 0.1), (2.0, 4.0, -2.0, 0.1)],
+        ),
+        (
+            ShadowLevel::Lg,
+            &[(10.0, 15.0, -3.0, 0.1), (4.0, 6.0, -4.0, 0.1)],
+        ),
+        (
+            ShadowLevel::Xl,
+            &[(20.0, 25.0, -5.0, 0.1), (8.0, 10.0, -6.0, 0.1)],
+        ),
+        (ShadowLevel::Xl2, &[(25.0, 50.0, -12.0, 0.25)]),
     ] {
-        let s = t.shadow(level);
-        assert_eq!(s.offset, [0, y], "{level:?}");
-        assert_eq!(s.blur, blur, "{level:?}");
-        assert_eq!(s.spread, 0, "{level:?}");
-        assert_eq!(s.color, egui::Color32::from_black_alpha(a), "{level:?}");
+        let got: Vec<_> = t
+            .shadow(level)
+            .iter()
+            .map(|l| {
+                assert_eq!(l.offset().x, 0.0, "{level:?}");
+                assert_eq!(l.color(), egui::Color32::BLACK, "{level:?}");
+                (l.offset().y, l.blur(), l.spread(), l.alpha())
+            })
+            .collect();
+        assert_eq!(got, want, "{level:?}");
     }
 }
 
@@ -132,7 +176,7 @@ fn current_without_apply_is_vega_dark_and_cheap() {
     let ctx = egui::Context::default();
     let a = Theme::current(&ctx);
     let b = Theme::current(&ctx);
-    assert!(a.dark);
+    assert!(a.is_dark());
     assert_eq!(a.style.name, "vega");
     // The fallback shares one Style instead of building one per call.
     assert!(std::sync::Arc::ptr_eq(&a.style, &b.style));
@@ -142,39 +186,49 @@ fn current_without_apply_is_vega_dark_and_cheap() {
 fn consumer_override_takes_effect() {
     let mut s = Style::nova();
     s.button_size_default.height.base = Some(40.0);
-    let t = Theme::new(s, Palette::dark(), 10.0);
+    let t = Theme::new(s, Palette::light(), Palette::dark(), 10.0);
     assert_eq!(
-        t.style.button_size_default.height.get(t.state(State::NONE)),
+        t.style
+            .button_size_default
+            .height
+            .get(t.state(&egui::Context::default(), State::NONE)),
         Some(40.0)
     );
 }
 
 #[test]
-fn consumer_set_dark_is_honoured() {
-    let mut t = Theme::new(Style::vega(), Palette::dark(), 10.0);
-    t.dark = false;
-    assert!(!t.state(State::HOVER).contains(State::DARK));
-    let mut t = Theme::new(Style::vega(), Palette::light(), 10.0);
-    t.dark = true;
-    assert!(t.state(State::HOVER).contains(State::DARK));
+fn context_mode_sets_the_dark_state() {
+    let ctx = egui::Context::default();
+    Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).apply(&ctx);
+    for mode in [egui::Theme::Light, egui::Theme::Dark] {
+        ctx.set_theme(mode);
+        let dark = Theme::current(&ctx)
+            .state(&ctx, State::HOVER)
+            .contains(State::DARK);
+        assert_eq!(dark, mode == egui::Theme::Dark, "{mode:?}");
+    }
 }
 
-use shadcn_egui::icons::lucide::{CHECK, CHEVRON_DOWN, SLOTS as LUCIDE_SLOTS, X as CLOSE};
-use shadcn_egui::{FontName, IconLibrary, IconSlots, MenuColors};
+use shadcn_egui::icons::lucide::{
+    CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, MORE_HORIZONTAL,
+    SLOTS as LUCIDE_SLOTS, X as CLOSE,
+};
+use shadcn_egui::{FontName, IconLibrary, IconSlots};
 
 #[test]
 fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
-    let t = Theme::vega_light();
-    assert_eq!(
-        t.icons,
-        IconSlots {
-            check: CHECK,
-            chevron_down: CHEVRON_DOWN,
-            close: CLOSE
-        }
-    );
+    let t = Theme::vega();
+    let mut lucide = IconSlots::all(CLOSE);
+    lucide.check = CHECK;
+    lucide.select_trigger = CHEVRON_DOWN;
+    lucide.chevron_down_plain = CHEVRON_DOWN;
+    lucide.chevron_up = CHEVRON_UP;
+    lucide.chevron_left = CHEVRON_LEFT;
+    lucide.chevron_right = CHEVRON_RIGHT;
+    lucide.more_horizontal = MORE_HORIZONTAL;
+    assert_eq!(t.icons, lucide);
     assert_eq!(t.icons, LUCIDE_SLOTS);
-    assert_eq!(t.menu, MenuColors::default());
+    assert!(!t.menu_inverted);
     assert_eq!(
         t.menu_theme(),
         t,
@@ -184,27 +238,19 @@ fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
 
 #[test]
 fn icon_and_menu_builders() {
-    let crosses = IconSlots {
-        check: CLOSE,
-        chevron_down: CLOSE,
-        close: CLOSE,
-    };
-    assert_eq!(Theme::vega_light().icons(crosses).icons, crosses);
-    let menu = MenuColors {
-        palette: Some(Palette::dark()),
-        dark: Some(true),
-    };
-    let t = Theme::vega_light().menu(menu);
-    assert_eq!(t.menu, menu);
+    let crosses = IconSlots::all(CLOSE);
+    assert_eq!(Theme::vega().icons(crosses).icons, crosses);
+    let t = common::resolved(&Theme::vega().menu_inverted(true), egui::Theme::Light);
+    assert!(t.menu_inverted);
     let mt = t.menu_theme();
-    assert_eq!((mt.palette, mt.dark), (Palette::dark(), true));
+    assert_eq!((mt.palette(), mt.is_dark()), (&Palette::dark(), true));
     assert!(
         std::sync::Arc::ptr_eq(&mt.style, &t.style),
         "the menu theme shares the style"
     );
     assert_eq!(
-        (t.palette, t.dark),
-        (Palette::light(), false),
+        (t.palette(), t.is_dark()),
+        (&Palette::light(), false),
         "the theme itself is unchanged"
     );
 }
@@ -228,7 +274,7 @@ fn registries_hold_what_this_build_bundles() {
     assert_eq!(shadcn_egui::fonts::files(FontName::Oxanium), None);
 }
 
-/// New `Theme` fields must stay small: `Theme::vega_dark()` already needs
+/// New `Theme` fields must stay small: `Theme::vega()` already needs
 /// ~200 KB of a 256 KB test stack (see `every_exported_style_builds_on_a_small_stack`).
 #[test]
 fn theme_stays_small() {
@@ -243,7 +289,11 @@ fn theme_stays_small() {
 fn assert_both_styles(ctx: &egui::Context, t: &Theme) {
     for which in [egui::Theme::Dark, egui::Theme::Light] {
         let s = ctx.style_of(which);
-        assert_eq!(s.visuals.panel_fill, t.palette.background, "{which:?}");
+        assert_eq!(
+            s.visuals.panel_fill,
+            t.palette_of(which).background,
+            "{which:?}"
+        );
         assert_eq!(
             s.text_styles[&egui::TextStyle::Body].size,
             t.metrics.text_sm,
@@ -261,17 +311,17 @@ fn assert_both_styles(ctx: &egui::Context, t: &Theme) {
 fn apply_reaches_both_styles_on_a_light_context() {
     let ctx = egui::Context::default();
     ctx.set_theme(egui::Theme::Light);
-    let t = Theme::vega_dark();
+    let t = Theme::vega();
     t.apply(&ctx);
     let _ = ctx.run_ui(Default::default(), |_ui| {});
-    assert_eq!(ctx.global_style().visuals.panel_fill, t.palette.background);
+    assert_eq!(ctx.global_style().visuals.panel_fill, t.light.background);
     assert_both_styles(&ctx, &t);
 }
 
 #[test]
 fn apply_survives_a_system_theme_switch() {
     let ctx = egui::Context::default();
-    let t = Theme::vega_light();
+    let t = Theme::vega();
     t.apply(&ctx);
     for sys in [egui::Theme::Light, egui::Theme::Dark] {
         let input = egui::RawInput {
@@ -281,9 +331,55 @@ fn apply_survives_a_system_theme_switch() {
         let _ = ctx.run_ui(input, |_ui| {});
         assert_eq!(
             ctx.global_style().visuals.panel_fill,
-            t.palette.background,
+            t.palette_of(sys).background,
             "{sys:?}"
         );
         assert_both_styles(&ctx, &t);
+    }
+}
+
+/// The hairline of plain egui widgets at a scale, read from both styles and
+/// from the root ui the pass hands out.
+fn hairlines(ctx: &egui::Context, ppp: f32) -> Vec<f32> {
+    let input = egui::RawInput {
+        viewports: std::iter::once((
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo {
+                native_pixels_per_point: Some(ppp),
+                ..Default::default()
+            },
+        ))
+        .collect(),
+        ..Default::default()
+    };
+    let mut root = 0.0;
+    let _ = ctx.run_ui(input, |ui| {
+        root = ui.visuals().widgets.inactive.bg_stroke.width
+    });
+    let mut out = vec![root];
+    for which in [egui::Theme::Dark, egui::Theme::Light] {
+        let v = &ctx.style_of(which).visuals;
+        out.extend([
+            v.window_stroke.width,
+            v.selection.stroke.width,
+            v.widgets.noninteractive.bg_stroke.width,
+            v.widgets.inactive.bg_stroke.width,
+            v.widgets.open.fg_stroke.width,
+        ]);
+    }
+    out
+}
+
+#[test]
+fn plain_widget_hairlines_sit_on_device_pixels() {
+    // Blink floors a border to whole device px (one at least): 1 px is
+    // 1 device px at 1.5x, as the crate's own borders.
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    for (ppp, device) in [(1.5, 1.0), (1.0, 1.0), (2.0, 2.0), (1.75, 1.0), (1.5, 1.0)] {
+        for w in hairlines(&ctx, ppp) {
+            assert_eq!(w * ppp, device, "{ppp}");
+        }
     }
 }

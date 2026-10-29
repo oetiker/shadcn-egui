@@ -36,7 +36,7 @@ fn trigger(style: &str) -> Part {
 
 /// The value the crate's `pick` resolves for `field` under `state`: the
 /// matching decl with the highest rank, the later one on a tie.
-fn resolve(decls: &[Decl], field: Field, state: u32) -> Option<Value> {
+fn resolve(decls: &[Decl], field: Field, state: u128) -> Option<Value> {
     decls
         .iter()
         .filter(|d| d.field == field && d.all & !state == 0 && d.none & state == 0)

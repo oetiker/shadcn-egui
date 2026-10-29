@@ -1,6 +1,6 @@
 use shadcn_egui::{
-    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, MenuColors, Mode,
-    Palette, Preset, RadiusChoice, StyleName, Theme, ThemeColor,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Palette, Preset,
+    RadiusChoice, StyleName, Theme, ThemeColor,
 };
 
 #[test]
@@ -150,7 +150,6 @@ fn each_setter_changes_its_field() {
         Preset::default().radius(RadiusChoice::Px(6.0)).to_code(),
         None
     );
-    assert_ne!(Mode::Light, Mode::Dark);
 }
 
 #[test]
@@ -159,7 +158,7 @@ fn lyra_forces_radius_zero() {
         Preset::default()
             .style(StyleName::Lyra)
             .radius(RadiusChoice::Large)
-            .theme(Mode::Light)
+            .theme()
             .radius,
         0.0
     );
@@ -167,7 +166,7 @@ fn lyra_forces_radius_zero() {
         Preset::default()
             .style(StyleName::Lyra)
             .radius(RadiusChoice::Px(7.0))
-            .theme(Mode::Light)
+            .theme()
             .radius,
         0.0
     );
@@ -175,7 +174,7 @@ fn lyra_forces_radius_zero() {
 
 #[test]
 fn radius_choices_resolve_to_px() {
-    let r = |c| Preset::default().radius(c).theme(Mode::Dark).radius;
+    let r = |c| Preset::default().radius(c).theme().radius;
     assert_eq!(r(RadiusChoice::Default), 10.0, "the base colour's 0.625rem");
     assert_eq!(r(RadiusChoice::None), 0.0);
     assert_eq!(r(RadiusChoice::Small), 0.45 * 16.0);
@@ -185,15 +184,13 @@ fn radius_choices_resolve_to_px() {
 
 #[test]
 fn default_preset_is_nova_with_the_hand_written_palettes() {
-    let dark = Preset::default().theme(Mode::Dark);
+    let t = Preset::default().theme();
     assert_eq!(
-        (dark.style.name, dark.palette, dark.dark),
-        ("nova", Palette::dark(), true)
+        (t.style.name, t.light, t.dark),
+        ("nova", Palette::light(), Palette::dark())
     );
-    let light = Preset::default().theme(Mode::Light);
-    assert_eq!((light.palette, light.dark), (Palette::light(), false));
-    assert_eq!(light.fonts.body.name, "inter");
-    assert_eq!(light.menu, MenuColors::default());
+    assert_eq!(t.fonts.body.name, "inter");
+    assert!(!t.menu_inverted);
 }
 
 #[test]
@@ -202,10 +199,14 @@ fn colours_merge_like_upstream() {
         .base_color(BaseColor::Stone)
         .theme_color(ThemeColor::Blue)
         .chart_color(ThemeColor::Rose)
-        .theme(Mode::Light);
+        .theme();
     assert_eq!(
-        Some(t.palette),
+        Some(t.light),
         Palette::from_upstream("stone", "blue", "rose", false)
+    );
+    assert_eq!(
+        Some(t.dark),
+        Palette::from_upstream("stone", "blue", "rose", true)
     );
 }
 
@@ -214,11 +215,13 @@ fn bold_accent_highlights_with_primary() {
     let t = Preset::default()
         .theme_color(ThemeColor::Blue)
         .menu_accent(MenuAccent::Bold)
-        .theme(Mode::Light);
-    assert_eq!(
-        (t.palette.accent, t.palette.accent_foreground),
-        (t.palette.primary, t.palette.primary_foreground)
-    );
+        .theme();
+    for p in [t.light, t.dark] {
+        assert_eq!(
+            (p.accent, p.accent_foreground),
+            (p.primary, p.primary_foreground)
+        );
+    }
 }
 
 /// ui.shadcn.com turns Bold into Subtle for translucent menus, in the main
@@ -234,10 +237,15 @@ fn translucent_menus_force_the_subtle_accent() {
         MenuColor::DefaultTranslucent,
         MenuColor::InvertedTranslucent,
     ] {
-        let t = bold.menu_color(menu).theme(Mode::Light);
-        let s = subtle.menu_color(menu).theme(Mode::Light);
-        assert_eq!((t.palette, t.menu), (s.palette, s.menu), "{menu:?}");
-        assert_ne!(t.palette.accent, t.palette.primary, "{menu:?}");
+        let t = bold.menu_color(menu).theme();
+        let s = subtle.menu_color(menu).theme();
+        assert_eq!(
+            (t.light, t.dark, t.menu_inverted),
+            (s.light, s.dark, s.menu_inverted),
+            "{menu:?}"
+        );
+        assert_ne!(t.light.accent, t.light.primary, "{menu:?}");
+        assert_ne!(t.dark.accent, t.dark.primary, "{menu:?}");
         let p = bold.menu_color(menu);
         assert_eq!(
             Preset::from_code(&p.to_code().expect("coded")),
@@ -245,11 +253,12 @@ fn translucent_menus_force_the_subtle_accent() {
             "to_code keeps Bold"
         );
     }
-    let solid = bold.menu_color(MenuColor::Inverted).theme(Mode::Light);
+    let solid = bold.menu_color(MenuColor::Inverted).theme();
     assert_eq!(
-        solid.palette.accent, solid.palette.primary,
+        solid.light.accent, solid.light.primary,
         "solid menus keep the bold accent"
     );
+    assert_eq!(solid.dark.accent, solid.dark.primary);
 }
 
 #[test]
@@ -257,23 +266,19 @@ fn inverted_menus_use_the_dark_palette_and_flag() {
     let p = Preset::default()
         .theme_color(ThemeColor::Blue)
         .menu_accent(MenuAccent::Bold);
-    let dark_palette = p.theme(Mode::Dark).palette;
-    let t = p.menu_color(MenuColor::Inverted).theme(Mode::Light);
-    assert_eq!(
-        t.menu,
-        MenuColors {
-            palette: Some(dark_palette),
-            dark: Some(true),
-        }
-    );
-    assert!(!t.dark);
+    assert!(!p.theme().menu_inverted);
+    let t = p.menu_color(MenuColor::Inverted).theme();
+    assert!(t.menu_inverted);
+    assert_eq!(t.dark, p.theme().dark);
+    let menu = t.menu_theme();
+    assert_eq!((menu.palette(), menu.is_dark()), (&t.dark, true));
 }
 
 #[test]
 fn a_heading_font_resolves() {
     let t = Preset::default()
         .font_heading(FontHeading::Font(FontName::Inter))
-        .theme(Mode::Light);
+        .theme();
     assert_eq!(
         (t.fonts.body.name, t.fonts.heading.name),
         ("inter", "inter")
@@ -288,7 +293,7 @@ fn to_code_keeps_values_that_fall_back() {
         .font(FontName::Geist)
         .menu_color(MenuColor::InvertedTranslucent);
     // falls back to Nova / Inter / an opaque inverted menu, the preset stays as it is
-    let _ = p.theme(Mode::Dark);
+    let _ = p.theme();
     assert_eq!(Preset::from_code(&p.to_code().expect("coded")), Ok(p));
 }
 
@@ -309,7 +314,7 @@ fn every_palette_id_resolves() {
                 .base_color(b)
                 .theme_color(c)
                 .chart_color(c)
-                .theme(Mode::Light);
+                .theme();
         }
     }
 }
@@ -317,8 +322,11 @@ fn every_palette_id_resolves() {
 #[test]
 fn apply_installs_the_theme() {
     let ctx = egui::Context::default();
-    Preset::default().apply(&ctx, Mode::Light);
-    assert_eq!(Theme::current(&ctx).palette, Palette::light());
+    Preset::default().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    assert_eq!(Theme::current(&ctx).palette(), &Palette::light());
+    ctx.set_theme(egui::Theme::Dark);
+    assert_eq!(Theme::current(&ctx).palette(), &Palette::dark());
 }
 
 /// A `Style` is ~100 KB in a debug build; resolving a preset must not hold
@@ -329,9 +337,9 @@ fn preset_theme_builds_on_a_small_stack() {
         .stack_size(256 * 1024)
         .spawn(|| {
             for &s in StyleName::ALL {
-                let _ = Preset::default().style(s).theme(Mode::Dark);
+                let _ = Preset::default().style(s).theme();
             }
-            Preset::default().theme(Mode::Dark).style.name
+            Preset::default().theme().style.name
         })
         .expect("spawn")
         .join();
@@ -342,30 +350,25 @@ fn preset_theme_builds_on_a_small_stack() {
 fn rhea_turns_radius_large_into_the_base_radius() {
     let rhea = Preset::default().style(StyleName::Rhea);
     assert_eq!(
-        rhea.radius(RadiusChoice::Large).theme(Mode::Light).radius,
+        rhea.radius(RadiusChoice::Large).theme().radius,
         10.0,
         "Large → the base colour's 0.625rem"
     );
     assert_eq!(
         rhea.base_color(BaseColor::Stone)
             .radius(RadiusChoice::Large)
-            .theme(Mode::Dark)
+            .theme()
             .radius,
         10.0
     );
     assert_eq!(
-        rhea.radius(RadiusChoice::Small).theme(Mode::Light).radius,
+        rhea.radius(RadiusChoice::Small).theme().radius,
         0.45 * 16.0,
         "only Large changes"
     );
+    assert_eq!(rhea.radius(RadiusChoice::None).theme().radius, 0.0);
     assert_eq!(
-        rhea.radius(RadiusChoice::None).theme(Mode::Light).radius,
-        0.0
-    );
-    assert_eq!(
-        rhea.radius(RadiusChoice::Px(14.0))
-            .theme(Mode::Light)
-            .radius,
+        rhea.radius(RadiusChoice::Px(14.0)).theme().radius,
         14.0,
         "Px is not a coded Large"
     );
@@ -373,7 +376,7 @@ fn rhea_turns_radius_large_into_the_base_radius() {
         Preset::default()
             .style(StyleName::Vega)
             .radius(RadiusChoice::Large)
-            .theme(Mode::Light)
+            .theme()
             .radius,
         0.875 * 16.0,
         "other styles keep Large"

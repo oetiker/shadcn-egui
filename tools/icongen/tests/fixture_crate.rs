@@ -13,7 +13,9 @@ const NAMES: [&str; 7] = [
     "star-evenodd",
     "x",
 ];
-const SLOTS: &str = "check=mixed,chevron_down=ring,close=x";
+const SLOTS: &str = "check=mixed,select_trigger=ring,chevron_down_plain=ring,chevron_up=ring,\
+chevron_left=ring,chevron_right=ring,more_horizontal=ring,\
+close=x";
 const PROVENANCE: &str =
     "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)";
 
@@ -35,10 +37,10 @@ fn committed_fixture_crate_is_current() {
     let committed_blob = std::fs::read(format!("{dir}/icons.bin")).expect("committed icons.bin");
     assert!(
         committed_src == src,
-        "fixture lib.rs is stale: regenerate it (references/icons.md)"
+        "fixture lib.rs is stale: regenerate it (plugin/skills/port-component/references/upstream.md, After changing icongen)"
     );
     assert!(
         committed_blob == blob,
-        "fixture icons.bin is stale: regenerate it (references/icons.md)"
+        "fixture icons.bin is stale: regenerate it (plugin/skills/port-component/references/upstream.md, After changing icongen)"
     );
 }

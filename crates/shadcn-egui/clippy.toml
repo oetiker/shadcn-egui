@@ -1,0 +1,12 @@
+# Snapshot tests go through tests/common (strict.rs), which adds a strict
+# comparison after egui_kittest's own.
+disallowed-methods = [
+    { path = "egui_kittest::Harness::snapshot", reason = "use common::snapshot" },
+    { path = "egui_kittest::Harness::snapshot_options", reason = "use common::snapshot_options" },
+    { path = "egui_kittest::Harness::try_snapshot", reason = "use common::try_snapshot" },
+    { path = "egui_kittest::Harness::try_snapshot_options", reason = "use common::try_snapshot_options" },
+    { path = "egui_kittest::image_snapshot", reason = "use common::image_snapshot_options" },
+    { path = "egui_kittest::image_snapshot_options", reason = "use common::image_snapshot_options" },
+    { path = "egui_kittest::try_image_snapshot", reason = "use common::try_image_snapshot" },
+    { path = "egui_kittest::try_image_snapshot_options", reason = "use common::try_image_snapshot_options" },
+]

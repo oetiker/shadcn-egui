@@ -1,26 +1,24 @@
 //! One Button snapshot per font crate (`font_<id>.png`, vega light): each
 //! font installs, its medium label is heavier than the body text, and the
-//! capitals sit centred in the button (`y_offset_factor`).
+//! text sits on the baseline the text path gives it (`y_offset_factor` 0).
 #![cfg(feature = "fonts-all")]
 
 mod common;
 
 use shadcn_egui::components::button::Button;
-use shadcn_egui::{fonts, FontName, Mode, Preset, StyleName, Theme};
+use shadcn_egui::{fonts, FontName, Preset, StyleName};
 
 #[test]
 fn every_font_crate_renders_a_button() {
-    let themes: Vec<(&'static str, Theme)> = FontName::ALL
+    let themes: Vec<common::Themed> = FontName::ALL
         .iter()
         .copied()
         .filter(|n| fonts::files(*n).is_some())
         .map(|n| {
             (
                 n.id(),
-                Preset::default()
-                    .style(StyleName::Vega)
-                    .font(n)
-                    .theme(Mode::Light),
+                Preset::default().style(StyleName::Vega).font(n).theme(),
+                egui::Theme::Light,
             )
         })
         .collect();

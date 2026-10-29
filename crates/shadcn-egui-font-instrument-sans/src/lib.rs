@@ -11,6 +11,6 @@ pub static FONT: FontFiles = FontFiles {
         data: include_bytes!("../fonts/instrument-sans.ttf"),
         wght: 400.0..=700.0,
     },
-    y_offset_factor: -0.07,
+    y_offset_factor: 0.0,
     license: include_str!("../LICENSE-FONT.txt"),
 };

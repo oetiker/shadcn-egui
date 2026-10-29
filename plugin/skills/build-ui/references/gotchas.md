@@ -23,6 +23,21 @@
   borders, rings, shadows and the 1px press nudge follow those states.
 - **egui has no backdrop blur.** `backdrop-blur-*` on a dialog overlay is not
   drawn; the overlay is only the translucent fill.
+- **No ligatures or contextual alternates.** egui draws one glyph per
+  character, so a font's `liga`, `calt` and `ccmp` substitutions (Geist's
+  `tt`, Manrope's case hyphen in "2-3", JetBrains Mono's `//`) are not
+  drawn, and a line holding such a pair can break one word off from
+  Chrome. Crate text otherwise breaks where Chrome does: at spaces, before
+  and after em dashes, after hyphens and en dashes, at a zero-width
+  space, at a soft hyphen (U+00AD, drawn as a hyphen at the line end) and
+  between CJK characters.
+- **Anti-aliased edges are egui's, not Chrome's.** egui feathers each shape
+  on its own, so a border over a fill stacks two anti-aliased layers where
+  Chrome paints one (up to about 56 levels apart on a bordered pill), and a
+  rounded corner sits up to half a device pixel off Chrome's arc (up to
+  about 100 levels on the edge pixels). A faded part fades shape by shape,
+  not as one layer. The crate's own cuts and fade bands match egui's
+  anti-aliasing of the same outline; the rest of the difference stays.
 - **Translucent menus draw opaque.** The menu colours
   `default-translucent` and `inverted-translucent` draw like `default`
   and `inverted`, and log a warning. Upstream blurs what lies behind the
@@ -35,9 +50,15 @@
   `cn-font-heading`; the crate draws them with `heading_family_for(ctx, weight)`,
   which is the theme's heading font (`Theme::fonts(body, Some(heading))`) or
   the body font when none is set.
-- **No CSS transitions.** Animate manually with `ctx.animate_bool(id, on)` and lerp
-  (see `switch.rs`). `animate_*` honours `animation_time`; set to 0 (as
-  `cpu-rendering.md` advises) it jumps to the target, which is what you want.
+- **CSS transitions.** Crate components move a value where upstream's
+  `transition-*` does: buttons, inputs, tabs and the other controls fade
+  their colours on hover and focus. For your own widget, paint
+  `components::motion::transition(ctx, id, target, &stack, Transition::OTHER, state)`
+  (`transition_color` for a colour, `RecipeBox::transitioned` for a box)
+  with the part's recipe stack (upstream's duration and easing), or
+  `ctx.animate_bool(id, on)` and lerp. Both honour `animation_time`; set to
+  0 (as `cpu-rendering.md` advises) they jump to the target, which is what
+  you want.
 - **A fade you time yourself does not honour `animation_time`.** Opacity
   computed from `ctx.input(|i| i.time)` (a hint that fades out after N seconds)
   only moves while frames are drawn. `request_repaint_after(N)` alone draws one
@@ -45,6 +66,11 @@
   every frame while the fade runs (`ctx.request_repaint()` while `0 < alpha < 1`)
   or drop the fade and show/hide in one step, which is the right call under a
   CPU rasterizer.
+- **A nested disable fades twice.** `ui.add_enabled_ui(false, ..)` inside a
+  `Ui` that is already disabled (a disabled card's content) multiplies
+  egui's fade in again, so its widgets show at 25 % instead of the style's
+  50 %; the crate cannot see the second fade. Disable an area once, at its
+  outermost `Ui`.
 - **One remembered popup.** egui's popup memory holds one open popup id, so
   opening a Popover closes any open menu or combo box (as on the web). For a
   popover inside a popover, keep the inner one's state yourself
@@ -53,12 +79,13 @@
   card in two areas at the same `Order` can swap z-order once another window
   has been shown, leaving the backdrop on top. `Dialog` uses `egui::Modal`,
   which draws both in one area.
-- **No multi-stop/radial gradients, no per-widget box-shadow stacks.** One `Shadow`
-  per `Frame`; gradients need a hand-built `Mesh`.
+- **No multi-stop/radial gradients.** Gradients need a hand-built `Mesh`. A
+  `box-shadow` stack goes through `RecipeBox`, which draws every Tailwind
+  layer; egui's own `Shadow` is one linear ramp and does not match the browser.
 - **Apply the theme once, not every frame.** Call `Theme::apply` right after the
-  context is created, and again only when the theme changes (for example a light/dark
-  toggle). It sets the dark and the light style alike, so a system theme switch
-  keeps it, and eframe restores its saved state before the app creator runs
+  context is created, and again only when the theme changes (a new preset). It
+  installs the dark and the light style, so a light/dark toggle
+  (`ctx.set_theme(..)`) or a system theme switch needs no second `apply`, and eframe restores its saved state before the app creator runs
   (styles are not saved). Re-applying every frame buys nothing and hides bugs:
   code that overwrites the style is silently repainted over on the next frame
   instead of showing. Read tokens via `Theme::current(ctx)` inside widgets.

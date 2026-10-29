@@ -10,7 +10,7 @@ use shadcn_egui::components::popover::{popover_header, Popover};
 use shadcn_egui::components::select::{Select, SelectSize};
 use shadcn_egui::components::tooltip::tooltip;
 use shadcn_egui::Theme;
-use shadcn_egui::{MenuColor, Mode, Palette, Preset, StyleName};
+use shadcn_egui::{MenuColor, Palette, Preset, StyleName};
 
 /// A dialog harness: `open` starts true; the body has a button that counts clicks.
 fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
@@ -18,19 +18,19 @@ fn dialog_harness(open: bool) -> Harness<'static, (bool, u32)> {
         .with_size(vec2(640.0, 360.0))
         .build_ui_state(
             |ui, (open, clicks): &mut (bool, u32)| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.label("page beneath");
                 Dialog::new("confirm", "Delete session?")
                     .description("The session and its files are removed.")
                     .show(ui.ctx(), open, |ui| {
                         dialog::footer(ui, |ui| {
+                            ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
                             if ui
                                 .add(Button::new("Delete").variant(ButtonVariant::Destructive))
                                 .clicked()
                             {
                                 *clicks += 1;
                             }
-                            ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
                         });
                     });
             },
@@ -99,7 +99,7 @@ fn dialog_inner_width(theme: &Theme, screen: f32) -> f32 {
 
 #[test]
 fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
-    for (name, theme) in common::themes() {
+    for (name, theme, _) in common::themes() {
         let pad = theme
             .style
             .dialog_content
@@ -120,7 +120,7 @@ fn dialog_box_is_max_w_sm_or_the_window_minus_32() {
     }
     let nova = common::themes()
         .into_iter()
-        .find(|(n, _)| *n == "nova_dark")
+        .find(|(n, _, _)| *n == "nova_dark")
         .expect("nova")
         .1;
     assert_eq!(
@@ -135,7 +135,7 @@ fn dialog_close_button_can_be_hidden() {
     let mut h = Harness::builder()
         .with_size(vec2(640.0, 360.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             Dialog::new("nc", "Title")
                 .show_close_button(false)
                 .show(ui.ctx(), &mut true, |_| {});
@@ -144,20 +144,79 @@ fn dialog_close_button_can_be_hidden() {
     assert!(h.query_by_label("Close").is_none());
 }
 
+/// A part paints at its own `disabled:` opacity, not egui's fade
+/// (conformance 2.2): nova's footer strip has no `disabled:` rule, so in a
+/// disabled area of the dialog it keeps its full colour, as in a disabled
+/// `<fieldset>`.
+#[test]
+fn a_disabled_dialog_footer_keeps_its_strip_colour() {
+    use shadcn_egui::style::{pick, State};
+    let mode = egui::Theme::Light;
+    let theme = Theme::new(
+        shadcn_egui::Style::nova(),
+        Palette::light(),
+        Palette::dark(),
+        10.0,
+    );
+    let strip = pick(&[&*theme.style.dialog_footer], |r| &r.bg, State::NONE)
+        .map(|p| common::resolved(&theme, mode).paint(p))
+        .expect("nova's footer has a strip");
+    let fills = |disabled: bool| {
+        let ctx = egui::Context::default();
+        theme.apply(&ctx);
+        ctx.set_theme(mode);
+        // No fade-in of the modal's area.
+        ctx.global_style_mut(|s| s.animation_time = 0.0);
+        let mut out = None;
+        for _ in 0..2 {
+            out = Some(ctx.run_ui(egui::RawInput::default(), |ui| {
+                Dialog::new("d", "Title").show(ui.ctx(), &mut true, |ui| {
+                    ui.add_enabled_ui(!disabled, |ui| dialog::footer(ui, |_| {}));
+                });
+            }));
+        }
+        common::rect_shapes(&out.expect("ran"))
+            .into_iter()
+            .map(|r| r.fill)
+            .collect::<Vec<_>>()
+    };
+    assert!(fills(false).contains(&strip), "enabled strip");
+    assert!(
+        fills(true).contains(&strip),
+        "disabled strip keeps {strip:?}"
+    );
+}
+
+/// An open dialog over a page, with a two-action footer.
+fn dialog_page(ui: &mut egui::Ui) {
+    ui.label("page beneath");
+    Dialog::new("confirm", "Delete session?")
+        .description("The session and its files are removed.")
+        .show(ui.ctx(), &mut true, |ui| {
+            ui.label("This cannot be undone.");
+            dialog::footer(ui, |ui| {
+                ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
+            });
+        });
+}
+
 #[test]
 fn dialog_snapshot() {
-    common::snapshot_all("dialog", vec2(800.0, 500.0), |ui| {
-        ui.label("page beneath");
-        Dialog::new("confirm", "Delete session?")
-            .description("The session and its files are removed.")
-            .show(ui.ctx(), &mut true, |ui| {
-                ui.label("This cannot be undone.");
-                dialog::footer(ui, |ui| {
-                    ui.add(Button::new("Delete").variant(ButtonVariant::Destructive));
-                    ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
-                });
-            });
-    });
+    common::snapshot_all("dialog", vec2(800.0, 500.0), dialog_page);
+}
+
+/// In a phone-wide window the footer stacks its actions, the primary on
+/// top, each as wide as the footer (`flex-col-reverse` below `sm`).
+#[test]
+fn dialog_narrow_snapshot() {
+    common::snapshot_with_themes(
+        "dialog_narrow",
+        vec2(common::PHONE, 500.0),
+        common::themes(),
+        dialog_page,
+        |_| {},
+    );
 }
 
 fn popover_trigger(ui: &mut egui::Ui) {
@@ -178,7 +237,7 @@ fn popover_harness() -> Harness<'static> {
     Harness::builder()
         .with_size(vec2(420.0, 240.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             popover_trigger(ui);
         })
 }
@@ -230,12 +289,13 @@ fn popover_closes_on_escape_and_toggles_on_trigger() {
 
 #[test]
 fn popover_box_is_w_72_and_content_gets_the_padding() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let inner = std::cell::Cell::new(0.0_f32);
         let mut h = Harness::builder()
             .with_size(vec2(420.0, 240.0))
             .build_ui(|ui| {
                 theme.apply(ui.ctx());
+                ui.ctx().set_theme(mode);
                 let trigger = ui.add(Button::new("Dimensions"));
                 Popover::new(&trigger).show(|ui| inner.set(ui.available_width()));
             });
@@ -283,7 +343,7 @@ fn tooltip_shows_on_hover() {
     let mut h = Harness::builder()
         .with_size(vec2(240.0, 120.0))
         .build_ui(|ui| {
-            Theme::vega_dark().apply(ui.ctx());
+            Theme::vega().apply(ui.ctx());
             tooltip_trigger(ui);
         });
     h.run();
@@ -295,11 +355,12 @@ fn tooltip_shows_on_hover() {
 
 #[test]
 fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut h = Harness::builder()
             .with_size(vec2(240.0, 120.0))
             .build_ui(|ui| {
                 theme.apply(ui.ctx());
+                ui.ctx().set_theme(mode);
                 tooltip_trigger(ui);
             });
         h.run();
@@ -313,12 +374,43 @@ fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
             egui::Color32::from_rgb(c[0], c[1], c[2])
         };
         // bg-foreground behind the text; the arrow reaches into the trigger below.
-        let fg = theme.palette.foreground;
+        let fg = theme.palette_of(mode).foreground;
         let corner = egui::pos2(text.left() - 4.0, text.center().y);
         assert_eq!(px(corner), fg, "{name}: fill is foreground");
         let tip = egui::pos2(text.center().x, trigger.top() - 2.0);
         assert_eq!(px(tip), fg, "{name}: arrow reaches the trigger");
     }
+}
+
+/// The tooltip paints its box through the recipe box: a border an app
+/// gives it in `theme.style` shows (review F4).
+#[test]
+fn tooltip_box_takes_the_styles_border() {
+    use shadcn_egui::style::{Paint, Prop, Role};
+    let mode = egui::Theme::Light;
+    let theme = common::restyled(Theme::vega(), |s| {
+        s.tooltip_content.border_width = Prop::fixed(4.0);
+        s.tooltip_content.border_color = Prop::fixed(Paint::Role(Role::Destructive, 1.0));
+    });
+    let red = theme.palette_of(mode).destructive;
+    let mut h = Harness::builder()
+        .with_size(vec2(240.0, 120.0))
+        .build_ui(move |ui| {
+            theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
+            tooltip_trigger(ui);
+        });
+    h.run();
+    h.get_by_label("Hover me").hover();
+    h.run();
+    let text = h.get_by_label("Add to library").rect();
+    let img = h.render().expect("render");
+    let y = text.center().y as u32;
+    let found = (0..text.left() as u32).rev().any(|x| {
+        let c = img.get_pixel(x, y);
+        egui::Color32::from_rgb(c[0], c[1], c[2]) == red
+    });
+    assert!(found, "no destructive border left of the tooltip text");
 }
 
 #[test]
@@ -336,7 +428,7 @@ fn select_harness(start: usize) -> Harness<'static, usize> {
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS).placeholder("Pick a fruit"));
                 ui.label("elsewhere");
             },
@@ -412,7 +504,7 @@ fn open_select_ignores_keys_once_focus_moves_elsewhere() {
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS));
                 ui.add(shadcn_egui::components::button::Button::new("Other"));
             },
@@ -476,7 +568,7 @@ fn select_disabled_does_not_open() {
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
-                Theme::vega_dark().apply(ui.ctx());
+                Theme::vega().apply(ui.ctx());
                 ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
             },
             0usize,
@@ -489,7 +581,7 @@ fn select_disabled_does_not_open() {
 
 #[test]
 fn select_trigger_height_follows_style_and_size() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let (default_h, sm_h) = if name.starts_with("nova") {
             (32.0, 28.0)
         } else {
@@ -497,7 +589,7 @@ fn select_trigger_height_follows_style_and_size() {
         };
         let mut v = 0usize;
         let mut h = |size| {
-            common::measure(&theme, |ui| {
+            common::measure(&theme, mode, |ui| {
                 ui.add(Select::new("s", &mut v, &FRUITS).size(size))
             })
             .height()
@@ -552,12 +644,13 @@ fn select_open_snapshot() {
 
 #[test]
 fn select_item_rows_have_the_text_sm_line_plus_padding() {
-    for (name, theme) in common::themes() {
+    for (name, theme, mode) in common::themes() {
         let mut h = Harness::builder()
             .with_size(vec2(320.0, 260.0))
             .build_ui_state(
                 |ui, value: &mut usize| {
                     theme.apply(ui.ctx());
+                    ui.ctx().set_theme(mode);
                     ui.add(Select::new("fruit", value, &FRUITS));
                 },
                 0usize,
@@ -570,13 +663,104 @@ fn select_item_rows_have_the_text_sm_line_plus_padding() {
     }
 }
 
+/// An option wider than the window caps the list to the window (conformance
+/// 3.1); its text wraps in its row, as the browser wraps it.
+#[test]
+fn select_list_is_capped_to_the_window() {
+    const LONG: [&str; 2] = [
+        "Short",
+        "An option whose text is far wider than this narrow window",
+    ];
+    let mut h = Harness::builder()
+        .with_size(vec2(200.0, 300.0))
+        .build_ui_state(
+            |ui, value: &mut usize| {
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
+                ui.add(Select::new("long", value, &LONG).width(150.0));
+            },
+            0usize,
+        );
+    h.run();
+    open_select(&mut h);
+    let short = h.get_by_label(LONG[0]).rect();
+    let long = h.get_by_label(LONG[1]).rect();
+    assert!(long.right() <= 200.0, "row ends at {}", long.right());
+    assert_eq!(long.width(), short.width(), "rows share the list width");
+    assert!(
+        long.height() > short.height(),
+        "the long text wraps: {} vs {}",
+        long.height(),
+        short.height()
+    );
+}
+
+/// The trigger is `w-fit`, capped to the room (conformance 3.1): an option
+/// wider than the window, or a wider `width`, keeps it inside the window.
+#[test]
+fn select_trigger_is_capped_to_the_room() {
+    const LONG: [&str; 2] = [
+        "Short",
+        "An option whose text is far wider than this narrow window",
+    ];
+    for width in [None, Some(400.0)] {
+        let mut h = Harness::builder()
+            .with_size(vec2(200.0, 300.0))
+            .build_ui_state(
+                move |ui, value: &mut usize| {
+                    Theme::vega().apply(ui.ctx());
+                    ui.ctx().set_theme(egui::Theme::Light);
+                    let select = Select::new("long", value, &LONG);
+                    match width {
+                        Some(w) => ui.add(select.width(w)),
+                        None => ui.add(select),
+                    };
+                },
+                0usize,
+            );
+        h.run();
+        let trigger = h.get_by_role(egui::accesskit::Role::ComboBox).rect();
+        assert!(
+            trigger.right() <= 200.0,
+            "{width:?}: trigger ends at {}",
+            trigger.right()
+        );
+    }
+}
+
+/// Where the room is narrower than the trigger's padding, gap and chevron,
+/// the trigger takes that content minimum (conformance 3.1) and overflows
+/// without widening its parent (3.6).
+#[test]
+fn select_trigger_in_no_room_takes_its_content_minimum() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let mut v = 0usize;
+    let mut rects = (egui::Rect::NOTHING, egui::Rect::NOTHING);
+    for _ in 0..2 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let parent = ui.allocate_ui(vec2(0.0, 100.0), |ui| {
+                ui.add(Select::new("fruit", &mut v, &FRUITS)).rect
+            });
+            rects = (parent.inner, parent.response.rect);
+        });
+    }
+    let (trigger, parent) = rects;
+    // vega: pl-2.5, pr-2, a 1 px border each side, gap-1.5, a size-4 chevron.
+    assert_eq!(trigger.width(), 10.0 + 8.0 + 2.0 + 6.0 + 16.0);
+    assert_eq!(parent.width(), 0.0, "the parent keeps its width");
+}
+
 /// Pixels darker than (60, 60, 60) once the list of a light-mode Select is open.
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
-    let bg = theme.palette.background;
+    let mode = egui::Theme::Light;
+    let bg = theme.palette_of(mode).background;
     let mut h = Harness::builder()
         .with_size(vec2(260.0, 260.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
+            ui.ctx().set_theme(mode);
             ui.ctx()
                 .layer_painter(egui::LayerId::background())
                 .rect_filled(ui.ctx().viewport_rect(), 0.0, bg);
@@ -597,14 +781,13 @@ fn an_inverted_menu_is_dark_in_light_mode() {
     let inverted = Preset::default()
         .style(StyleName::Vega)
         .menu_color(MenuColor::Inverted)
-        .theme(Mode::Light);
+        .theme();
     let mt = inverted.menu_theme();
     assert!(
-        mt.dark && mt.palette == Palette::dark(),
+        mt.is_dark() && mt.palette() == &Palette::dark(),
         "the menu resolves as dark mode"
     );
-    let plain =
-        dark_pixels_of_open_list(Preset::default().style(StyleName::Vega).theme(Mode::Light));
+    let plain = dark_pixels_of_open_list(Preset::default().style(StyleName::Vega).theme());
     let dark = dark_pixels_of_open_list(inverted);
     // The open list is ~180 x 140 px: filled dark it adds well over 10 000
     // dark pixels; a light list only has its text.
@@ -623,14 +806,16 @@ fn select_open_in(name: &str, color: MenuColor) {
             Preset::default()
                 .style(StyleName::Vega)
                 .menu_color(color)
-                .theme(Mode::Light),
+                .theme(),
+            egui::Theme::Light,
         ),
         (
             "vega_dark",
             Preset::default()
                 .style(StyleName::Vega)
                 .menu_color(color)
-                .theme(Mode::Dark),
+                .theme(),
+            egui::Theme::Dark,
         ),
     ];
     common::snapshot_with_themes(
@@ -655,4 +840,105 @@ fn select_open_in(name: &str, color: MenuColor) {
 #[test]
 fn select_open_inverted_snapshot() {
     select_open_in("select_open_inverted", MenuColor::Inverted);
+}
+
+/// Rects of `n` free 40×10 boxes in a dialog's body and of one box in
+/// its footer, as offsets from the title's bottom (the dialog is centred,
+/// so its place moves with its height).
+fn dialog_free_boxes(n: usize) -> (Vec<egui::Rect>, egui::Rect) {
+    let seen = std::cell::RefCell::new((Vec::new(), egui::Rect::NOTHING));
+    let boxed = |ui: &mut egui::Ui| {
+        ui.allocate_exact_size(vec2(40.0, 10.0), egui::Sense::hover())
+            .0
+    };
+    let mut h = Harness::builder()
+        .with_size(vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            Dialog::new("free", "Title").show(ui.ctx(), &mut true, |ui| {
+                let free: Vec<_> = (0..n).map(|_| boxed(ui)).collect();
+                let mut foot = egui::Rect::NOTHING;
+                dialog::footer(ui, |ui| foot = boxed(ui));
+                *seen.borrow_mut() = (free, foot);
+            });
+        });
+    h.run();
+    h.run();
+    let up = vec2(0.0, -h.get_by_label("Title").rect().bottom());
+    let (free, foot) = seen.borrow().clone();
+    (
+        free.iter().map(|r| r.translate(up)).collect(),
+        foot.translate(up),
+    )
+}
+
+/// Free content in a dialog stands for a block (rules, Container; G4):
+/// its widgets stack with no gap, and the dialog's gap stays only between
+/// the run and the header and footer.
+#[test]
+fn free_dialog_content_is_one_block() {
+    let (one, foot_one) = dialog_free_boxes(1);
+    let (two, foot_two) = dialog_free_boxes(2);
+    assert_eq!(two[0], one[0], "the header's gap before the run");
+    assert_eq!(two[1].top(), two[0].bottom(), "no gap inside the run");
+    assert_eq!(
+        foot_two.top() - two[1].bottom(),
+        foot_one.top() - one[0].bottom(),
+        "the footer keeps its distance from the run"
+    );
+}
+
+/// The footer comes last (rules, Part), free content too.
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "comes before its footer")]
+fn free_content_after_the_dialog_footer_fails_the_order_assert() {
+    let mut h = Harness::builder()
+        .with_size(vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            Dialog::new("late", "Title").show(ui.ctx(), &mut true, |ui| {
+                dialog::footer(ui, |ui| {
+                    ui.add(Button::new("Ok"));
+                });
+                ui.label("Late");
+            });
+        });
+    h.run();
+}
+
+/// Free content in a popover stands for a block (rules, Container; G4):
+/// its widgets stack with no gap, the popover's gap from the header.
+#[test]
+fn free_popover_content_is_one_block() {
+    let seen = std::cell::RefCell::new(Vec::new());
+    let mut h = Harness::builder()
+        .with_size(vec2(420.0, 240.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            let trigger = ui.add(Button::new("Dimensions"));
+            Popover::new(&trigger).show(|ui| {
+                popover_header(ui, "Layer size", "Set the dimensions.");
+                let boxes: Vec<_> = (0..2)
+                    .map(|_| {
+                        ui.allocate_exact_size(vec2(40.0, 10.0), egui::Sense::hover())
+                            .0
+                    })
+                    .collect();
+                *seen.borrow_mut() = boxes;
+            });
+        });
+    h.run();
+    h.get_by_label("Dimensions").click();
+    h.run();
+    h.run();
+    let boxes = seen.borrow().clone();
+    let description = h.get_by_label("Set the dimensions.").rect();
+    let gap = Theme::vega().style.popover_content.gap.base.expect("gap");
+    assert_eq!(
+        boxes[0].top(),
+        description.bottom() + gap,
+        "{description:?}"
+    );
+    assert_eq!(boxes[1].top(), boxes[0].bottom(), "no gap inside the run");
 }

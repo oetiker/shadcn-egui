@@ -5,10 +5,21 @@
 //! builds it, and the page takes `?preset=<code>&mode=dark`.
 
 use shadcn_egui::reference::{gallery_ui, GalleryState};
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 struct GalleryApp {
     state: GalleryState,
+}
+
+impl GalleryApp {
+    /// The app for `state`, its preset and mode applied before the first
+    /// pass, so the first frame is in the preset's fonts. `gallery_ui`
+    /// applies them again in its first pass, which then changes nothing.
+    fn new(ctx: &egui::Context, state: GalleryState) -> Self {
+        state.preset.apply(ctx);
+        ctx.set_theme(state.mode);
+        Self { state }
+    }
 }
 
 impl eframe::App for GalleryApp {
@@ -31,9 +42,9 @@ fn initial_state(preset: Option<&str>, mode: Option<&str>) -> (GalleryState, Opt
         None => Preset::default(),
     };
     let mode = if mode == Some("dark") {
-        Mode::Dark
+        egui::Theme::Dark
     } else {
-        Mode::Light
+        egui::Theme::Light
     };
     (GalleryState::new(preset, mode), warning)
 }
@@ -54,7 +65,7 @@ fn main() -> eframe::Result<()> {
             viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 900.0]),
             ..Default::default()
         },
-        Box::new(move |_cc| Ok(Box::new(GalleryApp { state }))),
+        Box::new(move |cc| Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))),
     )
 }
 
@@ -94,7 +105,7 @@ fn main() {
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(move |_cc| Ok(Box::new(GalleryApp { state }))),
+                Box::new(move |cc| Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))),
             )
             .await;
         match started {
@@ -112,7 +123,7 @@ mod tests {
     fn nothing_given_is_the_default_preset_in_light_mode() {
         let (state, warning) = initial_state(None, None);
         assert_eq!(state.preset, Preset::default());
-        assert_eq!(state.mode, Mode::Light);
+        assert_eq!(state.mode, egui::Theme::Light);
         assert_eq!(warning, None);
     }
 
@@ -129,7 +140,7 @@ mod tests {
         assert_eq!(expected.to_code().as_deref(), Some(code));
         assert_ne!(state.preset, Preset::default());
         assert_eq!(state.preset, expected);
-        assert_eq!(state.mode, Mode::Dark);
+        assert_eq!(state.mode, egui::Theme::Dark);
         assert_eq!(warning, None);
     }
 
@@ -146,7 +157,7 @@ mod tests {
         for mode in ["light", "DARK", ""] {
             assert_eq!(
                 initial_state(None, Some(mode)).0.mode,
-                Mode::Light,
+                egui::Theme::Light,
                 "{mode}"
             );
         }

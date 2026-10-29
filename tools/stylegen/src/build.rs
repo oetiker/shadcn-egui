@@ -30,8 +30,17 @@ pub fn styles(tool: &Path, pin: &str) -> Result<Styles, String> {
         let css = parse_style_css(&read(&format!("tests/fixtures/style-{style}.css"))?);
         per_style.push((style, parts(style, &css, &components)?));
     }
-    let all: Vec<&[Part]> = per_style.iter().map(|(_, p)| p.as_slice()).collect();
-    let fields = emit::fields(&all);
+    let in_export = |style: &str| export.split_whitespace().any(|e| e == style);
+    let unsupported = |ps: &[Part]| ps.iter().map(|p| p.marker.unsupported.len()).sum::<usize>();
+    // The public `Style` struct holds the fields the exported styles fill:
+    // a part's `_after` or `_child` field exists only where an exported
+    // style styles it.
+    let exported: Vec<&[Part]> = per_style
+        .iter()
+        .filter(|(style, ps)| in_export(style) && unsupported(ps) == 0)
+        .map(|(_, p)| p.as_slice())
+        .collect();
+    let fields = emit::fields(&exported);
     let mut out = Styles {
         generated: emit::emit_struct(pin, &fields),
         exported: Vec::new(),
@@ -41,13 +50,12 @@ pub fn styles(tool: &Path, pin: &str) -> Result<Styles, String> {
     for (style, ps) in &per_style {
         out.reports
             .push((style.to_string(), report::report(style, pin, ps)));
-        if export.split_whitespace().any(|e| e == *style) {
-            let unsupported: usize = ps.iter().map(|p| p.marker.unsupported.len()).sum();
-            if unsupported == 0 {
-                out.exported
-                    .push((style.to_string(), emit::emit_style(style, pin, &fields, ps)));
-            } else {
-                out.failed.push((style.to_string(), unsupported));
+        if in_export(style) {
+            match unsupported(ps) {
+                0 => out
+                    .exported
+                    .push((style.to_string(), emit::emit_style(style, pin, &fields, ps))),
+                n => out.failed.push((style.to_string(), n)),
             }
         }
     }

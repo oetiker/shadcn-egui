@@ -59,7 +59,8 @@ drawing code holds no style value of its own.
    app. Map each state or context condition to a `State` flag
    (`references/styles.md` has the table). Resolve a property over the
    stacked recipes in the order upstream joins their classes, with `pick`.
-   Build the state with `theme.state(..)`, which adds `DARK`, or with
+   Build the state with `theme.state(ctx, ..)`, which adds `DARK` and the
+   window's `SM` and `MD` breakpoint flags, or with
    `interaction_state` (below) for a widget that reacts to the pointer and
    the keyboard.
 4. **Base classes go into the recipes.** A class the component source sets
@@ -84,8 +85,25 @@ drawing code holds no style value of its own.
    the caller passes, not a literal in the component.
 6. **egui sizing.** The widget sets its own size before placement (single
    pass). Use the `shadcn_egui::layout` helpers, no `available_width()`
-   arithmetic. Resolve geometry without interaction states: the size does not
-   change on hover.
+   arithmetic: `layout::capped_width(ui, requested, content_min)` caps a
+   width to the room and raises it to the content minimum,
+   `layout::overlay_width` does the same against the window, and
+   `layout::allocate_overflowing` lets a widget wider than its room
+   overflow without widening its parent. The widget allocates its rect
+   with `layout::allocate_item` (for `allocate_exact_size`) or
+   `layout::allocate_item_space` (for `allocate_space`), never egui's own:
+   in a `layout::wrap_row` the crate then moves it to the next line and
+   gives that line its own height. A content-sized widget (no width or
+   `w-fit`) allocates with `layout::allocate_item_space` and senses its
+   rect with `ui.interact`: in a justified layout (`ui.add_sized`) it
+   then takes the layout's width, as egui's `Button` does. A hit target
+   larger than the box (`after:absolute after:-inset-*`, a checkbox, a
+   slider thumb) is sensed with `shared::hit_area(ui, rect, id, sense)`
+   after the box is allocated, never with `ui.interact`, so a crate row
+   stays as high as the box. A breakpoint reads the window through
+   `layout::window_at_least` (`sm:`, `md:`; `theme.state` sets `SM` and
+   `MD`) or its container through `layout::container_at_least`. Resolve
+   geometry without interaction states: the size does not change on hover.
 7. **Context.** The widget API takes whatever context the recipe conditions
    need: icon side (`ICON_START`, `ICON_END`), size variant (`SIZE_SM`),
    orientation, enclosing slot (`IN_BUTTON_GROUP`).
@@ -101,18 +119,70 @@ drawing code holds no style value of its own.
     the user's consent (below).
 
 ```rust
-use shadcn_egui::components::shared::interaction_state;
+use shadcn_egui::components::shared::{
+    interaction_state, part_painter, pressable, ActivationKeys, RecipeBox,
+};
 use shadcn_egui::style::{pick, State};
 use shadcn_egui::Theme;
 
-/// The height of a small button, resolved the way `Button` does it.
-fn button_height(ui: &egui::Ui, resp: &egui::Response) -> f32 {
+/// A small square button: geometry, press, keys, state and box the way
+/// `Button` does them.
+fn small_button(ui: &mut egui::Ui) -> egui::Response {
     let theme = Theme::current(ui.ctx());
     let s = &theme.style;
-    let st = interaction_state(&theme, resp, true, State::default());
-    pick(&[&*s.button, &*s.button_size_sm], |r| &r.height, st).unwrap_or(0.0)
+    let layers = [&*s.button, &*s.button_size_sm];
+    // Geometry never depends on interaction.
+    let geometry = theme.state(ui.ctx(), State::NONE);
+    let side = pick(&layers, |r| &r.height, geometry).unwrap_or(0.0);
+    let (rect, mut resp) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::click());
+    pressable(&mut resp, ActivationKeys::Button);
+    let st = interaction_state(&theme, &resp, State::NONE);
+    RecipeBox::resolve(ui.ctx(), &theme, &layers, st)
+        .transitioned(ui.ctx(), resp.id, &layers, st)
+        .paint(&part_painter(ui, resp.id, &[&layers[..]], st), rect);
+    resp
 }
 ```
+
+`RecipeBox` puts border and outline widths on whole device pixels, as
+Blink does. Where a border width becomes geometry in the port (padding
+plus border, a size), take it through
+`shared::line_width(px, ui.ctx().pixels_per_point())`, and inset content
+with `shared::inset_frame` (or `RecipeBox::frame`), which keeps a fraction
+of a point that egui's `Margin` would round away.
+
+## App variants
+
+A port into the crate gives every new component `XVariant`, `XRecipes` and
+`.variant(impl Into<XVariant>)`, so an app can define its own looks of it
+(`build-ui` SKILL.md, "App variants"). The mechanism is sealed: a port in an
+app has none. `components/separator.rs` is the smallest example,
+`components/card.rs` the one with a size and free-function parts.
+
+- No upstream variant: `default_variant!(XVariant, XRecipes { .. })` writes
+  the `Default` case, the hidden app case, `XVariant::app` and the recipes
+  struct. An enum with built-in variants (`ButtonVariant`, `TabsVariant`)
+  carries the app case by hand, as `components/button.rs` does.
+- `XRecipes` has one `Recipe` field per part the component draws, named
+  after its `data-slot` in snake case (`card_title`); a part without a
+  `data-slot` after its `cn-*` recipe, a pseudo-element after its slot plus
+  the element (`tabs_trigger_after`).
+- The widget resolves its variant with `t.resolve(self.variant)`, takes each
+  part from the result (`v.part(..)`) and starts its state from `v.bits()`.
+- A size upstream applies through state bits (`data-size`, read as
+  `data-[size=sm]:` in the parts' own recipes) gets
+  `state_size!(XSize, XVariant)`, which folds the base size's state rules
+  so an app size's `set` replaces them; the widget resolves with
+  `t.resolve_pair(variant, size)`. A size with recipes of its own
+  (`cn-button-size-*`) is a layer, as `ButtonSize`.
+- Parts that are free functions (`card_title`, `dialog::footer`) read the
+  parent's variant from the context tag (`components/context.rs`): the
+  parent pushes an `XContext` on the `Ui` it hands its content
+  (`context::push`), the part reads it with `context::find`. Never a new
+  `ctx.data` channel.
+- A unit test `edit_compiles_and_changes_its_part` defines one app variant
+  with `Theme::variant`, resolves it and checks that the edited part
+  changed and the rest kept the base's values.
 
 ## Behaviour, not just looks
 
@@ -144,32 +214,64 @@ back, Right and Down forward) whatever its orientation.
 ## Interaction states
 
 - One shared helper,
-  `shadcn_egui::components::shared::interaction_state(&theme, &resp, enabled, context)`,
+  `shadcn_egui::components::shared::interaction_state(&theme, &resp, context)`,
   turns a `Response` into a `State`: the context flags, `HOVER`, `ACTIVE`,
-  keyboard focus as `FOCUS_VISIBLE`, and `DARK`. Do not re-derive it per
-  component, or components will disagree.
-- A disabled widget never gets `HOVER`, `ACTIVE` or `FOCUS_VISIBLE`. It gets
-  `DISABLED` only.
-- A disabled part fades by its recipe's `opacity` (`disabled:opacity-50`):
+  `FOCUS` while focused, `FOCUS_VISIBLE` where the browser's
+  `:focus-visible` would match (focus moved by keyboard, tracked
+  crate-wide), and `DARK`. A widget that takes typed text uses
+  `text_entry_state`, which shows the ring after a pointer focus too. Do
+  not re-derive either per component, or components will disagree.
+- Call `shared::pressable(&mut resp, keys)` right after the interaction of
+  anything clickable: a pointer press then focuses it without a ring, as
+  the browser does, and `clicked()` fires on the element's own keys
+  (`ActivationKeys::Button` for a `<button>`: Enter on press, Space on
+  release; `EnterAndSpace`, `Space` or `Enter` for a bits primitive or a
+  link; `None` for a slider thumb).
+- Disabled state comes from the `Ui`; a widget with its own `enabled` flag
+  adds `DISABLED` to the context. A disabled widget never gets `HOVER`,
+  `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`. It gets `DISABLED` only.
+- A part fades by its recipe's `opacity` (`disabled:opacity-50`):
   `shared::opacity(&[part_stack, parent_stack], state)` multiplies the
-  values down the part tree as CSS does, and
-  `shared::style_painter(ui, &[part_stack, parent_stack], state)` returns the
-  painter faded by it. In a disabled `Ui` egui has faded every shape once
-  already. There `style_painter` (and `shared::ui_opacity`, the bare value)
-  takes 1.0 where the winning rule of a part's pick needs `DISABLED`: as in
-  CSS, the `disabled:` rule replaces the part's base opacity, and egui's fade
-  stands in for the rule. Where no such rule wins, the part's other opacity applies
-  on top of egui's fade. Pass `DISABLED` in the state whenever the `Ui` is
-  disabled. Every part reads its `opacity`, not only a disabled one: a child
-  part's painter multiplies the parent's chain, a container part fades the
-  `Ui` it hands to its content with `shared::faded(ui, opacity, |ui| ..)`,
-  and colours an egui `Frame` paints outside that `Ui` (fill, shadow, ring)
-  are faded with `gamma_multiply`.
+  values down the part tree as CSS does. `shared::part_painter(ui, id,
+  chain, state)` returns the painter at the part's opacity: the `Ui`'s
+  opacity with egui's disabled fade taken out once, times the part's own
+  value, with `DISABLED` added in a disabled `Ui` (`shared::part_opacity`
+  is the bare value). So a part fades by its style's `disabled:` rule, not
+  by egui's fade; `id` is the widget's, and where the part's `transition`
+  names `opacity` a disabled toggle fades. A crate part drawn through egui
+  (a title through `TextLook::label`) runs in `shared::part_ui(ui, id,
+  chain, state, |ui| ..)`; a container hands the caller's content
+  `shared::content_ui(ui, id, chain, state, |ui| ..)`, which
+  keeps egui's fade for plain egui widgets. A box an egui container paints
+  outside that `Ui` (a popup frame) takes `RecipeBox::faded(opacity)`.
 - An empty size `Prop` is CSS's initial value: `width` and `height` fall
-  back to the content size (`shared::line_box` for a line of text), never
+  back to the content size (`TextLook::line_height` for a line of text), never
   to 0, so an app that replaces a recipe whole keeps a usable widget.
 - Geometry is resolved without interaction states.
-- Every custom-painted widget reports itself with `resp.widget_info(..)`.
+- A value that changes where upstream transitions it (`transition-all` on
+  the progress indicator) is painted at
+  `shadcn_egui::components::motion::transition(ctx, id, target, &stack,
+  Transition::OTHER, state)`: it moves over the recipe's `duration` along
+  its `easing` (Tailwind's 150 ms and `ease-in-out` curve where the part
+  sets none) when the picked `transition` names the property (a
+  `duration` without a `transition` names every property, along CSS's
+  `ease`, `Easing::Ease`), jumps otherwise and under reduced motion (`style.animation_time == 0`), and
+  asks for a repaint only while it moves. Name the property by what it is:
+  `COLOR` for a text or icon colour, `BACKGROUND` for a fill,
+  `BORDER_COLOR`, `SHADOW` for a ring or shadow, `TRANSFORM` for a
+  translate, `OPACITY`, `OTHER` for a size. Transition the CSS value (an
+  offset from the part's place, a size), never a screen position: a part
+  whose widget moves must not slide after it.
+- A ported part wires its recipe's transition: its box goes through
+  `RecipeBox::transitioned(ctx, id, &stack, state)` (fill, border, outline,
+  ring and shadow fade where the `transition` names them), its text and
+  icon colour through `motion::transition_color(ctx, id, colour, &stack,
+  Transition::COLOR, state)`, and its opacity through `part_painter` with
+  the widget's id. A widget scrolled away or not shown keeps time: shown
+  again after the duration, it shows the new value at once.
+- Every custom-painted widget reports itself with `resp.widget_info(..)`;
+  a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
+  `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.
 
 ## Dependency discipline
 

@@ -3,7 +3,8 @@
 A `Preset` holds the choices of the shadcn create page on ui.shadcn.com:
 style, base colour, theme colour, chart colour, body and heading font, icon
 library, radius, menu colour and menu accent. Light or dark is not part of a
-preset; the app passes a `Mode` when it applies one.
+preset: its theme holds both palettes, and the app sets the mode on the
+context with `ctx.set_theme(..)`.
 
 ## Preset codes
 
@@ -11,11 +12,12 @@ The create page shows a code such as `b2D0wqNxT` for every preset.
 `Preset::from_code` decodes it and `to_code` writes it:
 
 ```rust
-use shadcn_egui::{Mode, Preset, PresetCodeError};
+use shadcn_egui::{Preset, PresetCodeError};
 
 fn setup(ctx: &egui::Context) -> Result<(), PresetCodeError> {
     let preset = Preset::from_code("b2D0wqNxT")?;
-    preset.apply(ctx, Mode::Dark);
+    preset.apply(ctx);
+    ctx.set_theme(egui::Theme::Dark);
     Ok(())
 }
 ```
@@ -54,7 +56,7 @@ has a builder method:
   `InvertedTranslucent`; `.menu_accent(MenuAccent::…)`: `Subtle`, `Bold`.
 
 ```rust
-use shadcn_egui::{BaseColor, Mode, Preset, RadiusChoice, StyleName, ThemeColor};
+use shadcn_egui::{BaseColor, Preset, RadiusChoice, StyleName, ThemeColor};
 
 fn setup(ctx: &egui::Context) {
     Preset::default()
@@ -62,11 +64,12 @@ fn setup(ctx: &egui::Context) {
         .base_color(BaseColor::Zinc)
         .theme_color(ThemeColor::Blue)
         .radius(RadiusChoice::Px(6.0))
-        .apply(ctx, Mode::Light);
+        .apply(ctx);
+    ctx.set_theme(egui::Theme::Light);
 }
 ```
 
-`preset.theme(mode)` returns the `Theme` without applying it, for an app that
+`preset.theme()` returns the `Theme` without applying it, for an app that
 adjusts the theme before `theme.apply(ctx)`.
 
 ## Fonts and icons
@@ -98,14 +101,16 @@ show falls back to a usable one and logs one `log::warn!` line, on every call:
   the opaque one. egui has no backdrop blur.
 
 The warnings go through the `log` crate; the app needs a logger (for example
-`env_logger`) to show them.
+`env_logger`) to show them. `preset.apply(ctx)` logs each one once per
+context; `preset.theme()` logs them on every call.
 
 ## Applying
 
-`preset.apply(ctx, mode)` is `preset.theme(mode).apply(ctx)`. Call it once
-after the context exists, and again when the mode or the preset changes. The
-fonts are reinstalled only when they change, so switching between light and
-dark is cheap.
+`preset.apply(ctx)` is `preset.theme().apply(ctx)`. Call it once after the
+context exists, and again when the preset changes. Switching between light
+and dark is `ctx.set_theme(egui::Theme::Light)` (or `Dark`, or
+`egui::ThemePreference::System`) and needs no second `apply`. The fonts are
+reinstalled only when they change.
 
 An app that installs fonts of its own uses `Theme::apply_with_fonts`. It
 starts from the app's `FontDefinitions` instead of egui's defaults and adds
@@ -113,10 +118,10 @@ the theme's fonts on top. A plain `ctx.set_fonts` after `apply` drops the
 theme's font families, and headings fall back to the default font.
 
 ```rust
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 fn setup(ctx: &egui::Context, my_fonts: egui::FontDefinitions) {
-    let theme = Preset::default().theme(Mode::Dark);
+    let theme = Preset::default().theme();
     theme.apply_with_fonts(ctx, my_fonts);
 }
 ```

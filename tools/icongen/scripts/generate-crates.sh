@@ -14,12 +14,14 @@ shift
 want=" ${*:-lucide tabler phosphor remixicon hugeicons} "
 
 slots() {
+  # One icon per IconSlots field (icongen's SLOT_NAMES), as upstream's
+  # IconPlaceholder names them for that library.
   case $1 in
-    lucide) echo check=check,chevron_down=chevron-down,close=x ;;
-    tabler) echo check=check,chevron_down=selector,close=x ;;
-    phosphor) echo check=check,chevron_down=caret-down,close=x ;;
-    remixicon) echo check=check-line,chevron_down=arrow-down-s-line,close=close-line ;;
-    hugeicons) echo check=tick-02,chevron_down=unfold-more,close=cancel-01 ;;
+    lucide) echo check=check,select_trigger=chevron-down,chevron_down_plain=chevron-down,chevron_up=chevron-up,chevron_left=chevron-left,chevron_right=chevron-right,more_horizontal=more-horizontal,close=x ;;
+    tabler) echo check=check,select_trigger=selector,chevron_down_plain=chevron-down,chevron_up=chevron-up,chevron_left=chevron-left,chevron_right=chevron-right,more_horizontal=dots,close=x ;;
+    phosphor) echo check=check,select_trigger=caret-down,chevron_down_plain=caret-down,chevron_up=caret-up,chevron_left=caret-left,chevron_right=caret-right,more_horizontal=dots-three,close=x ;;
+    remixicon) echo check=check-line,select_trigger=arrow-down-s-line,chevron_down_plain=arrow-down-s-line,chevron_up=arrow-up-s-line,chevron_left=arrow-left-s-line,chevron_right=arrow-right-s-line,more_horizontal=more-line,close=close-line ;;
+    hugeicons) echo check=tick-02,select_trigger=unfold-more,chevron_down_plain=arrow-down-01,chevron_up=arrow-up-01,chevron_left=arrow-left-01,chevron_right=arrow-right-01,more_horizontal=more-horizontal-circle-01,close=cancel-01 ;;
     *) echo "generate-crates: unknown lib $1" >&2; return 1 ;;
   esac
 }

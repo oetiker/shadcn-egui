@@ -2,7 +2,7 @@
 //! Tabler Icons, outline set 3.49.0 (MIT), from the npm package @tabler/icons.
 //!
 //! Every icon is a `pub const`; [`ALL`] lists them and [`SLOTS`] holds the
-//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button).
+//! icons shadcn-egui's components draw (checkbox tick, select trigger, close button, ...).
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
@@ -10396,8 +10396,15 @@ pub const ALL: &[&Icon] = &[
 ];
 
 /// The icons shadcn-egui's components draw.
-pub const SLOTS: IconSlots = IconSlots {
-    check: CHECK,
-    chevron_down: SELECTOR,
-    close: X,
+pub const SLOTS: IconSlots = {
+    let mut s = IconSlots::all(CHECK);
+    s.check = CHECK;
+    s.select_trigger = SELECTOR;
+    s.chevron_down_plain = CHEVRON_DOWN;
+    s.chevron_up = CHEVRON_UP;
+    s.chevron_left = CHEVRON_LEFT;
+    s.chevron_right = CHEVRON_RIGHT;
+    s.more_horizontal = DOTS;
+    s.close = X;
+    s
 };

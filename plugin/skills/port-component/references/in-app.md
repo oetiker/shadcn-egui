@@ -6,19 +6,45 @@ the crate.
 
 ## What the app can use
 
-- `Theme::current(ctx)`: the active theme, with `palette`, `metrics`,
-  `radius`, `dark`, `icons` and `style`.
+- `Theme::current(ctx)`: the active theme in the context's mode, with
+  `palette()` (the mode's palette; `light` and `dark` hold both),
+  `is_dark()`, `metrics`, `radius`, `icons` and `style`.
 - The `Style` fields of the markers the crate has ported
   (`theme.style.button`, `theme.style.checkbox`, …), for parts a new component
   shares with an existing one.
-- `shadcn_egui::style::{pick, Recipe, Prop, Rule, When, State, Paint, Role, Radius, Rung, TextSize, Weight}`.
+- `shadcn_egui::style::{pick, Recipe, Prop, Rule, When, State, Paint, Role, Radius, Rung, TextSize, Weight, Transition, Easing}`.
 - `Theme::{state, paint, role, radius_px, text_px, line_px, shadow}` to turn
   recipe values into pixels and colours.
-- `shadcn_egui::components::shared::interaction_state` for hover, press and
-  focus, and the other helpers in `components::shared` (`paint_box`, `ring`,
-  `opacity`, `ui_opacity` and `style_painter` for a part's fade, `faded` for a container
-  part's content, `line_box` for the height of a line of text).
+- `shadcn_egui::components::shared::interaction_state` (`text_entry_state`
+  for typed text) for hover, press and focus, and the other helpers in
+  `components::shared`: `pressable` for focus on press and activation keys,
+  `RecipeBox` for a part's fill, border, shadow, ring and outline,
+  `opacity`, `part_opacity` and `part_painter` for a part's fade, `part_ui`
+  and `content_ui` for a crate part or caller content drawn through egui,
+  `widget_info_with_role` for an accessible role egui's `WidgetType` lacks,
+  `hit_area` for a hit target larger than the part's box
+  (`after:absolute after:-inset-*`, a thumb), which leaves a crate row as
+  high as the box.
+- `shadcn_egui::components::text::{TextLook, content_scope, Leading}` for
+  every piece of text a widget lays out or paints:
+  `TextLook::resolve(ui, &recipes, state)` resolves size, weight, colour
+  and line height, `.layout(..)` returns a `TextBlock` as tall as its line
+  boxes with each baseline where the browser puts it, `.label(..)` shows it
+  as an egui label, `.color(c)` sets the colour of a part whose colour
+  comes from another part, `.resolved_color(ui)` is the colour to paint a
+  `TextBlock` in, and `content_scope` hands a container's `text-*` and
+  text colour to its content.
+- `shadcn_egui::layout::{capped_width, overlay_width, allocate_item,
+  allocate_item_space, allocate_overflowing}` for a widget's width and its
+  allocation, so that it wraps in a `layout::wrap_row` as a crate widget
+  does.
 - `shadcn_egui::components::icon::paint_icon` and the theme's icon slots.
+- `shadcn_egui::components::motion::transition(ctx, id, target, &stack,
+  property, state)` for a value that moves as a CSS transition does (an
+  offset or a size, never a screen position),
+  `transition_color` for a colour (mixed in OKLab as the browser mixes
+  it), and `RecipeBox::transitioned(ctx, id, &stack, state)` for a part's
+  box.
 
 ## Recipes for new markers
 
@@ -44,22 +70,30 @@ builds the recipes itself:
   rule with several variants ORs their bits; targets (`after:`, `[&>svg]:`,
   `[&_svg:not([class*='size-'])]:`) have no bit. Then add the specificity
   the variants add: `1 << 122` for each class, attribute or pseudo-class,
-  that is each state variant (`hover:`, `dark:`, `data-*:`, `aria-*:`,
-  `group-*:`, `peer-*:`, `has-*:`, `not-*:`); `1 << 121` for
-  `[&_svg:not([class*='size-'])]:`, one class more specific than
-  `[&>svg]:` but behind it at equal specificity; none for `sm:`, `md:`,
-  `supports-*:`, `in-*:`, `after:` and `[&>svg]:`. A `placeholder:` rule
+  that is each state variant (`hover:`, `dark:`, `data-[..]:`, `aria-*:`,
+  `group-*:`, `peer-*:`, `has-*:`, `not-*:`); none for shadcn-svelte's own
+  `data-open:`, `data-closed:`, `data-checked:`, `data-unchecked:`,
+  `data-disabled:`, `data-active:`, `data-horizontal:` and
+  `data-vertical:`, which are `:where()` and so weigh nothing, nor for
+  `sm:`, `md:`, `supports-*:`, `in-*:`, `after:` and `[&>svg]:`;
+  `1 << 121` for `[&_svg:not([class*='size-'])]:`, one class more specific
+  than `[&>svg]:` but behind it at equal specificity. A `placeholder:` rule
   adds `1 << 126`, which puts it above every rule without it, and
   `!important` adds `1 << 127`. The bits used below: `focus-visible:`
-  `1 << 20`, `disabled:` `1 << 22`, `aria-checked:` `1 << 27`,
-  `aria-invalid:` `1 << 29`, `data-checked:` `1 << 31`, `dark:`
-  `1 << 52`; so `dark:aria-invalid:` is `(1 << 29) | (1 << 52) | (2 << 122)`.
+  `1 << 29`, `disabled:` `1 << 31`, `aria-checked:` `1 << 43`,
+  `aria-invalid:` `1 << 45`, `dark:` `1 << 68`, `data-checked:` `1 << 71`;
+  so `dark:aria-invalid:` is `(1 << 45) | (1 << 68) | (2 << 122)` and
+  `dark:data-checked:` is `(1 << 68) | (1 << 71) | (1 << 122)`. A focused
+  checked item thus shows the focus border: `focus-visible:` has a class
+  step, `data-checked:` none.
   A class whose rank is above 0 without a state
   (`[&_svg:not([class*='size-'])]:size-4`) is a `When::ALWAYS` rule, not
   the base, as in a generated recipe.
 - Classes the crate ignores stay out of the recipe: layout keywords (`flex`,
-  `items-center`), transitions and animations, and variants for slots the
-  crate does not ship (`group-has-[:focus-visible]/field-label:`).
+  `items-center`), keyframe animations (`animate-spin`), and variants for
+  slots the crate does not ship (`group-has-[:focus-visible]/field-label:`).
+  Transitions and their timing (`transition-all`, `duration-200`,
+  `ease-in-out`) are recipe values.
   `tools/stylegen/reports/<style>.md` in the repository says why for each.
 - The component selects the recipe for `Theme::current(ctx).style.name`. A
   style without a recipe falls back to the first one and logs a warning.
@@ -84,15 +118,15 @@ fn radio_group_item_nova() -> Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(checked), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(dark), rank: (1 << 52) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: when(dark | checked), rank: (1 << 31) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(checked), rank: 1 << 71, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(dark), rank: (1 << 68) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: when(dark | checked), rank: (1 << 68) | (1 << 71) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(checked), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::PrimaryForeground, 1.0) },
+                Rule { when: when(checked), rank: 1 << 71, value: Paint::Role(Role::PrimaryForeground, 1.0) },
             ],
         },
         // base: "border"
@@ -100,26 +134,26 @@ fn radio_group_item_nova() -> Recipe {
         border_color: Prop {
             base: Some(Paint::Role(Role::Input, 1.0)),
             rules: vec![
-                Rule { when: when(focus), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: when(invalid), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: when(invalid | checked), rank: (1 << 27) | (1 << 29) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(checked), rank: (1 << 31) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(dark | invalid), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: when(checked), rank: 1 << 71, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(focus), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: when(invalid), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: when(invalid | checked), rank: (1 << 43) | (1 << 45) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(dark | invalid), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(focus), rank: (1 << 20) | (1 << 122), value: 3.0 },
-                Rule { when: when(invalid), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: when(focus), rank: (1 << 29) | (1 << 122), value: 3.0 },
+                Rule { when: when(invalid), rank: (1 << 45) | (1 << 122), value: 3.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(focus), rank: (1 << 20) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: when(invalid), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: when(dark | invalid), rank: (1 << 29) | (1 << 52) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: when(focus), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: when(invalid), rank: (1 << 45) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: when(dark | invalid), rank: (1 << 45) | (1 << 68) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         // base: "outline-none"
@@ -127,13 +161,23 @@ fn radio_group_item_nova() -> Recipe {
         // base: "disabled:opacity-50"
         opacity: Prop {
             base: None,
-            rules: vec![Rule { when: when(State::DISABLED), rank: (1 << 22) | (1 << 122), value: 0.5 }],
+            rules: vec![Rule { when: when(State::DISABLED), rank: (1 << 31) | (1 << 122), value: 0.5 }],
         },
         // base: "after:-inset-x-3 after:-inset-y-2"
         hit_inset_x: Prop::fixed(12.0),
         hit_inset_y: Prop::fixed(8.0),
         ..Recipe::default()
     }
+}
+
+// Check the ranks against the browser: a focused checked item shows the
+// ring border, an invalid checked one the primary border.
+fn main() {
+    let border = radio_group_item_nova().border_color;
+    let ring = Paint::Role(Role::Ring, 1.0);
+    assert_eq!(border.get(State::FOCUS_VISIBLE | State::CHECKED), Some(ring));
+    let primary = Paint::Role(Role::Primary, 1.0);
+    assert_eq!(border.get(State::INVALID | State::CHECKED), Some(primary));
 }
 
 fn radio_group_item(theme: &Theme) -> Recipe {

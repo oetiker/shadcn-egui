@@ -14,7 +14,8 @@ pub fn field_name(part: &str) -> String {
 }
 
 /// The `Style` fields as `(field, doc)`: each part in `markers.txt` order,
-/// followed by its `_after` part where any style gives it `after:` classes.
+/// followed by its `_after` part where any style gives it `after:` classes
+/// and its `_child` part where any style gives caller content `*:` classes.
 pub fn fields(styles: &[&[Part]]) -> Vec<(String, String)> {
     let first = styles.first().copied().unwrap_or_default();
     // `s[i]` below is part `i` of every style.
@@ -35,6 +36,15 @@ pub fn fields(styles: &[&[Part]]) -> Vec<(String, String)> {
             out.push((
                 format!("{}_after", field_name(&p.name)),
                 format!("`{}` `after:` pseudo-element", p.name),
+            ));
+        }
+        if styles.iter().any(|s| !s[i].marker.child.is_empty()) {
+            out.push((
+                format!("{}_child", field_name(&p.name)),
+                format!(
+                    "`{}` `*:` rules on caller content, which has no crate part",
+                    p.name
+                ),
             ));
         }
     }
@@ -62,7 +72,7 @@ pub(crate) fn header_react(pin: &str, source: &str) -> String {
 
 pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
     let mut s = header(pin, "the parts in tools/stylegen/markers.txt");
-    s += "use super::recipe::Recipe;\n\n";
+    s += "use super::recipe::{Recipe, State};\n\n";
     s += "/// One recipe per part the crate draws: a `cn-*` marker, a `data-slot`\n/// without one, or an `after:` pseudo-element. Adjust a value in\n";
     s += "/// your theme setup: `let mut s = Style::nova(); s.button_size_default.height.base = Some(36.0);`\n";
     s += "///\n/// Each recipe is boxed so a `Style` stays small on the stack; replace a\n";
@@ -73,14 +83,37 @@ pub fn emit_struct(pin: &str, fields: &[(String, String)]) -> String {
         s += &format!("    /// {doc}\n    pub {field}: Box<Recipe>,\n");
     }
     s += "}\n";
+    s + &emit_state_ranks()
+}
+
+/// The rank a generated rule under each state flag has
+/// ([`crate::variant::state_ranks`]), for `Prop::on`.
+fn emit_state_ranks() -> String {
+    let ranks = crate::variant::state_ranks();
+    let mut s = String::from(
+        "\n/// The rank a generated rule under one state flag has: the rank of the\n\
+         /// flag's own variant (`hover`, `aria-expanded`, …). `Prop::on` composes\n\
+         /// a state's rank from these. A flag missing here has no variant on the\n\
+         /// part itself.\n",
+    );
+    s += &format!(
+        "pub(super) const STATE_RANKS: [(State, u128); {}] = [\n",
+        ranks.len()
+    );
+    for (f, r) in ranks {
+        s += &format!("    (State::{f}, {}),\n", rank(r));
+    }
+    s += "];\n";
     s
 }
 
 /// One style's values; `markers` in the order of the `Style` fields.
 ///
-/// Each recipe gets its own function: one struct literal with every recipe
-/// keeps all their temporaries in one stack frame, about 0.5 MB in a debug
-/// build, which overflows small thread stacks.
+/// Each recipe gets its own function that boxes it: one struct literal with
+/// every recipe keeps all their temporaries in one stack frame, about 0.5 MB
+/// in a debug build, which overflows small thread stacks; so does a
+/// `Box::new(recipe())` per field, which gives each unboxed `Recipe` its
+/// own slot in `style()`.
 pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[Part]) -> String {
     let mut s = header(
         pin,
@@ -92,14 +125,15 @@ pub fn emit_style(style: &str, pin: &str, fields: &[(String, String)], parts: &[
     for p in parts {
         decls.insert(field_name(&p.name), &p.marker.decls);
         decls.insert(format!("{}_after", field_name(&p.name)), &p.marker.after);
+        decls.insert(format!("{}_child", field_name(&p.name)), &p.marker.child);
     }
     let mut fns = String::new();
     for (field, _) in fields {
         match decls.get(field).and_then(|d| recipe(d)) {
             None => s += &format!("        {field}: Box::default(),\n"),
             Some(body) => {
-                s += &format!("        {field}: Box::new({field}()),\n");
-                fns += &format!("\nfn {field}() -> Recipe {{\n    {body}\n}}\n");
+                s += &format!("        {field}: {field}(),\n");
+                fns += &format!("\nfn {field}() -> Box<Recipe> {{\n    Box::new({body})\n}}\n");
             }
         }
     }
@@ -210,6 +244,17 @@ mod tests {
             },
             corrections: Vec::new(),
         }
+    }
+
+    #[test]
+    fn state_ranks_are_emitted_per_flag() {
+        let s = emit_state_ranks();
+        assert!(
+            s.contains("    (State::HOVER, (1 << 27) | (1 << 122)),\n"),
+            "{s}"
+        );
+        assert!(s.contains("    (State::SM, "), "{s}");
+        assert!(!s.contains("State::FIRST,"), "{s}");
     }
 
     #[test]

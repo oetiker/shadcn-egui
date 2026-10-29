@@ -70,7 +70,8 @@ pub struct Row {
     pub license: String,
     pub files: Files,
     pub license_file: String,
-    /// `None` while the row says `-` (not measured yet).
+    /// `None` while the row says `-` (no baseline correction set yet: 0
+    /// unless the font still sits off Chrome's baseline).
     pub y_offset_factor: Option<f32>,
 }
 

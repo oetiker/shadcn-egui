@@ -5,6 +5,7 @@ mod fixture;
 #[path = "icons/lucide.rs"]
 #[rustfmt::skip]
 mod lucide;
+mod common;
 
 use shadcn_egui::{FillMesh, Icon, IconLayer, Seg};
 
@@ -409,7 +410,7 @@ fn zoomed(name: &str, alpha: f32) {
             }
         });
     h.run();
-    h.snapshot(name);
+    common::snapshot(&mut h, name);
 }
 
 #[test]

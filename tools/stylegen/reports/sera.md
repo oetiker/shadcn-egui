@@ -4,31 +4,32 @@
 
 Upstream: shadcn-svelte `493481fa`, `style-sera.css`.
 
-Unsupported classes in shipped markers: **21** (not exportable)
+Unsupported classes in shipped markers: **30** (not exportable)
 
 ## `cn-button`
 
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - ignored `group/button`: browser behaviour the component handles itself
-- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
-- ignored `transition-all`: animation or transition; out of scope (spec §4.4)
 - ignored `select-none`: browser behaviour the component handles itself
 - ignored `disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
-
-## `cn-button-variant-link`
-
-- ignored `underline-offset-4`: egui draws text underlines at a fixed offset
+- ignored `inline-flex`: structure: egui layout is done by the component
 
 ## `cn-badge`
 
-- ignored `transition-colors`: animation or transition; out of scope (spec §4.4)
 - ignored `group/badge`: browser behaviour the component handles itself
-- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
 - ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
@@ -36,47 +37,44 @@ Unsupported classes in shipped markers: **21** (not exportable)
 - ignored `overflow-hidden`: browser behaviour the component handles itself
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
 - ignored `[&>svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
+- ignored `inline-flex`: structure: egui layout is done by the component
 
 ## `cn-badge-variant-default`
 
-- ignored `[a]:hover:text-foreground/70`: link-styled badge/description anchors are not ported
+- ignored `[a]:hover:text-foreground/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
 
 ## `cn-badge-variant-secondary`
 
-- ignored `[a]:hover:text-foreground`: link-styled badge/description anchors are not ported
+- ignored `[a]:hover:text-foreground`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
 
 ## `cn-badge-variant-destructive`
 
-- ignored `[a]:hover:text-destructive/70`: link-styled badge/description anchors are not ported
+- ignored `[a]:hover:text-destructive/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
 
 ## `cn-badge-variant-outline`
 
-- ignored `[a]:hover:text-foreground/70`: link-styled badge/description anchors are not ported
-
-## `cn-badge-variant-link`
-
-- ignored `underline-offset-4`: egui draws text underlines at a fixed offset
+- ignored `[a]:hover:text-foreground/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
 
 ## `cn-card`
 
 - ignored `overflow-hidden`: browser behaviour the component handles itself
 - ignored `has-[>img:first-child]:pt-0`: card with a leading image is not offered
-- ignored `*:[img:first-child]:rounded-none`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:[img:last-child]:rounded-none`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[img:first-child]:rounded-none`: card with a leading image is not offered
+- ignored `*:[img:last-child]:rounded-none`: card with a trailing image is not offered
 - ignored `group/card`: browser behaviour the component handles itself
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-card-header`
 
 - ignored `[.border-b]:pb-(--card-spacing)`: card header with an explicit border class is not offered
 - ignored `group/card-header`: browser behaviour the component handles itself
 - ignored `@container/card-header`: structure: egui layout is done by the component
-- ignored `grid`: structure: egui layout is done by the component
 - ignored `auto-rows-min`: structure: egui layout is done by the component
 - ignored `items-start`: structure: egui layout is done by the component
 - ignored `has-data-[slot=card-action]:grid-cols-[1fr_auto]`: card header grid template; the crate lays out the header itself
 - ignored `has-data-[slot=card-description]:grid-rows-[auto_auto]`: card header grid template; the crate lays out the header itself
+- ignored `grid`: structure: egui layout is done by the component
 
 ## `cn-card-action`
 
@@ -89,15 +87,13 @@ Unsupported classes in shipped markers: **21** (not exportable)
 ## `cn-card-footer`
 
 - ignored `[.border-t]:pt-(--card-spacing)`: card footer with an explicit border class is not offered
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-checkbox`
 
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
-- ignored `transition-shadow`: animation or transition; out of scope (spec §4.4)
 - ignored `group-has-[:focus-visible]/field-label:ring-0`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `group-has-[:focus-visible]/field-label:not-data-checked:border-input`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `group-has-[:focus-visible]/field-label:data-checked:border-primary`: inside a focused FieldLabel; the crate does not ship Field
@@ -106,42 +102,28 @@ Unsupported classes in shipped markers: **21** (not exportable)
 - ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `after:absolute`: structure: egui layout is done by the component
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-checkbox-indicator`
 
-- ignored `grid`: structure: egui layout is done by the component
 - ignored `place-content-center`: structure: egui layout is done by the component
 - ignored `text-current`: inherits the parent's text colour: the recipe leaves `text` empty
-- ignored `transition-none`: animation or transition; out of scope (spec §4.4)
+- ignored `grid`: structure: egui layout is done by the component
 
 ## `cn-dialog-overlay`
 
-- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
-- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
-- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
 - ignored `fixed`: structure: egui layout is done by the component
 - ignored `isolate`: browser behaviour the component handles itself
 - ignored `z-50`: browser behaviour the component handles itself
 
 ## `cn-dialog-content`
 
-- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
-- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
-- ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
-- ignored `grid`: structure: egui layout is done by the component
-- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
 - ignored `fixed`: structure: egui layout is done by the component
 - ignored `top-1/2`: dialog centring: egui centres the dialog window
 - ignored `left-1/2`: dialog centring: egui centres the dialog window
 - ignored `z-50`: browser behaviour the component handles itself
 - ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
-- ignored `-translate-x-1/2`: dialog centring: egui centres the dialog window
-- ignored `-translate-y-1/2`: dialog centring: egui centres the dialog window
+- ignored `grid`: structure: egui layout is done by the component
 
 ## `cn-dialog-close`
 
@@ -149,29 +131,40 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-dialog-header`
 
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-dialog-footer`
 
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-col-reverse`: structure: egui layout is done by the component
 - ignored `sm:flex-row`: structure: egui layout is done by the component
 - ignored `sm:justify-end`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-dialog-description`
 
-- ignored `*:[a]:hover:text-foreground`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:[a]:underline`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:[a]:underline-offset-3`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:[a]:hover:text-foreground`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `*:[a]:underline`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `*:[a]:underline-offset-3`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
 
 ## `cn-input`
 
+- from `cn-button-group`: `*:data-[slot=input]:px-4` under State::IN_BUTTON_GROUP
+- from `cn-button-group`: `has-[>[data-variant=outline]]:[&>input]:border-border` under State::IN_BUTTON_GROUP.or(State::HAS_OUTLINE)
+- from `cn-button-group`: `has-[>[data-variant=outline]]:[&>input:focus-visible]:border-ring` under State::FOCUS_VISIBLE.or(State::IN_BUTTON_GROUP).or(State::HAS_OUTLINE)
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t (underline-style inputs)
-- ignored `transition-[color,border-color]`: animation or transition; out of scope (spec §4.4)
+- **unsupported** `transition-[color,border-color]`: transition value
 - ignored `file:h-7`: file-input button; egui has no file input
 - ignored `file:text-sm`: file-input button; egui has no file input
 - ignored `file:font-medium`: file-input button; egui has no file input
@@ -197,55 +190,54 @@ Unsupported classes in shipped markers: **21** (not exportable)
 - **unsupported** `peer-data-[slot=radio-group-item]:tracking-normal`: variant `peer-data-[slot=radio-group-item]`
 - **unsupported** `peer-data-[slot=switch]:normal-case`: variant `peer-data-[slot=switch]`
 - **unsupported** `peer-data-[slot=switch]:tracking-normal`: variant `peer-data-[slot=switch]`
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `select-none`: browser behaviour the component handles itself
 - ignored `group-data-[disabled=true]:pointer-events-none`: browser behaviour the component handles itself
 - ignored `peer-disabled:cursor-not-allowed`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-popover-content`
 
-- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
-- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
-- ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
-- ignored `data-[side=bottom]:slide-in-from-top-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=left]:slide-in-from-right-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-col`: structure: egui layout is done by the component
-- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
 - ignored `z-50`: browser behaviour the component handles itself
-- ignored `origin-(--bits-popover-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
+- ignored `origin-(--bits-popover-content-transform-origin)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-popover-header`
 
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-select-trigger`
 
+- moved `*:data-[slot=select-value]:gap-1.5` to `slot:select-value` under State::NONE
+- from `cn-button-group`: `has-[>[data-variant=outline]]:*:data-[slot=select-trigger]:border-border` under State::IN_BUTTON_GROUP.or(State::HAS_OUTLINE)
+- from `cn-button-group`: `has-[>[data-variant=outline]]:[&>[data-slot=select-trigger]:focus-visible]:border-ring` under State::FOCUS_VISIBLE.or(State::IN_BUTTON_GROUP).or(State::HAS_OUTLINE)
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
 - **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
 - **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t (underline-style inputs)
-- ignored `transition-[color,border-color]`: animation or transition; out of scope (spec §4.4)
-- ignored `*:data-[slot=select-value]:flex`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:data-[slot=select-value]:gap-1.5`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `flex`: structure: egui layout is done by the component
+- **unsupported** `transition-[color,border-color]`: transition value
+- ignored `*:data-[slot=select-value]:flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-between`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
-- ignored `*:data-[slot=select-value]:line-clamp-1`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:data-[slot=select-value]:flex`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:data-[slot=select-value]:items-center`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `*:data-[slot=select-value]:flex`: structure: egui layout is done by the component
+- ignored `*:data-[slot=select-value]:items-center`: structure: egui layout is done by the component
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `*:data-[slot=select-value]:line-clamp-1`: line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text
 
 ## `cn-select-trigger-icon`
 
@@ -253,29 +245,18 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-select-content`
 
-- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
-- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
-- ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
-- ignored `data-[side=bottom]:slide-in-from-top-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=left]:slide-in-from-right-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `duration-100`: animation or transition; out of scope (spec §4.4)
 - ignored `relative`: structure: egui layout is done by the component
 - ignored `z-50`: browser behaviour the component handles itself
-- ignored `max-h-(--bits-select-content-available-height)`: bits-ui anchor variable: placement computed by egui
-- ignored `origin-(--bits-select-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
+- ignored `max-h-(--bits-select-content-available-height)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
+- ignored `origin-(--bits-select-content-transform-origin)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
 - ignored `overflow-x-hidden`: browser behaviour the component handles itself
 - ignored `overflow-y-auto`: browser behaviour the component handles itself
 
 ## `cn-select-viewport`
 
-- ignored `h-(--bits-select-anchor-height)`: bits-ui anchor variable: placement computed by egui
+- ignored `h-(--bits-select-anchor-height)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
 - ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
-- ignored `min-w-(--bits-select-anchor-width)`: bits-ui anchor variable: placement computed by egui
+- ignored `min-w-(--bits-select-anchor-width)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
 - ignored `scroll-my-1`: browser behaviour the component handles itself
 
 ## `cn-select-group`
@@ -284,12 +265,11 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-select-item`
 
-- ignored `not-data-[variant=destructive]:focus:**:text-accent-foreground`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
-- ignored `*:[span]:last:flex`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:[span]:last:items-center`: `*:` styles direct child elements the crate does not draw as elements
-- ignored `*:[span]:last:gap-2`: `*:` styles direct child elements the crate does not draw as elements
+- ignored `not-data-[variant=destructive]:focus:**:text-accent-foreground`: `**:` without a child slot styles content the part draws in its own text colour (select item) or caller content
+- ignored `*:[span]:last:flex`: select item text wrapper; the crate draws the item text itself
+- ignored `*:[span]:last:items-center`: select item text wrapper; the crate draws the item text itself
+- ignored `*:[span]:last:gap-2`: select item text wrapper; the crate draws the item text itself
 - ignored `relative`: structure: egui layout is done by the component
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `cursor-default`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
@@ -297,14 +277,15 @@ Unsupported classes in shipped markers: **21** (not exportable)
 - ignored `data-disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-select-item-indicator`
 
 - ignored `pointer-events-none`: browser behaviour the component handles itself
 - ignored `absolute`: structure: egui layout is done by the component
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-select-item-indicator-icon`
 
@@ -312,10 +293,10 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-select-item-text`
 
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `flex-1`: structure: egui layout is done by the component
 - ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-select-separator`
 
@@ -324,18 +305,22 @@ Unsupported classes in shipped markers: **21** (not exportable)
 ## `cn-select-scroll-up-button`
 
 - ignored `z-10`: browser behaviour the component handles itself
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `cursor-default`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-select-scroll-down-button`
 
 - ignored `z-10`: browser behaviour the component handles itself
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `cursor-default`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `slot:select-value`
+
+- from `cn-select-trigger`: `*:data-[slot=select-value]:gap-1.5` under State::NONE
 
 ## `slot:separator`
 
@@ -346,7 +331,6 @@ Unsupported classes in shipped markers: **21** (not exportable)
 ## `cn-slider`
 
 - ignored `relative`: structure: egui layout is done by the component
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `touch-none`: browser behaviour the component handles itself
 - ignored `items-center`: structure: egui layout is done by the component
@@ -354,6 +338,7 @@ Unsupported classes in shipped markers: **21** (not exportable)
 - ignored `data-vertical:h-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `data-vertical:w-auto`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `data-vertical:flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-slider-track`
 
@@ -374,10 +359,9 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-slider-thumb`
 
-- ignored `transition-colors`: animation or transition; out of scope (spec §4.4)
-- ignored `block`: structure: egui layout is done by the component
 - ignored `shrink-0`: structure: egui layout is done by the component
 - ignored `select-none`: browser behaviour the component handles itself
+- ignored `block`: structure: egui layout is done by the component
 - ignored `disabled:pointer-events-none`: bits-ui renders the slider thumb as a <span>, where `disabled:` never matches
 - ignored `disabled:opacity-50`: bits-ui renders the slider thumb as a <span>, where `disabled:` never matches
 
@@ -390,53 +374,48 @@ Unsupported classes in shipped markers: **21** (not exportable)
 - ignored `peer`: browser behaviour the component handles itself
 - ignored `group/switch`: browser behaviour the component handles itself
 - ignored `relative`: structure: egui layout is done by the component
-- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
-- ignored `transition-all`: animation or transition; out of scope (spec §4.4)
 - ignored `after:absolute`: structure: egui layout is done by the component
 - ignored `data-disabled:cursor-not-allowed`: browser behaviour the component handles itself
+- ignored `inline-flex`: structure: egui layout is done by the component
 
 ## `cn-switch-thumb`
 
-- **unsupported** `data-checked:translate-x-[calc(100%+2px)]`: translate value
 - ignored `pointer-events-none`: browser behaviour the component handles itself
-- ignored `block`: structure: egui layout is done by the component
-- ignored `transition-transform`: animation or transition; out of scope (spec §4.4)
 - ignored `rtl:data-[state=checked]:translate-x-[calc(-100%)]`: right-to-left layout; the crate lays out left to right
+- ignored `block`: structure: egui layout is done by the component
 
 ## `cn-tabs`
 
 - ignored `group/tabs`: browser behaviour the component handles itself
-- ignored `flex`: structure: egui layout is done by the component
 - ignored `data-horizontal:flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-tabs-list`
 
 - ignored `group/tabs-list`: browser behaviour the component handles itself
-- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `group-data-vertical/tabs:h-fit`: the component's default sizing
 - ignored `group-data-vertical/tabs:flex-col`: structure: egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
 
 ## `cn-tabs-trigger`
 
 - corrected (C2) added `group-data-[variant=line]/tabs-list:focus-visible:ring-0` `group-data-[variant=line]/tabs-list:focus-visible:outline-0` `group-data-[variant=line]/tabs-list:focus-visible:border-transparent` `group-data-[variant=line]/tabs-list:focus-visible:after:opacity-100` `group-data-[variant=line]/tabs-list:focus-visible:after:bg-ring` `group-data-[variant=line]/tabs-list:focus-visible:data-active:after:bg-foreground` `group-data-[variant=line]/tabs-list:focus-visible:text-foreground` `dark:group-data-[variant=line]/tabs-list:focus-visible:text-foreground`: a line list draws no pills, so focus shows on an inactive trigger as on hover, not as a pill-shaped ring, outline and border: its label turns `Foreground` and its underline shows in `Ring`; C2 adds no focus marker to the active trigger, its underline stays `Foreground` and 2px
 - ignored `relative`: structure: egui layout is done by the component
-- ignored `inline-flex`: structure: egui layout is done by the component
 - ignored `flex-1`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `whitespace-nowrap`: browser behaviour the component handles itself
-- ignored `transition-all`: animation or transition; out of scope (spec §4.4)
 - ignored `group-data-vertical/tabs:w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `group-data-vertical/tabs:justify-start`: structure: egui layout is done by the component
 - ignored `disabled:pointer-events-none`: browser behaviour the component handles itself
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `[&_svg]:shrink-0`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `after:absolute`: structure: egui layout is done by the component
-- ignored `after:transition-opacity`: animation or transition; out of scope (spec §4.4)
+- ignored `inline-flex`: structure: egui layout is done by the component
 
 ## `cn-tabs-content`
 
@@ -444,40 +423,293 @@ Unsupported classes in shipped markers: **21** (not exportable)
 
 ## `cn-tooltip-content`
 
-- ignored `data-open:animate-in`: open/close animation state; egui shows and hides at once
-- ignored `data-open:fade-in-0`: open/close animation state; egui shows and hides at once
-- ignored `data-open:zoom-in-95`: open/close animation state; egui shows and hides at once
-- ignored `data-[state=delayed-open]:animate-in`: open/close animation state; egui shows and hides at once
-- ignored `data-[state=delayed-open]:fade-in-0`: open/close animation state; egui shows and hides at once
-- ignored `data-[state=delayed-open]:zoom-in-95`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:animate-out`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:fade-out-0`: open/close animation state; egui shows and hides at once
-- ignored `data-closed:zoom-out-95`: open/close animation state; egui shows and hides at once
-- ignored `data-[side=bottom]:slide-in-from-top-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=left]:slide-in-from-right-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=right]:slide-in-from-left-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=top]:slide-in-from-bottom-2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `inline-flex`: structure: egui layout is done by the component
+- moved `**:data-[slot=kbd]:rounded-none` to `cn-kbd` under State::IN_TOOLTIP_CONTENT
 - ignored `items-center`: structure: egui layout is done by the component
-- ignored `has-data-[slot=kbd]:pr-1.5`: keyboard-shortcut chip in a tooltip; the crate does not ship Kbd
-- ignored `**:data-[slot=kbd]:relative`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
-- ignored `**:data-[slot=kbd]:isolate`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
-- ignored `**:data-[slot=kbd]:z-50`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
-- ignored `**:data-[slot=kbd]:rounded-none`: `**:` styles descendant elements: a Kbd chip (not shipped) or select item content painted in the item's text colour
+- ignored `**:data-[slot=kbd]:relative`: structure: egui layout is done by the component
+- ignored `**:data-[slot=kbd]:isolate`: browser behaviour the component handles itself
+- ignored `**:data-[slot=kbd]:z-50`: browser behaviour the component handles itself
 - ignored `z-50`: browser behaviour the component handles itself
 - ignored `w-fit`: the component's default sizing
-- ignored `origin-(--bits-tooltip-content-transform-origin)`: bits-ui anchor variable: placement computed by egui
+- ignored `origin-(--bits-tooltip-content-transform-origin)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
+- ignored `inline-flex`: structure: egui layout is done by the component
 
 ## `cn-tooltip-arrow`
 
-- ignored `translate-y-[calc(-50%-2px)]`: tooltip arrow placement is component geometry
 - ignored `rotate-45`: the tooltip arrow is painted as a rotated square by the component
 - ignored `z-50`: browser behaviour the component handles itself
-- ignored `data-[side=bottom]:-translate-x-1/2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=bottom]:-translate-y-[calc(-50%+1px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=left]:-translate-y-[calc(50%-3px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=right]:translate-x-[calc(50%+2px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=right]:translate-y-1/2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=top]:translate-x-1/2`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
-- ignored `data-[side=top]:translate-y-[calc(-50%+2px)]`: the side egui placed the popup on: placement and slide-in direction, both done by egui (also the tooltip arrow offset)
+
+## `cn-kbd`
+
+- from `cn-tooltip-content`: `**:data-[slot=kbd]:rounded-none` under State::IN_TOOLTIP_CONTENT
+- ignored `w-fit`: the component's default sizing
+- ignored `font-sans`: sets the theme's sans font, which crate text uses already (D-100)
+- ignored `in-data-[slot=input-group]:bg-input`: inside or around an InputGroup; the crate does not ship InputGroup
+- ignored `pointer-events-none`: browser behaviour the component handles itself
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `inline-flex`: structure: egui layout is done by the component
+
+## `cn-kbd-group`
+
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
+
+## `cn-progress`
+
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `overflow-x-hidden`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-progress-indicator`
+
+- ignored `size-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `flex-1`: structure: egui layout is done by the component
+
+## `cn-alert`
+
+- ignored `has-data-[slot=alert-action]:relative`: structure: egui layout is done by the component
+- ignored `has-[>svg]:grid-cols-[auto_1fr]`: structure: egui layout is done by the component
+- ignored `*:[svg]:row-span-2`: structure: egui layout is done by the component
+- ignored `*:[svg]:text-current`: the icon takes the part's text colour (`currentColor`), as the crate paints it
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `after:absolute`: structure: egui layout is done by the component
+- ignored `group/alert`: browser behaviour the component handles itself
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `grid`: structure: egui layout is done by the component
+
+## `cn-alert-variant-destructive`
+
+- moved `*:data-[slot=alert-description]:text-destructive/90` to `cn-alert-description` under State::VARIANT_DESTRUCTIVE
+- ignored `*:[svg]:text-current`: the icon takes the part's text colour (`currentColor`), as the crate paints it
+
+## `cn-alert-title`
+
+- ignored `group-has-[>svg]/alert:col-start-2`: structure: egui layout is done by the component
+- ignored `[&_a]:underline`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&_a]:underline-offset-3`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&_a]:hover:text-foreground`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+
+## `cn-alert-description`
+
+- from `cn-alert-variant-destructive`: `*:data-[slot=alert-description]:text-destructive/90` under State::VARIANT_DESTRUCTIVE
+- ignored `[&_p:not(:last-child)]:mb-4`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&_a]:underline`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&_a]:underline-offset-3`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&_a]:hover:text-foreground`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+
+## `cn-alert-action`
+
+- ignored `absolute`: structure: egui layout is done by the component
+
+## `cn-avatar`
+
+- from `cn-avatar-group`: `*:data-[slot=avatar]:ring-2` under State::IN_AVATAR_GROUP
+- from `cn-avatar-group`: `*:data-[slot=avatar]:ring-background` under State::IN_AVATAR_GROUP
+- ignored `group/avatar`: browser behaviour the component handles itself
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `after:absolute`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-avatar-image`
+
+- ignored `size-full`: size or alignment relative to the parent; egui layout is done by the component
+
+## `cn-avatar-fallback`
+
+- ignored `size-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-avatar-badge`
+
+- ignored `absolute`: structure: egui layout is done by the component
+- ignored `z-10`: browser behaviour the component handles itself
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `bg-blend-color`: `background-blend-mode` without a background image: the browser paints the plain colour (dead rule, conformance 2.8)
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `inline-flex`: structure: egui layout is done by the component
+
+## `cn-avatar-group`
+
+- moved `*:data-[slot=avatar]:ring-2` to `cn-avatar` under State::IN_AVATAR_GROUP
+- moved `*:data-[slot=avatar]:ring-background` to `cn-avatar` under State::IN_AVATAR_GROUP
+- ignored `group/avatar-group`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-avatar-group-count`
+
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-button-group`
+
+- moved `*:data-[slot=input]:px-4` to `cn-input` under State::IN_BUTTON_GROUP
+- moved `has-[>[data-variant=outline]]:[&>input]:border-border` to `cn-input` under State::IN_BUTTON_GROUP.or(State::HAS_OUTLINE)
+- moved `has-[>[data-variant=outline]]:[&>input:focus-visible]:border-ring` to `cn-input` under State::FOCUS_VISIBLE.or(State::IN_BUTTON_GROUP).or(State::HAS_OUTLINE)
+- moved `has-[>[data-variant=outline]]:*:data-[slot=select-trigger]:border-border` to `cn-select-trigger` under State::IN_BUTTON_GROUP.or(State::HAS_OUTLINE)
+- moved `has-[>[data-variant=outline]]:[&>[data-slot=select-trigger]:focus-visible]:border-ring` to `cn-select-trigger` under State::FOCUS_VISIBLE.or(State::IN_BUTTON_GROUP).or(State::HAS_OUTLINE)
+- **unsupported** `has-[>[data-variant=outline]]:*:[[role=combobox]]:px-2.5`: variant `[[role=combobox]]`
+- ignored `has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-none`: a hidden native `<select>` after a select trigger; the crate renders none, so the trigger is the group's last child (`LAST`)
+- ignored `has-[>[data-variant=outline]]:[&>[data-slot=input-group]:has(:focus-visible)]:border-ring`: inside or around an InputGroup; the crate does not ship InputGroup
+- ignored `group/button-group`: browser behaviour the component handles itself
+- ignored `w-fit`: the component's default sizing
+- ignored `items-stretch`: structure: egui layout is done by the component
+- ignored `*:focus-visible:relative`: structure: egui layout is done by the component
+- ignored `*:focus-visible:z-10`: browser behaviour the component handles itself
+- ignored `[&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit`: a select trigger in a button group keeps `w-fit`, its default width
+- ignored `[&>input]:flex-1`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `has-[>[data-variant=outline]]:*:data-[slot=input-group]:border-border`: inside or around an InputGroup; the crate does not ship InputGroup
+- ignored `has-[>[data-variant=outline]]:*:data-[slot=input-group]:px-2.5`: inside or around an InputGroup; the crate does not ship InputGroup
+
+## `cn-button-group-orientation-horizontal`
+
+- moved `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- moved `[&>*:not(:first-child)]:rounded-l-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- moved `[&>*:not(:first-child)]:border-l-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- moved `[&>*:not(:last-child)]:rounded-r-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+
+## `cn-button-group-orientation-vertical`
+
+- moved `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- moved `[&>*:not(:first-child)]:rounded-t-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- moved `[&>*:not(:first-child)]:border-t-0` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- moved `[&>*:not(:last-child)]:rounded-b-none` to `cn-button`, `cn-input`, `cn-textarea`, `cn-select-trigger`, `cn-button-group-separator`, `cn-button-group-text` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
+- ignored `flex-col`: structure: egui layout is done by the component
+
+## `cn-button-group-separator`
+
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `self-stretch`: structure: egui layout is done by the component
+- ignored `data-horizontal:w-auto`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `data-vertical:h-auto`: size or alignment relative to the parent; egui layout is done by the component
+
+## `cn-button-group-text`
+
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
+- **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `group-has-[>[data-variant=outline]]/button-group:border-border`: variant `group-has-[>[data-variant=outline]]/button-group`
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-textarea`
+
+- from `cn-button-group-orientation-horizontal`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:rounded-l-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:first-child)]:border-l-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-horizontal`: `[&>*:not(:last-child)]:rounded-r-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_HORIZONTAL)
+- from `cn-button-group-orientation-vertical`: `[&>[data-slot]:not(:has(~[data-slot]))]:rounded-none!` under State::IN_BUTTON_GROUP.or(State::LAST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
+- from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
+- **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `transition-[color,border-color]`: transition value
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-hover-card-content`
+
+- ignored `z-50`: browser behaviour the component handles itself
+- ignored `origin-(--bits-link-preview-content-transform-origin)`: bits-ui anchor variable: its value comes from the placement, which the crate computes itself (conformance 5.6)
+
+## `cn-alert-dialog-overlay`
+
+- ignored `fixed`: structure: egui layout is done by the component
+- ignored `z-50`: browser behaviour the component handles itself
+
+## `cn-alert-dialog-content`
+
+- ignored `group/alert-dialog-content`: browser behaviour the component handles itself
+- ignored `fixed`: structure: egui layout is done by the component
+- ignored `top-1/2`: dialog centring: egui centres the dialog window
+- ignored `left-1/2`: dialog centring: egui centres the dialog window
+- ignored `z-50`: browser behaviour the component handles itself
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `grid`: structure: egui layout is done by the component
+
+## `cn-alert-dialog-header`
+
+- ignored `grid-rows-[auto_1fr]`: structure: egui layout is done by the component
+- ignored `place-items-center`: structure: egui layout is done by the component
+- ignored `has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr]`: structure: egui layout is done by the component
+- ignored `sm:group-data-[size=default]/alert-dialog-content:place-items-start`: structure: egui layout is done by the component
+- ignored `sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]`: structure: egui layout is done by the component
+- ignored `grid`: structure: egui layout is done by the component
+
+## `cn-alert-dialog-media`
+
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `sm:group-data-[size=default]/alert-dialog-content:row-span-2`: structure: egui layout is done by the component
+- ignored `inline-flex`: structure: egui layout is done by the component
+
+## `cn-alert-dialog-title`
+
+- ignored `sm:group-data-[size=default]/alert-dialog-content:group-has-data-[slot=alert-dialog-media]/alert-dialog-content:col-start-2`: structure: egui layout is done by the component
+
+## `cn-alert-dialog-description`
+
+- ignored `*:[a]:hover:text-foreground`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `*:[a]:underline`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `*:[a]:underline-offset-3`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+
+## `cn-alert-dialog-footer`
+
+- ignored `flex-col-reverse`: structure: egui layout is done by the component
+- ignored `group-data-[size=sm]/alert-dialog-content:grid-cols-2`: structure: egui layout is done by the component
+- ignored `sm:flex-row`: structure: egui layout is done by the component
+- ignored `sm:justify-end`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `group-data-[size=sm]/alert-dialog-content:grid`: structure: egui layout is done by the component
+
+## `cn-pagination`
+
+- ignored `mx-auto`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-pagination-content`
+
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-pagination-ellipsis`
+
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
 

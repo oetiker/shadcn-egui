@@ -453,6 +453,18 @@
       "pattern": "^        \"ref\": \"v[^\"]*\"",
       "replacement": "        \"ref\": \"v$VERSION\"",
       "verify": "^        \"ref\": \"v$VERSION\""
+    },
+    {
+      "path": "README.md",
+      "pattern": "^!\\[shadcn-egui component gallery\\]\\(https://raw\\.githubusercontent\\.com/oetiker/shadcn-egui/v[^/]*/docs/gallery-screen\\.png\\)$",
+      "replacement": "![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v$VERSION/docs/gallery-screen.png)",
+      "verify": "^!\\[shadcn-egui component gallery\\]\\(https://raw\\.githubusercontent\\.com/oetiker/shadcn-egui/v$VERSION/docs/gallery-screen\\.png\\)$"
+    },
+    {
+      "path": "README.md",
+      "pattern": "^!\\[shadcn-egui settings screen at 1280 px and at 390 px wide\\]\\(https://raw\\.githubusercontent\\.com/oetiker/shadcn-egui/v[^/]*/docs/settings-screen\\.png\\)$",
+      "replacement": "![shadcn-egui settings screen at 1280 px and at 390 px wide](https://raw.githubusercontent.com/oetiker/shadcn-egui/v$VERSION/docs/settings-screen.png)",
+      "verify": "^!\\[shadcn-egui settings screen at 1280 px and at 390 px wide\\]\\(https://raw\\.githubusercontent\\.com/oetiker/shadcn-egui/v$VERSION/docs/settings-screen\\.png\\)$"
     }
   ]
 }

@@ -4,6 +4,7 @@
 //! picker ([`gallery_ui`], the `gallery` example). The snapshot tests render
 //! both.
 
+use crate::components::alert::{alert_action, Alert, AlertVariant};
 use crate::components::badge::{badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::card::{card_description, card_title};
@@ -11,18 +12,23 @@ use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
 use crate::components::icon::IconView;
 use crate::components::input::Input;
+use crate::components::kbd::{kbd, Kbd, KbdGroup};
 use crate::components::label::{description, label};
 use crate::components::popover::{popover_header, Popover};
+use crate::components::progress::Progress;
 use crate::components::select::Select;
 use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
+use crate::components::text::TextLook;
+use crate::components::textarea::Textarea;
 use crate::components::tooltip::tooltip;
 use crate::preset::{
-    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Mode, Preset,
-    RadiusChoice, StyleName, ThemeColor,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, RadiusChoice,
+    StyleName, ThemeColor,
 };
+use crate::style::State;
 use crate::{layout, Theme};
 
 pub struct SettingsState {
@@ -66,7 +72,7 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(t.palette.background)
+                .fill(t.palette().background)
                 .inner_margin(egui::Margin::same(32)),
         )
         .show_inside(ui, |ui| {
@@ -154,11 +160,9 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             layout::space_between(
                 ui,
                 |_ui| {},
-                // right_to_left: the first widget added lands rightmost, so add the
-                // primary action (Save) first to keep it on the right of Cancel.
                 |ui| {
-                    let _ = ui.add(Button::new("Save").variant(ButtonVariant::Default));
                     let _ = ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                    let _ = ui.add(Button::new("Save").variant(ButtonVariant::Default));
                 },
             );
         });
@@ -182,7 +186,7 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             });
             separator(ui);
             label(ui, "Channel status");
-            layout::row(ui, 8.0, |ui| {
+            layout::wrap_row(ui, 8.0, |ui| {
                 badge(ui, "Active", BadgeVariant::Default);
                 badge(ui, "Beta", BadgeVariant::Secondary);
                 badge(ui, "Deprecated", BadgeVariant::Destructive);
@@ -199,12 +203,10 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             card_description(ui, "Buttons, badges, a slider and a select.");
             separator(ui);
             label(ui, "Button variants");
-            layout::row(ui, 8.0, |ui| {
+            layout::wrap_row(ui, 8.0, |ui| {
                 let _ = ui.add(Button::new("Default").variant(ButtonVariant::Default));
                 let _ = ui.add(Button::new("Secondary").variant(ButtonVariant::Secondary));
                 let _ = ui.add(Button::new("Destructive").variant(ButtonVariant::Destructive));
-            });
-            layout::row(ui, 8.0, |ui| {
                 let _ = ui.add(Button::new("Outline").variant(ButtonVariant::Outline));
                 let _ = ui.add(Button::new("Ghost").variant(ButtonVariant::Ghost));
                 let _ = ui.add(Button::new("Link").variant(ButtonVariant::Link));
@@ -229,7 +231,7 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
             });
             separator(ui);
             label(ui, "Badges");
-            layout::row(ui, 8.0, |ui| {
+            layout::wrap_row(ui, 8.0, |ui| {
                 badge(ui, "Default", BadgeVariant::Default);
                 badge(ui, "Secondary", BadgeVariant::Secondary);
                 badge(ui, "Destructive", BadgeVariant::Destructive);
@@ -253,26 +255,34 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 /// code field, and the demo widgets' values.
 pub struct GalleryState {
     pub preset: Preset,
-    pub mode: Mode,
+    /// Light or dark; the gallery passes it to `ctx.set_theme`.
+    pub mode: egui::Theme,
     /// The preset code field; the pickers rewrite it when they change.
     pub code: String,
     /// The last Apply's error, shown under the code field.
     code_error: Option<String>,
     /// What the context shows; `None` until the first pass applies it.
-    applied: Option<(Preset, Mode)>,
+    applied: Option<(Preset, egui::Theme)>,
     tab: usize,
     name: String,
     email: String,
+    message: String,
+    message_invalid: String,
     checked: bool,
     switch_on: bool,
     volume: f32,
     region: usize,
     dialog_open: bool,
+    /// When the progress demo first showed: it moves from 13 to 66
+    /// half a second later.
+    progress_shown: Option<f64>,
+    /// The controlled progress demo's value, 0..=100.
+    progress: f32,
 }
 
 impl GalleryState {
     /// Pickers set to `preset` in `mode`; the first [`gallery_ui`] pass applies it.
-    pub fn new(preset: Preset, mode: Mode) -> Self {
+    pub fn new(preset: Preset, mode: egui::Theme) -> Self {
         Self {
             preset,
             mode,
@@ -282,22 +292,30 @@ impl GalleryState {
             tab: 0,
             name: String::new(),
             email: "ada@example".into(),
+            message: String::new(),
+            message_invalid: String::new(),
             checked: true,
             switch_on: true,
             volume: 50.0,
             region: usize::MAX,
             dialog_open: false,
+            progress_shown: None,
+            progress: 50.0,
         }
     }
 
-    /// Apply the preset when it or the mode changed since the last apply,
-    /// never every frame (a preset logs its fallback warnings per apply).
+    /// Apply the preset when it changed since the last apply, never every
+    /// frame (each apply rebuilds the theme), and switch the context's mode
+    /// when the mode changed.
     fn apply_if_changed(&mut self, ctx: &egui::Context) {
-        let wanted = Some((self.preset, self.mode));
-        if self.applied != wanted {
-            self.preset.apply(ctx, self.mode);
-            self.applied = wanted;
+        let last = self.applied;
+        if last.map(|(p, _)| p) != Some(self.preset) {
+            self.preset.apply(ctx);
         }
+        if last.map(|(_, m)| m) != Some(self.mode) {
+            ctx.set_theme(self.mode);
+        }
+        self.applied = Some((self.preset, self.mode));
     }
 
     /// Decode the code field into the pickers, or keep everything and show
@@ -316,15 +334,18 @@ impl GalleryState {
 impl Default for GalleryState {
     /// ui.shadcn.com's default preset, light.
     fn default() -> Self {
-        Self::new(Preset::default(), Mode::Light)
+        Self::new(Preset::default(), egui::Theme::Light)
     }
 }
 
 /// Render the gallery into the given root `Ui`: a preset bar on top (a
 /// preset code field and one select per preset part, and the mode) and every
-/// component below it in a scroll area. It applies `state.preset` itself,
-/// on the first pass and whenever a picker changed it; the caller applies
-/// no theme. Fonts and icon libraries whose feature is off are not offered.
+/// component below it in a scroll area. It applies `state.preset` and
+/// `state.mode` itself, on its first pass and whenever a picker changed
+/// them. Applied in the first pass, the preset's fonts arrive a pass late
+/// and the first frame shows the layout unsettled; an app applies both
+/// before the first pass too, as the `gallery` example does. Fonts and
+/// icon libraries whose feature is off are not offered.
 pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     // Apply before anything reads the theme.
     state.apply_if_changed(ui.ctx());
@@ -339,7 +360,7 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     }
     let t = Theme::current(ui.ctx());
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(t.palette.background))
+        .frame(egui::Frame::new().fill(t.palette().background))
         .show_inside(ui, |ui| {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
@@ -412,7 +433,7 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
     egui::Panel::top("gallery_preset_bar")
         .frame(
             egui::Frame::new()
-                .fill(t.palette.background)
+                .fill(t.palette().background)
                 .inner_margin(egui::Margin::symmetric(32, 16)),
         )
         .show_inside(ui, |ui| {
@@ -434,13 +455,17 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
                         state.apply_code();
                     }
                     ui.add_space(16.0);
-                    let mut dark = usize::from(state.mode == Mode::Dark);
+                    let mut dark = usize::from(state.mode == egui::Theme::Dark);
                     if ui.add(Tabs::new(&mut dark, &["Light", "Dark"])).changed() {
-                        state.mode = if dark == 1 { Mode::Dark } else { Mode::Light };
+                        state.mode = if dark == 1 {
+                            egui::Theme::Dark
+                        } else {
+                            egui::Theme::Light
+                        };
                     }
                 });
                 if let Some(err) = &state.code_error {
-                    ui.label(egui::RichText::new(err).color(t.palette.destructive));
+                    ui.label(egui::RichText::new(err).color(t.palette().destructive));
                 }
                 preset_selects(ui, &mut state.preset);
             });
@@ -626,13 +651,17 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
         ui.columns_const(|[left, right]| {
             layout::vstack(left, 24.0, |ui| {
                 buttons_group(ui);
+                badges_group(ui);
                 icons_group(ui);
+                kbd_gallery(ui);
                 overlays_group(ui, state);
+                progress_group(ui, state);
             });
             layout::vstack(right, 24.0, |ui| {
                 inputs_group(ui, state);
+                textarea_group(ui, state);
                 controls_group(ui, state);
-                badges_group(ui);
+                alerts_group(ui);
                 tabs_group(ui, state);
             });
         });
@@ -685,11 +714,83 @@ fn badges_group(ui: &mut egui::Ui) {
     });
 }
 
+fn alerts_group(ui: &mut egui::Ui) {
+    use crate::icons::lucide;
+    group(
+        ui,
+        "Alert",
+        "Default with an icon, destructive, and one with an action.",
+        |ui| {
+            layout::vstack(ui, 16.0, |ui| {
+                ui.add(
+                    Alert::new()
+                        .icon(lucide::CIRCLE_CHECK)
+                        .title("Payment successful")
+                        .description(
+                            "Your payment of $29.99 has been processed. A receipt has been \
+                             sent to your email address.",
+                        ),
+                );
+                ui.add(
+                    Alert::new()
+                        .variant(AlertVariant::Destructive)
+                        .icon(lucide::CIRCLE_ALERT)
+                        .title("Payment failed")
+                        .description(
+                            "Your payment could not be processed. Please check your payment \
+                             method and try again.",
+                        ),
+                );
+                Alert::new()
+                    .title("Dark mode is now available")
+                    .description("Enable it under your profile settings to get started.")
+                    .show(ui, |ui| {
+                        alert_action(ui, |ui| {
+                            let _ = ui.add(Button::new("Enable").size(ButtonSize::Xs));
+                        });
+                    });
+            });
+        },
+    );
+}
+
+fn kbd_gallery(ui: &mut egui::Ui) {
+    let icons = Theme::current(ui.ctx()).icons;
+    group(ui, "Kbd", "Key chips and groups.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            KbdGroup::new().show(ui, |ui| {
+                for k in ["⌘", "⇧", "⌥", "⌃"] {
+                    kbd(ui, k);
+                }
+            });
+            KbdGroup::new().show(ui, |ui| {
+                kbd(ui, "Ctrl");
+                TextLook::resolve(ui, &[], State::NONE).label(ui, "+", egui::TextWrapMode::Extend);
+                kbd(ui, "B");
+            });
+            ui.horizontal_wrapped(|ui| {
+                description(ui, "Use");
+                KbdGroup::new().show(ui, |ui| {
+                    kbd(ui, "Ctrl + B");
+                    kbd(ui, "Ctrl + K");
+                });
+                description(ui, "to open the command palette");
+            });
+            ui.add(Kbd::icon_only(icons.check, "Enter"));
+        });
+    });
+}
+
 fn icons_group(ui: &mut egui::Ui) {
     let t = Theme::current(ui.ctx());
     let slots = [
         ("check", &t.icons.check),
-        ("chevron_down", &t.icons.chevron_down),
+        ("select_trigger", &t.icons.select_trigger),
+        ("chevron_down_plain", &t.icons.chevron_down_plain),
+        ("chevron_up", &t.icons.chevron_up),
+        ("chevron_left", &t.icons.chevron_left),
+        ("chevron_right", &t.icons.chevron_right),
+        ("more_horizontal", &t.icons.more_horizontal),
         ("close", &t.icons.close),
     ];
     group(
@@ -734,6 +835,39 @@ fn inputs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
     );
 }
 
+/// shadcn-svelte's textarea-demo and textarea-button, and the field's
+/// disabled and invalid states.
+fn textarea_group(ui: &mut egui::Ui, state: &mut GalleryState) {
+    const HINT: &str = "Type your message here.";
+    group(
+        ui,
+        "Textarea",
+        "Multi-line text that grows with its content; disabled; invalid.",
+        |ui| {
+            layout::vstack(ui, 8.0, |ui| {
+                ui.add(
+                    Textarea::new(&mut state.message)
+                        .hint_text(HINT)
+                        .desired_width(f32::INFINITY),
+                );
+                let _ = ui.add(Button::new("Send message"));
+            });
+            ui.add_enabled(
+                false,
+                Textarea::new(&mut String::new())
+                    .hint_text(HINT)
+                    .desired_width(f32::INFINITY),
+            );
+            ui.add(
+                Textarea::new(&mut state.message_invalid)
+                    .hint_text(HINT)
+                    .invalid(true)
+                    .desired_width(f32::INFINITY),
+            );
+        },
+    );
+}
+
 fn controls_group(ui: &mut egui::Ui, state: &mut GalleryState) {
     group(
         ui,
@@ -754,6 +888,40 @@ fn controls_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                     )
                     .placeholder("Select a region"),
                 )
+            });
+        },
+    );
+}
+
+/// shadcn-svelte's `progress-demo` (13, then 66 after 500 ms, at 60 % of
+/// the width) and `progress-controlled` (a slider drives the value).
+fn progress_group(ui: &mut egui::Ui, state: &mut GalleryState) {
+    group(
+        ui,
+        "Progress",
+        "A value that moves, and one a slider sets.",
+        |ui| {
+            let now = ui.input(|i| i.time);
+            let since = now - *state.progress_shown.get_or_insert(now);
+            let value = if since < 0.5 {
+                ui.ctx().request_repaint_after_secs((0.5 - since) as f32);
+                13.0
+            } else {
+                66.0
+            };
+            let width = ui.available_width() * 0.6;
+            ui.add(Progress::from_value(value, 100.0).desired_width(width));
+            // progress-controlled: `flex w-full max-w-sm flex-col gap-4`.
+            ui.scope(|ui| {
+                ui.set_max_width(384.0);
+                layout::vstack(ui, 16.0, |ui| {
+                    ui.add(Progress::from_value(state.progress, 100.0));
+                    ui.add(
+                        Slider::new(&mut state.progress, 0.0..=100.0)
+                            .step(1.0)
+                            .label("Progress"),
+                    )
+                });
             });
         },
     );
@@ -813,11 +981,10 @@ fn overlays_group(ui: &mut egui::Ui, state: &mut GalleryState) {
         .description("Make changes to your profile here. Click save when you are done.")
         .show(ui.ctx(), &mut state.dialog_open, |ui| {
             dialog::footer(ui, |ui| {
-                // The row runs right to left: the primary action first.
-                close |= ui.add(Button::new("Save changes")).clicked();
                 close |= ui
                     .add(Button::new("Cancel").variant(ButtonVariant::Outline))
                     .clicked();
+                close |= ui.add(Button::new("Save changes")).clicked();
             });
         });
     if close {

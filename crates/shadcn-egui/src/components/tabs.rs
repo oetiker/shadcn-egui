@@ -1,28 +1,106 @@
 //! shadcn Tabs, ported from shadcn-svelte `ui/tabs/*.svelte` at
 //! `tools/stylegen/PIN`. Every value comes from the style's `cn-tabs-list`,
 //! `cn-tabs-list-variant-*`, `cn-tabs-trigger` recipes and the trigger's
-//! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a click selects,
+//! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a press focuses and selects,
 //! Left/Right move the selection (and wrap), Home/End jump to the first/last
 //! tab (automatic activation). The list is one Tab stop, on the selected
 //! trigger (roving focus).
 
+use crate::color::Tone;
 use crate::components::shared::{
-    box_shapes, interaction_state, line_box, ring_shape, style_painter, ui_opacity,
+    interaction_state, line_width, part_painter, pressable, transitioned_opacity,
+    transitioned_text, ActivationKeys, RecipeBox,
 };
-use crate::style::{pick, Paint, Prop, Recipe, Role, State, TextSize, Weight};
-use crate::theme::family_for;
-use crate::Theme;
-use egui::{pos2, vec2, Color32, Key, Modifiers, Rect, Response, Sense, Shape, Stroke, Ui, Widget};
+use crate::components::text::TextLook;
+use crate::style::app::Sealed;
+use crate::style::{
+    pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
+};
+use crate::{layout, Theme};
+use egui::{pos2, vec2, Key, Modifiers, Rect, Response, Sense, TextWrapMode, Ui, Widget};
 
-/// shadcn `TabsList` `variant`.
+/// shadcn `TabsList` `variant`, or an app variant ([`TabsVariant::app`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TabsVariant {
     /// A muted track with the active trigger as a raised pill.
     #[default]
     Default,
     /// No track; the active trigger gets an underline.
     Line,
+    /// An app variant: [`TabsVariant::app`].
+    #[doc(hidden)]
+    App(AppVariant<TabsVariant>),
 }
+
+impl TabsVariant {
+    /// An app variant, defined in the theme ([`Theme::variant`]).
+    pub const fn app(name: &'static str) -> AppVariant<TabsVariant> {
+        AppVariant::new(name)
+    }
+
+    /// The list's variant layer (`cn-tabs-list-variant-*`) of a built-in
+    /// variant.
+    fn layer(self, s: &Style) -> &Recipe {
+        match self {
+            TabsVariant::Default | TabsVariant::App(_) => &s.tabs_list_variant_default,
+            TabsVariant::Line => &s.tabs_list_variant_line,
+        }
+    }
+}
+
+impl From<AppVariant<TabsVariant>> for TabsVariant {
+    fn from(app: AppVariant<TabsVariant>) -> Self {
+        TabsVariant::App(app)
+    }
+}
+
+/// The tabs' recipes an app variant's edit changes: copies of the base's.
+/// The trigger and its line take their look from the base's state bits
+/// (`group-data-[variant=line]/tabs-list`), so they are copies of the
+/// part recipes.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct TabsRecipes {
+    /// `data-slot="tabs-list"`: the variant's layer.
+    pub tabs_list: Recipe,
+    /// `data-slot="tabs-trigger"`.
+    pub tabs_trigger: Recipe,
+    /// The trigger's `::after`: the line under the active tab.
+    pub tabs_trigger_after: Recipe,
+}
+
+impl Sealed for TabsVariant {}
+impl AppEnum for TabsVariant {
+    type Recipes = TabsRecipes;
+    fn app_name(self) -> Option<&'static str> {
+        match self {
+            TabsVariant::App(a) => Some(a.name()),
+            _ => None,
+        }
+    }
+    fn parts(r: &mut TabsRecipes) -> Vec<&mut crate::style::Recipe> {
+        vec![
+            &mut r.tabs_list,
+            &mut r.tabs_trigger,
+            &mut r.tabs_trigger_after,
+        ]
+    }
+    fn recipes(self, style: &Style) -> TabsRecipes {
+        TabsRecipes {
+            tabs_list: self.layer(style).clone(),
+            tabs_trigger: (*style.tabs_trigger).clone(),
+            tabs_trigger_after: (*style.tabs_trigger_after).clone(),
+        }
+    }
+    fn bits(self) -> State {
+        match self {
+            TabsVariant::Line => State::VARIANT_LINE,
+            _ => State::VARIANT_DEFAULT,
+        }
+    }
+}
+impl VariantEnum for TabsVariant {}
 
 /// shadcn `Tabs` `orientation`. The crate offers `Horizontal` only: a vertical
 /// list needs a content layout beside the list that the crate does not have.
@@ -59,8 +137,9 @@ impl<'a> Tabs<'a> {
             width: None,
         }
     }
-    pub fn variant(mut self, v: TabsVariant) -> Self {
-        self.variant = v;
+    /// shadcn `TabsList` `variant`, or an app variant ([`TabsVariant::app`]).
+    pub fn variant(mut self, v: impl Into<TabsVariant>) -> Self {
+        self.variant = v.into();
         self
     }
     pub fn orientation(mut self, o: TabsOrientation) -> Self {
@@ -87,7 +166,11 @@ impl<'a> Tabs<'a> {
     /// The gap between the list and the content below it (shadcn `Tabs` root `gap`).
     pub fn content_gap(ui: &Ui) -> f32 {
         let t = Theme::current(ui.ctx());
-        pick(&[&*t.style.tabs], |r| &r.gap, t.state(State::NONE)).unwrap_or(0.0)
+        pick_len(
+            &[&*t.style.tabs],
+            |r| &r.gap,
+            t.state(ui.ctx(), State::NONE),
+        )
     }
 }
 
@@ -96,19 +179,20 @@ impl Widget for Tabs<'_> {
         let t = Theme::current(ui.ctx());
         let s = &t.style;
         let enabled = self.enabled && ui.is_enabled();
-        let (variant_bit, variant_layer) = match self.variant {
-            TabsVariant::Default => (State::VARIANT_DEFAULT, &*s.tabs_list_variant_default),
-            TabsVariant::Line => (State::VARIANT_LINE, &*s.tabs_list_variant_line),
-        };
+        let v = t.resolve(self.variant);
+        let variant_bit = v.bits();
         let TabsOrientation::Horizontal = self.orientation;
         let root = [&*s.tabs];
-        let list = [&*s.tabs_list, variant_layer];
-        let trigger = [&*s.tabs_trigger];
-        let after = [&*s.tabs_trigger_after];
+        let list = [
+            &*s.tabs_list,
+            v.part(s, |b, s| b.layer(s), |r| &r.tabs_list),
+        ];
+        let trigger = [v.part(s, |_, s| &s.tabs_trigger, |r| &r.tabs_trigger)];
+        let after = [v.part(s, |_, s| &s.tabs_trigger_after, |r| &r.tabs_trigger_after)];
 
         // Geometry depends neither on the selection nor on interaction.
-        let g = t.state(State::HORIZONTAL.or(variant_bit));
-        let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, g).unwrap_or(0.0);
+        let g = t.state(ui.ctx(), State::HORIZONTAL.or(variant_bit));
+        let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, g);
         let (pad_t, pad_r, pad_b, pad_l) = (
             geo(&list, |r| &r.pad_top),
             geo(&list, |r| &r.pad_right),
@@ -118,27 +202,24 @@ impl Widget for Tabs<'_> {
         let (tpad_l, tpad_r, border_w) = (
             geo(&trigger, |r| &r.pad_left),
             geo(&trigger, |r| &r.pad_right),
-            geo(&trigger, |r| &r.border_width),
+            line_width(
+                geo(&trigger, |r| &r.border_width),
+                ui.ctx().pixels_per_point(),
+            ),
         );
         let gap = geo(&list, |r| &r.gap);
-        let text_size = pick(&trigger, |r| &r.text_size, g).unwrap_or(TextSize::Sm);
-        let text_px = t.text_px(text_size);
-        let weight = pick(&trigger, |r| &r.weight, g).unwrap_or(Weight::Normal);
-        let font = egui::FontId::new(text_px, family_for(ui.ctx(), weight));
-        let painter = ui.painter().clone();
         // The text colour depends on the state: lay out in egui's placeholder
         // colour, paint in the final one.
+        let look = TextLook::resolve(ui, &trigger, g);
         let galleys: Vec<_> = self
             .labels
             .iter()
-            .map(|l| painter.layout_no_wrap(l.clone(), font.clone(), Color32::PLACEHOLDER))
+            .map(|l| look.layout(ui, l.as_str(), TextWrapMode::Extend, f32::INFINITY))
             .collect();
         // No list height: CSS's initial `auto`, the triggers' own height,
         // which `h-[calc(100%-1px)]` of an `auto` parent leaves at `auto` too.
-        let trigger_auto = galleys
-            .iter()
-            .map(|g| g.size().y)
-            .fold(line_box(&t, &trigger, g, text_size), f32::max)
+        // A trigger's content is its line box.
+        let trigger_auto = look.line_height()
             + geo(&trigger, |r| &r.pad_top)
             + geo(&trigger, |r| &r.pad_bottom)
             + border_w * 2.0;
@@ -154,13 +235,15 @@ impl Widget for Tabs<'_> {
         let chrome = gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
         let hug_w = widths.iter().sum::<f32>() + chrome;
         // A NaN width, one below the triggers' own, or an unbounded `Ui`
-        // leaves the list as wide as its triggers. NaN is filtered before
-        // the cap: `f32::NAN.min(x)` is `x`.
-        let list_w = match self.width.filter(|w| *w > hug_w) {
-            Some(w) if w.min(ui.available_width()).is_finite() => {
-                w.min(ui.available_width()).max(hug_w)
+        // leaves the list as wide as its triggers. Without a width, a
+        // justified layout gives the list its width, as egui's `Button`
+        // takes it (conformance 3.1), and the triggers share it (`flex-1`).
+        let list_w = match self.width {
+            Some(w) => layout::capped_width(ui, w, hug_w),
+            None if ui.layout().horizontal_justify() => {
+                layout::capped_width(ui, f32::INFINITY, hug_w)
             }
-            _ => hug_w,
+            None => hug_w,
         };
         let widths = if list_w > hug_w {
             flex_shares(&widths, list_w - chrome)
@@ -168,7 +251,10 @@ impl Widget for Tabs<'_> {
             widths
         };
 
-        let (list_rect, mut resp) = ui.allocate_exact_size(vec2(list_w, list_h), Sense::hover());
+        // Wider than its room, the list overflows as `w-fit` does in the
+        // browser: the column keeps its width.
+        let (list_rect, mut resp) =
+            layout::allocate_overflowing(ui, vec2(list_w, list_h), Sense::hover());
         let ids: Vec<egui::Id> = (0..n).map(|i| resp.id.with(("tab", i))).collect();
         let mut x = list_rect.left() + pad_l;
         let trigger_rects: Vec<Rect> = widths
@@ -197,18 +283,20 @@ impl Widget for Tabs<'_> {
                 } else {
                     Sense::CLICK
                 };
-                ui.interact(*r, *id, sense)
+                let mut resp = ui.interact(*r, *id, sense);
+                pressable(&mut resp, ActivationKeys::EnterAndSpace);
+                resp
             })
             .collect();
 
-        // Selection: a click, or the arrow/Home/End keys on a focused trigger.
-        // Only a key moves the focus along: focus is what shows the ring,
-        // and a click must not show it.
+        // Selection: a click, focus (bits' automatic activation, so a press
+        // selects as it focuses), or the arrow/Home/End keys on a focused
+        // trigger, which move the focus along.
         let mut next = None;
         let mut by_key = false;
         if enabled {
             for (i, r) in resps.iter().enumerate() {
-                if r.clicked() {
+                if r.clicked() || r.gained_focus() {
                     next = Some(i);
                 }
                 if r.has_focus() {
@@ -265,62 +353,37 @@ impl Widget for Tabs<'_> {
             });
         }
         if ui.is_rect_visible(list_rect.expand(reach)) {
-            let list_radius = pick(&list, |r| &r.radius, g)
-                .map_or(0.0, |r| t.radius_px(r, list_rect.height() / 2.0));
-            let track = pick(&list, |r| &r.bg, g).map(|p| t.paint(p));
             // The list sits in the tabs root; a trigger in the list.
-            style_painter(ui, &[&list[..], &root[..]], g).extend(box_shapes(
+            RecipeBox::resolve(ui.ctx(), &t, &list, g).paint(
+                &part_painter(ui, resp.id.with("list"), &[&list[..], &root[..]], g),
                 list_rect,
-                list_radius,
-                track,
-                None,
-                false,
-            ));
+            );
             let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground where neither trigger nor list sets a colour
-            let list_text = pick(&list, |r| &r.text, g).map(|p| t.paint(p));
+            let list_text = pick(&list, |r| &r.text, g).map(|p| t.tone(p));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
                 let context = State::HORIZONTAL
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
-                let st = interaction_state(&t, r, enabled, context);
-                let painter = style_painter(ui, &[&trigger[..], &list[..], &root[..]], st);
-                let paint = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
-                    pick(l, f, st).map(|p| t.paint(p))
+                let st = interaction_state(&t, r, context.with(State::DISABLED, !enabled));
+                let painter = part_painter(ui, r.id, &[&trigger[..], &list[..], &root[..]], st);
+                let tone = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
+                    pick(l, f, st).map(|p| t.tone(p))
                 };
-                let px =
-                    |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, st).unwrap_or(0.0);
+                let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, st);
 
-                let fg = paint(&trigger, |r| &r.text)
+                let fg = tone(&trigger, |r| &r.text)
                     .or(list_text)
-                    .unwrap_or(inherited);
-                let radius = pick(&trigger, |r| &r.radius, st)
-                    .map_or(0.0, |r| t.radius_px(r, rect.height() / 2.0));
-                if let Some(level) = pick(&trigger, |r| &r.shadow, st) {
-                    painter.add(t.shadow(level).as_shape(*rect, radius));
-                }
-                let stroke = paint(&trigger, |r| &r.border_color).map(|b| Stroke::new(border_w, b));
-                let mut shapes =
-                    box_shapes(*rect, radius, paint(&trigger, |r| &r.bg), stroke, false);
-                if let Some(c) = paint(&trigger, |r| &r.ring_color) {
-                    shapes.extend(ring_shape(
-                        *rect,
-                        radius,
-                        px(&trigger, |r| &r.ring_width),
-                        c,
-                    ));
-                }
-                if let Some(c) = paint(&trigger, |r| &r.outline_color) {
-                    shapes.extend(ring_shape(
-                        *rect,
-                        radius,
-                        px(&trigger, |r| &r.outline_width),
-                        c,
-                    ));
-                }
+                    .unwrap_or(Tone::of(inherited));
+                let fg = transitioned_text(ui.ctx(), r.id, fg, &trigger, st);
+                let mut shapes = RecipeBox::resolve(ui.ctx(), &t, &trigger, st)
+                    .transitioned(ui.ctx(), r.id, &trigger, st)
+                    .shapes_at(ui.ctx(), *rect, painter.opacity());
                 // The `after:` line indicator, placed against the padding box.
-                let bar_alpha = ui_opacity(ui, &[&after[..]], st);
-                if let (Some(c), true) = (paint(&after, |r| &r.bg), bar_alpha > 0.0) {
+                // The painter already carries the trigger's chain.
+                let bar_alpha =
+                    transitioned_opacity(ui.ctx(), r.id.with("after"), &[&after[..]], st);
+                if bar_alpha > 0.0 {
                     let inner = rect.shrink(border_w);
                     let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);
                     let bar = Rect::from_min_max(
@@ -330,11 +393,15 @@ impl Widget for Tabs<'_> {
                         ),
                         pos2(inner.right() - px(&after, |r| &r.inset_right), bottom),
                     );
-                    shapes.push(Shape::rect_filled(bar, 0.0, c.gamma_multiply(bar_alpha)));
+                    shapes.extend(
+                        RecipeBox::resolve(ui.ctx(), &t, &after, st)
+                            .faded(bar_alpha)
+                            .shapes_at(ui.ctx(), bar, painter.opacity()),
+                    );
                 }
                 painter.extend(shapes);
-                let galley = galleys[i].clone();
-                painter.galley(rect.center() - galley.size() / 2.0, galley, fg);
+                let galley = &galleys[i];
+                galley.paint(&painter, rect.center() - galley.size() / 2.0, fg);
             }
         }
         resp
@@ -380,4 +447,32 @@ fn flex_shares(content: &[f32], inner: f32) -> Vec<f32> {
 /// Returns true if it changed.
 pub fn tab_bar(ui: &mut Ui, active: &mut usize, labels: &[&str]) -> bool {
     ui.add(Tabs::new(active, labels)).changed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An app variant's edit gets `TabsRecipes`, keeps its base's bits and
+    /// changes only what it names.
+    #[test]
+    fn edit_compiles_and_changes_its_part() {
+        const BRAND_LINE: AppVariant<TabsVariant> = TabsVariant::app("brand-line");
+        let t = Theme::vega().variant(BRAND_LINE, TabsVariant::Line, |r: &mut TabsRecipes, _| {
+            r.tabs_trigger_after
+                .recolor(Role::Foreground, Role::Primary)
+        });
+        let v = t.resolve(TabsVariant::from(BRAND_LINE));
+        assert_eq!(v.bits(), State::VARIANT_LINE);
+        let s = &t.style;
+        let list = v.part(s, |b, s| b.layer(s), |r| &r.tabs_list);
+        assert_eq!(list, &*s.tabs_list_variant_line);
+        let trigger = v.part(s, |_, s| &s.tabs_trigger, |r| &r.tabs_trigger);
+        assert_eq!(trigger, &*s.tabs_trigger);
+        let after = v.part(s, |_, s| &s.tabs_trigger_after, |r| &r.tabs_trigger_after);
+        assert_ne!(after, &*s.tabs_trigger_after);
+        let mut want = (*s.tabs_trigger_after).clone();
+        want.recolor(Role::Foreground, Role::Primary);
+        assert_eq!(after, &want);
+    }
 }

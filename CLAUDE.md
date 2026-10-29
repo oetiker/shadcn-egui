@@ -25,9 +25,9 @@ crates.
 - `web/index.html` — the browser gallery's loading page; the scripts below
   build it into the site and `.github/workflows/pages.yml` deploys it.
 - `scripts/` — `check-package-size.sh`, `check-packages.sh`,
-  `check-version-files.sh`, `build-web-gallery.sh` (builds the browser
-  gallery), `install-wasm-bindgen.sh` (fetches the matching
-  `wasm-bindgen` CLI).
+  `check-publish.sh`, `check-version-files.sh`, `build-web-gallery.sh`
+  (builds the browser gallery), `install-wasm-bindgen.sh` (fetches the
+  matching `wasm-bindgen` CLI).
 - `plugin/` — the Claude Code plugin: `skills/` and
   `.claude-plugin/plugin.json`. The marketplace that installs it is
   `.claude-plugin/marketplace.json` at the root.
@@ -95,7 +95,7 @@ crates.
   scripts/check-version-files.sh
   scripts/check-packages.sh
   scripts/check-package-size.sh
-  cargo publish --dry-run --workspace --jobs 4
+  scripts/check-publish.sh --jobs 4
   ```
 
 - Generators run from the repository root: `stylegen generate|drift
@@ -104,5 +104,9 @@ crates.
   `plugin/skills/port-component/references/upstream.md`. Downloads go to a scratch
   directory, never into the repository.
 - Snapshot tests render headlessly (egui_kittest + wgpu, mesa software
-  adapter). Regenerate baselines with `UPDATE_SNAPSHOTS=1 cargo test`, then
-  look at every changed PNG.
+  adapter). Regenerate baselines by deleting the PNGs a change touches,
+  then `UPDATE_SNAPSHOTS=1 cargo test`; kittest ignores changes on
+  anti-aliased edges, even with `force`. Look at every changed PNG.
+  The harness adds a strict check (no anti-aliasing allowance, small
+  tolerance) after kittest's; snapshot tests go through it, never through
+  kittest's snapshot functions directly (`clippy.toml` forbids them).

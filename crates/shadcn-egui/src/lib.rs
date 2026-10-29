@@ -10,7 +10,7 @@
 //! use shadcn_egui::Theme;
 //!
 //! fn setup(ctx: &egui::Context) {
-//!     Theme::vega_dark().apply(ctx);
+//!     Theme::vega().apply(ctx);
 //! }
 //!
 //! fn ui(ui: &mut egui::Ui) {
@@ -28,6 +28,7 @@
 //! repository (not in the crates.io package) shows every component under
 //! any preset: `cargo run --example gallery --features fonts-all,icons-all`.
 
+mod box_shadow;
 pub mod color;
 pub mod components;
 pub mod fonts;
@@ -40,12 +41,12 @@ pub mod style;
 pub mod theme;
 
 pub use preset::{
-    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Mode, Preset,
-    PresetCodeError, RadiusChoice, StyleName, ThemeColor,
+    BaseColor, FontHeading, FontName, IconLibrary, MenuAccent, MenuColor, Preset, PresetCodeError,
+    RadiusChoice, StyleName, ThemeColor,
 };
 pub use shadcn_egui_core::*;
 pub use style::Style;
-pub use theme::{theme, MenuColors, Metrics, Palette, Theme, ThemeFonts};
+pub use theme::{theme, Metrics, Palette, ShadowLayer, Theme, ThemeFonts};
 
 // The Claude Code skills under plugin/skills/ name this crate's API. Compiling
 // their rust fences as doctests makes an API change fail `cargo test` until

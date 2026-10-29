@@ -6,7 +6,9 @@ use shadcn_egui::components::checkbox::Checkbox;
 use shadcn_egui::components::icon::IconView;
 use shadcn_egui::components::select::Select;
 use shadcn_egui::style::Style;
-use shadcn_egui::{icons, layout, Icon, IconLayer, IconLibrary, Mode, Palette, Preset, Seg, Theme};
+use shadcn_egui::{
+    icons, layout, Icon, IconLayer, IconLibrary, IconSlots, Palette, Preset, Seg, Theme,
+};
 
 /// Every icon of a set decodes to something drawable with in-range indices,
 /// an opaque layer first and translucent ones after it.
@@ -48,7 +50,7 @@ fn fill(icon: &Icon) -> Option<shadcn_egui::FillMesh> {
 #[test]
 fn lucide_is_the_default_icon_set() {
     assert_eq!(
-        Theme::new(Style::vega(), Palette::light(), 10.0).icons,
+        Theme::new(Style::vega(), Palette::light(), Palette::dark(), 10.0).icons,
         icons::lucide::SLOTS
     );
     assert_eq!(
@@ -57,8 +59,17 @@ fn lucide_is_the_default_icon_set() {
     );
     let s = icons::lucide::SLOTS;
     assert_eq!(
-        (s.check.name, s.chevron_down.name, s.close.name),
-        ("check", "chevron-down", "x")
+        slot_names(&s),
+        [
+            "check",
+            "chevron-down",
+            "chevron-down",
+            "chevron-up",
+            "chevron-left",
+            "chevron-right",
+            "more-horizontal",
+            "x"
+        ]
     );
 }
 
@@ -93,22 +104,45 @@ fn every_lucide_icon_decodes() {
     );
 }
 
+/// Every slot of `s`, in declaration order.
+fn slot_icons(s: &IconSlots) -> [&Icon; 8] {
+    [
+        &s.check,
+        &s.select_trigger,
+        &s.chevron_down_plain,
+        &s.chevron_up,
+        &s.chevron_left,
+        &s.chevron_right,
+        &s.more_horizontal,
+        &s.close,
+    ]
+}
+
+/// The icon names of every slot of `s`, in declaration order.
+fn slot_names(s: &IconSlots) -> [&'static str; 8] {
+    slot_icons(s).map(|i| i.name)
+}
+
 /// The slot icons of `lib` as the components draw them, vega light.
 fn slot_snapshot(lib: IconLibrary, name: &str) {
     let theme = Preset::default()
         .style(shadcn_egui::StyleName::Vega)
         .icons(lib)
-        .theme(Mode::Light);
+        .theme();
     let slots = theme.icons;
     common::snapshot_with_themes(
         name,
-        vec2(360.0, 120.0),
-        vec![("vega_light", theme)],
+        vec2(360.0, 160.0),
+        vec![("vega_light", theme, egui::Theme::Light)],
         move |ui| {
             layout::vstack(ui, 12.0, |ui| {
                 layout::row(ui, 16.0, |ui| {
-                    for icon in [&slots.check, &slots.chevron_down, &slots.close] {
+                    for icon in slot_icons(&slots) {
                         ui.add(IconView::new(icon));
+                    }
+                });
+                layout::row(ui, 16.0, |ui| {
+                    for icon in slot_icons(&slots) {
                         ui.add(IconView::new(icon).size(24.0));
                     }
                 });
@@ -143,8 +177,17 @@ fn tabler_set() {
     );
     let s = icons::tabler::SLOTS;
     assert_eq!(
-        (s.check.name, s.chevron_down.name, s.close.name),
-        ("check", "selector", "x")
+        slot_names(&s),
+        [
+            "check",
+            "selector",
+            "chevron-down",
+            "chevron-up",
+            "chevron-left",
+            "chevron-right",
+            "dots",
+            "x"
+        ]
     );
     slot_snapshot(IconLibrary::Tabler, "icon_slots_tabler");
 }
@@ -159,8 +202,17 @@ fn phosphor_set() {
     );
     let s = icons::phosphor::SLOTS;
     assert_eq!(
-        (s.check.name, s.chevron_down.name, s.close.name),
-        ("check", "caret-down", "x")
+        slot_names(&s),
+        [
+            "check",
+            "caret-down",
+            "caret-down",
+            "caret-up",
+            "caret-left",
+            "caret-right",
+            "dots-three",
+            "x"
+        ]
     );
     assert!(
         fill(&s.check).is_some(),
@@ -179,8 +231,17 @@ fn remixicon_set() {
     );
     let s = icons::remixicon::SLOTS;
     assert_eq!(
-        (s.check.name, s.chevron_down.name, s.close.name),
-        ("check-line", "arrow-down-s-line", "close-line")
+        slot_names(&s),
+        [
+            "check-line",
+            "arrow-down-s-line",
+            "arrow-down-s-line",
+            "arrow-up-s-line",
+            "arrow-left-s-line",
+            "arrow-right-s-line",
+            "more-line",
+            "close-line"
+        ]
     );
     assert!(fill(&s.close).is_some(), "Remix Icon is a filled outline");
     slot_snapshot(IconLibrary::Remixicon, "icon_slots_remixicon");
@@ -196,8 +257,17 @@ fn hugeicons_set() {
     );
     let s = icons::hugeicons::SLOTS;
     assert_eq!(
-        (s.check.name, s.chevron_down.name, s.close.name),
-        ("tick-02", "unfold-more", "cancel-01")
+        slot_names(&s),
+        [
+            "tick-02",
+            "unfold-more",
+            "arrow-down-01",
+            "arrow-up-01",
+            "arrow-left-01",
+            "arrow-right-01",
+            "more-horizontal-circle-01",
+            "cancel-01"
+        ]
     );
     slot_snapshot(IconLibrary::Hugeicons, "icon_slots_hugeicons");
 }
@@ -227,11 +297,11 @@ fn hugeicons_faded_layers() {
     let theme = Preset::default()
         .style(shadcn_egui::StyleName::Vega)
         .icons(IconLibrary::Hugeicons)
-        .theme(Mode::Light);
+        .theme();
     common::snapshot_with_themes(
         "icon_hugeicons_faded",
         vec2(240.0, 64.0),
-        vec![("vega_light", theme)],
+        vec![("vega_light", theme, egui::Theme::Light)],
         move |ui| {
             layout::row(ui, 16.0, |ui| {
                 ui.add(IconView::new(&HAMBURGER_01).size(48.0));

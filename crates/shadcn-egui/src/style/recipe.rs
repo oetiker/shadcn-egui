@@ -10,9 +10,12 @@
 use std::ops::BitOr;
 
 /// State and context flags. A component builds one per paint; the theme adds
-/// [`State::DARK`]. Each flag stands for the Tailwind variants listed.
+/// [`State::DARK`]. Each flag stands for the Tailwind variants listed, and
+/// means the upstream attribute it stands for. Combine flags with `|` or
+/// [`State::or`]; the bit layout is private, so flags can be added without a
+/// break.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct State(pub u32);
+pub struct State(u128);
 
 impl State {
     pub const NONE: State = State(0);
@@ -34,7 +37,7 @@ impl State {
     pub const CHECKED: State = State(1 << 7);
     /// `data-unchecked:`, `data-[state=unchecked]:`
     pub const UNCHECKED: State = State(1 << 8);
-    /// `aria-expanded:`
+    /// `aria-expanded:`, `data-open:`
     pub const EXPANDED: State = State(1 << 9);
     /// `aria-[haspopup]:` (used negated: `not-aria-[haspopup]:`)
     pub const HAS_POPUP: State = State(1 << 10);
@@ -62,9 +65,70 @@ impl State {
     pub const VARIANT_DEFAULT: State = State(1 << 24);
     /// `has-data-[slot=card-footer]:`
     pub const HAS_FOOTER: State = State(1 << 25);
+    /// `data-[size=lg]:`, `group-data-[size=lg]/…:`
+    pub const SIZE_LG: State = State(1 << 26);
+    /// A group's first child (`:first-child`; button-group corners).
+    pub const FIRST: State = State(1 << 27);
+    /// A group's last child (`:last-child`, the last `[data-slot]` child).
+    pub const LAST: State = State(1 << 28);
+    /// A group child that is not the first (`:not(:first-child)`).
+    pub const NOT_FIRST: State = State(1 << 29);
+    /// A group child that is not the last (`:not(:last-child)`).
+    pub const NOT_LAST: State = State(1 << 30);
+    /// `sm:` (the window is at least 640 px wide; `Theme::state` sets it)
+    pub const SM: State = State(1 << 31);
+    /// `md:` (the window is at least 768 px wide)
+    pub const MD: State = State(1 << 32);
+    /// `data-[side=top]:` (the panel sits above its trigger)
+    pub const SIDE_TOP: State = State(1 << 33);
+    /// `data-[side=right]:`
+    pub const SIDE_RIGHT: State = State(1 << 34);
+    /// `data-[side=bottom]:`
+    pub const SIDE_BOTTOM: State = State(1 << 35);
+    /// `data-[side=left]:`
+    pub const SIDE_LEFT: State = State(1 << 36);
+    /// `has-[>svg]:`, `group-has-[>svg]/…:` (the part shows an icon)
+    pub const HAS_ICON: State = State(1 << 37);
+    /// `has-data-[slot=alert-action]:`
+    pub const HAS_ACTION: State = State(1 << 38);
+    /// `has-data-[slot=alert-dialog-media]:`, `group-has-data-[slot=alert-dialog-media]/…:`
+    pub const HAS_MEDIA: State = State(1 << 39);
+    /// `has-data-[slot=kbd]:`
+    pub const HAS_KBD: State = State(1 << 40);
+    /// `has-[>[data-slot=button-group]]:` (a nested button group)
+    pub const HAS_BUTTON_GROUP: State = State(1 << 41);
+    /// `has-[>[data-variant=outline]]:` (a child with the outline variant)
+    pub const HAS_OUTLINE: State = State(1 << 42);
+    /// `in-data-[slot=tooltip-content]:`, and a tooltip's `**:data-[slot=kbd]:`
+    pub const IN_TOOLTIP_CONTENT: State = State(1 << 43);
+    /// An avatar in an avatar group (the group's `*:data-[slot=avatar]:`)
+    pub const IN_AVATAR_GROUP: State = State(1 << 44);
+    /// A part of the destructive variant (`cn-alert-variant-destructive`'s
+    /// `*:data-[slot=alert-description]:`)
+    pub const VARIANT_DESTRUCTIVE: State = State(1 << 45);
+    /// `group-has-data-[size=lg]/…:` (the group holds a large child)
+    pub const HAS_SIZE_LG: State = State(1 << 46);
+    /// `group-has-data-[size=sm]/…:` (the group holds a small child)
+    pub const HAS_SIZE_SM: State = State(1 << 47);
+    /// `data-closed:` (bits' closed panel; `data-open:` is [`State::EXPANDED`])
+    pub const CLOSED: State = State(1 << 48);
+    /// `data-[state=delayed-open]:` (a tooltip opened after its delay)
+    pub const DELAYED_OPEN: State = State(1 << 49);
+    /// A child of a group whose `data-orientation` is horizontal
+    /// (`cn-button-group-orientation-horizontal`'s `[&>*]` rules), apart
+    /// from the child's own orientation ([`State::HORIZONTAL`])
+    pub const IN_GROUP_HORIZONTAL: State = State(1 << 50);
+    /// A child of a group whose `data-orientation` is vertical
+    /// (`cn-button-group-orientation-vertical`'s `[&>*]` rules), apart from
+    /// the child's own orientation ([`State::VERTICAL`])
+    pub const IN_GROUP_VERTICAL: State = State(1 << 51);
 
     pub const fn or(self, other: State) -> State {
         State(self.0 | other.0)
+    }
+    /// `self` without the flags in `other`.
+    pub const fn without(self, other: State) -> State {
+        State(self.0 & !other.0)
     }
     pub const fn with(self, flag: State, on: bool) -> State {
         if on {
@@ -121,17 +185,23 @@ impl When {
 /// specificity, one `1 << 122` each (bits 122 to 125); bit 121, a half
 /// step, which `[&_svg:not([class*='size-'])]:` adds where `[&>svg]:` adds
 /// nothing (more specific, but it loses a tie of equal specificity to
-/// `[&>svg]:`); and below that the Tailwind v4 variant-order bitmask, one
-/// bit per distinct variant, which decides between equal ranks above.
+/// `[&>svg]:`), and which an element selector adds (`has-[>svg]:` is
+/// `&:has(> svg)`, (0,0,1): above the same class count without it, below
+/// one class more); and below that the Tailwind v4 variant-order bitmask,
+/// one bit per distinct variant, which decides between equal ranks above.
 ///
 /// To rank an app's rule like a generated one, OR the variant bits taken
 /// from a generated rule with the same variants, then add `1 << 122` per
 /// state variant (`hover:`, `dark:`, `data-*:`, `aria-*:`, `group-*:`,
 /// `peer-*:`, `has-*:`, `not-*:`), `1 << 121` for
-/// `[&_svg:not([class*='size-'])]:`, nothing for `sm:`, `md:`,
-/// `supports-*:` and `in-*:` (their variant bits still count), and
-/// `1 << 126` for `placeholder:`. `after:` and `[&>svg]:` add nothing at
-/// all: no specificity and no variant bit.
+/// `[&_svg:not([class*='size-'])]:` and for an element selector
+/// (`has-[>svg]:`), nothing for `sm:`, `md:`, `supports-*:` and `in-*:`
+/// (their variant bits still count), and `1 << 126` for `placeholder:`.
+/// `after:` and `[&>svg]:` add nothing at all: no specificity and no
+/// variant bit. A rule a parent gives its children (`*:`, `[&>*:not(..)]:`)
+/// sits in the child's recipe under the parent's context flags and ranks
+/// with its whole selector: the child's `data-slot` or position
+/// pseudo-class adds its class step, and the target adds no variant bit.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rule<T> {
     pub when: When,
@@ -154,7 +224,7 @@ impl<T> Rule<T> {
     /// ```
     /// use std::sync::Arc;
     /// use shadcn_egui::style::{pick, Paint, Role, Rule, State, When};
-    /// let mut theme = shadcn_egui::Theme::vega_light();
+    /// let mut theme = shadcn_egui::Theme::vega();
     /// let style = Arc::make_mut(&mut theme.style);
     /// let primary = Paint::Role(Role::Primary, 1.0);
     /// let selected_hover = State::SELECTED | State::HOVER;
@@ -222,6 +292,67 @@ impl<T: Copy> Prop<T> {
     pub fn get(&self, s: State) -> Option<T> {
         pick_props([self], s)
     }
+
+    /// Replace the unconditional value where this property keeps it, in
+    /// `base` or in [`When::ALWAYS`] rules, and keep the state rules, as a
+    /// class without variants does in a class list.
+    pub fn set(&mut self, value: T) {
+        let mut always = false;
+        for r in self.rules.iter_mut().filter(|r| r.when == When::ALWAYS) {
+            r.value = value;
+            always = true;
+        }
+        if !always || self.base.is_some() {
+            self.base = Some(value);
+        }
+    }
+
+    /// Replace the rules whose condition is exactly `state` with one rule
+    /// of that state's rank, as tailwind-merge merges `hover:` classes. A
+    /// rule of more states (`dark:hover:`) stays and still beats it where
+    /// it matches.
+    pub fn on(&mut self, state: State, value: T) {
+        debug_assert!(
+            state != State::NONE,
+            "Prop::on(State::NONE, ..): use Prop::set"
+        );
+        let when = When::all(state);
+        let same = self
+            .rules
+            .iter()
+            .filter(|r| r.when == when)
+            .map(|r| r.rank)
+            .max();
+        self.rules.retain(|r| r.when != when);
+        self.rules.push(Rule {
+            when,
+            rank: same.unwrap_or_else(|| state_rank(state)),
+            value,
+        });
+    }
+}
+
+/// The rank of a rule under `state` that no generated rule of the property
+/// gives: the rank a generated class with each flag's own variant has
+/// (`STATE_RANKS`, from `tools/stylegen`), so it orders against generated
+/// rules of other states as upstream's classes do (`aria-expanded:` after
+/// `hover:`). The class steps add up, the variant bits combine. A flag
+/// without a variant of its own counts as one class.
+fn state_rank(state: State) -> u128 {
+    const R_CLASSES: u32 = 121;
+    const VARIANT_BITS: u128 = (1 << R_CLASSES) - 1;
+    const PSEUDO_ELEMENT: u128 = 1 << 126;
+    let (mut bits, mut steps, mut rest) = (0, 0, state);
+    for (flag, rank) in super::generated::STATE_RANKS {
+        if state.contains(flag) {
+            bits |= rank & (VARIANT_BITS | PSEUDO_ELEMENT);
+            steps += (rank >> R_CLASSES) & 0x1f;
+            rest = rest.without(flag);
+        }
+    }
+    // One class is two steps.
+    steps += 2 * u128::from(rest.0.count_ones());
+    bits | steps << R_CLASSES
 }
 
 /// Resolve one property across stacked recipes, in the order upstream joins
@@ -236,44 +367,75 @@ pub fn pick<T: Copy>(
     pick_props(layers.iter().map(|r| field(r)), s)
 }
 
-/// Like [`pick`], but also the condition of the winning candidate: the
-/// rule's [`When`], or [`When::ALWAYS`] for a base value.
-pub(crate) fn pick_when<T: Copy>(
+/// [`pick`] for a length: 0 where no layer sets it, as an unset CSS
+/// padding, gap or border width is 0.
+pub(crate) fn pick_len(layers: &[&Recipe], field: fn(&Recipe) -> &Prop<f32>, s: State) -> f32 {
+    pick(layers, field, s).unwrap_or(0.0)
+}
+
+/// Like [`pick`], but also the winner's rank and layer, for comparing the
+/// winners of two fields that set one CSS property (a side's `rounded-l-*`
+/// against `rounded-*`).
+pub(crate) fn pick_ranked<T: Copy>(
     layers: &[&Recipe],
     field: impl Fn(&Recipe) -> &Prop<T>,
     s: State,
-) -> Option<(When, T)> {
-    pick_props_when(layers.iter().map(|r| field(r)), s)
+) -> Option<((u128, usize), T)> {
+    pick_props_keyed(layers.iter().map(|r| field(r)), s).map(|((rank, li, _), v)| ((rank, li), v))
+}
+
+/// Like [`pick`], over the candidates that `keep` accepts only: the value
+/// a CSS property takes when only some values of a field declare it (a
+/// named `text-*` declares a line height, `text-[0.8rem]` does not).
+pub(crate) fn pick_where<T: Copy>(
+    layers: &[&Recipe],
+    field: impl Fn(&Recipe) -> &Prop<T>,
+    keep: impl Fn(&T) -> bool,
+    s: State,
+) -> Option<T> {
+    let kept: Vec<Prop<T>> = layers
+        .iter()
+        .map(|r| {
+            let p = field(r);
+            Prop {
+                base: p.base.filter(|v| keep(v)),
+                rules: p.rules.iter().filter(|r| keep(&r.value)).copied().collect(),
+            }
+        })
+        .collect();
+    pick_props(&kept, s)
 }
 
 fn pick_props<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
 ) -> Option<T> {
-    pick_props_when(props, s).map(|(_, v)| v)
+    pick_props_keyed(props, s).map(|(_, v)| v)
 }
 
-fn pick_props_when<'a, T: Copy + 'a>(
+type PickKey = (u128, usize, usize);
+
+fn pick_props_keyed<'a, T: Copy + 'a>(
     props: impl IntoIterator<Item = &'a Prop<T>>,
     s: State,
-) -> Option<(When, T)> {
-    let mut best: Option<((u128, usize, usize), When, T)> = None;
-    let mut consider = |key: (u128, usize, usize), when: When, v: T| {
-        if best.as_ref().is_none_or(|(k, _, _)| key >= *k) {
-            best = Some((key, when, v));
+) -> Option<(PickKey, T)> {
+    let mut best: Option<(PickKey, T)> = None;
+    let mut consider = |key: PickKey, v: T| {
+        if best.as_ref().is_none_or(|(k, _)| key >= *k) {
+            best = Some((key, v));
         }
     };
     for (li, p) in props.into_iter().enumerate() {
         if let Some(v) = p.base {
-            consider((0, li, 0), When::ALWAYS, v);
+            consider((0, li, 0), v);
         }
         for (ri, r) in p.rules.iter().enumerate() {
             if r.when.matches(s) {
-                consider((r.rank, li, ri + 1), r.when, r.value);
+                consider((r.rank, li, ri + 1), r.value);
             }
         }
     }
-    best.map(|(_, when, v)| (when, v))
+    best
 }
 
 /// A palette colour role (shadcn CSS variable), or a fixed colour.
@@ -302,6 +464,33 @@ pub enum Role {
     White,
     Black,
     Transparent,
+    /// An app colour: [`Role::custom`].
+    #[doc(hidden)]
+    Custom(AppColor),
+}
+
+impl Role {
+    /// An app colour, defined as a light and dark pair on the theme
+    /// ([`crate::Theme::color`]). Name it through a constant
+    /// (`const BRAND: Role = Role::custom("brand");`), so a misspelling
+    /// does not compile. A name the theme does not define fails a
+    /// `debug_assert!`; in a release build an app variant's edit that
+    /// uses it is skipped, so the part keeps its base's value there, and
+    /// [`crate::Theme::role`] gives [`Role::Foreground`] for it.
+    pub const fn custom(name: &'static str) -> Role {
+        Role::Custom(AppColor(name))
+    }
+}
+
+/// The name of an app colour; made by [`Role::custom`].
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AppColor(&'static str);
+
+impl AppColor {
+    pub(crate) fn name(self) -> &'static str {
+        self.0
+    }
 }
 
 /// A colour as a style states it.
@@ -367,11 +556,108 @@ pub enum ShadowLevel {
     Xl2,
 }
 
-/// A translation: fixed pixels, or `calc(100% - Npx)` of the part's own size.
+/// A translation: fixed pixels, or a share of the part's own size plus
+/// pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shift {
     Px(f32),
-    SelfMinus(f32),
+    /// `calc(frac × 100% + px)`: `translate-x-1/2` is `Calc(0.5, 0.0)`,
+    /// `translate-y-[calc(100%-2px)]` is `Calc(1.0, -2.0)`.
+    Calc(f32, f32),
+}
+
+/// `text-balance`, `text-pretty`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextWrap {
+    /// Lines of about equal length.
+    Balance,
+    /// No single word alone on the last line.
+    Pretty,
+}
+
+/// `text-left`, `text-center`, `text-right`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
+}
+
+/// `mix-blend-darken`, `mix-blend-lighten`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blend {
+    Darken,
+    Lighten,
+}
+
+/// The properties a `transition-*` class animates, as a set.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Transition(u16);
+
+impl Transition {
+    /// `transition-none`.
+    pub const NONE: Transition = Transition(0);
+    /// `color`.
+    pub const COLOR: Transition = Transition(1 << 0);
+    /// `background-color`.
+    pub const BACKGROUND: Transition = Transition(1 << 1);
+    /// `border-color`.
+    pub const BORDER_COLOR: Transition = Transition(1 << 2);
+    /// `outline-color`.
+    pub const OUTLINE_COLOR: Transition = Transition(1 << 3);
+    /// `opacity`.
+    pub const OPACITY: Transition = Transition(1 << 4);
+    /// `box-shadow` (shadows and rings).
+    pub const SHADOW: Transition = Transition(1 << 5);
+    /// `translate`, `scale`, `rotate`, `transform`.
+    pub const TRANSFORM: Transition = Transition(1 << 6);
+    /// `filter`, `backdrop-filter`.
+    pub const FILTER: Transition = Transition(1 << 7);
+    /// Every other property (size, position): only in [`Transition::ALL`].
+    pub const OTHER: Transition = Transition(1 << 8);
+    /// `transition-colors`.
+    pub const COLORS: Transition = Transition(0b1111);
+    /// `transition-all`.
+    pub const ALL: Transition = Transition(0x1ff);
+
+    pub const fn or(self, other: Transition) -> Transition {
+        Transition(self.0 | other.0)
+    }
+    pub const fn contains(self, other: Transition) -> bool {
+        self.0 & other.0 == other.0
+    }
+    /// Whether the set names any property of `other`: a transition moves
+    /// a colour under `transition-[color,box-shadow]` asked for as
+    /// [`Transition::COLORS`].
+    pub const fn intersects(self, other: Transition) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+impl BitOr for Transition {
+    type Output = Transition;
+    fn bitor(self, o: Transition) -> Transition {
+        self.or(o)
+    }
+}
+
+/// `ease-*`: the timing function of a part's transitions, as Tailwind 4
+/// defines it. A part without one eases as [`Easing::InOut`], Tailwind's
+/// `--default-transition-timing-function`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Easing {
+    /// `ease-linear`.
+    Linear,
+    /// CSS's initial timing function `ease`, `cubic-bezier(0.25, 0.1,
+    /// 0.25, 1)`: the curve of a part with a `duration-*` and no
+    /// `transition-*`. No Tailwind class sets it.
+    Ease,
+    /// `ease-in`: `cubic-bezier(0.4, 0, 1, 1)`.
+    In,
+    /// `ease-out`: `cubic-bezier(0, 0, 0.2, 1)`.
+    Out,
+    /// `ease-in-out`: `cubic-bezier(0.4, 0, 0.2, 1)`.
+    InOut,
 }
 
 /// Everything a style can say about one part. Lengths are logical px.
@@ -395,6 +681,11 @@ pub struct Recipe {
     pub margin_bottom: Prop<f32>,
     pub margin_left: Prop<f32>,
     pub gap: Prop<f32>,
+    /// `gap-x-N`: the gap between columns only.
+    pub gap_x: Prop<f32>,
+    /// `space-x-N`: a margin between neighbouring children (negative overlaps
+    /// them: avatar group `-space-x-2`).
+    pub space_x: Prop<f32>,
     /// `top-N` etc. of an absolutely placed part (dialog close button).
     pub inset_top: Prop<f32>,
     pub inset_right: Prop<f32>,
@@ -402,6 +693,10 @@ pub struct Recipe {
     pub inset_left: Prop<f32>,
     /// `[&_svg:not([class*='size-'])]:size-N` and `[&>svg]:size-N`.
     pub icon_size: Prop<f32>,
+    /// `[&>svg]:translate-y-N`: the icon's vertical nudge.
+    pub icon_shift_y: Prop<Shift>,
+    /// `[&>svg]:hidden`: the part shows no icon.
+    pub icon_hidden: Prop<bool>,
     pub text_size: Prop<TextSize>,
     /// `leading-*` as a multiple of the font size.
     pub line_height: Prop<f32>,
@@ -410,9 +705,20 @@ pub struct Recipe {
     pub weight: Prop<Weight>,
     pub uppercase: Prop<bool>,
     pub underline: Prop<bool>,
+    /// `underline-offset-*` in px: the underline's distance below the
+    /// baseline (`text-underline-offset`).
+    pub underline_offset: Prop<f32>,
+    /// `text-balance`, `text-pretty`: how the part breaks its text.
+    pub text_wrap: Prop<TextWrap>,
+    /// `text-left`, `text-center`, `text-right`: where the part's lines sit.
+    pub text_align: Prop<TextAlign>,
     pub radius: Prop<Radius>,
     pub radius_top: Prop<Radius>,
     pub radius_bottom: Prop<Radius>,
+    /// `rounded-l-*`: the two left corners.
+    pub radius_left: Prop<Radius>,
+    /// `rounded-r-*`: the two right corners.
+    pub radius_right: Prop<Radius>,
     pub bg: Prop<Paint>,
     /// `bg-clip-padding`: the fill stops inside the border, so a transparent
     /// border shows what lies under the part.
@@ -420,6 +726,8 @@ pub struct Recipe {
     pub text: Prop<Paint>,
     pub border_width: Prop<f32>,
     pub border_top_width: Prop<f32>,
+    /// `border-l`, `border-l-N`.
+    pub border_left_width: Prop<f32>,
     pub border_color: Prop<Paint>,
     pub ring_width: Prop<f32>,
     pub ring_color: Prop<Paint>,
@@ -429,6 +737,8 @@ pub struct Recipe {
     pub outline_color: Prop<Paint>,
     pub shadow: Prop<ShadowLevel>,
     pub opacity: Prop<f32>,
+    /// `mix-blend-*`: how the part's paint blends with what lies under it.
+    pub blend: Prop<Blend>,
     pub shift_x: Prop<Shift>,
     /// `active:translate-y-px` is the press nudge.
     pub shift_y: Prop<Shift>,
@@ -437,6 +747,316 @@ pub struct Recipe {
     pub hit_inset_y: Prop<f32>,
     /// `backdrop-blur-*` in px.
     pub backdrop_blur: Prop<f32>,
+    /// `hidden`: the part is not drawn; a display class (`sm:flex`) shows it
+    /// again (`false`).
+    pub hidden: Prop<bool>,
+    /// `aspect-square`: width over height.
+    pub aspect_ratio: Prop<f32>,
+    /// `object-cover`: an image fills the part and is cropped to it.
+    pub object_cover: Prop<bool>,
+    /// `field-sizing-content`: a text area grows with its content.
+    pub field_sizing_content: Prop<bool>,
+    /// `resize-none`: `false`, the user cannot resize the part.
+    pub resizable: Prop<bool>,
+    /// `transition-*`: the properties that animate when they change.
+    pub transition: Prop<Transition>,
+    /// `duration-N` in seconds: of the transition and of the enter and exit
+    /// animation.
+    pub duration: Prop<f32>,
+    /// `ease-*`: the timing function of the transition.
+    pub easing: Prop<Easing>,
+    /// `animate-in`: the part plays its enter animation when it opens.
+    pub animate_in: Prop<bool>,
+    /// `animate-out`: the part plays its exit animation when it closes.
+    pub animate_out: Prop<bool>,
+    /// `fade-in-N`: the opacity the enter animation starts from.
+    pub enter_opacity: Prop<f32>,
+    /// `zoom-in-N`: the scale the enter animation starts from.
+    pub enter_scale: Prop<f32>,
+    /// `slide-in-from-left-N` (negative), `-right-N`: the horizontal offset in px
+    /// the enter animation starts from.
+    pub enter_x: Prop<f32>,
+    /// `slide-in-from-top-N` (negative), `-bottom-N`: the vertical offset in px.
+    pub enter_y: Prop<f32>,
+    /// `fade-out-N`: the opacity the exit animation ends at.
+    pub exit_opacity: Prop<f32>,
+    /// `zoom-out-N`: the scale the exit animation ends at.
+    pub exit_scale: Prop<f32>,
+}
+
+impl Recipe {
+    /// Swap the colour role `from` for `to` in every colour of this part,
+    /// unconditional and under every state, opacity and mix share kept.
+    pub fn recolor(&mut self, from: Role, to: Role) {
+        let swap = |r: &mut Role| {
+            if *r == from {
+                *r = to;
+            }
+        };
+        let paints = [
+            &mut self.bg,
+            &mut self.text,
+            &mut self.border_color,
+            &mut self.ring_color,
+            &mut self.outline_color,
+        ];
+        for p in paints {
+            let rules = p.rules.iter_mut().map(|r| &mut r.value);
+            for v in p.base.iter_mut().chain(rules) {
+                match v {
+                    Paint::Role(r, _) => swap(r),
+                    Paint::Mix(a, b, _) => {
+                        swap(a);
+                        swap(b);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Put `base`'s value back wherever a colour of this part names an app
+    /// colour that `defined` does not know, and return such a name. The
+    /// edit that set it is skipped there: the unconditional value, or the
+    /// rules of that one state, are the base's again (rules, App
+    /// variants); every other change stays.
+    pub(crate) fn skip_undefined(
+        &mut self,
+        base: &Recipe,
+        defined: impl Fn(&str) -> bool,
+    ) -> Option<&'static str> {
+        let undefined = |p: Paint| {
+            let (a, b) = match p {
+                Paint::Role(r, _) => (r, None),
+                Paint::Mix(a, b, _) => (a, Some(b)),
+            };
+            [Some(a), b].into_iter().flatten().find_map(|r| match r {
+                Role::Custom(c) if !defined(c.name()) => Some(c.name()),
+                _ => None,
+            })
+        };
+        let skip = |p: &mut Prop<Paint>, base: &Prop<Paint>| {
+            let mut found = p.base.and_then(undefined);
+            if found.is_some() {
+                p.base = base.base;
+            }
+            let edited = std::mem::take(&mut p.rules);
+            let mut restored: Vec<When> = Vec::new();
+            for r in &edited {
+                let Some(name) = undefined(r.value) else {
+                    p.rules.push(*r);
+                    continue;
+                };
+                found = Some(name);
+                if !restored.contains(&r.when) {
+                    restored.push(r.when);
+                    p.rules.extend(
+                        base.rules
+                            .iter()
+                            .filter(|b| b.when == r.when && !edited.contains(b)),
+                    );
+                }
+            }
+            found
+        };
+        [
+            skip(&mut self.bg, &base.bg),
+            skip(&mut self.text, &base.text),
+            skip(&mut self.border_color, &base.border_color),
+            skip(&mut self.ring_color, &base.ring_color),
+            skip(&mut self.outline_color, &base.outline_color),
+        ]
+        .into_iter()
+        .flatten()
+        .next()
+    }
+
+    /// Make the values this part takes under exactly `state` its
+    /// unconditional ones. The copy an app size of a state-bit size edits
+    /// always draws with its base's bits, so after this its `Prop::set`
+    /// acts as for a size with a layer of its own and `Prop::on` adds rules
+    /// as before (notes §18). Per property, the rule of exactly `state`
+    /// that wins becomes a [`When::ALWAYS`] rule of its rank, and `base`
+    /// and every rule it beats go, as none of them can win while `state`
+    /// holds: the other rules of exactly `state`, and those of any
+    /// condition ranked below it or of its rank earlier in the list. Rules
+    /// that beat it (`data-[size=sm]:hover:` of a higher rank) stay. Its
+    /// rank keeps it above the rules it beat in the other layers of a
+    /// stack too.
+    pub(crate) fn fold_state(&mut self, state: State) {
+        fn fold<T: Copy>(p: &mut Prop<T>, when: When) {
+            // The pick order: the higher rank, on a tie the later rule.
+            let Some((ti, top)) = p
+                .rules
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| r.when == when)
+                .max_by_key(|(i, r)| (r.rank, *i))
+                .map(|(i, r)| (i, *r))
+            else {
+                return;
+            };
+            let beats_top = |i: usize, r: &Rule<T>| (r.rank, i) > (top.rank, ti);
+            // An unconditional rule that beats it wins under `state` too.
+            if p.rules
+                .iter()
+                .enumerate()
+                .any(|(i, r)| r.when == When::ALWAYS && beats_top(i, r))
+            {
+                return;
+            }
+            let mut i = 0;
+            p.rules.retain(|r| {
+                i += 1;
+                beats_top(i - 1, r)
+            });
+            // Ahead of the rules that stay, at its own rank, so it beats in
+            // every stack what it beat before, and `Prop::set` replaces it.
+            p.rules.insert(
+                0,
+                Rule {
+                    when: When::ALWAYS,
+                    rank: top.rank,
+                    value: top.value,
+                },
+            );
+            p.base = None;
+        }
+        let when = When::all(state);
+        let this = self;
+        macro_rules! fold_all {
+            ($($f:ident),*) => {
+                // Destructured so a new field does not compile until it folds too.
+                let Recipe { $($f),* } = this;
+                $(fold($f, when);)*
+            };
+        }
+        recipe_props!(fold_all);
+    }
+}
+
+/// `$m!(field, ..)` with every field of [`Recipe`].
+macro_rules! recipe_props {
+    ($m:ident) => {
+        $m!(
+            height,
+            width,
+            min_height,
+            min_width,
+            max_width,
+            max_width_inset,
+            height_inset,
+            pad_top,
+            pad_right,
+            pad_bottom,
+            pad_left,
+            margin_top,
+            margin_right,
+            margin_bottom,
+            margin_left,
+            gap,
+            gap_x,
+            space_x,
+            inset_top,
+            inset_right,
+            inset_bottom,
+            inset_left,
+            icon_size,
+            icon_shift_y,
+            icon_hidden,
+            text_size,
+            line_height,
+            tracking,
+            weight,
+            uppercase,
+            underline,
+            underline_offset,
+            text_wrap,
+            text_align,
+            radius,
+            radius_top,
+            radius_bottom,
+            radius_left,
+            radius_right,
+            bg,
+            bg_clip_padding,
+            text,
+            border_width,
+            border_top_width,
+            border_left_width,
+            border_color,
+            ring_width,
+            ring_color,
+            outline_width,
+            outline_color,
+            shadow,
+            opacity,
+            blend,
+            shift_x,
+            shift_y,
+            hit_inset_x,
+            hit_inset_y,
+            backdrop_blur,
+            hidden,
+            aspect_ratio,
+            object_cover,
+            field_sizing_content,
+            resizable,
+            transition,
+            duration,
+            easing,
+            animate_in,
+            animate_out,
+            enter_opacity,
+            enter_scale,
+            enter_x,
+            enter_y,
+            exit_opacity,
+            exit_scale
+        )
+    };
+}
+use recipe_props;
+
+/// The fields in which two recipe stacks resolve differently under `s`:
+/// the winner's value, rank and layer as [`pick_ranked`] finds them, and
+/// the named `text-*` size [`pick_where`] finds.
+#[cfg(test)]
+pub(crate) fn pick_diff(a: &[&Recipe], b: &[&Recipe], s: State) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    macro_rules! diff {
+        ($($f:ident),*) => {
+            $(if pick_ranked(a, |r| &r.$f, s) != pick_ranked(b, |r| &r.$f, s) {
+                out.push(stringify!($f));
+            })*
+        };
+    }
+    recipe_props!(diff);
+    let named =
+        |l: &[&Recipe]| pick_where(l, |r| &r.text_size, |t| !matches!(t, TextSize::Px(_)), s);
+    if named(a) != named(b) {
+        out.push("text_size (named)");
+    }
+    out
+}
+
+/// Every single state flag a rule of `recipes` names.
+#[cfg(test)]
+pub(crate) fn flags_used(recipes: &[&Recipe]) -> Vec<State> {
+    let mut bits = 0u128;
+    macro_rules! collect {
+        ($($f:ident),*) => {
+            for r in recipes {
+                $(for rule in &r.$f.rules {
+                    bits |= rule.when.all.0 | rule.when.none.0;
+                })*
+            }
+        };
+    }
+    recipe_props!(collect);
+    (0..128)
+        .filter(|i| bits >> i & 1 == 1)
+        .map(|i| State(1 << i))
+        .collect()
 }
 
 #[cfg(test)]
@@ -475,6 +1095,79 @@ mod tests {
         q.rules.push(Rule::important(When::all(State::SELECTED), 2));
         assert_eq!(q.get(State::SELECTED), Some(2));
         assert_eq!(q.get(State::NONE), Some(1));
+    }
+
+    #[test]
+    fn fold_state_drops_every_rule_the_folded_one_beats() {
+        let class = 1u128 << 122;
+        let height = Prop {
+            base: Some(10.0),
+            rules: vec![
+                // An unconditional rule ranked below the size rule.
+                rule(State::NONE, 1 << 5, 40.0),
+                // A hover rule ranked below it.
+                rule(State::HOVER, class | (1 << 10), 30.0),
+                // `data-[size=sm]:`, the rule that folds.
+                rule(State::SIZE_SM, class | (1 << 30), 20.0),
+                // A hover rule of its rank later in the list beats it.
+                rule(State::HOVER, class | (1 << 30), 35.0),
+                // `data-[size=sm]:hover:` beats it.
+                rule(State::SIZE_SM | State::HOVER, (2 * class) | (1 << 30), 50.0),
+            ],
+        };
+        let mut r = Recipe {
+            height,
+            ..Recipe::default()
+        };
+        let before = r.clone();
+        r.fold_state(State::SIZE_SM);
+        assert_eq!(r.height.base, None);
+        let values: Vec<_> = r.height.rules.iter().map(|r| r.value).collect();
+        assert_eq!(values, [20.0, 35.0, 50.0]);
+        assert_eq!(r.height.rules[0].when, When::ALWAYS);
+        assert_eq!(r.height.rules[0].rank, class | (1 << 30));
+        for s in [State::NONE, State::HOVER, State::FOCUS] {
+            assert_eq!(
+                r.height.get(s | State::SIZE_SM),
+                before.height.get(s | State::SIZE_SM),
+                "{s:?}"
+            );
+        }
+        // Without the later hover rule the folded value draws under hover.
+        let mut q = before.clone();
+        q.height.rules.remove(3);
+        q.fold_state(State::SIZE_SM);
+        assert_eq!(q.height.get(State::HOVER), Some(20.0));
+        assert_eq!(q.height.get(State::HOVER | State::SIZE_SM), Some(50.0));
+        // In a stack, a lower-ranked rule of another layer still loses.
+        let other = Recipe {
+            height: Prop {
+                base: None,
+                rules: vec![rule(State::HOVER, class | (1 << 10), 30.0)],
+            },
+            ..Recipe::default()
+        };
+        let unfolded = {
+            let mut u = before.clone();
+            u.height.rules.remove(3);
+            u
+        };
+        let s = State::HOVER | State::SIZE_SM;
+        assert_eq!(pick(&[&q, &other], |r| &r.height, s), Some(50.0));
+        assert_eq!(pick(&[&q, &other], |r| &r.height, State::HOVER), Some(20.0));
+        assert!(pick_diff(&[&q, &other], &[&unfolded, &other], s).is_empty());
+        // An app's `set` replaces the size value at the size rule's rank.
+        q.height.set(70.0);
+        assert_eq!(q.height.rules[0].rank, class | (1 << 30));
+        assert_eq!(pick(&[&q, &other], |r| &r.height, State::HOVER), Some(70.0));
+        // An unconditional rule that beats it leaves the property as it is.
+        let mut a = before;
+        a.height
+            .rules
+            .push(rule(State::NONE, class | (1 << 30), 60.0));
+        let kept = a.clone();
+        a.fold_state(State::SIZE_SM);
+        assert_eq!(a.height, kept.height);
     }
 
     #[test]

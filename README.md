@@ -11,7 +11,7 @@ maia, lyra, mira, luma, rhea), their colour themes, fonts, icon sets and
 presets, and components drawn as plain egui widgets. It works with any egui
 backend (eframe, egui-winit, glow, wgpu).
 
-![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/gallery-screen.png)
+![shadcn-egui component gallery](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.6.0/docs/gallery-screen.png)
 
 [Try the gallery in your browser](https://oetiker.github.io/shadcn-egui/):
 every component under the preset pickers, with all fonts and icon sets. The
@@ -30,10 +30,11 @@ and apply it. Codes from shadcn-svelte.com number colours differently and
 are not supported.
 
 ```rust
-use shadcn_egui::{Mode, Preset};
+use shadcn_egui::Preset;
 
 fn setup(ctx: &egui::Context) -> Result<(), shadcn_egui::PresetCodeError> {
-    Preset::from_code("b2D0wqNxT")?.apply(ctx, Mode::Dark);
+    Preset::from_code("b2D0wqNxT")?.apply(ctx);
+    ctx.set_theme(egui::Theme::Dark);
     Ok(())
 }
 ```
@@ -43,10 +44,11 @@ This preset uses the Geist font and the Hugeicons icons, which need
 Inter and Lucide. Its translucent menu colour always falls back to the
 opaque one, with a log warning.
 
-`apply` again to switch mode or preset; the fonts are reinstalled only when
-they change. An app that installs fonts of its own uses
+The theme holds the light and the dark palette: `ctx.set_theme(..)` switches
+the mode, and `apply` again only for another preset; the fonts are
+reinstalled only when they change. An app that installs fonts of its own uses
 `Theme::apply_with_fonts` instead (see the `Theme` docs). Without a preset,
-`Theme::vega_dark().apply(ctx)` gives the default look.
+`Theme::vega().apply(ctx)` gives the default look.
 
 ## Components
 
@@ -72,9 +74,10 @@ live.
 
 `cargo run --example settings` opens a settings page built from Badge,
 Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and
-Tabs, with a toolbar that switches style, mode and radius.
+Tabs, with a toolbar that switches style, mode and radius. The image shows
+it at a desktop width (1280 px) and at a phone width (390 px).
 
-![shadcn-egui settings screen](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.4.0/docs/settings-screen.png)
+![shadcn-egui settings screen at 1280 px and at 390 px wide](https://raw.githubusercontent.com/oetiker/shadcn-egui/v0.6.0/docs/settings-screen.png)
 
 ## Features
 
