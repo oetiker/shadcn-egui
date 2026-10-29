@@ -74,6 +74,9 @@ impl AppEnum for BadgeVariant {
             _ => None,
         }
     }
+    fn parts(r: &mut BadgeRecipes) -> Vec<&mut crate::style::Recipe> {
+        vec![&mut r.badge]
+    }
     fn recipes(self, style: &Style) -> BadgeRecipes {
         BadgeRecipes {
             badge: self.layer(style).clone(),

@@ -144,7 +144,7 @@ pub struct Theme {
     /// The mode colours and `dark:` rules resolve in.
     mode: egui::Theme,
     /// App variants, app sizes and app colours, shared by every clone.
-    apps: Arc<AppMap>,
+    pub(crate) apps: Arc<AppMap>,
 }
 
 /// Size tokens, in logical px. Defaults are shadcn v4's Tailwind classes; the

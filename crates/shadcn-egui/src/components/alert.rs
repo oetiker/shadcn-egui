@@ -100,6 +100,14 @@ impl AppEnum for AlertVariant {
             _ => None,
         }
     }
+    fn parts(r: &mut AlertRecipes) -> Vec<&mut crate::style::Recipe> {
+        vec![
+            &mut r.alert,
+            &mut r.alert_title,
+            &mut r.alert_description,
+            &mut r.alert_action,
+        ]
+    }
     fn recipes(self, style: &Style) -> AlertRecipes {
         AlertRecipes {
             alert: self.layer(style).clone(),

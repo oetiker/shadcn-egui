@@ -79,6 +79,9 @@ impl AppEnum for ButtonVariant {
             _ => None,
         }
     }
+    fn parts(r: &mut ButtonRecipes) -> Vec<&mut crate::style::Recipe> {
+        vec![&mut r.button]
+    }
     fn recipes(self, style: &Style) -> ButtonRecipes {
         ButtonRecipes {
             button: self.layer(style).clone(),
@@ -148,6 +151,9 @@ impl AppEnum for ButtonSize {
             ButtonSize::App(a) => Some(a.name()),
             _ => None,
         }
+    }
+    fn parts(r: &mut ButtonRecipes) -> Vec<&mut crate::style::Recipe> {
+        vec![&mut r.button]
     }
     fn recipes(self, style: &Style) -> ButtonRecipes {
         ButtonRecipes {

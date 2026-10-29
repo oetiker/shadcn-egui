@@ -473,8 +473,10 @@ impl Role {
     /// An app colour, defined as a light and dark pair on the theme
     /// ([`crate::Theme::color`]). Name it through a constant
     /// (`const BRAND: Role = Role::custom("brand");`), so a misspelling
-    /// does not compile; a name the theme does not define fails a
-    /// `debug_assert!` and draws as [`Role::Foreground`].
+    /// does not compile. A name the theme does not define fails a
+    /// `debug_assert!`; in a release build an app variant's edit that
+    /// uses it is skipped, so the part keeps its base's value there, and
+    /// [`crate::Theme::role`] gives [`Role::Foreground`] for it.
     pub const fn custom(name: &'static str) -> Role {
         Role::Custom(AppColor(name))
     }
@@ -810,6 +812,62 @@ impl Recipe {
                 }
             }
         }
+    }
+
+    /// Put `base`'s value back wherever a colour of this part names an app
+    /// colour that `defined` does not know, and return such a name. The
+    /// edit that set it is skipped there: the unconditional value, or the
+    /// rules of that one state, are the base's again (rules, App
+    /// variants); every other change stays.
+    pub(crate) fn skip_undefined(
+        &mut self,
+        base: &Recipe,
+        defined: impl Fn(&str) -> bool,
+    ) -> Option<&'static str> {
+        let undefined = |p: Paint| {
+            let (a, b) = match p {
+                Paint::Role(r, _) => (r, None),
+                Paint::Mix(a, b, _) => (a, Some(b)),
+            };
+            [Some(a), b].into_iter().flatten().find_map(|r| match r {
+                Role::Custom(c) if !defined(c.name()) => Some(c.name()),
+                _ => None,
+            })
+        };
+        let skip = |p: &mut Prop<Paint>, base: &Prop<Paint>| {
+            let mut found = p.base.and_then(undefined);
+            if found.is_some() {
+                p.base = base.base;
+            }
+            let edited = std::mem::take(&mut p.rules);
+            let mut restored: Vec<When> = Vec::new();
+            for r in &edited {
+                let Some(name) = undefined(r.value) else {
+                    p.rules.push(*r);
+                    continue;
+                };
+                found = Some(name);
+                if !restored.contains(&r.when) {
+                    restored.push(r.when);
+                    p.rules.extend(
+                        base.rules
+                            .iter()
+                            .filter(|b| b.when == r.when && !edited.contains(b)),
+                    );
+                }
+            }
+            found
+        };
+        [
+            skip(&mut self.bg, &base.bg),
+            skip(&mut self.text, &base.text),
+            skip(&mut self.border_color, &base.border_color),
+            skip(&mut self.ring_color, &base.ring_color),
+            skip(&mut self.outline_color, &base.outline_color),
+        ]
+        .into_iter()
+        .flatten()
+        .next()
     }
 
     /// Make the values this part takes under exactly `state` its

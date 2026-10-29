@@ -79,6 +79,13 @@ impl AppEnum for TabsVariant {
             _ => None,
         }
     }
+    fn parts(r: &mut TabsRecipes) -> Vec<&mut crate::style::Recipe> {
+        vec![
+            &mut r.tabs_list,
+            &mut r.tabs_trigger,
+            &mut r.tabs_trigger_after,
+        ]
+    }
     fn recipes(self, style: &Style) -> TabsRecipes {
         TabsRecipes {
             tabs_list: self.layer(style).clone(),

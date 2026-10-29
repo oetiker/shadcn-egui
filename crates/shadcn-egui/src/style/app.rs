@@ -83,6 +83,35 @@ pub trait AppEnum: Sealed + Copy + Eq + Default + std::fmt::Debug + Send + Sync 
     /// `Prop::set` takes effect. Nothing for an enum with its own layer.
     #[doc(hidden)]
     fn fold(self, _recipes: &mut Self::Recipes) {}
+    /// Every part of `recipes`, in field order.
+    #[doc(hidden)]
+    fn parts(recipes: &mut Self::Recipes) -> Vec<&mut Recipe>;
+}
+
+/// Run `edit` on `r` and skip it wherever it names an app colour
+/// `defined` does not know (rules, App variants); return such a name.
+fn edit_checked<X: AppEnum>(
+    edit: Edit<X>,
+    r: &mut X::Recipes,
+    name: StyleName,
+    defined: &dyn Fn(&str) -> bool,
+) -> Option<&'static str> {
+    let mut base = r.clone();
+    edit(r, name);
+    X::parts(&mut base)
+        .into_iter()
+        .zip(X::parts(r))
+        .filter_map(|(b, e)| e.skip_undefined(b, defined))
+        .last()
+}
+
+/// The `debug_assert!` an undefined app colour fails.
+fn assert_colour(missing: Option<&'static str>) {
+    debug_assert!(
+        missing.is_none(),
+        "app colour {:?} is not defined in the theme",
+        missing.unwrap_or_default()
+    );
 }
 
 /// A variant enum: what [`crate::Theme::variant`] takes.
@@ -97,7 +126,12 @@ pub type Edit<X> = fn(&mut <X as AppEnum>::Recipes, StyleName);
 
 trait Entry: Send + Sync {
     fn key(&self) -> (TypeId, &'static str);
-    fn build(&self, style: &Style, name: StyleName) -> Arc<dyn Any + Send + Sync>;
+    fn build(
+        &self,
+        style: &Style,
+        name: StyleName,
+        defined: &dyn Fn(&str) -> bool,
+    ) -> (Arc<dyn Any + Send + Sync>, Option<&'static str>);
     fn same(&self, other: &dyn Entry) -> bool;
     fn as_any(&self) -> &dyn Any;
     fn describe(&self) -> String;
@@ -113,10 +147,15 @@ impl<X: AppEnum> Entry for Typed<X> {
     fn key(&self) -> (TypeId, &'static str) {
         (TypeId::of::<X>(), self.name)
     }
-    fn build(&self, style: &Style, name: StyleName) -> Arc<dyn Any + Send + Sync> {
+    fn build(
+        &self,
+        style: &Style,
+        name: StyleName,
+        defined: &dyn Fn(&str) -> bool,
+    ) -> (Arc<dyn Any + Send + Sync>, Option<&'static str>) {
         let mut r = self.base.recipes(style);
-        (self.edit)(&mut r, name);
-        Arc::new(r)
+        let missing = edit_checked::<X>(self.edit, &mut r, name, defined);
+        (Arc::new(r), missing)
     }
     fn same(&self, other: &dyn Entry) -> bool {
         other.as_any().downcast_ref::<Typed<X>>().is_some_and(|o| {
@@ -220,6 +259,8 @@ impl AppMap {
     pub(crate) fn set_color(&mut self, name: &'static str, light: Color32, dark: Color32) {
         self.colors.retain(|(n, ..)| *n != name);
         self.colors.push((name, light, dark));
+        // Which edits are skipped depends on the colours defined.
+        *self.built.get_mut().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     pub(crate) fn color(&self, name: &str, dark: bool) -> Option<Color32> {
@@ -234,20 +275,33 @@ impl AppMap {
     /// app case the theme does not define fails a `debug_assert!` and
     /// resolves to `X::default()`.
     pub(crate) fn resolve<X: AppEnum>(&self, style: &Arc<Style>, x: X) -> Resolved<X> {
+        let (r, missing) = self.resolve_quiet(style, x);
+        debug_assert!(
+            missing.is_none(),
+            "app variant {:?} of {} is not defined in the theme",
+            missing.unwrap_or_default(),
+            std::any::type_name::<X>()
+        );
+        r
+    }
+
+    /// [`AppMap::resolve`] without the `debug_assert!`: the name of an
+    /// undefined app case comes back beside `X::default()`.
+    pub(crate) fn resolve_quiet<X: AppEnum>(
+        &self,
+        style: &Arc<Style>,
+        x: X,
+    ) -> (Resolved<X>, Option<&'static str>) {
         let Some(name) = x.app_name() else {
-            return Resolved { base: x, app: None };
+            return (Resolved { base: x, app: None }, None);
         };
         let key = (TypeId::of::<X>(), name);
         let Some(i) = self.entries.iter().position(|e| e.key() == key) else {
-            debug_assert!(
-                false,
-                "app variant {name:?} of {} is not defined in the theme",
-                std::any::type_name::<X>()
-            );
-            return Resolved {
+            let r = Resolved {
                 base: X::default(),
                 app: None,
             };
+            return (r, Some(name));
         };
         let base = self.entries[i]
             .as_any()
@@ -256,12 +310,14 @@ impl AppMap {
             .unwrap_or_default();
         let mut built = self.built.lock().unwrap_or_else(|e| e.into_inner());
         if built.as_ref().is_none_or(|b| !Arc::ptr_eq(&b.style, style)) {
-            *built = Some(self.build(style));
+            let (b, missing) = self.build_quiet(style);
+            *built = Some(b);
+            assert_colour(missing);
         }
         let recipes = built
             .as_ref()
             .and_then(|b| b.recipes[i].clone().downcast::<X::Recipes>().ok());
-        Resolved { base, app: recipes }
+        (Resolved { base, app: recipes }, None)
     }
 
     /// The recipes of a component whose variant `v` and size `z` edit the
@@ -301,10 +357,12 @@ impl AppMap {
                             .and_then(|e| e.as_any().downcast_ref::<Typed<Z>>())
                             .map(|t| t.edit);
                         if let Some(edit) = edit {
-                            edit(
+                            assert_colour(edit_checked::<Z>(
+                                edit,
                                 &mut r,
                                 StyleName::from_id(style.name).unwrap_or(StyleName::Vega),
-                            );
+                                &|n| self.color(n, false).is_some(),
+                            ));
                         }
                         let r = Arc::new(r);
                         b.pairs.push((key, r.clone()));
@@ -321,7 +379,10 @@ impl AppMap {
         }
     }
 
-    fn build(&self, style: &Arc<Style>) -> Built {
+    /// The edited recipes of every entry for `style`, and the name of an
+    /// app colour an edit names but the theme does not define (the edit
+    /// is skipped there).
+    fn build_quiet(&self, style: &Arc<Style>) -> (Built, Option<&'static str>) {
         let name = StyleName::from_id(style.name);
         debug_assert!(
             name.is_some(),
@@ -329,11 +390,23 @@ impl AppMap {
             style.name
         );
         let name = name.unwrap_or(StyleName::Vega);
-        Built {
+        let defined = |n: &str| self.color(n, false).is_some();
+        let mut missing = None;
+        let recipes = self
+            .entries
+            .iter()
+            .map(|e| {
+                let (r, m) = e.build(style, name, &defined);
+                missing = missing.or(m);
+                r
+            })
+            .collect();
+        let built = Built {
             style: Arc::clone(style),
-            recipes: self.entries.iter().map(|e| e.build(style, name)).collect(),
+            recipes,
             pairs: Vec::new(),
-        }
+        };
+        (built, missing)
     }
 }
 
@@ -394,6 +467,9 @@ macro_rules! default_variant {
                     $($field: (*style.$field).clone(),)+
                 }
             }
+            fn parts(recipes: &mut $recipes) -> Vec<&mut $crate::style::Recipe> {
+                vec![$(&mut recipes.$field),+]
+            }
         }
         impl $crate::style::VariantEnum for $x {}
 
@@ -444,6 +520,9 @@ macro_rules! state_size {
             fn fold(self, recipes: &mut Self::Recipes) {
                 let bits = $crate::style::AppEnum::bits(self);
                 recipes.each_mut(|r| r.fold_state(bits));
+            }
+            fn parts(recipes: &mut Self::Recipes) -> Vec<&mut $crate::style::Recipe> {
+                <$x as $crate::style::AppEnum>::parts(recipes)
             }
             fn bits(self) -> $crate::style::State {
                 match self {
@@ -921,6 +1000,91 @@ mod tests {
     #[should_panic(expected = "is not defined in the theme")]
     fn undefined_colour_fails_a_debug_assert() {
         let _ = Theme::vega().role(BRAND);
+    }
+
+    /// An undefined app variant draws as the built-in `Default` case: the
+    /// value a release build takes after the `debug_assert!`.
+    #[test]
+    fn an_undefined_variant_resolves_to_default() {
+        let t = themed();
+        let (r, missing) = t
+            .apps
+            .resolve_quiet(&t.style, ButtonVariant::from(ButtonVariant::app("nope")));
+        assert_eq!(missing, Some("nope"));
+        assert_eq!(r.base, ButtonVariant::Default);
+        assert!(r.app.is_none());
+        let (r, missing) = t
+            .apps
+            .resolve_quiet(&t.style, ButtonVariant::from(DANGER_GHOST));
+        assert_eq!((missing, r.base), (None, ButtonVariant::Ghost));
+    }
+
+    /// An edit that names an undefined app colour is skipped where it
+    /// names it, as a release build does after the `debug_assert!`: `set`,
+    /// `on` and `recolor` leave the base's value for that property and
+    /// state, and every other change of the edit stays.
+    #[test]
+    fn an_undefined_colour_skips_the_edit_and_keeps_the_base() {
+        const GONE: Role = Role::custom("gone");
+        let base = Style::vega().button_variant_outline.as_ref().clone();
+        let mut r = base.clone();
+        r.bg.set(P(GONE));
+        r.text.on(State::HOVER, P(BRAND));
+        r.border_color.set(P(BRAND));
+        r.recolor(Role::Ring, GONE);
+        r.outline_color.set(Paint::Mix(Role::Border, GONE, 0.5));
+        r.height.set(50.0);
+        let missing = r.skip_undefined(&base, |n| n == "brand");
+        assert_eq!(missing, Some("gone"));
+        assert_eq!(r.bg, base.bg);
+        assert_eq!(r.ring_color, base.ring_color);
+        assert_eq!(r.outline_color, base.outline_color);
+        assert_eq!(r.text.get(State::HOVER), Some(P(BRAND)));
+        assert_eq!(r.border_color.get(State::NONE), Some(P(BRAND)));
+        assert_eq!(r.height.get(State::NONE), Some(50.0));
+
+        // `on` over the base's own rules of that state puts them back.
+        let mut r = base.clone();
+        r.text.on(State::HOVER, P(GONE));
+        assert_eq!(r.skip_undefined(&base, |_| false), Some("gone"));
+        for st in [State::NONE, State::HOVER, State::HOVER | State::DARK] {
+            assert_eq!(r.text.get(st), base.text.get(st), "{st:?}");
+        }
+        // Nothing undefined: nothing changes.
+        let mut r = base.clone();
+        r.text.set(P(BRAND));
+        let want = r.clone();
+        assert_eq!(r.skip_undefined(&base, |n| n == "brand"), None);
+        assert_eq!(r, want);
+    }
+
+    /// Through the theme, the skipped edit draws the base variant's value.
+    #[test]
+    fn a_variant_with_an_undefined_colour_draws_its_base_there() {
+        let t = Theme::vega()
+            .color(BRAND, egui::Color32::RED, egui::Color32::BLUE)
+            .variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _| {
+                r.button.text.set(P(Role::custom("gone")));
+                r.button.bg.set(P(BRAND));
+            });
+        let (built, missing) = t.apps.build_quiet(&t.style);
+        assert_eq!(missing, Some("gone"));
+        let r = built.recipes[0]
+            .clone()
+            .downcast::<<ButtonVariant as AppEnum>::Recipes>()
+            .expect("button recipes");
+        let ghost = &t.style.button_variant_ghost;
+        assert_eq!(r.button.text, ghost.text);
+        assert_eq!(r.button.bg.get(State::NONE), Some(P(BRAND)));
+    }
+
+    #[test]
+    #[should_panic(expected = "is not defined in the theme")]
+    fn an_edit_with_an_undefined_colour_fails_a_debug_assert() {
+        let t = Theme::vega().variant(DANGER_GHOST, ButtonVariant::Ghost, |r, _| {
+            r.button.text.set(P(BRAND))
+        });
+        let _ = t.resolve(ButtonVariant::from(DANGER_GHOST));
     }
 
     #[test]
