@@ -395,7 +395,22 @@ impl TextLook {
         width: f32,
         color: Color32,
     ) -> Arc<Galley> {
+        self.layout_colored_with(ui, text, wrap, width, color, |_| ())
+    }
+
+    /// [`TextLook::layout_colored`] with `edit` applied to the job before
+    /// it is laid out (an input's hint drops its line breaks).
+    pub(crate) fn layout_colored_with(
+        &self,
+        ui: &Ui,
+        text: impl Into<WidgetText>,
+        wrap: TextWrapMode,
+        width: f32,
+        color: Color32,
+        edit: impl FnOnce(&mut LayoutJob),
+    ) -> Arc<Galley> {
         let mut job = self.job(ui, text.into());
+        edit(&mut job);
         fill_color(&mut job, color);
         let galley = self.lay_out(ui.ctx(), job, wrap, width);
         place_rows(ui.ctx(), galley, self.place(), 0.0)

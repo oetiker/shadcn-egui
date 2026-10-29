@@ -3,12 +3,16 @@
 //! recipe. A frameless egui `TextEdit` sits inside a box this widget
 //! paints.
 
+use crate::components::icon_atom::retint;
 use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::{layout, Theme};
-use egui::{TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget};
+use egui::text::LayoutJob;
+use egui::{
+    AtomKind, Atoms, IntoAtoms, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget, WidgetText,
+};
 
 default_variant!(
     /// The input's variant: upstream has none, so only app variants
@@ -22,8 +26,8 @@ default_variant!(
 );
 
 pub struct Input<'a> {
-    text: &'a mut String,
-    hint: String,
+    text: &'a mut dyn TextBuffer,
+    hint: Atoms<'static>,
     password: bool,
     max_width: Option<f32>,
     id_salt: Option<egui::Id>,
@@ -33,10 +37,12 @@ pub struct Input<'a> {
 }
 
 impl<'a> Input<'a> {
-    pub fn new(text: &'a mut String) -> Self {
+    /// A field that edits `text`, any egui [`TextBuffer`] (a `String`, or
+    /// a `&str` that shows its text read-only), as `TextEdit::singleline`.
+    pub fn new(text: &'a mut dyn TextBuffer) -> Self {
         Self {
             text,
-            hint: String::new(),
+            hint: Atoms::default(),
             password: false,
             max_width: None,
             id_salt: None,
@@ -45,8 +51,11 @@ impl<'a> Input<'a> {
             variant: InputVariant::Default,
         }
     }
-    pub fn hint(mut self, h: impl Into<String>) -> Self {
-        self.hint = h.into();
+    /// The placeholder, shown while the field is empty, as
+    /// `TextEdit::hint_text`: text, rich text or an image, in the style's
+    /// placeholder colour where it sets none of its own.
+    pub fn hint(mut self, h: impl IntoAtoms<'static>) -> Self {
+        self.hint = h.into_atoms();
         self
     }
     pub fn password(mut self, yes: bool) -> Self {
@@ -139,15 +148,25 @@ impl<'a> Widget for Input<'a> {
             // and not elided (`text-overflow: clip`): the field's clip cuts
             // it at the content box. It is measured in the room the field
             // leaves before the caret's.
-            let content = frame.content_width(width);
-            let hint = frame.look.layout_colored(
-                ui,
-                self.hint.replace(['\r', '\n'], ""),
-                TextWrapMode::Extend,
-                f32::INFINITY,
-                frame.placeholder,
-            );
-            edit = edit.hint_text(within(hint, content - frame.caret_room(ui.ctx())));
+            let room = frame.content_width(width) - frame.caret_room(ui.ctx());
+            let color = frame.placeholder;
+            let mut hint = self.hint;
+            hint.map_kind(|kind| match kind {
+                AtomKind::Text(text) => {
+                    let galley = frame.look.layout_colored_with(
+                        ui,
+                        text,
+                        TextWrapMode::Extend,
+                        f32::INFINITY,
+                        color,
+                        drop_line_breaks,
+                    );
+                    AtomKind::Text(WidgetText::Galley(within(galley, room)))
+                }
+                AtomKind::Image(image) => AtomKind::Image(retint(image, color)),
+                other => other,
+            });
+            edit = edit.hint_text(hint);
         }
         let edit = edit
             .layouter(&mut layouter)
@@ -162,6 +181,25 @@ impl<'a> Widget for Input<'a> {
             .response
             .response
     }
+}
+
+/// An input's placeholder on one line: the HTML spec strips its line
+/// breaks.
+fn drop_line_breaks(job: &mut LayoutJob) {
+    if !job.text.contains(['\r', '\n']) {
+        return;
+    }
+    let mut text = String::with_capacity(job.text.len());
+    for section in &mut job.sections {
+        let start = text.len();
+        text.extend(
+            job.text[section.byte_range.clone()]
+                .chars()
+                .filter(|c| !matches!(c, '\r' | '\n')),
+        );
+        section.byte_range = start..text.len();
+    }
+    job.text = text;
 }
 
 #[cfg(test)]

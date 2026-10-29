@@ -2645,3 +2645,41 @@ fn slider_in_a_row_drags_from_inside_its_target() {
     h.run();
     assert_eq!(h.state().0, 100.0, "{r:?}");
 }
+
+/// The input takes egui's types where it mirrors `TextEdit` (rules,
+/// Parameter types; axiom 2): any `TextBuffer` as its text and
+/// `impl IntoAtoms<'static>` as its hint, which draws as the same hint
+/// as a plain string.
+#[test]
+fn the_input_takes_egui_text_edit_types() {
+    use shadcn_egui::components::input::Input;
+    let theme = Theme::vega();
+    let texts = |hint: &dyn Fn() -> Input<'static>| {
+        let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| ui.add(hint()));
+        common::text_shapes(&out)
+            .iter()
+            .map(|t| (t.pos, t.galley.text().to_owned()))
+            .collect::<Vec<_>>()
+    };
+    fn buffer() -> &'static mut dyn egui::TextBuffer {
+        Box::leak(Box::new(""))
+    }
+    let plain = texts(&|| Input::new(buffer()).hint("Email").id_salt("a"));
+    let rich = texts(&|| {
+        Input::new(buffer())
+            .hint(egui::RichText::new("Email"))
+            .id_salt("a")
+    });
+    assert!(plain.iter().any(|(_, t)| t == "Email"), "{plain:?}");
+    assert_eq!(plain, rich);
+
+    // A read-only buffer shows its text and keeps it.
+    let mut fixed: &str = "fixed";
+    let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        ui.add(Input::new(&mut fixed))
+    });
+    assert!(common::text_shapes(&out)
+        .iter()
+        .any(|t| t.galley.text() == "fixed"));
+    assert_eq!(fixed, "fixed");
+}
