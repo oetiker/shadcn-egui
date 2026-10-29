@@ -19,6 +19,7 @@
 //! corners have nothing to shape.
 
 use crate::components::context;
+use crate::components::free_content::{self, section};
 use crate::components::shared::{content_ui, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, state_size, ResolvedPair};
@@ -235,19 +236,7 @@ impl<'a> Card<'a> {
                 id.with("shadcn_egui::card::content"),
                 &[&card[..]],
                 st,
-                |ui| {
-                    ui.spacing_mut().item_spacing.y = content_gap;
-                    let body = Body {
-                        mark: ui.cursor().top(),
-                        gap,
-                        content_gap,
-                    };
-                    let key = body_key(ui);
-                    ui.data_mut(|d| d.insert_temp(key, body));
-                    let inner = add(ui);
-                    ui.data_mut(|d| d.remove::<Body>(key));
-                    inner
-                },
+                |ui| free_content::body(ui, gap, content_gap, "card", add),
             )
         })
         .inner;
@@ -351,43 +340,6 @@ impl<'a> Card<'a> {
         response.widget_info(|| WidgetInfo::new(WidgetType::Panel));
         result
     }
-}
-
-/// What a card's body knows while its closure runs: where the last part
-/// ended and its two gaps.
-#[derive(Clone, Copy, Debug)]
-struct Body {
-    /// The body's cursor after the last part.
-    mark: f32,
-    /// `cn-card`'s gap, between sections.
-    gap: f32,
-    /// `cn-card-content`'s gap, inside a run of free content.
-    content_gap: f32,
-}
-
-fn body_key(ui: &Ui) -> egui::Id {
-    ui.id().with("shadcn_egui::card::body")
-}
-
-/// Place a card part: directly in a card's body, it is a section the
-/// card's gap away from the free content before it and from what comes
-/// after it; elsewhere `add` runs as it is.
-fn section<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let key = body_key(ui);
-    let Some(body) = ui.data(|d| d.get_temp::<Body>(key)) else {
-        return add(ui);
-    };
-    let free = ui.cursor().top() > body.mark + 0.5; // behaviour-ok: below half a point the cursor did not move
-    if free {
-        // Free content before: its last widget left the content gap.
-        ui.add_space(body.gap - body.content_gap);
-    }
-    ui.spacing_mut().item_spacing.y = body.gap;
-    let inner = add(ui);
-    ui.spacing_mut().item_spacing.y = body.content_gap;
-    let mark = ui.cursor().top();
-    ui.data_mut(|d| d.insert_temp(key, Body { mark, ..body }));
-    inner
 }
 
 /// `card-content` section. Its children are the style's `cn-card-content`

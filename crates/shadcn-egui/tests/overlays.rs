@@ -841,3 +841,104 @@ fn select_open_in(name: &str, color: MenuColor) {
 fn select_open_inverted_snapshot() {
     select_open_in("select_open_inverted", MenuColor::Inverted);
 }
+
+/// Rects of `n` free 40×10 boxes in a dialog's body and of one box in
+/// its footer, as offsets from the title's bottom (the dialog is centred,
+/// so its place moves with its height).
+fn dialog_free_boxes(n: usize) -> (Vec<egui::Rect>, egui::Rect) {
+    let seen = std::cell::RefCell::new((Vec::new(), egui::Rect::NOTHING));
+    let boxed = |ui: &mut egui::Ui| {
+        ui.allocate_exact_size(vec2(40.0, 10.0), egui::Sense::hover())
+            .0
+    };
+    let mut h = Harness::builder()
+        .with_size(vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            Dialog::new("free", "Title").show(ui.ctx(), &mut true, |ui| {
+                let free: Vec<_> = (0..n).map(|_| boxed(ui)).collect();
+                let mut foot = egui::Rect::NOTHING;
+                dialog::footer(ui, |ui| foot = boxed(ui));
+                *seen.borrow_mut() = (free, foot);
+            });
+        });
+    h.run();
+    h.run();
+    let up = vec2(0.0, -h.get_by_label("Title").rect().bottom());
+    let (free, foot) = seen.borrow().clone();
+    (
+        free.iter().map(|r| r.translate(up)).collect(),
+        foot.translate(up),
+    )
+}
+
+/// Free content in a dialog stands for a block (rules, Container; G4):
+/// its widgets stack with no gap, and the dialog's gap stays only between
+/// the run and the header and footer.
+#[test]
+fn free_dialog_content_is_one_block() {
+    let (one, foot_one) = dialog_free_boxes(1);
+    let (two, foot_two) = dialog_free_boxes(2);
+    assert_eq!(two[0], one[0], "the header's gap before the run");
+    assert_eq!(two[1].top(), two[0].bottom(), "no gap inside the run");
+    assert_eq!(
+        foot_two.top() - two[1].bottom(),
+        foot_one.top() - one[0].bottom(),
+        "the footer keeps its distance from the run"
+    );
+}
+
+/// The footer comes last (rules, Part), free content too.
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "comes before its footer")]
+fn free_content_after_the_dialog_footer_fails_the_order_assert() {
+    let mut h = Harness::builder()
+        .with_size(vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            Dialog::new("late", "Title").show(ui.ctx(), &mut true, |ui| {
+                dialog::footer(ui, |ui| {
+                    ui.add(Button::new("Ok"));
+                });
+                ui.label("Late");
+            });
+        });
+    h.run();
+}
+
+/// Free content in a popover stands for a block (rules, Container; G4):
+/// its widgets stack with no gap, the popover's gap from the header.
+#[test]
+fn free_popover_content_is_one_block() {
+    let seen = std::cell::RefCell::new(Vec::new());
+    let mut h = Harness::builder()
+        .with_size(vec2(420.0, 240.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            let trigger = ui.add(Button::new("Dimensions"));
+            Popover::new(&trigger).show(|ui| {
+                popover_header(ui, "Layer size", "Set the dimensions.");
+                let boxes: Vec<_> = (0..2)
+                    .map(|_| {
+                        ui.allocate_exact_size(vec2(40.0, 10.0), egui::Sense::hover())
+                            .0
+                    })
+                    .collect();
+                *seen.borrow_mut() = boxes;
+            });
+        });
+    h.run();
+    h.get_by_label("Dimensions").click();
+    h.run();
+    h.run();
+    let boxes = seen.borrow().clone();
+    let description = h.get_by_label("Set the dimensions.").rect();
+    let gap = Theme::vega().style.popover_content.gap.base.expect("gap");
+    assert_eq!(
+        boxes[0].top(),
+        description.bottom() + gap,
+        "{description:?}"
+    );
+    assert_eq!(boxes[1].top(), boxes[0].bottom(), "no gap inside the run");
+}

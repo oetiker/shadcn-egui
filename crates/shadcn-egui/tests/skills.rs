@@ -150,6 +150,7 @@ fn component_map_has_every_component() {
             "context",
             "registry",
             "text_entry",
+            "free_content",
         ]
         .contains(&module)
         {

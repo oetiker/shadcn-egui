@@ -12,6 +12,7 @@
 //! state of your own.
 
 use crate::components::context;
+use crate::components::free_content;
 use crate::components::shared::{content_ui, opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
@@ -83,7 +84,11 @@ impl<'a> Popover<'a> {
         self.side_offset = px;
         self
     }
-    /// Show the content while open. Returns its value while open.
+    /// Show the content while open. Returns its value while open. Widgets
+    /// of the caller's own stand for the element upstream's demos put
+    /// there, a block (rules, Container): they stack with no gap, the
+    /// style's gap from [`popover_header`]. Wrap them in
+    /// [`crate::layout::vstack`] for a gap of their own.
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<R> {
         let t = Theme::current(&self.trigger.ctx);
         let v = t.resolve(self.variant);
@@ -129,7 +134,7 @@ impl<'a> Popover<'a> {
                             ui.id().with("shadcn_egui::popover::content"),
                             &[&l[..]],
                             g,
-                            content,
+                            |ui| free_content::body(ui, gap, 0.0, "popover", content),
                         )
                     })
                     .inner
@@ -151,6 +156,10 @@ impl<'a> Popover<'a> {
 /// Each line takes its size and line height from its own recipe, over the
 /// header's.
 pub fn popover_header(ui: &mut Ui, title: &str, description: &str) {
+    free_content::section(ui, |ui| header(ui, title, description));
+}
+
+fn header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let v = popover_recipes(ui, &t);
     let g = t.state(ui.ctx(), v.bits());

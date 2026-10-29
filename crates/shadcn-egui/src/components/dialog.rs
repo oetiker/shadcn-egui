@@ -12,6 +12,7 @@
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::context;
+use crate::components::free_content;
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
@@ -108,7 +109,11 @@ impl<'a> Dialog<'a> {
     }
 
     /// Show the dialog while `*open`; clears `open` when the user dismisses it.
-    /// Returns the body's value while open.
+    /// Returns the body's value while open. Widgets of the caller's own
+    /// in `body` stand for the element upstream's demos put there, a block
+    /// (rules, Container): they stack with no gap, the style's gap from the
+    /// header and from [`footer`], which comes last (a `debug_assert!`
+    /// checks it). Wrap them in [`layout::vstack`] for a gap of their own.
     pub fn show<R>(
         self,
         ctx: &egui::Context,
@@ -166,8 +171,12 @@ impl<'a> Dialog<'a> {
                     let look = TextLook::resolve(ui, &l, g);
                     content_scope(ui, &look, |ui| {
                         content_ui(ui, self.id.with("content"), &[&l[..]], g, |ui| {
-                            header(ui, &t, &v, self.title, self.description);
-                            let inner = body(ui);
+                            let inner = free_content::body(ui, gap, 0.0, "dialog", |ui| {
+                                free_content::section(ui, |ui| {
+                                    header(ui, &t, &v, self.title, self.description)
+                                });
+                                body(ui)
+                            });
                             let close =
                                 self.show_close_button && close_button(ui, &t, &v, (pad_t, pad_r));
                             (inner, close, slot)
@@ -289,6 +298,10 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
 /// stack from its height (and, in unbounded width, its widest action's
 /// width); where that size changes, the pass is discarded and redone.
 pub fn footer(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+    free_content::closing_section(ui, |ui| footer_part(ui, add));
+}
+
+fn footer_part(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let id = ui.next_auto_id().with("shadcn_egui::dialog::footer");
     let t = Theme::current(ui.ctx());
     let v = dialog_recipes(ui, &t);
