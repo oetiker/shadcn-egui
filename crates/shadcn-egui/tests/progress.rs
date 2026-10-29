@@ -442,6 +442,21 @@ fn reports_a_progressbar_with_value_and_range() {
     assert_eq!(node.max_numeric_value(), Some(200.0));
 }
 
+/// Rules, Modes (G1): egui's fraction form is upstream's form with the
+/// matching range, `new(f)` is `from_value(f, 1.0)`, and reports so.
+#[test]
+fn a_fraction_reports_its_value_over_max_one() {
+    let mut h = Harness::new_ui(|ui| {
+        ui.add(Progress::new(0.25));
+    });
+    h.run();
+    let node = h.get_by_role(Role::ProgressIndicator);
+    let node = node.accesskit_node();
+    assert_eq!(node.numeric_value(), Some(0.25));
+    assert_eq!(node.min_numeric_value(), Some(0.0));
+    assert_eq!(node.max_numeric_value(), Some(1.0));
+}
+
 #[test]
 fn snapshot() {
     let (mut a, b) = (50.0_f32, 0.66_f32);
