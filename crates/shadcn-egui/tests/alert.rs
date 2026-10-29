@@ -60,6 +60,53 @@ fn height_is_border_padding_and_rows() {
     );
 }
 
+/// Free content in the closure stands for the description's slot (rules,
+/// Container; G4 (b)): one item in the content column, counted as one
+/// grid row, so the icon's `row-span-2` spans a title and free content
+/// with no empty row, and free content alone keeps the empty row's gap.
+#[test]
+fn free_content_is_one_grid_row() {
+    let t = vega();
+    let boxed = |ui: &mut Ui, h: f32| {
+        let _ = ui.allocate_exact_size(vec2(40.0, h), egui::Sense::hover());
+    };
+    let h = |add: &dyn Fn(&mut Ui) -> f32| settle(&t, 900.0, |ui| add(ui));
+    // Icon, title and a 20 px box: two rows, `gap-0.5` apart.
+    assert_eq!(
+        h(&|ui| Alert::new()
+            .icon(lucide::INFO)
+            .title("Saved")
+            .show(ui, |ui| boxed(ui, 20.0))
+            .response
+            .rect
+            .height()),
+        1.0 + 12.0 + 20.0 + 2.0 + 20.0 + 12.0 + 1.0
+    );
+    // Icon and a 20 px box alone: one row, and the icon's empty second
+    // row keeps its gap, as with a lone title.
+    assert_eq!(
+        h(&|ui| Alert::new()
+            .icon(lucide::INFO)
+            .show(ui, |ui| boxed(ui, 20.0))
+            .response
+            .rect
+            .height()),
+        1.0 + 12.0 + 20.0 + 2.0 + 12.0 + 1.0
+    );
+    // Title, description and free content: three rows, no empty one.
+    assert_eq!(
+        h(&|ui| Alert::new()
+            .icon(lucide::INFO)
+            .title("Saved")
+            .description("All good.")
+            .show(ui, |ui| boxed(ui, 20.0))
+            .response
+            .rect
+            .height()),
+        1.0 + 12.0 + 20.0 + 2.0 + 20.0 + 2.0 + 20.0 + 12.0 + 1.0
+    );
+}
+
 /// `w-full`: the alert fills its `Ui`; the text starts after the border,
 /// the padding and, with an icon, the icon and `gap-x-2.5`.
 #[test]
@@ -482,6 +529,20 @@ fn a_title_after_the_action_fails_the_order_assert() {
         Alert::new().show(ui, |ui| {
             let _ = alert_action(ui, |ui| ui.button("Undo"));
             shadcn_egui::components::alert::alert_title(ui, "Saved");
+        })
+    });
+}
+
+/// Free content comes where the description's slot is, before the action
+/// (rules, Container; G4 (b)).
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "before alert_action")]
+fn free_content_after_the_action_fails_the_order_assert() {
+    let _ = settle(&vega(), 900.0, |ui| {
+        Alert::new().title("Saved").show(ui, |ui| {
+            let _ = alert_action(ui, |ui| ui.button("Undo"));
+            ui.label("More");
         })
     });
 }

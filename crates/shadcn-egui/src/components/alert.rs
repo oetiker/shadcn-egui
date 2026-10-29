@@ -9,9 +9,12 @@
 //! (`*:[svg]:row-span-2`) and the title and description stack in the
 //! second, `gap-0.5` apart. [`Alert::show`] builds that grid by hand: the
 //! icon column, then one content column that holds the title, the
-//! description and the caller's content. Where the content column holds a
-//! single title or description, the icon's second row stays empty and its
-//! gap stays, as the browser lays out an implicit empty row.
+//! description and the caller's content. The caller's own widgets between
+//! two parts stand for the element upstream's demos put there, the
+//! description's slot: one item in the content column, counted as one
+//! grid row (rules, Container). Where the content column holds a single
+//! row, the icon's second row stays empty and its gap stays, as the
+//! browser lays out an implicit empty row.
 //!
 //! The action ([`AlertAction`]) is absolutely placed in the browser, at
 //! the style's `cn-alert-action` inset (`top-2.5 right-3` in vega,
@@ -137,6 +140,45 @@ struct AlertContext {
     /// The top right corner of the action's place: the padding box's top
     /// right, the style's `cn-alert-action` inset inside it.
     action_corner: egui::Pos2,
+}
+
+/// What the alert's content column has seen of free content (rules,
+/// Container): runs of caller widgets between its parts, each one item in
+/// the column, as the description's slot upstream.
+#[derive(Clone, Copy, Debug, Default)]
+struct FreeRuns {
+    /// The column's cursor after the last part.
+    mark: f32,
+    /// Free runs so far.
+    runs: usize,
+    /// `alert_action` has been called.
+    action: bool,
+}
+
+fn free_key(alert: egui::Id) -> egui::Id {
+    alert.with("shadcn_egui::alert::free")
+}
+
+/// Count a free run that ends at `ui`'s cursor, if any, and return what
+/// the column has seen; `action` records a call of `alert_action`.
+fn free_runs(ui: &Ui, alert: egui::Id, action: bool) -> FreeRuns {
+    let key = free_key(alert);
+    let y = ui.cursor().top();
+    ui.data_mut(|d| {
+        let f = d.get_temp_mut_or_default::<FreeRuns>(key);
+        if y > f.mark + 0.5 {
+            f.runs += 1;
+            f.mark = y;
+        }
+        f.action |= action;
+        *f
+    })
+}
+
+/// Move the free-content mark to `ui`'s cursor, after a part.
+fn mark_part(ui: &Ui, alert: egui::Id) {
+    let y = ui.cursor().top();
+    ui.data_mut(|d| d.get_temp_mut_or_default::<FreeRuns>(free_key(alert)).mark = y);
 }
 
 /// The context of the alert around `ui`, if any.
@@ -267,7 +309,10 @@ impl Alert {
 
     /// Show the alert with `add` below its title and description, in the
     /// content column. `add` holds the alert's parts and other widgets; it
-    /// takes the alert's text size and colour.
+    /// takes the alert's text size and colour. Widgets of the caller's own
+    /// between two parts are one row of the content column, in the
+    /// description's slot, and come before [`alert_action`] (a
+    /// `debug_assert!` checks it).
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
         let t = Theme::current(ui.ctx());
         let id = match self.id_salt {
@@ -351,17 +396,34 @@ impl Alert {
         content.spacing_mut().item_spacing.y = gap;
         let inner = content_scope(&mut content, &look, |ui| {
             content_ui(ui, id.with("content"), &[&root[..]], st, |ui| {
+                let start = FreeRuns {
+                    mark: ui.cursor().top(),
+                    ..FreeRuns::default()
+                };
+                ui.data_mut(|d| d.insert_temp(free_key(id), start));
                 if let Some(title) = self.title {
                     ui.add(AlertTitle::new(title));
                 }
                 if let Some(description) = self.description {
                     ui.add(AlertDescription::new(description));
                 }
-                add(ui)
+                let inner = add(ui);
+                let before = ui.data(|d| d.get_temp::<FreeRuns>(free_key(id)));
+                let after = free_runs(ui, id, false);
+                // Free content stands for the description's slot, which
+                // upstream places before `Alert.Action`.
+                debug_assert!(
+                    !after.action || before.is_none_or(|b| b.runs == after.runs),
+                    "free content in an alert comes before alert_action"
+                );
+                inner
             })
         })
         .inner;
-        let rows = group.end(ui.ctx()).items.len();
+        let free = ui
+            .data_mut(|d| d.remove_temp::<FreeRuns>(free_key(id)))
+            .map_or(0, |f| f.runs);
+        let rows = group.end(ui.ctx()).items.len() + free;
 
         let used = content.min_rect();
         let mut content_h = (used.bottom() - top).max(0.0);
@@ -489,6 +551,10 @@ fn text_part(
             .is_none_or(|cx| registry::reported(ui.ctx(), cx.id, State::HAS_ACTION) == State::NONE),
         "alert_action comes after the title and description"
     );
+    let cx = alert_context(ui);
+    if let Some(cx) = cx {
+        let _ = free_runs(ui, cx.id, false);
+    }
     let (v, st) = part_setup(ui, &t);
     let l = [v.part(&t.style, builtin, app)];
     let look = TextLook::resolve(ui, &l, st);
@@ -496,6 +562,9 @@ fn text_part(
     let response = part_ui(ui, id, &[&l[..]], st, |ui| {
         look.label(ui, text, TextWrapMode::Wrap)
     });
+    if let Some(cx) = cx {
+        mark_part(ui, cx.id);
+    }
     let _ = registry::join(
         ui,
         Item {
@@ -537,6 +606,7 @@ impl AlertAction {
             return ui.scope(|ui| content_ui(ui, id, &[&l[..]], st, add));
         };
         registry::report(ui.ctx(), cx.id, State::HAS_ACTION);
+        let _ = free_runs(ui, cx.id, true);
         let room = ui.max_rect();
         let place = Rect::from_min_max(
             egui::pos2(room.left(), cx.action_corner.y),
