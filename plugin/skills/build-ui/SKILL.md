@@ -250,8 +250,11 @@ fn delete(ui: &mut egui::Ui) -> egui::Response {
 - Parts follow their parent's variant: `card_title` in a
   `Card::new().variant(..)`, `dialog::footer` in a dialog, `popover_header`
   in a popover draw the parent's app variant without a setter of their own.
-- A name the theme does not define stops a debug build with an assertion
-  and draws as `Default` in a release build.
+- An app variant or app size the theme does not define stops a debug build
+  with an assertion and draws as `Default` in a release build. An app colour
+  the theme does not define stops a debug build too; in a release build the
+  edit that uses it is skipped, so the part keeps the base variant's value
+  there.
 
 ## Decompose and map
 

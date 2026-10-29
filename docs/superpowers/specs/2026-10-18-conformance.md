@@ -113,6 +113,11 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   egui shapes to the browser's pixels. Where that is not possible, the
   port stops and states the case with its options to the maintainer. It
   never drops the look and never ships an approximation silently.
+- An edge the crate builds itself (a cut, a fade band) counts as the
+  browser's when it equals egui's own anti-aliasing of the same outline,
+  within the strict snapshot tolerance. The rest of the difference between
+  egui's anti-aliasing and Chrome's (stacked layers, arc tessellation) is
+  egui's: the build-ui skill names it, and it is not a port's defect.
 
 ### 2.6 Focus ring
 
@@ -407,6 +412,10 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
 - A pass-start hook may give a mechanism its place in the pass, never
   its correctness: where no hook runs, the first crate call of the pass
   does the work.
+- A frame in which nothing changes takes one pass and requests no
+  repaint, from the second frame on (egui repaints after a context's
+  first frame), also when the app repeats an idempotent setup call
+  (`Theme::apply`, `Preset::apply`) every frame.
 - The one allowed difference: previous-pass knowledge (3.2) relies on a
   discarded pass, so a loop without the discarded pass shows one stale
   first frame, which the docs say.

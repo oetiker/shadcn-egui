@@ -1794,8 +1794,11 @@ output field (i) — as recommended.
 
 Consequence (rules, 2026-10-19): The action part is placed from the
 previous pass's size, with `request_discard` when it changes (rules,
-Part fn; conformance 3.2). It is called first because upstream places it before the
-content in source order, which is Tab and reading order.
+Part fn; conformance 3.2). The card's action is called first because upstream
+places it before the content in source order, which is Tab and reading order.
+The alert's comes last, after the title, the description and free content, as
+upstream's `Alert.Action` does (rules, Part: source order; narrowed to card
+2026-10-29).
 
 ### D-49 · Media and image slots
 
@@ -3031,7 +3034,7 @@ reports no `widget_info` (conformance 8).
   others out.
 - **Options:** (a) every leaf whose common use is one call (button, badge,
   kbd, spinner, skeleton, progress, separator, label, checkbox, switch,
-  slider, input, textarea, marker, alert, radio), plus value shortcuts for
+  slider, input, textarea, marker, radio), plus value shortcuts for
   list choices (`select`, `native_select`, `tabs`, `toggle_group`, D-27) and
   for `pagination` (page, total) and `calendar`/`range_calendar` (one
   binding); none for containers, popover-style overlays and data-heavy
@@ -3053,6 +3056,9 @@ Decision: (a) with the named exceptions — as recommended.
 Consequence (rules, 2026-10-19): The rules state (a) as clauses (Kind templates: Shortcuts, Leaf, Anchored overlay); the
 lists here are examples at the pin. A variant is not content, so there is
 no `separator_vertical` shortcut (D-18 (x)).
+
+Consequence (rules, 2026-10-29): `alert` is struck from (a)'s list. Alert is
+a container (rules, Container: shortcut none), so it has no shortcut.
 
 Consequence (rules, 2026-10-21): Axiom 2 says why the named exceptions
 keep upstream's names with egui's shape: an egui name is copied only

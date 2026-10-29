@@ -31,6 +31,13 @@
   and after em dashes, after hyphens and en dashes, at a zero-width
   space, at a soft hyphen (U+00AD, drawn as a hyphen at the line end) and
   between CJK characters.
+- **Anti-aliased edges are egui's, not Chrome's.** egui feathers each shape
+  on its own, so a border over a fill stacks two anti-aliased layers where
+  Chrome paints one (up to about 56 levels apart on a bordered pill), and a
+  rounded corner sits up to half a device pixel off Chrome's arc (up to
+  about 100 levels on the edge pixels). A faded part fades shape by shape,
+  not as one layer. The crate's own cuts and fade bands match egui's
+  anti-aliasing of the same outline; the rest of the difference stays.
 - **Translucent menus draw opaque.** The menu colours
   `default-translucent` and `inverted-translucent` draw like `default`
   and `inverted`, and log a warning. Upstream blurs what lies behind the
