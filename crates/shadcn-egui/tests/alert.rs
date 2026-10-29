@@ -462,19 +462,76 @@ fn variant_colours_reach_title_and_description() {
     }
 }
 
-/// Plain egui text in the closure takes the alert's text colour.
+/// Plain egui text in the closure stands for the description (rules,
+/// Container; G4) and takes its colour: `text-muted-foreground`, and
+/// `text-destructive/90` in the destructive variant.
 #[test]
-fn caller_content_takes_the_alert_text_colour() {
+fn caller_content_takes_the_description_colour() {
+    for (name, theme, mode) in common::themes() {
+        let r = common::resolved(&theme, mode);
+        for (variant, want) in [
+            (
+                AlertVariant::Default,
+                Paint::Role(Role::MutedForeground, 1.0),
+            ),
+            (
+                AlertVariant::Destructive,
+                Paint::Role(Role::Destructive, 0.9),
+            ),
+        ] {
+            let (_, out) = common::measure_output(&theme, mode, |ui| {
+                Alert::new()
+                    .variant(variant)
+                    .show(ui, |ui| ui.label("Plain"))
+                    .response
+            });
+            assert_eq!(
+                common::text_colour(&out),
+                r.paint(want),
+                "{name} {variant:?}"
+            );
+        }
+    }
+}
+
+/// The action is a sibling of the description: its plain text keeps the
+/// alert's colour.
+#[test]
+fn action_content_keeps_the_alert_text_colour() {
     for (name, theme, mode) in common::themes() {
         let p = theme.palette_of(mode);
         let (_, out) = common::measure_output(&theme, mode, |ui| {
             Alert::new()
                 .variant(AlertVariant::Destructive)
-                .show(ui, |ui| ui.label("Plain"))
+                .show(ui, |ui| alert_action(ui, |ui| ui.label("Plain")))
                 .response
         });
         assert_eq!(common::text_colour(&out), p.destructive, "{name}");
     }
+}
+
+/// Free content stacks as a block (no gap between its widgets); the grid
+/// gap stays between it and the parts around it.
+#[test]
+fn free_content_stacks_without_a_gap() {
+    let t = vega();
+    let boxed = |ui: &mut Ui| {
+        ui.allocate_exact_size(vec2(40.0, 10.0), egui::Sense::hover())
+            .0
+    };
+    let (title, a, b, desc) = settle(&t, 900.0, |ui| {
+        Alert::new()
+            .show(ui, |ui| {
+                let title = shadcn_egui::components::alert::alert_title(ui, "Saved").rect;
+                let (a, b) = (boxed(ui), boxed(ui));
+                let desc = shadcn_egui::components::alert::alert_description(ui, "All good.").rect;
+                (title, a, b, desc)
+            })
+            .inner
+    });
+    assert_eq!(a.top(), title.bottom() + 2.0);
+    assert_eq!(b.top(), a.bottom());
+    assert_eq!(desc.top(), b.bottom() + 2.0);
 }
 
 /// `role="alert"`.

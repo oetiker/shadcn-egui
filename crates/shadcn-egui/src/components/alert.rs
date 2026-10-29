@@ -140,6 +140,8 @@ struct AlertContext {
     /// The top right corner of the action's place: the padding box's top
     /// right, the style's `cn-alert-action` inset inside it.
     action_corner: egui::Pos2,
+    /// The grid's row gap (`gap-0.5` in vega).
+    gap: f32,
 }
 
 /// What the alert's content column has seen of free content (rules,
@@ -160,19 +162,35 @@ fn free_key(alert: egui::Id) -> egui::Id {
 }
 
 /// Count a free run that ends at `ui`'s cursor, if any, and return what
-/// the column has seen; `action` records a call of `alert_action`.
-fn free_runs(ui: &Ui, alert: egui::Id, action: bool) -> FreeRuns {
+/// the column has seen and whether a run ended here; `action` records a
+/// call of `alert_action`.
+fn free_runs(ui: &Ui, alert: egui::Id, action: bool) -> (FreeRuns, bool) {
     let key = free_key(alert);
     let y = ui.cursor().top();
     ui.data_mut(|d| {
         let f = d.get_temp_mut_or_default::<FreeRuns>(key);
-        if y > f.mark + 0.5 {
+        let ended = y > f.mark + 0.5; // behaviour-ok: below half a point the cursor did not move
+        if ended {
             f.runs += 1;
             f.mark = y;
         }
         f.action |= action;
-        *f
+        (*f, ended)
     })
+}
+
+fn look_key(alert: egui::Id) -> egui::Id {
+    alert.with("shadcn_egui::alert::look")
+}
+
+/// `add` in the alert's own text look: its parts and the action are
+/// siblings of the description, so they do not take the description's
+/// look that free content takes.
+fn in_alert_look<R>(ui: &mut Ui, alert: egui::Id, add: impl FnOnce(&mut Ui) -> R) -> R {
+    match ui.data(|d| d.get_temp::<TextLook>(look_key(alert))) {
+        Some(look) => content_scope(ui, &look, add).inner,
+        None => add(ui),
+    }
 }
 
 /// Move the free-content mark to `ui`'s cursor, after a part.
@@ -310,9 +328,11 @@ impl Alert {
     /// Show the alert with `add` below its title and description, in the
     /// content column. `add` holds the alert's parts and other widgets; it
     /// takes the alert's text size and colour. Widgets of the caller's own
-    /// between two parts are one row of the content column, in the
-    /// description's slot, and come before [`alert_action`] (a
-    /// `debug_assert!` checks it).
+    /// between two parts stand for a description (rules, Container): one
+    /// row of the content column, in the description's text look (muted;
+    /// `text-destructive/90` in the destructive variant), stacked with no
+    /// gap as in a block, and before [`alert_action`] (a `debug_assert!`
+    /// checks it). The action's content keeps the alert's look.
     pub fn show<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
         let t = Theme::current(ui.ctx());
         let id = match self.id_salt {
@@ -370,7 +390,9 @@ impl Alert {
                     - pick_len(&action, |r| &r.inset_right, st),
                 origin.y + border + pick_len(&action, |r| &r.inset_top, st),
             ),
+            gap,
         };
+        ui.data_mut(|d| d.insert_temp(look_key(id), look.clone()));
 
         let back = RecipeBox::reserve(ui);
         let top = origin.y + border + pad_t;
@@ -393,33 +415,46 @@ impl Alert {
             ),
             parts,
         ));
-        content.spacing_mut().item_spacing.y = gap;
+        // Free content stands for the description (rules, Container): it
+        // takes the description's text look and stacks as a block, with no
+        // gap; the parts add the grid's gap around themselves.
+        let description = [variant.part(
+            &t.style,
+            |_, s| &s.alert_description,
+            |r| &r.alert_description,
+        )];
         let inner = content_scope(&mut content, &look, |ui| {
+            let free_look = TextLook::resolve(ui, &description, st);
             content_ui(ui, id.with("content"), &[&root[..]], st, |ui| {
-                let start = FreeRuns {
-                    mark: ui.cursor().top(),
-                    ..FreeRuns::default()
-                };
-                ui.data_mut(|d| d.insert_temp(free_key(id), start));
-                if let Some(title) = self.title {
-                    ui.add(AlertTitle::new(title));
-                }
-                if let Some(description) = self.description {
-                    ui.add(AlertDescription::new(description));
-                }
-                let inner = add(ui);
-                let before = ui.data(|d| d.get_temp::<FreeRuns>(free_key(id)));
-                let after = free_runs(ui, id, false);
-                // Free content stands for the description's slot, which
-                // upstream places before `Alert.Action`.
-                debug_assert!(
-                    !after.action || before.is_none_or(|b| b.runs == after.runs),
-                    "free content in an alert comes before alert_action"
-                );
-                inner
+                content_scope(ui, &free_look, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    let start = FreeRuns {
+                        mark: ui.cursor().top(),
+                        ..FreeRuns::default()
+                    };
+                    ui.data_mut(|d| d.insert_temp(free_key(id), start));
+                    if let Some(title) = self.title {
+                        ui.add(AlertTitle::new(title));
+                    }
+                    if let Some(description) = self.description {
+                        ui.add(AlertDescription::new(description));
+                    }
+                    let inner = add(ui);
+                    let before = ui.data(|d| d.get_temp::<FreeRuns>(free_key(id)));
+                    let (after, _) = free_runs(ui, id, false);
+                    // Free content stands for the description's slot, which
+                    // upstream places before `Alert.Action`.
+                    debug_assert!(
+                        !after.action || before.is_none_or(|b| b.runs == after.runs),
+                        "free content in an alert comes before alert_action"
+                    );
+                    inner
+                })
+                .inner
             })
         })
         .inner;
+        ui.data_mut(|d| d.remove::<TextLook>(look_key(id)));
         let free = ui
             .data_mut(|d| d.remove_temp::<FreeRuns>(free_key(id)))
             .map_or(0, |f| f.runs);
@@ -551,20 +586,31 @@ fn text_part(
             .is_none_or(|cx| registry::reported(ui.ctx(), cx.id, State::HAS_ACTION) == State::NONE),
         "alert_action comes after the title and description"
     );
-    let cx = alert_context(ui);
-    if let Some(cx) = cx {
-        let _ = free_runs(ui, cx.id, false);
-    }
     let (v, st) = part_setup(ui, &t);
     let l = [v.part(&t.style, builtin, app)];
-    let look = TextLook::resolve(ui, &l, st);
     let id = ui.next_auto_id().with("shadcn_egui::alert::part");
-    let response = part_ui(ui, id, &[&l[..]], st, |ui| {
-        look.label(ui, text, TextWrapMode::Wrap)
-    });
-    if let Some(cx) = cx {
-        mark_part(ui, cx.id);
-    }
+    let draw = |ui: &mut Ui| {
+        let look = TextLook::resolve(ui, &l, st);
+        part_ui(ui, id, &[&l[..]], st, |ui| {
+            look.label(ui, text, TextWrapMode::Wrap)
+        })
+    };
+    let response = match alert_context(ui) {
+        None => draw(ui),
+        Some(cx) => {
+            // A grid row: `gap` from the free content before it and to
+            // whatever comes after it.
+            if free_runs(ui, cx.id, false).1 {
+                ui.add_space(cx.gap);
+            }
+            let spacing = ui.spacing().item_spacing.y;
+            ui.spacing_mut().item_spacing.y = cx.gap;
+            let response = in_alert_look(ui, cx.id, draw);
+            ui.spacing_mut().item_spacing.y = spacing;
+            mark_part(ui, cx.id);
+            response
+        }
+    };
     let _ = registry::join(
         ui,
         Item {
@@ -607,6 +653,7 @@ impl AlertAction {
         };
         registry::report(ui.ctx(), cx.id, State::HAS_ACTION);
         let _ = free_runs(ui, cx.id, true);
+        let alert = cx.id;
         let room = ui.max_rect();
         let place = Rect::from_min_max(
             egui::pos2(room.left(), cx.action_corner.y),
@@ -622,7 +669,11 @@ impl AlertAction {
             id,
             Align::Min,
             "alert::alert_action width changed",
-            |ui| content_ui(ui, id.with("content"), &[&l[..]], st, add),
+            |ui| {
+                in_alert_look(ui, alert, |ui| {
+                    content_ui(ui, id.with("content"), &[&l[..]], st, add)
+                })
+            },
         )
     }
 }

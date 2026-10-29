@@ -130,7 +130,10 @@ impl<'a> Card<'a> {
     }
 
     /// Show the card. `add` fills the body: [`card_header`] and
-    /// [`card_content`] sections, `gap` apart.
+    /// [`card_content`] sections, `gap` apart. Widgets of the caller's own
+    /// between two sections stand for one more `card-content` (rules,
+    /// Container): they are `cn-card-content`'s gap apart, as inside
+    /// [`card_content`], and `gap` from the sections around them.
     ///
     /// Upstream's card sets no width (conformance 3.1): in a column it
     /// spans the available width, as a block does; in a crate row
@@ -221,7 +224,10 @@ impl<'a> Card<'a> {
                 .layout(Layout::top_down(Align::Min)),
             parts,
         ));
-        body.spacing_mut().item_spacing.y = gap;
+        // Free content stands for a `card-content` (rules, Container): its
+        // widgets are `cn-card-content`'s gap apart, and the parts keep the
+        // card's gap around themselves.
+        let content_gap = pick_len(&content, |r| &r.gap, st);
         clip(&mut body);
         let result = content_scope(&mut body, &look, |ui| {
             content_ui(
@@ -229,7 +235,19 @@ impl<'a> Card<'a> {
                 id.with("shadcn_egui::card::content"),
                 &[&card[..]],
                 st,
-                add,
+                |ui| {
+                    ui.spacing_mut().item_spacing.y = content_gap;
+                    let body = Body {
+                        mark: ui.cursor().top(),
+                        gap,
+                        content_gap,
+                    };
+                    let key = body_key(ui);
+                    ui.data_mut(|d| d.insert_temp(key, body));
+                    let inner = add(ui);
+                    ui.data_mut(|d| d.remove::<Body>(key));
+                    inner
+                },
             )
         })
         .inner;
@@ -335,11 +353,52 @@ impl<'a> Card<'a> {
     }
 }
 
+/// What a card's body knows while its closure runs: where the last part
+/// ended and its two gaps.
+#[derive(Clone, Copy, Debug)]
+struct Body {
+    /// The body's cursor after the last part.
+    mark: f32,
+    /// `cn-card`'s gap, between sections.
+    gap: f32,
+    /// `cn-card-content`'s gap, inside a run of free content.
+    content_gap: f32,
+}
+
+fn body_key(ui: &Ui) -> egui::Id {
+    ui.id().with("shadcn_egui::card::body")
+}
+
+/// Place a card part: directly in a card's body, it is a section the
+/// card's gap away from the free content before it and from what comes
+/// after it; elsewhere `add` runs as it is.
+fn section<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let key = body_key(ui);
+    let Some(body) = ui.data(|d| d.get_temp::<Body>(key)) else {
+        return add(ui);
+    };
+    let free = ui.cursor().top() > body.mark + 0.5; // behaviour-ok: below half a point the cursor did not move
+    if free {
+        // Free content before: its last widget left the content gap.
+        ui.add_space(body.gap - body.content_gap);
+    }
+    ui.spacing_mut().item_spacing.y = body.gap;
+    let inner = add(ui);
+    ui.spacing_mut().item_spacing.y = body.content_gap;
+    let mark = ui.cursor().top();
+    ui.data_mut(|d| d.insert_temp(key, Body { mark, ..body }));
+    inner
+}
+
 /// `card-content` section. Its children are the style's `cn-card-content`
 /// `gap` apart, which only vega sets (12 px); in nova, maia, lyra, mira,
 /// luma and rhea they touch. Wrap them in [`crate::layout::vstack`] for the
 /// design's spacing.
 pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    section(ui, |ui| content_section(ui, add))
+}
+
+fn content_section<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
     let st = card_state(ui, &v);
@@ -355,6 +414,10 @@ pub fn card_content<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// `card-header` with its title and description.
 pub fn card_header(ui: &mut Ui, title: &str, description: &str) {
+    section(ui, |ui| header(ui, title, description));
+}
+
+fn header(ui: &mut Ui, title: &str, description: &str) {
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
     let header = [v.part(&t.style, |s| &s.card_header, |r| &r.card_header)];
@@ -386,6 +449,10 @@ pub fn card_header_with_action(
     description: &str,
     action: impl FnOnce(&mut Ui),
 ) {
+    section(ui, |ui| header_with_action(ui, title, description, action));
+}
+
+fn header_with_action(ui: &mut Ui, title: &str, description: &str, action: impl FnOnce(&mut Ui)) {
     // The action sits in the header, beside the title and description.
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
@@ -434,6 +501,10 @@ fn header_column(ui: &mut Ui, title: &str, description: &str) {
 
 /// `card-title`: size, weight and line height of the style.
 pub fn card_title(ui: &mut Ui, text: &str) -> Response {
+    section(ui, |ui| title(ui, text))
+}
+
+fn title(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
     let st = t.state(ui.ctx(), v.bits());
@@ -451,6 +522,10 @@ pub fn card_title(ui: &mut Ui, text: &str) -> Response {
 
 /// `card-description`: muted text at the style's size.
 pub fn card_description(ui: &mut Ui, text: &str) -> Response {
+    section(ui, |ui| description(ui, text))
+}
+
+fn description(ui: &mut Ui, text: &str) -> Response {
     let t = Theme::current(ui.ctx());
     let v = card_recipes(ui, &t);
     let st = t.state(ui.ctx(), v.bits());

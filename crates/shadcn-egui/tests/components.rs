@@ -1107,6 +1107,48 @@ fn demo_card(ui: &mut egui::Ui, size: CardSize, footer: bool) {
     });
 }
 
+/// Free content in a card's closure stands for a `card-content` (rules,
+/// Container; G4): its widgets are `cn-card-content`'s gap apart (vega
+/// 12 px, nova none), and the card's gap stays between it and the
+/// sections around it.
+#[test]
+fn free_card_content_is_one_card_content() {
+    for (theme, content_gap, gap) in [
+        (Theme::vega(), 12.0, 24.0),
+        (
+            Theme::new(Style::nova(), Palette::light(), Palette::dark(), 10.0),
+            0.0,
+            16.0,
+        ),
+    ] {
+        let boxed = |ui: &mut egui::Ui| {
+            ui.allocate_exact_size(egui::vec2(40.0, 10.0), egui::Sense::hover())
+                .0
+        };
+        let mut seen = (
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+        );
+        let _ = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            let inner = ui.scope(|ui| {
+                Card::new().show(ui, |ui| {
+                    let h = card_content(ui, |ui| boxed(ui));
+                    let (a, b) = (boxed(ui), boxed(ui));
+                    let c = card_content(ui, |ui| boxed(ui));
+                    seen = (h, a, b, c);
+                });
+            });
+            inner.response
+        });
+        let (h, a, b, c) = seen;
+        assert_eq!(a.top(), h.bottom() + gap, "{h:?} {a:?}");
+        assert_eq!(b.top(), a.bottom() + content_gap, "{a:?} {b:?}");
+        assert_eq!(c.top(), b.bottom() + gap, "{b:?} {c:?}");
+    }
+}
+
 #[test]
 fn card_default_snapshot() {
     common::snapshot_all("card_default", egui::vec2(360.0, 200.0), |ui| {
