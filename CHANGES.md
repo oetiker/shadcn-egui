@@ -7,6 +7,7 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- Avatar shows a round picture with initials while it loads or when it fails: `ui.add(Avatar::new("CN").image("https://…/me.png").alt_text("@me"))`, `Avatar::icon_only(icon, name)` for an icon instead of initials, `.size(AvatarSize::Sm)` or `Lg`, and `.badge(AvatarBadge::new())` for the status dot, with an icon by `.icon(..)`. `AvatarGroup::new().show(ui, |ui| ..)` overlaps avatars in a row, and `avatar_group_count(ui, "+3")` ends it in the size of the group's avatars. The image is a uri an installed egui image loader reads, or encoded bytes; a texture is not accepted, as the avatar's thin inner border is blended with the picture's pixels as on the shadcn page (#30).
 
 ### Changed
 - build-ui skill: the guide for apps that run their own egui frame loop now says to run each frame with `Context::run_ui` instead of `begin_pass`/`end_pass`. In such a loop, a drag over dialog, card or alert text left a selection that kept following the pointer after the button came up, and Ctrl+C copied nothing. The guide also shows how to pass copied text to your own clipboard when `egui-winit` runs without its clipboard features, and says what `is_pointer_over_egui()` reports under a `CentralPanel`.
