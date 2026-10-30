@@ -11,7 +11,7 @@ are recorded here. The format is based on
 ### Changed
 
 ### Fixed
-- A widget with a shadow (a selected tab, a card, a dialog, a popover) no longer stalls the app each time it moves, fades in or out, or comes back after a frame without it: the shadow is built once per size and reused, where before every such frame built it again (about 100 ms in a debug build). The first frame that shows a shadow, and a shadow that changes size or grows in as a tab is selected, still build it. (#25)
+- A widget with a shadow (a selected tab, a card, a dialog, a popover) no longer stalls the app each time it moves, fades in or out, or comes back after a frame without it: the shadow is built once per size and reused, where before every such frame built it again (about 100 ms in a debug build). The first frame that shows a shadow, and each frame of a shadow that changes size or grows in as a tab is selected, still build it, now in half the time (a tab bar's first frame in a debug build: 115 ms before, 51 ms now). (#25)
 
 ## 0.7.0 - 2026-10-29
 ### New
