@@ -1373,6 +1373,22 @@ pub(crate) fn clip_inside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Me
 /// share an edge, and two polygons that share a side, cut it at the same
 /// point, so the pieces meet without a crack a pixel centre could fall in.
 fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui::Mesh) {
+    split_convex_with(mesh, polygon, true)
+}
+
+/// [`split_convex`], with `classify` deciding whether triangles are first
+/// sorted by the cheap tests of [`Sorter`]: one whose points lie in its
+/// inner rects lies inside every edge; one outside the edge it faces, or
+/// either neighbour, lies outside. The per-edge test would emit both the
+/// same way (it sends a triangle outside if any edge has it wholly
+/// outside, whichever edge it meets first), so the output is identical.
+/// Without, every triangle takes the per-edge test: the reference the
+/// tests compare against.
+pub(crate) fn split_convex_with(
+    mesh: &egui::Mesh,
+    polygon: &[egui::Pos2],
+    classify: bool,
+) -> (egui::Mesh, egui::Mesh) {
     use egui::epaint::Vertex;
     let n = polygon.len();
     let mut out = egui::Mesh::with_texture(mesh.texture_id);
@@ -1382,13 +1398,7 @@ fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui:
         return (out, rest);
     }
     let first = |a: egui::Pos2, b: egui::Pos2| (a.x, a.y) <= (b.x, b.y);
-    let area: f32 = (0..n)
-        .map(|i| {
-            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
-            a.x * b.y - b.x * a.y
-        })
-        .sum();
-    let orient = area.signum();
+    let orient = orientation(polygon);
     // > 0 inside edge `i`, < 0 outside it.
     let side = |i: usize, p: egui::Pos2| {
         let (a, b) = (polygon[i], polygon[(i + 1) % n]);
@@ -1428,8 +1438,28 @@ fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui:
         Vec::with_capacity(n + 3),
         Vec::with_capacity(n + 3),
     );
+    let sorter = classify.then(|| Sorter::new(polygon));
     for tri in mesh.indices.as_chunks::<3>().0 {
         let tri = tri.map(|i| mesh.vertices[i as usize]);
+        if let Some(sorter) = &sorter {
+            if tri.iter().all(|v| sorter.inside(v.pos)) {
+                emit(&mut out, &tri);
+                continue;
+            }
+            let sum = tri
+                .iter()
+                .fold(egui::Vec2::ZERO, |s, v| s + v.pos.to_vec2());
+            let centroid = (sum / tri.len() as f32).to_pos2();
+            let facing = sorter.facing(centroid);
+            if facing.is_some_and(|f| {
+                [f + n - 1, f, f + 1]
+                    .iter()
+                    .any(|&e| tri.iter().all(|v| side(e % n, v.pos) <= 0.0))
+            }) {
+                emit(&mut rest, &tri);
+                continue;
+            }
+        }
         let (mut all_inside, mut outside_one) = (true, false);
         for e in 0..n {
             let d = tri.map(|v| side(e, v.pos));
@@ -1471,6 +1501,149 @@ fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui:
         emit(&mut out, &inside);
     }
     (out, rest)
+}
+
+/// Which way `polygon` runs: the sign of its area, as [`split_convex`]'s
+/// side test takes it.
+fn orientation(polygon: &[egui::Pos2]) -> f32 {
+    let n = polygon.len();
+    let area: f32 = (0..n)
+        .map(|i| {
+            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+            a.x * b.y - b.x * a.y
+        })
+        .sum();
+    area.signum()
+}
+
+/// Cheap tests that sort most triangles before [`split_convex`]'s
+/// per-edge test, deciding as it would.
+pub(crate) struct Sorter {
+    /// Rects inside the polygon (see [`inner_rect`]): a point in one lies
+    /// inside every edge, and so does a triangle whose points all do, the
+    /// polygon being convex.
+    cores: Vec<Rect>,
+    /// Where the polygon's straight middle lies: a point outside it faces
+    /// the edges in the direction it lies off this rect.
+    middle: Rect,
+    /// The edge facing each of [`FACINGS`] directions round the circle.
+    facing: Vec<usize>,
+}
+
+/// How many directions [`Sorter`] tells the facing edge for.
+const FACINGS: usize = 64;
+
+impl Sorter {
+    pub(crate) fn new(polygon: &[egui::Pos2]) -> Self {
+        let n = polygon.len();
+        let orient = orientation(polygon);
+        let bounds = Rect::from_points(polygon);
+        // Shrunk evenly, in x only, in y only.
+        let [square, wide, tall] = [egui::Vec2::splat(1.0), egui::Vec2::X, egui::Vec2::Y] // behaviour-ok: shrink weights
+            .map(|w| inner_rect(polygon, orient, w));
+        let middle = Rect::from_x_y_ranges(
+            wide.map_or(bounds.center().x..=bounds.center().x, |r| {
+                r.x_range().into()
+            }),
+            tall.map_or(bounds.center().y..=bounds.center().y, |r| {
+                r.y_range().into()
+            }),
+        );
+        let outward = |i: usize| {
+            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+            egui::vec2(b.y - a.y, a.x - b.x) * orient
+        };
+        let facing = (0..FACINGS)
+            .map(|k| {
+                let angle = (k as f32 + 0.5) / FACINGS as f32 * std::f32::consts::TAU; // behaviour-ok: centre of the direction's sector
+                let dir = egui::vec2(angle.cos(), angle.sin());
+                (0..n)
+                    .max_by(|&i, &j| {
+                        let reach = |i: usize| outward(i).normalized().dot(dir);
+                        reach(i).total_cmp(&reach(j))
+                    })
+                    .unwrap_or(0)
+            })
+            .collect();
+        Self {
+            cores: [square, wide, tall].into_iter().flatten().collect(),
+            middle,
+            facing,
+        }
+    }
+
+    /// `p` lies inside every edge of the polygon, far enough that
+    /// [`split_convex`] finds it so: a triangle with all its points here
+    /// is wholly inside.
+    pub(crate) fn inside(&self, p: egui::Pos2) -> bool {
+        self.cores.iter().any(|r| r.contains(p))
+    }
+
+    /// The edge facing the direction `p` lies off the middle, the likeliest
+    /// to have `p` outside; `None` where `p` lies within the middle.
+    fn facing(&self, p: egui::Pos2) -> Option<usize> {
+        let off = p - p.clamp(self.middle.min, self.middle.max);
+        if off == egui::Vec2::ZERO {
+            return None;
+        }
+        let turn = off.y.atan2(off.x) / std::f32::consts::TAU;
+        let k = ((turn + 1.0) * FACINGS as f32) as usize % FACINGS; // behaviour-ok: atan2's -1/2..1/2 turn made positive
+        Some(self.facing[k])
+    }
+}
+
+/// An axis-aligned rect inside every edge of `polygon` (inside where the
+/// edge's side, by `orient`, is positive), kept off each edge by a margin
+/// far above the rounding of [`split_convex`]'s side test, so that test
+/// finds every point of it strictly inside. The polygon's bounding box,
+/// shrunk as far as its edges need, by `weight` in x and y; `None` when
+/// nothing is left.
+fn inner_rect(polygon: &[egui::Pos2], orient: f32, weight: egui::Vec2) -> Option<Rect> {
+    let n = polygon.len();
+    let bounds = Rect::from_points(polygon);
+    // The side test's rounding is a few float epsilons of the distances
+    // within the polygon's bounds; 1e-5 of them is a wide berth.
+    let margin = 1e-3 + 1e-5 * (bounds.width() + bounds.height()); // behaviour-ok: float tolerance in points
+
+    // Signed distance inside edge `i`.
+    let inside = |i: usize, p: egui::Pos2| {
+        let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+        // The side test's cross product, as a dot with the edge's normal.
+        let normal = egui::vec2(a.y - b.y, b.x - a.x) * orient;
+        normal.dot(p - a) / (b - a).length()
+    };
+    let corners = |r: Rect| {
+        [
+            r.left_top(),
+            r.right_top(),
+            r.left_bottom(),
+            r.right_bottom(),
+        ]
+    };
+    // Off the straight sides first, then each corner moves into the box
+    // by `weight` per point of shrinking: an edge it is too near to asks
+    // for that much.
+    let start = bounds.shrink(2.0 * margin); // behaviour-ok: twice the margin, as below
+    let mut shrink = 0.0f32;
+    for corner in corners(start) {
+        let towards = start.center() - corner;
+        let step = egui::vec2(towards.x.signum() * weight.x, towards.y.signum() * weight.y);
+        for i in 0..n {
+            let rate = inside(i, corner + step) - inside(i, corner);
+            // Twice the margin, so rounding cannot take the corner below it.
+            let need = 2.0 * margin - inside(i, corner); // behaviour-ok: float tolerance
+            if need > 0.0 && rate > 0.0 {
+                shrink = shrink.max(need / rate);
+            }
+        }
+    }
+    let core = start.shrink2(weight * shrink);
+    // Distance to an edge is linear, so the corners bound the whole rect.
+    let fits = core.is_positive()
+        && corners(core)
+            .iter()
+            .all(|&p| (0..n).all(|i| inside(i, p) >= margin));
+    fits.then_some(core)
 }
 
 /// Apply `translate-x/y` to a part's rect. `Calc(f, n)` is `calc(f × 100% +
@@ -1883,6 +2056,86 @@ mod tests {
             CornerRadius::ZERO,
         );
         assert_eq!(area(&clip_inside(&quad, &beside)), 0.0);
+    }
+
+    /// A mesh of small squares over `rect`, `step` apart, each colour
+    /// different so a misplaced vertex shows.
+    fn grid(rect: Rect, step: f32) -> egui::Mesh {
+        let mut mesh = egui::Mesh::default();
+        let (w, h) = (
+            (rect.width() / step) as usize,
+            (rect.height() / step) as usize,
+        );
+        for j in 0..h {
+            for i in 0..w {
+                let min = rect.min + egui::vec2(i as f32, j as f32) * step;
+                let tone = ((i * 7 + j * 13) % 256) as u8;
+                mesh.add_colored_rect(
+                    Rect::from_min_size(min, egui::Vec2::splat(step)),
+                    Color32::from_rgba_premultiplied(tone, 255 - tone, 0, 255),
+                );
+            }
+        }
+        mesh
+    }
+
+    /// The cheap sorting before the per-edge test keeps every outline
+    /// the clip cuts with, `clip_inside` and `clip_outside` alike, cutting
+    /// exactly as before: the exact, outer and inner outlines and the band
+    /// quads of a rounded clip (#25).
+    #[test]
+    fn the_quick_split_cuts_every_clip_outline_as_the_edge_test_does() {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(1.5);
+        let mesh = grid(
+            Rect::from_min_size(egui::pos2(-3.3, -2.1), egui::vec2(70.0, 40.0)),
+            0.7,
+        );
+        let radii = [
+            CornerRadius::same(6),
+            CornerRadius {
+                nw: 0,
+                ne: 14,
+                sw: 3,
+                se: 9,
+            },
+            CornerRadius::ZERO,
+        ];
+        for radius in radii {
+            let outline = rounded_polygon(
+                Rect::from_min_size(egui::pos2(2.25, 3.5), egui::vec2(55.0, 25.0)),
+                radius,
+            );
+            let clip = RoundedClip::new(&ctx, outline);
+            assert!(clip.half > 0.0);
+            let n = clip.exact.len();
+            let quads = (0..n).map(|i| {
+                let j = (i + 1) % n;
+                vec![clip.outer[i], clip.outer[j], clip.inner[j], clip.inner[i]]
+            });
+            for polygon in [clip.exact.clone(), clip.outer.clone(), clip.inner.clone()]
+                .into_iter()
+                .chain(quads)
+            {
+                crate::box_shadow::tests::assert_same_split(&mesh, &polygon);
+            }
+        }
+    }
+
+    /// The quick inside test has a rect to work with on a rounded box,
+    /// nearly as large as fits, clear of the rounding.
+    #[test]
+    fn a_rounded_box_has_an_inner_rect() {
+        let rect = Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(90.0, 30.0));
+        let polygon = rounded_polygon(rect, CornerRadius::same(6));
+        let core = inner_rect(&polygon, orientation(&polygon), egui::vec2(1.0, 1.0))
+            .expect("an inner rect");
+        // Its corner meets the rounding on the diagonal, 6 (1 - 1/√2) =
+        // 1.76 in, a little further for the arc's chords.
+        assert!(rect.shrink(1.75).contains_rect(core), "{core:?}");
+        assert!(core.contains_rect(rect.shrink(2.5)), "{core:?}");
+        let centre = rect.min + egui::Vec2::splat(6.0);
+        assert!((core.min - centre).length() < 6.0, "{core:?}");
     }
 
     /// A box narrower than the outer box's rounding keeps only the part

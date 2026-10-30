@@ -519,8 +519,9 @@ fn erf(x: f32) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::components::shared::split_convex_with;
 
     #[test]
     fn erf_matches_known_values() {
@@ -708,6 +709,97 @@ mod tests {
         }
         let len = shadow_cached(&ctx);
         assert!(len <= MAX_IDLE + 4, "cached meshes {len}");
+    }
+
+    /// The same mesh, vertex for vertex and index for index.
+    pub(crate) fn assert_same_mesh(a: &egui::Mesh, b: &egui::Mesh, what: &str) {
+        assert_eq!(a.indices, b.indices, "{what} indices");
+        assert_eq!(a.vertices.len(), b.vertices.len(), "{what} vertices");
+        for (u, v) in a.vertices.iter().zip(&b.vertices) {
+            assert_eq!(u.pos.x.to_bits(), v.pos.x.to_bits(), "{what} {u:?} {v:?}");
+            assert_eq!(u.pos.y.to_bits(), v.pos.y.to_bits(), "{what} {u:?} {v:?}");
+            assert_eq!(u.uv, v.uv, "{what}");
+            assert_eq!(u.color, v.color, "{what}");
+        }
+    }
+
+    /// Both halves of a split as the per-edge test alone splits them.
+    pub(crate) fn assert_same_split(mesh: &egui::Mesh, polygon: &[egui::Pos2]) {
+        let fast = split_convex_with(mesh, polygon, true);
+        let reference = split_convex_with(mesh, polygon, false);
+        assert_same_mesh(&fast.0, &reference.0, "inside");
+        assert_same_mesh(&fast.1, &reference.1, "outside");
+    }
+
+    /// Sorting triangles before the per-edge test cuts a shadow exactly as
+    /// the per-edge test alone does: uniform, uneven and cut radii, whole
+    /// and fractional places, one and two layers, a hard edge (#25).
+    #[test]
+    fn the_quick_split_cuts_a_shadow_as_the_edge_test_does() {
+        let black = Color32::BLACK;
+        let md = Layers::new(&[
+            ShadowLayer::new(egui::vec2(0.0, 4.0), 6.0, -1.0, black, 0.1),
+            ShadowLayer::new(egui::vec2(0.0, 2.0), 4.0, -2.0, black, 0.1),
+        ]);
+        let hard = Layers::new(&[ShadowLayer::new(egui::vec2(2.0, 2.0), 0.0, 1.0, black, 0.5)]);
+        let cases: [([f32; 4], CornerRadius, Pos2, Layers, f32); 6] = [
+            (
+                [6.0; 4],
+                CornerRadius::same(6),
+                egui::pos2(10.0, 10.0),
+                shadow_sm(),
+                1.0,
+            ),
+            (
+                [6.0; 4],
+                CornerRadius::same(6),
+                egui::pos2(10.3, 7.7),
+                md,
+                1.0,
+            ),
+            (
+                [0.0, 12.0, 3.0, 20.0],
+                CornerRadius {
+                    nw: 0,
+                    ne: 12,
+                    sw: 3,
+                    se: 20,
+                },
+                egui::pos2(-5.5, 3.25),
+                md,
+                2.0,
+            ),
+            (
+                [8.0; 4],
+                CornerRadius::ZERO,
+                egui::pos2(100.0, 50.0),
+                shadow_sm(),
+                1.5,
+            ),
+            (
+                [0.0; 4],
+                CornerRadius::same(10),
+                egui::pos2(1.0, 1.0),
+                md,
+                1.0,
+            ),
+            (
+                [4.0; 4],
+                CornerRadius::same(4),
+                egui::pos2(0.25, 0.75),
+                hard,
+                1.0,
+            ),
+        ];
+        for (radii, cut, at, layers, ppp) in cases {
+            let rect = Rect::from_min_size(at, egui::vec2(90.0, 29.0));
+            let mut mesh = Mesh::default();
+            for layer in layers.as_slice().iter().rev() {
+                add_layer(&mut mesh, rect, radii, layer, 1.0, ppp);
+            }
+            let polygon = rounded_polygon(rect, cut);
+            assert_same_split(&mesh, &polygon);
+        }
     }
 
     #[test]
