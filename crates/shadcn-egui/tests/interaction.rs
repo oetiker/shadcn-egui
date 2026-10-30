@@ -436,3 +436,89 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
         }
     }
 }
+
+/// The text `ui_fn` paints that contains `needle`: its bounds in a pass.
+fn text_bounds(out: &egui::FullOutput, needle: &str) -> Rect {
+    common::text_shapes(out)
+        .into_iter()
+        .find(|t| t.galley.text().contains(needle))
+        .map(|t| t.visual_bounding_rect())
+        .unwrap_or_else(|| panic!("no text containing {needle:?}"))
+}
+
+/// The text a pass asks the platform to copy, if any.
+fn copied_text(out: &egui::FullOutput) -> Option<String> {
+    out.platform_output.commands.iter().find_map(|c| match c {
+        egui::OutputCommand::CopyText(s) => Some(s.clone()),
+        _ => None,
+    })
+}
+
+/// Press on the text containing `needle` near its start, drag a little
+/// way into it and release, then move along the text with no button held
+/// and press Ctrl+C. Returns what that copies.
+fn select_then_hover(
+    app_loop: Loop,
+    needle: &str,
+    mut ui_fn: impl FnMut(&mut egui::Ui),
+) -> Option<String> {
+    let ctx = egui::Context::default();
+    let mut out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
+    for _ in 0..2 {
+        out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
+    }
+    let r = text_bounds(&out, needle);
+    let (y, start) = (r.center().y, r.left() + 1.0);
+    let end = start + r.width() * 0.4;
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        common::pointer_down(egui::pos2(start, y)),
+        &mut ui_fn,
+    );
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        vec![egui::Event::PointerMoved(egui::pos2(end, y))],
+        &mut ui_fn,
+    );
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        common::pointer_up(egui::pos2(end, y)),
+        &mut ui_fn,
+    );
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        vec![egui::Event::PointerMoved(egui::pos2(r.right() - 1.0, y))],
+        &mut ui_fn,
+    );
+    copied_text(&common::pass(
+        app_loop,
+        &ctx,
+        vec![egui::Event::Copy],
+        &mut ui_fn,
+    ))
+}
+
+/// cpu-rendering.md section 5 tells a custom loop to run frames through
+/// `Context::run_ui`: only there does egui end a label selection on the
+/// release and hand Ctrl+C's text to the platform. Through its own
+/// `begin_pass`/`end_pass` the selection follows the pointer after the
+/// release and nothing is copied.
+#[test]
+fn dialog_text_selection_ends_on_release_only_under_run_ui() {
+    use shadcn_egui::components::dialog::Dialog;
+    let title = "Delete this session now";
+    let dialog = |ui: &mut egui::Ui| {
+        Theme::vega().apply(ui.ctx());
+        Dialog::new("d", title).show(ui.ctx(), &mut true, |_| ());
+    };
+    let copied = select_then_hover(Loop::RunUi, title, dialog).expect("run_ui copies");
+    assert!(
+        !copied.is_empty() && title.starts_with(&copied) && copied.len() < title.len() - 4,
+        "the selection stops where the button came up: {copied:?}"
+    );
+    assert_eq!(select_then_hover(Loop::Own, title, dialog), None);
+}

@@ -21,7 +21,7 @@ glow or wgpu.
 
 - A component or layout helper the design needs is not in the crate: port it
   with `shadcn-egui:port-component`. Do not paint it ad hoc.
-- The app drives egui itself (`egui-winit`, `begin_pass`/`end_pass`) or
+- The app drives egui itself (`egui-winit` + `Context::run_ui`) or
   rasterizes on the CPU: read `references/cpu-rendering.md` before writing
   the frame loop. It covers repaint scheduling, tessellation settings,
   rasterizer fast paths, damage tracking and the input-routing predicates
