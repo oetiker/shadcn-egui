@@ -113,9 +113,10 @@ fn mix_layer(a: ShadowLayer, b: ShadowLayer, t: f32) -> ShadowLayer {
 /// `cut`. First layer on top.
 ///
 /// The mesh is built once per shape: its size, radii, cut, layers, scale
-/// and where `rect` starts within a device pixel. A box that moves by
-/// whole device pixels or fades reuses it, moved and faded per vertex, as
-/// does one that comes back after frames without it.
+/// and where `rect` starts within a device pixel. It is built where the
+/// box first is, so a box that stays paints what a fresh build paints; a
+/// box that moves by whole device pixels or fades reuses it, moved and
+/// faded per vertex, as does one that comes back after frames without it.
 pub(crate) fn shadow_mesh(
     ctx: &egui::Context,
     rect: Rect,
@@ -125,11 +126,10 @@ pub(crate) fn shadow_mesh(
     opacity: f32,
 ) -> Arc<Mesh> {
     let ppp = ctx.pixels_per_point();
-    let (shape, local) = ShapeKey::new(rect, radii, cut, layers, ppp);
-    let shift = rect.min - local.min;
+    let shape = ShapeKey::new(rect, radii, cut, layers, ppp);
     let placed = Placed {
         shape,
-        shift: [shift.x, shift.y].map(f32::to_bits),
+        at: [rect.min.x, rect.min.y].map(f32::to_bits),
         opacity: opacity.to_bits(),
     };
     let cache = |f: &mut dyn FnMut(&mut ShadowCache)| {
@@ -143,16 +143,18 @@ pub(crate) fn shadow_mesh(
     if let Some(mesh) = hit {
         return mesh;
     }
-    let built = built.unwrap_or_else(|| {
-        let mesh = Arc::new(build(local, radii, cut, layers, 1.0, ppp));
+    let (built, origin) = built.unwrap_or_else(|| {
+        let mesh = Arc::new(build(rect, radii, cut, layers, 1.0, ppp));
         cache(&mut |c| {
-            c.shapes.insert(shape, (mesh.clone(), c.pass));
+            c.shapes.insert(shape, (mesh.clone(), rect.min, c.pass));
             c.builds += 1;
         });
-        mesh
+        (mesh, rect.min)
     });
     let mut mesh = (*built).clone();
-    mesh.translate(shift);
+    if rect.min != origin {
+        mesh.translate(rect.min - origin);
+    }
     // A fresh build rounds a vertex's faded alpha once, this a second
     // time: within one level per layer.
     if opacity != 1.0 {
@@ -195,31 +197,19 @@ struct ShapeKey {
 }
 
 impl ShapeKey {
-    /// The key of `rect`'s shadow, and the rect to build it at: `rect`'s
-    /// size at its sub-pixel phase, next to the origin.
-    fn new(
-        rect: Rect,
-        radii: [f32; 4],
-        cut: CornerRadius,
-        layers: Layers,
-        ppp: f32,
-    ) -> (ShapeKey, Rect) {
+    /// The key of `rect`'s shadow.
+    fn new(rect: Rect, radii: [f32; 4], cut: CornerRadius, layers: Layers, ppp: f32) -> ShapeKey {
         let scale = ppp * STEPS_PER_PIXEL;
         let steps = |v: f32| (v * scale).round() as i64;
         let per_pixel = STEPS_PER_PIXEL as i64;
         let phase = [rect.min.x, rect.min.y].map(|v| steps(v).rem_euclid(per_pixel));
         let size = [steps(rect.width()), steps(rect.height())];
-        let point = |v: i64| v as f32 / scale;
-        let local = Rect::from_min_size(
-            egui::pos2(point(phase[0]), point(phase[1])),
-            egui::vec2(point(size[0]), point(size[1])),
-        );
         let mut list = [([0; 5], Color32::TRANSPARENT); MAX_LAYERS];
         for (k, l) in list.iter_mut().zip(layers.as_slice()) {
             let v = [l.offset().x, l.offset().y, l.blur(), l.spread(), l.alpha()];
             *k = (v.map(f32::to_bits), l.color());
         }
-        let key = ShapeKey {
+        ShapeKey {
             size,
             phase,
             radii: radii.map(f32::to_bits),
@@ -227,16 +217,15 @@ impl ShapeKey {
             layers: list,
             len: layers.len,
             pixels_per_point: ppp.to_bits(),
-        };
-        (key, local)
+        }
     }
 }
 
-/// A built shape moved by `shift` and faded by `opacity`.
+/// A built shape placed at `at` (its rect's `min`) and faded by `opacity`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct Placed {
     shape: ShapeKey,
-    shift: [u32; 2],
+    at: [u32; 2],
     opacity: u32,
 }
 
@@ -251,8 +240,8 @@ struct Placed {
 struct ShadowCache {
     /// Passes ended so far: the number of this one.
     pass: u64,
-    /// Each shape with the last pass that used it.
-    shapes: std::collections::HashMap<ShapeKey, (Arc<Mesh>, u64)>,
+    /// Each shape with where it was built and the last pass that used it.
+    shapes: std::collections::HashMap<ShapeKey, (Arc<Mesh>, Pos2, u64)>,
     current: std::collections::HashMap<Placed, Arc<Mesh>>,
     previous: std::collections::HashMap<Placed, Arc<Mesh>>,
     /// Shapes built, for the tests.
@@ -270,7 +259,7 @@ impl egui::cache::CacheTrait for ShadowCache {
         let mut ages: Vec<u64> = self
             .shapes
             .values()
-            .map(|(_, used)| *used)
+            .map(|(_, _, used)| *used)
             .filter(|used| idle(*used))
             .collect();
         ages.sort_unstable_by(|a, b| b.cmp(a));
@@ -281,7 +270,7 @@ impl egui::cache::CacheTrait for ShadowCache {
             .map_or(0, |used| *used)
             .max(pass.saturating_sub(MAX_AGE));
         self.shapes
-            .retain(|_, (_, used)| !idle(*used) || *used >= oldest);
+            .retain(|_, (_, _, used)| !idle(*used) || *used >= oldest);
     }
 
     fn len(&self) -> usize {
@@ -303,12 +292,13 @@ impl ShadowCache {
         hit
     }
 
-    /// The built shape `key`, marked as used in this pass.
-    fn shape(&mut self, key: ShapeKey) -> Option<Arc<Mesh>> {
+    /// The built shape `key` and where it was built, marked as used in
+    /// this pass.
+    fn shape(&mut self, key: ShapeKey) -> Option<(Arc<Mesh>, Pos2)> {
         let pass = self.pass;
-        self.shapes.get_mut(&key).map(|(mesh, used)| {
+        self.shapes.get_mut(&key).map(|(mesh, origin, used)| {
             *used = pass;
-            mesh.clone()
+            (mesh.clone(), *origin)
         })
     }
 }
