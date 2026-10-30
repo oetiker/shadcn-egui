@@ -12,6 +12,7 @@ are recorded here. The format is based on
 - build-ui skill: the guide for apps that run their own egui frame loop now says to run each frame with `Context::run_ui` instead of `begin_pass`/`end_pass`. In such a loop, a drag over dialog, card or alert text left a selection that kept following the pointer after the button came up, and Ctrl+C copied nothing. The guide also shows how to pass copied text to your own clipboard when `egui-winit` runs without its clipboard features, and says what `is_pointer_over_egui()` reports under a `CentralPanel`.
 
 ### Fixed
+- Badge text can now be selected with the mouse and copied with Ctrl+C, as on the shadcn page; before, a drag over a badge selected nothing.
 
 ## 0.7.0 - 2026-10-29
 ### New

@@ -129,7 +129,7 @@ pub fn part_painter(ui: &Ui, id: Id, chain: &[&[&Recipe]], s: State) -> Painter 
 /// Run `add` with `ui` at `opacity`, then restore the `Ui`'s own opacity.
 /// A [`Ui::disable`] inside `add` (a disabled card action) keeps its fade:
 /// the `Ui` stays disabled, so what it paints afterwards stays faded too.
-fn with_opacity<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+pub(crate) fn with_opacity<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let (before, was_enabled) = (ui.opacity(), ui.is_enabled());
     ui.set_opacity(opacity);
     let inner = add(ui);

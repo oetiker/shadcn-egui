@@ -44,8 +44,8 @@ use crate::Theme;
 use egui::text::{LayoutJob, TextWrapping};
 use egui::FontData;
 use egui::{
-    Align, Color32, FontFamily, FontId, FontSelection, Galley, Painter, Pos2, Response, Stroke,
-    TextWrapMode, Ui, Vec2, WidgetText,
+    Align, Color32, FontFamily, FontId, FontSelection, Galley, Painter, Pos2, Response, Sense,
+    Stroke, TextWrapMode, Ui, Vec2, WidgetText,
 };
 use std::sync::Arc;
 
@@ -780,6 +780,38 @@ impl TextBlock {
         let galley = place_rows(painter.ctx(), self.source.clone(), self.place, pos.y);
         painter.galley(pos, galley, color);
     }
+
+    /// [`TextBlock::paint`] through egui's label text selection, for text
+    /// the browser lets the user select and copy: `response` must sense
+    /// clicks and drags ([`selectable_sense`]). It paints with
+    /// `ui.painter()`, at the `Ui`'s opacity.
+    pub(crate) fn paint_selectable(&self, ui: &Ui, response: &Response, pos: Pos2, color: Color32) {
+        let galley = place_rows(ui.ctx(), self.source.clone(), self.place, pos.y);
+        egui::text_selection::LabelSelectionState::label_text_selection(
+            ui,
+            response,
+            pos,
+            galley,
+            color,
+            Stroke::NONE,
+        );
+    }
+}
+
+/// What text the user can select senses, as egui's `Label` does: clicks
+/// and drags (clicks only on a touch screen, where a drag scrolls), never
+/// Tab focus. `Sense::hover()` when the app turned egui's
+/// `selectable_labels` off.
+pub(crate) fn selectable_sense(ui: &Ui) -> Sense {
+    if !ui.style().interaction.selectable_labels {
+        return Sense::hover();
+    }
+    let select = if ui.input(|i| i.has_touch_screen()) {
+        Sense::click()
+    } else {
+        Sense::click_and_drag()
+    };
+    Sense::hover() | (select - Sense::FOCUSABLE)
 }
 
 /// Run `add` in a child `Ui` whose text a crate container's recipe sets

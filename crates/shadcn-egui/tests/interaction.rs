@@ -522,3 +522,22 @@ fn dialog_text_selection_ends_on_release_only_under_run_ui() {
     );
     assert_eq!(select_then_hover(Loop::Own, title, dialog), None);
 }
+
+/// A badge is a `span` upstream with no `select-none`: its text selects
+/// and copies as the browser's does.
+#[test]
+fn badge_text_selects_and_copies() {
+    use shadcn_egui::components::badge::{Badge, BadgeVariant};
+    let text = "Experimental feature";
+    for variant in [BadgeVariant::Default, BadgeVariant::Link] {
+        let copied = select_then_hover(Loop::RunUi, text, |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.add(Badge::new(text).variant(variant));
+        });
+        let copied = copied.unwrap_or_else(|| panic!("{variant:?}: nothing copied"));
+        assert!(
+            !copied.is_empty() && text.starts_with(&copied) && copied.len() < text.len(),
+            "{variant:?}: {copied:?}"
+        );
+    }
+}

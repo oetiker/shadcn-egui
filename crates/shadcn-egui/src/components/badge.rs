@@ -6,15 +6,15 @@ use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Icon;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, transitioned_text, RecipeBox,
+    interaction_state, line_width, part_painter, transitioned_text, with_opacity, RecipeBox,
 };
-use crate::components::text::TextLook;
+use crate::components::text::{selectable_sense, TextLook};
 use crate::style::app::Sealed;
 use crate::style::{
     pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
 use crate::Theme;
-use egui::{Response, Sense, Ui, Vec2, Widget};
+use egui::{Response, Ui, Vec2, Widget};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -168,7 +168,9 @@ impl Widget for Badge {
         // In a justified layout the box takes the layout's width, as egui's
         // `Button` does (conformance 3.1); the content stays centred in it.
         let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
-        let resp = ui.interact(rect, id, Sense::hover());
+        // A `span` upstream, without `select-none`: its text selects as
+        // the browser's does.
+        let resp = ui.interact(rect, id, selectable_sense(ui));
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });
@@ -187,7 +189,11 @@ impl Widget for Badge {
             .paint(&painter, rect);
 
         // A state's `underline` (the link variant on hover) lays out again.
-        row.paint(ui, &painter, rect, &TextLook::resolve(ui, &l, st), fg);
+        let look = TextLook::resolve(ui, &l, st);
+        // The selectable text paints through the `Ui`: at the part's opacity.
+        with_opacity(ui, painter.opacity(), |ui| {
+            row.selectable(&resp).paint(ui, &painter, rect, &look, fg);
+        });
         resp
     }
 }
