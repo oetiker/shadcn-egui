@@ -21,7 +21,7 @@ glow or wgpu.
 
 - A component or layout helper the design needs is not in the crate: port it
   with `shadcn-egui:port-component`. Do not paint it ad hoc.
-- The app drives egui itself (`egui-winit`, `begin_pass`/`end_pass`) or
+- The app drives egui itself (`egui-winit` + `Context::run_ui`) or
   rasterizes on the CPU: read `references/cpu-rendering.md` before writing
   the frame loop. It covers repaint scheduling, tessellation settings,
   rasterizer fast paths, damage tracking and the input-routing predicates
@@ -285,6 +285,18 @@ fn toolbar(ui: &mut egui::Ui) {
     if ui.add(Button::new("Save changes")).clicked() {
         // save
     }
+}
+```
+
+Text that the browser lets the user select (dialog, card, alert and
+popover titles and descriptions, badges) selects and copies with Ctrl+C;
+a crate `Label` and `Kbd` do not, as upstream's `select-none` says. Turn
+text selection off app-wide with egui's own switch, which crate text
+follows:
+
+```rust
+fn no_text_selection(ctx: &egui::Context) {
+    ctx.all_styles_mut(|s| s.interaction.selectable_labels = false);
 }
 ```
 

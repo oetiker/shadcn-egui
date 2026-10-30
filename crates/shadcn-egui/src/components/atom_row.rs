@@ -21,10 +21,12 @@
 
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::icon_atom::{resize, retint};
+#[cfg(doc)]
+use crate::components::text::selectable_sense;
 use crate::components::text::{TextBlock, TextLook};
 use egui::{
-    Align2, AtomKind, Atoms, Color32, Image, IntoAtoms, Painter, Rect, SizedAtomKind, TextWrapMode,
-    Ui, Vec2, WidgetText,
+    Align2, AtomKind, Atoms, Color32, Image, IntoAtoms, Painter, Rect, Response, SizedAtomKind,
+    TextWrapMode, Ui, Vec2, WidgetText,
 };
 
 /// One row of atoms with optional typed icon slots, before layout.
@@ -143,6 +145,7 @@ impl<'a> AtomRow<'a> {
             gap: self.gap,
             inset: self.inset,
             icon_stroke: self.icon_stroke,
+            select: None,
         }
     }
 }
@@ -177,9 +180,20 @@ pub(crate) struct LaidRow<'a> {
     gap: f32,
     inset: [f32; 4],
     icon_stroke: f32,
+    /// The widget's response, when its text is selectable.
+    select: Option<Response>,
 }
 
 impl LaidRow<'_> {
+    /// Make the text selectable through egui's label text selection, as
+    /// the browser selects a `span`'s: `response` senses
+    /// [`selectable_sense`], and the `Ui` given to [`LaidRow::paint`] has
+    /// the opacity the text paints at.
+    pub(crate) fn selectable(mut self, response: &Response) -> Self {
+        self.select = Some(response.clone());
+        self
+    }
+
     /// The border-box size: the content plus the inset.
     pub(crate) fn size(&self) -> Vec2 {
         let [l, r, t, b] = self.inset;
@@ -226,7 +240,10 @@ impl LaidRow<'_> {
                     } else {
                         block
                     };
-                    block.paint(painter, at.min, color);
+                    match &self.select {
+                        Some(resp) => block.paint_selectable(ui, resp, at.min, color),
+                        None => block.paint(painter, at.min, color),
+                    }
                 }
                 ItemKind::Sized(SizedAtomKind::Text(galley)) => {
                     painter.galley(at.min, galley, color);

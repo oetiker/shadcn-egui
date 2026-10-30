@@ -1,6 +1,6 @@
 # Fast egui without a GPU (CPU rasterizer, custom integration)
 
-Applies when you drive egui yourself (`egui-winit` + `begin_pass`/`end_pass`,
+Applies when you drive egui yourself (`egui-winit` + `Context::run_ui`,
 not eframe) and rasterize its meshes on the CPU, for example into a `softbuffer`
 surface on a box with no usable GPU. eframe + wgpu/glow handles most of this
 for you; a hand-rolled loop does not.
@@ -79,12 +79,28 @@ screen with fallback fonts until the user moves the mouse.
 
 ## 5. Integration traps (custom loop)
 
-- **`ctx.is_pointer_over_egui()` is always `true`** under a `CentralPanel`
-  when you drive egui with `begin_pass`/`end_pass`: the modern code path needs
-  state only `Context::run_ui` writes, and the legacy fallback sees the central
-  panel claim the whole unused rect. Likewise `wants_pointer_input()` over a
-  `CentralPanel`, and `wants_keyboard_input()` is true for *any* focused
-  widget (a button reached by Tab). For "is the pointer over floating UI":
+- **Run each frame with `ctx.run_ui(raw_input, |ui| ..)`**, not
+  `begin_pass`/`end_pass` or the deprecated `ctx.run`. Only `run_ui` runs
+  egui's plugins. Without them, label text selection never ends: after a
+  drag the selection follows the pointer with no button held, and Ctrl+C
+  copies nothing. `run_ui` takes the `RawInput` from
+  `egui_winit::State::take_egui_input` and returns the same `FullOutput`:
+
+  ```rust
+  fn frame(ctx: &egui::Context, raw_input: egui::RawInput) -> egui::FullOutput {
+      ctx.run_ui(raw_input, |ui| {
+          egui::CentralPanel::default().show_inside(ui, |ui| {
+              ui.label("Hello");
+          });
+      })
+  }
+  ```
+
+- **`ctx.is_pointer_over_egui()` is `true` over the whole window** when a
+  `CentralPanel` fills it: the panel is egui. So is
+  `egui_wants_pointer_input()` there, and `egui_wants_keyboard_input()` is
+  true for *any* focused widget (a button reached by Tab). For "is the
+  pointer over floating UI":
 
   ```rust
   fn pointer_over_floating_ui(ctx: &egui::Context) -> bool {
@@ -105,6 +121,27 @@ screen with fallback fonts until the user moves the mouse.
   ["links", "wayland", "x11"] }` and, if you need a clipboard, a crate with its
   own Wayland connection (`wl-clipboard-rs`). Check with `cargo tree -i
   smithay-clipboard`.
+- **Clipboard without egui-winit's clipboard features:** egui-winit then
+  keeps copied text in an in-process string. Before `handle_platform_output`,
+  take each `egui::OutputCommand::CopyText(text)` out of
+  `full_output.platform_output.commands` and store it with your own
+  clipboard crate. For Ctrl+V, push `egui::Event::Paste(text)` from that
+  clipboard into the `RawInput` and drop the `Paste` egui-winit adds from
+  its own string:
+
+  ```rust
+  fn take_copied_text(output: &mut egui::PlatformOutput) -> Option<String> {
+      let mut copied = None;
+      output.commands.retain(|c| match c {
+          egui::OutputCommand::CopyText(text) => {
+              copied = Some(text.clone());
+              false
+          }
+          _ => true,
+      });
+      copied
+  }
+  ```
 - **Colors on a non-sRGB GPU surface.** softbuffer writes raw sRGB bytes. If
   the same app also has a wgpu path rendering to a `*Unorm` (non-sRGB) surface,
   emit raw sRGB from custom shaders too; linearizing first makes overlays

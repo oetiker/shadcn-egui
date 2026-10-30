@@ -9,10 +9,12 @@ are recorded here. The format is based on
 ### New
 
 ### Changed
+- build-ui skill: the guide for apps that run their own egui frame loop now says to run each frame with `Context::run_ui` instead of `begin_pass`/`end_pass`. In such a loop, a drag over dialog, card or alert text left a selection that kept following the pointer after the button came up, and Ctrl+C copied nothing. The guide also shows how to pass copied text to your own clipboard when `egui-winit` runs without its clipboard features, and says what `is_pointer_over_egui()` reports under a `CentralPanel`.
 
 ### Fixed
 - After a switch between light and dark mode, the text of every crate widget showed wrong glyphs (pieces of other letters) or no glyphs at all, and kept them until the text changed; only text typed into input fields was spared. Text now draws as in an app started in the new mode. The same happened whenever egui rebuilt its font atlas for another reason, such as an atlas almost full of glyphs.
 - A widget with a shadow (a selected tab, a card, a dialog, a popover) no longer stalls the app each time it moves, fades in or out, or comes back after a frame without it: the shadow is built once per size and reused, where before every such frame built it again (about 100 ms in a debug build). The first frame that shows a shadow, and each frame of a shadow that changes size or grows in as a tab is selected, still build it, now in half the time (a tab bar's first frame in a debug build: 115 ms before, 51 ms now). (#25)
+- Badge text can now be selected with the mouse and copied with Ctrl+C, as on the shadcn page; before, a drag over a badge selected nothing. Setting egui's `selectable_labels` to false turns selection off for badges as for all other crate text; the build-ui skill now names this switch.
 
 ## 0.7.0 - 2026-10-29
 ### New
