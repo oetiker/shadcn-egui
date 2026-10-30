@@ -132,13 +132,8 @@ pub(crate) fn shadow_mesh(
         shift: [shift.x, shift.y].map(f32::to_bits),
         opacity: opacity.to_bits(),
     };
-    let pass = ctx.cumulative_pass_nr();
     let cache = |f: &mut dyn FnMut(&mut ShadowCache)| {
-        ctx.data_mut(|d| {
-            let cache = d.get_temp_mut_or_default::<ShadowCache>(cache_id());
-            cache.start(pass);
-            f(cache);
-        });
+        ctx.memory_mut(|m| f(m.caches.cache::<ShadowCache>()));
     };
     let (mut hit, mut built) = (None, None);
     cache(&mut |c| {
@@ -151,7 +146,7 @@ pub(crate) fn shadow_mesh(
     let built = built.unwrap_or_else(|| {
         let mesh = Arc::new(build(local, radii, cut, layers, 1.0, ppp));
         cache(&mut |c| {
-            c.shapes.insert(shape, (mesh.clone(), pass));
+            c.shapes.insert(shape, (mesh.clone(), c.pass));
             c.builds += 1;
         });
         mesh
@@ -250,9 +245,11 @@ struct Placed {
 /// [`MAX_IDLE`] idle ones for [`MAX_AGE`] passes. The placed meshes stay
 /// for this pass and the last, as egui's `FrameCache` keeps them, so an
 /// idle box costs no allocation and an animated one cannot grow the
-/// cache.
+/// cache. egui ends each pass of the cache (`CacheTrait::update`), so it
+/// empties when an app stops drawing shadows.
 #[derive(Clone, Default)]
 struct ShadowCache {
+    /// Passes ended so far: the number of this one.
     pass: u64,
     /// Each shape with the last pass that used it.
     shapes: std::collections::HashMap<ShapeKey, (Arc<Mesh>, u64)>,
@@ -262,14 +259,12 @@ struct ShadowCache {
     builds: u64,
 }
 
-impl ShadowCache {
-    /// Start `pass`, once: the last pass's placed meshes become the
-    /// previous ones, and idle shapes past the bounds go.
-    fn start(&mut self, pass: u64) {
-        if self.pass == pass {
-            return;
-        }
-        self.pass = pass;
+impl egui::cache::CacheTrait for ShadowCache {
+    /// The end of a pass: this pass's placed meshes become the previous
+    /// ones, and idle shapes past the bounds go.
+    fn update(&mut self) {
+        self.pass += 1;
+        let pass = self.pass;
         self.previous = std::mem::take(&mut self.current);
         let idle = |used: u64| used + 1 < pass;
         let mut ages: Vec<u64> = self
@@ -289,6 +284,12 @@ impl ShadowCache {
             .retain(|_, (_, used)| !idle(*used) || *used >= oldest);
     }
 
+    fn len(&self) -> usize {
+        self.shapes.len() + self.current.len() + self.previous.len()
+    }
+}
+
+impl ShadowCache {
     /// The placed mesh `key` from this pass or the last.
     fn placed(&mut self, key: Placed) -> Option<Arc<Mesh>> {
         let hit = self
@@ -310,10 +311,6 @@ impl ShadowCache {
             mesh.clone()
         })
     }
-}
-
-fn cache_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::shadow_cache")
 }
 
 /// The shadow mesh of `layers` around `rect`, built from scratch.
@@ -344,16 +341,14 @@ fn build(
 
 #[cfg(test)]
 fn shadow_builds(ctx: &egui::Context) -> u64 {
-    ctx.data_mut(|d| d.get_temp_mut_or_default::<ShadowCache>(cache_id()).builds)
+    ctx.memory_mut(|m| m.caches.cache::<ShadowCache>().builds)
 }
 
 /// Meshes the cache holds: shapes and placed ones.
 #[cfg(test)]
 fn shadow_cached(ctx: &egui::Context) -> usize {
-    ctx.data_mut(|d| {
-        let c = d.get_temp_mut_or_default::<ShadowCache>(cache_id());
-        c.shapes.len() + c.current.len() + c.previous.len()
-    })
+    use egui::cache::CacheTrait as _;
+    ctx.memory_mut(|m| m.caches.cache::<ShadowCache>().len())
 }
 
 /// CSS's corner clamping: where two radii on one side add up to more than
@@ -745,6 +740,28 @@ pub(crate) mod tests {
         }
         let len = shadow_cached(&ctx);
         assert!(len <= MAX_IDLE + 4, "cached meshes {len}");
+    }
+
+    /// An app that stops drawing shadows lets go of the cached ones: they
+    /// go once idle for [`MAX_AGE`] passes, without another shadow drawn.
+    #[test]
+    fn the_shadow_cache_empties_when_no_shadow_is_drawn() {
+        let ctx = egui::Context::default();
+        for x in 0..3 {
+            frame(&ctx, Some(egui::pos2(10.0 + x as f32 * 0.25, 10.0)), 1.0);
+        }
+        assert!(shadow_cached(&ctx) >= 3);
+        for _ in 0..2 {
+            frame(&ctx, None, 1.0);
+        }
+        assert!(
+            shadow_cached(&ctx) >= 3,
+            "a box away for a frame comes back"
+        );
+        for _ in 0..MAX_AGE {
+            frame(&ctx, None, 1.0);
+        }
+        assert_eq!(shadow_cached(&ctx), 0);
     }
 
     /// The same mesh, vertex for vertex and index for index.
