@@ -7,16 +7,14 @@
 //! radius, with no negative spread and one layer, so the crate builds the
 //! mesh itself: rings of vertices along the shape's distance contours, each
 //! vertex coloured with the blurred shape's exact coverage, and the whole
-//! cut to the outside of the border box. The mesh is cached per frame, so
-//! an idle box costs no allocation.
+//! cut to the outside of the border box. The mesh is cached by shape, so
+//! an idle box costs no allocation and a moving or fading one no rebuild.
 
 use crate::color::mix_oklab;
 use crate::components::shared::{clip_outside, rounded_polygon};
 use crate::theme::ShadowLayer;
-use egui::cache::{ComputerMut, FrameCache};
 use egui::{Color32, CornerRadius, Mesh, Pos2, Rect};
 use std::f32::consts::{FRAC_PI_2, PI, SQRT_2};
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 /// Arc segments per corner of a ring.
@@ -113,6 +111,11 @@ fn mix_layer(a: ShadowLayer, b: ShadowLayer, t: f32) -> ShadowLayer {
 /// where egui rounds rects) with CSS corner radii `radii` (nw, ne, sw, se),
 /// faded by `opacity` and cut to the outside of the box egui fills with
 /// `cut`. First layer on top.
+///
+/// The mesh is built once per shape: its size, radii, cut, layers, scale
+/// and where `rect` starts within a device pixel. A box that moves by
+/// whole device pixels or fades reuses it, moved and faded per vertex, as
+/// does one that comes back after frames without it.
 pub(crate) fn shadow_mesh(
     ctx: &egui::Context,
     rect: Rect,
@@ -121,76 +124,226 @@ pub(crate) fn shadow_mesh(
     layers: Layers,
     opacity: f32,
 ) -> Arc<Mesh> {
-    let key = Key {
-        rect,
-        radii,
-        cut,
-        layers,
-        opacity,
-        pixels_per_point: ctx.pixels_per_point(),
+    let ppp = ctx.pixels_per_point();
+    let (shape, local) = ShapeKey::new(rect, radii, cut, layers, ppp);
+    let shift = rect.min - local.min;
+    let placed = Placed {
+        shape,
+        shift: [shift.x, shift.y].map(f32::to_bits),
+        opacity: opacity.to_bits(),
     };
-    ctx.memory_mut(|m| {
-        m.caches
-            .cache::<FrameCache<Arc<Mesh>, Builder>>()
-            .get(key)
-            .clone()
-    })
+    let pass = ctx.cumulative_pass_nr();
+    let cache = |f: &mut dyn FnMut(&mut ShadowCache)| {
+        ctx.data_mut(|d| {
+            let cache = d.get_temp_mut_or_default::<ShadowCache>(cache_id());
+            cache.start(pass);
+            f(cache);
+        });
+    };
+    let (mut hit, mut built) = (None, None);
+    cache(&mut |c| {
+        hit = c.placed(placed);
+        built = c.shape(shape);
+    });
+    if let Some(mesh) = hit {
+        return mesh;
+    }
+    let built = built.unwrap_or_else(|| {
+        let mesh = Arc::new(build(local, radii, cut, layers, 1.0, ppp));
+        cache(&mut |c| {
+            c.shapes.insert(shape, (mesh.clone(), pass));
+            c.builds += 1;
+        });
+        mesh
+    });
+    let mut mesh = (*built).clone();
+    mesh.translate(shift);
+    // A fresh build rounds a vertex's faded alpha once, this a second
+    // time: within one level per layer.
+    if opacity != 1.0 {
+        for v in &mut mesh.vertices {
+            v.color = v.color.gamma_multiply(opacity);
+        }
+    }
+    let mesh = Arc::new(mesh);
+    cache(&mut |c| {
+        c.current.insert(placed, mesh.clone());
+    });
+    mesh
 }
 
-#[derive(Clone, Copy)]
-struct Key {
+/// Steps per device pixel that a shape's size and sub-pixel phase are
+/// keyed in: finer than any visible change, coarse enough that float
+/// noise in a moved rect does not miss the cache.
+const STEPS_PER_PIXEL: f32 = 256.0;
+
+/// Idle shapes kept beyond the ones the last two passes used, for a box
+/// that comes back after frames without it.
+const MAX_IDLE: usize = 8;
+
+/// Passes an idle shape is kept at most.
+const MAX_AGE: u64 = 60;
+
+/// Everything a built shadow mesh depends on, except where it is and how
+/// faded.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct ShapeKey {
+    /// The rect's size and the sub-pixel phase of its `min`, in steps of
+    /// [`STEPS_PER_PIXEL`].
+    size: [i64; 2],
+    phase: [i64; 2],
+    radii: [u32; 4],
+    cut: CornerRadius,
+    layers: [([u32; 5], Color32); MAX_LAYERS],
+    len: usize,
+    pixels_per_point: u32,
+}
+
+impl ShapeKey {
+    /// The key of `rect`'s shadow, and the rect to build it at: `rect`'s
+    /// size at its sub-pixel phase, next to the origin.
+    fn new(
+        rect: Rect,
+        radii: [f32; 4],
+        cut: CornerRadius,
+        layers: Layers,
+        ppp: f32,
+    ) -> (ShapeKey, Rect) {
+        let scale = ppp * STEPS_PER_PIXEL;
+        let steps = |v: f32| (v * scale).round() as i64;
+        let per_pixel = STEPS_PER_PIXEL as i64;
+        let phase = [rect.min.x, rect.min.y].map(|v| steps(v).rem_euclid(per_pixel));
+        let size = [steps(rect.width()), steps(rect.height())];
+        let point = |v: i64| v as f32 / scale;
+        let local = Rect::from_min_size(
+            egui::pos2(point(phase[0]), point(phase[1])),
+            egui::vec2(point(size[0]), point(size[1])),
+        );
+        let mut list = [([0; 5], Color32::TRANSPARENT); MAX_LAYERS];
+        for (k, l) in list.iter_mut().zip(layers.as_slice()) {
+            let v = [l.offset().x, l.offset().y, l.blur(), l.spread(), l.alpha()];
+            *k = (v.map(f32::to_bits), l.color());
+        }
+        let key = ShapeKey {
+            size,
+            phase,
+            radii: radii.map(f32::to_bits),
+            cut,
+            layers: list,
+            len: layers.len,
+            pixels_per_point: ppp.to_bits(),
+        };
+        (key, local)
+    }
+}
+
+/// A built shape moved by `shift` and faded by `opacity`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct Placed {
+    shape: ShapeKey,
+    shift: [u32; 2],
+    opacity: u32,
+}
+
+/// Shadow meshes, thousands of vertices with a coverage integral each.
+/// The built shapes stay while the last two passes use them, and up to
+/// [`MAX_IDLE`] idle ones for [`MAX_AGE`] passes. The placed meshes stay
+/// for this pass and the last, as egui's `FrameCache` keeps them, so an
+/// idle box costs no allocation and an animated one cannot grow the
+/// cache.
+#[derive(Clone, Default)]
+struct ShadowCache {
+    pass: u64,
+    /// Each shape with the last pass that used it.
+    shapes: std::collections::HashMap<ShapeKey, (Arc<Mesh>, u64)>,
+    current: std::collections::HashMap<Placed, Arc<Mesh>>,
+    previous: std::collections::HashMap<Placed, Arc<Mesh>>,
+    /// Shapes built, for the tests.
+    builds: u64,
+}
+
+impl ShadowCache {
+    /// Start `pass`, once: the last pass's placed meshes become the
+    /// previous ones, and idle shapes past the bounds go.
+    fn start(&mut self, pass: u64) {
+        if self.pass == pass {
+            return;
+        }
+        self.pass = pass;
+        self.previous = std::mem::take(&mut self.current);
+        let idle = |used: u64| used + 1 < pass;
+        let mut ages: Vec<u64> = self
+            .shapes
+            .values()
+            .map(|(_, used)| *used)
+            .filter(|used| idle(*used))
+            .collect();
+        ages.sort_unstable_by(|a, b| b.cmp(a));
+        // The oldest pass an idle shape may come from; ties at the
+        // bound may keep a few more than `MAX_IDLE`.
+        let oldest = ages
+            .get(MAX_IDLE.saturating_sub(1))
+            .map_or(0, |used| *used)
+            .max(pass.saturating_sub(MAX_AGE));
+        self.shapes
+            .retain(|_, (_, used)| !idle(*used) || *used >= oldest);
+    }
+
+    /// The placed mesh `key` from this pass or the last.
+    fn placed(&mut self, key: Placed) -> Option<Arc<Mesh>> {
+        let hit = self
+            .current
+            .get(&key)
+            .cloned()
+            .or_else(|| self.previous.remove(&key));
+        if let Some(mesh) = &hit {
+            self.current.insert(key, mesh.clone());
+        }
+        hit
+    }
+
+    /// The built shape `key`, marked as used in this pass.
+    fn shape(&mut self, key: ShapeKey) -> Option<Arc<Mesh>> {
+        let pass = self.pass;
+        self.shapes.get_mut(&key).map(|(mesh, used)| {
+            *used = pass;
+            mesh.clone()
+        })
+    }
+}
+
+fn cache_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::shadow_cache")
+}
+
+/// The shadow mesh of `layers` around `rect`, built from scratch.
+fn build(
     rect: Rect,
     radii: [f32; 4],
     cut: CornerRadius,
     layers: Layers,
     opacity: f32,
     pixels_per_point: f32,
+) -> Mesh {
+    let mut mesh = Mesh::default();
+    for layer in layers.as_slice().iter().rev() {
+        add_layer(&mut mesh, rect, radii, layer, opacity, pixels_per_point);
+    }
+    clip_outside(&mesh, &rounded_polygon(rect, cut))
 }
 
-impl Hash for Key {
-    fn hash<H: Hasher>(&self, h: &mut H) {
-        let r = self.rect;
-        for v in [
-            r.min.x,
-            r.min.y,
-            r.max.x,
-            r.max.y,
-            self.opacity,
-            self.pixels_per_point,
-        ]
-        .into_iter()
-        .chain(self.radii)
-        {
-            v.to_bits().hash(h);
-        }
-        self.cut.hash(h);
-        for l in self.layers.as_slice() {
-            for v in [l.offset().x, l.offset().y, l.blur(), l.spread(), l.alpha()] {
-                v.to_bits().hash(h);
-            }
-            l.color().hash(h);
-        }
-    }
+#[cfg(test)]
+fn shadow_builds(ctx: &egui::Context) -> u64 {
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<ShadowCache>(cache_id()).builds)
 }
 
-#[derive(Default)]
-struct Builder;
-
-impl ComputerMut<Key, Arc<Mesh>> for Builder {
-    fn compute(&mut self, k: Key) -> Arc<Mesh> {
-        let mut mesh = Mesh::default();
-        for layer in k.layers.as_slice().iter().rev() {
-            add_layer(
-                &mut mesh,
-                k.rect,
-                k.radii,
-                layer,
-                k.opacity,
-                k.pixels_per_point,
-            );
-        }
-        Arc::new(clip_outside(&mesh, &rounded_polygon(k.rect, k.cut)))
-    }
+/// Meshes the cache holds: shapes and placed ones.
+#[cfg(test)]
+fn shadow_cached(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|d| {
+        let c = d.get_temp_mut_or_default::<ShadowCache>(cache_id());
+        c.shapes.len() + c.current.len() + c.previous.len()
+    })
 }
 
 /// CSS's corner clamping: where two radii on one side add up to more than
@@ -394,6 +547,167 @@ mod tests {
         // A corner gives less than either side.
         let corner = coverage(egui::pos2(1000.0, 100.0), rect, r, 10.0);
         assert!(corner < 0.25 && corner > 0.1, "{corner}");
+    }
+
+    /// Tailwind's `shadow-sm`: two layers, one with a negative spread.
+    fn shadow_sm() -> Layers {
+        let black = Color32::BLACK;
+        Layers::new(&[
+            ShadowLayer::new(egui::vec2(0.0, 1.0), 3.0, 0.0, black, 0.1),
+            ShadowLayer::new(egui::vec2(0.0, 1.0), 2.0, -1.0, black, 0.1),
+        ])
+    }
+
+    /// The shadow of an 80 x 30 box at `at`, faded by `opacity`, drawn in
+    /// one frame of `ctx` (none where `at` is `None`).
+    fn frame(ctx: &egui::Context, at: Option<Pos2>, opacity: f32) -> Option<Arc<Mesh>> {
+        let mut mesh = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+            mesh = at.map(|at| {
+                let rect = Rect::from_min_size(at, egui::vec2(80.0, 30.0));
+                shadow_mesh(
+                    ctx,
+                    rect,
+                    [6.0; 4],
+                    CornerRadius::same(6),
+                    shadow_sm(),
+                    opacity,
+                )
+            });
+        });
+        mesh
+    }
+
+    /// Moving by whole device pixels, fading and missing a frame reuse the
+    /// built mesh; only a new sub-pixel phase builds another (#25).
+    #[test]
+    fn a_moved_faded_or_returning_shadow_is_not_rebuilt() {
+        let ctx = egui::Context::default();
+        let builds = |ctx: &egui::Context| shadow_builds(ctx);
+        let start = builds(&ctx);
+        frame(&ctx, Some(egui::pos2(10.0, 10.0)), 1.0);
+        assert_eq!(builds(&ctx) - start, 1, "first frame");
+        for x in 11..15 {
+            frame(&ctx, Some(egui::pos2(x as f32, 2.0 * x as f32)), 1.0);
+        }
+        assert_eq!(builds(&ctx) - start, 1, "moved by whole pixels");
+        for o in [0.9, 0.5, 0.1] {
+            frame(&ctx, Some(egui::pos2(14.0, 28.0)), o);
+        }
+        assert_eq!(builds(&ctx) - start, 1, "faded");
+        frame(&ctx, None, 1.0);
+        frame(&ctx, Some(egui::pos2(14.0, 28.0)), 1.0);
+        assert_eq!(builds(&ctx) - start, 1, "absent for a frame");
+        frame(&ctx, Some(egui::pos2(14.5, 28.0)), 1.0);
+        assert_eq!(builds(&ctx) - start, 2, "a new sub-pixel phase");
+    }
+
+    /// `mesh` painted on a transparent `w` x `h` canvas at `origin`, one
+    /// premultiplied RGBA sample per pixel (off the pixel centre, so no
+    /// sample lies on a grid-aligned edge), as a GPU blends it.
+    fn raster(mesh: &Mesh, origin: Pos2, w: usize, h: usize) -> Vec<[f32; 4]> {
+        let mut px = vec![[0.0_f32; 4]; w * h];
+        for t in mesh.indices.as_chunks::<3>().0 {
+            let [a, b, c] = t.map(|i| mesh.vertices[i as usize]);
+            let area =
+                (b.pos - a.pos).x * (c.pos - a.pos).y - (b.pos - a.pos).y * (c.pos - a.pos).x;
+            if area.abs() < 1e-12 {
+                continue;
+            }
+            let bounds = Rect::from_points(&[a.pos, b.pos, c.pos]);
+            let (x0, y0) = (
+                (bounds.min.x - origin.x).floor().max(0.0) as usize,
+                (bounds.min.y - origin.y).floor().max(0.0) as usize,
+            );
+            let (x1, y1) = (
+                ((bounds.max.x - origin.x).ceil().max(0.0) as usize).min(w),
+                ((bounds.max.y - origin.y).ceil().max(0.0) as usize).min(h),
+            );
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let p = origin + egui::vec2(x as f32 + 0.537, y as f32 + 0.291);
+                    let edge =
+                        |u: Pos2, v: Pos2| ((v - u).x * (p - u).y - (v - u).y * (p - u).x) / area;
+                    let (wa, wb, wc) = (edge(b.pos, c.pos), edge(c.pos, a.pos), edge(a.pos, b.pos));
+                    if wa < 0.0 || wb < 0.0 || wc < 0.0 {
+                        continue;
+                    }
+                    let src: [f32; 4] = std::array::from_fn(|k| {
+                        wa * f32::from(a.color[k])
+                            + wb * f32::from(b.color[k])
+                            + wc * f32::from(c.color[k])
+                    });
+                    let dst = &mut px[y * w + x];
+                    let keep = 1.0 - src[3] / 255.0;
+                    *dst = std::array::from_fn(|k| src[k] + dst[k] * keep);
+                }
+            }
+        }
+        px
+    }
+
+    /// The reused mesh, moved and faded, paints what a fresh build at that
+    /// place and opacity paints. The cut and the triangles may differ in
+    /// float noise; a pixel may differ by one level of rounding per
+    /// layer, where the fade rounds a vertex's alpha a second time.
+    #[test]
+    fn a_moved_or_faded_shadow_matches_a_fresh_build() {
+        let ctx = egui::Context::default();
+        frame(&ctx, Some(egui::pos2(3.0, 4.0)), 1.0);
+        for (at, opacity) in [
+            (egui::pos2(103.0, 57.0), 1.0),
+            (egui::pos2(-20.0, 999.0), 0.5),
+            (egui::pos2(40.0, 40.0), 0.13),
+        ] {
+            let got = frame(&ctx, Some(at), opacity).expect("drawn");
+            assert_eq!(shadow_builds(&ctx), 1, "reused");
+            let rect = Rect::from_min_size(at, egui::vec2(80.0, 30.0));
+            let want = build(
+                rect,
+                [6.0; 4],
+                CornerRadius::same(6),
+                shadow_sm(),
+                opacity,
+                1.0,
+            );
+            let origin = at - egui::vec2(10.0, 10.0);
+            let (g, w) = (
+                raster(&got, origin, 100, 55),
+                raster(&want, origin, 100, 55),
+            );
+            let worst = g
+                .iter()
+                .zip(&w)
+                .flat_map(|(g, w)| (0..4).map(move |k| (g[k] - w[k]).abs()))
+                .fold(0.0, f32::max);
+            assert!(worst <= 2.0, "{at:?} {opacity}: {worst}");
+            let painted = w.iter().filter(|p| p[3] > 0.0).count();
+            assert!(painted > 300, "{at:?}: the shadow shows ({painted} px)");
+        }
+    }
+
+    /// A box that changes size and opacity every frame keeps the cache
+    /// bounded.
+    #[test]
+    fn the_shadow_cache_stays_bounded_while_a_box_resizes() {
+        let ctx = egui::Context::default();
+        for f in 0..40 {
+            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+                let rect =
+                    Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(40.0 + f as f32, 30.0));
+                let opacity = (f % 10) as f32 / 10.0 + 0.05;
+                let _ = shadow_mesh(
+                    &ctx,
+                    rect,
+                    [6.0; 4],
+                    CornerRadius::same(6),
+                    shadow_sm(),
+                    opacity,
+                );
+            });
+        }
+        let len = shadow_cached(&ctx);
+        assert!(len <= MAX_IDLE + 4, "cached meshes {len}");
     }
 
     #[test]
