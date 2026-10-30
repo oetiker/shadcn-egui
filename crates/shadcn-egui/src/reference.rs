@@ -1002,7 +1002,6 @@ fn overlays_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                     ui.add(Button::new("Tooltip").variant(ButtonVariant::Outline)),
                     "Add to library",
                 );
-                description(ui, "hover me");
             });
         },
     );
