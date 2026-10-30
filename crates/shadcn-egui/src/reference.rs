@@ -5,6 +5,7 @@
 //! both.
 
 use crate::components::alert::{alert_action, Alert, AlertVariant};
+use crate::components::avatar::{avatar_group_count, Avatar, AvatarBadge, AvatarGroup, AvatarSize};
 use crate::components::badge::{badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::card::{card_description, card_title};
@@ -654,6 +655,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 badges_group(ui);
                 icons_group(ui);
                 kbd_gallery(ui);
+                avatar_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
             });
@@ -779,6 +781,34 @@ fn kbd_gallery(ui: &mut egui::Ui) {
             ui.add(Kbd::icon_only(icons.check, "Enter"));
         });
     });
+}
+
+/// shadcn-svelte's avatar demos without images (the gallery installs no
+/// image loader, so each avatar shows its fallback): sizes, a badge with an
+/// icon, and a group with a count.
+fn avatar_gallery(ui: &mut egui::Ui) {
+    let icons = crate::icons::lucide::PLUS;
+    group(
+        ui,
+        "Avatar",
+        "Sizes, a badge and a group with a count.",
+        |ui| {
+            layout::wrap_row(ui, 24.0, |ui| {
+                layout::row(ui, 8.0, |ui| {
+                    for size in [AvatarSize::Sm, AvatarSize::Default, AvatarSize::Lg] {
+                        let _ = ui.add(Avatar::new("CN").size(size));
+                    }
+                });
+                let _ = ui.add(Avatar::new("PP").badge(AvatarBadge::new().icon(icons)));
+                AvatarGroup::new().show(ui, |ui| {
+                    for name in ["CN", "LR", "ER"] {
+                        let _ = ui.add(Avatar::new(name));
+                    }
+                    avatar_group_count(ui, "+3");
+                });
+            });
+        },
+    );
 }
 
 fn icons_group(ui: &mut egui::Ui) {

@@ -1,5 +1,6 @@
 pub mod alert;
 mod atom_row;
+pub mod avatar;
 pub mod badge;
 pub mod button;
 pub mod card;

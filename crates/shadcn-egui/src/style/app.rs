@@ -488,8 +488,10 @@ pub(crate) use default_variant;
 /// size works through state bits (`data-[size=sm]:` rules in the parts'
 /// own recipes): an app size edits copies of the same parts as the
 /// component's variant `$x` (`Recipes` shared), from its base's bits.
+/// `state_size!($z, $x, lg)` is for an enum that also has `Lg`
+/// (`data-[size=lg]:`).
 macro_rules! state_size {
-    ($z:ident, $x:ident) => {
+    ($z:ident, $x:ident $(, $lg:ident)?) => {
         impl $z {
             /// An app size, defined in the theme ([`crate::Theme::size`]).
             pub const fn app(name: &'static str) -> $crate::style::AppVariant<$z> {
@@ -527,6 +529,10 @@ macro_rules! state_size {
             fn bits(self) -> $crate::style::State {
                 match self {
                     $z::Sm => $crate::style::State::SIZE_SM,
+                    $($z::Lg => {
+                        let _ = stringify!($lg);
+                        $crate::style::State::SIZE_LG
+                    })?
                     _ => $crate::style::State::SIZE_DEFAULT,
                 }
             }
