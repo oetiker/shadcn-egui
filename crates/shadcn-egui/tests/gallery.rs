@@ -50,6 +50,16 @@ fn gallery_default_preset() {
     ));
 }
 
+/// Switched from light to dark, the gallery draws as when started dark:
+/// its text draws from the font atlas egui built for dark mode.
+#[test]
+fn gallery_switched_to_dark_draws_as_started_dark() {
+    let mut h = harness(GalleryState::default(), FULL);
+    h.state_mut().mode = egui::Theme::Dark;
+    h.run();
+    common::snapshot(&mut h, "gallery_dark");
+}
+
 fn stateful(state: GalleryState) -> Harness<'static, GalleryState> {
     harness(state, FULL)
 }

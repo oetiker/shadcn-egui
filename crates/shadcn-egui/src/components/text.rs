@@ -453,8 +453,21 @@ impl TextLook {
         let key = hasher.finish();
         let id = egui::Id::new("shadcn_egui::text::laid_out");
         let frame = ctx.cumulative_frame_nr();
+        let pass = ctx.cumulative_pass_nr();
+        // Laying out reads the fonts: not inside a `data_mut`.
+        let probe = ctx
+            .data_mut(|d| d.get_temp_mut_or_default::<LayoutCache>(id).pass != Some(pass))
+            .then(|| atlas_probe(ctx));
         let hit = ctx.data_mut(|d| {
             let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
+            if let Some(probe) = probe {
+                // A new atlas: the galleys point at glyphs of the old one.
+                if !cache.probe.as_ref().is_some_and(|p| Arc::ptr_eq(p, &probe)) {
+                    cache.entries.clear();
+                }
+                cache.probe = Some(probe);
+                cache.pass = Some(pass);
+            }
             if cache.frame != frame {
                 cache.entries.retain(|_, e| e.1 + 1 >= frame);
                 cache.measured.retain(|_, e| e.1 + 1 >= frame);
@@ -731,11 +744,24 @@ impl TextLook {
 /// before: by the hash of the job, width, mode, scale and faces, the galley
 /// and the frame it was last used; by the hash of the job, scale and faces,
 /// the job's advances and the frame they were last used.
+/// The galleys hold the places of their glyphs in egui's font atlas.
+/// egui builds a new atlas, and empties its own galley cache, when the
+/// fonts or the text options change (a light/dark switch changes how glyph
+/// coverage becomes alpha) and when the atlas is almost full. Once per pass
+/// `probe`, a galley egui keeps in that cache, tells: egui hands out the
+/// same galley while its cache lives, and a new one after.
 #[derive(Clone, Default)]
 struct LayoutCache {
     frame: u64,
+    pass: Option<u64>,
+    probe: Option<Arc<Galley>>,
     entries: std::collections::HashMap<u64, (Arc<Galley>, u64)>,
     measured: std::collections::HashMap<u64, (Arc<shape::Advances>, u64)>,
+}
+
+/// A galley egui lays out and caches, for [`LayoutCache`]'s `probe`.
+fn atlas_probe(ctx: &egui::Context) -> Arc<Galley> {
+    ctx.fonts_mut(|f| f.layout_no_wrap("x".into(), FontId::default(), Color32::PLACEHOLDER))
 }
 
 /// Every placeholder colour of `job` (text and underline) set to `color`.
