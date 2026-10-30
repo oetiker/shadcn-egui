@@ -541,3 +541,30 @@ fn badge_text_selects_and_copies() {
         );
     }
 }
+
+/// Crate text selects by default; an app that turns egui's
+/// `selectable_labels` off turns selection off in crate text too (the
+/// maintainer's exception to concept 1 of the API rules, 2026-10-30).
+#[test]
+fn text_selection_follows_egui_selectable_labels() {
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::dialog::Dialog;
+    let (title, chip) = ("Delete this session now", "Experimental feature");
+    for selectable in [true, false] {
+        let setup = move |ui: &mut egui::Ui| {
+            ui.ctx()
+                .all_styles_mut(|s| s.interaction.selectable_labels = selectable);
+            Theme::vega().apply(ui.ctx());
+        };
+        let dialog = select_then_hover(Loop::RunUi, title, |ui| {
+            setup(ui);
+            Dialog::new("d", title).show(ui.ctx(), &mut true, |_| ());
+        });
+        let badge = select_then_hover(Loop::RunUi, chip, |ui| {
+            setup(ui);
+            ui.add(Badge::new(chip));
+        });
+        assert_eq!(dialog.is_some(), selectable, "dialog title: {dialog:?}");
+        assert_eq!(badge.is_some(), selectable, "badge: {badge:?}");
+    }
+}

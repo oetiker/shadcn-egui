@@ -335,7 +335,11 @@ impl TextLook {
     /// Show `text` in this look as an egui `Label` (selectable as egui's
     /// labels are, with the label's accessibility info): wrapped at the
     /// available width unless `wrap` says otherwise, each row placed as
-    /// the browser places it, in the look's colour.
+    /// the browser places it, in the look's colour. An app turns text
+    /// selection off app-wide with egui's switch,
+    /// `ctx.all_styles_mut(|s| s.interaction.selectable_labels = false)`,
+    /// which this text follows (an allowed exception to "no egui setting
+    /// changes a behaviour").
     pub fn label(&self, ui: &mut Ui, text: impl Into<WidgetText>, wrap: TextWrapMode) -> Response {
         let mut job = self.job(ui, text.into());
         fill_color(&mut job, self.resolved_color(ui));

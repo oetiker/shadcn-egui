@@ -288,6 +288,18 @@ fn toolbar(ui: &mut egui::Ui) {
 }
 ```
 
+Text that the browser lets the user select (dialog, card, alert and
+popover titles and descriptions, badges) selects and copies with Ctrl+C;
+a crate `Label` and `Kbd` do not, as upstream's `select-none` says. Turn
+text selection off app-wide with egui's own switch, which crate text
+follows:
+
+```rust
+fn no_text_selection(ctx: &egui::Context) {
+    ctx.all_styles_mut(|s| s.interaction.selectable_labels = false);
+}
+```
+
 ## Verify visually
 
 Render the screen to a PNG and look at it next to the design, then iterate
