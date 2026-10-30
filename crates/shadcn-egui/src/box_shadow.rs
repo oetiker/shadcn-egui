@@ -11,7 +11,7 @@
 //! an idle box costs no allocation and a moving or fading one no rebuild.
 
 use crate::color::mix_oklab;
-use crate::components::shared::{clip_outside, rounded_polygon};
+use crate::components::shared::{clip_outside, rounded_polygon, Sorter};
 use crate::theme::ShadowLayer;
 use egui::{Color32, CornerRadius, Mesh, Pos2, Rect};
 use std::f32::consts::{FRAC_PI_2, PI, SQRT_2};
@@ -325,11 +325,21 @@ fn build(
     opacity: f32,
     pixels_per_point: f32,
 ) -> Mesh {
+    let cut = rounded_polygon(rect, cut);
+    let hidden = Sorter::new(&cut);
     let mut mesh = Mesh::default();
     for layer in layers.as_slice().iter().rev() {
-        add_layer(&mut mesh, rect, radii, layer, opacity, pixels_per_point);
+        add_layer(
+            &mut mesh,
+            rect,
+            radii,
+            layer,
+            opacity,
+            pixels_per_point,
+            Some(&hidden),
+        );
     }
-    clip_outside(&mesh, &rounded_polygon(rect, cut))
+    clip_outside(&mesh, &cut)
 }
 
 #[cfg(test)]
@@ -384,6 +394,7 @@ fn add_layer(
     layer: &ShadowLayer,
     opacity: f32,
     pixels_per_point: f32,
+    hidden: Option<&Sorter>,
 ) {
     let spread = layer.spread();
     let shape = grow(rect.translate(layer.offset()), spread);
@@ -403,11 +414,34 @@ fn add_layer(
         vec![(-h, Some(1.0)), (h, Some(0.0))]
     };
     let per_ring = 4 * (CORNER_SEGMENTS + 1 + 2 * SIDE_POINTS);
-    let first = mesh.vertices.len() as u32;
-    for &(d, fixed) in &rings {
+    let ring_at = |d: f32| {
         let ring = grow(shape, d);
-        let ring_radii = clamp_radii(shape_radii.map(|r| (r + d).max(0.0)), ring);
-        contour(ring, ring_radii, sigma / RINGS_PER_SIGMA, |p| {
+        (
+            ring,
+            clamp_radii(shape_radii.map(|r| (r + d).max(0.0)), ring),
+        )
+    };
+    let step = sigma / RINGS_PER_SIGMA;
+    // The inner rings that lie wholly inside the cut: every triangle
+    // between two of them, and the fan, would be cut away whole, so they
+    // are not built. The last of them stays, the inner side of the first
+    // strip kept, which the cut splits as before.
+    let inside = hidden.map_or(0, |hidden| {
+        rings
+            .iter()
+            .take_while(|&&(d, _)| {
+                let (ring, ring_radii) = ring_at(d);
+                let mut all = true;
+                contour(ring, ring_radii, step, |p| all &= hidden.inside(p));
+                all
+            })
+            .count()
+    });
+    let rings = &rings[inside.saturating_sub(1)..];
+    let first = mesh.vertices.len() as u32;
+    for &(d, fixed) in rings {
+        let (ring, ring_radii) = ring_at(d);
+        contour(ring, ring_radii, step, |p| {
             let cov = fixed.unwrap_or_else(|| coverage(p, shape, shape_radii, sigma));
             let a = (alpha * cov).clamp(0.0, 1.0) * 255.0;
             mesh.colored_vertex(p, Color32::from_rgba_unmultiplied(r, g, b, a.round() as u8));
@@ -415,8 +449,10 @@ fn add_layer(
     }
     // The innermost ring as a fan, then a strip between each pair of rings.
     let n = per_ring as u32;
-    for i in 1..n - 1 {
-        mesh.add_triangle(first, first + i, first + i + 1);
+    if inside == 0 {
+        for i in 1..n - 1 {
+            mesh.add_triangle(first, first + i, first + i + 1);
+        }
     }
     for r in 0..rings.len() as u32 - 1 {
         let (a, b) = (first + r * n, first + (r + 1) * n);
@@ -732,7 +768,8 @@ pub(crate) mod tests {
     }
 
     /// Sorting triangles before the per-edge test cuts a shadow exactly as
-    /// the per-edge test alone does: uniform, uneven and cut radii, whole
+    /// the per-edge test alone does, and leaving out the rings the cut
+    /// hides builds the same shadow: uniform, uneven and cut radii, whole
     /// and fractional places, one and two layers, a hard edge (#25).
     #[test]
     fn the_quick_split_cuts_a_shadow_as_the_edge_test_does() {
@@ -791,14 +828,29 @@ pub(crate) mod tests {
                 1.0,
             ),
         ];
-        for (radii, cut, at, layers, ppp) in cases {
+        for (k, (radii, cut, at, layers, ppp)) in cases.into_iter().enumerate() {
             let rect = Rect::from_min_size(at, egui::vec2(90.0, 29.0));
-            let mut mesh = Mesh::default();
-            for layer in layers.as_slice().iter().rev() {
-                add_layer(&mut mesh, rect, radii, layer, 1.0, ppp);
-            }
             let polygon = rounded_polygon(rect, cut);
-            assert_same_split(&mesh, &polygon);
+            let (mut all, mut kept) = (Mesh::default(), Mesh::default());
+            let hidden = Sorter::new(&polygon);
+            for layer in layers.as_slice().iter().rev() {
+                add_layer(&mut all, rect, radii, layer, 1.0, ppp, None);
+                add_layer(&mut kept, rect, radii, layer, 1.0, ppp, Some(&hidden));
+            }
+            assert_same_split(&all, &polygon);
+            let reference = split_convex_with(&all, &polygon, false).1;
+            assert_same_mesh(
+                &build(rect, radii, cut, layers, 1.0, ppp),
+                &reference,
+                "shadow",
+            );
+            if k == 0 {
+                let (kept, all) = (kept.vertices.len(), all.vertices.len());
+                assert!(
+                    kept < all,
+                    "rings hidden by the cut are built: {kept} of {all}"
+                );
+            }
         }
     }
 
