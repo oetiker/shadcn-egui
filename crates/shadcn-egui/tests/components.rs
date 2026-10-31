@@ -491,15 +491,16 @@ fn tabs_report_the_selected_trigger() {
     use egui_kittest::kittest::{NodeT, Queryable};
     let (mut h, _) = tabs_harness(&["Account", "Notifications"], 1);
     h.run();
-    // egui reports `selected` as the node's toggled state.
-    use egui::accesskit::Toggled;
+    // bits' `aria-selected`, not a toggle.
     assert_eq!(
-        h.get_by_label("Notifications").accesskit_node().toggled(),
-        Some(Toggled::True)
+        h.get_by_label("Notifications")
+            .accesskit_node()
+            .is_selected(),
+        Some(true)
     );
     assert_eq!(
-        h.get_by_label("Account").accesskit_node().toggled(),
-        Some(Toggled::False)
+        h.get_by_label("Account").accesskit_node().is_selected(),
+        Some(false)
     );
 }
 
