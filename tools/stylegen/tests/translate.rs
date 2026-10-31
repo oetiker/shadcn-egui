@@ -1625,3 +1625,73 @@ fn side_border_colour_is_the_border_colour_of_a_one_side_box() {
 fn inherited_radius_is_ignored() {
     assert!(matches!(utility("rounded-[inherit]", None), U::Ignore(_)));
 }
+
+/// The port-component skill's in-app recipe example ranks its rules by
+/// hand. Its bits must be the generator's: the prose names each
+/// variant's bit, and each `rank:` in the example must be the rank of a
+/// class in the example's `// style:` or `// base:` string. A new variant
+/// shifts the bits; this fails until the skill follows.
+#[test]
+fn in_app_skill_ranks_match_the_generator() {
+    let doc = read("../../plugin/skills/port-component/references/in-app.md");
+    // `(1 << 54) | (1 << 81) | (2 << 122)`, `1 << 84`.
+    let eval = |expr: &str| -> u128 {
+        expr.split('|')
+            .map(|t| {
+                let t = t.trim().trim_start_matches('(').trim_end_matches(')');
+                let (a, b) = t.split_once(" << ").unwrap_or_else(|| panic!("`{t}`"));
+                a.trim().parse::<u128>().unwrap() << b.trim().parse::<u32>().unwrap()
+            })
+            .fold(0, |acc, v| acc | v)
+    };
+    // The prose: "`focus-visible:` `1 << 37`" and "`dark:aria-invalid:` is
+    // `(..)`", from "The bits used below:" to the end of its paragraph.
+    let start = doc.find("The bits used below:").expect("bits sentence");
+    let prose = &doc[start..start + doc[start..].find(". A focused").expect("end")];
+    let quoted: Vec<&str> = prose.split('`').skip(1).step_by(2).collect();
+    let mut named = 0;
+    for w in quoted.windows(2) {
+        let Some(v) = w[0].strip_suffix(':') else {
+            continue;
+        };
+        if let Some(n) = w[1].strip_prefix("1 << ") {
+            assert_eq!(rank(v).to_string(), n, "`{v}:` in in-app.md");
+            named += 1;
+        } else if w[1].starts_with('(') {
+            let class = format!("{v}:border-input");
+            assert_eq!(
+                eval(w[1]),
+                variants_of(&class).unwrap().rank,
+                "`{v}:` in in-app.md"
+            );
+            named += 1;
+        }
+    }
+    assert_eq!(named, 10, "bits named in the prose");
+    // The example: every rank is a class's rank.
+    let line = |tag: &str| {
+        doc.lines()
+            .find_map(|l| l.trim().strip_prefix(tag))
+            .unwrap_or_else(|| panic!("{tag}"))
+            .trim_matches('"')
+            .to_owned()
+    };
+    let classes = format!("{} {}", line("// style: "), line("// base: "));
+    let ranks: Vec<u128> = classes
+        .split_whitespace()
+        .filter_map(|c| variants_of(c).ok().map(|v| v.rank))
+        .collect();
+    let mut rules = 0;
+    for l in doc.lines() {
+        let Some((_, rest)) = l.split_once("rank: ") else {
+            continue;
+        };
+        let expr = rest.split(", value:").next().unwrap();
+        assert!(
+            ranks.contains(&eval(expr)),
+            "in-app.md rank `{expr}` is no class's rank: {l}"
+        );
+        rules += 1;
+    }
+    assert_eq!(rules, 18, "rank lines in the example");
+}

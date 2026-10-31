@@ -80,12 +80,12 @@ builds the recipes itself:
   than `[&>svg]:` but behind it at equal specificity. A `placeholder:` rule
   adds `1 << 126`, which puts it above every rule without it, and
   `!important` adds `1 << 127`. The bits used below: `focus-visible:`
-  `1 << 34`, `disabled:` `1 << 36`, `aria-checked:` `1 << 52`,
-  `aria-invalid:` `1 << 54`, `dark:` `1 << 81`, `data-checked:` `1 << 84`,
+  `1 << 37`, `disabled:` `1 << 39`, `aria-checked:` `1 << 57`,
+  `aria-invalid:` `1 << 59`, `dark:` `1 << 87`, `data-checked:` `1 << 90`,
   `not-data-checked:` `1 << 5`,
-  `group-has-[:focus-visible]/field-label:` `1 << 11`;
-  so `dark:aria-invalid:` is `(1 << 54) | (1 << 81) | (2 << 122)` and
-  `dark:data-checked:` is `(1 << 81) | (1 << 84) | (1 << 122)`. A focused
+  `group-has-[:focus-visible]/field-label:` `1 << 12`;
+  so `dark:aria-invalid:` is `(1 << 59) | (1 << 87) | (2 << 122)` and
+  `dark:data-checked:` is `(1 << 87) | (1 << 90) | (1 << 122)`. A focused
   checked item thus shows the focus border: `focus-visible:` has a class
   step, `data-checked:` none.
   A class whose rank is above 0 without a state
@@ -123,15 +123,15 @@ fn radio_group_item_nova() -> Recipe {
         bg: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(checked), rank: 1 << 84, value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(dark), rank: (1 << 81) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
-                Rule { when: when(dark | checked), rank: (1 << 81) | (1 << 84) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(checked), rank: 1 << 90, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(dark), rank: (1 << 87) | (1 << 122), value: Paint::Role(Role::Input, 0.3) },
+                Rule { when: when(dark | checked), rank: (1 << 87) | (1 << 90) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
             ],
         },
         text: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(checked), rank: 1 << 84, value: Paint::Role(Role::PrimaryForeground, 1.0) },
+                Rule { when: when(checked), rank: 1 << 90, value: Paint::Role(Role::PrimaryForeground, 1.0) },
             ],
         },
         // base: "border"
@@ -139,29 +139,29 @@ fn radio_group_item_nova() -> Recipe {
         border_color: Prop {
             base: Some(Paint::Role(Role::Input, 1.0)),
             rules: vec![
-                Rule { when: when(checked), rank: 1 << 84, value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(focus), rank: (1 << 34) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
-                Rule { when: when(invalid), rank: (1 << 54) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
-                Rule { when: when(invalid | checked), rank: (1 << 52) | (1 << 54) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
-                Rule { when: when(dark | invalid), rank: (1 << 54) | (1 << 81) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
-                Rule { when: When::new(in_card, checked), rank: (1 << 5) | (1 << 11) | (1 << 122), value: Paint::Role(Role::Input, 1.0) },
-                Rule { when: when(in_card | checked), rank: (1 << 11) | (1 << 84) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(checked), rank: 1 << 90, value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(focus), rank: (1 << 37) | (1 << 122), value: Paint::Role(Role::Ring, 1.0) },
+                Rule { when: when(invalid), rank: (1 << 59) | (1 << 122), value: Paint::Role(Role::Destructive, 1.0) },
+                Rule { when: when(invalid | checked), rank: (1 << 57) | (1 << 59) | (2 << 122), value: Paint::Role(Role::Primary, 1.0) },
+                Rule { when: when(dark | invalid), rank: (1 << 59) | (1 << 87) | (2 << 122), value: Paint::Role(Role::Destructive, 0.5) },
+                Rule { when: When::new(in_card, checked), rank: (1 << 5) | (1 << 12) | (1 << 122), value: Paint::Role(Role::Input, 1.0) },
+                Rule { when: when(in_card | checked), rank: (1 << 12) | (1 << 90) | (1 << 122), value: Paint::Role(Role::Primary, 1.0) },
             ],
         },
         ring_width: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(focus), rank: (1 << 34) | (1 << 122), value: 3.0 },
-                Rule { when: when(invalid), rank: (1 << 54) | (1 << 122), value: 3.0 },
-                Rule { when: when(in_card), rank: (1 << 11) | (1 << 122), value: 0.0 },
+                Rule { when: when(focus), rank: (1 << 37) | (1 << 122), value: 3.0 },
+                Rule { when: when(invalid), rank: (1 << 59) | (1 << 122), value: 3.0 },
+                Rule { when: when(in_card), rank: (1 << 12) | (1 << 122), value: 0.0 },
             ],
         },
         ring_color: Prop {
             base: None,
             rules: vec![
-                Rule { when: when(focus), rank: (1 << 34) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
-                Rule { when: when(invalid), rank: (1 << 54) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
-                Rule { when: when(dark | invalid), rank: (1 << 54) | (1 << 81) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
+                Rule { when: when(focus), rank: (1 << 37) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+                Rule { when: when(invalid), rank: (1 << 59) | (1 << 122), value: Paint::Role(Role::Destructive, 0.2) },
+                Rule { when: when(dark | invalid), rank: (1 << 59) | (1 << 87) | (2 << 122), value: Paint::Role(Role::Destructive, 0.4) },
             ],
         },
         // base: "outline-none"
@@ -169,7 +169,7 @@ fn radio_group_item_nova() -> Recipe {
         // base: "disabled:opacity-50"
         opacity: Prop {
             base: None,
-            rules: vec![Rule { when: when(State::DISABLED), rank: (1 << 36) | (1 << 122), value: 0.5 }],
+            rules: vec![Rule { when: when(State::DISABLED), rank: (1 << 39) | (1 << 122), value: 0.5 }],
         },
         // base: "after:-inset-x-3 after:-inset-y-2"
         hit_inset_x: Prop::fixed(12.0),
