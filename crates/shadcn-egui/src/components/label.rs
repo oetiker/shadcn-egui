@@ -3,7 +3,10 @@
 //! `peer-disabled:cursor-not-allowed` matters in egui: the label of a
 //! disabled control shows the not-allowed cursor. Its look comes from the
 //! style's `cn-label` recipe. `peer-disabled:opacity-50` arrives as the
-//! DISABLED state of that recipe.
+//! DISABLED state of that recipe. Placed directly in a
+//! [`Field`](crate::components::field::Field), it is the field's label,
+//! as upstream's `<Label for>` in the demos: it names the field's first
+//! crate control, and a press on it acts on that control.
 
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
@@ -95,6 +98,8 @@ impl Widget for Label {
             size = egui::vec2(block.size().x.max(width), block.size().y);
         }
         let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
+        // In a field it is the field's label, as upstream's `<Label for>`.
+        let resp = crate::components::field::label_in_field(ui, rect).unwrap_or(resp);
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });

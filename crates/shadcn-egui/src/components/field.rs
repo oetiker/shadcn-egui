@@ -633,6 +633,27 @@ impl ControlSlot {
     }
 }
 
+/// A crate [`Label`](crate::components::label::Label) placed directly in
+/// a field (upstream's demos write `<Label for=..>` there): sense its
+/// `rect` as the field's label, so it names the field's first crate
+/// control when it is the field's first label, and a press on it acts on
+/// that control. `None` outside a field.
+pub(crate) fn label_in_field(ui: &Ui, rect: Rect) -> Option<Response> {
+    let p = parent(ui).filter(|p| matches!(p.kind, Kind::Field | Kind::Content))?;
+    let f = context::find::<FieldCx>(ui)?;
+    let first = !with_children(ui, f.id, |c| std::mem::replace(&mut c.label_drawn, true));
+    let id = if first {
+        f.label
+    } else {
+        ui.next_auto_id().with((p.id, "shadcn_egui::label"))
+    };
+    let resp = ui.interact(rect, id, label_sense());
+    if resp.clicked() {
+        press(ui, f.press);
+    }
+    Some(resp)
+}
+
 /// A widget with a horizontal `data-orientation` (a slider, a separator)
 /// tells the field around it (`group-has-data-horizontal/field:`).
 pub(crate) fn report_horizontal(ui: &Ui) {
