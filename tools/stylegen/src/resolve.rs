@@ -83,9 +83,10 @@ pub fn collect_vars(css: &[(String, Vec<String>)]) -> Vars {
 
 /// Why a `line-clamp-N` under a display class clamps nothing.
 pub const CLAMP_CANCELLED: &str = "line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text";
-/// Why a `line-clamp-N` that Chrome applies is not translated.
+/// Why a `line-clamp-N` that Chrome applies is not translated: on a child
+/// target, or under a display class that cancels it only in some states.
 pub const CLAMP_EFFECTIVE: &str =
-    "line clamp: the crate does not clamp lines yet (no ported part has one)";
+    "line clamp on a child target or cancelled only in some states: the crate clamps a part's own text in every state";
 
 pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     let mut m = Marker::default();
@@ -94,7 +95,7 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     // Line clamps and display classes, by target and variants: a display
     // class of the same target and at least the clamp's rank cancels it.
     type Target = (Option<ChildSel>, u128, u128, u128);
-    let mut clamps: Vec<(String, Target)> = Vec::new();
+    let mut clamps: Vec<(String, u32, usize, Target)> = Vec::new();
     let mut displays: Vec<Target> = Vec::new();
     // `border-{t,l}-<role>` decls (as `BorderColor`) with their class and
     // the width field of their side, checked once every class is read.
@@ -137,7 +138,12 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
         match utility(&c.utility, v.pseudo) {
             U::Set(list) => set(list, false, &mut m),
             U::After(list) => set(list, true, &mut m),
-            U::Clamp(_) => clamps.push((raw.clone(), (v.child.clone(), v.all, v.none, v.rank))),
+            U::Clamp(n) => clamps.push((
+                raw.clone(),
+                n,
+                idx,
+                (v.child.clone(), v.all, v.none, v.rank),
+            )),
             U::SideColor(..) if v.child.is_some() => m.unsupported.push((
                 raw.clone(),
                 "single-side border colour on a child target".into(),
@@ -249,12 +255,24 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
             m.ignored.push((raw, why));
         }
     }
-    for (raw, (child, all, none, rank)) in clamps {
+    for (raw, n, idx, (child, all, none, rank)) in clamps {
         let cancelled = displays
             .iter()
             .any(|d| d.0 == child && d.1 == all && d.2 == none && d.3 >= rank);
+        // A display class of the target in other states cancels the clamp
+        // there only.
+        let partly = displays.iter().any(|d| d.0 == child);
         if cancelled {
             m.ignored.push((raw, CLAMP_CANCELLED));
+        } else if child.is_none() && !partly {
+            m.decls.push(Decl {
+                field: Field::LineClamp,
+                value: Value::Lines(n),
+                all,
+                none,
+                rank,
+                idx,
+            });
         } else {
             m.unsupported.push((raw, CLAMP_EFFECTIVE.into()));
         }

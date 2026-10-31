@@ -234,6 +234,19 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
         CLASS,
     ),
     ("has-data-[slot=card-footer]", Is("HAS_FOOTER"), CLASS),
+    // `&:is(a)`: the part itself rendered as a link (D-86 (b), `.link`), an
+    // element. `*:[a]`, a link child, is caller content (`IGNORED`).
+    ("[a]", Is("LINK"), ELEMENT),
+    ("data-[size=xs]", Is("SIZE_XS"), CLASS),
+    ("group-data-[size=sm]/item", Is("SIZE_SM"), CLASS),
+    ("group-data-[size=xs]/item", Is("SIZE_XS"), CLASS),
+    ("has-data-[size=sm]", Is("HAS_SIZE_SM"), CLASS),
+    ("has-data-[size=xs]", Is("HAS_SIZE_XS"), CLASS),
+    (
+        "group-has-data-[slot=item-description]/item",
+        Is("HAS_DESCRIPTION"),
+        CLASS,
+    ),
     // Field (#27).
     ("data-[variant=label]", Is("VARIANT_LABEL"), CLASS),
     ("data-[variant=legend]", Is("VARIANT_LEGEND"), CLASS),
@@ -361,7 +374,9 @@ pub const INPUT_GROUP: &str = "inside or around an InputGroup; the crate does no
 
 /// Every variant stylegen ignores, by exact text, with the reason.
 pub const IGNORED: &[(&str, &str)] = &[
-    ("[a]", CALLER_CONTENT),
+    ("*:[a]", CALLER_CONTENT),
+    ("[&>a]", CALLER_CONTENT),
+    ("[&>a:hover]", CALLER_CONTENT),
     ("[&_a]", CALLER_CONTENT),
     ("[&_p:not(:last-child)]", CALLER_CONTENT),
     ("file", "file-input button; egui has no file input"),
@@ -386,8 +401,16 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("[&_svg]", crate::utility::SVG_CHILD),
     ("has-data-[slot=card-action]", "card header grid template; the crate lays out the header itself"),
     ("has-data-[slot=card-description]", "card header grid template; the crate lays out the header itself"),
-    ("[&>a]", CALLER_CONTENT),
-    ("[&>a:hover]", CALLER_CONTENT),
+    // CP-03-18: a context flag once DropdownMenu exists.
+    (
+        "in-data-[slot=dropdown-menu-content]",
+        "inside a DropdownMenu; the crate does not ship DropdownMenu (CP-03-18: a context flag once it exists)",
+    ),
+    (
+        "[&+[data-slot=item-content]]",
+        "a second item content column; the crate's item has one, other columns are the caller's (CP-03-16)",
+    ),
+    ("[&_img]", "the item media image; the part draws the image at its own box, cover-cropped"),
     ("data-[slot=checkbox-group]", CHECKBOX_GROUP),
     ("has-[>[data-slot=checkbox-group]]", CHECKBOX_GROUP),
     ("has-[>[data-slot=radio-group]]", "a field set around a RadioGroup; the crate does not ship RadioGroup"),
@@ -821,7 +844,9 @@ fn context_flag(f: &str) -> bool {
 
 /// `*:[svg]` and `*:[svg:not([class*='size-'])]` name the part's own icon,
 /// as `[&>svg]` and `[&_svg:not([class*='size-'])]` do, with the same
-/// specificity: the pairs are spelt as those.
+/// specificity: the pairs are spelt as those. `*:[a]` (a link child) is
+/// spelt as one variant, so it stays apart from `[a]`, the part itself
+/// as a link.
 pub fn normalise(variants: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(variants.len());
     let mut i = 0;
@@ -834,6 +859,11 @@ pub fn normalise(variants: &[String]) -> Vec<String> {
             }
             ("*", Some("[svg:not([class*='size-'])]")) => {
                 out.push("[&_svg:not([class*='size-'])]".into());
+                i += 2;
+            }
+            // A link child, not the part itself as a link (`[a]`).
+            ("*", Some("[a]")) => {
+                out.push("*:[a]".into());
                 i += 2;
             }
             _ => {

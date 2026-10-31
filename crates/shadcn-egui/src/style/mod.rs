@@ -152,7 +152,7 @@ mod tests {
     /// thread stacks as soon as a function holds a few of them.
     #[test]
     fn style_is_small() {
-        // One unboxed Recipe is about 1.5 KB; allow a box per part, the
+        // One unboxed Recipe is about 1.5 KB; allow a box per recipe, the
         // name and a few non-recipe fields, never a recipe.
         let size = std::mem::size_of::<Style>();
         assert!(size < 2048, "size_of::<Style>() = {size}");

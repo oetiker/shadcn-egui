@@ -1847,6 +1847,15 @@ inside its root (`button_group_separator`, `button_group_text`) keeps its
 part shortcut. Bubble and message groups get the same test in their
 family PR.
 
+Consequence (Item port, #29, axiom 1, R:Part): `ItemGroup` has no size
+setter. Upstream's `ItemGroup` takes no `size`; its gap follows the items'
+sizes (`has-data-[size=sm|xs]`), so the group takes them from the previous
+pass, as `AvatarGroup` does, and the "explicit size" of the recommendation
+does not apply. Only items report their size: upstream's selector also
+matches other sized descendants (avatar, switch, select, card, toggle
+group), which do not change the group's gap here; the `ItemGroup` docs
+name that gap.
+
 ### D-51 · Labelled groups of items
 
 - **Case:** Select groups carry their label (`SelectGroup { label, items

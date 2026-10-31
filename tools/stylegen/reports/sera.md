@@ -39,22 +39,6 @@ Unsupported classes in shipped markers: **31** (not exportable)
 - ignored `[&>svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
 - ignored `inline-flex`: structure: egui layout is done by the component
 
-## `cn-badge-variant-default`
-
-- ignored `[a]:hover:text-foreground/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
-
-## `cn-badge-variant-secondary`
-
-- ignored `[a]:hover:text-foreground`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
-
-## `cn-badge-variant-destructive`
-
-- ignored `[a]:hover:text-destructive/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
-
-## `cn-badge-variant-outline`
-
-- ignored `[a]:hover:text-foreground/70`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
-
 ## `cn-card`
 
 - ignored `overflow-hidden`: browser behaviour the component handles itself
@@ -706,6 +690,79 @@ Unsupported classes in shipped markers: **31** (not exportable)
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item`
+
+- ignored `group/item`: browser behaviour the component handles itself
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `flex-wrap`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item-size-xs`
+
+- ignored `in-data-[slot=dropdown-menu-content]:p-0`: inside a DropdownMenu; the crate does not ship DropdownMenu (CP-03-18: a context flag once it exists)
+
+## `cn-item-media`
+
+- ignored `group-has-data-[slot=item-description]/item:self-start`: structure: egui layout is done by the component
+- ignored `shrink-0`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-center`: structure: egui layout is done by the component
+- ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item-media-variant-image`
+
+- ignored `overflow-hidden`: browser behaviour the component handles itself
+- ignored `[&_img]:size-full`: the item media image; the part draws the image at its own box, cover-cropped
+- ignored `[&_img]:object-cover`: the item media image; the part draws the image at its own box, cover-cropped
+
+## `cn-item-content`
+
+- ignored `flex-1`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
+- ignored `[&+[data-slot=item-content]]:flex-none`: a second item content column; the crate's item has one, other columns are the caller's (CP-03-16)
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item-title`
+
+- ignored `w-fit`: the component's default sizing
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+- ignored `line-clamp-1`: line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text
+
+## `cn-item-description`
+
+- ignored `[&>a]:underline`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&>a]:underline-offset-4`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&>a:hover]:text-primary`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+
+## `cn-item-actions`
+
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item-header`
+
+- ignored `basis-full`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-between`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item-footer`
+
+- ignored `basis-full`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `justify-between`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-item-group`
+
+- ignored `group/item-group`: browser behaviour the component handles itself
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
 - ignored `flex`: structure: egui layout is done by the component
 
 ## `cn-field`

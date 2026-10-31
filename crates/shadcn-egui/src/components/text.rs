@@ -104,6 +104,7 @@ pub struct TextLook {
     underline_offset: Option<f32>,
     leading: Leading,
     wrap_style: Option<TextWrap>,
+    line_clamp: Option<u32>,
     break_word: bool,
 }
 
@@ -156,6 +157,7 @@ impl TextLook {
             underline_offset: pick(layers, |r| &r.underline_offset, state),
             leading: Leading::Inline,
             wrap_style: pick(layers, |r| &r.text_wrap, state),
+            line_clamp: pick(layers, |r| &r.line_clamp, state),
             break_word: false,
         }
     }
@@ -278,7 +280,8 @@ impl TextLook {
     /// explicit colour (`strong` and `weak` text included) is
     /// `Color32::PLACEHOLDER`, which the painter replaces with the colour
     /// passed at paint time. Sections without an explicit line height get
-    /// the look's.
+    /// the look's. A `line-clamp-N` look keeps at most N rows, the last
+    /// one ending in `…`, unless the caller's job keeps fewer.
     fn job(&self, ui: &Ui, text: WidgetText) -> LayoutJob {
         let ctx = ui.ctx();
         let font = self.font_id(ctx);
@@ -296,6 +299,12 @@ impl TextLook {
             WidgetText::LayoutJob(job) => job.as_ref().clone(),
             WidgetText::Galley(galley) => galley.job.as_ref().clone(),
         };
+        if let Some(rows) = self.line_clamp.map(|n| n as usize) {
+            if rows < job.wrap.max_rows {
+                job.wrap.max_rows = rows;
+                job.wrap.overflow_character = Some('…');
+            }
+        }
         if self.uppercase {
             uppercase(&mut job);
         }
@@ -625,15 +634,26 @@ impl TextLook {
             text: String::with_capacity(job.text.len() + 8),
             ..job.clone()
         };
-        out.wrap = if breaking {
-            let mut w = TextWrapping::no_max_width();
-            if job.justify {
-                w.max_width = width;
+        // The caller's row limit, overflow character and `break_anywhere`
+        // stay, as egui's `Label` keeps them (it sets only what the wrap
+        // mode needs). The chosen breaks are forced ones, so egui needs
+        // the width only to justify, or to fit the overflow character into
+        // the last row a row limit keeps.
+        let limited = job.wrap.max_rows != usize::MAX;
+        out.wrap = job.wrap.clone();
+        match wrap {
+            TextWrapMode::Extend => out.wrap.max_width = f32::INFINITY,
+            TextWrapMode::Wrap if breaking && !job.justify && !limited => {
+                out.wrap.max_width = f32::INFINITY;
             }
-            w
-        } else {
-            TextWrapping::from_wrap_mode_and_width(wrap, width)
-        };
+            TextWrapMode::Wrap => out.wrap.max_width = width,
+            TextWrapMode::Truncate => {
+                let t = TextWrapping::truncate_at_width(width);
+                out.wrap.max_width = t.max_width;
+                out.wrap.max_rows = t.max_rows;
+                out.wrap.break_anywhere = t.break_anywhere;
+            }
+        }
         // The original char behind each char of `out`, for the row widths,
         // and the exact x of its pen on its line, in points.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);

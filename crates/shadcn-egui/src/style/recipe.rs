@@ -110,7 +110,8 @@ impl State {
     pub const VARIANT_DESTRUCTIVE: State = State(1 << 45);
     /// `group-has-data-[size=lg]/…:` (the group holds a large child)
     pub const HAS_SIZE_LG: State = State(1 << 46);
-    /// `group-has-data-[size=sm]/…:` (the group holds a small child)
+    /// `has-data-[size=sm]:`, `group-has-data-[size=sm]/…:` (the group
+    /// holds a small child)
     pub const HAS_SIZE_SM: State = State(1 << 47);
     /// `data-closed:` (bits' closed panel; `data-open:` is [`State::EXPANDED`])
     pub const CLOSED: State = State(1 << 48);
@@ -124,39 +125,48 @@ impl State {
     /// (`cn-button-group-orientation-vertical`'s `[&>*]` rules), apart from
     /// the child's own orientation ([`State::VERTICAL`])
     pub const IN_GROUP_VERTICAL: State = State(1 << 51);
+    /// `[a]:` (the part itself is a link: `.link(true)`)
+    pub const LINK: State = State(1 << 52);
+    /// `data-[size=xs]:`, `group-data-[size=xs]/…:`
+    pub const SIZE_XS: State = State(1 << 53);
+    /// `has-data-[size=xs]:` (the group holds an extra-small child)
+    pub const HAS_SIZE_XS: State = State(1 << 54);
+    /// `group-has-data-[slot=item-description]/…:` (the item shows a
+    /// description)
+    pub const HAS_DESCRIPTION: State = State(1 << 55);
     /// `data-[variant=label]:` (a FieldLegend drawn as a label)
-    pub const VARIANT_LABEL: State = State(1 << 52);
+    pub const VARIANT_LABEL: State = State(1 << 56);
     /// `data-[variant=legend]:` (a FieldLegend drawn as a legend)
-    pub const VARIANT_LEGEND: State = State(1 << 53);
+    pub const VARIANT_LEGEND: State = State(1 << 57);
     /// `[[data-variant=legend]+&]:` (the part comes right after a legend
     /// FieldLegend)
-    pub const AFTER_LEGEND: State = State(1 << 54);
+    pub const AFTER_LEGEND: State = State(1 << 58);
     /// `nth-last-2:` (the part is its parent's last but one child)
-    pub const NTH_LAST_2: State = State(1 << 55);
+    pub const NTH_LAST_2: State = State(1 << 59);
     /// A field group inside a field group (the group's
     /// `*:data-[slot=field-group]:`)
-    pub const IN_FIELD_GROUP: State = State(1 << 56);
+    pub const IN_FIELD_GROUP: State = State(1 << 60);
     /// `group-has-data-horizontal/…:` (the field holds a part whose
     /// `data-orientation` is horizontal: a slider, separator, tabs)
-    pub const HAS_HORIZONTAL: State = State(1 << 57);
+    pub const HAS_HORIZONTAL: State = State(1 << 61);
     /// `has-data-checked:` (a checked control inside the part)
-    pub const HAS_CHECKED: State = State(1 << 58);
+    pub const HAS_CHECKED: State = State(1 << 62);
     /// `has-[>[data-slot=field]]:` (a FieldLabel that wraps a Field: a
     /// choice card)
-    pub const HAS_FIELD: State = State(1 << 59);
+    pub const HAS_FIELD: State = State(1 << 63);
     /// `has-[>[data-slot=field-content]]:` (a field with a FieldContent
     /// child), also on that field's checkbox (`[&>[role=checkbox]]`)
-    pub const HAS_FIELD_CONTENT: State = State(1 << 60);
+    pub const HAS_FIELD_CONTENT: State = State(1 << 64);
     /// `has-[:focus-visible]:` (a control inside the part shows keyboard
     /// focus); on a control, `group-has-[:focus-visible]/field-label:`
     /// (the FieldLabel around it does)
-    pub const HAS_FOCUS_VISIBLE: State = State(1 << 61);
+    pub const HAS_FOCUS_VISIBLE: State = State(1 << 65);
     /// `has-[:disabled,[data-disabled]]` (a disabled control inside the
     /// part; used negated: `not-has-[..]:`)
-    pub const HAS_DISABLED: State = State(1 << 62);
+    pub const HAS_DISABLED: State = State(1 << 66);
     /// A field inside a FieldLabel, the choice card's field (the label's
     /// `*:data-[slot=field]:`)
-    pub const IN_FIELD_LABEL: State = State(1 << 63);
+    pub const IN_FIELD_LABEL: State = State(1 << 67);
 
     pub const fn or(self, other: State) -> State {
         State(self.0 | other.0)
@@ -751,6 +761,9 @@ pub struct Recipe {
     pub text_wrap: Prop<TextWrap>,
     /// `text-left`, `text-center`, `text-right`: where the part's lines sit.
     pub text_align: Prop<TextAlign>,
+    /// `line-clamp-N`: the part shows at most N lines, the last one cut
+    /// with an ellipsis.
+    pub line_clamp: Prop<u32>,
     pub radius: Prop<Radius>,
     pub radius_top: Prop<Radius>,
     pub radius_bottom: Prop<Radius>,
@@ -1014,6 +1027,7 @@ macro_rules! recipe_props {
             underline_offset,
             text_wrap,
             text_align,
+            line_clamp,
             radius,
             radius_top,
             radius_bottom,

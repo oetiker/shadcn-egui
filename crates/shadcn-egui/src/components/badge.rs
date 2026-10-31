@@ -6,7 +6,8 @@ use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
 use crate::components::icon::Glyph;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, transitioned_text, with_opacity, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, transitioned_text, with_opacity,
+    ActivationKeys, RecipeBox,
 };
 use crate::components::text::{selectable_sense, TextLook};
 use crate::style::app::Sealed;
@@ -14,7 +15,7 @@ use crate::style::{
     pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
 use crate::Theme;
-use egui::{Response, Ui, Vec2, Widget};
+use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget, WidgetType};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -90,6 +91,7 @@ pub struct Badge {
     variant: BadgeVariant,
     icon: Option<Glyph>,
     icon_end: Option<Glyph>,
+    link: bool,
 }
 
 impl Badge {
@@ -99,6 +101,7 @@ impl Badge {
             variant: BadgeVariant::Default,
             icon: None,
             icon_end: None,
+            link: false,
         }
     }
     pub fn variant(mut self, v: impl Into<BadgeVariant>) -> Self {
@@ -117,6 +120,14 @@ impl Badge {
         self.icon_end = Some(icon.into());
         self
     }
+    /// The badge is a link (shadcn's `href`, an `<a>`): it takes the
+    /// style's link hover look, clicks and takes focus, activates on Enter
+    /// only and shows the pointing hand. Its `clicked()` is where the app
+    /// opens the target (`ctx.open_url`).
+    pub fn link(mut self, link: bool) -> Self {
+        self.link = link;
+        self
+    }
 }
 
 /// A badge with the default variant order of the shadcn docs.
@@ -133,11 +144,11 @@ impl Widget for Badge {
             variant.part(&t.style, BadgeVariant::layer, |r| &r.badge),
         ];
         let enabled = ui.is_enabled();
-        // The style has no `[a]:hover` rules (a badge is not a link in
-        // egui): the hover rules it has, and an app variant's, decide. A
-        // badge is never focused.
+        // `LINK` turns on the style's `[a]:hover` rules; a badge that is
+        // not a link is a `span` and never takes focus.
         let context = variant
             .bits()
+            .with(State::LINK, self.link)
             .with(State::ICON_START, self.icon.is_some())
             .with(State::ICON_END, self.icon_end.is_some());
         // Geometry never depends on hover: resolve it before allocating.
@@ -172,11 +183,24 @@ impl Widget for Badge {
         // `Button` does (conformance 3.1); the content stays centred in it.
         let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
         // A `span` upstream, without `select-none`: its text selects as
-        // the browser's does.
-        let resp = ui.interact(rect, id, selectable_sense(ui));
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
-        });
+        // the browser's does. A link's text drags the link in the browser,
+        // so a link badge clicks and does not select.
+        let sense = if self.link {
+            Sense::click()
+        } else {
+            selectable_sense(ui)
+        };
+        let mut resp = ui.interact(rect, id, sense);
+        let role = if self.link {
+            pressable(&mut resp, ActivationKeys::Enter);
+            if resp.hovered() {
+                ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            }
+            WidgetType::Link
+        } else {
+            WidgetType::Label
+        };
+        resp.widget_info(|| egui::WidgetInfo::labeled(role, enabled, &self.text));
         for (slot, _) in [self.icon, self.icon_end]
             .iter()
             .enumerate()
@@ -201,8 +225,13 @@ impl Widget for Badge {
         // A state's `underline` (the link variant on hover) lays out again.
         let look = TextLook::resolve(ui, &l, st);
         // The selectable text paints through the `Ui`: at the part's opacity.
+        let row = if self.link {
+            row
+        } else {
+            row.selectable(&resp)
+        };
         with_opacity(ui, painter.opacity(), |ui| {
-            row.selectable(&resp).paint(ui, &painter, rect, &look, fg);
+            row.paint(ui, &painter, rect, &look, fg);
         });
         resp
     }

@@ -14,6 +14,7 @@ use crate::components::dialog::{self, Dialog};
 use crate::components::field::{field_label, Field, FieldGroup, FieldLabel};
 use crate::components::icon::{Glyph, IconView};
 use crate::components::input::Input;
+use crate::components::item::{Item, ItemGroup, ItemSize, ItemVariant};
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
 use crate::components::label::label;
 use crate::components::popover::{popover_header, Popover};
@@ -670,6 +671,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 alerts_group(ui);
                 tabs_group(ui, state);
                 spinner_group(ui);
+                item_group(ui);
             });
         });
     });
@@ -887,6 +889,57 @@ fn spinner_group(ui: &mut egui::Ui) {
                         .variant(BadgeVariant::Secondary)
                         .icon_end(Glyph::Spinner),
                 );
+            });
+        });
+    });
+}
+
+/// shadcn-svelte's item demos: the outline variant with icon media and an
+/// action, a muted link item at the small size, and `item-group-demo`'s
+/// group of outline items with avatars. The demo's `rounded-full` on the
+/// icon buttons is a Button look, an app variant (axiom 8), and is not
+/// reproduced.
+fn item_group(ui: &mut egui::Ui) {
+    use crate::icons::lucide;
+    group(ui, "Item", "Variants, sizes, media and a group.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .icon(lucide::SHIELD_ALERT)
+                .title("Security Alert")
+                .description("New login detected from unknown device.")
+                .show(ui, |ui| {
+                    let _ = ui.add(Button::new("Review").size(ButtonSize::Sm));
+                });
+            let _ = ui.add(
+                Item::new()
+                    .variant(ItemVariant::Muted)
+                    .size(ItemSize::Sm)
+                    .icon(lucide::BADGE_CHECK)
+                    .title("Your profile has been verified.")
+                    .link(true),
+            );
+            ItemGroup::new().show(ui, |ui| {
+                for (name, mail) in [
+                    ("shadcn", "shadcn@vercel.com"),
+                    ("maxleiter", "maxleiter@vercel.com"),
+                ] {
+                    Item::new()
+                        .variant(ItemVariant::Outline)
+                        .media(move |ui| {
+                            let _ = ui.add(Avatar::new(&name[..1]));
+                        })
+                        .title(name)
+                        .description(mail)
+                        .show(ui, |ui| {
+                            let _ = ui.add(
+                                Button::new("Add")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Icon)
+                                    .icon(lucide::PLUS),
+                            );
+                        });
+                }
             });
         });
     });
