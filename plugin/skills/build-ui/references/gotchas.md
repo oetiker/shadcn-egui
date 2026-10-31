@@ -75,6 +75,11 @@
   opening a Popover closes any open menu or combo box (as on the web). For a
   popover inside a popover, keep the inner one's state yourself
   (`egui::Popup::..open_bool(&mut flag)`).
+- **`egui::ScrollArea` keeps egui's look.** Its bar takes egui's widget
+  colours, so under a theme the thumb turns `accent` on hover, and it
+  fades the content at the edges. Where upstream scrolls, use
+  `shadcn_egui::components::scroll_area::ScrollArea`: same constructors and
+  setters, shadcn's bar, no fade, and keyboard scrolling.
 - **Overlays must share an area or use distinct `Order`s.** A backdrop and a
   card in two areas at the same `Order` can swap z-order once another window
   has been shown, leaving the backdrop on top. `Dialog` uses `egui::Modal`,
