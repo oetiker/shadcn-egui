@@ -4,7 +4,7 @@ use egui::vec2;
 use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
 use shadcn_egui::components::button::{Button, ButtonSize};
-use shadcn_egui::components::item::Item;
+use shadcn_egui::components::item::{Item, ItemGroup, ItemSize};
 use shadcn_egui::Theme;
 
 #[derive(Default)]
@@ -49,7 +49,10 @@ fn a_click_on_an_action_reaches_the_action_not_the_item() {
 fn a_click_beside_the_actions_reaches_the_item() {
     let mut h = clickable_item();
     h.run();
-    let at = h.get_by_label("Row").rect().center();
+    let at = h
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Row")
+        .rect()
+        .center();
     for e in common::click(at) {
         h.event(e);
     }
@@ -175,4 +178,366 @@ fn unbounded_room_takes_the_content_width() {
     });
     assert!(item.width().is_finite() && item.width() < 300.0, "{item:?}");
     assert_eq!(button.right(), item.right() - 17.0);
+}
+
+/// A light vega context with AccessKit on, driven a frame at a time at a
+/// clock the test sets.
+struct Frames {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl Frames {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        Self { ctx, time: 0.0 }
+    }
+
+    /// One frame at `self.time` with `events`; `add` draws the page.
+    fn run(
+        &mut self,
+        events: Vec<egui::Event>,
+        add: impl FnMut(&mut egui::Ui),
+    ) -> egui::FullOutput {
+        let mut add = add;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                vec2(400.0, 400.0),
+            )),
+            time: Some(self.time),
+            events,
+            ..Default::default()
+        };
+        self.ctx.run_ui(input, |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.ctx().set_theme(egui::Theme::Light);
+            add(ui);
+        })
+    }
+}
+
+/// The AccessKit node labelled `label`.
+fn node<'a>(
+    out: &'a egui::FullOutput,
+    label: &str,
+) -> (egui::accesskit::NodeId, &'a egui::accesskit::Node) {
+    let update = out
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .expect("accesskit on");
+    let (id, n) = update
+        .nodes
+        .iter()
+        .find(|(_, n)| n.label() == Some(label))
+        .unwrap_or_else(|| panic!("no node {label}"));
+    (*id, n)
+}
+
+/// The 3px focus ring strokes a frame painted.
+fn rings(out: &egui::FullOutput) -> usize {
+    common::rect_shapes(out)
+        .iter()
+        .filter(|r| r.stroke.width == 3.0)
+        .count()
+}
+
+/// A plain button, then an item that senses `sense` (with `.link(link)`),
+/// returning the item's response.
+fn focus_page(sense: egui::Sense, link: bool) -> impl FnMut(&mut egui::Ui) -> egui::Response {
+    move |ui| {
+        let _ = ui.add(Button::new("Before"));
+        ui.add(Item::new().title("Row").sense(sense).link(link))
+    }
+}
+
+/// C 4.1: a press focuses a sensed item without a ring; a Tab focus shows
+/// one.
+#[test]
+fn a_press_focuses_without_a_ring_a_tab_with_one() {
+    for (sense, link) in [(egui::Sense::click(), false), (egui::Sense::hover(), true)] {
+        let mut f = Frames::new();
+        let mut page = focus_page(sense, link);
+        let mut item = None;
+        let out = f.run(vec![], |ui| item = Some(page(ui)));
+        let at = item.as_ref().unwrap().rect.center();
+        let _ = rings(&out);
+        f.run(common::pointer_down(at), |ui| item = Some(page(ui)));
+        let out = f.run(common::pointer_up(at), |ui| item = Some(page(ui)));
+        assert!(
+            item.as_ref().unwrap().has_focus(),
+            "link {link}: a press focuses"
+        );
+        assert_eq!(rings(&out), 0, "link {link}: no ring after a press");
+
+        let mut f = Frames::new();
+        f.run(vec![], |ui| item = Some(page(ui)));
+        f.run(common::key(egui::Key::Tab), |ui| item = Some(page(ui)));
+        f.run(common::key(egui::Key::Tab), |ui| item = Some(page(ui)));
+        let out = f.run(vec![], |ui| item = Some(page(ui)));
+        assert!(
+            item.as_ref().unwrap().has_focus(),
+            "link {link}: Tab focuses"
+        );
+        assert_eq!(rings(&out), 1, "link {link}: a ring after Tab");
+    }
+}
+
+/// Clicks of `item` after a Tab onto it and `keys`.
+fn clicks_after(sense: egui::Sense, link: bool, keys: &[egui::Key]) -> usize {
+    let mut f = Frames::new();
+    let mut page = focus_page(sense, link);
+    let mut clicks = 0;
+    let mut frame = |f: &mut Frames, events| {
+        f.run(events, |ui| clicks += usize::from(page(ui).clicked()));
+    };
+    frame(&mut f, vec![]);
+    frame(&mut f, common::key(egui::Key::Tab));
+    frame(&mut f, common::key(egui::Key::Tab));
+    for k in keys {
+        frame(&mut f, common::key_down(*k));
+        frame(&mut f, common::key_up(*k));
+    }
+    frame(&mut f, vec![]);
+    clicks
+}
+
+/// O2: a sensed item is a `<button>`, Enter and Space click it; a link
+/// item is an `<a>`, only Enter does.
+#[test]
+fn enter_and_space_click_a_sensed_item_enter_alone_a_link() {
+    let click = egui::Sense::click();
+    assert_eq!(clicks_after(click, false, &[egui::Key::Enter]), 1);
+    assert_eq!(clicks_after(click, false, &[egui::Key::Space]), 1);
+    assert_eq!(
+        clicks_after(egui::Sense::hover(), true, &[egui::Key::Enter]),
+        1
+    );
+    assert_eq!(
+        clicks_after(egui::Sense::hover(), true, &[egui::Key::Space]),
+        0
+    );
+}
+
+/// `Sense::CLICK` without `FOCUSABLE` clicks by pointer but takes no Tab
+/// focus, so no key clicks it.
+#[test]
+fn an_item_without_focusable_takes_no_tab_and_no_keys() {
+    let only = egui::Sense::CLICK;
+    assert_eq!(
+        clicks_after(only, false, &[egui::Key::Enter, egui::Key::Space]),
+        0
+    );
+    let mut f = Frames::new();
+    let mut page = focus_page(only, false);
+    let mut item = None;
+    for e in [
+        vec![],
+        common::key(egui::Key::Tab),
+        common::key(egui::Key::Tab),
+        vec![],
+    ] {
+        f.run(e, |ui| item = Some(page(ui)));
+    }
+    assert!(!item.unwrap().has_focus());
+}
+
+/// O5: `.link` and `.sense` add up, in either order: a link item with a
+/// hover sense still clicks.
+#[test]
+fn link_and_sense_add_up_in_any_order() {
+    type Build = fn() -> Item<'static>;
+    let orders: [Build; 2] = [
+        || {
+            Item::new()
+                .title("Row")
+                .link(true)
+                .sense(egui::Sense::hover())
+        },
+        || {
+            Item::new()
+                .title("Row")
+                .sense(egui::Sense::hover())
+                .link(true)
+        },
+    ];
+    for build in orders {
+        let mut f = Frames::new();
+        let mut item = None;
+        f.run(vec![], |ui| item = Some(ui.add(build())));
+        let at = item.as_ref().unwrap().rect.center();
+        let mut clicked = false;
+        f.run(common::click(at), |ui| clicked = ui.add(build()).clicked());
+        assert!(clicked);
+    }
+}
+
+/// `aria-selected`: `.selected` reaches AccessKit; without it the item
+/// reports no selection state.
+#[test]
+fn selected_reaches_accesskit() {
+    for (sel, want) in [
+        (Some(true), Some(true)),
+        (Some(false), Some(false)),
+        (None, None),
+    ] {
+        let mut f = Frames::new();
+        let out = f.run(vec![], |ui| {
+            let mut item = Item::new().title("Row").sense(egui::Sense::click());
+            if let Some(s) = sel {
+                item = item.selected(s);
+            }
+            ui.add(item);
+        });
+        let (_, n) = node(&out, "Row");
+        assert_eq!(n.is_selected(), want, "{sel:?}");
+        assert_eq!(n.toggled(), None, "{sel:?}: not a toggle button");
+    }
+}
+
+/// Roles: a plain item is egui's `Other`, a sensed one a button, a link
+/// item a link; the description is the node's description.
+#[test]
+fn an_items_role_follows_its_sense() {
+    use egui::accesskit::Role;
+    let cases: [(fn() -> Item<'static>, Role); 3] = [
+        (|| Item::new().title("Row"), Role::Unknown),
+        (
+            || Item::new().title("Row").sense(egui::Sense::click()),
+            Role::Button,
+        ),
+        (|| Item::new().title("Row").link(true), Role::Link),
+    ];
+    for (build, role) in cases {
+        let mut f = Frames::new();
+        let out = f.run(vec![], |ui| {
+            ui.add(build().description("Details"));
+        });
+        let (_, n) = node(&out, "Row");
+        assert_eq!(n.role(), role);
+        assert_eq!(n.description(), Some("Details"));
+    }
+}
+
+/// D10: the items are children of the group's `List` node.
+#[test]
+fn items_are_children_of_the_groups_list() {
+    let mut f = Frames::new();
+    let out = f.run(vec![], |ui| {
+        ItemGroup::new().show(ui, |ui| {
+            ui.add(Item::new().title("One"));
+            ui.add(Item::new().title("Two"));
+        });
+    });
+    let update = out.platform_output.accesskit_update.as_ref().unwrap();
+    let (_, list) = update
+        .nodes
+        .iter()
+        .find(|(_, n)| n.role() == egui::accesskit::Role::List)
+        .expect("a List node");
+    let kids = list.children();
+    for label in ["One", "Two"] {
+        let (id, _) = node(&out, label);
+        assert!(kids.contains(&id), "{label} not a child of the list");
+    }
+}
+
+/// D-88 (c), `transition-colors duration-100`: a link item's hover fill
+/// fades in over 100 ms.
+#[test]
+fn the_hover_fill_fades_over_100_ms() {
+    let muted = common::resolved(&Theme::vega(), egui::Theme::Light)
+        .palette_of(egui::Theme::Light)
+        .muted;
+    let mut f = Frames::new();
+    let mut item = None;
+    let page = |ui: &mut egui::Ui| ui.add(Item::new().title("Row").link(true));
+    f.run(vec![], |ui| item = Some(page(ui)));
+    let rect = item.unwrap().rect;
+    let fill = |out: &egui::FullOutput| {
+        common::box_fills(out)
+            .into_iter()
+            .find(|(r, _)| r.contains(rect.center()) && r.width() >= rect.width() - 2.0)
+            .map_or(egui::Color32::TRANSPARENT, |(_, c)| c)
+    };
+    f.time = 1.0;
+    let start = f.run(vec![egui::Event::PointerMoved(rect.center())], |ui| {
+        let _ = page(ui);
+    });
+    f.time = 1.05;
+    let mid = f.run(vec![], |ui| {
+        let _ = page(ui);
+    });
+    f.time = 1.2;
+    let end = f.run(vec![], |ui| {
+        let _ = page(ui);
+    });
+    assert_ne!(fill(&start), muted, "the fill jumped");
+    let m = fill(&mid);
+    assert!(m != muted && m.a() > 0, "half way: {m:?}");
+    assert_eq!(fill(&end), muted);
+}
+
+/// O3: a word too long for the column is clipped at the content's edge.
+#[test]
+fn a_long_unbreakable_title_is_clipped() {
+    let mut f = Frames::new();
+    let mut item = None;
+    let page = |ui: &mut egui::Ui| {
+        ui.set_max_width(160.0);
+        ui.add(Item::new().title("Supercalifragilisticexpialidocious-and-more"))
+    };
+    for _ in 0..2 {
+        f.run(vec![], |ui| item = Some(page(ui)));
+    }
+    let out = f.run(vec![], |ui| item = Some(page(ui)));
+    let rect = item.unwrap().rect;
+    let clips: Vec<_> = out
+        .shapes
+        .iter()
+        .filter(|c| matches!(c.shape, egui::Shape::Text(_)))
+        .map(|c| c.clip_rect)
+        .collect();
+    assert!(!clips.is_empty());
+    for clip in clips {
+        // vega: `border px-4`.
+        assert!(
+            clip.right() <= rect.right() - 17.0 + 0.01,
+            "{clip:?} in {rect:?}"
+        );
+    }
+}
+
+/// The gaps between the items of a group.
+fn group_gaps(sizes: &[ItemSize]) -> Vec<f32> {
+    let sizes = sizes.to_vec();
+    let rects = settle(&Theme::vega(), 400.0, move |ui| {
+        ItemGroup::new()
+            .show(ui, |ui| {
+                sizes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, z)| ui.add(Item::new().title(format!("Item {i}")).size(*z)).rect)
+                    .collect::<Vec<_>>()
+            })
+            .inner
+    });
+    rects
+        .windows(2)
+        .map(|w| w[1].top() - w[0].bottom())
+        .collect()
+}
+
+/// `gap-4 has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2`: the group
+/// gap follows its items' sizes; with sm and xs items both rules match and
+/// the later one in CSS order, xs, wins (D10).
+#[test]
+fn the_group_gap_follows_the_item_sizes() {
+    use ItemSize::{Default, Sm, Xs};
+    assert_eq!(group_gaps(&[Default, Default]), [16.0]);
+    assert_eq!(group_gaps(&[Default, Sm]), [10.0]);
+    assert_eq!(group_gaps(&[Xs, Default]), [8.0]);
+    assert_eq!(group_gaps(&[Sm, Xs, Default]), [8.0, 8.0]);
 }

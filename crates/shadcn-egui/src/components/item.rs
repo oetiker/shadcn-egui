@@ -18,8 +18,8 @@ use crate::components::context;
 use crate::components::icon::{paint_icon, Icon};
 use crate::components::registry::{self, Group};
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, part_ui, pressable, shift, widget_info_with_role,
-    ActivationKeys, RecipeBox,
+    interaction_state, line_width, part_painter, part_ui, pressable, shift, ActivationKeys,
+    RecipeBox,
 };
 use crate::components::text::{content_scope, TextLook};
 use crate::layout;
@@ -560,12 +560,15 @@ impl<'a> Item<'a> {
         let fid = frame.unique_id();
         // The item's own hit area goes in before its content, so the
         // actions' widgets lie above it; the rect is the previous pass's
-        // until the box is known.
+        // until the box is known. Its id is not the frame's: egui takes
+        // the focus from a `Ui`'s id each time it builds that `Ui`, which
+        // does not sense focus.
+        let hit = fid.with("shadcn_egui::item::hit");
         let prev = ui
             .ctx()
-            .read_response(fid)
+            .read_response(hit)
             .map_or(Rect::NOTHING, |r| r.rect);
-        let _ = ui.interact(prev, fid, sense);
+        let _ = ui.interact(prev, hit, sense);
         let back = RecipeBox::reserve(ui);
 
         let left = origin.x + side;
@@ -811,7 +814,7 @@ impl<'a> Item<'a> {
 
         drop(frame);
         let _ = ui.allocate_rect(outer, Sense::hover());
-        let mut response = ui.interact(outer, fid, sense);
+        let mut response = ui.interact(outer, hit, sense);
         let st = if sensed {
             let kind = if self.link {
                 ActivationKeys::Enter
@@ -841,16 +844,20 @@ impl<'a> Item<'a> {
             WidgetType::Other
         };
         let enabled = response.enabled();
-        let selected = self.selected;
         response.widget_info(|| {
-            let mut info = WidgetInfo::labeled(kind, enabled, title_text.as_deref().unwrap_or(""));
-            info.selected = selected;
-            info
+            WidgetInfo::labeled(kind, enabled, title_text.as_deref().unwrap_or(""))
         });
-        if let Some(desc) = desc_text {
-            ui.ctx()
-                .accesskit_node_builder(fid, |node| node.set_description(desc));
-        }
+        // `aria-selected` is AccessKit's selected state; egui's
+        // `WidgetInfo::selected` is a toggle button's pressed state.
+        let selected = self.selected;
+        ui.ctx().accesskit_node_builder(hit, |node| {
+            if let Some(desc) = desc_text {
+                node.set_description(desc);
+            }
+            if let Some(selected) = selected {
+                node.set_selected(selected);
+            }
+        });
         InnerResponse::new(inner, response)
     }
 }
@@ -1111,11 +1118,14 @@ impl ItemGroup {
         list.spacing_mut().item_spacing.y = gap;
         let inner = add(&mut list);
         let rect = list.min_rect();
+        // The `List` role goes on the `Ui` the items are in, so they are
+        // its children in the AccessKit tree, not grandchildren.
+        let list_id = list.unique_id();
         drop(list);
         let _ = group.end(ui.ctx());
         let response = layout::end_item(ui, frame, rect, Sense::hover());
-        widget_info_with_role(&response, egui::accesskit::Role::List, || {
-            WidgetInfo::new(WidgetType::Other)
+        ui.ctx().accesskit_node_builder(list_id, |node| {
+            node.set_role(egui::accesskit::Role::List);
         });
         InnerResponse::new(inner, response)
     }
