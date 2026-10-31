@@ -19,9 +19,12 @@
 //! Differences from upstream: the options-list API has no groups, labels,
 //! separators or per-option disabled state, so `cn-select-label` and
 //! `cn-select-separator` are not drawn and the list always sits in one
-//! `cn-select-group` (its padding frames the rows). An `egui::ScrollArea`
-//! replaces the scroll buttons (`cn-select-scroll-*` are resolved by the
-//! style but unused). Each row paints its tick and text in the row's own
+//! `cn-select-group` (its padding frames the rows). Upstream's list shows
+//! no scroll bar and scrolls by its up and down buttons; here the list
+//! scrolls in the crate's [`ScrollArea`], which shows its `border` thumb
+//! while the pointer is over a list that overflows, and the buttons are
+//! not drawn (`cn-select-scroll-*` are resolved by the style but unused).
+//! Each row paints its tick and text in the row's own
 //! text colour, which is what the `**:` descendant classes of
 //! `cn-select-item` ask for. Without `width`, the trigger is as wide as its
 //! widest option (`w-fit` would make it jump with the chosen text); either
@@ -30,6 +33,7 @@
 use crate::color::Tone;
 use crate::components::field::ControlSlot;
 use crate::components::icon::paint_icon;
+use crate::components::scroll_area::ScrollArea;
 use crate::components::shared::{
     content_ui, disabled_cursor, interaction_state, line_width, opacity, part_painter, pressable,
     report_invalid, transitioned_text, ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
@@ -488,7 +492,7 @@ impl Widget for Select<'_> {
                         &chain,
                         gs,
                         |ui| {
-                            egui::ScrollArea::vertical()
+                            ScrollArea::vertical()
                                 .max_height(max_h.max(0.0))
                                 .auto_shrink([false, true])
                                 .show(ui, |ui| {

@@ -695,6 +695,63 @@ fn select_list_is_capped_to_the_window() {
     );
 }
 
+/// A select of thirty options: more than its list shows in a 260 px
+/// window.
+fn long_select_harness() -> Harness<'static, usize> {
+    let options: Vec<String> = (0..30).map(|i| format!("Option {i}")).collect();
+    Harness::builder()
+        .with_size(vec2(320.0, 260.0))
+        .build_ui_state(
+            move |ui, value: &mut usize| {
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
+                let options: Vec<&str> = options.iter().map(String::as_str).collect();
+                ui.add(Select::new("many", value, &options).width(180.0));
+            },
+            0usize,
+        )
+}
+
+/// bits keeps the highlighted option in view: arrows that move the
+/// highlight past the visible rows scroll the list after it.
+#[test]
+fn select_list_follows_the_highlight() {
+    let mut h = long_select_harness();
+    h.run();
+    open_select(&mut h);
+    assert!(
+        h.get_by_label("Option 15").rect().top() > 260.0,
+        "starts below the window"
+    );
+    for _ in 0..15 {
+        h.key_press(Key::ArrowDown);
+        h.run();
+    }
+    let row = h.get_by_label("Option 15").rect();
+    assert!(
+        row.top() >= 0.0 && row.bottom() <= 260.0,
+        "the highlighted row is in view: {row:?}"
+    );
+}
+
+/// The list scrolls in the crate's `ScrollArea`: hovered, an overflowing
+/// list shows the 7 px `border` thumb of the scroll-area recipes.
+#[test]
+fn select_list_uses_the_crate_scroll_bar() {
+    use shadcn_egui::style::{Paint, Role};
+    let mut h = long_select_harness();
+    h.run();
+    open_select(&mut h);
+    h.get_by_label("Option 2").hover();
+    h.run();
+    let border = Theme::current(&h.ctx).paint(Paint::Role(Role::Border, 1.0));
+    let thumbs: Vec<_> = common::rect_shapes(h.output())
+        .into_iter()
+        .filter(|r| r.fill == border && r.rect.width() == 7.0)
+        .collect();
+    assert_eq!(thumbs.len(), 1, "{thumbs:?}");
+}
+
 /// The trigger is `w-fit`, capped to the room (conformance 3.1): an option
 /// wider than the window, or a wider `width`, keeps it inside the window.
 #[test]

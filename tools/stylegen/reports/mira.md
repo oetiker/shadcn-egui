@@ -757,3 +757,25 @@ Unsupported classes in shipped markers: **0** (exportable)
 - ignored `flex-col`: structure: egui layout is done by the component
 - ignored `flex`: structure: egui layout is done by the component
 
+## `cn-scroll-area`
+
+- ignored `relative`: structure: egui layout is done by the component
+
+## `cn-scroll-area-viewport`
+
+- ignored `size-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `rounded-[inherit]`: clips the content to the parent's radius; egui clips to a rectangle (accepted difference, as card's `overflow-hidden`)
+
+## `cn-scroll-area-scrollbar`
+
+- ignored `data-horizontal:flex-col`: structure: egui layout is done by the component
+- ignored `data-vertical:h-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `touch-none`: browser behaviour the component handles itself
+- ignored `select-none`: browser behaviour the component handles itself
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-scroll-area-thumb`
+
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `flex-1`: structure: egui layout is done by the component
+
