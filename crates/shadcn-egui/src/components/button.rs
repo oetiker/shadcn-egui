@@ -293,7 +293,7 @@ impl Widget for Button {
         let (layers, n) = Self::layers(&t.style, v, z, self.extra.as_ref());
         let l = &layers[..n];
         let enabled = self.enabled && ui.is_enabled();
-        let slot = ControlSlot::of(ui);
+        let slot = ControlSlot::of_button(ui);
         let invalid = slot.invalid(self.invalid);
         let context = (variant.bits() | size.bits())
             .with(State::ICON_START, self.icon.is_some())
@@ -348,6 +348,12 @@ impl Widget for Button {
         let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
         let mut resp = ui.interact(rect, id, sense);
         pressable(&mut resp, ActivationKeys::Button);
+        // A press on the field's label clicks the button, as on
+        // `<label for=button>`.
+        if enabled && slot.pressed {
+            resp.flags
+                .insert(egui::response::Flags::FAKE_PRIMARY_CLICKED);
+        }
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
         });

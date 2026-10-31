@@ -310,6 +310,8 @@ struct Children {
     label_drawn: bool,
     /// A control took the field's label.
     label_taken: bool,
+    /// The field holds a crate control other than a button.
+    form_control: bool,
     /// The right edge of the part that grows in a row.
     grower_right: Option<f32>,
     /// The `has-*` flags its children reported.
@@ -328,6 +330,8 @@ struct Learned {
     /// The width a row's growing part leaves to what follows it.
     trailing: f32,
     labelled: bool,
+    /// [`Children::form_control`].
+    form_control: bool,
     presence: State,
 }
 
@@ -424,6 +428,7 @@ fn end_children(ui: &Ui, id: Id, trailing: f32) -> Children {
         count,
         trailing,
         labelled: c.label_drawn,
+        form_control: c.form_control,
         presence: c.presence,
     };
     let before = ui.data(|d| d.get_temp::<Learned>(learned_key(id)));
@@ -433,6 +438,7 @@ fn end_children(ui: &Ui, id: Id, trailing: f32) -> Children {
             b.count != now.count
                 || (b.trailing - now.trailing).abs() > 0.01 // behaviour-ok: float tolerance
                 || b.labelled != now.labelled
+                || b.form_control != now.form_control
                 || b.presence != now.presence
         });
         if differs {
@@ -529,6 +535,17 @@ impl ControlSlot {
     /// The slot of a control drawn in `ui`: the first crate control of a
     /// field takes its label, and with it a press on the label.
     pub(crate) fn of(ui: &Ui) -> Self {
+        Self::take(ui, false)
+    }
+
+    /// The slot of a button: as [`ControlSlot::of`], but a button leaves
+    /// the label to another crate control of the field (an input after a
+    /// button, as `<label for=input>`), known from the previous pass.
+    pub(crate) fn of_button(ui: &Ui) -> Self {
+        Self::take(ui, true)
+    }
+
+    fn take(ui: &Ui, button: bool) -> Self {
         let field = context::find::<FieldCx>(ui);
         let card = context::find::<CardCx>(ui);
         let mut slot = Self {
@@ -539,11 +556,12 @@ impl ControlSlot {
             pressed: false,
         };
         if let Some(f) = field {
-            let labelled = learned(ui, f.id).labelled;
+            let learned = learned(ui, f.id);
             let take = with_children(ui, f.id, |c| {
-                let take = !c.label_taken;
-                c.label_taken = true;
-                (take, labelled || c.label_drawn)
+                c.form_control |= !button;
+                let take = !c.label_taken && !(button && learned.form_control);
+                c.label_taken |= take;
+                (take, learned.labelled || c.label_drawn)
             });
             if take.0 {
                 slot.label = take.1.then_some(f.label);
@@ -1137,8 +1155,10 @@ impl Widget for FieldDescription {
 /// classes). It takes the field's text colour, and fades in a disabled
 /// field and after a disabled checkbox or switch (`peer-disabled:`). A
 /// press on it acts on the field's first crate control: it toggles a
-/// checkbox or switch, focuses a text field and opens a select. In a
-/// horizontal field it takes the room the other children leave.
+/// checkbox or switch, focuses a text field, opens a select and clicks a
+/// button. A button leaves the label to a crate control of another kind
+/// in the same field. In a horizontal field it takes the room the other
+/// children leave.
 ///
 /// [`FieldLabel::choice_card`] wraps a whole field instead.
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]

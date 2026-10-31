@@ -591,6 +591,75 @@ fn a_label_press_acts_on_the_control() {
     assert!(h.get_by_role(Role::TextInput).is_focused());
 }
 
+/// A press on the label of a field whose only control is a Button clicks
+/// it, as `<label for=button>` does, and the label names it.
+#[test]
+fn a_label_press_clicks_a_button() {
+    let mut h = Harness::new_ui_state(
+        |ui, (clicks, label): &mut (usize, Rect)| {
+            Theme::vega().apply(ui.ctx());
+            Field::new().show(ui, |ui| {
+                *label = field_label(ui, "Avatar").rect;
+                if ui.add(Button::new("Upload")).clicked() {
+                    *clicks += 1;
+                }
+            });
+        },
+        (0, Rect::NOTHING),
+    );
+    h.run();
+    let at = h.state().1.center();
+    h.input_mut().events.extend(common::click(at));
+    h.run();
+    assert_eq!(h.state().0, 1);
+    let label = h
+        .get_by_role_and_label(Role::Label, "Avatar")
+        .accesskit_node()
+        .id();
+    let button = h.get_by_role(Role::Button).accesskit_node();
+    assert_eq!(
+        button.labelled_by().map(|n| n.id()).collect::<Vec<_>>(),
+        [label]
+    );
+}
+
+/// A Button before a text field leaves the field's label to the text
+/// field: the label names the text field and its press focuses it; the
+/// button keeps its own name and is not clicked.
+#[test]
+fn a_button_before_a_text_field_leaves_it_the_label() {
+    let mut h = Harness::new_ui_state(
+        |ui, (s, clicks, label): &mut (String, usize, Rect)| {
+            Theme::vega().apply(ui.ctx());
+            Field::new().show(ui, |ui| {
+                *label = field_label(ui, "Name").rect;
+                if ui.add(Button::new("Clear")).clicked() {
+                    *clicks += 1;
+                }
+                ui.add(Input::new(s).id_salt("name"));
+            });
+        },
+        (String::new(), 0, Rect::NOTHING),
+    );
+    h.run();
+    let at = h.state().2.center();
+    h.input_mut().events.extend(common::click(at));
+    h.run();
+    assert_eq!(h.state().1, 0, "the button was clicked");
+    assert!(h.get_by_role(Role::TextInput).is_focused());
+    let label = h
+        .get_by_role_and_label(Role::Label, "Name")
+        .accesskit_node()
+        .id();
+    let input = h.get_by_role(Role::TextInput).accesskit_node();
+    assert_eq!(
+        input.labelled_by().map(|n| n.id()).collect::<Vec<_>>(),
+        [label]
+    );
+    let button = h.get_by_role(Role::Button).accesskit_node();
+    assert_eq!(button.labelled_by().count(), 0);
+}
+
 /// A press on a choice card toggles its switch; the card shows the
 /// switch's checked state from the next pass.
 #[test]
