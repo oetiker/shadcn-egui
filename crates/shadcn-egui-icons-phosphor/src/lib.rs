@@ -3060,5 +3060,6 @@ pub const SLOTS: IconSlots = {
     s.chevron_right = CARET_RIGHT;
     s.more_horizontal = DOTS_THREE;
     s.close = X;
+    s.loader = SPINNER;
     s
 };

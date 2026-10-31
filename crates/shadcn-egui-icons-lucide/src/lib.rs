@@ -4330,5 +4330,6 @@ pub const SLOTS: IconSlots = {
     s.chevron_right = CHEVRON_RIGHT;
     s.more_horizontal = MORE_HORIZONTAL;
     s.close = X;
+    s.loader = LOADER_CIRCLE;
     s
 };

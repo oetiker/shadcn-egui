@@ -68,7 +68,8 @@ fn lucide_is_the_default_icon_set() {
             "chevron-left",
             "chevron-right",
             "more-horizontal",
-            "x"
+            "x",
+            "loader-circle"
         ]
     );
 }
@@ -105,7 +106,7 @@ fn every_lucide_icon_decodes() {
 }
 
 /// Every slot of `s`, in declaration order.
-fn slot_icons(s: &IconSlots) -> [&Icon; 8] {
+fn slot_icons(s: &IconSlots) -> [&Icon; 9] {
     [
         &s.check,
         &s.select_trigger,
@@ -115,11 +116,12 @@ fn slot_icons(s: &IconSlots) -> [&Icon; 8] {
         &s.chevron_right,
         &s.more_horizontal,
         &s.close,
+        &s.loader,
     ]
 }
 
 /// The icon names of every slot of `s`, in declaration order.
-fn slot_names(s: &IconSlots) -> [&'static str; 8] {
+fn slot_names(s: &IconSlots) -> [&'static str; 9] {
     slot_icons(s).map(|i| i.name)
 }
 
@@ -132,7 +134,7 @@ fn slot_snapshot(lib: IconLibrary, name: &str) {
     let slots = theme.icons;
     common::snapshot_with_themes(
         name,
-        vec2(360.0, 160.0),
+        vec2(400.0, 160.0),
         vec![("vega_light", theme, egui::Theme::Light)],
         move |ui| {
             layout::vstack(ui, 12.0, |ui| {
@@ -186,7 +188,8 @@ fn tabler_set() {
             "chevron-left",
             "chevron-right",
             "dots",
-            "x"
+            "x",
+            "loader"
         ]
     );
     slot_snapshot(IconLibrary::Tabler, "icon_slots_tabler");
@@ -211,7 +214,8 @@ fn phosphor_set() {
             "caret-left",
             "caret-right",
             "dots-three",
-            "x"
+            "x",
+            "spinner"
         ]
     );
     assert!(
@@ -240,7 +244,8 @@ fn remixicon_set() {
             "arrow-left-s-line",
             "arrow-right-s-line",
             "more-line",
-            "close-line"
+            "close-line",
+            "loader-line"
         ]
     );
     assert!(fill(&s.close).is_some(), "Remix Icon is a filled outline");
@@ -266,7 +271,8 @@ fn hugeicons_set() {
             "arrow-left-01",
             "arrow-right-01",
             "more-horizontal-circle-01",
-            "cancel-01"
+            "cancel-01",
+            "loading-03"
         ]
     );
     slot_snapshot(IconLibrary::Hugeicons, "icon_slots_hugeicons");

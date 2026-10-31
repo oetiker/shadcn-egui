@@ -822,6 +822,7 @@ fn icons_group(ui: &mut egui::Ui) {
         ("chevron_right", &t.icons.chevron_right),
         ("more_horizontal", &t.icons.more_horizontal),
         ("close", &t.icons.close),
+        ("loader", &t.icons.loader),
     ];
     group(
         ui,

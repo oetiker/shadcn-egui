@@ -210,7 +210,7 @@ fn context_mode_sets_the_dark_state() {
 }
 
 use shadcn_egui::icons::lucide::{
-    CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, MORE_HORIZONTAL,
+    CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, LOADER_CIRCLE, MORE_HORIZONTAL,
     SLOTS as LUCIDE_SLOTS, X as CLOSE,
 };
 use shadcn_egui::{FontName, IconLibrary, IconSlots};
@@ -226,6 +226,7 @@ fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
     lucide.chevron_left = CHEVRON_LEFT;
     lucide.chevron_right = CHEVRON_RIGHT;
     lucide.more_horizontal = MORE_HORIZONTAL;
+    lucide.loader = LOADER_CIRCLE;
     assert_eq!(t.icons, lucide);
     assert_eq!(t.icons, LUCIDE_SLOTS);
     assert!(!t.menu_inverted);
