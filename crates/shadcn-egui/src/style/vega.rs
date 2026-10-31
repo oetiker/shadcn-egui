@@ -122,6 +122,10 @@ pub(super) fn style() -> Style {
         pagination_next: pagination_next(),
         pagination_next_text: pagination_next_text(),
         pagination_ellipsis: pagination_ellipsis(),
+        scroll_area: Box::default(),
+        scroll_area_viewport: scroll_area_viewport(),
+        scroll_area_scrollbar: scroll_area_scrollbar(),
+        scroll_area_thumb: scroll_area_thumb(),
         spinner: spinner(),
     }
 }
@@ -2862,6 +2866,81 @@ fn pagination_ellipsis() -> Box<Recipe> {
                 Rule { when: When::ALWAYS, rank: 1 << 121, value: 16.0 },
             ],
         },
+        ..Recipe::default()
+    })
+}
+
+fn scroll_area_viewport() -> Box<Recipe> {
+    Box::new(Recipe {
+        ring_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 3.0 },
+            ],
+        },
+        ring_color: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: Paint::Role(Role::Ring, 0.5) },
+            ],
+        },
+        outline_width: Prop {
+            base: Some(0.0),
+            rules: vec![
+                Rule { when: When::new(State::FOCUS_VISIBLE, State::NONE), rank: (1 << 29) | (1 << 122), value: 1.0 },
+            ],
+        },
+        transition: Prop::fixed(Transition::COLOR.or(Transition::SHADOW)),
+        ..Recipe::default()
+    })
+}
+
+fn scroll_area_scrollbar() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 10.0 },
+            ],
+        },
+        width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 10.0 },
+            ],
+        },
+        pad_top: Prop::fixed(1.0),
+        pad_right: Prop::fixed(1.0),
+        pad_bottom: Prop::fixed(1.0),
+        pad_left: Prop::fixed(1.0),
+        border_top_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: 1.0 },
+            ],
+        },
+        border_left_width: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: 1.0 },
+            ],
+        },
+        border_color: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::HORIZONTAL, State::NONE), rank: 1 << 75, value: Paint::Role(Role::Transparent, 1.0) },
+                Rule { when: When::new(State::VERTICAL, State::NONE), rank: 1 << 76, value: Paint::Role(Role::Transparent, 1.0) },
+            ],
+        },
+        transition: Prop::fixed(Transition::COLORS),
+        ..Recipe::default()
+    })
+}
+
+fn scroll_area_thumb() -> Box<Recipe> {
+    Box::new(Recipe {
+        radius: Prop::fixed(Radius::Rung(Rung::Full)),
+        bg: Prop::fixed(Paint::Role(Role::Border, 1.0)),
         ..Recipe::default()
     })
 }
