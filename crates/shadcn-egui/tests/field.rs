@@ -20,7 +20,8 @@ use shadcn_egui::components::select::Select;
 use shadcn_egui::components::slider::Slider;
 use shadcn_egui::components::switch::Switch;
 use shadcn_egui::components::textarea::Textarea;
-use shadcn_egui::style::{AppVariant, Role as Palette, Style, Weight};
+use shadcn_egui::style::{AppVariant, Role as Palette, Style, TextSize, Weight};
+use shadcn_egui::theme::family_for;
 use shadcn_egui::{Palette as Pal, Theme};
 
 fn vega() -> Theme {
@@ -1067,6 +1068,9 @@ fn field_fieldset_snapshot() {
     });
 }
 
+/// field-field-group-demo. The "Manage tasks" link in the Tasks
+/// description is left out: the crate has no link inside a run of text
+/// (the description's `[&>a]` rules style caller content, D-100).
 #[test]
 fn field_field_group_demo_snapshot() {
     snapshot("field_field_group_demo", vec2(400.0, 380.0), |ui| {
@@ -1177,6 +1181,8 @@ fn field_demo_snapshot() {
     });
 }
 
+/// field-slider, with one thumb where upstream's slider has two
+/// (`type="multiple"`): the crate's Slider has one thumb.
 #[test]
 fn field_slider_snapshot() {
     snapshot("field_slider", vec2(400.0, 140.0), |ui| {
@@ -1184,7 +1190,24 @@ fn field_slider_snapshot() {
             let mut v = 200.0;
             Field::new().show(ui, |ui| {
                 field_title(ui, "Price Range");
-                field_description(ui, "Set your budget range ($200 - 800).");
+                // The values are `font-medium`; egui has no `tabular-nums`.
+                let size = Theme::current(ui.ctx()).text_px(TextSize::Sm);
+                let mut job = egui::text::LayoutJob::default();
+                for (text, w) in [
+                    ("Set your budget range ($", Weight::Normal),
+                    ("200", Weight::Medium),
+                    (" - ", Weight::Normal),
+                    ("800", Weight::Medium),
+                    (").", Weight::Normal),
+                ] {
+                    let font = egui::FontId::new(size, family_for(ui.ctx(), w));
+                    job.append(
+                        text,
+                        0.0,
+                        egui::TextFormat::simple(font, Color32::PLACEHOLDER),
+                    );
+                }
+                field_description(ui, job);
                 ui.add_space(8.0);
                 ui.add(Slider::new(&mut v, 0.0..=1000.0).step(10.0));
             });
