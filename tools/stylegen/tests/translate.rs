@@ -274,7 +274,8 @@ fn variants() {
     assert!(matches!(variant("[&>svg]"), V::Pseudo(Pseudo::SvgAll, _)));
     assert!(matches!(variant("after"), V::Pseudo(Pseudo::After, _)));
     assert!(matches!(variant("data-open"), V::Cond { all, .. } if all == flag("EXPANDED")));
-    assert!(matches!(variant("[a]"), V::Ignore(_)));
+    assert!(matches!(variant("[a]"), V::Cond { all, .. } if all == flag("LINK")));
+    assert!(matches!(variant("*:[a]"), V::Ignore(_)));
     assert!(matches!(variant("lg"), V::Unsupported));
     // Only exact, listed text translates: an unknown group name is not guessed.
     assert!(matches!(
@@ -450,6 +451,7 @@ fn model_matches_recipe_rs() {
         UnderlineOffset,
         TextWrap,
         TextAlign,
+        LineClamp,
         Radius,
         RadiusTop,
         RadiusBottom,
@@ -823,7 +825,8 @@ fn ignore_reasons_follow_the_spec_groups() {
 /// `line-clamp-N` sets `display: -webkit-box`; Tailwind 4.3.3 emits the
 /// display utilities after it, so a display class on the same target and
 /// variants wins and Chrome clamps nothing (the select value). Without one
-/// the clamp is real, and the crate does not build it yet.
+/// the clamp is real: a part's own clamp is its `line_clamp`; a child's,
+/// or one a display class cancels in some states only, is not built.
 #[test]
 fn a_display_class_cancels_a_line_clamp() {
     use stylegen::resolve::{CLAMP_CANCELLED, CLAMP_EFFECTIVE};
@@ -840,9 +843,13 @@ fn a_display_class_cancels_a_line_clamp() {
         CLAMP_CANCELLED
     )));
     assert!(select.unsupported.is_empty());
+    assert_eq!(
+        winner(&["line-clamp-2"], Field::LineClamp, 0),
+        Some(Value::Lines(2))
+    );
+    assert!(run(&["line-clamp-2"]).unsupported.is_empty());
     for classes in [
-        &["line-clamp-2"][..],
-        &["line-clamp-1", "md:flex"],
+        &["line-clamp-1", "md:flex"][..],
         &["flex", "*:line-clamp-1"],
     ] {
         let m = run(classes);
@@ -1027,7 +1034,7 @@ fn svg_targets_keep_their_variant_order() {
 /// moves a variant fails here.
 #[test]
 fn ranks_pin_tailwind_order() {
-    const ORDER: [&str; 79] = [
+    const ORDER: [&str; 86] = [
         "not-aria-[haspopup]",
         "not-data-selected",
         "not-data-[variant=destructive]",
@@ -1037,6 +1044,7 @@ fn ranks_pin_tailwind_order() {
         "group-has-data-[size=lg]/avatar-group",
         "group-has-data-[size=sm]/avatar-group",
         "group-has-data-[slot=alert-dialog-media]/alert-dialog-content",
+        "group-has-data-[slot=item-description]/item",
         "group-has-[>svg]/alert",
         "group-data-[disabled=true]",
         "group-data-[size=default]/alert-dialog-content",
@@ -1046,7 +1054,9 @@ fn ranks_pin_tailwind_order() {
         "group-data-[size=sm]/alert-dialog-content",
         "group-data-[size=sm]/avatar",
         "group-data-[size=sm]/card",
+        "group-data-[size=sm]/item",
         "group-data-[size=sm]/switch",
+        "group-data-[size=xs]/item",
         "group-data-[variant=default]/tabs-list",
         "group-data-[variant=line]/tabs-list",
         "group-data-horizontal/tabs",
@@ -1064,6 +1074,8 @@ fn ranks_pin_tailwind_order() {
         "in-data-[slot=tooltip-content]",
         "has-data-[icon=inline-end]",
         "has-data-[icon=inline-start]",
+        "has-data-[size=sm]",
+        "has-data-[size=xs]",
         "has-data-[slot=alert-action]",
         "has-data-[slot=alert-dialog-media]",
         "has-data-[slot=card-footer]",
@@ -1089,6 +1101,7 @@ fn ranks_pin_tailwind_order() {
         "data-[size=default]",
         "data-[size=lg]",
         "data-[size=sm]",
+        "data-[size=xs]",
         "data-[state=checked]",
         "data-[state=delayed-open]",
         "data-[state=unchecked]",
@@ -1106,6 +1119,7 @@ fn ranks_pin_tailwind_order() {
         "data-horizontal",
         "data-vertical",
         "[&_svg:not([class*='size-'])]",
+        "[a]",
         "[&>svg]",
     ];
     let mut translated: Vec<&str> = TRANSLATED.iter().map(|(n, _, _)| *n).collect();
@@ -1298,6 +1312,21 @@ fn state_ranks_compose_like_a_class() {
     // `aria-expanded:` sorts after `hover:`: a rule under EXPANDED beats
     // one under HOVER of equal specificity.
     assert!(compose(&["EXPANDED"]) > compose(&["HOVER"]));
+}
+
+/// `[a]` is the part itself rendered as a link (D-86 (b)): the `LINK`
+/// flag, an element's specificity. `*:[a]` is a link child, caller content
+/// (D-100), and stays ignored.
+#[test]
+fn a_link_part_is_the_link_flag_and_a_link_child_is_ignored() {
+    use stylegen::model::flag;
+    let link = variants_of("[a]:hover:bg-muted").unwrap();
+    assert_eq!(link.all, flag("LINK") | flag("HOVER"));
+    assert_eq!(link.child, None);
+    assert_eq!(variants_of("*:[a]:underline"), Err("ignored".to_owned()));
+    for v in ["[&>a]:underline", "[&>a:hover]:text-primary"] {
+        assert_eq!(variants_of(v), Err("ignored".to_owned()), "{v}");
+    }
 }
 
 /// `border-{t,l}-<role>` colours the one border side; on a box where that

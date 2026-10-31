@@ -56,6 +56,8 @@ const INHERIT_RADIUS: &str = "clips the content to the parent's radius; egui cli
 const IGNORE_EXACT: &[(&str, &str)] = &[
     ("flex-col", STRUCTURE),
     ("flex-1", STRUCTURE),
+    ("flex-wrap", STRUCTURE),
+    ("basis-full", STRUCTURE),
     ("shrink-0", STRUCTURE),
     ("relative", STRUCTURE),
     ("absolute", STRUCTURE),

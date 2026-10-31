@@ -670,6 +670,7 @@ mod tests {
     #[test]
     fn a_folded_size_resolves_as_its_bits_do() {
         use crate::components::card::{CardSize, CardVariant};
+        use crate::components::item::{ItemSize, ItemVariant};
         use crate::components::select::{SelectSize, SelectVariant};
         use crate::components::switch::{SwitchSize, SwitchVariant};
         use crate::style::{flags_used, pick_diff};
@@ -687,16 +688,21 @@ mod tests {
         for style in &styles {
             macro_rules! check {
                 ($z:ident, $x:ident) => {
-                    for z in [$z::Default, $z::Sm] {
+                    check!($z, [$z::Default, $z::Sm], |_| $x::Default.recipes(style));
+                };
+                // `$unfolded(z)`: the size's parts before the fold, where the
+                // default variant's are not (Item's size is a layer of its
+                // own, as the variant is).
+                ($z:ident, $sizes:expr, $unfolded:expr) => {
+                    for z in $sizes {
                         let (mut unfolded, mut folded) = (Vec::new(), Vec::new());
-                        $x::Default
-                            .recipes(style)
-                            .each_mut(|p| unfolded.push(p.clone()));
+                        ($unfolded)(z).each_mut(|p| unfolded.push(p.clone()));
                         z.recipes(style).each_mut(|p| folded.push(p.clone()));
                         let bits = z.bits();
                         let u: Vec<&Recipe> = unfolded.iter().collect();
                         let f: Vec<&Recipe> = folded.iter().collect();
-                        let sizes = State::SIZE_SM | State::SIZE_DEFAULT | State::DARK;
+                        let sizes =
+                            State::SIZE_XS | State::SIZE_SM | State::SIZE_DEFAULT | State::DARK;
                         let flags: Vec<State> = flags_used(&u)
                             .into_iter()
                             .filter(|s| !sizes.contains(*s))
@@ -725,6 +731,21 @@ mod tests {
             check!(CardSize, CardVariant);
             check!(SelectSize, SelectVariant);
             check!(SwitchSize, SwitchVariant);
+            check!(
+                ItemSize,
+                [ItemSize::Xs, ItemSize::Sm, ItemSize::Default],
+                |z: ItemSize| {
+                    let mut r = ItemVariant::Default.recipes(style);
+                    r.item = match z {
+                        ItemSize::Xs => &style.item_size_xs,
+                        ItemSize::Sm => &style.item_size_sm,
+                        _ => &style.item_size_default,
+                    }
+                    .as_ref()
+                    .clone();
+                    r
+                }
+            );
         }
         assert!(checked > 0);
         assert!(
@@ -817,13 +838,13 @@ mod tests {
         let r = bg.rules.last().expect("pushed");
         assert_eq!(
             (r.when, r.rank),
-            (When::all(State::FOCUS_VISIBLE), (1 << 29) | (1 << 122))
+            (When::all(State::FOCUS_VISIBLE), (1 << 32) | (1 << 122))
         );
         // `dark:sm:active:`: the variant bits combine, the class steps add.
         bg.on(State::DARK | State::SM | State::ACTIVE, P(Role::Ring));
         assert_eq!(
             bg.rules.last().map(|r| r.rank),
-            Some((1 << 30) | (1 << 66) | (1 << 68) | (2 << 122))
+            Some((1 << 33) | (1 << 72) | (1 << 74) | (2 << 122))
         );
     }
 
