@@ -97,30 +97,16 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
         });
 }
 
-/// A labelled control: a 6px-gap stack of `label` over the control. The
-/// label names the control for screen readers (`labelled_by`).
-fn field(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> egui::Response) {
-    layout::vstack(ui, 6.0, |ui| {
-        let name = label(ui, name);
-        let _ = control(ui).labelled_by(name.id);
-    });
+/// A labelled control: a vertical [`Field`], its label over the control,
+/// naming it for screen readers.
+fn field<R>(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> R) {
+    Field::new().label(name).show(ui, control);
 }
 
-/// A label on the left, its control on the right, the label naming the
-/// control for screen readers (`labelled_by`).
-fn setting_row(
-    ui: &mut egui::Ui,
-    name: &str,
-    control: impl FnOnce(&mut egui::Ui) -> egui::Response,
-) {
-    let label_id = std::cell::Cell::new(egui::Id::NULL);
-    layout::space_between(
-        ui,
-        |ui| label_id.set(label(ui, name).id),
-        |ui| {
-            let _ = control(ui).labelled_by(label_id.get());
-        },
-    );
+/// A label on the left, its control on the right: a horizontal [`Field`],
+/// the label naming the control for screen readers.
+fn setting_row<R>(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> R) {
+    Field::new().horizontal().label(name).show(ui, control);
 }
 
 fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
@@ -240,7 +226,8 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
                 badge(ui, "Outline", BadgeVariant::Outline);
             });
             separator(ui);
-            field(ui, "Volume", |ui| {
+            // field-slider: a slider is named by the field's title.
+            Field::new().title("Volume").show(ui, |ui| {
                 ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume"))
             });
             field(ui, "Region", |ui| {
@@ -391,9 +378,9 @@ fn muted(ui: &mut egui::Ui, text: &str) -> egui::Response {
     TextLook::resolve(ui, &[&recipe], st).label(ui, text, egui::TextWrapMode::Wrap)
 }
 
-/// One preset part: its label over a select of `options`, `current` the
-/// index of the preset's value (`None`: not offered, shown as the
-/// placeholder `missing`), and a muted `help` line under it. Returns the
+/// One preset part: a [`Field`] with its label over a select of `options`,
+/// `current` the index of the preset's value (`None`: not offered, shown as
+/// the placeholder `missing`), and `help` as its description. Returns the
 /// newly picked index.
 fn part_select(
     ui: &mut egui::Ui,
@@ -404,10 +391,15 @@ fn part_select(
 ) -> Option<usize> {
     let mut idx = current.unwrap_or(usize::MAX);
     let mut picked = None;
-    layout::vstack(ui, 6.0, |ui| {
-        // The help line wraps at the select's width.
+    ui.scope(|ui| {
+        // The field, and the help line in it, are as wide as the select.
         ui.set_max_width(PART_WIDTH);
-        field(ui, name, |ui| {
+        let field = Field::new().label(name).id_salt(name);
+        let field = match help {
+            Some(help) => field.description(help),
+            None => field,
+        };
+        field.show(ui, |ui| {
             let resp = ui.add(
                 Select::new(name, &mut idx, options)
                     .placeholder(missing)
@@ -416,11 +408,7 @@ fn part_select(
             if resp.changed() && idx < options.len() {
                 picked = Some(idx);
             }
-            resp
         });
-        if let Some(help) = help {
-            muted(ui, help);
-        }
     });
     picked
 }
@@ -962,7 +950,8 @@ fn controls_group(ui: &mut egui::Ui, state: &mut GalleryState) {
         |ui| {
             setting_row(ui, "Accept terms", |ui| checkbox(ui, &mut state.checked));
             setting_row(ui, "Airplane mode", |ui| toggle(ui, &mut state.switch_on));
-            field(ui, "Volume", |ui| {
+            // field-slider: a slider is named by the field's title.
+            Field::new().title("Volume").show(ui, |ui| {
                 ui.add(Slider::new(&mut state.volume, 0.0..=100.0).label("Volume"))
             });
             field(ui, "Region", |ui| {

@@ -150,10 +150,12 @@ fn first_frames(before: bool) -> Vec<usize> {
 
 /// Applied before the first pass, the gallery's first frame is in the
 /// preset's fonts and settles in that frame: the second frame takes one
-/// pass. Applied only in the first pass, the fonts arrive a pass late and
-/// the second frame still redoes a pass.
+/// pass. Applied only in the first pass, the fonts arrive a pass late;
+/// since its form rows are Fields, which keep no row height from the
+/// previous pass, nothing that changes with the fonts is redone, and the
+/// second frame takes one pass as well.
 #[test]
 fn the_gallery_applied_before_the_first_pass_settles_in_its_first_frame() {
     assert_eq!(first_frames(true)[1..], [1, 1]);
-    assert_eq!(first_frames(false)[1..], [2, 1]);
+    assert_eq!(first_frames(false)[1..], [1, 1]);
 }
