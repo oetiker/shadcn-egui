@@ -28,6 +28,7 @@
 //! width is capped to the room (conformance 3.1).
 
 use crate::color::Tone;
+use crate::components::field::ControlSlot;
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
     content_ui, disabled_cursor, interaction_state, line_width, opacity, part_painter, pressable,
@@ -89,7 +90,7 @@ pub struct Select<'a> {
     variant: SelectVariant,
     placeholder: String,
     enabled: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     width: Option<f32>,
     side_offset: f32,
 }
@@ -105,7 +106,7 @@ impl<'a> Select<'a> {
             variant: SelectVariant::Default,
             placeholder: String::new(),
             enabled: true,
-            invalid: false,
+            invalid: None,
             width: None,
             side_offset: DEFAULT_SIDE_OFFSET,
         }
@@ -130,9 +131,11 @@ impl<'a> Select<'a> {
         self.enabled = yes;
         self
     }
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the select is
+    /// invalid unless this says `false`.
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// Trigger width in points, capped to the room; default is the widest
@@ -157,9 +160,11 @@ impl Widget for Select<'_> {
         let enabled = self.enabled && ui.is_enabled();
         let n = self.options.len();
         let has_value = *self.selected < n;
+        let slot = ControlSlot::of(ui);
+        let invalid = slot.invalid(self.invalid);
         let context = v
             .bits()
-            .with(State::INVALID, self.invalid)
+            .with(State::INVALID, invalid)
             .with(State::PLACEHOLDER, !has_value);
         // Geometry depends on neither interaction nor the open state.
         let g = t.state(ui.ctx(), context);
@@ -256,7 +261,11 @@ impl Widget for Select<'_> {
             });
         }
         let activation = ui.input(|i| i.key_pressed(Key::Enter) || i.key_pressed(Key::Space));
-        let mut toggle = resp.clicked();
+        // A press on the field's label opens the list, as on the trigger.
+        if slot.pressed && enabled {
+            resp.request_focus();
+        }
+        let mut toggle = resp.clicked() || slot.pressed;
         if enabled && keys_to_list && n > 0 {
             let mut hl = ctx
                 .data(|d| d.get_temp::<usize>(hl_id))
@@ -360,7 +369,9 @@ impl Widget for Select<'_> {
                     t.metrics.icon_stroke,
                 );
             }
-            let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
+            // No colour of its own: the value inherits the `Ui`'s (a
+            // field's destructive text in an invalid field).
+            let inherited = ui.visuals().text_color();
             let text_color = transitioned_text(
                 ui.ctx(),
                 resp.id,
@@ -384,7 +395,8 @@ impl Widget for Select<'_> {
         });
         // The trigger's `disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);
-        report_invalid(&resp, self.invalid);
+        report_invalid(&resp, invalid);
+        slot.done(ui, &resp, st, enabled, false);
 
         // The list.
         if open {

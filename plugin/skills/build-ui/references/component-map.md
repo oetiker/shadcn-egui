@@ -13,6 +13,7 @@ variants"), and its parts follow it.
 | `<Badge variant>` | `shadcn_egui::components::badge::Badge::new(text)` with `.variant(BadgeVariant::…)` (`Default`, `Secondary`, `Destructive`, `Outline`, `Ghost`, `Link`), `.icon(..)`, `.icon_end(..)`; or `badge(ui, text, variant)`. Markers: `cn-badge`, `cn-badge-variant-*` |
 | `<Input>` | `shadcn_egui::components::input::Input::new(&mut text)` (any egui `TextBuffer`, as `TextEdit::singleline`) with `.hint(..)` (placeholder; egui's hint types: text, `RichText`, an image), `.password(..)`, `.max_width(..)`, `.id_salt(..)`, `.enabled(..)`, `.invalid(..)` (aria-invalid). Marker: `cn-input` |
 | `<Textarea>` | `shadcn_egui::components::textarea::Textarea::new(&mut text)` with `.hint_text(..)` (placeholder), `.desired_width(..)` (default `Metrics::field_max_width`, `f32::INFINITY` fills), `.id_salt(..)`, `.invalid(..)` (aria-invalid); or `textarea(ui, &mut text)`. `.show(ui)` returns egui's `TextEditOutput`. Grows with its text from the style's minimum height (`field-sizing-content`), no resize handle; Enter starts a line, Tab moves the focus on. Disable it with `ui.add_enabled(false, ..)`. Marker: `cn-textarea` |
+| `<Field.Field orientation>` + Label/Title/Description/Error/Content, `<Field.Set>` + Legend, `<Field.Group>`, `<Field.Separator>` | `shadcn_egui::components::field::Field::new().label(..).description(..).show(ui, \|ui\| ..)`, setters `.title(..)`, `.error(msg)` (each call adds a message; one shows as text, several as a list), `.invalid(..)` (`data-invalid`), `.horizontal()` / `.orientation(..)`, `.responsive(true)` (horizontal in a `FieldGroup` at least 448 wide), `.variant(..)`, `.id_salt(..)`. The setters draw label, closure, description, error in that order; other orders call the parts in the closure: `field_label`, `field_title`, `field_description`, `field_error`, `field_content(ui, \|ui\| ..)`. Each closure widget is one child, the field's gap apart; a vertical field gives each its width. The field's `invalid` and its label reach its crate controls (Input, Textarea, Checkbox, Switch, Select, Button; their own `.invalid(..)` wins), a label press toggles or focuses the control, and the field's destructive text colours the label and the typed value. A disabled `Ui` fades label and title only. `FieldSet::new().legend(..).description(..).show(..)`, `FieldLegend::new(..).variant(FieldLegendVariant::Label)`, `FieldGroup::new().show(..)`, `ui.add(FieldSeparator::new().content("Or"))`, choice cards `FieldLabel::choice_card().show(ui, \|ui\| Field::new()..)`. Demo classes (`font-normal` labels, a `gap-3` group) are app variants (`FieldVariant`, `FieldSetVariant`, `FieldGroupVariant`). Markers: `cn-field*` |
 | `<Label>` | `shadcn_egui::components::label::label(ui, text)`, or `Label::new(text).enabled(..)` (`peer-disabled:opacity-50`). Marker: `cn-label` |
 | description text | `shadcn_egui::components::label::description(ui, text)`; reads `cn-card-description` (no marker of its own) |
 | `<Label for="x">` + control | Name the control after the label: `let l = label(ui, "Email"); ui.add(Input::new(&mut s)).labelled_by(l.id);` (egui's `Response::labelled_by`). Switch, Checkbox and Select have no accessible name of their own (a Select reports its shown text as the value), so do this for each of them |
@@ -49,6 +50,30 @@ fn shortcut(ui: &mut egui::Ui) {
         kbd(ui, "Ctrl");
         TextLook::resolve(ui, &[], State::NONE).label(ui, "+", egui::TextWrapMode::Extend);
         kbd(ui, "B");
+    });
+}
+```
+
+```rust
+use shadcn_egui::components::checkbox::Checkbox;
+use shadcn_egui::components::field::{field_label, Field, FieldGroup, FieldSeparator, FieldSet};
+use shadcn_egui::components::input::Input;
+
+fn payment(ui: &mut egui::Ui, name: &mut String, same: &mut bool, missing: bool) {
+    FieldGroup::new().show(ui, |ui| {
+        FieldSet::new()
+            .legend("Payment Method")
+            .description("All transactions are secure and encrypted")
+            .show(ui, |ui| {
+                let field = Field::new().label("Name on Card");
+                let field = if missing { field.error("Enter the name on your card.") } else { field };
+                field.show(ui, |ui| ui.add(Input::new(name).hint("Evil Rabbit")));
+            });
+        ui.add(FieldSeparator::new());
+        Field::new().horizontal().show(ui, |ui| {
+            ui.add(Checkbox::new(same));
+            field_label(ui, "Same as shipping address");
+        });
     });
 }
 ```

@@ -70,8 +70,20 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// as a vertical [`Separator`](crate::components::separator::Separator))
 /// takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    row_aligned(ui, gap, false, add)
+}
+
+/// [`row`] with its items at the top of the row (`items-start`) where
+/// `top` is set, else centred (`items-center`).
+pub(crate) fn row_aligned<R>(
+    ui: &mut Ui,
+    gap: f32,
+    top: bool,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let (stored, height, align) = row_band(ui, id);
+    let align = if top { egui::Align::Min } else { align };
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(align)
     } else {

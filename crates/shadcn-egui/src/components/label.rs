@@ -12,7 +12,7 @@
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
 use crate::style::app::default_variant;
-use crate::style::{pick, Role, State};
+use crate::style::{Role, State};
 use crate::Theme;
 use egui::{Response, Sense, TextWrapMode, Ui, Widget};
 
@@ -65,8 +65,9 @@ impl Widget for Label {
         let enabled = self.enabled && ui.is_enabled();
         let st = t.state(ui.ctx(), v.bits().with(State::DISABLED, !enabled));
         let look = TextLook::resolve(ui, &l, st);
-        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
-        let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
+        // `cn-label` sets no colour: the label takes its `Ui`'s text
+        // colour, as CSS inherits it (a field's destructive text).
+        let fg = look.resolved_color(ui);
         let painter = part_painter(ui, ui.next_auto_id(), &[&l[..]], st);
 
         // The label is as tall as its line box (`leading-none`: the font

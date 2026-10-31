@@ -109,6 +109,10 @@ impl Widget for Separator {
             Vec2::new(capped_width(ui, f32::INFINITY, 0.0), h)
         };
         let (rect, resp) = layout::allocate_item(ui, size, Sense::hover());
+        if !vertical {
+            // `data-horizontal` (`group-has-data-horizontal/field:`).
+            crate::components::field::report_horizontal(ui);
+        }
         if ui.is_rect_visible(rect) {
             if let Some(c) = pick(&l, |r| &r.bg, st).map(|p| t.paint(p)) {
                 part_painter(ui, resp.id, &[&l[..]], st).rect_filled(rect, 0.0, c);

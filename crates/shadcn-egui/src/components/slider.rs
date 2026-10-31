@@ -334,6 +334,10 @@ impl Widget for Slider<'_> {
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));
+        if !vertical {
+            // `data-horizontal` on the slider (`group-has-data-horizontal/field:`).
+            crate::components::field::report_horizontal(ui);
+        }
         resp.rect = rect;
         resp
     }

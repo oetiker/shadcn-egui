@@ -5,6 +5,7 @@
 
 use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
+use crate::components::field::ControlSlot;
 use crate::components::icon::Icon;
 use crate::components::motion::transition;
 use crate::components::shared::{
@@ -171,7 +172,7 @@ pub struct Button {
     icon: Option<Icon>,
     icon_end: Option<Icon>,
     expanded: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     has_popup: bool,
     extra: Option<Recipe>,
 }
@@ -186,7 +187,7 @@ impl Button {
             icon: None,
             icon_end: None,
             expanded: false,
-            invalid: false,
+            invalid: None,
             has_popup: false,
             extra: None,
         }
@@ -223,8 +224,10 @@ impl Button {
         self
     }
     /// `aria-invalid`: the destructive ring and border.
+    /// Inside an invalid [`Field`](crate::components::field::Field) the
+    /// button is invalid unless this says `false` (rules, axiom 5).
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// `aria-haspopup`: the button opens a popup, so it does not nudge down
@@ -288,11 +291,13 @@ impl Widget for Button {
         let (layers, n) = Self::layers(&t.style, v, z, self.extra.as_ref());
         let l = &layers[..n];
         let enabled = self.enabled && ui.is_enabled();
+        let slot = ControlSlot::of(ui);
+        let invalid = slot.invalid(self.invalid);
         let context = (variant.bits() | size.bits())
             .with(State::ICON_START, self.icon.is_some())
             .with(State::ICON_END, self.icon_end.is_some())
             .with(State::EXPANDED, self.expanded)
-            .with(State::INVALID, self.invalid)
+            .with(State::INVALID, invalid)
             .with(State::HAS_POPUP, self.has_popup);
         // Geometry never depends on hover or press: resolve it before allocating.
         let g = t.state(ui.ctx(), context);
@@ -343,7 +348,9 @@ impl Widget for Button {
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
         });
-        report_invalid(&resp, self.invalid);
+        report_invalid(&resp, invalid);
+        let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
+        slot.done(ui, &resp, st, enabled, false);
         if !ui.is_rect_visible(rect) {
             return resp;
         }

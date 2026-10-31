@@ -7,6 +7,7 @@ pub mod card;
 pub mod checkbox;
 pub(crate) mod context;
 pub mod dialog;
+pub mod field;
 mod free_content;
 pub mod icon;
 pub mod icon_atom;

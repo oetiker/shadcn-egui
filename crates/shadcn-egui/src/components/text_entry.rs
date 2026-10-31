@@ -100,8 +100,10 @@ impl<'a> TextEntry<'a> {
         let muted = theme.role(Role::MutedForeground); // behaviour-ok: upstream's placeholder colour
         let placeholder = pick(layers, |r| &r.text, geometry.or(State::PLACEHOLDER))
             .map_or(muted, |p| theme.paint(p));
-        let inherited = theme.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads the part first
-        let typed = pick(layers, |r| &r.text, geometry).map_or(inherited, |p| theme.paint(p));
+        // No colour of its own: the typed text inherits the `Ui`'s (a
+        // field's destructive text in an invalid field).
+        let typed = pick(layers, |r| &r.text, geometry)
+            .map_or_else(|| ui.visuals().text_color(), |p| theme.paint(p));
         let content_min = inset[3] + inset[1] + ui.ctx().fonts_mut(|f| f.glyph_width(&font, 'M'));
         Self {
             theme,

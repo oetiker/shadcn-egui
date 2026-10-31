@@ -6,6 +6,7 @@
 //! through [`motion::transition`](crate::components::motion::transition):
 //! upstream's 150 ms ease-in-out, a jump under reduced motion.
 
+use crate::components::field::ControlSlot;
 use crate::components::motion::transition;
 use crate::components::shared::{
     disabled_cursor, interaction_state, line_width, part_painter, pressable, report_invalid, shift,
@@ -54,7 +55,7 @@ pub struct Switch<'a> {
     on: &'a mut bool,
     size: SwitchSize,
     enabled: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     variant: SwitchVariant,
 }
 
@@ -64,7 +65,7 @@ impl<'a> Switch<'a> {
             on,
             size: SwitchSize::Default,
             enabled: true,
-            invalid: false,
+            invalid: None,
             variant: SwitchVariant::Default,
         }
     }
@@ -83,9 +84,11 @@ impl<'a> Switch<'a> {
         self.enabled = yes;
         self
     }
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the switch is
+    /// invalid unless this says `false`.
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
 }
@@ -97,9 +100,11 @@ impl Widget for Switch<'_> {
         let track = [v.part(&t.style, |s| &s.switch, |r| &r.switch)];
         let thumb = [v.part(&t.style, |s| &s.switch_thumb, |r| &r.switch_thumb)];
         let enabled = self.enabled && ui.is_enabled();
-        let size_bit = v.bits();
+        let slot = ControlSlot::of(ui);
+        let invalid = slot.invalid(self.invalid);
+        let size_bit = v.bits().or(slot.state());
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(ui.ctx(), size_bit.with(State::INVALID, self.invalid));
+        let g = t.state(ui.ctx(), size_bit.with(State::INVALID, invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&track, f, g);
 
         // No size: CSS's initial `auto`, the thumb inside the border.
@@ -118,7 +123,7 @@ impl Widget for Switch<'_> {
         };
         let mut resp = crate::components::shared::hit_area(ui, hit, base.id.with("hit"), sense);
         pressable(&mut resp, ActivationKeys::EnterAndSpace);
-        if enabled && resp.clicked() {
+        if enabled && (resp.clicked() || slot.pressed) {
             *self.on = !*self.on;
             resp.mark_changed();
         }
@@ -130,7 +135,7 @@ impl Widget for Switch<'_> {
                 } else {
                     State::UNCHECKED
                 })
-                .with(State::INVALID, self.invalid)
+                .with(State::INVALID, invalid)
         };
         let st = interaction_state(&t, &resp, context(on).with(State::DISABLED, !enabled));
 
@@ -192,7 +197,8 @@ impl Widget for Switch<'_> {
         // `data-disabled:cursor-not-allowed`, on the hit area as on its
         // `::after`.
         disabled_cursor(&resp, !enabled);
-        report_invalid(&resp, self.invalid);
+        report_invalid(&resp, invalid);
+        slot.done(ui, &resp, st, enabled, true);
         resp.rect = rect;
         resp
     }
