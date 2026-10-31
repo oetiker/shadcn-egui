@@ -839,3 +839,257 @@ fn a_separator_takes_its_margins_and_the_group_gap() {
     assert_eq!(s.top() - a.bottom(), 16.0 + 8.0, "{a:?} {s:?}");
     assert_eq!(b.top() - s.bottom(), 8.0 + 16.0, "{s:?} {b:?}");
 }
+
+/// `fixture://cover`, a wide image (96 x 64: a sky band over a dark
+/// ground, a light disc left of centre), so `object-cover` visibly cuts its
+/// sides; no test needs a network or a decoder.
+struct Cover;
+
+const COVER: &str = "fixture://cover";
+
+impl egui::load::ImageLoader for Cover {
+    fn id(&self) -> &str {
+        "item-fixtures"
+    }
+    fn load(
+        &self,
+        _: &egui::Context,
+        uri: &str,
+        _: egui::load::SizeHint,
+    ) -> egui::load::ImageLoadResult {
+        if uri != COVER {
+            return Err(egui::load::LoadError::NotSupported);
+        }
+        let (w, h) = (96usize, 64usize);
+        let pixels = (0..w * h)
+            .map(|i| {
+                let (x, y) = ((i % w) as f32 - 40.0, (i / w) as f32 - 28.0);
+                if x * x + y * y < 14.0 * 14.0 {
+                    egui::Color32::from_rgb(250, 220, 120)
+                } else if y > 10.0 {
+                    egui::Color32::from_rgb(40, 70, 50)
+                } else {
+                    egui::Color32::from_rgb(110, 160, 220)
+                }
+            })
+            .collect();
+        Ok(egui::load::ImagePoll::Ready {
+            image: std::sync::Arc::new(egui::ColorImage::new([w, h], pixels)),
+        })
+    }
+    fn forget(&self, _: &str) {}
+    fn forget_all(&self) {}
+    fn byte_size(&self) -> usize {
+        0
+    }
+}
+
+fn install_cover(ctx: &egui::Context) {
+    let has = ctx
+        .loaders()
+        .image
+        .lock()
+        .iter()
+        .any(|l| l.id() == "item-fixtures");
+    if !has {
+        ctx.add_image_loader(std::sync::Arc::new(Cover));
+    }
+}
+
+/// `item-variants-demo` and `item-size-demo`: the three variants with an
+/// outline action, then an outline item at each size with icon media and
+/// a chevron action.
+#[test]
+fn item_snapshot() {
+    use shadcn_egui::icons::lucide;
+    common::snapshot_all("item", vec2(460.0, 560.0), |ui| {
+        ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+        shadcn_egui::layout::vstack(ui, 16.0, |ui| {
+            for (v, name) in [
+                (ItemVariant::Default, "Default Variant"),
+                (ItemVariant::Outline, "Outline Variant"),
+                (ItemVariant::Muted, "Muted Variant"),
+            ] {
+                Item::new()
+                    .variant(v)
+                    .title(name)
+                    .description("Standard styling with subtle background and borders.")
+                    .show(ui, |ui| {
+                        ui.add(
+                            Button::new("Open")
+                                .variant(shadcn_egui::components::button::ButtonVariant::Outline)
+                                .size(ButtonSize::Sm),
+                        )
+                    });
+            }
+            for size in [ItemSize::Default, ItemSize::Sm, ItemSize::Xs] {
+                Item::new()
+                    .variant(ItemVariant::Outline)
+                    .size(size)
+                    .icon(lucide::BADGE_CHECK)
+                    .title("Your profile has been verified.")
+                    .show(ui, |ui| {
+                        ui.add(shadcn_egui::components::icon::IconView::new(
+                            &lucide::CHEVRON_RIGHT,
+                        ))
+                    });
+            }
+        });
+    });
+}
+
+/// The media kinds: icon (`item-icon-demo`), a spinner
+/// (`spinner-item-demo`, with its progress footer), a cropped image
+/// (`item-image-demo`) and an avatar (`item-avatar-demo`).
+#[test]
+fn item_media_snapshot() {
+    use shadcn_egui::components::avatar::Avatar;
+    use shadcn_egui::components::item::item_footer;
+    use shadcn_egui::components::progress::Progress;
+    use shadcn_egui::icons::lucide;
+    common::snapshot_all("item_media", vec2(460.0, 470.0), |ui| {
+        ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+        install_cover(ui.ctx());
+        shadcn_egui::layout::vstack(ui, 16.0, |ui| {
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .icon(lucide::SHIELD_ALERT)
+                .title("Security Alert")
+                .description("New login detected from unknown device.")
+                .show(ui, |ui| {
+                    ui.add(Button::new("Review").size(ButtonSize::Sm))
+                });
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .icon(Glyph::Spinner)
+                .title("Downloading...")
+                .description("129 MB / 1000 MB")
+                .show(ui, |ui| {
+                    ui.add(
+                        Button::new("Cancel")
+                            .variant(shadcn_egui::components::button::ButtonVariant::Outline)
+                            .size(ButtonSize::Sm),
+                    );
+                    item_footer(ui, |ui| ui.add(Progress::new(0.75)));
+                });
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .image(COVER)
+                .alt_text("Midnight City Lights")
+                .title("Midnight City Lights")
+                .description("Electric Nights")
+                .link(true)
+                .show(ui, |ui| ui.label("3:45"));
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .media(|ui| {
+                    ui.add(Avatar::new("ER"));
+                })
+                .title("Evil Rabbit")
+                .description("Last seen 5 months ago")
+                .show(ui, |ui| {
+                    ui.add(
+                        Button::new("Invite")
+                            .variant(shadcn_egui::components::button::ButtonVariant::Outline)
+                            .size(ButtonSize::Sm)
+                            .icon(lucide::PLUS),
+                    )
+                });
+        });
+    });
+}
+
+/// `item-group-demo` with separators between its items, then items with
+/// a header row (`item-header-demo`, two widgets spread) and a footer.
+#[test]
+fn item_group_snapshot() {
+    use shadcn_egui::components::avatar::Avatar;
+    use shadcn_egui::components::item::{item_footer, item_header, item_separator};
+    use shadcn_egui::icons::lucide;
+    common::snapshot_all("item_group", vec2(420.0, 560.0), |ui| {
+        ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+        shadcn_egui::layout::vstack(ui, 24.0, |ui| {
+            ItemGroup::new().variant(ItemVariant::Outline).show(ui, |ui| {
+                for (i, (name, mail)) in [
+                    ("shadcn", "shadcn@vercel.com"),
+                    ("maxleiter", "maxleiter@vercel.com"),
+                    ("evilrabbit", "evilrabbit@vercel.com"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if i > 0 {
+                        item_separator(ui);
+                    }
+                    Item::new()
+                        .media(move |ui| {
+                            ui.add(Avatar::new(&name[..1]));
+                        })
+                        .title(name)
+                        .description(mail)
+                        .show(ui, |ui| {
+                            ui.add(
+                                Button::new("Add")
+                                    .variant(shadcn_egui::components::button::ButtonVariant::Ghost)
+                                    .size(ButtonSize::Icon)
+                                    .icon(lucide::PLUS),
+                            )
+                        });
+                }
+            });
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .title("v0-1.5-sm")
+                .description("Everyday tasks and UI generation.")
+                .show(ui, |ui| {
+                    item_header(ui, |ui| {
+                        ui.add(shadcn_egui::components::icon::IconView::new(&lucide::MUSIC));
+                        ui.label("Model");
+                    });
+                    item_footer(ui, |ui| {
+                        ui.label("Updated 2 days ago");
+                        ui.label("v1.5");
+                    });
+                });
+        });
+    });
+}
+
+/// D8: a link item under the pointer (vega's `[a]:hover:bg-muted`) and a
+/// sensed item focused by Tab, with its ring.
+#[test]
+fn item_states_snapshot() {
+    use shadcn_egui::icons::lucide;
+    common::snapshot_all_with(
+        "item_states",
+        vec2(420.0, 220.0),
+        |ui| {
+            ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
+            shadcn_egui::layout::vstack(ui, 16.0, |ui| {
+                ui.add(
+                    Item::new()
+                        .variant(ItemVariant::Outline)
+                        .icon(lucide::BADGE_CHECK)
+                        .title("Hovered link")
+                        .description("Your profile has been verified.")
+                        .link(true),
+                );
+                ui.add(
+                    Item::new()
+                        .variant(ItemVariant::Outline)
+                        .title("Focused item")
+                        .description("Reached with Tab.")
+                        .sense(egui::Sense::click()),
+                );
+            });
+        },
+        |h| {
+            h.key_press(egui::Key::Tab);
+            h.run();
+            h.key_press(egui::Key::Tab);
+            h.run();
+            h.get_by_role_and_label(Role::Link, "Hovered link").hover();
+            h.run();
+        },
+    );
+}
