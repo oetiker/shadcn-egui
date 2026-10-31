@@ -247,6 +247,9 @@ struct ItemContext {
     /// Where the actions' free content starts: a header after it is out of
     /// upstream's order.
     actions_start: Pos2,
+    /// The part is in the content column, whose min-content width decides
+    /// whether the actions wrap.
+    in_content: bool,
 }
 
 /// What the item measured in a pass, for the next one to place by.
@@ -258,6 +261,12 @@ struct Memory {
     content: f32,
     actions: Vec2,
     line: f32,
+    /// The content column's width, and its min-content width: its longest
+    /// word.
+    content_w: f32,
+    min_content: f32,
+    /// The width the item's box takes where its room is unbounded.
+    natural: f32,
     /// Where free content stood when the footer was placed.
     footer_at: Option<Pos2>,
 }
@@ -323,7 +332,12 @@ enum Media<'a> {
 /// cancelled by its `flex`); a word too long for the column is clipped.
 /// The description clamps at the style's line count.
 ///
-/// The item fills the width of its `Ui` (upstream's `w-full`). It keeps
+/// The actions take a line of their own below once the media, the
+/// content's longest word and the actions do not fit the width (upstream's
+/// `flex-wrap`).
+///
+/// The item fills the width of its `Ui` (upstream's `w-full`); in
+/// unbounded room it is as wide as its content. It keeps
 /// what it measured from one pass to the next under an auto id; items
 /// whose parts change between passes need [`Item::id_salt`].
 #[must_use = "You should put this widget in a ui with `ui.add(widget);` or call .show()"]
@@ -534,7 +548,14 @@ impl<'a> Item<'a> {
         let look = TextLook::resolve(ui, &root, rest);
         let side = border + pad_l;
         let end = pad_r + border;
-        let outer_w = layout::capped_width(ui, f32::INFINITY, side + end);
+        // `w-full`: the item fills its room; in unbounded room it takes
+        // its content's width, measured in the previous pass.
+        let bounded = ui.available_width().is_finite();
+        let outer_w = if bounded {
+            layout::capped_width(ui, f32::INFINITY, side + end)
+        } else {
+            side + mem.natural + end
+        };
         let (origin, mut frame) = layout::begin_block(ui, outer_w);
         let fid = frame.unique_id();
         // The item's own hit area goes in before its content, so the
@@ -609,9 +630,11 @@ impl<'a> Item<'a> {
                 next.media = at.size();
             }
             Some(Media::Ui(add)) => {
-                let at = Rect::from_min_max(
+                // As high as the media measured last pass: egui centres a
+                // row's widgets in the height it has.
+                let at = Rect::from_min_size(
                     egui::pos2(left, media_top(mem.media.y)),
-                    egui::pos2(right, f32::INFINITY),
+                    egui::vec2(right - left, mem.media.y),
                 );
                 let mut m = frame.new_child(
                     UiBuilder::new()
@@ -629,10 +652,31 @@ impl<'a> Item<'a> {
         } else {
             left
         };
-        let content_right = if mem.actions.x > 0.0 {
+        // `flex-wrap`: the content is `flex-1` with `min-width: auto`, so
+        // the actions take a line of their own once media, the content's
+        // longest word, the actions and the gaps exceed the width.
+        let media_w = if next.media.x > 0.0 {
+            next.media.x + gap
+        } else {
+            0.0
+        };
+        let wrapped = bounded
+            && mem.actions.x > 0.0
+            && media_w + mem.min_content + gap + mem.actions.x > right - left;
+        let content_right = if !bounded {
+            f32::INFINITY
+        } else if mem.actions.x > 0.0 && !wrapped {
             right - mem.actions.x - gap
         } else {
             right
+        };
+        let actions_line = if wrapped { mem.actions.y + gap } else { 0.0 };
+        let actions_start = if wrapped {
+            egui::pos2(left, line_top + line + gap)
+        } else if bounded {
+            egui::pos2(right - mem.actions.x, centred(mem.actions.y))
+        } else {
+            egui::pos2(left + media_w + mem.content_w + gap, centred(mem.actions.y))
         };
         let cx = ItemContext {
             variant,
@@ -642,8 +686,9 @@ impl<'a> Item<'a> {
             left,
             width: right - left,
             header_top: top,
-            footer_top: line_top + line + gap,
-            actions_start: egui::pos2(right - mem.actions.x, centred(mem.actions.y)),
+            footer_top: line_top + line + actions_line + gap,
+            actions_start,
+            in_content: false,
         };
         ui.data_mut(|d| d.insert_temp(next_key(id), next));
 
@@ -659,7 +704,10 @@ impl<'a> Item<'a> {
                     .max_rect(column)
                     .layout(Layout::top_down(Align::Min)),
             ),
-            cx,
+            ItemContext {
+                in_content: true,
+                ..cx
+            },
         ));
         content.set_clip_rect(content.clip_rect().intersect(Rect::from_x_y_ranges(
             column.x_range(),
@@ -689,9 +737,16 @@ impl<'a> Item<'a> {
         let mut act = frame.new_child(context::push(
             group.push(
                 UiBuilder::new()
-                    .max_rect(Rect::from_min_max(
+                    .max_rect(Rect::from_min_size(
                         cx.actions_start,
-                        egui::pos2(right, f32::INFINITY),
+                        egui::vec2(
+                            if bounded {
+                                right - cx.actions_start.x
+                            } else {
+                                f32::INFINITY
+                            },
+                            mem.actions.y,
+                        ),
                     ))
                     .layout(Layout::left_to_right(Align::Center)),
             ),
@@ -716,10 +771,28 @@ impl<'a> Item<'a> {
             Vec2::ZERO
         };
         next.content = content_h;
-        next.line = next.media.y.max(content_h).max(next.actions.y);
+        next.content_w = if content_h > 0.0 {
+            content.min_rect().width()
+        } else {
+            0.0
+        };
+        next.line = next.media.y.max(content_h);
+        if !wrapped {
+            next.line = next.line.max(next.actions.y);
+        }
+        next.natural = media_w
+            + next.content_w
+            + if next.actions.x > 0.0 {
+                gap + next.actions.x
+            } else {
+                0.0
+            };
         let _ = group.end(ui.ctx());
 
         let mut h = next.line;
+        if wrapped {
+            h += gap + next.actions.y;
+        }
         if next.header > 0.0 {
             h += next.header + gap;
         }
@@ -800,6 +873,22 @@ fn text_part(
     let l = [pair.part(&t.style, builtin, app)];
     let id = ui.next_auto_id().with("shadcn_egui::item::part");
     let look = TextLook::resolve(ui, &l, st);
+    if let Some(cx) = item_context(ui).filter(|c| c.in_content) {
+        // The longest word: what the column cannot shrink below.
+        let longest = text
+            .text()
+            .split_whitespace()
+            .map(|w| {
+                look.layout(ui, w, TextWrapMode::Extend, f32::INFINITY)
+                    .size()
+                    .x
+            })
+            .fold(0.0, f32::max);
+        ui.data_mut(|d| {
+            let n = d.get_temp_mut_or_default::<Memory>(next_key(cx.id));
+            n.min_content = n.min_content.max(longest);
+        });
+    }
     part_ui(ui, id, &[&l[..]], st, |ui| {
         look.label(ui, text, TextWrapMode::Wrap)
     })
@@ -879,11 +968,17 @@ fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> Inn
         "item_header comes before the item's actions"
     );
     let top = if footer { cx.footer_top } else { cx.header_top };
+    // As high as the row measured last pass: egui centres a row's widgets
+    // in the height it has.
+    let mem = ui
+        .data(|d| d.get_temp::<Memory>(memory_key(cx.id)))
+        .unwrap_or_default();
+    let height = if footer { mem.footer } else { mem.header };
     let mut row = ui.new_child(
         UiBuilder::new()
             .max_rect(Rect::from_min_size(
                 egui::pos2(cx.left, top),
-                egui::vec2(cx.width, f32::INFINITY),
+                egui::vec2(cx.width, height),
             ))
             .layout(Layout::left_to_right(Align::Center)),
     );
