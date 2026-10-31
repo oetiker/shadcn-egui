@@ -8,7 +8,7 @@ use crate::components::alert::{alert_action, Alert, AlertVariant};
 use crate::components::avatar::{avatar_group_count, Avatar, AvatarBadge, AvatarGroup, AvatarSize};
 use crate::components::badge::{badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::card::{card_description, card_title};
+use crate::components::card::{card_description, card_title, Card};
 use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
 use crate::components::field::{field_label, Field, FieldGroup, FieldLabel};
@@ -124,7 +124,7 @@ fn setting_row(
 }
 
 fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Account");
             card_description(ui, "Update your account details.");
@@ -172,7 +172,7 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 }
 
 fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Notifications");
             card_description(ui, "Choose what you want to be notified about.");
@@ -199,7 +199,7 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 }
 
 fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Components");
             card_description(ui, "Buttons, badges, a slider and a select.");
@@ -643,7 +643,7 @@ const BADGE_VARIANTS: [(BadgeVariant, &str); 6] = [
 
 /// A component group: a card with a heading-font title and a description.
 fn group(ui: &mut egui::Ui, title: &str, about: &str, add: impl FnOnce(&mut egui::Ui)) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             layout::vstack(ui, 6.0, |ui| {
                 card_title(ui, title);

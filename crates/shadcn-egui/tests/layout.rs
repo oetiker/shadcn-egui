@@ -55,79 +55,6 @@ fn space_between_composes() {
     assert!(right.left() > left.right() + 100.0, "{left:?} {right:?}");
 }
 
-/// `form_row`: the control starts after the label column, and the row is
-/// as high as the taller of the label and the control.
-#[test]
-fn form_row_puts_the_control_after_the_label_column() {
-    let mode = egui::Theme::Dark;
-    let theme = Theme::vega();
-    let mut control = egui::Rect::NOTHING;
-    let mut gap = 0.0;
-    let row = common::measure(&theme, mode, |ui| {
-        ui.scope(|ui| {
-            gap = ui.spacing().item_spacing.x;
-            ui.set_max_width(380.0);
-            layout::form_row(ui, 100.0, "Name", |ui| control = ui.label("hi").rect);
-        })
-        .response
-    });
-    assert_eq!(control.left() - row.left(), 100.0 + gap);
-    let label = common::measure(&theme, mode, |ui| {
-        ui.add(shadcn_egui::components::label::Label::new("Name"))
-    });
-    assert_eq!(row.height(), label.height().max(control.height()));
-}
-
-/// `form_row` draws its label as the crate's `Label`: the same recipe text
-/// (font, line box, colour), not egui's `ui.label`.
-#[test]
-fn form_row_label_is_the_crate_label() {
-    use shadcn_egui::components::label::Label;
-    let mode = egui::Theme::Dark;
-    let theme = Theme::vega();
-    let alone = common::measure_output(&theme, mode, |ui| ui.add(Label::new("Name"))).1;
-    let in_row = common::measure_output(&theme, mode, |ui| {
-        ui.scope(|ui| layout::form_row(ui, 100.0, "Name", |_| {}))
-            .response
-    })
-    .1;
-    let (a, b) = (
-        &common::text_shapes(&alone)[0],
-        &common::text_shapes(&in_row)[0],
-    );
-    assert_eq!(a.galley.rows.len(), b.galley.rows.len());
-    for (ra, rb) in a.galley.rows.iter().zip(&b.galley.rows) {
-        assert_eq!(ra.size, rb.size);
-        assert_eq!(ra.visuals.mesh.vertices, rb.visuals.mesh.vertices);
-    }
-    assert_eq!(common::text_colour(&alone), common::text_colour(&in_row));
-}
-
-/// `layout::card` is the default-size card.
-#[test]
-fn layout_card_matches_the_default_card() {
-    use shadcn_egui::components::card::Card;
-    let mode = egui::Theme::Dark;
-    let theme = Theme::vega();
-    let a = common::measure(&theme, mode, |ui| {
-        ui.scope(|ui| {
-            layout::card(ui, |ui| {
-                ui.label("x");
-            })
-        })
-        .response
-    });
-    let b = common::measure(&theme, mode, |ui| {
-        ui.scope(|ui| {
-            Card::new().show(ui, |ui| {
-                ui.label("x");
-            })
-        })
-        .response
-    });
-    assert_eq!(a, b);
-}
-
 /// In unbounded room the card takes its content's width, for an empty
 /// card its side padding (conformance 3.1), never an infinite width.
 #[test]
@@ -2402,23 +2329,24 @@ fn a_justified_tabs_list_shares_its_width_equally() {
     }
 }
 
-/// `layout::form_row` in a column narrower than its label column and
-/// control together keeps to the column: the control takes the rest and
-/// the row does not run past the column, settled in one pass a frame.
-/// In a crate row it is one item that ends at the row's end.
+/// A horizontal Field in a column narrower than its label and control
+/// together keeps to the column: the control stays inside it and the row
+/// does not run past it, settled in one pass a frame. In a crate row it is
+/// one item that starts after the items before it.
 #[test]
-fn a_form_row_keeps_to_a_narrow_column_and_a_crate_row() {
+fn a_horizontal_field_keeps_to_a_narrow_column_and_a_crate_row() {
+    use shadcn_egui::components::field::Field;
     for host in [Host::Screen, Host::Area(false)] {
         for in_row in [false, true] {
             let (passes, r) = settled(&vega(), host, &|ui, _, out| {
                 ui.set_max_width(180.0);
                 out.push(ui.max_rect());
                 let add = |ui: &mut egui::Ui, out: &mut Vec<egui::Rect>| {
-                    let row = ui
-                        .scope(|ui| {
-                            layout::form_row(ui, 100.0, "Name", |ui| {
-                                out.push(ui.add(egui::Label::new("ok")).rect);
-                            })
+                    let row = Field::new()
+                        .horizontal()
+                        .label("A name that does not fit")
+                        .show(ui, |ui| {
+                            out.push(ui.add(egui::Label::new("ok")).rect);
                         })
                         .response
                         .rect;
@@ -2448,7 +2376,7 @@ fn a_form_row_keeps_to_a_narrow_column_and_a_crate_row() {
             };
             assert!(row.right() <= column.right() + 0.01, "{case}");
             assert!(control.right() <= column.right() + 0.01, "{case}");
-            assert!(control.left() >= row.left() + 100.0, "{case}");
+            assert!(control.left() > row.left(), "{case}");
             assert_eq!(passes, 1, "{case}");
         }
     }
@@ -2549,15 +2477,20 @@ fn a_dialog_footer_is_as_high_as_its_tallest_action() {
     assert_eq!(height(30.0) - height(20.0), 10.0);
 }
 
-/// `form_row` is as high as its taller cell, the label's line or the
-/// control, not egui's `interact_size`, and centres both in it; it grows
-/// with a taller control and shrinks again when it goes. On the screen
-/// and in an `egui::Area`; a still frame takes one pass.
+/// A horizontal Field (`items-center`) is as high as its taller child,
+/// the label's line or the control, not egui's `interact_size`, and
+/// centres both in it; it grows with a taller control and shrinks again
+/// when it goes. On the screen and in an `egui::Area`; a still frame takes
+/// one pass.
 #[test]
-fn form_row_is_as_high_as_its_label_or_control() {
-    use shadcn_egui::components::label::Label;
+fn a_horizontal_field_is_as_high_as_its_label_or_control() {
+    use shadcn_egui::components::field::Field;
     let label = common::measure(&Theme::vega(), egui::Theme::Light, |ui| {
-        ui.add(Label::new("Name"))
+        Field::new()
+            .horizontal()
+            .label("Name")
+            .show(ui, |_| {})
+            .response
     })
     .height();
     for host in [Host::Screen, Host::Area(false)] {
@@ -2567,12 +2500,10 @@ fn form_row_is_as_high_as_its_label_or_control() {
                 ui.spacing_mut().interact_size.y = 60.0;
                 ui.set_max_width(380.0);
                 let mut control = egui::Rect::NOTHING;
-                let row = ui
-                    .scope(|ui| {
-                        layout::form_row(ui, 100.0, "Name", |ui| {
-                            control = boxed(ui, 10.0, tall);
-                        })
-                    })
+                let row = Field::new()
+                    .horizontal()
+                    .label("Name")
+                    .show(ui, |ui| control = boxed(ui, 10.0, tall))
                     .response
                     .rect;
                 out.extend([row, control]);
@@ -2937,7 +2868,7 @@ fn label_rows_frames(in_pass: bool) -> Vec<(f32, usize, std::time::Duration)> {
                 height = ui
                     .scope(|ui| {
                         ui.set_width(300.0);
-                        layout::card(ui, |ui| {
+                        shadcn_egui::components::card::Card::new().show(ui, |ui| {
                             layout::vstack(ui, 16.0, |ui| {
                                 layout::space_between(
                                     ui,

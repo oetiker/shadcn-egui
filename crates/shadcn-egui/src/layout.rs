@@ -3,7 +3,6 @@
 
 use crate::components::context;
 use egui::Ui;
-use egui_extras::{Size, StripBuilder};
 
 /// shadcn `orientation`, shared by every component that has one
 /// (`.orientation(..)`). It has no default: each component keeps
@@ -1643,60 +1642,6 @@ pub(crate) fn reverse_column<R>(
         ui.data_mut(|d| d.insert_temp(fit_id, known));
     }
     inner
-}
-
-/// A shadcn Card at the default size, across the available width of a
-/// column and content-sized in a crate row. See
-/// [`crate::components::card::Card`] for sizes, a footer and its width.
-pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    crate::components::card::Card::new().show(ui, add)
-}
-
-/// A labeled control row: fixed-width label column + control filling the
-/// rest, as high as the taller of the two (never egui's `interact_size`),
-/// both centred in it. The height comes from the previous pass; where it
-/// changes, the pass is redone.
-pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce(&mut Ui)) {
-    let id = ui.next_auto_id().with("shadcn_egui::layout::form_row");
-    let (stored, band, align) = row_band(ui, id);
-    let mut lines = Vec::new();
-    // A cell measures its widgets, not its own rect: egui makes a centred
-    // cell as high as the band, so the row would never shrink.
-    let mut cell = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
-        ui.with_layout(egui::Layout::left_to_right(align), |ui| {
-            let items = RowItems::begin(ui);
-            add(ui);
-            lines.extend(items.finish(ui, false));
-        });
-    };
-    let mut control = Some(control);
-    ui.allocate_ui(egui::vec2(ui.available_width(), band), |ui| {
-        StripBuilder::new(ui)
-            .size(Size::exact(label_width))
-            .size(Size::remainder())
-            .horizontal(|mut strip| {
-                strip.cell(|ui| {
-                    cell(ui, &mut |ui| {
-                        ui.add(crate::components::label::Label::new(label));
-                    })
-                });
-                strip.cell(|ui| {
-                    cell(ui, &mut |ui| {
-                        if let Some(control) = control.take() {
-                            control(ui);
-                        }
-                    })
-                });
-            });
-    });
-    settle_row_band(
-        ui,
-        id,
-        stored,
-        band,
-        &lines,
-        "layout::form_row content height changed",
-    );
 }
 
 #[cfg(test)]
