@@ -572,11 +572,7 @@ fn a_spinner_media_keeps_its_size_and_the_icons_colour() {
         let spinner = painted(Glyph::Spinner);
         let icon = painted(Glyph::Icon(shadcn_egui::icons::lucide::INBOX));
         assert_eq!(spinner.len(), 1, "{name}");
-        assert_eq!(
-            spinner[0].calc_bounds().size(),
-            vec2(16.0, 16.0),
-            "{name}"
-        );
+        assert_eq!(spinner[0].calc_bounds().size(), vec2(16.0, 16.0), "{name}");
         assert_eq!(
             common::mesh_colour(&spinner[0]),
             common::mesh_colour(&icon[0]),
@@ -727,7 +723,11 @@ fn media_starts_below_the_title_with_a_description() {
 /// height less the title's line.
 #[test]
 fn image_media_follows_the_item_size() {
-    for (size, side) in [(ItemSize::Default, 40.0), (ItemSize::Sm, 32.0), (ItemSize::Xs, 24.0)] {
+    for (size, side) in [
+        (ItemSize::Default, 40.0),
+        (ItemSize::Sm, 32.0),
+        (ItemSize::Xs, 24.0),
+    ] {
         let height = |image: bool| {
             settle(&Theme::vega(), 400.0, |ui| {
                 let mut item = Item::new().title("Track").size(size);
@@ -738,11 +738,7 @@ fn image_media_follows_the_item_size() {
             })
         };
         let grown = height(true) - height(false);
-        assert_eq!(
-            grown + text_line(size),
-            side,
-            "{size:?}"
-        );
+        assert_eq!(grown + text_line(size), side, "{size:?}");
     }
 }
 
@@ -752,7 +748,11 @@ fn image_media_follows_the_item_size() {
 fn image_media_fills_its_box() {
     let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
         install_cover(ui.ctx());
-        Item::new().title("Track").image(COVER).show(ui, |_| ()).response
+        Item::new()
+            .title("Track")
+            .image(COVER)
+            .show(ui, |_| ())
+            .response
     });
     let painted = out
         .shapes
@@ -768,7 +768,11 @@ fn image_media_fills_its_box() {
 /// The height of a title-only item's title line.
 fn text_line(size: ItemSize) -> f32 {
     let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
-        Item::new().title("Track").size(size).show(ui, |_| ()).response
+        Item::new()
+            .title("Track")
+            .size(size)
+            .show(ui, |_| ())
+            .response
     });
     out.shapes
         .iter()
@@ -835,7 +839,10 @@ fn the_group_variant_reaches_its_items() {
     let outline = group_shapes(Default, Some(Outline));
     assert_eq!(group_shapes(Outline, None), outline);
     assert_ne!(group_shapes(Default, None), outline);
-    assert_eq!(group_shapes(Outline, Some(Default)), group_shapes(Default, None));
+    assert_eq!(
+        group_shapes(Outline, Some(Default)),
+        group_shapes(Default, None)
+    );
 }
 
 /// vega's `my-2` separator between two items of a group: the group's
@@ -975,9 +982,7 @@ fn item_media_snapshot() {
                 .icon(lucide::SHIELD_ALERT)
                 .title("Security Alert")
                 .description("New login detected from unknown device.")
-                .show(ui, |ui| {
-                    ui.add(Button::new("Review").size(ButtonSize::Sm))
-                });
+                .show(ui, |ui| ui.add(Button::new("Review").size(ButtonSize::Sm)));
             Item::new()
                 .variant(ItemVariant::Outline)
                 .icon(Glyph::Spinner)

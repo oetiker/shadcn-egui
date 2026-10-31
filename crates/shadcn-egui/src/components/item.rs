@@ -640,7 +640,11 @@ impl<'a> Item<'a> {
                     }
                     Glyph::Spinner => {
                         let angle = crate::components::spinner::spin(ui, &[&*t.style.spinner]);
-                        (t.icons.loader, crate::components::spinner::own_size(&t), angle)
+                        (
+                            t.icons.loader,
+                            crate::components::spinner::own_size(&t),
+                            angle,
+                        )
                     }
                 };
                 let at = Rect::from_min_size(egui::pos2(left, media_top(s)), Vec2::splat(s));
@@ -1048,7 +1052,11 @@ fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> Inn
     // `justify-between`: the widgets spread over the row with the gap
     // their widths left last pass, never closer than `gap`.
     let gap = pick_len(&l, |r| &r.gap, st);
-    let spread = if footer { mem.footer_gap } else { mem.header_gap };
+    let spread = if footer {
+        mem.footer_gap
+    } else {
+        mem.header_gap
+    };
     row.spacing_mut().item_spacing.x = spread.unwrap_or(gap);
     let items = crate::layout::RowItems::begin(&row);
     let inner = add(&mut row);
