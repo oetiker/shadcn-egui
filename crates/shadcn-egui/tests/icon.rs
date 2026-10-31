@@ -139,6 +139,30 @@ fn icon_widgets_are_labelled() {
     );
 }
 
+/// An icon draws in `currentColor`: the `Ui`'s text colour, unless the
+/// caller gives one.
+#[test]
+fn an_icon_takes_the_uis_text_colour() {
+    let theme = Theme::vega();
+    let colour = |set: Option<Color32>| {
+        let (_, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+            ui.visuals_mut().override_text_color = Some(Color32::RED);
+            match set {
+                Some(c) => ui.add(IconView::new(&lucide::MIC).color(c)),
+                None => ui.add(IconView::new(&lucide::MIC)),
+            }
+        });
+        let textured: Vec<_> = common::mesh_shapes(&out)
+            .into_iter()
+            .filter(|m| m.texture_id != TextureId::default())
+            .collect();
+        assert_eq!(textured.len(), 1, "one icon");
+        common::mesh_colour(&textured[0])
+    };
+    assert_eq!(colour(None), Color32::RED);
+    assert_eq!(colour(Some(Color32::BLUE)), Color32::BLUE);
+}
+
 #[test]
 fn icons_snapshot() {
     common::snapshot_all("icons", vec2(420.0, 120.0), |ui| {

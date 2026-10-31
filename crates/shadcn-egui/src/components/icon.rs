@@ -42,7 +42,8 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
 }
 
 /// An icon as a widget: `ui.add(IconView::new(&icons::MIC))`. Sized
-/// `Metrics::icon`, colored `foreground`, stroked `Metrics::icon_stroke`.
+/// `Metrics::icon`, in the `Ui`'s text colour (`currentColor`), stroked
+/// `Metrics::icon_stroke`.
 /// It has no accessible name; give it one with `.labelled_by(label.id)`.
 pub struct IconView<'a> {
     icon: &'a Icon,
@@ -62,8 +63,9 @@ impl<'a> IconView<'a> {
         self.size = Some(size);
         self
     }
-    pub fn color(mut self, color: Color32) -> Self {
-        self.color = Some(color);
+    /// The colour; the `Ui`'s text colour by default.
+    pub fn color(mut self, color: impl Into<Color32>) -> Self {
+        self.color = Some(color.into());
         self
     }
 }
@@ -82,7 +84,7 @@ impl Widget for IconView<'_> {
             ..egui::WidgetInfo::new(egui::WidgetType::Image)
         });
         if ui.is_rect_visible(rect) {
-            let color = self.color.unwrap_or(t.palette().foreground);
+            let color = self.color.unwrap_or(ui.visuals().text_color());
             paint_icon(ui.painter(), rect, self.icon, color, t.metrics.icon_stroke);
         }
         resp
