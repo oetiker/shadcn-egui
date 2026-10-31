@@ -1014,12 +1014,12 @@ fn separators_are_one_pixel_border_lines() {
 
 #[test]
 fn label_separator_snapshot() {
-    use shadcn_egui::components::label::{description, Label};
+    use shadcn_egui::components::label::Label;
     use shadcn_egui::components::separator::{separator, Separator};
     common::snapshot_all("label_separator", egui::vec2(360.0, 200.0), |ui| {
         ui.add(Label::new("Email"));
         ui.add(Label::new("Email (disabled)").enabled(false));
-        description(ui, "We'll never share your email.");
+        common::muted_text(ui, "We'll never share your email.");
         separator(ui);
         ui.horizontal(|ui| {
             ui.set_height(20.0);
@@ -1039,7 +1039,7 @@ fn label_separator_snapshot() {
 fn separator_vertical_row_snapshot() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
     use shadcn_egui::components::button::Button;
-    use shadcn_egui::components::label::{description, Label};
+    use shadcn_egui::components::label::Label;
     use shadcn_egui::components::separator::Separator;
     use shadcn_egui::layout;
     let themes = common::themes().into_iter().take(2).collect();
@@ -1057,7 +1057,7 @@ fn separator_vertical_row_snapshot() {
                 ui.add(Separator::new().vertical());
                 layout::vstack(ui, 2.0, |ui| {
                     ui.add(Label::new("Account"));
-                    description(ui, "Signed in");
+                    common::muted_text(ui, "Signed in");
                 });
             });
         },
@@ -2455,27 +2455,6 @@ fn tab_click_shows_no_focus_ring() {
     h.run();
     assert_eq!(active.get(), 2);
     assert!(three_px(&h), "keyboard focus shows the ring");
-}
-
-/// `description` is `text-sm`: each wrapped line is 20px, Tailwind's line
-/// height for `text-sm`, not egui's font row height.
-#[test]
-fn description_lines_are_text_sm_line_height() {
-    use shadcn_egui::components::label::description;
-    for (name, theme, mode) in common::themes() {
-        let one = common::measure(&theme, mode, |ui| description(ui, "Short."));
-        assert_eq!(one.height(), 20.0, "{name}");
-        let wrapped = common::measure(&theme, mode, |ui| {
-            ui.set_max_width(120.0);
-            description(
-                ui,
-                "We will never share your email with anyone else, ever, at all.",
-            )
-        });
-        let lines = (wrapped.height() / 20.0).round();
-        assert!(lines >= 3.0, "{name}: {wrapped:?}");
-        assert_eq!(wrapped.height(), lines * 20.0, "{name}");
-    }
 }
 
 /// The switch paints the shadow its style sets (`shadow-xs` on vega's track).

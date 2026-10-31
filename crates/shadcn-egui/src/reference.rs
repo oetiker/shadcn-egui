@@ -15,7 +15,7 @@ use crate::components::field::{field_label, Field, FieldGroup, FieldLabel};
 use crate::components::icon::IconView;
 use crate::components::input::Input;
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
-use crate::components::label::{description, label};
+use crate::components::label::label;
 use crate::components::popover::{popover_header, Popover};
 use crate::components::progress::Progress;
 use crate::components::select::Select;
@@ -378,6 +378,19 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
 /// feature set, and wide enough for the longest id (`inverted-translucent`).
 const PART_WIDTH: f32 = 192.0;
 
+/// The demos' own muted paragraph (`text-sm text-muted-foreground`), which
+/// belongs to no component: caller text in a recipe of its own.
+fn muted(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    use crate::style::{Paint, Prop, Recipe, Role, TextSize};
+    let recipe = Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    };
+    let st = Theme::current(ui.ctx()).state(ui.ctx(), State::NONE);
+    TextLook::resolve(ui, &[&recipe], st).label(ui, text, egui::TextWrapMode::Wrap)
+}
+
 /// One preset part: its label over a select of `options`, `current` the
 /// index of the preset's value (`None`: not offered, shown as the
 /// placeholder `missing`), and a muted `help` line under it. Returns the
@@ -406,7 +419,7 @@ fn part_select(
             resp
         });
         if let Some(help) = help {
-            description(ui, help);
+            muted(ui, help);
         }
     });
     picked
@@ -677,7 +690,7 @@ fn buttons_group(ui: &mut egui::Ui) {
     group(ui, "Button", "Every variant in every size.", |ui| {
         for (size, size_name) in BUTTON_SIZES {
             layout::vstack(ui, 8.0, |ui| {
-                description(ui, size_name);
+                muted(ui, size_name);
                 layout::wrap_row(ui, 8.0, |ui| {
                     for (variant, name) in BUTTON_VARIANTS {
                         let _ = ui.add(Button::new(name).variant(variant).size(size));
@@ -686,7 +699,7 @@ fn buttons_group(ui: &mut egui::Ui) {
             });
         }
         layout::vstack(ui, 8.0, |ui| {
-            description(ui, "Icon sizes, an icon with text, disabled");
+            muted(ui, "Icon sizes, an icon with text, disabled");
             layout::wrap_row(ui, 8.0, |ui| {
                 for size in [
                     ButtonSize::IconXs,
@@ -773,12 +786,12 @@ fn kbd_gallery(ui: &mut egui::Ui) {
                 kbd(ui, "B");
             });
             ui.horizontal_wrapped(|ui| {
-                description(ui, "Use");
+                muted(ui, "Use");
                 KbdGroup::new().show(ui, |ui| {
                     kbd(ui, "Ctrl + B");
                     kbd(ui, "Ctrl + K");
                 });
-                description(ui, "to open the command palette");
+                muted(ui, "to open the command palette");
             });
             ui.add(Kbd::icon_only(icons.check, "Enter"));
         });
@@ -876,7 +889,7 @@ fn icons_group(ui: &mut egui::Ui) {
                     layout::vstack(ui, 4.0, |ui| {
                         let name = label(ui, icon.name);
                         let _ = ui.add(IconView::new(icon).size(24.0)).labelled_by(name.id);
-                        description(ui, slot);
+                        muted(ui, slot);
                     });
                 }
             });
@@ -1009,7 +1022,7 @@ fn tabs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                 1 => "The usage tab.",
                 _ => "The billing tab.",
             };
-            description(ui, text);
+            muted(ui, text);
         });
         separator(ui);
         layout::row(ui, 12.0, |ui| {

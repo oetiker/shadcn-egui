@@ -4,11 +4,12 @@
 //! Chrome lays out in CSS px from the case's top left; the crate builds
 //! the same cases with its layout helpers and its `Button`.
 
+mod common;
+
 use egui::{vec2, Rect, Sense, Ui};
 use egui_extras::{Size, StripBuilder};
 use egui_kittest::Harness;
 use shadcn_egui::components::button::{Button, ButtonSize};
-use shadcn_egui::components::label::description;
 use shadcn_egui::layout::{allocate_overflowing, row, space_between, vstack};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
@@ -37,7 +38,7 @@ fn boxed(ui: &mut Ui, items: &Items) {
 fn para(ui: &mut Ui, items: &Items, n: &str, text: &str) {
     let r = ui.scope(|ui| {
         vstack(ui, 4.0, |ui| {
-            let t = description(ui, text).rect;
+            let t = common::muted_text(ui, text).rect;
             items.borrow_mut().insert(format!("text{n}"), t);
         })
     });
@@ -69,7 +70,7 @@ fn build(case: &str, ui: &mut Ui, items: &Items) {
         "max-content" => {
             vstack(ui, 4.0, |ui| {
                 for (n, text) in [("-1", ASK), ("-2", MAIL), ("-3", WORD)] {
-                    let t = description(ui, text).rect;
+                    let t = common::muted_text(ui, text).rect;
                     items.borrow_mut().insert(format!("text{n}"), t);
                 }
             });

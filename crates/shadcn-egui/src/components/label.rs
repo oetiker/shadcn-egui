@@ -4,15 +4,11 @@
 //! disabled control shows the not-allowed cursor. Its look comes from the
 //! style's `cn-label` recipe. `peer-disabled:opacity-50` arrives as the
 //! DISABLED state of that recipe.
-//!
-//! `description` has no marker of its own in shadcn: it is the muted `text-sm`
-//! paragraph that `cn-card-description` and `cn-dialog-description` share, so
-//! it reads the `card_description` recipe.
 
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
 use crate::style::app::default_variant;
-use crate::style::{Role, State};
+use crate::style::State;
 use crate::Theme;
 use egui::{Response, Sense, TextWrapMode, Ui, Widget};
 
@@ -109,20 +105,6 @@ impl Widget for Label {
         }
         resp
     }
-}
-
-/// Muted `text-sm` helper text, wrapping like a paragraph.
-pub fn description(ui: &mut Ui, text: &str) -> Response {
-    let t = Theme::current(ui.ctx());
-    let l = [&*t.style.card_description];
-    let st = t.state(ui.ctx(), State::NONE);
-    let look = TextLook::resolve(ui, &l, st);
-    let muted = t.role(Role::MutedForeground); // behaviour-ok: inherits; reads card_description first
-    let look = match look.recipe_color() {
-        Some(_) => look,
-        None => look.color(muted),
-    };
-    look.label(ui, text, TextWrapMode::Wrap)
 }
 
 #[cfg(test)]

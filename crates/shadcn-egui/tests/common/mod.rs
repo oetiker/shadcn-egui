@@ -466,3 +466,18 @@ pub fn bounds_by_label(out: &egui::FullOutput, label: &str) -> Option<egui::Rect
             )
         })
 }
+
+/// The upstream demos' own muted paragraph (`text-sm
+/// text-muted-foreground`, no part of any component): caller text in a
+/// recipe the test builds, wrapping like a paragraph.
+pub fn muted_text(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    use shadcn_egui::components::text::TextLook;
+    use shadcn_egui::style::{Paint, Prop, Recipe, Role, State, TextSize};
+    let muted = Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    };
+    let st = Theme::current(ui.ctx()).state(ui.ctx(), State::NONE);
+    TextLook::resolve(ui, &[&muted], st).label(ui, text, egui::TextWrapMode::Wrap)
+}
