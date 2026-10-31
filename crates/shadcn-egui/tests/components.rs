@@ -582,7 +582,7 @@ fn input_form_snapshot() {
     use shadcn_egui::components::field::{Field, FieldGroup};
     use shadcn_egui::components::input::Input;
     use shadcn_egui::components::select::Select;
-    input_demo("input_form", 384.0, 470.0, |ui| {
+    input_demo("input_form", 384.0, 500.0, |ui| {
         let mut country = 0;
         FieldGroup::new().show(ui, |ui| {
             Field::new().label("Name").show(ui, |ui| {
