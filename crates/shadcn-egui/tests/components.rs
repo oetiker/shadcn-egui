@@ -460,29 +460,31 @@ fn input_disabled_snapshot() {
     });
 }
 
-/// The label's `*` is a `text-destructive` span; `required` has no look.
+/// The label's `*` is a `text-destructive` span, a flex item the field
+/// label's `gap-2` after the text; `required` has no look.
 #[test]
 fn input_required_snapshot() {
     use shadcn_egui::components::field::Field;
     use shadcn_egui::components::input::Input;
     use shadcn_egui::components::text::TextLook;
-    use shadcn_egui::style::{Role, State};
+    use shadcn_egui::style::{pick, Role, State};
     input_demo("input_required", 320.0, 150.0, |ui| {
         let t = Theme::current(ui.ctx());
         // The field label's font: `cn-label` under `cn-field-label`.
         let st = t.state(ui.ctx(), State::NONE);
-        let font =
-            TextLook::resolve(ui, &[&*t.style.label, &*t.style.field_label], st).font_id(ui.ctx());
+        let layers = [&*t.style.label, &*t.style.field_label];
+        let font = TextLook::resolve(ui, &layers, st).font_id(ui.ctx());
+        let gap = pick(&layers, |r| &r.gap, st).unwrap_or(0.0);
         let mut label = egui::text::LayoutJob::default();
         // The label's own colour and font where the job leaves them.
         label.append(
-            "Required Field ",
+            "Required Field",
             0.0,
             egui::TextFormat::simple(font.clone(), egui::Color32::PLACEHOLDER),
         );
         label.append(
             "*",
-            0.0,
+            gap,
             egui::TextFormat::simple(font, t.role(Role::Destructive)),
         );
         Field::new()
