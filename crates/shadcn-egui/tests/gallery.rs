@@ -129,11 +129,13 @@ fn gallery_after_applying_a_code() {
     common::snapshot(&mut h, "gallery_code_b2D0wqNxT_light");
 }
 
-/// The passes of the gallery's first three frames, its preset and mode
-/// applied before the first pass (the `gallery` example's app creator) or
-/// only by `gallery_ui` in its first pass.
-fn first_frames(before: bool) -> Vec<usize> {
+/// The passes of the gallery's first three frames and the bounds of the
+/// widget named `label` in each, its preset and mode applied before the
+/// first pass (the `gallery` example's app creator) or only by
+/// `gallery_ui` in its first pass.
+fn first_frames(before: bool, label: &str) -> Vec<(usize, Option<egui::Rect>)> {
     let ctx = egui::Context::default();
+    ctx.enable_accesskit();
     let mut state = GalleryState::new(Preset::default(), egui::Theme::Light);
     if before {
         state.preset.apply(&ctx);
@@ -146,19 +148,32 @@ fn first_frames(before: bool) -> Vec<usize> {
                 ..Default::default()
             };
             let out = ctx.run_ui(input, |ui| gallery_ui(ui, &mut state));
-            out.platform_output.num_completed_passes
+            (
+                out.platform_output.num_completed_passes,
+                common::bounds_by_label(&out, label),
+            )
         })
         .collect()
 }
 
 /// Applied before the first pass, the gallery's first frame is in the
-/// preset's fonts and settles in that frame: the second frame takes one
-/// pass. Applied only in the first pass, the fonts arrive a pass late;
-/// since its form rows are Fields, which keep no row height from the
-/// previous pass, nothing that changes with the fonts is redone, and the
-/// second frame takes one pass as well.
+/// preset's fonts: the Apply button in frame 0 has the bounds it settles
+/// on in frame 2. Applied only in the first pass, the fonts arrive a pass
+/// late, so frame 0 is in egui's default font. Either way the later frames
+/// take one pass each: the form rows are Fields, which keep no row height
+/// from the previous pass.
 #[test]
-fn the_gallery_applied_before_the_first_pass_settles_in_its_first_frame() {
-    assert_eq!(first_frames(true)[1..], [1, 1]);
-    assert_eq!(first_frames(false)[1..], [1, 1]);
+fn the_gallery_applied_before_the_first_pass_is_in_its_fonts_in_its_first_frame() {
+    let early = first_frames(true, "Apply");
+    assert!(early[0].1.is_some(), "the Apply button is in frame 0");
+    assert_eq!(early[0].1, early[2].1, "applied early, frame 0 is settled");
+    let late = first_frames(false, "Apply");
+    assert_ne!(
+        late[0].1, late[2].1,
+        "applied late, frame 0 is in egui's default font"
+    );
+    for frames in [early, late] {
+        let passes: Vec<usize> = frames[1..].iter().map(|f| f.0).collect();
+        assert_eq!(passes, [1, 1]);
+    }
 }
