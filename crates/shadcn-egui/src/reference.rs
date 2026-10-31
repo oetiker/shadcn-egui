@@ -893,7 +893,9 @@ fn spinner_group(ui: &mut egui::Ui) {
 
 /// shadcn-svelte's item demos: the outline variant with icon media and an
 /// action, a muted link item at the small size, and `item-group-demo`'s
-/// group of outline items with avatars.
+/// group of outline items with avatars. The demo's `rounded-full` on the
+/// icon buttons is a Button look, an app variant (axiom 8), and is not
+/// reproduced.
 fn item_group(ui: &mut egui::Ui) {
     use crate::icons::lucide;
     group(ui, "Item", "Variants, sizes, media and a group.", |ui| {

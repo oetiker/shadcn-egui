@@ -832,6 +832,35 @@ fn a_description_among_the_actions_takes_its_width() {
     assert!(!text.galley.elided, "{:?}", text.galley.text());
 }
 
+/// The header and footer rows are not the actions: a description there
+/// wraps at the row's width and clamps at two rows.
+#[test]
+fn a_description_in_a_header_or_footer_wraps() {
+    use shadcn_egui::components::item::{item_footer, item_header};
+    const TEXT: &str = "A description of many words that cannot fit on one line, \
+                        nor on two lines, in an item this narrow";
+    for footer in [false, true] {
+        let out = last_output(240.0, |ui| {
+            Item::new().title("Title").show(ui, |ui| {
+                let row = |ui: &mut egui::Ui| {
+                    item_description(ui, TEXT);
+                };
+                if footer {
+                    item_footer(ui, row);
+                } else {
+                    item_header(ui, row);
+                }
+            });
+        });
+        let text = common::text_shapes(&out)
+            .into_iter()
+            .find(|t| t.galley.text().starts_with("A description"))
+            .expect("the description painted");
+        assert_eq!(text.galley.rows.len(), 2, "footer {footer}");
+        assert!(text.galley.elided, "footer {footer}");
+    }
+}
+
 /// egui's id clash check paints "First use of widget ID" when one id
 /// senses at two rects in a pass; a sensed item that moves without
 /// changing size must not.
@@ -1138,7 +1167,9 @@ fn item_media_snapshot() {
 
 /// shadcn-svelte's `item-group-demo` (outline items, no separators;
 /// the older React demo has default items with separators), then items with
-/// a header row (`item-header-demo`, two widgets spread) and a footer.
+/// a header row (`item-header-demo`, two widgets spread) and a footer. The
+/// demo's `rounded-full` on the icon buttons is a Button look, an app
+/// variant (axiom 8), and is not reproduced.
 #[test]
 fn item_group_snapshot() {
     use shadcn_egui::components::avatar::Avatar;
