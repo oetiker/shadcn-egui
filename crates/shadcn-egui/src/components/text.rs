@@ -625,15 +625,26 @@ impl TextLook {
             text: String::with_capacity(job.text.len() + 8),
             ..job.clone()
         };
-        out.wrap = if breaking {
-            let mut w = TextWrapping::no_max_width();
-            if job.justify {
-                w.max_width = width;
+        // The caller's row limit, overflow character and `break_anywhere`
+        // stay, as egui's `Label` keeps them (it sets only what the wrap
+        // mode needs). The chosen breaks are forced ones, so egui needs
+        // the width only to justify, or to fit the overflow character into
+        // the last row a row limit keeps.
+        let limited = job.wrap.max_rows != usize::MAX;
+        out.wrap = job.wrap.clone();
+        match wrap {
+            TextWrapMode::Extend => out.wrap.max_width = f32::INFINITY,
+            TextWrapMode::Wrap if breaking && !job.justify && !limited => {
+                out.wrap.max_width = f32::INFINITY;
             }
-            w
-        } else {
-            TextWrapping::from_wrap_mode_and_width(wrap, width)
-        };
+            TextWrapMode::Wrap => out.wrap.max_width = width,
+            TextWrapMode::Truncate => {
+                let t = TextWrapping::truncate_at_width(width);
+                out.wrap.max_width = t.max_width;
+                out.wrap.max_rows = t.max_rows;
+                out.wrap.break_anywhere = t.break_anywhere;
+            }
+        }
         // The original char behind each char of `out`, for the row widths,
         // and the exact x of its pen on its line, in points.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);

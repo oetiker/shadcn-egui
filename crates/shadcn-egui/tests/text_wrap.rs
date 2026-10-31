@@ -224,3 +224,28 @@ fn lines_break_where_chrome_breaks_them() {
         wrong.join("\n")
     );
 }
+
+/// A caller's `LayoutJob` keeps its row limit and overflow character, as
+/// egui's `Label` keeps them (axiom 6): wrapped text stops after
+/// `max_rows` rows with the overflow character, within the width.
+#[test]
+fn a_caller_layout_job_keeps_its_row_limit() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let _ = ctx.run_ui(RawInput::default(), |_| {});
+    let _ = ctx.run_ui(RawInput::default(), |ui| {
+        let look = TextLook::resolve(ui, &[], State::NONE);
+        let text = TEXTS.iter().find(|t| t.0 == "alert-dialog").unwrap().1;
+        let mut job = spans(ui, &look, text);
+        job.wrap.max_rows = 2;
+        job.wrap.overflow_character = Some('~');
+        let block = look.layout(ui, job, TextWrapMode::Wrap, 120.0);
+        let galley = block.galley();
+        assert!(galley.elided, "the text is cut");
+        assert_eq!(galley.rows.len(), 2);
+        let last = &galley.rows[1].row;
+        assert_eq!(last.glyphs.last().map(|g| g.chr), Some('~'));
+        assert!(galley.size().x <= 120.0 + 0.5, "{}", galley.size().x);
+    });
+}
