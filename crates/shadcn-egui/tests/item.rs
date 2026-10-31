@@ -746,6 +746,25 @@ fn image_media_follows_the_item_size() {
     }
 }
 
+/// `[&_img]:size-full [&_img]:object-cover`: a wide image fills the whole
+/// square box and is cropped, it does not keep its own aspect in it.
+#[test]
+fn image_media_fills_its_box() {
+    let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
+        install_cover(ui.ctx());
+        Item::new().title("Track").image(COVER).show(ui, |_| ()).response
+    });
+    let painted = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Rect(r) if r.brush.is_some() => Some(r.rect.size()),
+            _ => None,
+        })
+        .expect("the image painted");
+    assert_eq!(painted, vec2(40.0, 40.0));
+}
+
 /// The height of a title-only item's title line.
 fn text_line(size: ItemSize) -> f32 {
     let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
@@ -1009,7 +1028,7 @@ fn item_group_snapshot() {
     common::snapshot_all("item_group", vec2(420.0, 560.0), |ui| {
         ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
         shadcn_egui::layout::vstack(ui, 24.0, |ui| {
-            ItemGroup::new().variant(ItemVariant::Outline).show(ui, |ui| {
+            ItemGroup::new().show(ui, |ui| {
                 for (i, (name, mail)) in [
                     ("shadcn", "shadcn@vercel.com"),
                     ("maxleiter", "maxleiter@vercel.com"),

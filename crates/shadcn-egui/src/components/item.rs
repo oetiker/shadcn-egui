@@ -661,7 +661,8 @@ impl<'a> Item<'a> {
                 let radius = RecipeBox::resolve(ui.ctx(), &t, &media_l, rest).radius_on(at);
                 let mut image = egui::Image::new(src)
                     .corner_radius(radius)
-                    .fit_to_exact_size(at.size());
+                    .fit_to_exact_size(at.size())
+                    .maintain_aspect_ratio(false);
                 // `object-cover`: the image fills the box, its overflow
                 // cut evenly on both sides, once its size is known.
                 if let Some(size) = image
