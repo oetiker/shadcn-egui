@@ -14,16 +14,16 @@ The helpers live in `shadcn_egui::layout`.
 | `flex:1` / `flex-grow` across siblings | `egui_extras::StripBuilder` with `Size::remainder()` per growing cell |
 | fixed + fluid columns | `StripBuilder` `Size::exact(w)` + `Size::remainder()` |
 | proportional columns (`fr`) | `StripBuilder` `Size::relative(frac)` |
-| a `.card` block | `shadcn_egui::layout::card(ui, \|ui\| ...)`, or `components::card::Card` for sizes and a footer |
+| a `.card` block | `shadcn_egui::components::card::Card::new().show(ui, \|ui\| ...)`, with `.size(..)` and `.footer(..)` |
 | `w-full max-w-*` on a custom-painted widget, `max-w-[calc(100%-Npx)]` on a floating panel | `shadcn_egui::layout::capped_width(ui, max, content_min)`, `layout::overlay_width(ctx, max, inset, content_min)`; allocate with `layout::allocate_overflowing` so a widget wider than its room overflows instead of widening its column |
-| label + control form row | `shadcn_egui::layout::form_row(ui, label_w, "Label", \|ui\| ...)` |
+| label + control form row | `shadcn_egui::components::field::Field::new().horizontal().label("Label").show(ui, \|ui\| ...)` (the label takes the room the control leaves); a label over its control: `Field::new().label("Label").show(..)` |
 | app shell (sidebar/topbar/main) | `SidePanel` / `TopBottomPanel` / `CentralPanel` |
 | responsive breakpoints (`sm:`, `md:`, `@container`) | branch on `shadcn_egui::layout::window_at_least(ui.ctx(), px)` (media query) or `layout::container_at_least(ui, px)` (container query); components apply their own |
 | CSS Grid tracks | `StripBuilder` rows × cells (no named lines) |
 
 Every gap `N` here is a named constant from the design (Tailwind `gap-N` is
 N×4 px); see the hard rules in SKILL.md. `StripBuilder` comes from
-`egui_extras`; an app that uses it directly adds
+`egui_extras`, which shadcn-egui does not depend on; an app that uses it adds
 `egui_extras = { version = "0.34", default-features = false }`.
 
 `StripBuilder` puts `ui.spacing().item_spacing.x` between its cells
@@ -59,7 +59,7 @@ fn footer(ui: &mut egui::Ui) {
 - `layout::space_between` shows the widgets of each side left to right
   in the order the code adds them, as `justify-between` does; add the
   primary action last.
-- `layout::row`, `space_between`, `form_row` and a card footer are as
+- `layout::row`, `space_between`, a horizontal `Field` and a card footer are as
   high as their tallest child, never `ui.spacing().interact_size.y`. A
   checkbox's, switch's or slider's larger click target does not count, as an
   absolute box in a flex row: a row of a label and a checkbox is 16 px
@@ -87,6 +87,5 @@ fn footer(ui: &mut egui::Ui) {
   children in a `layout::vstack` with the design's gap.
 
 Gotcha: `StripBuilder.horizontal` fills all available vertical space. Wrap it
-in `ui.allocate_ui(vec2(w, row_h), ...)` to cap a row's height (`form_row`
-does this). When no helper fits, port one with `shadcn-egui:port-component`
+in `ui.allocate_ui(vec2(w, row_h), ...)` to cap a row's height. When no helper fits, port one with `shadcn-egui:port-component`
 instead of inlining `available_width()` arithmetic.
