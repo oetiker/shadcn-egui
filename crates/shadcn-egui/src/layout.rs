@@ -155,11 +155,26 @@ struct Stretch {
 }
 
 /// One line of a crate row's items in a pass: the height of its tallest
-/// item and of its first.
+/// item and of its first, how many items it holds and their summed width.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Line {
     height: f32,
     first: f32,
+    items: usize,
+    widths: f32,
+}
+
+impl Line {
+    /// The gap between the line's items that spreads them over `width`
+    /// (`justify-content: space-between`), never below `gap`: one item, or
+    /// items that fill `width` already, keep `gap`.
+    pub(crate) fn between_gap(&self, width: f32, gap: f32) -> f32 {
+        if self.items < 2 || !width.is_finite() {
+            return gap;
+        }
+        let gaps = (self.items - 1) as f32;
+        ((width - self.widths) / gaps).max(gap)
+    }
 }
 
 /// A crate row's pass over its items ([`row`], [`wrap_row`],
@@ -298,6 +313,7 @@ fn row_lines(
             lines.push(Line {
                 height: 0.0,
                 first: r.height(),
+                ..Line::default()
             });
             bottom = f32::NEG_INFINITY;
         }
@@ -305,6 +321,8 @@ fn row_lines(
         line_of[k] = lines.len() - 1;
         let line = lines.last_mut().expect("a line was pushed");
         line.height = line.height.max(r.height());
+        line.items += 1;
+        line.widths += r.width();
     }
     // A stretch item is the item that holds the first entry registered
     // after its mark.

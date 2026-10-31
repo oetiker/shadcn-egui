@@ -605,3 +605,237 @@ fn a_spinner_media_is_a_status_inside_the_item() {
         Some(item.accesskit_node().id())
     );
 }
+
+/// `justify-between`: a header's or footer's first widget starts the row,
+/// its last ends it, as far from the item's right edge as the first is
+/// from its left; a single widget stays at the start.
+#[test]
+fn header_and_footer_spread_their_widgets() {
+    use shadcn_egui::components::item::{item_footer, item_header};
+    for footer in [false, true] {
+        let [item, first, last] = settle(&Theme::vega(), 400.0, |ui| {
+            let row = |ui: &mut egui::Ui| [ui.label("Start").rect, ui.label("End").rect];
+            let r = Item::new().variant(ItemVariant::Outline).show(ui, |ui| {
+                if footer {
+                    item_footer(ui, row).inner
+                } else {
+                    item_header(ui, row).inner
+                }
+            });
+            [r.response.rect, r.inner[0], r.inner[1]]
+        });
+        let inset = first.left() - item.left();
+        assert!(inset > 0.0, "footer {footer}");
+        assert!(
+            (item.right() - last.right() - inset).abs() < 0.01,
+            "footer {footer}: {item:?} {first:?} {last:?}"
+        );
+        assert!((first.top() - last.top()).abs() < 0.01, "footer {footer}");
+    }
+    let [item, only] = settle(&Theme::vega(), 400.0, |ui| {
+        let r = Item::new().show(ui, |ui| item_header(ui, |ui| ui.label("Only").rect).inner);
+        [r.response.rect, r.inner]
+    });
+    assert!(only.right() < item.center().x, "{item:?} {only:?}");
+}
+
+/// vega's `[a]:hover:bg-muted`: only a link item takes the hover fill; a
+/// sensed item that is no link stays clear under the pointer.
+#[test]
+fn only_a_link_takes_the_hover_fill() {
+    let muted = common::resolved(&Theme::vega(), egui::Theme::Light)
+        .palette_of(egui::Theme::Light)
+        .muted;
+    for link in [false, true] {
+        let mut f = Frames::new();
+        let mut item = None;
+        let page = |ui: &mut egui::Ui| {
+            ui.add(
+                Item::new()
+                    .title("Row")
+                    .sense(egui::Sense::click())
+                    .link(link),
+            )
+        };
+        f.run(vec![], |ui| item = Some(page(ui)));
+        let rect = item.unwrap().rect;
+        f.time = 1.0;
+        f.run(vec![egui::Event::PointerMoved(rect.center())], |ui| {
+            let _ = page(ui);
+        });
+        f.time = 2.0;
+        let out = f.run(vec![], |ui| {
+            let _ = page(ui);
+        });
+        let filled = common::box_fills(&out)
+            .into_iter()
+            .any(|(r, c)| r.contains(rect.center()) && c == muted);
+        assert_eq!(filled, link, "link {link}");
+    }
+}
+
+/// The rects of the text shapes a frame painted, in paint order.
+fn text_rects(out: &egui::FullOutput) -> Vec<egui::Rect> {
+    out.shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.visual_bounding_rect()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// vega's `group-has-data-[slot=item-description]/item:translate-y-0.5
+/// self-start`: with a description the media starts 2 px below the
+/// title's top; without one it is centred on the title.
+#[test]
+fn media_starts_below_the_title_with_a_description() {
+    for description in [false, true] {
+        let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
+            let mut item = Item::new()
+                .icon(shadcn_egui::icons::lucide::INBOX)
+                .title("Title");
+            if description {
+                item = item.description("A description of two words");
+            }
+            item.show(ui, |_| ()).response
+        });
+        let icon = icon_meshes(&out)[0].calc_bounds();
+        let title = text_rects(&out)[0];
+        if description {
+            // The title's line box: the text's own top lies inside it.
+            let line_top = out
+                .shapes
+                .iter()
+                .find_map(|c| match &c.shape {
+                    egui::Shape::Text(t) => Some(t.pos.y),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(icon.top(), line_top + 2.0, "{icon:?} {title:?}");
+        } else {
+            assert!(
+                (icon.center().y - title.center().y).abs() < 1.0,
+                "{icon:?} {title:?}"
+            );
+        }
+    }
+}
+
+/// `size-10`, `group-data-[size=sm]/item:size-8`, `xs: size-6`: image
+/// media is 40, 32 or 24 px, so a title-only item grows by the image
+/// height less the title's line.
+#[test]
+fn image_media_follows_the_item_size() {
+    for (size, side) in [(ItemSize::Default, 40.0), (ItemSize::Sm, 32.0), (ItemSize::Xs, 24.0)] {
+        let height = |image: bool| {
+            settle(&Theme::vega(), 400.0, |ui| {
+                let mut item = Item::new().title("Track").size(size);
+                if image {
+                    item = item.image("bytes://none.png");
+                }
+                item.show(ui, |_| ()).response.rect.height()
+            })
+        };
+        let grown = height(true) - height(false);
+        assert_eq!(
+            grown + text_line(size),
+            side,
+            "{size:?}"
+        );
+    }
+}
+
+/// The height of a title-only item's title line.
+fn text_line(size: ItemSize) -> f32 {
+    let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
+        Item::new().title("Track").size(size).show(ui, |_| ()).response
+    });
+    out.shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::Text(t) => Some(t.galley.rect.height()),
+            _ => None,
+        })
+        .expect("the title painted")
+}
+
+#[test]
+#[should_panic(expected = "an item takes one media setter")]
+fn a_second_media_setter_panics() {
+    let _ = Item::new()
+        .icon(shadcn_egui::icons::lucide::INBOX)
+        .image("bytes://none.png");
+}
+
+#[test]
+#[should_panic(expected = "item_header comes before the item's actions")]
+fn a_header_after_the_actions_panics() {
+    settle(&Theme::vega(), 400.0, |ui| {
+        Item::new().title("Row").show(ui, |ui| {
+            ui.add(Button::new("Open"));
+            shadcn_egui::components::item::item_header(ui, |ui| ui.label("Late"));
+        });
+    });
+}
+
+#[test]
+#[should_panic(expected = "item_footer comes last in an item")]
+fn a_part_after_the_footer_panics() {
+    use shadcn_egui::components::item::{item_footer, item_header};
+    settle(&Theme::vega(), 400.0, |ui| {
+        Item::new().title("Row").show(ui, |ui| {
+            item_footer(ui, |ui| ui.label("Foot"));
+            item_header(ui, |ui| ui.label("Head"));
+        });
+    });
+}
+
+/// The shapes of a group of one item, as text.
+fn group_shapes(group: ItemVariant, item: Option<ItemVariant>) -> String {
+    let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
+        ItemGroup::new()
+            .variant(group)
+            .show(ui, |ui| {
+                let i = Item::new().title("Row");
+                ui.add(match item {
+                    Some(v) => i.variant(v),
+                    None => i,
+                })
+            })
+            .response
+    });
+    format!("{:?}", out.shapes)
+}
+
+/// The group's variant reaches an item that names none; an item's own
+/// variant wins over it.
+#[test]
+fn the_group_variant_reaches_its_items() {
+    use ItemVariant::{Default, Outline};
+    let outline = group_shapes(Default, Some(Outline));
+    assert_eq!(group_shapes(Outline, None), outline);
+    assert_ne!(group_shapes(Default, None), outline);
+    assert_eq!(group_shapes(Outline, Some(Default)), group_shapes(Default, None));
+}
+
+/// vega's `my-2` separator between two items of a group: the group's
+/// gap on both sides of it, its margins and its 1 px line.
+#[test]
+fn a_separator_takes_its_margins_and_the_group_gap() {
+    use shadcn_egui::components::item::item_separator;
+    let rects = settle(&Theme::vega(), 400.0, |ui| {
+        ItemGroup::new()
+            .show(ui, |ui| {
+                let a = ui.add(Item::new().title("One")).rect;
+                let s = item_separator(ui).rect;
+                let b = ui.add(Item::new().title("Two")).rect;
+                [a, s, b]
+            })
+            .inner
+    });
+    let [a, s, b] = rects;
+    assert_eq!(s.height(), 1.0, "{s:?}");
+    assert_eq!(s.top() - a.bottom(), 16.0 + 8.0, "{a:?} {s:?}");
+    assert_eq!(b.top() - s.bottom(), 8.0 + 16.0, "{s:?} {b:?}");
+}

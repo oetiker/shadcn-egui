@@ -155,6 +155,12 @@ impl ItemRecipes {
         }
     }
 
+    /// Every part, for an edit of all of them.
+    #[cfg(test)]
+    pub(crate) fn each_mut(&mut self, f: impl FnMut(&mut Recipe)) {
+        self.parts_mut().into_iter().for_each(f);
+    }
+
     fn parts_mut(&mut self) -> Vec<&mut Recipe> {
         vec![
             &mut self.item,
@@ -269,6 +275,10 @@ struct Memory {
     natural: f32,
     /// Where free content stood when the footer was placed.
     footer_at: Option<Pos2>,
+    /// The gap that spreads the header's and the footer's widgets over
+    /// the row (`justify-between`).
+    header_gap: Option<f32>,
+    footer_gap: Option<f32>,
 }
 
 fn memory_key(item: Id) -> Id {
@@ -791,13 +801,19 @@ impl<'a> Item<'a> {
             cx,
         ));
         act.spacing_mut().item_spacing.x = pick_len(&actions_l, |r| &r.gap, rest);
-        let inner = content_scope(&mut act, &look, actions).inner;
+        // The cursor of the scope the closure fills, where `item_footer`
+        // read it: `act`'s own moves past the scope's allocation.
+        let (inner, end) = content_scope(&mut act, &look, |ui| {
+            let inner = actions(ui);
+            (inner, ui.cursor().min)
+        })
+        .inner;
         let mut next = ui
             .data_mut(|d| d.remove_temp::<Memory>(next_key(id)))
             .unwrap_or_default();
         if let Some(at) = next.footer_at {
             debug_assert!(
-                act.cursor().min.x <= at.x + 0.5, // behaviour-ok: below half a point the cursor did not move
+                end.x <= at.x + 0.5, // behaviour-ok: below half a point the cursor did not move
                 "free content in an item comes before item_footer"
             );
         }
@@ -989,7 +1005,8 @@ impl Widget for ItemDescription {
     }
 }
 
-/// A header or footer row: `add` left to right across the item's width.
+/// A header or footer row: `add` left to right across the item's width,
+/// its widgets spread to both ends (`justify-between`).
 fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Theme::current(ui.ctx());
     let (pair, st) = part_setup(ui, &t);
@@ -1027,8 +1044,17 @@ fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> Inn
             ))
             .layout(Layout::left_to_right(Align::Center)),
     );
-    row.spacing_mut().item_spacing.x = pick_len(&l, |r| &r.gap, st);
+    // `justify-between`: the widgets spread over the row with the gap
+    // their widths left last pass, never closer than `gap`.
+    let gap = pick_len(&l, |r| &r.gap, st);
+    let spread = if footer { mem.footer_gap } else { mem.header_gap };
+    row.spacing_mut().item_spacing.x = spread.unwrap_or(gap);
+    let items = crate::layout::RowItems::begin(&row);
     let inner = add(&mut row);
+    let between = items
+        .finish(&row, false)
+        .first()
+        .map_or(gap, |line| line.between_gap(cx.width, gap));
     let rect = row.min_rect();
     let at = ui.cursor().min;
     ui.data_mut(|d| {
@@ -1036,8 +1062,10 @@ fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> Inn
         if footer {
             n.footer = rect.height();
             n.footer_at = Some(at);
+            n.footer_gap = Some(between);
         } else {
             n.header = rect.height();
+            n.header_gap = Some(between);
         }
     });
     let response = ui.interact(rect, row.unique_id(), Sense::hover());
@@ -1045,7 +1073,8 @@ fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> Inn
 }
 
 /// `item-header`: a row of its own above the media and content, its
-/// widgets left to right. Call it in the [`Item::show`] closure before the
+/// widgets left to right and spread to both ends (`justify-between`): the
+/// first at the start, the last at the end. Call it in the [`Item::show`] closure before the
 /// actions.
 #[must_use = "Call .show(ui, |ui| ..)"]
 #[derive(Clone, Copy, Debug, Default)]
@@ -1062,7 +1091,8 @@ impl ItemHeader {
     }
 }
 
-/// `item-footer`: a row of its own below the media and content. Call it
+/// `item-footer`: a row of its own below the media and content, its
+/// widgets spread as the header's. Call it
 /// last in the [`Item::show`] closure.
 #[must_use = "Call .show(ui, |ui| ..)"]
 #[derive(Clone, Copy, Debug, Default)]
@@ -1102,6 +1132,11 @@ pub fn item_footer<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerRespo
 /// `item-group` (`role="list"`): a column of items, its gap following the
 /// items' size (`has-data-[size=sm|xs]`), learned from the previous pass.
 /// Its variant reaches the items that name none.
+///
+/// Only the items report their size. Upstream's `has-data-[size=*]` also
+/// matches any sized descendant: an avatar, a switch, a select, a card or
+/// a toggle group with `size="sm"` inside a default item makes the browser
+/// group's gap smaller; here it does not.
 #[must_use = "Call .show(ui, |ui| ..)"]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ItemGroup {
