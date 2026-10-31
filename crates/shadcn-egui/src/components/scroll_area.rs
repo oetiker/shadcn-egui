@@ -470,6 +470,7 @@ impl ScrollArea {
             pick_len(&bar, |r| &r.height, states[0]),
             pick_len(&bar, |r| &r.width, states[1]),
         ];
+        let [bar_height, bar_width] = thickness;
         for d in 0..2 {
             if !shown[d] {
                 mem.grab[d] = None;
@@ -481,12 +482,12 @@ impl ScrollArea {
             let other = if shown[1 - d] { thickness[1 - d] } else { 0.0 };
             let bar_rect = if d == 1 {
                 Rect::from_min_max(
-                    egui::pos2(inner.right() - thickness[1], inner.top()),
+                    egui::pos2(inner.right() - bar_width, inner.top()),
                     egui::pos2(inner.right(), inner.bottom() - other),
                 )
             } else {
                 Rect::from_min_max(
-                    egui::pos2(inner.left(), inner.bottom() - thickness[0]),
+                    egui::pos2(inner.left(), inner.bottom() - bar_height),
                     egui::pos2(inner.right() - other, inner.bottom()),
                 )
             };
