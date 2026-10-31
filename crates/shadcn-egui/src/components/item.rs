@@ -295,6 +295,18 @@ fn part_setup(ui: &Ui, t: &Theme) -> (ResolvedPair<ItemVariant, ItemSize>, State
     (pair, t.state(ui.ctx(), bits))
 }
 
+/// The part of an image of `image` size that covers a box of `frame` size
+/// (`object-cover`), centred, in texture coordinates.
+fn cover_uv(image: Vec2, frame: Vec2) -> Rect {
+    let full = Rect::from_min_max(Pos2::ZERO, egui::pos2(1.0, 1.0)); // behaviour-ok: texture coordinates run from 0 to 1
+    if image.min_elem() <= 0.0 || frame.min_elem() <= 0.0 {
+        return full;
+    }
+    let scale = (frame.x / image.x).max(frame.y / image.y);
+    let part = frame / (image * scale);
+    Rect::from_center_size(full.center(), part)
+}
+
 type MediaFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 
 enum Media<'a> {
@@ -626,6 +638,15 @@ impl<'a> Item<'a> {
                 let mut image = egui::Image::new(src)
                     .corner_radius(radius)
                     .fit_to_exact_size(at.size());
+                // `object-cover`: the image fills the box, its overflow
+                // cut evenly on both sides, once its size is known.
+                if let Some(size) = image
+                    .load_for_size(ui.ctx(), at.size())
+                    .ok()
+                    .and_then(|p| p.size())
+                {
+                    image = image.uv(cover_uv(size, at.size()));
+                }
                 if let Some(alt) = alt {
                     image = image.alt_text(alt);
                 }
@@ -1166,6 +1187,26 @@ pub fn item_separator(ui: &mut Ui) -> Response {
 
 #[cfg(test)]
 mod tests {
+    /// `object-cover`: a wide image loses its sides, a tall one its top
+    /// and bottom, one of the box's shape nothing.
+    #[test]
+    fn cover_uv_cuts_the_overflow_evenly() {
+        use super::cover_uv;
+        use egui::{pos2, vec2, Rect};
+        let r = |a: (f32, f32), b: (f32, f32)| Rect::from_min_max(pos2(a.0, a.1), pos2(b.0, b.1));
+        let full = r((0.0, 0.0), (1.0, 1.0));
+        assert_eq!(
+            cover_uv(vec2(80.0, 40.0), vec2(40.0, 40.0)),
+            r((0.25, 0.0), (0.75, 1.0))
+        );
+        assert_eq!(
+            cover_uv(vec2(40.0, 160.0), vec2(40.0, 40.0)),
+            r((0.0, 0.375), (1.0, 0.625))
+        );
+        assert_eq!(cover_uv(vec2(64.0, 64.0), vec2(32.0, 32.0)), full);
+        assert_eq!(cover_uv(vec2(0.0, 0.0), vec2(32.0, 32.0)), full);
+    }
+
     use super::*;
     use crate::style::{pick, Paint, Role, TextSize};
     use crate::Theme;
