@@ -204,8 +204,11 @@ fn spaced(fields: &[Field], value: &str, sign: f32) -> U {
 pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     use Field::*;
     match pseudo {
-        Some(Pseudo::Svg) => {
+        Some(p @ (Pseudo::Svg | Pseudo::SvgAll)) => {
             if let Some(v) = u.strip_prefix("size-").and_then(spacing) {
+                if p == Pseudo::SvgAll {
+                    return px(&[IconSize, SizedIconSize], v);
+                }
                 return px(&[IconSize], v);
             }
             if let Some(v) = u.strip_prefix("translate-y-").and_then(spacing) {
@@ -599,15 +602,24 @@ fn calc(v: &str) -> Option<(f32, f32)> {
 
 /// Motion classes (D-88, axiom 8: a value a class gives is a look):
 /// tw-animate-css enter and exit (`animate-in`, `fade-in-0`, `zoom-in-95`,
-/// `slide-in-from-top-2`), `duration-*` (seconds, also the animation's
-/// duration), `ease-*` (the timing function) and `transition-*` (the
-/// properties that animate).
+/// `slide-in-from-top-2`), Tailwind's `animate-spin`, `duration-*` (seconds,
+/// also the animation's duration), `ease-*` (the timing function) and
+/// `transition-*` (the properties that animate).
 fn motion(u: &str) -> Option<U> {
     use Field::*;
     let set = |f: Field, v: Value| Some(U::Set(vec![(f, v)]));
     match u {
         "animate-in" => return set(AnimateIn, Value::Bool(true)),
         "animate-out" => return set(AnimateOut, Value::Bool(true)),
+        // Tailwind 4: `--animate-spin: spin 1s linear infinite`, one turn a
+        // second.
+        "animate-spin" => {
+            return Some(U::Set(vec![
+                (AnimateSpin, Value::Bool(true)),
+                (Duration, Value::Factor(1.0)),
+                (Easing, Value::Easing("Linear")),
+            ]))
+        }
         "fade-in" => return set(EnterOpacity, Value::Factor(0.0)),
         "fade-out" => return set(ExitOpacity, Value::Factor(0.0)),
         _ => {}

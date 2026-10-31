@@ -251,6 +251,8 @@ pub struct Style {
     pub scroll_area_scrollbar: Box<Recipe>,
     /// `cn-scroll-area-thumb`
     pub scroll_area_thumb: Box<Recipe>,
+    /// `data-slot="spinner"` (no style marker)
+    pub spinner: Box<Recipe>,
 }
 
 /// The rank a generated rule under one state flag has: the rank of the

@@ -126,6 +126,7 @@ pub(super) fn style() -> Style {
         scroll_area_viewport: scroll_area_viewport(),
         scroll_area_scrollbar: scroll_area_scrollbar(),
         scroll_area_thumb: scroll_area_thumb(),
+        spinner: spinner(),
     }
 }
 
@@ -501,6 +502,12 @@ fn badge() -> Box<Recipe> {
                 Rule { when: When::ALWAYS, rank: 1 << 127, value: 12.0 },
             ],
         },
+        sized_icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::ALWAYS, rank: 1 << 127, value: 12.0 },
+            ],
+        },
         text_size: Prop::fixed(TextSize::Xs),
         weight: Prop::fixed(Weight::Medium),
         radius: Prop::fixed(Radius::Rung(Rung::None)),
@@ -796,6 +803,7 @@ fn checkbox() -> Box<Recipe> {
 fn checkbox_indicator() -> Box<Recipe> {
     Box::new(Recipe {
         icon_size: Prop::fixed(14.0),
+        sized_icon_size: Prop::fixed(14.0),
         transition: Prop::fixed(Transition::NONE),
         ..Recipe::default()
     })
@@ -2231,6 +2239,13 @@ fn avatar_badge() -> Box<Recipe> {
                 Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 14) | (1 << 122), value: 8.0 },
             ],
         },
+        sized_icon_size: Prop {
+            base: None,
+            rules: vec![
+                Rule { when: When::new(State::SIZE_DEFAULT, State::NONE), rank: (1 << 12) | (1 << 122), value: 8.0 },
+                Rule { when: When::new(State::SIZE_LG, State::NONE), rank: (1 << 14) | (1 << 122), value: 8.0 },
+            ],
+        },
         icon_hidden: Prop {
             base: None,
             rules: vec![
@@ -2270,6 +2285,13 @@ fn avatar_group_count() -> Box<Recipe> {
             ],
         },
         icon_size: Prop {
+            base: Some(16.0),
+            rules: vec![
+                Rule { when: When::new(State::HAS_SIZE_LG, State::NONE), rank: (1 << 6) | (1 << 122), value: 20.0 },
+                Rule { when: When::new(State::HAS_SIZE_SM, State::NONE), rank: (1 << 7) | (1 << 122), value: 12.0 },
+            ],
+        },
+        sized_icon_size: Prop {
             base: Some(16.0),
             rules: vec![
                 Rule { when: When::new(State::HAS_SIZE_LG, State::NONE), rank: (1 << 6) | (1 << 122), value: 20.0 },
@@ -2906,6 +2928,17 @@ fn scroll_area_thumb() -> Box<Recipe> {
     Box::new(Recipe {
         radius: Prop::fixed(Radius::Rung(Rung::None)),
         bg: Prop::fixed(Paint::Role(Role::Border, 1.0)),
+        ..Recipe::default()
+    })
+}
+
+fn spinner() -> Box<Recipe> {
+    Box::new(Recipe {
+        height: Prop::fixed(16.0),
+        width: Prop::fixed(16.0),
+        duration: Prop::fixed(1.0),
+        easing: Prop::fixed(Easing::Linear),
+        animate_spin: Prop::fixed(true),
         ..Recipe::default()
     })
 }

@@ -273,7 +273,7 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
     child
         .add(
             Button::new("Close")
-                .icon(&t.icons.close)
+                .icon(t.icons.close)
                 .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::IconSm)
                 .extra_layer(close.clone()),

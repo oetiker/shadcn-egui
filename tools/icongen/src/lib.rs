@@ -331,6 +331,7 @@ pub const SLOT_NAMES: &[&str] = &[
     "chevron_right",
     "more_horizontal",
     "close",
+    "loader",
 ];
 
 /// The icon each slot of [`SLOT_NAMES`] draws, by icon name, in that order.

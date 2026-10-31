@@ -128,6 +128,8 @@ pub struct IconSlots {
     pub more_horizontal: Icon,
     /// Dialog close button.
     pub close: Icon,
+    /// Spinner: the loader icon, turning.
+    pub loader: Icon,
 }
 
 impl IconSlots {
@@ -154,6 +156,7 @@ impl IconSlots {
             chevron_right: icon,
             more_horizontal: icon,
             close: icon,
+            loader: icon,
         }
     }
 }
