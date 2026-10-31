@@ -476,3 +476,35 @@ fn snapshot() {
         });
     });
 }
+
+/// progress-label: a `max-w-sm` field whose label row holds the title at
+/// its start and the value (`ml-auto font-normal text-muted-foreground`)
+/// at its end. egui has no `tabular-nums`.
+#[test]
+fn progress_label_snapshot() {
+    use shadcn_egui::components::field::{field_label, Field};
+    use shadcn_egui::style::Weight;
+    use shadcn_egui::theme::family_for;
+    common::snapshot_all("progress_label", egui::vec2(432.0, 90.0), |ui| {
+        ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
+            ui.set_width(384.0);
+            Field::new().show(ui, |ui| {
+                shadcn_egui::layout::space_between(
+                    ui,
+                    |ui| {
+                        field_label(ui, "Upload progress");
+                    },
+                    |ui| {
+                        // The label's font and size, in its normal weight.
+                        let t = Theme::current(ui.ctx());
+                        let value = egui::RichText::new("56%")
+                            .family(family_for(ui.ctx(), Weight::Normal))
+                            .color(t.role(Token::MutedForeground));
+                        field_label(ui, value);
+                    },
+                );
+                ui.add(Progress::from_value(56.0, 100.0))
+            });
+        });
+    });
+}
