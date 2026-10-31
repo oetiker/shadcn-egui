@@ -4,7 +4,7 @@
 
 use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
-use crate::components::icon::Icon;
+use crate::components::icon::Glyph;
 use crate::components::shared::{
     interaction_state, line_width, part_painter, transitioned_text, with_opacity, RecipeBox,
 };
@@ -88,8 +88,8 @@ impl VariantEnum for BadgeVariant {}
 pub struct Badge {
     text: String,
     variant: BadgeVariant,
-    icon: Option<Icon>,
-    icon_end: Option<Icon>,
+    icon: Option<Glyph>,
+    icon_end: Option<Glyph>,
 }
 
 impl Badge {
@@ -105,14 +105,16 @@ impl Badge {
         self.variant = v.into();
         self
     }
-    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
-    pub fn icon(mut self, icon: &Icon) -> Self {
-        self.icon = Some(*icon);
+    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`),
+    /// or [`Glyph::Spinner`] (`<Spinner data-icon="inline-start" />`).
+    pub fn icon(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
-    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`).
-    pub fn icon_end(mut self, icon: &Icon) -> Self {
-        self.icon_end = Some(*icon);
+    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`),
+    /// or [`Glyph::Spinner`].
+    pub fn icon_end(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon_end = Some(icon.into());
         self
     }
 }
@@ -154,6 +156,7 @@ impl Widget for Badge {
         let row = AtomRow::new(ui, self.text.as_str())
             .icons(self.icon, self.icon_end)
             .icon_size(icon_px)
+            .sized_icon_size(pick(&l, |r| &r.sized_icon_size, g))
             .gap(gap)
             .inset(
                 pad_l + border_w,
@@ -174,6 +177,13 @@ impl Widget for Badge {
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });
+        for (slot, _) in [self.icon, self.icon_end]
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| **g == Some(Glyph::Spinner))
+        {
+            crate::components::spinner::report_hosted(ui, &resp, slot);
+        }
         if !ui.is_rect_visible(rect) {
             return resp;
         }

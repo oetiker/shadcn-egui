@@ -74,11 +74,11 @@ fn button_snapshot() {
                 ui.add(Button::new("Large").size(ButtonSize::Lg));
                 ui.add(
                     Button::new("Close")
-                        .icon(&CLOSE)
+                        .icon(CLOSE)
                         .size(ButtonSize::Icon)
                         .variant(ButtonVariant::Outline),
                 );
-                ui.add(Button::new("With icon").icon(&CLOSE));
+                ui.add(Button::new("With icon").icon(CLOSE));
             });
             layout::row(ui, 8.0, |ui| {
                 ui.add(Button::new("Disabled").enabled(false));
@@ -1751,7 +1751,7 @@ fn badge_takes_a_borrowed_icon() {
     let ctx = egui::Context::default();
     let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
         let icons = Theme::current(ui.ctx()).icons;
-        ui.add(Badge::new("Done").icon(&icons.check).icon_end(&icons.check));
+        ui.add(Badge::new("Done").icon(icons.check).icon_end(icons.check));
     });
 }
 

@@ -271,6 +271,8 @@ pub struct Style {
     pub field_set: Box<Recipe>,
     /// `cn-field-legend`
     pub field_legend: Box<Recipe>,
+    /// `data-slot="spinner"` (no style marker)
+    pub spinner: Box<Recipe>,
 }
 
 /// The rank a generated rule under one state flag has: the rank of the

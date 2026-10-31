@@ -3014,7 +3014,7 @@ behaviour, as setters.
   through `accesskit_node_builder` where it does not (switch, tab,
   tablist, log, table, live regions, expanded); (b) `WidgetType` only.
   Per component: toggle `Button` + selected; toggle-group upstream roles;
-  spinner `.label` default "Loading"; skeleton `Other`; separator
+  spinner `.alt_text` default "Loading"; skeleton `Other`; separator
   decorative; command highlight as `selected`; accordion `expanded`;
   carousel roledescription; field error and marker `status` live regions;
   item `Button`/`Other`.
@@ -3034,6 +3034,10 @@ Consequence (field port, 2026-10-31): "field error ... `status`" in the
 per-component list is wrong: upstream's FieldError has `role="alert"`, so it
 reports `Role::Alert` with an assertive live region, as CP-07-17 and the
 alert do (conformance 8). The marker's `status` stays.
+
+Consequence (maintainer, 2026-10-31): The spinner's name setter is
+`.alt_text(impl Into<String>)`, default "Loading", as on the avatar; it
+was `.label`, which reads as visible text the spinner does not show.
 
 ## Shortcut functions
 

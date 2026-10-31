@@ -728,6 +728,10 @@ pub struct Recipe {
     pub inset_left: Prop<f32>,
     /// `[&_svg:not([class*='size-'])]:size-N` and `[&>svg]:size-N`.
     pub icon_size: Prop<f32>,
+    /// `[&>svg]:size-N`: the icon size that also reaches an icon with a size
+    /// of its own (the spinner's `size-4`); without it such an icon keeps its
+    /// own size.
+    pub sized_icon_size: Prop<f32>,
     /// `[&>svg]:translate-y-N`: the icon's vertical nudge.
     pub icon_shift_y: Prop<Shift>,
     /// `[&>svg]:hidden`: the part shows no icon.
@@ -804,6 +808,8 @@ pub struct Recipe {
     pub animate_in: Prop<bool>,
     /// `animate-out`: the part plays its exit animation when it closes.
     pub animate_out: Prop<bool>,
+    /// `animate-spin`: the part turns without end, one turn per `duration`.
+    pub animate_spin: Prop<bool>,
     /// `fade-in-N`: the opacity the enter animation starts from.
     pub enter_opacity: Prop<f32>,
     /// `zoom-in-N`: the scale the enter animation starts from.
@@ -996,6 +1002,7 @@ macro_rules! recipe_props {
             inset_bottom,
             inset_left,
             icon_size,
+            sized_icon_size,
             icon_shift_y,
             icon_hidden,
             text_size,
@@ -1041,6 +1048,7 @@ macro_rules! recipe_props {
             easing,
             animate_in,
             animate_out,
+            animate_spin,
             enter_opacity,
             enter_scale,
             enter_x,

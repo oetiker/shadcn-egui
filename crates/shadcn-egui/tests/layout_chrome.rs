@@ -304,7 +304,7 @@ fn button_case(case: &str) -> (Theme, Button) {
         "icon-lg" => ButtonSize::IconLg,
         _ => panic!("{size}"),
     };
-    let icon = &shadcn_egui::icons::lucide::CHEVRON_RIGHT;
+    let icon = shadcn_egui::icons::lucide::CHEVRON_RIGHT;
     let b = Button::new("Continue").size(size);
     let b = match content {
         "text" => b,

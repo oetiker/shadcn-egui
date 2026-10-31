@@ -154,7 +154,7 @@ fn important_app_rule_beats_generated_important() {
         10.0,
     );
     let mode = egui::Theme::Light;
-    let badge = |ui: &mut egui::Ui| ui.add(Badge::new("Badge").icon(&X));
+    let badge = |ui: &mut egui::Ui| ui.add(Badge::new("Badge").icon(X));
     let before = common::measure(&luma, mode, badge);
     let theme = common::restyled(luma, |s| {
         s.badge

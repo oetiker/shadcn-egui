@@ -207,6 +207,10 @@ fn pseudo_targets() {
     assert!(
         matches!(utility("size-4", Some(Pseudo::Svg)), U::Set(v) if v == [(Field::IconSize, Value::Px(16.0))])
     );
+    // `[&>svg]` also reaches an icon with a size of its own (the spinner).
+    assert!(
+        matches!(utility("size-3", Some(Pseudo::SvgAll)), U::Set(v) if v == [(Field::IconSize, Value::Px(12.0)), (Field::SizedIconSize, Value::Px(12.0))])
+    );
     assert!(matches!(utility("-inset-2", Some(Pseudo::After)), U::Set(v) if v.len() == 2));
     assert!(
         matches!(utility("-inset-x-3", Some(Pseudo::After)), U::Set(v) if v == [(Field::HitInsetX, Value::Px(12.0))])
@@ -267,6 +271,7 @@ fn variants() {
         variant("[&_svg:not([class*='size-'])]"),
         V::Pseudo(Pseudo::Svg, _)
     ));
+    assert!(matches!(variant("[&>svg]"), V::Pseudo(Pseudo::SvgAll, _)));
     assert!(matches!(variant("after"), V::Pseudo(Pseudo::After, _)));
     assert!(matches!(variant("data-open"), V::Cond { all, .. } if all == flag("EXPANDED")));
     assert!(matches!(variant("[a]"), V::Ignore(_)));
@@ -433,6 +438,7 @@ fn model_matches_recipe_rs() {
         InsetBottom,
         InsetLeft,
         IconSize,
+        SizedIconSize,
         IconShiftY,
         IconHidden,
         TextSize,
@@ -478,6 +484,7 @@ fn model_matches_recipe_rs() {
         Easing,
         AnimateIn,
         AnimateOut,
+        AnimateSpin,
         EnterOpacity,
         EnterScale,
         EnterX,
@@ -720,13 +727,16 @@ fn important_class_gets_the_top_rank_bit() {
             all: 0,
             none: 0,
             rank: 1 << R_IMPORTANT,
-            pseudo: Some(Pseudo::Svg),
+            pseudo: Some(Pseudo::SvgAll),
             child: None,
         }
     );
     assert_eq!(
         utility(&c.utility, v.pseudo),
-        U::Set(vec![(Field::IconSize, Value::Px(12.0))])
+        U::Set(vec![
+            (Field::IconSize, Value::Px(12.0)),
+            (Field::SizedIconSize, Value::Px(12.0))
+        ])
     );
     // An important plain class outranks the highest-ranked normal one.
     let important = variants_of("h-8!").unwrap().rank;
@@ -864,6 +874,19 @@ fn a_display_class_cancels_a_line_clamp() {
         );
     }
     assert!(run(&["flex", "line-clamp-3"]).unsupported.is_empty());
+}
+
+/// Tailwind 4's `animate-spin` is `spin 1s linear infinite`: the part turns,
+/// one turn a second, at an even speed (D-88: a motion value is a look).
+#[test]
+fn animate_spin_turns_once_a_second_linearly() {
+    let spin = &["animate-spin"];
+    assert_eq!(winner(spin, Field::AnimateSpin, 0), Some(Value::Bool(true)));
+    assert_eq!(winner(spin, Field::Duration, 0), Some(Value::Factor(1.0)));
+    assert_eq!(
+        winner(spin, Field::Easing, 0),
+        Some(Value::Easing("Linear"))
+    );
 }
 
 /// The winning value of `field` under `state` in one class list, as `pick`
