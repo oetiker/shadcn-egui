@@ -153,7 +153,7 @@ fn slot_snapshot(lib: IconLibrary, name: &str) {
                     ui.add(Select::new("slots", &mut 0, &["Option"]));
                     ui.add(
                         Button::new("Close")
-                            .icon(&slots.close)
+                            .icon(slots.close)
                             .size(ButtonSize::Icon)
                             .variant(ButtonVariant::Ghost),
                     );

@@ -118,7 +118,7 @@ fn icon_widgets_are_labelled() {
         if ui
             .add(
                 Button::new("Power off")
-                    .icon(&lucide::POWER)
+                    .icon(lucide::POWER)
                     .size(ButtonSize::Icon),
             )
             .clicked()
@@ -176,21 +176,21 @@ fn icons_snapshot() {
                 }
             });
             layout::row(ui, 8.0, |ui| {
-                ui.add(Button::new("Microphone").icon(&lucide::MIC));
+                ui.add(Button::new("Microphone").icon(lucide::MIC));
                 ui.add(
                     Button::new("Display")
-                        .icon(&lucide::MONITOR)
+                        .icon(lucide::MONITOR)
                         .variant(ButtonVariant::Outline),
                 );
                 ui.add(
                     Button::new("Close")
-                        .icon(&lucide::X)
+                        .icon(lucide::X)
                         .size(ButtonSize::Icon)
                         .variant(ButtonVariant::Ghost),
                 );
                 ui.add(
                     Button::new("Power")
-                        .icon(&lucide::POWER)
+                        .icon(lucide::POWER)
                         .size(ButtonSize::Icon)
                         .variant(ButtonVariant::Destructive),
                 );

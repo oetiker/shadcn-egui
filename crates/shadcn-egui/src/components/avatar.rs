@@ -286,7 +286,10 @@ impl Widget for Avatar<'_> {
         let look = TextLook::resolve(ui, &fallback, st);
         let icon_px = pick(&fallback, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
         let (row, fallback_name) = match self.icon {
-            Some((icon, name)) => (AtomRow::new(ui, self.atoms).icons(Some(icon), None), name),
+            Some((icon, name)) => (
+                AtomRow::new(ui, self.atoms).icons(Some(icon.into()), None),
+                name,
+            ),
             None => {
                 let name = self
                     .atoms
@@ -803,7 +806,10 @@ impl Widget for AvatarGroupCount<'_> {
         let look = TextLook::resolve(ui, &l, st);
         let icon_px = pick(&l, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
         let (row, name) = match self.icon {
-            Some((icon, name)) => (AtomRow::new(ui, self.atoms).icons(Some(icon), None), name),
+            Some((icon, name)) => (
+                AtomRow::new(ui, self.atoms).icons(Some(icon.into()), None),
+                name,
+            ),
             None => {
                 let name = self
                     .atoms

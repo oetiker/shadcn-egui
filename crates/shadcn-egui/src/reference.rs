@@ -696,10 +696,10 @@ fn buttons_group(ui: &mut egui::Ui) {
                         Button::new("Close")
                             .variant(ButtonVariant::Outline)
                             .size(size)
-                            .icon(&icons.close),
+                            .icon(icons.close),
                     );
                 }
-                let _ = ui.add(Button::new("Confirm").icon(&icons.check));
+                let _ = ui.add(Button::new("Confirm").icon(icons.check));
                 let _ = ui.add(Button::new("Disabled").enabled(false));
             });
         });
