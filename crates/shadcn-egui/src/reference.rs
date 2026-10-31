@@ -6,12 +6,12 @@
 
 use crate::components::alert::{alert_action, Alert, AlertVariant};
 use crate::components::avatar::{avatar_group_count, Avatar, AvatarBadge, AvatarGroup, AvatarSize};
-use crate::components::badge::{badge, BadgeVariant};
+use crate::components::badge::{badge, Badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::card::{card_description, card_title};
 use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
-use crate::components::icon::IconView;
+use crate::components::icon::{Glyph, IconView};
 use crate::components::input::Input;
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
 use crate::components::label::{description, label};
@@ -20,6 +20,7 @@ use crate::components::progress::Progress;
 use crate::components::select::Select;
 use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
+use crate::components::spinner::Spinner;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
 use crate::components::text::TextLook;
@@ -665,6 +666,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 controls_group(ui, state);
                 alerts_group(ui);
                 tabs_group(ui, state);
+                spinner_group(ui);
             });
         });
     });
@@ -779,6 +781,36 @@ fn kbd_gallery(ui: &mut egui::Ui) {
                 description(ui, "to open the command palette");
             });
             ui.add(Kbd::icon_only(icons.check, "Enter"));
+        });
+    });
+}
+
+/// shadcn-svelte's spinner demos: sizes, a disabled button and badges
+/// with a spinner. `spinner-custom-demo` is left out: it turns another
+/// icon itself and uses no `<Spinner>`.
+fn spinner_group(ui: &mut egui::Ui) {
+    group(ui, "Spinner", "Sizes, in a button and in badges.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            layout::row(ui, 24.0, |ui| {
+                for side in [12.0, 16.0, 24.0, 32.0] {
+                    let _ = ui.add(Spinner::new().size(side));
+                }
+            });
+            layout::wrap_row(ui, 8.0, |ui| {
+                let _ = ui.add(
+                    Button::new("Please wait")
+                        .size(ButtonSize::Sm)
+                        .variant(ButtonVariant::Outline)
+                        .icon(Glyph::Spinner)
+                        .enabled(false),
+                );
+                let _ = ui.add(Badge::new("Syncing").icon(Glyph::Spinner));
+                let _ = ui.add(
+                    Badge::new("Generating")
+                        .variant(BadgeVariant::Secondary)
+                        .icon_end(Glyph::Spinner),
+                );
+            });
         });
     });
 }
