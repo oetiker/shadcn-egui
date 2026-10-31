@@ -89,6 +89,10 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// });
 /// # });
 /// ```
+///
+/// An item that stretches to the row's height (upstream's bordered content
+/// box beside an `h-fit` list) reads [`stretch_height`], as in [`row`].
+#[doc(alias = "items-start")]
 pub fn row_top<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     row_aligned(ui, gap, true, add)
 }

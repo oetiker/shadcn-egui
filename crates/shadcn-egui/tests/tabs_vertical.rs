@@ -129,7 +129,54 @@ fn horizontal_list_ignores_up_and_down() {
     assert_eq!(active.get(), 0, "ArrowUp");
 }
 
-/// bits' list: `role="tablist"` with `aria-orientation`.
+/// bits' roving focus: an arrow off the list's axis does nothing, and the
+/// focus stays on the trigger, though a focusable widget lies in that
+/// direction (beside a vertical list, below a horizontal one).
+#[test]
+fn off_axis_arrows_keep_the_focus_in_the_list() {
+    for o in [Orientation::Horizontal, Orientation::Vertical] {
+        let active = Rc::new(Cell::new(0));
+        let seen = active.clone();
+        let mut h = egui_kittest::Harness::new_ui(move |ui| {
+            Theme::vega().apply(ui.ctx());
+            let mut sel = seen.get();
+            let tabs = Tabs::new(&mut sel, &LABELS).orientation(o);
+            if o == Orientation::Vertical {
+                layout::row_top(ui, 8.0, |ui| {
+                    ui.add(tabs);
+                    let _ = ui.button("Neighbour");
+                });
+            } else {
+                layout::vstack(ui, 8.0, |ui| {
+                    ui.add(tabs);
+                    let _ = ui.button("Neighbour");
+                });
+            }
+            seen.set(sel);
+        });
+        h.run();
+        h.get_by_label("Account").focus();
+        h.run();
+        let keys = if o == Orientation::Vertical {
+            [egui::Key::ArrowRight, egui::Key::ArrowLeft]
+        } else {
+            [egui::Key::ArrowDown, egui::Key::ArrowUp]
+        };
+        for key in keys {
+            h.key_press(key);
+            h.run();
+            let focused = h
+                .query_all(egui_kittest::kittest::by())
+                .find(|n| n.accesskit_node().is_focused())
+                .and_then(|n| n.accesskit_node().label());
+            assert_eq!(focused.as_deref(), Some("Account"), "{o:?} {key:?}");
+            assert_eq!(active.get(), 0, "{o:?} {key:?}");
+        }
+    }
+}
+
+/// bits' list: `role="tablist"` with `aria-orientation`, its node over
+/// the whole list.
 #[test]
 fn list_reports_its_orientation() {
     for (o, want) in [
@@ -140,6 +187,12 @@ fn list_reports_its_orientation() {
         h.run();
         let list = h.get_by_role(Role::TabList);
         assert_eq!(list.accesskit_node().orientation(), Some(want), "{o:?}");
+        // The node covers the list, so a screen reader can show it.
+        let bounds = list.rect();
+        assert!(bounds.area() > 0.0, "{o:?}: {bounds:?}");
+        for tab in h.get_all_by_role(Role::Tab) {
+            assert!(bounds.contains_rect(tab.rect()), "{o:?}: {bounds:?}");
+        }
     }
 }
 
@@ -232,18 +285,31 @@ fn row_top_puts_the_content_beside_the_list_at_the_top() {
 fn tabs_vertical_snapshot() {
     common::snapshot_all("tabs_vertical", egui::vec2(460.0, 300.0), |ui| {
         let gap = Tabs::content_gap(ui);
-        // The upstream demo: the list beside a bordered content box.
+        // The upstream demo (`create/tabs/tabs-vertical.svelte`): the list
+        // beside a bordered content box, which stretches to the row's
+        // height (the list is `h-fit`, the box is not).
         layout::row_top(ui, gap, |ui| {
             ui.add(Tabs::new(&mut 0, &LABELS).orientation(Orientation::Vertical));
             let t = Theme::current(ui.ctx());
+            // `style-vega:rounded-lg style-vega:p-6`, … per style.
+            let (radius, pad) = match t.style.name {
+                "nova" => (t.radius_lg(), 16.0),
+                "lyra" => (0.0, 16.0),
+                "maia" | "luma" | "rhea" => (t.radius_xl(), 24.0),
+                "mira" => (t.radius_md(), 16.0),
+                _ => (t.radius_lg(), 24.0),
+            };
+            // Read in the row, before the frame: inside it, it is `None`.
+            let height = layout::stretch_height(ui).unwrap_or(0.0);
             egui::Frame::new()
                 .stroke(egui::Stroke::new(1.0_f32, t.palette().border))
-                .corner_radius(8)
-                .inner_margin(16)
+                .corner_radius(radius)
+                .inner_margin(pad)
                 .show(ui, |ui| {
                     // The rest of the row, the text wrapped inside it
                     // (a row's label does not wrap on its own).
                     ui.set_width(ui.available_width());
+                    ui.set_min_height((height - 2.0 * (pad + 1.0)).max(0.0));
                     ui.add(
                         egui::Label::new(
                             "Manage your account preferences and profile information.",

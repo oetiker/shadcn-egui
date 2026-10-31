@@ -277,6 +277,13 @@ impl Widget for Tabs<'_> {
         ui.ctx()
             .accesskit_node_builder(list_ui.unique_id(), |node| {
                 node.set_role(egui::accesskit::Role::TabList);
+                // egui gives a `Ui`'s node no bounds; the list's are its rect.
+                node.set_bounds(egui::accesskit::Rect {
+                    x0: list_rect.min.x.into(),
+                    y0: list_rect.min.y.into(),
+                    x1: list_rect.max.x.into(),
+                    y1: list_rect.max.y.into(),
+                });
                 node.set_orientation(if vertical {
                     egui::accesskit::Orientation::Vertical
                 } else {
@@ -340,13 +347,15 @@ impl Widget for Tabs<'_> {
                     next = Some(i);
                 }
                 if r.has_focus() {
-                    // Keep egui from using the arrows to move focus on its own.
+                    // Keep egui from using the arrows to move focus on its own:
+                    // the list's axis moves the selection, the other does
+                    // nothing (bits' roving focus).
                     ui.memory_mut(|m| {
                         m.set_focus_lock_filter(
                             r.id,
                             egui::EventFilter {
-                                horizontal_arrows: !vertical,
-                                vertical_arrows: vertical,
+                                horizontal_arrows: true,
+                                vertical_arrows: true,
                                 ..Default::default()
                             },
                         )
