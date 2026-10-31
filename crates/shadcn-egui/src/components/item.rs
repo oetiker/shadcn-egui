@@ -256,6 +256,9 @@ struct ItemContext {
     /// The part is in the content column, whose min-content width decides
     /// whether the actions wrap.
     in_content: bool,
+    /// The part is directly in the actions, which are `flex-none`: text
+    /// there takes its one-line width.
+    in_actions: bool,
 }
 
 /// What the item measured in a pass, for the next one to place by.
@@ -582,15 +585,17 @@ impl<'a> Item<'a> {
         let (origin, mut frame) = layout::begin_block(ui, outer_w);
         let fid = frame.unique_id();
         // The item's own hit area goes in before its content, so the
-        // actions' widgets lie above it; the rect is the previous pass's
+        // actions' widgets lie above it; the size is the previous pass's
         // until the box is known. Its id is not the frame's: egui takes
         // the focus from a `Ui`'s id each time it builds that `Ui`, which
         // does not sense focus.
         let hit = fid.with("shadcn_egui::item::hit");
-        let prev = ui
-            .ctx()
-            .read_response(hit)
-            .map_or(Rect::NOTHING, |r| r.rect);
+        // At `origin`: the previous pass's place is stale once the item
+        // moves, and egui reports one id at two rects in a pass as a
+        // clash. A size change redoes the pass anyway.
+        let prev = ui.ctx().read_response(hit).map_or(Rect::NOTHING, |r| {
+            Rect::from_min_size(origin, r.rect.size())
+        });
         let _ = ui.interact(prev, hit, sense);
         let back = RecipeBox::reserve(ui);
 
@@ -742,6 +747,7 @@ impl<'a> Item<'a> {
             footer_top: line_top + line + actions_line + gap,
             actions_start,
             in_content: false,
+            in_actions: false,
         };
         ui.data_mut(|d| d.insert_temp(next_key(id), next));
 
@@ -803,7 +809,10 @@ impl<'a> Item<'a> {
                     ))
                     .layout(Layout::left_to_right(Align::Center)),
             ),
-            cx,
+            ItemContext {
+                in_actions: true,
+                ..cx
+            },
         ));
         act.spacing_mut().item_spacing.x = pick_len(&actions_l, |r| &r.gap, rest);
         // The cursor of the scope the closure fills, where `item_footer`
@@ -955,9 +964,14 @@ fn text_part(
             n.min_content = n.min_content.max(longest);
         });
     }
-    part_ui(ui, id, &[&l[..]], st, |ui| {
-        look.label(ui, text, TextWrapMode::Wrap)
-    })
+    // The actions are `flex-none`, laid out at the width of the last
+    // pass: text wrapped there would keep the first pass's width.
+    let wrap = if item_context(ui).is_some_and(|c| c.in_actions) {
+        TextWrapMode::Extend
+    } else {
+        TextWrapMode::Wrap
+    };
+    part_ui(ui, id, &[&l[..]], st, |ui| look.label(ui, text, wrap))
 }
 
 /// `item-title`: the item's text at the title's weight. Inside an
@@ -1041,14 +1055,18 @@ fn row_part<R>(ui: &mut Ui, footer: bool, add: impl FnOnce(&mut Ui) -> R) -> Inn
         .data(|d| d.get_temp::<Memory>(memory_key(cx.id)))
         .unwrap_or_default();
     let height = if footer { mem.footer } else { mem.header };
-    let mut row = ui.new_child(
+    let mut row = ui.new_child(context::push(
         UiBuilder::new()
             .max_rect(Rect::from_min_size(
                 egui::pos2(cx.left, top),
                 egui::vec2(cx.width, height),
             ))
             .layout(Layout::left_to_right(Align::Center)),
-    );
+        ItemContext {
+            in_actions: false,
+            ..cx
+        },
+    ));
     // `justify-between`: the widgets spread over the row with the gap
     // their widths left last pass, never closer than `gap`.
     let gap = pick_len(&l, |r| &r.gap, st);

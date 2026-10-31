@@ -6,7 +6,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
 use shadcn_egui::components::button::{Button, ButtonSize};
 use shadcn_egui::components::icon::Glyph;
-use shadcn_egui::components::item::{Item, ItemGroup, ItemSize, ItemVariant};
+use shadcn_egui::components::item::{item_description, Item, ItemGroup, ItemSize, ItemVariant};
 use shadcn_egui::Theme;
 
 #[derive(Default)]
@@ -763,6 +763,119 @@ fn image_media_fills_its_box() {
         })
         .expect("the image painted");
     assert_eq!(painted, vec2(40.0, 40.0));
+}
+
+/// Three frames of `add`, returning the last frame's output.
+fn last_output(width: f32, mut add: impl FnMut(&mut egui::Ui)) -> egui::FullOutput {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.all_styles_mut(|s| s.animation_time = 0.0);
+    let input = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            vec2(width, 800.0),
+        )),
+        ..Default::default()
+    };
+    let mut out = None;
+    for _ in 0..3 {
+        out = Some(ctx.run_ui(input(), &mut add));
+    }
+    out.expect("a frame ran")
+}
+
+/// A description only in the actions closure moves the media to the top
+/// as `.description` does: the item knows it from the previous pass. A
+/// title of two lines tells the top from the centre.
+#[test]
+fn a_description_among_the_actions_moves_the_media_up() {
+    let icon_top = |setter: bool, actions: bool| {
+        let out = last_output(240.0, |ui| {
+            let mut item = Item::new()
+                .icon(shadcn_egui::icons::lucide::INBOX)
+                .title("A title long enough for two lines");
+            if setter {
+                item = item.description("Text");
+            }
+            item.show(ui, |ui| {
+                if actions {
+                    item_description(ui, "3:45");
+                }
+            });
+        });
+        icon_meshes(&out)[0].calc_bounds().top()
+    };
+    let (none, setter, actions) = (
+        icon_top(false, false),
+        icon_top(true, false),
+        icon_top(false, true),
+    );
+    assert_eq!(actions, setter);
+    assert!(none > setter, "centred {none}, top {setter}");
+}
+
+/// The actions are `flex-none`: a description of several words among
+/// them takes its one-line width, it does not wrap at the width of the
+/// first pass (none).
+#[test]
+fn a_description_among_the_actions_takes_its_width() {
+    let out = last_output(400.0, |ui| {
+        Item::new()
+            .title("Title")
+            .show(ui, |ui| item_description(ui, "5 min ago"));
+    });
+    let text = common::text_shapes(&out)
+        .into_iter()
+        .find(|t| t.galley.text().contains("min"))
+        .expect("the description painted");
+    assert_eq!(text.galley.rows.len(), 1, "{:?}", text.galley.text());
+    assert!(!text.galley.elided, "{:?}", text.galley.text());
+}
+
+/// egui's id clash check paints "First use of widget ID" when one id
+/// senses at two rects in a pass; a sensed item that moves without
+/// changing size must not.
+#[test]
+fn a_moving_sensed_item_paints_no_id_clash() {
+    for link in [false, true] {
+        let ctx = egui::Context::default();
+        Theme::vega().apply(&ctx);
+        for frame in 0..4 {
+            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.add_space(10.0 * frame as f32);
+                let item = Item::new().title("Row");
+                let item = if link {
+                    item.link(true)
+                } else {
+                    item.sense(egui::Sense::click())
+                };
+                ui.add(item);
+            });
+            let clash = common::text_shapes(&out)
+                .iter()
+                .any(|t| t.galley.text().contains("use of widget ID"));
+            assert!(!clash, "link {link}, frame {frame}");
+        }
+    }
+}
+
+/// `.alt_text` names the image media's AccessKit node.
+#[test]
+fn image_media_alt_text_reaches_accesskit() {
+    let mut h = Harness::builder()
+        .with_size(vec2(400.0, 120.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            install_cover(ui.ctx());
+            ui.add(
+                Item::new()
+                    .title("Track")
+                    .image(COVER)
+                    .alt_text("Cover art"),
+            );
+        });
+    h.run();
+    let _ = h.get_by_role_and_label(Role::Image, "Cover art");
 }
 
 /// The height of a title-only item's title line.
