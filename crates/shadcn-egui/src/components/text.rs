@@ -104,6 +104,7 @@ pub struct TextLook {
     underline_offset: Option<f32>,
     leading: Leading,
     wrap_style: Option<TextWrap>,
+    line_clamp: Option<u32>,
     break_word: bool,
 }
 
@@ -156,6 +157,7 @@ impl TextLook {
             underline_offset: pick(layers, |r| &r.underline_offset, state),
             leading: Leading::Inline,
             wrap_style: pick(layers, |r| &r.text_wrap, state),
+            line_clamp: pick(layers, |r| &r.line_clamp, state),
             break_word: false,
         }
     }
@@ -278,7 +280,8 @@ impl TextLook {
     /// explicit colour (`strong` and `weak` text included) is
     /// `Color32::PLACEHOLDER`, which the painter replaces with the colour
     /// passed at paint time. Sections without an explicit line height get
-    /// the look's.
+    /// the look's. A `line-clamp-N` look keeps at most N rows, the last
+    /// one ending in `…`, unless the caller's job keeps fewer.
     fn job(&self, ui: &Ui, text: WidgetText) -> LayoutJob {
         let ctx = ui.ctx();
         let font = self.font_id(ctx);
@@ -296,6 +299,12 @@ impl TextLook {
             WidgetText::LayoutJob(job) => job.as_ref().clone(),
             WidgetText::Galley(galley) => galley.job.as_ref().clone(),
         };
+        if let Some(rows) = self.line_clamp.map(|n| n as usize) {
+            if rows < job.wrap.max_rows {
+                job.wrap.max_rows = rows;
+                job.wrap.overflow_character = Some('…');
+            }
+        }
         if self.uppercase {
             uppercase(&mut job);
         }
