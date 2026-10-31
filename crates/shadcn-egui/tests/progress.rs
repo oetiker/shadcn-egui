@@ -479,32 +479,49 @@ fn snapshot() {
 
 /// progress-label: a `max-w-sm` field whose label row holds the title at
 /// its start and the value (`ml-auto font-normal text-muted-foreground`)
-/// at its end. egui has no `tabular-nums`.
-#[test]
-fn progress_label_snapshot() {
+/// at its end, a span in the label: plain text in the label's look, not
+/// a second label. egui has no `tabular-nums`.
+fn progress_label(ui: &mut egui::Ui) {
     use shadcn_egui::components::field::{field_label, Field};
-    use shadcn_egui::style::Weight;
+    use shadcn_egui::components::text::TextLook;
+    use shadcn_egui::style::{State, Weight};
     use shadcn_egui::theme::family_for;
-    common::snapshot_all("progress_label", egui::vec2(432.0, 90.0), |ui| {
-        ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
-            ui.set_width(384.0);
-            Field::new().show(ui, |ui| {
-                shadcn_egui::layout::space_between(
-                    ui,
-                    |ui| {
-                        field_label(ui, "Upload progress");
-                    },
-                    |ui| {
-                        // The label's font and size, in its normal weight.
-                        let t = Theme::current(ui.ctx());
-                        let value = egui::RichText::new("56%")
-                            .family(family_for(ui.ctx(), Weight::Normal))
-                            .color(t.role(Token::MutedForeground));
-                        field_label(ui, value);
-                    },
-                );
-                ui.add(Progress::from_value(56.0, 100.0))
-            });
+    ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
+        ui.set_width(384.0);
+        Field::new().show(ui, |ui| {
+            shadcn_egui::layout::space_between(
+                ui,
+                |ui| {
+                    field_label(ui, "Upload progress");
+                },
+                |ui| {
+                    // The label's look, in its normal weight.
+                    let t = Theme::current(ui.ctx());
+                    let st = t.state(ui.ctx(), State::NONE);
+                    let look = TextLook::resolve(ui, &[&*t.style.label, &*t.style.field_label], st);
+                    let value =
+                        egui::RichText::new("56%").family(family_for(ui.ctx(), Weight::Normal));
+                    let block = look.layout(ui, value, egui::TextWrapMode::Extend, f32::INFINITY);
+                    let (_, rect) = ui.allocate_space(block.size());
+                    block.paint(ui.painter(), rect.min, t.role(Token::MutedForeground));
+                },
+            );
+            ui.add(Progress::from_value(56.0, 100.0))
         });
     });
+}
+
+#[test]
+fn progress_label_snapshot() {
+    common::snapshot_all("progress_label", egui::vec2(432.0, 90.0), progress_label);
+}
+
+/// progress-label has one label, "Upload progress 56%", whose value is
+/// a span in it: no second label node for the value.
+#[test]
+fn progress_label_has_one_label() {
+    let mut h = Harness::new_ui(progress_label);
+    h.run();
+    assert_eq!(h.get_all_by_role(Role::Label).count(), 1);
+    let _ = h.get_by_role_and_label(Role::Label, "Upload progress");
 }
