@@ -1,6 +1,6 @@
 //! Checkbox: the shadcn-svelte demos that wrap the checkbox in a Field, as
-//! snapshots, and the plain Label beside it in checkbox-demo. The bare checkbox's behaviour and its own snapshot are in
-//! `components.rs`.
+//! snapshots, and the plain Label beside it in checkbox-demo. The bare
+//! checkbox's behaviour and its own snapshot are in `components.rs`.
 
 mod common;
 
@@ -47,38 +47,91 @@ fn width(ui: &mut Ui, w: f32, add: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// checkbox-demo's first row: a plain Label after the checkbox in a
-/// field (upstream's `<Label for>`) names the checkbox, and a press on it
-/// toggles the checkbox, as a field label does.
-#[test]
-fn a_plain_label_in_a_field_names_and_toggles_the_checkbox() {
-    let mut h = Harness::new_ui_state(
-        |ui, (on, label): &mut (bool, Rect)| {
+/// Where the plain Labels of a test sit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Place {
+    /// After the checkbox in a field (checkbox-demo's first row).
+    After,
+    /// Before the checkbox in a field.
+    Before,
+    /// "First" before the checkbox, "Second" after it, in one field.
+    Two,
+    /// After the checkbox in a row outside any field.
+    Outside,
+}
+
+/// The checkbox's value and the first label's rect, after the first frame.
+fn plain_label_harness(place: Place) -> Harness<'static, (bool, Rect)> {
+    Harness::new_ui_state(
+        move |ui, (on, label): &mut (bool, Rect)| {
             Theme::vega().apply(ui.ctx());
-            Field::new().horizontal().show(ui, |ui| {
-                ui.add(Checkbox::new(on));
-                *label = ui.add(Label::new("Accept terms and conditions")).rect;
-            });
+            let mut row = |ui: &mut Ui| match place {
+                Place::After | Place::Outside => {
+                    ui.add(Checkbox::new(on));
+                    *label = ui.add(Label::new("First")).rect;
+                }
+                Place::Before => {
+                    *label = ui.add(Label::new("First")).rect;
+                    ui.add(Checkbox::new(on));
+                }
+                Place::Two => {
+                    *label = ui.add(Label::new("First")).rect;
+                    ui.add(Checkbox::new(on));
+                    ui.add(Label::new("Second"));
+                }
+            };
+            if place == Place::Outside {
+                ui.horizontal(row);
+            } else {
+                Field::new().horizontal().show(ui, |ui| row(ui));
+            }
         },
         (false, Rect::NOTHING),
-    );
-    h.run();
-    h.run();
-    let label = h
-        .get_by_role_and_label(Role::Label, "Accept terms and conditions")
-        .accesskit_node()
-        .id();
-    let named: Vec<_> = h
+    )
+}
+
+/// The labels that name the checkbox, as their text.
+fn checkbox_names(h: &Harness<'_, (bool, Rect)>) -> Vec<String> {
+    let names: Vec<_> = h
         .get_by_role(Role::CheckBox)
         .accesskit_node()
         .labelled_by()
         .map(|n| n.id())
         .collect();
-    assert_eq!(named, vec![label], "the label names the checkbox");
-    let at = h.state().1.center();
-    h.input_mut().events.extend(common::click(at));
-    h.run();
-    assert!(h.state().0, "a press on the label toggles the checkbox");
+    ["First", "Second"]
+        .into_iter()
+        .filter(|text| {
+            h.query_by_role_and_label(Role::Label, text)
+                .is_some_and(|l| names.contains(&l.accesskit_node().id()))
+        })
+        .map(str::to_owned)
+        .collect()
+}
+
+/// checkbox-demo's first row: a plain Label in a field (upstream's
+/// `<Label for>`) names the checkbox, and a press on it toggles the
+/// checkbox, as a field label does. Before the checkbox it names it from
+/// the first frame on; of two labels only the first names it; outside a
+/// field a Label stays plain text that takes no press.
+#[test]
+fn a_plain_label_in_a_field_names_and_toggles_the_checkbox() {
+    for place in [Place::After, Place::Before, Place::Two, Place::Outside] {
+        let mut h = plain_label_harness(place);
+        if place == Place::Before {
+            assert_eq!(checkbox_names(&h), ["First"], "{place:?}: first frame");
+        }
+        h.run();
+        let named = checkbox_names(&h);
+        if place == Place::Outside {
+            assert!(named.is_empty(), "{place:?}: {named:?}");
+        } else {
+            assert_eq!(named, ["First"], "{place:?}");
+        }
+        let at = h.state().1.center();
+        h.input_mut().events.extend(common::click(at));
+        h.run();
+        assert_eq!(h.state().0, place != Place::Outside, "{place:?}: a press");
+    }
 }
 
 /// checkbox-basic: a checkbox and its label in a `w-56` group. The
@@ -141,7 +194,8 @@ fn checkbox_demo_snapshot() {
 }
 
 /// checkbox-description: a checked checkbox beside a label and a
-/// description, in a `w-72` group.
+/// description, in a `w-72` group. The group's `mx-auto` centres it on
+/// the docs page; here it starts at the page's edge.
 #[test]
 fn checkbox_description_snapshot() {
     snapshot("checkbox_description", vec2(320.0, 100.0), |ui| {
@@ -163,7 +217,9 @@ fn checkbox_description_snapshot() {
 }
 
 /// checkbox-disabled: `data-disabled` on the field and `disabled` on the
-/// checkbox, both from a disabled `Ui`.
+/// checkbox, both from a disabled `Ui`, in a `w-56` group. The group's
+/// `mx-auto` centres it on the docs page; here it starts at the page's
+/// edge.
 #[test]
 fn checkbox_disabled_snapshot() {
     snapshot("checkbox_disabled", vec2(260.0, 70.0), |ui| {
@@ -181,7 +237,8 @@ fn checkbox_disabled_snapshot() {
 }
 
 /// checkbox-invalid: `data-invalid` on the field; the checkbox takes
-/// `aria-invalid` from it.
+/// `aria-invalid` from it. In a `w-56` group, whose `mx-auto` centres it
+/// on the docs page; here it starts at the page's edge.
 #[test]
 fn checkbox_invalid_snapshot() {
     snapshot("checkbox_invalid", vec2(260.0, 70.0), |ui| {
