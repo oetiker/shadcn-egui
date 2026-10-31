@@ -352,9 +352,9 @@ fn a_faded_thumb_hides_the_track_under_it() {
                     );
                     ui.set_width(100.0);
                     rects[0] = ui
-                        .add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(false))
+                        .add_enabled(false, Slider::new(&mut 50.0, 0.0..=100.0))
                         .rect;
-                    rects[1] = ui.add(Switch::new(&mut true).enabled(false)).rect;
+                    rects[1] = ui.add_enabled(false, Switch::new(&mut true)).rect;
                 },
                 [Rect::NOTHING; 2],
             );

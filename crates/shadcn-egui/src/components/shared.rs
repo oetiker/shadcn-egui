@@ -1893,10 +1893,10 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
 /// is set while `resp` has focus; `FOCUS_VISIBLE` too where the browser's
 /// `:focus-visible` would match: focus moved by keyboard, not by a pointer
 /// press (crate-wide modality, conformance 2.6). A held Space on a
-/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`, or
-/// `DISABLED` in `context` for a widget's own `enabled` flag) gets
-/// `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`, even if
-/// `context` has them: shadcn's `disabled:pointer-events-none`. A
+/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`,
+/// or `DISABLED` in `context` for an item or container's own `enabled`
+/// flag) gets `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or
+/// `FOCUS_VISIBLE`, even if `context` has them: shadcn's `disabled:pointer-events-none`. A
 /// composite widget passes the response of its focusable inner part (a
 /// select's trigger, a slider's thumb), so focus and press are read where
 /// they happen. For a widget that takes typed text use [`text_entry_state`].

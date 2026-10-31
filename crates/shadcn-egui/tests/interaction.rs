@@ -339,13 +339,13 @@ fn a_click_beside_a_check_control_inside_its_target_toggles() {
 }
 
 /// One control of [`a_disabled_control_shows_the_not_allowed_cursor`]:
-/// drawn enabled or with its own `enabled(false)`.
+/// drawn enabled or with `ui.add_enabled(false, ..)`.
 type Control = fn(&mut egui::Ui, bool) -> egui::Response;
 
 /// Upstream's `disabled:cursor-not-allowed` (checkbox, switch, select
 /// trigger, textarea; the label as `peer-disabled:`): the pointer over a
 /// disabled control, its hit area beside it included, shows the
-/// not-allowed cursor, whether its own flag or a disabled `Ui` disables
+/// not-allowed cursor, whether `add_enabled` or a disabled area disables
 /// it. The input's rule comes with `disabled:pointer-events-none`, so the
 /// browser shows the cursor of what lies under it: the default one here.
 /// An enabled control never shows it.
@@ -354,25 +354,25 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
     let controls: [(&str, Control, Option<f32>, bool); 6] = [
         (
             "checkbox",
-            |ui, on| ui.add(Checkbox::new(&mut false).enabled(on)),
+            |ui, on| ui.add_enabled(on, Checkbox::new(&mut false)),
             Some(4.0),
             true,
         ),
         (
             "switch",
-            |ui, on| ui.add(Switch::new(&mut false).enabled(on)),
+            |ui, on| ui.add_enabled(on, Switch::new(&mut false)),
             Some(4.0),
             true,
         ),
         (
             "select",
-            |ui, on| ui.add(Select::new("fruit", &mut 0, &["Apple", "Pear"]).enabled(on)),
+            |ui, on| ui.add_enabled(on, Select::new("fruit", &mut 0, &["Apple", "Pear"])),
             None,
             true,
         ),
         (
             "label",
-            |ui, on| ui.add(Label::new("Email").enabled(on)),
+            |ui, on| ui.add_enabled(on, Label::new("Email")),
             None,
             true,
         ),
@@ -384,7 +384,7 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
         ),
         (
             "input",
-            |ui, on| ui.add(Input::new(&mut String::new()).enabled(on)),
+            |ui, on| ui.add_enabled(on, Input::new(&mut String::new())),
             None,
             false,
         ),
@@ -392,8 +392,8 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
     for (name, control, beside, shows) in controls {
         for (how, enabled, ui_enabled) in [
             ("enabled", true, true),
-            ("own flag", false, true),
-            ("disabled Ui", true, false),
+            ("add_enabled", false, true),
+            ("disabled area", true, false),
         ] {
             let ctx = egui::Context::default();
             let rect = Cell::new(Rect::NOTHING);

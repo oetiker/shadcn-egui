@@ -569,7 +569,7 @@ fn select_disabled_does_not_open() {
         .build_ui_state(
             |ui, value: &mut usize| {
                 Theme::vega().apply(ui.ctx());
-                ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
+                ui.add_enabled(false, Select::new("fruit", value, &FRUITS));
             },
             0usize,
         );
@@ -609,11 +609,7 @@ fn select_triggers(ui: &mut egui::Ui) {
     );
     ui.add(Select::new("b", &mut b, &FRUITS).width(180.0));
     ui.add(Select::new("c", &mut c, &FRUITS).invalid(true).width(180.0));
-    ui.add(
-        Select::new("d", &mut d, &FRUITS)
-            .enabled(false)
-            .width(180.0),
-    );
+    ui.add_enabled(false, Select::new("d", &mut d, &FRUITS).width(180.0));
     ui.add(Select::new("e", &mut e, &FRUITS).size(SelectSize::Sm));
 }
 

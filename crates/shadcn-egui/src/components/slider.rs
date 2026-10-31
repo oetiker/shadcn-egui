@@ -47,7 +47,6 @@ pub struct Slider<'a> {
     range: std::ops::RangeInclusive<f32>,
     step: f32,
     orientation: Orientation,
-    enabled: bool,
     label: String,
     variant: SliderVariant,
 }
@@ -59,7 +58,6 @@ impl<'a> Slider<'a> {
             range,
             step: 0.0,
             orientation: Orientation::Horizontal,
-            enabled: true,
             label: String::new(),
             variant: SliderVariant::Default,
         }
@@ -77,11 +75,6 @@ impl<'a> Slider<'a> {
     /// Shortcut for `.orientation(Orientation::Vertical)`.
     pub fn vertical(self) -> Self {
         self.orientation(Orientation::Vertical)
-    }
-    /// `false` draws the slider disabled: no hover, no focus, no changes.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
     }
     /// Accessible name (shadcn sets it through a label).
     pub fn label(mut self, text: impl Into<String>) -> Self {
@@ -114,7 +107,7 @@ impl Widget for Slider<'_> {
         let track = [v.part(&t.style, |_, s| &s.slider_track, |r| &r.slider_track)];
         let range = [v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range)];
         let thumb = [v.part(&t.style, |_, s| &s.slider_thumb, |r| &r.slider_thumb)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let vertical = self.orientation == Orientation::Vertical;
         let orient = if vertical {
             State::VERTICAL

@@ -54,7 +54,6 @@ default_variant!(
 pub struct Switch<'a> {
     on: &'a mut bool,
     size: SwitchSize,
-    enabled: bool,
     invalid: Option<bool>,
     variant: SwitchVariant,
 }
@@ -64,7 +63,6 @@ impl<'a> Switch<'a> {
         Self {
             on,
             size: SwitchSize::Default,
-            enabled: true,
             invalid: None,
             variant: SwitchVariant::Default,
         }
@@ -77,11 +75,6 @@ impl<'a> Switch<'a> {
     /// An app variant ([`SwitchVariant::app`]).
     pub fn variant(mut self, v: impl Into<SwitchVariant>) -> Self {
         self.variant = v.into();
-        self
-    }
-    /// `false` draws the switch disabled: no hover, no focus, no toggling.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
         self
     }
     /// shadcn `aria-invalid`: destructive border and ring. Inside an
@@ -99,7 +92,7 @@ impl Widget for Switch<'_> {
         let v = t.resolve_pair(self.variant, self.size);
         let track = [v.part(&t.style, |s| &s.switch, |r| &r.switch)];
         let thumb = [v.part(&t.style, |s| &s.switch_thumb, |r| &r.switch_thumb)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let slot = ControlSlot::of(ui);
         let invalid = slot.invalid(self.invalid);
         let size_bit = v.bits().or(slot.state());

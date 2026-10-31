@@ -114,7 +114,6 @@ pub struct Tabs<'a> {
     labels: Vec<String>,
     variant: TabsVariant,
     orientation: Orientation,
-    enabled: bool,
     width: Option<f32>,
 }
 
@@ -126,7 +125,6 @@ impl<'a> Tabs<'a> {
             labels: labels.iter().map(|l| (*l).to_owned()).collect(),
             variant: TabsVariant::Default,
             orientation: Orientation::Horizontal,
-            enabled: true,
             width: None,
         }
     }
@@ -143,11 +141,6 @@ impl<'a> Tabs<'a> {
     /// `layout::row_top(ui, Tabs::content_gap(ui), |ui| { ui.add(tabs); content })`.
     pub fn orientation(mut self, o: Orientation) -> Self {
         self.orientation = o;
-        self
-    }
-    /// `false` draws every trigger disabled: no hover, no focus, no selecting.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
         self
     }
     /// List width in points, padding included (shadcn `class="w-full"`
@@ -177,7 +170,7 @@ impl Widget for Tabs<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
         let t = Theme::current(ui.ctx());
         let s = &t.style;
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let v = t.resolve(self.variant);
         let variant_bit = v.bits();
         let vertical = self.orientation == Orientation::Vertical;

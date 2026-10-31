@@ -59,22 +59,20 @@ pub(crate) struct TextEntry<'a> {
 
 impl<'a> TextEntry<'a> {
     /// The frame of a field drawn from `layers` in `theme`, in `context`
-    /// (the variant's bits, `aria-invalid`), disabled where `ui` is or
-    /// `enabled` is false, its text placed in its line box as `leading`
-    /// says, its text clipped as `clip` says. `name` keys the part's fade
-    /// transition.
+    /// (the variant's bits, `aria-invalid`), disabled where `ui` is, its
+    /// text placed in its line box as `leading` says, its text clipped as
+    /// `clip` says. `name` keys the part's fade transition.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn resolve(
         ui: &Ui,
         theme: &'a Theme,
         layers: &'a [&'a Recipe],
         context: State,
-        enabled: bool,
         leading: Leading,
         clip: TextClip,
         name: &str,
     ) -> Self {
-        let enabled = enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let geometry = theme.state(ui.ctx(), context);
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(layers, f, geometry);
         let border_w = line_width(get(|r| &r.border_width), ui.ctx().pixels_per_point());

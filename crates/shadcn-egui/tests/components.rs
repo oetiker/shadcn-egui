@@ -81,7 +81,7 @@ fn button_snapshot() {
                 ui.add(Button::new("With icon").icon(CLOSE));
             });
             layout::row(ui, 8.0, |ui| {
-                ui.add(Button::new("Disabled").enabled(false));
+                ui.add_enabled(false, Button::new("Disabled"));
                 ui.add(
                     Button::new("Invalid")
                         .variant(ButtonVariant::Outline)
@@ -287,7 +287,7 @@ fn disabled_input_ignores_typing() {
     let mut h = Harness::new_ui_state(
         |ui, text: &mut String| {
             Theme::vega().apply(ui.ctx());
-            ui.add(Input::new(text).enabled(false));
+            ui.add_enabled(false, Input::new(text));
         },
         String::new(),
     );
@@ -365,7 +365,7 @@ fn input_snapshot() {
         ui.add(Input::new(&mut invalid).invalid(true).id_salt("invalid"));
         ui.add_space(8.0);
         label(ui, "Disabled");
-        ui.add(Input::new(&mut disabled).enabled(false).id_salt("disabled"));
+        ui.add_enabled(false, Input::new(&mut disabled).id_salt("disabled"));
         ui.add_space(8.0);
         label(ui, "Focused");
         let resp = ui.add(Input::new(&mut focused).id_salt("focused"));
@@ -713,7 +713,7 @@ fn tabs_snapshot() {
             Tabs::new(&mut 1, &["Account", "Notifications", "Display"]).variant(TabsVariant::Line),
         );
         ui.add_space(24.0);
-        ui.add(Tabs::new(&mut 0, &["Disabled", "Tabs"]).enabled(false));
+        ui.add_enabled(false, Tabs::new(&mut 0, &["Disabled", "Tabs"]));
         ui.add_space(24.0);
         // Keyboard focus ring on the second trigger of a default list.
         let mut sel = 1;
@@ -730,10 +730,9 @@ fn tabs_matrix(variant: shadcn_egui::components::tabs::TabsVariant) -> impl FnMu
     move |ui| {
         ui.add(Tabs::new(&mut 0, &["Active", "Inactive", "Hovered"]).variant(variant));
         ui.add_space(24.0);
-        ui.add(
-            Tabs::new(&mut 0, &["Disabled", "Off"])
-                .variant(variant)
-                .enabled(false),
+        ui.add_enabled(
+            false,
+            Tabs::new(&mut 0, &["Disabled", "Off"]).variant(variant),
         );
         ui.add_space(24.0);
         let mut sel = 0;
@@ -877,11 +876,8 @@ fn tabs_states(variant: shadcn_egui::components::tabs::TabsVariant, name: &str) 
             let mut h = common::page_harness(size, theme.clone(), mode, |ui| {
                 ui.add_space((i * ROW_H) as f32);
                 let mut sel = r.selected;
-                let resp = ui.add(
-                    Tabs::new(&mut sel, r.labels)
-                        .variant(variant)
-                        .enabled(r.enabled),
-                );
+                let resp =
+                    ui.add_enabled(r.enabled, Tabs::new(&mut sel, r.labels).variant(variant));
                 if let Some(f) = r.focus {
                     ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", f))));
                 }
@@ -964,7 +960,7 @@ fn disabled_label_paints_half_alpha_text() {
     for (name, theme, mode) in common::themes() {
         let (rect, on) = common::measure_output(&theme, mode, |ui| ui.add(Label::new("Email")));
         let (_, off) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Label::new("Email").enabled(false))
+            ui.add_enabled(false, Label::new("Email"))
         });
         let fg = theme.palette_of(mode).foreground;
         assert_eq!(common::text_colour(&on), fg, "{name}");
@@ -1019,7 +1015,7 @@ fn label_separator_snapshot() {
     use shadcn_egui::components::separator::{separator, Separator};
     common::snapshot_all("label_separator", egui::vec2(360.0, 200.0), |ui| {
         ui.add(Label::new("Email"));
-        ui.add(Label::new("Email (disabled)").enabled(false));
+        ui.add_enabled(false, Label::new("Email (disabled)"));
         common::muted_text(ui, "We'll never share your email.");
         separator(ui);
         ui.horizontal(|ui| {
@@ -1461,7 +1457,7 @@ fn disabled_button_ignores_clicks() {
     let clicked = Cell::new(false);
     let mut h = Harness::new_ui(|ui| {
         Theme::vega().apply(ui.ctx());
-        if ui.add(Button::new("Save").enabled(false)).clicked() {
+        if ui.add_enabled(false, Button::new("Save")).clicked() {
             clicked.set(true);
         }
     });
@@ -1486,7 +1482,7 @@ fn disabled_button_ignores_clicks() {
                 },
                 |ui| {
                     Theme::vega().apply(ui.ctx());
-                    rect = ui.add(Button::new("Save").enabled(enabled)).rect;
+                    rect = ui.add_enabled(enabled, Button::new("Save")).rect;
                 },
             );
             (rect, common::rect_shapes(&out))
@@ -1772,7 +1768,7 @@ fn checkbox_harness(enabled: bool, checked: bool) -> egui_kittest::Harness<'stat
             ui.add_space(20.0);
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
-                s.rect = ui.add(Checkbox::new(&mut s.checked).enabled(enabled)).rect;
+                s.rect = ui.add_enabled(enabled, Checkbox::new(&mut s.checked)).rect;
             });
         },
         CheckboxState {
@@ -1886,7 +1882,7 @@ fn checkbox_snapshot() {
         ui.horizontal(|ui| {
             ui.add(Checkbox::new(&mut invalid).invalid(true));
             ui.add_space(12.0);
-            ui.add(Checkbox::new(&mut disabled).enabled(false));
+            ui.add_enabled(false, Checkbox::new(&mut disabled));
         });
         ui.add_space(8.0);
         let mut focused = true;
@@ -1911,7 +1907,7 @@ fn switch_harness(enabled: bool, on: bool) -> egui_kittest::Harness<'static, Swi
             ui.add_space(20.0);
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
-                s.rect = ui.add(Switch::new(&mut s.on).enabled(enabled)).rect;
+                s.rect = ui.add_enabled(enabled, Switch::new(&mut s.on)).rect;
             });
         },
         SwitchState {
@@ -2082,9 +2078,9 @@ fn switch_snapshot() {
             for enabled in [true, false] {
                 ui.horizontal(|ui| {
                     let (mut off, mut on) = (false, true);
-                    ui.add(Switch::new(&mut off).size(size).enabled(enabled));
+                    ui.add_enabled(enabled, Switch::new(&mut off).size(size));
                     ui.add_space(12.0);
-                    ui.add(Switch::new(&mut on).size(size).enabled(enabled));
+                    ui.add_enabled(enabled, Switch::new(&mut on).size(size));
                 });
                 ui.add_space(8.0);
             }
@@ -2119,10 +2115,10 @@ fn run_slider(
                 shadcn_egui::Theme::vega().apply(ui.ctx());
                 let mut value = cell.get();
                 rect.set(
-                    ui.add(
+                    ui.add_enabled(
+                        enabled,
                         Slider::new(&mut value, range.clone())
                             .step(step)
-                            .enabled(enabled)
                             .label("Volume"),
                     )
                     .rect,
@@ -2299,7 +2295,7 @@ fn slider_snapshot() {
             shadcn_egui::layout::vstack(ui, 16.0, |ui| {
                 ui.set_width(200.0);
                 ui.add(Slider::new(&mut a, 0.0..=100.0).label("A"));
-                ui.add(Slider::new(&mut b, 0.0..=100.0).enabled(false).label("B"));
+                ui.add_enabled(false, Slider::new(&mut b, 0.0..=100.0).label("B"));
                 ui.add(Slider::new(&mut d, 0.0..=100.0).label("D"));
             });
             ui.add(Slider::new(&mut c, 0.0..=100.0).vertical().label("C"));
@@ -2337,8 +2333,10 @@ fn text_paint(out: &egui::FullOutput) -> Vec<(egui::Color32, egui::Color32, f32)
     acc
 }
 
-/// shadcn `disabled:opacity-50` applies once: a widget disabled by its own
-/// flag, by a disabled `Ui`, or by both paints exactly the same shapes.
+/// shadcn `disabled:opacity-50` applies once: a widget disabled by
+/// `ui.add_enabled(false, ..)`, by a disabled area
+/// (`ui.add_enabled_ui(false, ..)`), or by both paints exactly the same
+/// shapes.
 #[test]
 fn disabled_widgets_fade_once() {
     use shadcn_egui::components::checkbox::Checkbox;
@@ -2349,38 +2347,38 @@ fn disabled_widgets_fade_once() {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::components::tabs::{Tabs, TabsVariant};
     type Add = fn(&mut egui::Ui, bool) -> egui::Response;
-    let widgets: [(&str, Add); 8] = [
-        ("button", |ui, on| ui.add(Button::new("Save").enabled(on))),
-        ("label", |ui, on| ui.add(Label::new("Email").enabled(on))),
+    let widgets: [(&str, Add); 9] = [
+        ("button", |ui, on| ui.add_enabled(on, Button::new("Save"))),
+        ("label", |ui, on| ui.add_enabled(on, Label::new("Email"))),
         ("input", |ui, on| {
-            ui.add(Input::new(&mut "text".to_owned()).enabled(on))
+            ui.add_enabled(on, Input::new(&mut "text".to_owned()))
         }),
         ("switch", |ui, on| {
-            ui.add(Switch::new(&mut true).enabled(on))
+            ui.add_enabled(on, Switch::new(&mut true))
         }),
         ("checkbox", |ui, on| {
-            ui.add(Checkbox::new(&mut true).enabled(on))
+            ui.add_enabled(on, Checkbox::new(&mut true))
         }),
         ("select", |ui, on| {
-            ui.add(Select::new("s", &mut 0, &["One", "Two"]).enabled(on))
+            ui.add_enabled(on, Select::new("s", &mut 0, &["One", "Two"]))
         }),
         ("slider", |ui, on| {
-            ui.add(Slider::new(&mut 30.0, 0.0..=100.0).enabled(on))
+            ui.add_enabled(on, Slider::new(&mut 30.0, 0.0..=100.0))
         }),
-        // The line variant: the default variant's list track does not fade
-        // with its triggers, but does with a disabled `Ui`.
         ("tabs", |ui, on| {
-            ui.add(
-                Tabs::new(&mut 0, &["A", "B"])
-                    .variant(TabsVariant::Line)
-                    .enabled(on),
+            ui.add_enabled(on, Tabs::new(&mut 0, &["A", "B"]))
+        }),
+        ("line tabs", |ui, on| {
+            ui.add_enabled(
+                on,
+                Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line),
             )
         }),
     ];
     let mode = egui::Theme::Light;
     let theme = Theme::vega();
     for (name, add) in widgets {
-        let (_, own) = common::measure_output(&theme, mode, |ui| add(ui, false));
+        let (_, leaf) = common::measure_output(&theme, mode, |ui| add(ui, false));
         let (_, by_ui) = common::measure_output(&theme, mode, |ui| {
             ui.add_enabled_ui(false, |ui| add(ui, true)).inner
         });
@@ -2388,24 +2386,24 @@ fn disabled_widgets_fade_once() {
             ui.add_enabled_ui(false, |ui| add(ui, false)).inner
         });
         assert_eq!(
-            rect_paint(&own),
+            rect_paint(&leaf),
             rect_paint(&by_ui),
-            "{name}: own flag vs disabled Ui"
+            "{name}: add_enabled vs disabled area"
         );
         assert_eq!(
             rect_paint(&both),
             rect_paint(&by_ui),
-            "{name}: both vs disabled Ui"
+            "{name}: both vs disabled area"
         );
         assert_eq!(
-            text_paint(&own),
+            text_paint(&leaf),
             text_paint(&by_ui),
-            "{name}: text, own flag vs disabled Ui"
+            "{name}: text, add_enabled vs disabled area"
         );
         assert_eq!(
             text_paint(&both),
             text_paint(&by_ui),
-            "{name}: text, both vs disabled Ui"
+            "{name}: text, both vs disabled area"
         );
     }
     // And the fade is a half: a solid button's fill.

@@ -114,3 +114,162 @@ fn a_link_badge_reports_the_link_role() {
         assert_eq!(harness.query_by_role(Role::Link).is_some(), link, "{link}");
     }
 }
+
+/// How [`a_disabled_ui_disables_every_leaf`] draws a leaf.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum How {
+    /// Not disabled: the control that shows the leaf takes the input.
+    Enabled,
+    /// `ui.add_enabled(false, leaf)`.
+    AddEnabled,
+    /// `ui.disable()` before `ui.add(leaf)`.
+    UiDisable,
+}
+
+/// What the leaves of [`a_disabled_ui_disables_every_leaf`] change.
+#[derive(Default)]
+struct Leaves {
+    clicked: bool,
+    checked: bool,
+    on: bool,
+    index: usize,
+    open: bool,
+    value: f32,
+    tab: usize,
+    text: String,
+}
+
+/// One leaf of [`a_disabled_ui_disables_every_leaf`]: its name, the label
+/// or role of the node a click goes to, how it is drawn, and whether the
+/// click (and the typed text after it) changed anything.
+type Leaf = (
+    &'static str,
+    Result<&'static str, Role>,
+    fn(&mut egui::Ui, &mut Leaves, How),
+    Option<fn(&Leaves) -> bool>,
+);
+
+fn put(ui: &mut egui::Ui, how: How, leaf: impl egui::Widget) -> egui::Response {
+    match how {
+        How::AddEnabled => ui.add_enabled(false, leaf),
+        How::Enabled | How::UiDisable => ui.add(leaf),
+    }
+}
+
+/// D-1: a leaf has no `enabled` flag of its own; the `Ui` disables it, by
+/// `add_enabled` or `Ui::disable`, as an egui leaf. Every leaf in a
+/// disabled `Ui` reports the disabled state to assistive technology and
+/// ignores a click and typed text; the same leaf in an enabled `Ui` takes
+/// them.
+#[test]
+fn a_disabled_ui_disables_every_leaf() {
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::slider::Slider;
+    use shadcn_egui::components::tabs::Tabs;
+    let leaves: [Leaf; 8] = [
+        (
+            "button",
+            Ok("Save"),
+            |ui, s, how| s.clicked |= put(ui, how, Button::new("Save")).clicked(),
+            Some(|s| s.clicked),
+        ),
+        (
+            "checkbox",
+            Err(Role::CheckBox),
+            |ui, s, how| {
+                put(ui, how, Checkbox::new(&mut s.checked));
+            },
+            Some(|s| s.checked),
+        ),
+        (
+            "switch",
+            Err(Role::CheckBox),
+            |ui, s, how| {
+                put(ui, how, Switch::new(&mut s.on));
+            },
+            Some(|s| s.on),
+        ),
+        (
+            "select",
+            Err(Role::ComboBox),
+            |ui, s, how| {
+                put(
+                    ui,
+                    how,
+                    Select::new("fruit", &mut s.index, &["Apple", "Pear"]),
+                );
+                s.open |= egui::Popup::is_any_open(ui.ctx());
+            },
+            Some(|s| s.open),
+        ),
+        (
+            "input",
+            Err(Role::TextInput),
+            |ui, s, how| {
+                put(ui, how, Input::new(&mut s.text));
+            },
+            Some(|s| s.text == "x"),
+        ),
+        (
+            "slider",
+            Err(Role::Slider),
+            |ui, s, how| {
+                put(ui, how, Slider::new(&mut s.value, 0.0..=100.0));
+            },
+            Some(|s| s.value != 0.0),
+        ),
+        (
+            "tabs",
+            Ok("B"),
+            |ui, s, how| {
+                put(ui, how, Tabs::new(&mut s.tab, &["A", "B"]));
+            },
+            Some(|s| s.tab == 1),
+        ),
+        // A label takes no input; it only looks and reads disabled.
+        (
+            "label",
+            Ok("Email"),
+            |ui, _, how| {
+                put(ui, how, Label::new("Email"));
+            },
+            None,
+        ),
+    ];
+    for (name, node, add, changed) in leaves {
+        for how in [How::Enabled, How::AddEnabled, How::UiDisable] {
+            let mut harness = Harness::new_ui_state(
+                move |ui, s: &mut Leaves| {
+                    Theme::vega().apply(ui.ctx());
+                    if how == How::UiDisable {
+                        ui.disable();
+                    }
+                    add(ui, s, how);
+                },
+                Leaves::default(),
+            );
+            harness.set_size(egui::vec2(300.0, 200.0));
+            harness.run();
+            let target = || match node {
+                Ok(label) => harness.get_by_label(label),
+                Err(role) => harness.get_by_role(role),
+            };
+            let disabled = how != How::Enabled;
+            assert_eq!(
+                target().accesskit_node().is_disabled(),
+                disabled,
+                "{name}, {how:?}: AccessKit disabled state"
+            );
+            let Some(changed) = changed else { continue };
+            target().click();
+            harness.run();
+            harness.event(egui::Event::Text("x".to_owned()));
+            harness.run();
+            assert_eq!(
+                changed(harness.state()),
+                !disabled,
+                "{name}, {how:?}: a click changed the leaf"
+            );
+        }
+    }
+}

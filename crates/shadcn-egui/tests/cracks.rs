@@ -232,7 +232,7 @@ fn a_track_cut_under_a_faded_thumb_has_no_crack() {
                             ui.add_space(8.0 + dx);
                             ui.set_width(160.0);
                             let mut v = value;
-                            *rect = ui.add(Slider::new(&mut v, 0.0..=100.0).enabled(false)).rect;
+                            *rect = ui.add_enabled(false, Slider::new(&mut v, 0.0..=100.0)).rect;
                         });
                     },
                 );

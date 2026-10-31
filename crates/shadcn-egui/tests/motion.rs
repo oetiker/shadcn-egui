@@ -763,7 +763,7 @@ fn sibling_labels_keep_their_own_transitions() {
             |ui| {
                 theme.apply(ui.ctx());
                 ui.add(Label::new("On"));
-                ui.add(Label::new("Off").enabled(false));
+                ui.add_enabled(false, Label::new("Off"));
             },
         );
         repaints.push(

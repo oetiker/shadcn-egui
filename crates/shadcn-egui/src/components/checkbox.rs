@@ -39,7 +39,6 @@ default_variant!(
 /// accessibility node carries that larger rect.
 pub struct Checkbox<'a> {
     checked: &'a mut bool,
-    enabled: bool,
     invalid: Option<bool>,
     variant: CheckboxVariant,
 }
@@ -48,15 +47,9 @@ impl<'a> Checkbox<'a> {
     pub fn new(checked: &'a mut bool) -> Self {
         Self {
             checked,
-            enabled: true,
             invalid: None,
             variant: CheckboxVariant::Default,
         }
-    }
-    /// `false` draws the box disabled: no hover, no focus, no toggling.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
     }
     /// shadcn `aria-invalid`: destructive border and ring. Inside an
     /// invalid [`Field`](crate::components::field::Field) the checkbox is
@@ -77,7 +70,7 @@ impl Widget for Checkbox<'_> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.checkbox, |r| &r.checkbox)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let slot = ControlSlot::of(ui);
         let invalid = slot.invalid(self.invalid);
         let bits = v.bits().or(slot.state());
