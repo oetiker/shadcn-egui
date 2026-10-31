@@ -270,6 +270,19 @@ impl Widget for Tabs<'_> {
         let (list_rect, mut resp) =
             layout::allocate_overflowing(ui, vec2(list_w, list_h), Sense::hover());
         let ids: Vec<egui::Id> = (0..n).map(|i| resp.id.with(("tab", i))).collect();
+        // bits' list: `role="tablist"` with `aria-orientation`. Its node is
+        // made before the triggers', so that they are inside it (egui gives
+        // a node the nearest ancestor that has one when the node is made).
+        let list_ui = ui.new_child(egui::UiBuilder::new().max_rect(list_rect));
+        ui.ctx()
+            .accesskit_node_builder(list_ui.unique_id(), |node| {
+                node.set_role(egui::accesskit::Role::TabList);
+                node.set_orientation(if vertical {
+                    egui::accesskit::Orientation::Vertical
+                } else {
+                    egui::accesskit::Orientation::Horizontal
+                });
+            });
         let mut x = list_rect.left() + pad_l;
         let mut y = list_rect.top() + pad_t;
         let trigger_rects: Vec<Rect> = widths
@@ -304,7 +317,7 @@ impl Widget for Tabs<'_> {
                 } else {
                     Sense::CLICK
                 };
-                let mut resp = ui.interact(*r, *id, sense);
+                let mut resp = list_ui.interact(*r, *id, sense);
                 pressable(&mut resp, ActivationKeys::EnterAndSpace);
                 resp
             })
@@ -378,23 +391,20 @@ impl Widget for Tabs<'_> {
         ]
         .into_iter()
         .fold(0.0_f32, |m, i| m.max(-i));
-        // bits' list: `role="tablist"` with `aria-orientation`.
-        ui.ctx().accesskit_node_builder(resp.id, |node| {
-            node.set_role(egui::accesskit::Role::TabList);
-            node.set_orientation(if vertical {
-                egui::accesskit::Orientation::Vertical
-            } else {
-                egui::accesskit::Orientation::Horizontal
-            });
-        });
+        // bits' trigger: `role="tab"` with `aria-selected`. egui reports a
+        // selected widget as toggled (`aria-pressed`), so the state moves
+        // from `toggled` to `selected`.
         for (i, r) in resps.iter().enumerate() {
             r.widget_info(|| {
-                egui::WidgetInfo::selected(
+                egui::WidgetInfo::labeled(
                     egui::WidgetType::SelectableLabel,
                     enabled,
-                    i == active,
                     &self.labels[i],
                 )
+            });
+            ui.ctx().accesskit_node_builder(r.id, |node| {
+                node.set_role(egui::accesskit::Role::Tab);
+                node.set_selected(i == active);
             });
         }
         if ui.is_rect_visible(list_rect.expand(reach)) {
@@ -407,9 +417,7 @@ impl Widget for Tabs<'_> {
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.tone(p));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
-                let context = axis
-                    .or(variant_bit)
-                    .with(State::SELECTED, i == active);
+                let context = axis.or(variant_bit).with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, context.with(State::DISABLED, !enabled));
                 let painter = part_painter(ui, r.id, &[&trigger[..], &list[..], &root[..]], st);
                 let tone = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {

@@ -2290,6 +2290,9 @@ fn a_justified_tabs_list_shares_its_width_equally() {
                                 .widgets
                                 .get_layer(layer)
                                 .skip(before)
+                                // The triggers: the list's own nodes
+                                // (its `tablist` node) sense no click.
+                                .filter(|w| w.sense.senses_click())
                                 .map(|w| w.rect)
                                 .filter(|r| *r != list && list.contains_rect(*r)),
                         )

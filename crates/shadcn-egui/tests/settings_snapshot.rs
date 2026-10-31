@@ -105,7 +105,7 @@ fn every_widget_on_every_tab_is_exposed_to_accessibility() {
     with_tab(0, |h| {
         // The tab triggers; a card title may share their text.
         for tab in ["Account", "Notifications", "Components"] {
-            h.get_by_role_and_label(Role::Button, tab);
+            h.get_by_role_and_label(Role::Tab, tab);
         }
         // Each field's label names its control (`labelled_by`).
         h.get_by_role_and_label(Role::TextInput, "Name");

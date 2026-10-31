@@ -43,14 +43,15 @@ fn vertical_list_stacks_its_triggers_in_a_column() {
         for (variant, gap) in [(TabsVariant::Default, 0.0), (TabsVariant::Line, 4.0)] {
             let list = Rc::new(Cell::new(egui::Rect::NOTHING));
             let sink = list.clone();
-            let h = common::page_harness(egui::vec2(400.0, 300.0), theme.clone(), mode, move |ui| {
-                let resp = ui.add(
-                    Tabs::new(&mut 0, &LABELS)
-                        .orientation(Orientation::Vertical)
-                        .variant(variant),
-                );
-                sink.set(resp.rect);
-            });
+            let h =
+                common::page_harness(egui::vec2(400.0, 300.0), theme.clone(), mode, move |ui| {
+                    let resp = ui.add(
+                        Tabs::new(&mut 0, &LABELS)
+                            .orientation(Orientation::Vertical)
+                            .variant(variant),
+                    );
+                    sink.set(resp.rect);
+                });
             let list = list.get();
             let t: Vec<egui::Rect> = LABELS.iter().map(|l| h.get_by_label(l).rect()).collect();
             let widest = t.iter().map(|r| r.width()).fold(0.0, f32::max);
@@ -61,7 +62,10 @@ fn vertical_list_stacks_its_triggers_in_a_column() {
             for w in t.windows(2) {
                 assert_eq!(w[1].top() - w[0].bottom(), gap, "{name} {variant:?}: {t:?}");
             }
-            assert!(list.contains_rect(t[0]) && list.contains_rect(t[2]), "{name}");
+            assert!(
+                list.contains_rect(t[0]) && list.contains_rect(t[2]),
+                "{name}"
+            );
             assert!(list.height() > list.width() / 2.0, "{name}: {list:?}");
             // The list is as wide as its widest trigger (`w-fit`).
             let pad = t[0].left() - list.left();
@@ -139,6 +143,30 @@ fn list_reports_its_orientation() {
     }
 }
 
+/// bits' trigger: `role="tab"` with `aria-selected`, inside the
+/// `tablist`, in both orientations; not a toggle (`aria-pressed`).
+#[test]
+fn triggers_are_tabs_with_a_selected_state() {
+    for o in [Orientation::Horizontal, Orientation::Vertical] {
+        let (mut h, active) = harness(o, TabsVariant::Default);
+        active.set(1);
+        h.run();
+        let tabs: Vec<_> = h.get_all_by_role(Role::Tab).collect();
+        assert_eq!(tabs.len(), LABELS.len(), "{o:?}");
+        for (i, label) in LABELS.iter().enumerate() {
+            let tab = h.get_by_role_and_label(Role::Tab, label);
+            let node = tab.accesskit_node();
+            assert_eq!(node.is_selected(), Some(i == 1), "{o:?} {label}");
+            assert_eq!(node.toggled(), None, "{o:?} {label}");
+            assert_eq!(
+                node.parent().map(|p| p.role()),
+                Some(Role::TabList),
+                "{o:?} {label}"
+            );
+        }
+    }
+}
+
 /// `group-data-vertical/tabs:after:inset-y-0 after:-right-1 after:w-0.5`:
 /// the active trigger's bar runs its full padding-box height, 2 px wide,
 /// its right edge 4 px past the padding box's right edge.
@@ -165,7 +193,11 @@ fn vertical_line_bar_sits_on_the_right() {
     // vega's trigger border is 1 px.
     assert_eq!(bar.top(), trigger.top() + 1.0, "{bar:?} {trigger:?}");
     assert_eq!(bar.bottom(), trigger.bottom() - 1.0, "{bar:?} {trigger:?}");
-    assert_eq!(bar.right(), trigger.right() - 1.0 + 4.0, "{bar:?} {trigger:?}");
+    assert_eq!(
+        bar.right(),
+        trigger.right() - 1.0 + 4.0,
+        "{bar:?} {trigger:?}"
+    );
     assert!(bar.right() <= list.right() + 0.01, "{bar:?} {list:?}");
 }
 
@@ -205,12 +237,19 @@ fn tabs_vertical_snapshot() {
             ui.add(Tabs::new(&mut 0, &LABELS).orientation(Orientation::Vertical));
             let t = Theme::current(ui.ctx());
             egui::Frame::new()
-                .stroke(egui::Stroke::new(1.0, t.palette().border))
+                .stroke(egui::Stroke::new(1.0_f32, t.palette().border))
                 .corner_radius(8)
                 .inner_margin(16)
                 .show(ui, |ui| {
-                    ui.set_width(220.0);
-                    ui.label("Manage your account preferences and profile information.");
+                    // The rest of the row, the text wrapped inside it
+                    // (a row's label does not wrap on its own).
+                    ui.set_width(ui.available_width());
+                    ui.add(
+                        egui::Label::new(
+                            "Manage your account preferences and profile information.",
+                        )
+                        .wrap(),
+                    );
                 });
         });
         ui.add_space(24.0);
