@@ -999,3 +999,122 @@ fn free_popover_content_is_one_block() {
     );
     assert_eq!(boxes[1].top(), boxes[0].bottom(), "no gap inside the run");
 }
+
+// ---------------------------------------------------------------------------
+// Upstream's demos that hold a Field
+
+const GAP_4: shadcn_egui::style::AppVariant<shadcn_egui::components::field::FieldGroupVariant> =
+    shadcn_egui::components::field::FieldGroupVariant::app("gap-4");
+
+/// The snapshot themes with the demos' classes as app variants: the
+/// `gap-4` field group of popover-form.
+fn field_demo_themes() -> Vec<common::Themed> {
+    use shadcn_egui::components::field::FieldGroupVariant;
+    common::snapshot_themes()
+        .into_iter()
+        .map(|(n, t, m)| {
+            let t = t.variant(GAP_4, FieldGroupVariant::Default, |r, _| {
+                r.field_group.gap.set(16.0)
+            });
+            (n, t, m)
+        })
+        .collect()
+}
+
+/// select-invalid: an invalid `max-w-48` field with an error; the field
+/// makes its select invalid (`aria-invalid` on the trigger).
+#[test]
+fn select_invalid_snapshot() {
+    use shadcn_egui::components::field::Field;
+    common::snapshot_all("select_invalid", vec2(240.0, 130.0), |ui| {
+        ui.allocate_ui(vec2(192.0, ui.available_height()), |ui| {
+            ui.set_width(192.0);
+            let mut i = usize::MAX;
+            Field::new()
+                .invalid(true)
+                .label("Fruit")
+                .error("Please select a fruit.")
+                .show(ui, |ui| {
+                    ui.add(
+                        Select::new("fruit", &mut i, &["Apple", "Banana", "Blueberry"])
+                            .placeholder("Select a fruit"),
+                    )
+                });
+        });
+    });
+}
+
+/// popover-form: a `w-64` popover at the trigger's start with a header
+/// and a `gap-4` group of two horizontal fields. The labels' `w-1/2` is a
+/// share of the row, which no recipe length holds: in the browser's flex
+/// row a `w-1/2` label and a `w-full` input shrink by their bases to a
+/// third and two thirds of the row less the gap, so the input takes that
+/// width and the label the rest.
+#[test]
+fn popover_form_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::style::{pick, State};
+    common::snapshot_with_themes(
+        "popover_form",
+        vec2(320.0, 260.0),
+        field_demo_themes(),
+        |ui| {
+            let trigger = ui.add(Button::new("Open Popover").variant(ButtonVariant::Outline));
+            Popover::new(&trigger).width(256.0).show(|ui| {
+                popover_header(ui, "Dimensions", "Set the dimensions for the layer.");
+                let t = Theme::current(ui.ctx());
+                let row = [&*t.style.field, &*t.style.field_orientation_horizontal];
+                let gap = pick(&row, |r| &r.gap, State::NONE).unwrap_or(0.0);
+                let input = (ui.available_width() - gap) * 2.0 / 3.0;
+                FieldGroup::new().variant(GAP_4).show(ui, |ui| {
+                    for (name, value) in [("Width", "100%"), ("Height", "25px")] {
+                        Field::new().horizontal().label(name).show(ui, |ui| {
+                            ui.add(
+                                Input::new(&mut String::from(value))
+                                    .max_width(input)
+                                    .id_salt(name),
+                            )
+                        });
+                    }
+                });
+            });
+        },
+        |h| {
+            h.get_by_label("Open Popover").click();
+            h.run();
+            // Move the pointer off the trigger, as the click leaves it there.
+            h.event(egui::Event::PointerGone);
+            h.run();
+        },
+    );
+}
+
+/// dialog-demo: a `sm:max-w-sm` dialog over its trigger, a group of two
+/// fields, each with a plain Label, and the footer's actions.
+#[test]
+fn dialog_demo_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::label::label;
+    common::snapshot_all("dialog_demo", vec2(800.0, 500.0), |ui| {
+        ui.add(Button::new("Open Dialog").variant(ButtonVariant::Outline));
+        Dialog::new("dialog-demo", "Edit profile")
+            .description("Make changes to your profile here. Click save when you're done.")
+            .width(384.0)
+            .show(ui.ctx(), &mut true, |ui| {
+                FieldGroup::new().show(ui, |ui| {
+                    for (name, value) in [("Name", "Pedro Duarte"), ("Username", "@peduarte")] {
+                        Field::new().show(ui, |ui| {
+                            label(ui, name);
+                            ui.add(Input::new(&mut String::from(value)).id_salt(name))
+                        });
+                    }
+                });
+                dialog::footer(ui, |ui| {
+                    ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                    ui.add(Button::new("Save changes"));
+                });
+            });
+    });
+}
