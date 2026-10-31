@@ -8,8 +8,10 @@
 //! this module paints shadcn's over the content.
 //!
 //! Behaviour follows bits-ui: an axis shows its bar while the pointer is
-//! over the area and that axis overflows, and hides it 600 ms after the
-//! pointer leaves, with no fade. The bars take no room from the content.
+//! over the area or drags a thumb and that axis overflows, and hides it
+//! 600 ms after the pointer leaves or the drag ends, with no fade. The
+//! bars take no room from the content. Content wider than a vertical
+//! area (or taller than a horizontal one) is cut at the area's edge.
 //! Pressing the thumb drags it from where it was taken; pressing the
 //! track centres the thumb on the pointer, then drags. The wheel scrolls
 //! over the bars too; a touch screen scrolls by dragging the content, a
@@ -141,6 +143,31 @@ struct Scan {
 }
 
 impl Scan {
+    /// Runs `add` in a child of egui's content `Ui` and gives egui the
+    /// child's size cut to the room on the axis the area does not scroll:
+    /// egui grows the area to content wider than that axis, where bits'
+    /// viewport keeps its size and cuts the content (`overflow-x:
+    /// hidden`). The clip, the bars and the ring then share one rect.
+    fn content<R>(&mut self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+        let room = ui.max_rect();
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(ui.available_rect_before_wrap())
+                .layout(*ui.layout()),
+        );
+        let start = self.start(&mut child);
+        let inner = add(&mut child);
+        self.end(&child, start);
+        let mut used = child.min_rect();
+        for d in 0..2 {
+            if !self.direction[d] {
+                used.max[d] = used.max[d].min(room.max[d]);
+            }
+        }
+        ui.advance_cursor_after_rect(used);
+        inner
+    }
+
     /// Gives the content the caller's look back, and counts the widgets
     /// the `Ui`'s layer holds before the content.
     fn start(&self, ui: &mut Ui) -> usize {
@@ -281,12 +308,7 @@ impl ScrollArea {
         add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R> {
         self.run(ui, |area, ui, scan| {
-            area.show(ui, |ui| {
-                let start = scan.start(ui);
-                let inner = add_contents(ui);
-                scan.end(ui, start);
-                inner
-            })
+            area.show(ui, |ui| scan.content(ui, add_contents))
         })
     }
 
@@ -302,10 +324,7 @@ impl ScrollArea {
     ) -> ScrollAreaOutput<R> {
         self.run(ui, |area, ui, scan| {
             area.show_rows(ui, row_height_sans_spacing, total_rows, |ui, rows| {
-                let start = scan.start(ui);
-                let inner = add_contents(ui, rows);
-                scan.end(ui, start);
-                inner
+                scan.content(ui, |ui| add_contents(ui, rows))
             })
         })
     }
@@ -450,14 +469,16 @@ impl ScrollArea {
         let now = ctx.input(|i| i.time);
         let bar_id = |d: usize| id.with(("shadcn_egui::scroll_area::bar", d));
         let dragging = ctx.is_being_dragged(bar_id(0)) || ctx.is_being_dragged(bar_id(1));
-        if ui.rect_contains_pointer(inner) {
+        // A thumb drag counts as hovering, so a drag released outside
+        // hides the bar 600 ms after its end.
+        if ui.rect_contains_pointer(inner) || dragging {
             mem.hovered_at = Some(now);
         }
         let since = mem.hovered_at.map_or(f64::INFINITY, |at| now - at);
         if since > 0.0 && since < HIDE_DELAY {
             ctx.request_repaint_after_secs((HIDE_DELAY - since) as f32);
         }
-        let hover = since < HIDE_DELAY || dragging;
+        let hover = since < HIDE_DELAY;
         let shown = [overflow[0] && hover, overflow[1] && hover];
 
         let states = [

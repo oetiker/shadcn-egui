@@ -288,6 +288,33 @@ fn content_gets_the_full_width() {
     assert_eq!(width, AREA.width(), "the bar takes no room");
 }
 
+/// Content wider than a vertical area is cut at the area's width, as
+/// bits' `overflow-x: hidden` viewport cuts it: the bar stays at the
+/// area's edge and the area takes no more room than it has.
+#[test]
+fn wider_content_is_cut_at_the_area_edge() {
+    let mut sim = Sim::vega();
+    let wide = |ui: &mut Ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(AREA), |ui| {
+            ScrollArea::vertical()
+                .max_height(AREA.height())
+                .auto_shrink(false)
+                .show(ui, block(vec2(300.0, 1000.0)));
+        })
+        .response
+        .rect
+    };
+    let (_, out) = sim.pass(moved(INSIDE), tall);
+    let narrow_thumbs = thumbs(&sim, &out);
+    let (used, out) = sim.pass(moved(INSIDE), wide);
+    assert_eq!(used, AREA, "the room the area took");
+    assert_eq!(
+        thumbs(&sim, &out),
+        narrow_thumbs,
+        "the bar at the area's edge"
+    );
+}
+
 #[test]
 fn horizontal_draws_only_the_x_bar() {
     let mut sim = Sim::vega();
@@ -389,6 +416,23 @@ fn dragging_the_thumb_scrolls() {
     for (when, got) in [("dragged", last), ("released", released), ("after", after)] {
         assert!((got.y - want).abs() < 0.01, "{when}: {} want {want}", got.y);
     }
+}
+
+/// A thumb drag that ends outside the area keeps the bar until 600 ms
+/// after the release, as bits counts the drag as hovering.
+#[test]
+fn a_drag_released_outside_hides_600ms_later() {
+    let mut sim = Sim::vega();
+    let grab = pos2(295.0, TRACK_TOP + 10.0);
+    drag(&mut sim, grab, pos2(500.0, TRACK_TOP + 60.0), tall);
+    // `drag` ends with a pass after the release.
+    let released = sim.time - 2.0 / 60.0;
+    sim.time = released + 0.5;
+    let (_, out) = sim.pass(vec![], tall);
+    assert_eq!(thumbs(&sim, &out).len(), 1, "still shown at 0.5 s");
+    sim.time = released + 0.7;
+    let (_, out) = sim.pass(vec![], tall);
+    assert!(thumbs(&sim, &out).is_empty(), "hidden at 0.7 s");
 }
 
 #[test]
