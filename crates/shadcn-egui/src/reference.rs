@@ -11,6 +11,7 @@ use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::card::{card_description, card_title};
 use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
+use crate::components::field::{field_label, Field, FieldGroup, FieldLabel};
 use crate::components::icon::IconView;
 use crate::components::input::Input;
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
@@ -656,6 +657,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 icons_group(ui);
                 kbd_gallery(ui);
                 avatar_gallery(ui);
+                field_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
             });
@@ -786,6 +788,47 @@ fn kbd_gallery(ui: &mut egui::Ui) {
 /// shadcn-svelte's avatar demos without images (the gallery installs no
 /// image loader, so each avatar shows its fallback): sizes, a badge with an
 /// icon, and a group with a count.
+fn field_gallery(ui: &mut egui::Ui) {
+    group(
+        ui,
+        "Field",
+        "A label, a control, a description or errors; a choice card.",
+        |ui| {
+            // The switch's state lives in egui's memory: the gallery
+            // keeps no app state for it.
+            let key = egui::Id::new("shadcn_egui::reference::field_share");
+            let mut share = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(true);
+            let mut terms = ui
+                .data(|d| d.get_temp::<bool>(key.with("terms")))
+                .unwrap_or(false);
+            FieldGroup::new().show(ui, |ui| {
+                let mut email: &str = "max@";
+                Field::new()
+                    .label("Email")
+                    .error("Enter a valid email address.")
+                    .show(ui, |ui| ui.add(Input::new(&mut email)));
+                Field::new().horizontal().show(ui, |ui| {
+                    ui.add(crate::components::checkbox::Checkbox::new(&mut terms));
+                    field_label(ui, "Accept the terms and conditions");
+                });
+                FieldLabel::choice_card().show(ui, |ui| {
+                    Field::new()
+                        .horizontal()
+                        .title("Share across devices")
+                        .description("Focus is shared across devices.")
+                        .show(ui, |ui| {
+                            ui.add(crate::components::switch::Switch::new(&mut share))
+                        });
+                });
+            });
+            ui.data_mut(|d| {
+                d.insert_temp(key, share);
+                d.insert_temp(key.with("terms"), terms);
+            });
+        },
+    );
+}
+
 fn avatar_gallery(ui: &mut egui::Ui) {
     let icons = crate::icons::lucide::PLUS;
     group(
