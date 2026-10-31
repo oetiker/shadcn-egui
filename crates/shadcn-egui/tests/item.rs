@@ -1136,29 +1136,25 @@ fn item_media_snapshot() {
     });
 }
 
-/// `item-group-demo` with separators between its items, then items with
+/// shadcn-svelte's `item-group-demo` (outline items, no separators;
+/// the older React demo has default items with separators), then items with
 /// a header row (`item-header-demo`, two widgets spread) and a footer.
 #[test]
 fn item_group_snapshot() {
     use shadcn_egui::components::avatar::Avatar;
-    use shadcn_egui::components::item::{item_footer, item_header, item_separator};
+    use shadcn_egui::components::item::{item_footer, item_header};
     use shadcn_egui::icons::lucide;
     common::snapshot_all("item_group", vec2(420.0, 560.0), |ui| {
         ui.ctx().all_styles_mut(|s| s.animation_time = 0.0);
         shadcn_egui::layout::vstack(ui, 24.0, |ui| {
             ItemGroup::new().show(ui, |ui| {
-                for (i, (name, mail)) in [
+                for (name, mail) in [
                     ("shadcn", "shadcn@vercel.com"),
                     ("maxleiter", "maxleiter@vercel.com"),
                     ("evilrabbit", "evilrabbit@vercel.com"),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if i > 0 {
-                        item_separator(ui);
-                    }
+                ] {
                     Item::new()
+                        .variant(ItemVariant::Outline)
                         .media(move |ui| {
                             ui.add(Avatar::new(&name[..1]));
                         })
