@@ -243,51 +243,93 @@ pub struct Style {
     pub pagination_next_text: Box<Recipe>,
     /// `cn-pagination-ellipsis`
     pub pagination_ellipsis: Box<Recipe>,
+    /// `cn-item`
+    pub item: Box<Recipe>,
+    /// `cn-item-variant-default`
+    pub item_variant_default: Box<Recipe>,
+    /// `cn-item-variant-outline`
+    pub item_variant_outline: Box<Recipe>,
+    /// `cn-item-variant-muted`
+    pub item_variant_muted: Box<Recipe>,
+    /// `cn-item-size-default`
+    pub item_size_default: Box<Recipe>,
+    /// `cn-item-size-sm`
+    pub item_size_sm: Box<Recipe>,
+    /// `cn-item-size-xs`
+    pub item_size_xs: Box<Recipe>,
+    /// `cn-item-media`
+    pub item_media: Box<Recipe>,
+    /// `cn-item-media-variant-default`
+    pub item_media_variant_default: Box<Recipe>,
+    /// `cn-item-media-variant-icon`
+    pub item_media_variant_icon: Box<Recipe>,
+    /// `cn-item-media-variant-image`
+    pub item_media_variant_image: Box<Recipe>,
+    /// `cn-item-content`
+    pub item_content: Box<Recipe>,
+    /// `cn-item-title`
+    pub item_title: Box<Recipe>,
+    /// `cn-item-description`
+    pub item_description: Box<Recipe>,
+    /// `cn-item-actions`
+    pub item_actions: Box<Recipe>,
+    /// `cn-item-header`
+    pub item_header: Box<Recipe>,
+    /// `cn-item-footer`
+    pub item_footer: Box<Recipe>,
+    /// `cn-item-group`
+    pub item_group: Box<Recipe>,
+    /// `cn-item-separator`
+    pub item_separator: Box<Recipe>,
 }
 
 /// The rank a generated rule under one state flag has: the rank of the
 /// flag's own variant (`hover`, `aria-expanded`, …). `Prop::on` composes
 /// a state's rank from these. A flag missing here has no variant on the
 /// part itself.
-pub(super) const STATE_RANKS: [(State, u128); 40] = [
-    (State::DARK, (1 << 68) | (1 << 122)),
-    (State::HOVER, (1 << 27) | (1 << 122)),
-    (State::FOCUS, (1 << 28) | (1 << 122)),
-    (State::FOCUS_VISIBLE, (1 << 29) | (1 << 122)),
-    (State::ACTIVE, (1 << 30) | (1 << 122)),
-    (State::DISABLED, (1 << 31) | (1 << 122)),
-    (State::INVALID, (1 << 45) | (1 << 122)),
-    (State::CHECKED, 1 << 71),
-    (State::UNCHECKED, 1 << 72),
-    (State::EXPANDED, (1 << 44) | (1 << 122)),
-    (State::SELECTED, 1 << 74),
-    (State::PLACEHOLDER, (1 << 48) | (1 << 122)),
-    (State::ICON_START, (1 << 35) | (1 << 122)),
-    (State::ICON_END, (1 << 34) | (1 << 122)),
-    (State::IN_BUTTON_GROUP, 1 << 32),
-    (State::SIZE_SM, (1 << 60) | (1 << 122)),
-    (State::SIZE_DEFAULT, (1 << 58) | (1 << 122)),
-    (State::VERTICAL, 1 << 76),
-    (State::HORIZONTAL, 1 << 75),
-    (State::VARIANT_LINE, (1 << 64) | (1 << 122)),
-    (State::VARIANT_DEFAULT, (1 << 19) | (1 << 122)),
-    (State::HAS_FOOTER, (1 << 38) | (1 << 122)),
-    (State::SIZE_LG, (1 << 59) | (1 << 122)),
-    (State::SM, 1 << 66),
-    (State::MD, 1 << 67),
-    (State::SIDE_TOP, (1 << 57) | (1 << 122)),
-    (State::SIDE_RIGHT, (1 << 56) | (1 << 122)),
-    (State::SIDE_BOTTOM, (1 << 54) | (1 << 122)),
-    (State::SIDE_LEFT, (1 << 55) | (1 << 122)),
-    (State::HAS_ICON, (1 << 42) | (1 << 121)),
-    (State::HAS_ACTION, (1 << 36) | (1 << 122)),
-    (State::HAS_MEDIA, (1 << 37) | (1 << 122)),
-    (State::HAS_KBD, (1 << 39) | (1 << 122)),
-    (State::HAS_BUTTON_GROUP, (1 << 40) | (1 << 122)),
-    (State::HAS_OUTLINE, (1 << 41) | (1 << 122)),
-    (State::IN_TOOLTIP_CONTENT, 1 << 33),
+pub(super) const STATE_RANKS: [(State, u128); 44] = [
+    (State::DARK, (1 << 74) | (1 << 122)),
+    (State::HOVER, (1 << 30) | (1 << 122)),
+    (State::FOCUS, (1 << 31) | (1 << 122)),
+    (State::FOCUS_VISIBLE, (1 << 32) | (1 << 122)),
+    (State::ACTIVE, (1 << 33) | (1 << 122)),
+    (State::DISABLED, (1 << 34) | (1 << 122)),
+    (State::INVALID, (1 << 50) | (1 << 122)),
+    (State::CHECKED, 1 << 77),
+    (State::UNCHECKED, 1 << 78),
+    (State::EXPANDED, (1 << 49) | (1 << 122)),
+    (State::SELECTED, 1 << 80),
+    (State::PLACEHOLDER, (1 << 53) | (1 << 122)),
+    (State::ICON_START, (1 << 38) | (1 << 122)),
+    (State::ICON_END, (1 << 37) | (1 << 122)),
+    (State::IN_BUTTON_GROUP, 1 << 35),
+    (State::SIZE_SM, (1 << 65) | (1 << 122)),
+    (State::SIZE_DEFAULT, (1 << 63) | (1 << 122)),
+    (State::VERTICAL, 1 << 82),
+    (State::HORIZONTAL, 1 << 81),
+    (State::VARIANT_LINE, (1 << 70) | (1 << 122)),
+    (State::VARIANT_DEFAULT, (1 << 22) | (1 << 122)),
+    (State::HAS_FOOTER, (1 << 43) | (1 << 122)),
+    (State::SIZE_LG, (1 << 64) | (1 << 122)),
+    (State::SM, 1 << 72),
+    (State::MD, 1 << 73),
+    (State::SIDE_TOP, (1 << 62) | (1 << 122)),
+    (State::SIDE_RIGHT, (1 << 61) | (1 << 122)),
+    (State::SIDE_BOTTOM, (1 << 59) | (1 << 122)),
+    (State::SIDE_LEFT, (1 << 60) | (1 << 122)),
+    (State::HAS_ICON, (1 << 47) | (1 << 121)),
+    (State::HAS_ACTION, (1 << 41) | (1 << 122)),
+    (State::HAS_MEDIA, (1 << 42) | (1 << 122)),
+    (State::HAS_KBD, (1 << 44) | (1 << 122)),
+    (State::HAS_BUTTON_GROUP, (1 << 45) | (1 << 122)),
+    (State::HAS_OUTLINE, (1 << 46) | (1 << 122)),
+    (State::IN_TOOLTIP_CONTENT, 1 << 36),
     (State::HAS_SIZE_LG, (1 << 6) | (1 << 122)),
-    (State::HAS_SIZE_SM, (1 << 7) | (1 << 122)),
-    (State::CLOSED, 1 << 70),
-    (State::DELAYED_OPEN, (1 << 62) | (1 << 122)),
+    (State::HAS_SIZE_SM, (1 << 39) | (1 << 122)),
+    (State::CLOSED, 1 << 76),
+    (State::DELAYED_OPEN, (1 << 68) | (1 << 122)),
+    (State::LINK, (1 << 84) | (1 << 121)),
+    (State::SIZE_XS, (1 << 66) | (1 << 122)),
+    (State::HAS_SIZE_XS, (1 << 40) | (1 << 122)),
+    (State::HAS_DESCRIPTION, (1 << 9) | (1 << 122)),
 ];

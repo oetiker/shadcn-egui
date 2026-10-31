@@ -39,6 +39,7 @@ pub enum Field {
     UnderlineOffset,
     TextWrap,
     TextAlign,
+    LineClamp,
     Radius,
     RadiusTop,
     RadiusBottom,
@@ -119,6 +120,7 @@ impl Field {
             UnderlineOffset => "underline_offset",
             TextWrap => "text_wrap",
             TextAlign => "text_align",
+            LineClamp => "line_clamp",
             Radius => "radius",
             RadiusTop => "radius_top",
             RadiusBottom => "radius_bottom",
@@ -200,6 +202,8 @@ pub enum Value {
     TextAlign(&'static str),
     /// `Blend::Darken`, `Blend::Lighten`.
     Blend(&'static str),
+    /// A count of lines (`line-clamp-N`).
+    Lines(u32),
     /// The `Transition` const names it ORs together.
     Transition(&'static [&'static str]),
     /// `Easing::Linear`, `Easing::In`, `Easing::Out`, `Easing::InOut`.
@@ -226,6 +230,7 @@ impl Value {
             Value::TextWrap(w) => format!("TextWrap::{w}"),
             Value::TextAlign(a) => format!("TextAlign::{a}"),
             Value::Blend(b) => format!("Blend::{b}"),
+            Value::Lines(n) => n.to_string(),
             Value::Easing(e) => format!("Easing::{e}"),
             Value::Transition(names) => match names.split_first() {
                 None => "Transition::NONE".into(),
@@ -290,6 +295,10 @@ pub const FLAGS: &[(&str, u128)] = &[
     ("DELAYED_OPEN", 1 << 49),
     ("IN_GROUP_HORIZONTAL", 1 << 50),
     ("IN_GROUP_VERTICAL", 1 << 51),
+    ("LINK", 1 << 52),
+    ("SIZE_XS", 1 << 53),
+    ("HAS_SIZE_XS", 1 << 54),
+    ("HAS_DESCRIPTION", 1 << 55),
 ];
 
 pub fn flag(name: &str) -> u128 {

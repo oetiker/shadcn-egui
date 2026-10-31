@@ -108,7 +108,8 @@ impl State {
     pub const VARIANT_DESTRUCTIVE: State = State(1 << 45);
     /// `group-has-data-[size=lg]/…:` (the group holds a large child)
     pub const HAS_SIZE_LG: State = State(1 << 46);
-    /// `group-has-data-[size=sm]/…:` (the group holds a small child)
+    /// `has-data-[size=sm]:`, `group-has-data-[size=sm]/…:` (the group
+    /// holds a small child)
     pub const HAS_SIZE_SM: State = State(1 << 47);
     /// `data-closed:` (bits' closed panel; `data-open:` is [`State::EXPANDED`])
     pub const CLOSED: State = State(1 << 48);
@@ -122,6 +123,15 @@ impl State {
     /// (`cn-button-group-orientation-vertical`'s `[&>*]` rules), apart from
     /// the child's own orientation ([`State::VERTICAL`])
     pub const IN_GROUP_VERTICAL: State = State(1 << 51);
+    /// `[a]:` (the part itself is a link: `.link(true)`)
+    pub const LINK: State = State(1 << 52);
+    /// `data-[size=xs]:`, `group-data-[size=xs]/…:`
+    pub const SIZE_XS: State = State(1 << 53);
+    /// `has-data-[size=xs]:` (the group holds an extra-small child)
+    pub const HAS_SIZE_XS: State = State(1 << 54);
+    /// `group-has-data-[slot=item-description]/…:` (the item shows a
+    /// description)
+    pub const HAS_DESCRIPTION: State = State(1 << 55);
 
     pub const fn or(self, other: State) -> State {
         State(self.0 | other.0)
@@ -712,6 +722,9 @@ pub struct Recipe {
     pub text_wrap: Prop<TextWrap>,
     /// `text-left`, `text-center`, `text-right`: where the part's lines sit.
     pub text_align: Prop<TextAlign>,
+    /// `line-clamp-N`: the part shows at most N lines, the last one cut
+    /// with an ellipsis.
+    pub line_clamp: Prop<u32>,
     pub radius: Prop<Radius>,
     pub radius_top: Prop<Radius>,
     pub radius_bottom: Prop<Radius>,
@@ -972,6 +985,7 @@ macro_rules! recipe_props {
             underline_offset,
             text_wrap,
             text_align,
+            line_clamp,
             radius,
             radius_top,
             radius_bottom,
