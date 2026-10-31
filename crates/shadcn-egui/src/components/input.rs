@@ -9,7 +9,7 @@ use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
-use crate::{layout, Theme};
+use crate::Theme;
 use egui::text::LayoutJob;
 use egui::{
     AtomKind, Atoms, IntoAtoms, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget, WidgetText,
@@ -63,10 +63,10 @@ impl<'a> Input<'a> {
         self.password = yes;
         self
     }
-    /// Override the default maximum width (`Metrics::field_max_width`, the
-    /// field's width in a vertical
-    /// [`Field`](crate::components::field::Field)). Pass `f32::INFINITY`
-    /// for full-width.
+    /// Override the default maximum width (`Metrics::field_max_width`; in
+    /// a vertical [`Field`](crate::components::field::Field) the field's
+    /// width, first in a horizontal one the room the parts after it
+    /// leave). Pass `f32::INFINITY` for full-width.
     pub fn max_width(mut self, w: f32) -> Self {
         self.max_width = Some(w);
         self
@@ -104,7 +104,7 @@ impl<'a> Widget for Input<'a> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.input, |r| &r.input)];
-        let slot = ControlSlot::of(ui);
+        let mut slot = ControlSlot::of(ui);
         let context = v.bits().with(State::INVALID, slot.invalid(self.invalid));
         // The field's text sits in its line box as in a browser's
         // text-entry field: the leading's half above rounds up.
@@ -145,15 +145,14 @@ impl<'a> Widget for Input<'a> {
                 .galley()
                 .clone()
         };
-        // In a vertical field it takes the field's width (`*:w-full`).
-        let fill = if slot.fills() {
-            f32::INFINITY
-        } else {
-            t.metrics.field_max_width
-        };
-        let max_width = self.max_width.unwrap_or(fill);
-        slot.want(ui, max_width);
-        let width = layout::capped_width(ui, max_width, frame.content_min);
+        // The field's width in a vertical field (`*:w-full`), the room
+        // left in a horizontal one.
+        let width = slot.text_width(
+            ui,
+            self.max_width,
+            t.metrics.field_max_width,
+            frame.content_min,
+        );
         let mut edit = TextEdit::singleline(self.text);
         if !self.hint.is_empty() {
             // The placeholder is laid out in the field's look on one line,

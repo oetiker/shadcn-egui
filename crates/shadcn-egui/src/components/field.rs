@@ -529,6 +529,12 @@ pub(crate) struct ControlSlot {
     label: Option<Id>,
     /// The label (or the card) was pressed for this control.
     pub(crate) pressed: bool,
+    /// The control sits in a row of its own inside the field, where the
+    /// field's `*:w-full` does not reach.
+    in_row: bool,
+    /// The control is the part that grows in a horizontal field
+    /// ([`ControlSlot::text_width`]).
+    grows: bool,
 }
 
 impl ControlSlot {
@@ -554,6 +560,8 @@ impl ControlSlot {
             parent: parent(ui),
             label: None,
             pressed: false,
+            in_row: ui.layout().is_horizontal(),
+            grows: false,
         };
         if let Some(f) = field {
             let learned = learned(ui, f.id);
@@ -595,9 +603,34 @@ impl ControlSlot {
     }
 
     /// The control fills the field's width (`*:w-full` of a vertical
-    /// field).
+    /// field): as the field's own child, not in a row inside it.
     pub(crate) fn fills(&self) -> bool {
-        self.field.is_some_and(|f| f.fills)
+        self.field.is_some_and(|f| f.fills) && !self.in_row
+    }
+
+    /// The width of a text field (`w-full min-w-0`): `requested` where the
+    /// caller set one; else the field's width in a vertical field; else,
+    /// as the first part to grow in a horizontal field, the room the parts
+    /// after it left in the previous pass (the browser shrinks it for
+    /// them, as input-inline's button); else `default`. Capped to the room
+    /// and raised to `content_min`.
+    pub(crate) fn text_width(
+        &mut self,
+        ui: &Ui,
+        requested: Option<f32>,
+        default: f32,
+        content_min: f32,
+    ) -> f32 {
+        if requested.is_none() && self.field.is_some() {
+            if let Some(w) = self.parent.and_then(|p| grower_width(ui, &p, default)) {
+                self.grows = true;
+                return w.max(content_min);
+            }
+        }
+        let fill = if self.fills() { f32::INFINITY } else { default };
+        let width = requested.unwrap_or(fill);
+        self.want(ui, width);
+        layout::capped_width(ui, width, content_min)
     }
 
     /// The bits a control's recipe reads from the field and the card
@@ -615,6 +648,9 @@ impl ControlSlot {
     /// choice card, and, for a `peer` (checkbox, switch), its disabled
     /// state to the label after it.
     pub(crate) fn done(&self, ui: &Ui, resp: &Response, st: State, enabled: bool, peer: bool) {
+        if let Some(p) = self.parent.filter(|_| self.grows) {
+            grown(ui, &p, resp.rect.right());
+        }
         if let Some(label) = self.label {
             let _ = resp.clone().labelled_by(label);
         }
@@ -1206,7 +1242,9 @@ impl Widget for FieldLabel {
             let room = ui.available_width();
             let width = match grow {
                 Some((_, w)) => w,
-                None if field.is_some_and(|f| f.fills) => room,
+                // `*:w-full` reaches the field's own children, not a
+                // label in a row inside it.
+                None if field.is_some_and(|f| f.fills) && !ui.layout().is_horizontal() => room,
                 None => natural.min(room),
             };
             let wrap = if room.is_finite() { width } else { natural };

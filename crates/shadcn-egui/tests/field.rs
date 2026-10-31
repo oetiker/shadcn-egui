@@ -250,6 +250,59 @@ fn horizontal_label_grows_and_the_control_ends_the_row() {
     assert!((check.center().y - label.center().y).abs() <= 0.5);
 }
 
+/// `*:w-full` reaches the field's own children only: a label in a row
+/// inside a vertical field (input-badge's label beside its badge) keeps
+/// its own width, and the row's end stays in the field.
+#[test]
+fn a_label_in_a_row_in_a_vertical_field_keeps_its_own_width() {
+    use shadcn_egui::components::badge::{badge, BadgeVariant};
+    let ((field, label, end), _) = settle(&vega(), 400.0, |ui| {
+        let mut r = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
+        r.0 = Field::new()
+            .show(ui, |ui| {
+                shadcn_egui::layout::space_between(
+                    ui,
+                    |ui| r.1 = field_label(ui, "Webhook URL").rect,
+                    |ui| r.2 = badge(ui, "Beta", BadgeVariant::Secondary).rect,
+                );
+            })
+            .response
+            .rect;
+        r
+    });
+    assert!(label.width() < 200.0, "the label's own width: {label:?}");
+    assert_eq!(end.right(), field.right(), "the badge ends the row");
+}
+
+/// A text field first in a horizontal field (`w-full min-w-0`) shrinks
+/// for what follows it (input-inline), as a label does: the button ends
+/// the row, the field's gap after the text field.
+#[test]
+fn a_text_field_first_in_a_horizontal_field_leaves_room_for_what_follows() {
+    for textarea in [false, true] {
+        let ((field, button), _) = settle(&vega(), 400.0, |ui| {
+            let mut text = String::new();
+            let mut r = (Rect::NOTHING, Rect::NOTHING);
+            Field::new().horizontal().show(ui, |ui| {
+                r.0 = if textarea {
+                    ui.add(Textarea::new(&mut text)).rect
+                } else {
+                    ui.add(Input::new(&mut text)).rect
+                };
+                r.1 = ui.add(Button::new("Search")).rect;
+            });
+            r
+        });
+        assert_eq!(field.left(), 0.0, "textarea {textarea}");
+        assert_eq!(
+            button.right(),
+            400.0,
+            "textarea {textarea}: the button ends the row"
+        );
+        assert_eq!(button.left() - field.right(), 12.0, "textarea {textarea}");
+    }
+}
+
 /// With a FieldContent the row is `items-start` and the checkbox moves
 /// down by `mt-px`.
 #[test]
