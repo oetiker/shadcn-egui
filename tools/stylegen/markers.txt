@@ -27,3 +27,4 @@ textarea.rs textarea: cn-textarea
 hover_card.rs hover-card: cn-hover-card-content
 alert_dialog.rs alert-dialog: cn-alert-dialog-overlay cn-alert-dialog-content cn-alert-dialog-header cn-alert-dialog-media cn-alert-dialog-title cn-alert-dialog-description cn-alert-dialog-footer cn-alert-dialog-cancel cn-alert-dialog-action
 pagination.rs pagination: cn-pagination cn-pagination-content cn-pagination-link cn-pagination-previous cn-pagination-previous-text cn-pagination-next cn-pagination-next-text cn-pagination-ellipsis
+field.rs field: cn-field cn-field-orientation-vertical cn-field-orientation-horizontal cn-field-orientation-responsive cn-field-content cn-field-label cn-field-title cn-field-description cn-field-separator cn-field-separator-content cn-field-error cn-field-group cn-field-set cn-field-legend

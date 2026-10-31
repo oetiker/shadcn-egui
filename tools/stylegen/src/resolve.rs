@@ -514,6 +514,25 @@ pub const CONTEXTS: &[Context] = &[
         flags: &["IN_BUTTON_GROUP", "IN_GROUP_VERTICAL"],
         children: BUTTON_GROUP_CHILDREN,
     },
+    // A field group nested in a field group (`*:data-[slot=field-group]:`).
+    Context {
+        parent: "cn-field-group",
+        flags: &["IN_FIELD_GROUP"],
+        children: &[],
+    },
+    // The field a choice card wraps (`*:data-[slot=field]:`).
+    Context {
+        parent: "cn-field-label",
+        flags: &["IN_FIELD_LABEL"],
+        children: &[],
+    },
+    // The checkbox of a horizontal field: its rule's own
+    // `has-[>[data-slot=field-content]]` says when it applies.
+    Context {
+        parent: "cn-field-orientation-horizontal",
+        flags: &[],
+        children: &[],
+    },
 ];
 
 /// Upstream slots of components the crate does not ship, with the reason.

@@ -29,9 +29,10 @@ impl State {
     pub const FOCUS_VISIBLE: State = State(1 << 3);
     /// `active:` (pressed)
     pub const ACTIVE: State = State(1 << 4);
-    /// `disabled:`, `data-disabled:`, `group-data-[disabled=true]:`, `peer-disabled:`
+    /// `disabled:`, `data-disabled:`, `group-data-[disabled=true]:`,
+    /// `group-data-[disabled=true]/field:`, `peer-disabled:`
     pub const DISABLED: State = State(1 << 5);
-    /// `aria-invalid:`, `data-invalid:`
+    /// `aria-invalid:`, `data-invalid:`, `data-[invalid=true]:`
     pub const INVALID: State = State(1 << 6);
     /// `data-checked:`, `aria-checked:`, `data-[state=checked]:`
     pub const CHECKED: State = State(1 << 7);
@@ -69,7 +70,8 @@ impl State {
     pub const SIZE_LG: State = State(1 << 26);
     /// A group's first child (`:first-child`; button-group corners).
     pub const FIRST: State = State(1 << 27);
-    /// A group's last child (`:last-child`, the last `[data-slot]` child).
+    /// A group's last child (`:last-child`, the last `[data-slot]` child);
+    /// `last:`
     pub const LAST: State = State(1 << 28);
     /// A group child that is not the first (`:not(:first-child)`).
     pub const NOT_FIRST: State = State(1 << 29);
@@ -122,6 +124,39 @@ impl State {
     /// (`cn-button-group-orientation-vertical`'s `[&>*]` rules), apart from
     /// the child's own orientation ([`State::VERTICAL`])
     pub const IN_GROUP_VERTICAL: State = State(1 << 51);
+    /// `data-[variant=label]:` (a FieldLegend drawn as a label)
+    pub const VARIANT_LABEL: State = State(1 << 52);
+    /// `data-[variant=legend]:` (a FieldLegend drawn as a legend)
+    pub const VARIANT_LEGEND: State = State(1 << 53);
+    /// `[[data-variant=legend]+&]:` (the part comes right after a legend
+    /// FieldLegend)
+    pub const AFTER_LEGEND: State = State(1 << 54);
+    /// `nth-last-2:` (the part is its parent's last but one child)
+    pub const NTH_LAST_2: State = State(1 << 55);
+    /// A field group inside a field group (the group's
+    /// `*:data-[slot=field-group]:`)
+    pub const IN_FIELD_GROUP: State = State(1 << 56);
+    /// `group-has-data-horizontal/…:` (the field holds a part whose
+    /// `data-orientation` is horizontal: a slider, separator, tabs)
+    pub const HAS_HORIZONTAL: State = State(1 << 57);
+    /// `has-data-checked:` (a checked control inside the part)
+    pub const HAS_CHECKED: State = State(1 << 58);
+    /// `has-[>[data-slot=field]]:` (a FieldLabel that wraps a Field: a
+    /// choice card)
+    pub const HAS_FIELD: State = State(1 << 59);
+    /// `has-[>[data-slot=field-content]]:` (a field with a FieldContent
+    /// child), also on that field's checkbox (`[&>[role=checkbox]]`)
+    pub const HAS_FIELD_CONTENT: State = State(1 << 60);
+    /// `has-[:focus-visible]:` (a control inside the part shows keyboard
+    /// focus); on a control, `group-has-[:focus-visible]/field-label:`
+    /// (the FieldLabel around it does)
+    pub const HAS_FOCUS_VISIBLE: State = State(1 << 61);
+    /// `has-[:disabled,[data-disabled]]` (a disabled control inside the
+    /// part; used negated: `not-has-[..]:`)
+    pub const HAS_DISABLED: State = State(1 << 62);
+    /// A field inside a FieldLabel, the choice card's field (the label's
+    /// `*:data-[slot=field]:`)
+    pub const IN_FIELD_LABEL: State = State(1 << 63);
 
     pub const fn or(self, other: State) -> State {
         State(self.0 | other.0)

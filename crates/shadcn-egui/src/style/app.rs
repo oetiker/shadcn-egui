@@ -817,13 +817,13 @@ mod tests {
         let r = bg.rules.last().expect("pushed");
         assert_eq!(
             (r.when, r.rank),
-            (When::all(State::FOCUS_VISIBLE), (1 << 29) | (1 << 122))
+            (When::all(State::FOCUS_VISIBLE), (1 << 34) | (1 << 122))
         );
         // `dark:sm:active:`: the variant bits combine, the class steps add.
         bg.on(State::DARK | State::SM | State::ACTIVE, P(Role::Ring));
         assert_eq!(
             bg.rules.last().map(|r| r.rank),
-            Some((1 << 30) | (1 << 66) | (1 << 68) | (2 << 122))
+            Some((1 << 35) | (1 << 79) | (1 << 81) | (2 << 122))
         );
     }
 

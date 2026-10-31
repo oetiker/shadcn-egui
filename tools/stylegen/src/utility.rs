@@ -50,6 +50,7 @@ const CENTRE: &str = "dialog centring: egui centres the dialog window";
 const IGNORE_EXACT: &[(&str, &str)] = &[
     ("flex-col", STRUCTURE),
     ("flex-1", STRUCTURE),
+    ("flex-auto", STRUCTURE),
     ("shrink-0", STRUCTURE),
     ("relative", STRUCTURE),
     ("absolute", STRUCTURE),
@@ -99,6 +100,7 @@ const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("auto-rows-", STRUCTURE),
     ("@container/", STRUCTURE),
     ("group/", BROWSER),
+    ("peer/", BROWSER),
     ("cursor-", BROWSER),
     ("overflow-", BROWSER),
     ("origin-", ANCHOR),

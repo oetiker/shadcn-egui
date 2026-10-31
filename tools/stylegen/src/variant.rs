@@ -177,11 +177,13 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
     ("data-disabled", Is("DISABLED"), WHERE),
     ("data-[disabled=true]", Is("DISABLED"), CLASS),
     ("group-data-[disabled=true]", Is("DISABLED"), CLASS),
+    ("group-data-[disabled=true]/field", Is("DISABLED"), CLASS),
     ("group-has-disabled/field", Is("DISABLED"), CLASS),
     ("peer-disabled", Is("DISABLED"), CLASS),
     ("peer-data-disabled", Is("DISABLED"), WHERE),
     ("aria-invalid", Is("INVALID"), CLASS),
     ("data-invalid", Is("INVALID"), CLASS),
+    ("data-[invalid=true]", Is("INVALID"), CLASS),
     ("data-checked", Is("CHECKED"), WHERE),
     ("data-[state=checked]", Is("CHECKED"), CLASS),
     ("aria-checked", Is("CHECKED"), CLASS),
@@ -228,6 +230,41 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
         CLASS,
     ),
     ("has-data-[slot=card-footer]", Is("HAS_FOOTER"), CLASS),
+    // Field (#27).
+    ("data-[variant=label]", Is("VARIANT_LABEL"), CLASS),
+    ("data-[variant=legend]", Is("VARIANT_LEGEND"), CLASS),
+    // `[data-variant=legend] + &`: one attribute.
+    ("[[data-variant=legend]+&]", Is("AFTER_LEGEND"), CLASS),
+    ("last", Is("LAST"), CLASS),
+    ("nth-last-2", Is("NTH_LAST_2"), CLASS),
+    // `:has(*:where([data-orientation=horizontal]))`: no specificity.
+    (
+        "group-has-data-horizontal/field",
+        Is("HAS_HORIZONTAL"),
+        WHERE,
+    ),
+    // The choice card (a FieldLabel wrapping a Field). `has-data-checked`
+    // is `:has(*:where(..))`, no specificity.
+    ("has-data-checked", Is("HAS_CHECKED"), WHERE),
+    ("has-[>[data-slot=field]]", Is("HAS_FIELD"), CLASS),
+    (
+        "has-[>[data-slot=field-content]]",
+        Is("HAS_FIELD_CONTENT"),
+        CLASS,
+    ),
+    ("has-[:focus-visible]", Is("HAS_FOCUS_VISIBLE"), CLASS),
+    // A control in a choice card: the card's label has the focus.
+    (
+        "group-has-[:focus-visible]/field-label",
+        Is("HAS_FOCUS_VISIBLE"),
+        CLASS,
+    ),
+    // `:not(:has(:disabled, [data-disabled]))`: one pseudo-class.
+    (
+        "not-has-[:disabled,[data-disabled]]",
+        IsNot("HAS_DISABLED"),
+        CLASS,
+    ),
     // `data-open` is a real open state (D-91); bits sets `data-closed` on
     // the same parts when closed. Neither is set on tooltip content.
     ("data-open", Is("EXPANDED"), WHERE),
@@ -314,6 +351,8 @@ const LEADING_IMAGE: &str = "card with a leading image is not offered";
 /// D-100 (a): rules for links and paragraphs inside caller content.
 const CALLER_CONTENT: &str =
     "styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)";
+/// D-114: the demo attribute becomes an app variant of the demo.
+const CHECKBOX_GROUP: &str = "a demo's `data-slot=\"checkbox-group\"` field group, and the field set around it; the crate gives that demo app variants (D-114)";
 pub const INPUT_GROUP: &str = "inside or around an InputGroup; the crate does not ship InputGroup";
 
 /// Every variant stylegen ignores, by exact text, with the reason.
@@ -327,7 +366,6 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("has-[>img:first-child]", LEADING_IMAGE),
     ("[img:first-child]", LEADING_IMAGE),
     ("[img:last-child]", "card with a trailing image is not offered"),
-    ("group-has-[:focus-visible]/field-label", "inside a focused FieldLabel; the crate does not ship Field"),
     ("[span]", "select item text wrapper; the crate draws the item text itself"),
     ("data-[slot=input-group]", INPUT_GROUP),
     ("in-data-[slot=input-group]", INPUT_GROUP),
@@ -344,6 +382,20 @@ pub const IGNORED: &[(&str, &str)] = &[
     ("[&_svg]", crate::utility::SVG_CHILD),
     ("has-data-[slot=card-action]", "card header grid template; the crate lays out the header itself"),
     ("has-data-[slot=card-description]", "card header grid template; the crate lays out the header itself"),
+    ("[&>a]", CALLER_CONTENT),
+    ("[&>a:hover]", CALLER_CONTENT),
+    ("data-[slot=checkbox-group]", CHECKBOX_GROUP),
+    ("has-[>[data-slot=checkbox-group]]", CHECKBOX_GROUP),
+    ("has-[>[data-slot=radio-group]]", "a field set around a RadioGroup; the crate does not ship RadioGroup"),
+    (
+        "group-data-[variant=outline]/field-group",
+        "an outline field group; upstream's FieldGroup has no variant prop that sets it",
+    ),
+    ("[&>.sr-only]", "a screen-reader-only child; egui draws no visually hidden content"),
+    (
+        "@md/field-group",
+        "a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)",
+    ),
 ];
 
 /// Registration order of the variant roots this tool meets: the line of the
@@ -374,6 +426,7 @@ const ROOTS: &[(&str, u32)] = &[
     ("has", 810),
     ("aria", 845),
     ("data", 873),
+    ("nth-last", 892),
     ("supports", 919),
     // One group (variants.ts:1046-1075), ordered by breakpoint width.
     ("sm", BREAKPOINT_GROUP),
@@ -406,7 +459,7 @@ const BREAKPOINT_GROUP: u32 = 1046;
 const BREAKPOINTS: &[(&str, u32)] = &[("sm", 40), ("md", 48), ("lg", 64), ("xl", 80), ("2xl", 96)];
 
 const COMPOUND: &[&str] = &["not", "group", "peer", "in", "has"];
-const FUNCTIONAL: &[&str] = &["aria", "data", "supports"];
+const FUNCTIONAL: &[&str] = &["aria", "data", "nth-last", "supports"];
 
 /// Tailwind's parsed form of a variant (`candidate.ts` `parseVariant`), as
 /// far as ordering needs it.
@@ -460,7 +513,13 @@ fn parse(v: &str) -> Option<Tw<'_>> {
     if is_static {
         return modifier.is_none().then_some(Tw::Static(body));
     }
-    let (root, value) = body.split_once('-')?;
+    // A root with a dash (`nth-last`) before the split at the first dash:
+    // Tailwind tries the longest root first (`candidate.ts` `findRoots`).
+    let (root, value) = FUNCTIONAL
+        .iter()
+        .filter(|r| r.contains('-'))
+        .find_map(|r| Some((*r, body.strip_prefix(r)?.strip_prefix('-')?)))
+        .or_else(|| body.split_once('-'))?;
     if COMPOUND.contains(&root) {
         return Some(Tw::Compound {
             root,
@@ -732,6 +791,14 @@ pub const CHILD_TARGETS: &[(&str, Option<&str>, &[&str], Spec)] = &[
         Some("select-trigger"),
         &["FOCUS_VISIBLE"],
         TWO_CLASSES,
+    ),
+    // `& > [role=checkbox], [role=radio]`: the checkbox; the crate has no
+    // radio part.
+    (
+        "[&>[role=checkbox],[role=radio]]",
+        Some("checkbox"),
+        &[],
+        CLASS,
     ),
 ];
 

@@ -290,6 +290,18 @@ pub const FLAGS: &[(&str, u128)] = &[
     ("DELAYED_OPEN", 1 << 49),
     ("IN_GROUP_HORIZONTAL", 1 << 50),
     ("IN_GROUP_VERTICAL", 1 << 51),
+    ("VARIANT_LABEL", 1 << 52),
+    ("VARIANT_LEGEND", 1 << 53),
+    ("AFTER_LEGEND", 1 << 54),
+    ("NTH_LAST_2", 1 << 55),
+    ("IN_FIELD_GROUP", 1 << 56),
+    ("HAS_HORIZONTAL", 1 << 57),
+    ("HAS_CHECKED", 1 << 58),
+    ("HAS_FIELD", 1 << 59),
+    ("HAS_FIELD_CONTENT", 1 << 60),
+    ("HAS_FOCUS_VISIBLE", 1 << 61),
+    ("HAS_DISABLED", 1 << 62),
+    ("IN_FIELD_LABEL", 1 << 63),
 ];
 
 pub fn flag(name: &str) -> u128 {

@@ -4,7 +4,7 @@
 
 Upstream: shadcn-svelte `493481fa`, `style-sera.css`.
 
-Unsupported classes in shipped markers: **30** (not exportable)
+Unsupported classes in shipped markers: **31** (not exportable)
 
 ## `cn-button`
 
@@ -92,11 +92,9 @@ Unsupported classes in shipped markers: **30** (not exportable)
 
 ## `cn-checkbox`
 
+- from `cn-field-orientation-horizontal`: `has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px` under State::HAS_FIELD_CONTENT
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
-- ignored `group-has-[:focus-visible]/field-label:ring-0`: inside a focused FieldLabel; the crate does not ship Field
-- ignored `group-has-[:focus-visible]/field-label:not-data-checked:border-input`: inside a focused FieldLabel; the crate does not ship Field
-- ignored `group-has-[:focus-visible]/field-label:data-checked:border-primary`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `peer`: browser behaviour the component handles itself
 - ignored `relative`: structure: egui layout is done by the component
 - ignored `shrink-0`: structure: egui layout is done by the component
@@ -368,9 +366,6 @@ Unsupported classes in shipped markers: **30** (not exportable)
 ## `cn-switch`
 
 - ignored `shrink-0`: structure: egui layout is done by the component
-- ignored `group-has-[:focus-visible]/field-label:ring-0`: inside a focused FieldLabel; the crate does not ship Field
-- ignored `group-has-[:focus-visible]/field-label:data-unchecked:border-input/50`: inside a focused FieldLabel; the crate does not ship Field
-- ignored `group-has-[:focus-visible]/field-label:data-checked:border-primary`: inside a focused FieldLabel; the crate does not ship Field
 - ignored `peer`: browser behaviour the component handles itself
 - ignored `group/switch`: browser behaviour the component handles itself
 - ignored `relative`: structure: egui layout is done by the component
@@ -711,5 +706,98 @@ Unsupported classes in shipped markers: **30** (not exportable)
 - ignored `justify-center`: structure: egui layout is done by the component
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `justify-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-field`
+
+- from `cn-field-label`: `*:data-[slot=field]:p-4` under State::IN_FIELD_LABEL
+- ignored `group/field`: browser behaviour the component handles itself
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-field-orientation-vertical`
+
+- ignored `flex-col`: structure: egui layout is done by the component
+- ignored `*:w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `[&>.sr-only]:w-auto`: a screen-reader-only child; egui draws no visually hidden content
+
+## `cn-field-orientation-horizontal`
+
+- moved `has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px` to `cn-checkbox` under State::HAS_FIELD_CONTENT
+- ignored `flex-row`: structure: egui layout is done by the component
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `has-[>[data-slot=field-content]]:items-start`: structure: egui layout is done by the component
+- ignored `*:data-[slot=field-label]:flex-auto`: structure: egui layout is done by the component
+
+## `cn-field-orientation-responsive`
+
+- ignored `flex-col`: structure: egui layout is done by the component
+- ignored `*:w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `@md/field-group:flex-row`: a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)
+- ignored `@md/field-group:items-center`: a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)
+- ignored `@md/field-group:*:w-auto`: a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)
+- ignored `@md/field-group:has-[>[data-slot=field-content]]:items-start`: a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)
+- ignored `@md/field-group:*:data-[slot=field-label]:flex-auto`: a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)
+- ignored `[&>.sr-only]:w-auto`: a screen-reader-only child; egui draws no visually hidden content
+- ignored `@md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px`: a responsive field at least `@md` (28rem) wide in its FieldGroup: the component reads the group's width and draws the horizontal orientation, whose classes these repeat (D-69)
+
+## `cn-field-content`
+
+- ignored `group/field-content`: browser behaviour the component handles itself
+- ignored `flex-1`: structure: egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-field-label`
+
+- moved `*:data-[slot=field]:p-4` to `cn-field` under State::IN_FIELD_LABEL
+- ignored `group/field-label`: browser behaviour the component handles itself
+- ignored `peer/field-label`: browser behaviour the component handles itself
+- ignored `w-fit`: the component's default sizing
+- ignored `has-[>[data-slot=field]]:w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `has-[>[data-slot=field]]:flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-field-title`
+
+- **unsupported** `in-data-[slot=field-label]:font-semibold`: variant `in-data-[slot=field-label]`
+- ignored `w-fit`: the component's default sizing
+- ignored `items-center`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-field-description`
+
+- ignored `[&>a]:underline`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&>a]:underline-offset-4`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+- ignored `[&>a:hover]:text-primary`: styles links or paragraphs in caller content, which egui lays out and draws itself (D-100)
+
+## `cn-field-separator`
+
+- ignored `group-data-[variant=outline]/field-group:-mb-2`: an outline field group; upstream's FieldGroup has no variant prop that sets it
+- ignored `relative`: structure: egui layout is done by the component
+
+## `cn-field-separator-content`
+
+- ignored `relative`: structure: egui layout is done by the component
+- ignored `mx-auto`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `w-fit`: the component's default sizing
+- ignored `block`: structure: egui layout is done by the component
+
+## `cn-field-group`
+
+- from `cn-field-group`: `*:data-[slot=field-group]:gap-4` under State::IN_FIELD_GROUP
+- moved `*:data-[slot=field-group]:gap-4` to `cn-field-group` under State::IN_FIELD_GROUP
+- ignored `data-[slot=checkbox-group]:gap-3`: a demo's `data-slot="checkbox-group"` field group, and the field set around it; the crate gives that demo app variants (D-114)
+- ignored `group/field-group`: browser behaviour the component handles itself
+- ignored `@container/field-group`: structure: egui layout is done by the component
+- ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
+- ignored `flex-col`: structure: egui layout is done by the component
+- ignored `flex`: structure: egui layout is done by the component
+
+## `cn-field-set`
+
+- ignored `has-[>[data-slot=checkbox-group]]:gap-3`: a demo's `data-slot="checkbox-group"` field group, and the field set around it; the crate gives that demo app variants (D-114)
+- ignored `has-[>[data-slot=radio-group]]:gap-3`: a field set around a RadioGroup; the crate does not ship RadioGroup
+- ignored `flex-col`: structure: egui layout is done by the component
 - ignored `flex`: structure: egui layout is done by the component
 
