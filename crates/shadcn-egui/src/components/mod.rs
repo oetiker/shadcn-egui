@@ -19,6 +19,7 @@ pub mod motion;
 pub mod popover;
 pub mod progress;
 pub(crate) mod registry;
+pub mod scroll_area;
 pub mod select;
 pub mod separator;
 pub mod shared;

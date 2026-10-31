@@ -281,6 +281,14 @@ pub struct Style {
     pub item_group: Box<Recipe>,
     /// `cn-item-separator`
     pub item_separator: Box<Recipe>,
+    /// `cn-scroll-area`
+    pub scroll_area: Box<Recipe>,
+    /// `cn-scroll-area-viewport`
+    pub scroll_area_viewport: Box<Recipe>,
+    /// `cn-scroll-area-scrollbar`
+    pub scroll_area_scrollbar: Box<Recipe>,
+    /// `cn-scroll-area-thumb`
+    pub scroll_area_thumb: Box<Recipe>,
     /// `data-slot="spinner"` (no style marker)
     pub spinner: Box<Recipe>,
 }

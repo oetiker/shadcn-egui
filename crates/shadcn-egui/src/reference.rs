@@ -18,6 +18,7 @@ use crate::components::kbd::{kbd, Kbd, KbdGroup};
 use crate::components::label::{description, label};
 use crate::components::popover::{popover_header, Popover};
 use crate::components::progress::Progress;
+use crate::components::scroll_area::ScrollArea;
 use crate::components::select::Select;
 use crate::components::separator::{separator, separator_vertical};
 use crate::components::slider::Slider;
@@ -365,13 +366,11 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(t.palette().background))
         .show_inside(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, |ui| {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin::same(32))
-                        .show(ui, |ui| gallery_components(ui, state));
-                });
+            ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin::same(32))
+                    .show(ui, |ui| gallery_components(ui, state));
+            });
         });
 }
 
@@ -660,7 +659,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 avatar_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
-                item_group(ui);
+                scroll_area_group(ui);
             });
             layout::vstack(right, 24.0, |ui| {
                 inputs_group(ui, state);
@@ -669,6 +668,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 alerts_group(ui);
                 tabs_group(ui, state);
                 spinner_group(ui);
+                item_group(ui);
             });
         });
     });
@@ -784,6 +784,80 @@ fn kbd_gallery(ui: &mut egui::Ui) {
             });
             ui.add(Kbd::icon_only(icons.check, "Enter"));
         });
+    });
+}
+
+/// The caller's `rounded-md border` around a scroll area demo.
+fn scroll_root(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    // The theme writes the hairline in the border colour here.
+    let border = ui.visuals().widgets.noninteractive.bg_stroke;
+    egui::Frame::new()
+        .stroke(border)
+        .corner_radius(Theme::current(ui.ctx()).radius_md())
+        .show(ui, |ui| {
+            ui.set_width(width);
+            add(ui);
+        });
+}
+
+/// shadcn-svelte's `scroll-area-demo` (50 tags in an `h-72 w-48` root)
+/// and `scroll-area-horizontal` (three works in a `w-96` root); `muted`
+/// boxes of the photos' 300 × 400 stand in for the images, as the
+/// gallery installs no image loader.
+fn scroll_area_group(ui: &mut egui::Ui) {
+    group(ui, "Scroll Area", "Vertical and horizontal.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            // The roots' 1 px border is outside the stated size.
+            scroll_root(ui, 190.0, |ui| {
+                ScrollArea::vertical()
+                    .id_salt("gallery-tags")
+                    .max_height(286.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        egui::Frame::new().inner_margin(16).show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            label(ui, "Tags");
+                            ui.add_space(16.0);
+                            for i in (1..=50).rev() {
+                                ui.label(format!("v1.2.0-beta.{i}"));
+                                ui.add_space(8.0);
+                                separator(ui);
+                                ui.add_space(8.0);
+                            }
+                        });
+                    });
+            });
+            scroll_root(ui, 382.0, |ui| {
+                ScrollArea::horizontal()
+                    .id_salt("gallery-works")
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        egui::Frame::new().inner_margin(16).show(ui, |ui| {
+                            ui.horizontal_top(|ui| {
+                                ui.spacing_mut().item_spacing.x = 16.0;
+                                for artist in ["Ornella Binni", "Tom Byrom", "Vladimir Malyavko"] {
+                                    ui.vertical(|ui| work(ui, artist));
+                                }
+                            });
+                        });
+                    });
+            });
+        });
+    });
+}
+
+/// One work of `scroll-area-horizontal`: the photo, then its credit.
+fn work(ui: &mut egui::Ui, artist: &str) {
+    let t = Theme::current(ui.ctx());
+    let (_, r) = ui.allocate_space(egui::vec2(300.0, 400.0));
+    ui.painter()
+        .rect_filled(r, t.radius_md(), t.palette().muted);
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let muted = t.palette().muted_foreground;
+        ui.label(egui::RichText::new("Photo by ").size(12.0).color(muted));
+        ui.label(egui::RichText::new(artist).size(12.0).strong());
     });
 }
 

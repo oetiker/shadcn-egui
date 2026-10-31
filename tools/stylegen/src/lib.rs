@@ -5,6 +5,7 @@ pub mod css;
 pub mod drift;
 pub mod emit;
 pub mod extract;
+pub mod generate;
 pub mod markers;
 pub mod model;
 pub mod pin;

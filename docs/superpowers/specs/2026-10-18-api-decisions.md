@@ -2241,8 +2241,8 @@ builder's terminal call takes the `&Context`:
   the crate hides egui's bars and paints its own from the output state,
   with the exact thumb colour and all four bits types, and CP-14-30 is (i)
   move select's list in the same PR or (ii) later. (a)'s cost, not named
-  before: the crate then also implements thumb dragging, track clicks, the
-  hover widening and the offset writes through `scroll_area::State`, a
+  before: the crate then also implements thumb dragging, track clicks and
+  the offset writes through `scroll_area::State`, a
   second scroll bar implementation that follows egui at every upgrade.
 - **Recommendation:** (b) (it replaces the earlier pick (a)): the theme
   sets a full `ScrollStyle` (floating, track opacities 0, dormant handle opacity 0, handle in the
@@ -2267,7 +2267,7 @@ Decision: (a) — differs from the recommendation (maintainer, P9: colours
 match upstream exactly; a `ScrollStyle` thumb reaches only the nearest
 shared colour). A crate `ScrollArea` hides egui's bars and paints its own
 (transparent track, exact `bg-border` thumb), with the cost named above
-accepted: thumb drag, track click, hover widening and offset writes through
+accepted: thumb drag, track click and offset writes through
 `scroll_area::State`, followed at every egui upgrade. Under (a), as the
 recommendation describes: hover-only visibility first, bits' other types
 later; CP-14-30 (i), select's list moves to the crate type in the
@@ -3987,12 +3987,26 @@ with list and content parts (D-47).
 
 Decision: deferred to the family PR (recommendation is the default
 proposal). Under D-62 (a) F12 ports a real widget (the crate `ScrollArea`
-with its own bars, thumb drag, track click, hover widening) and moves
+with its own bars, thumb drag, track click) and moves
 select's list onto it; CP-14-29's skip still holds, and the PR checks that
 egui's keyboard scrolling keeps working under the hidden bars.
 
 Consequence (rules, 2026-10-23, fix 5): Resizable's `autoSaveId` is an opt-in
 setter behind the crate's `persistence` feature (D-35).
+
+Consequence (maintainer, 2026-10-31, #28): CP-14-29 is added, not skipped.
+egui 0.34 has no keyboard scrolling, so the skip left a scroll area that the
+keyboard cannot scroll; the check above on egui's keyboard scrolling is void.
+As in Chrome's keyboard-focusable scrollers, an overflowing viewport that
+holds nothing focusable is a Tab stop with the `cn-scroll-area-viewport`
+focus ring, and the arrow keys, Page Up/Down, Space, Home and End scroll it.
+
+Consequence (maintainer, 2026-10-31, #28): the crate `ScrollArea` clips its
+content to a rectangle, not to the root's radius (`rounded-[inherit]`),
+because egui clips only to rectangles. It is a known difference, named in
+the module docs and in build-ui together with Card, whose `overflow-hidden`
+clips to a rectangle the same way. Upstream's bars do not widen on hover, so
+D-62 and this entry no longer list hover widening.
 
 ### D-121 · F13 paging (breadcrumb, pagination)
 

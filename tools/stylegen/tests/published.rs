@@ -70,9 +70,9 @@ fn part_strings_match_the_published_components() {
             }
         }
     }
-    // 133 parts in markers.txt, 132 with a class string (all but
+    // 137 parts in markers.txt, 136 with a class string (all but
     // `slot:select-value`), each for vega and nova.
-    assert_eq!(compared, 264, "compared {compared} parts");
+    assert_eq!(compared, 272, "compared {compared} parts");
     assert!(
         missing.is_empty(),
         "not in published output:\n{}",
