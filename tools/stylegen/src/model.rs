@@ -303,6 +303,18 @@ pub const FLAGS: &[(&str, u128)] = &[
     ("SIZE_XS", 1 << 53),
     ("HAS_SIZE_XS", 1 << 54),
     ("HAS_DESCRIPTION", 1 << 55),
+    ("VARIANT_LABEL", 1 << 56),
+    ("VARIANT_LEGEND", 1 << 57),
+    ("AFTER_LEGEND", 1 << 58),
+    ("NTH_LAST_2", 1 << 59),
+    ("IN_FIELD_GROUP", 1 << 60),
+    ("HAS_HORIZONTAL", 1 << 61),
+    ("HAS_CHECKED", 1 << 62),
+    ("HAS_FIELD", 1 << 63),
+    ("HAS_FIELD_CONTENT", 1 << 64),
+    ("HAS_FOCUS_VISIBLE", 1 << 65),
+    ("HAS_DISABLED", 1 << 66),
+    ("IN_FIELD_LABEL", 1 << 67),
 ];
 
 pub fn flag(name: &str) -> u128 {

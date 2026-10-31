@@ -8,19 +8,20 @@ use crate::components::alert::{alert_action, Alert, AlertVariant};
 use crate::components::avatar::{avatar_group_count, Avatar, AvatarBadge, AvatarGroup, AvatarSize};
 use crate::components::badge::{badge, Badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::card::{card_description, card_title};
+use crate::components::card::{card_description, card_title, Card};
 use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
+use crate::components::field::{field_label, Field, FieldGroup, FieldLabel};
 use crate::components::icon::{Glyph, IconView};
 use crate::components::input::Input;
 use crate::components::item::{Item, ItemGroup, ItemSize, ItemVariant};
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
-use crate::components::label::{description, label};
+use crate::components::label::label;
 use crate::components::popover::{popover_header, Popover};
 use crate::components::progress::Progress;
 use crate::components::scroll_area::ScrollArea;
 use crate::components::select::Select;
-use crate::components::separator::{separator, separator_vertical};
+use crate::components::separator::{separator, Separator};
 use crate::components::slider::Slider;
 use crate::components::spinner::Spinner;
 use crate::components::switch::toggle;
@@ -99,34 +100,20 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
         });
 }
 
-/// A labelled control: a 6px-gap stack of `label` over the control. The
-/// label names the control for screen readers (`labelled_by`).
-fn field(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> egui::Response) {
-    layout::vstack(ui, 6.0, |ui| {
-        let name = label(ui, name);
-        let _ = control(ui).labelled_by(name.id);
-    });
+/// A labelled control: a vertical [`Field`], its label over the control,
+/// naming it for screen readers.
+fn field<R>(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> R) {
+    Field::new().label(name).show(ui, control);
 }
 
-/// A label on the left, its control on the right, the label naming the
-/// control for screen readers (`labelled_by`).
-fn setting_row(
-    ui: &mut egui::Ui,
-    name: &str,
-    control: impl FnOnce(&mut egui::Ui) -> egui::Response,
-) {
-    let label_id = std::cell::Cell::new(egui::Id::NULL);
-    layout::space_between(
-        ui,
-        |ui| label_id.set(label(ui, name).id),
-        |ui| {
-            let _ = control(ui).labelled_by(label_id.get());
-        },
-    );
+/// A label on the left, its control on the right: a horizontal [`Field`],
+/// the label naming the control for screen readers.
+fn setting_row<R>(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> R) {
+    Field::new().horizontal().label(name).show(ui, control);
 }
 
 fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Account");
             card_description(ui, "Update your account details.");
@@ -174,7 +161,7 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 }
 
 fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Notifications");
             card_description(ui, "Choose what you want to be notified about.");
@@ -201,7 +188,7 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 }
 
 fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Components");
             card_description(ui, "Buttons, badges, a slider and a select.");
@@ -242,7 +229,8 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
                 badge(ui, "Outline", BadgeVariant::Outline);
             });
             separator(ui);
-            field(ui, "Volume", |ui| {
+            // field-slider: a slider is named by the field's title.
+            Field::new().title("Volume").show(ui, |ui| {
                 ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume"))
             });
             field(ui, "Region", |ui| {
@@ -378,9 +366,22 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
 /// feature set, and wide enough for the longest id (`inverted-translucent`).
 const PART_WIDTH: f32 = 192.0;
 
-/// One preset part: its label over a select of `options`, `current` the
-/// index of the preset's value (`None`: not offered, shown as the
-/// placeholder `missing`), and a muted `help` line under it. Returns the
+/// The demos' own muted paragraph (`text-sm text-muted-foreground`), which
+/// belongs to no component: caller text in a recipe of its own.
+fn muted(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    use crate::style::{Paint, Prop, Recipe, Role, TextSize};
+    let recipe = Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    };
+    let st = Theme::current(ui.ctx()).state(ui.ctx(), State::NONE);
+    TextLook::resolve(ui, &[&recipe], st).label(ui, text, egui::TextWrapMode::Wrap)
+}
+
+/// One preset part: a [`Field`] with its label over a select of `options`,
+/// `current` the index of the preset's value (`None`: not offered, shown as
+/// the placeholder `missing`), and `help` as its description. Returns the
 /// newly picked index.
 fn part_select(
     ui: &mut egui::Ui,
@@ -391,10 +392,15 @@ fn part_select(
 ) -> Option<usize> {
     let mut idx = current.unwrap_or(usize::MAX);
     let mut picked = None;
-    layout::vstack(ui, 6.0, |ui| {
-        // The help line wraps at the select's width.
+    ui.scope(|ui| {
+        // The field, and the help line in it, are as wide as the select.
         ui.set_max_width(PART_WIDTH);
-        field(ui, name, |ui| {
+        let field = Field::new().label(name).id_salt(name);
+        let field = match help {
+            Some(help) => field.description(help),
+            None => field,
+        };
+        field.show(ui, |ui| {
             let resp = ui.add(
                 Select::new(name, &mut idx, options)
                     .placeholder(missing)
@@ -403,11 +409,7 @@ fn part_select(
             if resp.changed() && idx < options.len() {
                 picked = Some(idx);
             }
-            resp
         });
-        if let Some(help) = help {
-            description(ui, help);
-        }
     });
     picked
 }
@@ -630,7 +632,7 @@ const BADGE_VARIANTS: [(BadgeVariant, &str); 6] = [
 
 /// A component group: a card with a heading-font title and a description.
 fn group(ui: &mut egui::Ui, title: &str, about: &str, add: impl FnOnce(&mut egui::Ui)) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             layout::vstack(ui, 6.0, |ui| {
                 card_title(ui, title);
@@ -657,6 +659,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 icons_group(ui);
                 kbd_gallery(ui);
                 avatar_gallery(ui);
+                field_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
                 scroll_area_group(ui);
@@ -679,7 +682,7 @@ fn buttons_group(ui: &mut egui::Ui) {
     group(ui, "Button", "Every variant in every size.", |ui| {
         for (size, size_name) in BUTTON_SIZES {
             layout::vstack(ui, 8.0, |ui| {
-                description(ui, size_name);
+                muted(ui, size_name);
                 layout::wrap_row(ui, 8.0, |ui| {
                     for (variant, name) in BUTTON_VARIANTS {
                         let _ = ui.add(Button::new(name).variant(variant).size(size));
@@ -688,7 +691,7 @@ fn buttons_group(ui: &mut egui::Ui) {
             });
         }
         layout::vstack(ui, 8.0, |ui| {
-            description(ui, "Icon sizes, an icon with text, disabled");
+            muted(ui, "Icon sizes, an icon with text, disabled");
             layout::wrap_row(ui, 8.0, |ui| {
                 for size in [
                     ButtonSize::IconXs,
@@ -775,12 +778,12 @@ fn kbd_gallery(ui: &mut egui::Ui) {
                 kbd(ui, "B");
             });
             ui.horizontal_wrapped(|ui| {
-                description(ui, "Use");
+                muted(ui, "Use");
                 KbdGroup::new().show(ui, |ui| {
                     kbd(ui, "Ctrl + B");
                     kbd(ui, "Ctrl + K");
                 });
-                description(ui, "to open the command palette");
+                muted(ui, "to open the command palette");
             });
             ui.add(Kbd::icon_only(icons.check, "Enter"));
         });
@@ -945,6 +948,47 @@ fn item_group(ui: &mut egui::Ui) {
 /// shadcn-svelte's avatar demos without images (the gallery installs no
 /// image loader, so each avatar shows its fallback): sizes, a badge with an
 /// icon, and a group with a count.
+fn field_gallery(ui: &mut egui::Ui) {
+    group(
+        ui,
+        "Field",
+        "A label, a control, a description or errors; a choice card.",
+        |ui| {
+            // The switch's state lives in egui's memory: the gallery
+            // keeps no app state for it.
+            let key = egui::Id::new("shadcn_egui::reference::field_share");
+            let mut share = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(true);
+            let mut terms = ui
+                .data(|d| d.get_temp::<bool>(key.with("terms")))
+                .unwrap_or(false);
+            FieldGroup::new().show(ui, |ui| {
+                let mut email: &str = "max@";
+                Field::new()
+                    .label("Email")
+                    .error("Enter a valid email address.")
+                    .show(ui, |ui| ui.add(Input::new(&mut email)));
+                Field::new().horizontal().show(ui, |ui| {
+                    ui.add(crate::components::checkbox::Checkbox::new(&mut terms));
+                    field_label(ui, "Accept the terms and conditions");
+                });
+                FieldLabel::choice_card().show(ui, |ui| {
+                    Field::new()
+                        .horizontal()
+                        .title("Share across devices")
+                        .description("Focus is shared across devices.")
+                        .show(ui, |ui| {
+                            ui.add(crate::components::switch::Switch::new(&mut share))
+                        });
+                });
+            });
+            ui.data_mut(|d| {
+                d.insert_temp(key, share);
+                d.insert_temp(key.with("terms"), terms);
+            });
+        },
+    );
+}
+
 fn avatar_gallery(ui: &mut egui::Ui) {
     let icons = crate::icons::lucide::PLUS;
     group(
@@ -993,7 +1037,7 @@ fn icons_group(ui: &mut egui::Ui) {
                     layout::vstack(ui, 4.0, |ui| {
                         let name = label(ui, icon.name);
                         let _ = ui.add(IconView::new(icon).size(24.0)).labelled_by(name.id);
-                        description(ui, slot);
+                        muted(ui, slot);
                     });
                 }
             });
@@ -1066,7 +1110,8 @@ fn controls_group(ui: &mut egui::Ui, state: &mut GalleryState) {
         |ui| {
             setting_row(ui, "Accept terms", |ui| checkbox(ui, &mut state.checked));
             setting_row(ui, "Airplane mode", |ui| toggle(ui, &mut state.switch_on));
-            field(ui, "Volume", |ui| {
+            // field-slider: a slider is named by the field's title.
+            Field::new().title("Volume").show(ui, |ui| {
                 ui.add(Slider::new(&mut state.volume, 0.0..=100.0).label("Volume"))
             });
             field(ui, "Region", |ui| {
@@ -1126,14 +1171,14 @@ fn tabs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                 1 => "The usage tab.",
                 _ => "The billing tab.",
             };
-            description(ui, text);
+            muted(ui, text);
         });
         separator(ui);
         layout::row(ui, 12.0, |ui| {
             label(ui, "Blog");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             label(ui, "Docs");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             label(ui, "Source");
         });
     });

@@ -154,8 +154,8 @@ group.
 | `FOCUS` | `focus:`, `data-highlighted:` (the highlighted item of a list) |
 | `FOCUS_VISIBLE` | `focus-visible:` (keyboard focus) |
 | `ACTIVE` | `active:` (pressed) |
-| `DISABLED` | `disabled:`, `data-disabled:`, `group-data-[disabled=true]:`, `peer-disabled:` |
-| `INVALID` | `aria-invalid:`, `data-invalid:` |
+| `DISABLED` | `disabled:`, `data-disabled:`, `group-data-[disabled=true]:`, `group-data-[disabled=true]/field:`, `peer-disabled:` |
+| `INVALID` | `aria-invalid:`, `data-invalid:`, `data-[invalid=true]:` |
 | `CHECKED` | `data-checked:`, `aria-checked:`, `data-[state=checked]:` |
 | `UNCHECKED` | `data-unchecked:`, `data-[state=unchecked]:` |
 | `EXPANDED` | `aria-expanded:`, `data-open:` |
@@ -170,6 +170,7 @@ group.
 | `HAS_SIZE_SM` / `HAS_SIZE_LG` | `group-has-data-[size=sm]/…:` / `group-has-data-[size=lg]/…:` (the group holds a small or large child) |
 | `VERTICAL` / `HORIZONTAL` | the part's own orientation: `data-vertical:`, `data-[orientation=vertical]:`, `group-data-vertical/…:` and the horizontal forms |
 | `VARIANT_LINE` / `VARIANT_DEFAULT` | `data-[variant=line]:` / `group-data-[variant=default]/…:` |
+| `VARIANT_LABEL` / `VARIANT_LEGEND` | `data-[variant=label]:` / `data-[variant=legend]:` (a FieldLegend's variant) |
 | `VARIANT_DESTRUCTIVE` | a part of the destructive variant (`cn-alert-variant-destructive`'s `*:data-[slot=alert-description]:`) |
 | `SIDE_TOP` / `SIDE_RIGHT` / `SIDE_BOTTOM` / `SIDE_LEFT` | `data-[side=top]:` and the other sides (where a panel sits against its trigger) |
 | `SM` / `MD` | `sm:` / `md:` (the window is at least 640 / 768 points wide) |
@@ -184,6 +185,16 @@ group.
 | `FIRST` / `LAST` / `NOT_FIRST` / `NOT_LAST` | a group child's position: `:first-child`, `:last-child` (the last `[data-slot]` child), `:not(:first-child)`, `:not(:last-child)` |
 | `IN_TOOLTIP_CONTENT` | `in-data-[slot=tooltip-content]:`, and a tooltip's `**:data-[slot=kbd]:` |
 | `IN_AVATAR_GROUP` | an avatar in an avatar group (the group's `*:data-[slot=avatar]:`) |
+| `IN_FIELD_GROUP` | a field group inside a field group (the group's `*:data-[slot=field-group]:`) |
+| `IN_FIELD_LABEL` | the field a choice card wraps (the FieldLabel's `*:data-[slot=field]:`) |
+| `AFTER_LEGEND` | `[[data-variant=legend]+&]:` (right after a legend FieldLegend) |
+| `NTH_LAST_2` | `nth-last-2:` (the last but one child; `last:` is `LAST`) |
+| `HAS_HORIZONTAL` | `group-has-data-horizontal/…:` (the field holds a part with horizontal `data-orientation`) |
+| `HAS_CHECKED` | `has-data-checked:` (a checked control inside) |
+| `HAS_FIELD` | `has-[>[data-slot=field]]:` (a FieldLabel that wraps a Field: a choice card) |
+| `HAS_FIELD_CONTENT` | `has-[>[data-slot=field-content]]:` (a field with a FieldContent child; also on that field's checkbox) |
+| `HAS_FOCUS_VISIBLE` | `has-[:focus-visible]:` (a control inside shows keyboard focus); on a control, `group-has-[:focus-visible]/field-label:` |
+| `HAS_DISABLED` | `has-[:disabled,[data-disabled]]` (a disabled control inside; used negated: `not-has-[..]:`) |
 
 A rule's `When` is `all` (flags that must be set) plus `none` (flags that must
 not be set; this is how a negated variant works). A component sets only the

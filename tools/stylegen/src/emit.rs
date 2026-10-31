@@ -250,7 +250,7 @@ mod tests {
     fn state_ranks_are_emitted_per_flag() {
         let s = emit_state_ranks();
         assert!(
-            s.contains("    (State::HOVER, (1 << 30) | (1 << 122)),\n"),
+            s.contains("    (State::HOVER, (1 << 35) | (1 << 122)),\n"),
             "{s}"
         );
         assert!(s.contains("    (State::SM, "), "{s}");

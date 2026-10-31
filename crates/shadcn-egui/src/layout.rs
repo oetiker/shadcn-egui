@@ -3,7 +3,17 @@
 
 use crate::components::context;
 use egui::Ui;
-use egui_extras::{Size, StripBuilder};
+
+/// shadcn `orientation`, shared by every component that has one
+/// (`.orientation(..)`). It has no default: each component keeps
+/// upstream's own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Orientation {
+    /// Laid out along a row (`data-orientation="horizontal"`).
+    Horizontal,
+    /// Laid out along a column (`data-orientation="vertical"`).
+    Vertical,
+}
 
 /// A row height or stack width change below this is float noise, not a
 /// reason to redo a pass.
@@ -56,10 +66,48 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// `ui.horizontal` cannot do that (see [`allocate_overflowing`]).
 ///
 /// A child that is as high as the row's other children (`self-stretch`,
-/// as `separator_vertical`) takes its height from [`stretch_height`].
+/// as a vertical [`Separator`](crate::components::separator::Separator))
+/// takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    row_aligned(ui, gap, false, add)
+}
+
+/// [`row`] with its items at the top of the row: the browser's flex row
+/// (`flex-direction: row; gap: N`) whose items keep their own height at the
+/// row's start, as `items-start` or an `h-fit` item in a stretching row
+/// (egui's `ui.horizontal_top`). A vertical
+/// [`Tabs`](crate::components::tabs::Tabs) list and its content sit in one:
+///
+/// ```
+/// # egui::__run_test_ui(|ui| {
+/// use shadcn_egui::components::tabs::Tabs;
+/// use shadcn_egui::{layout, Orientation};
+/// let mut tab = 0;
+/// layout::row_top(ui, Tabs::content_gap(ui), |ui| {
+///     ui.add(Tabs::new(&mut tab, &["Account", "Password"]).orientation(Orientation::Vertical));
+///     layout::vstack(ui, 0.0, |ui| ui.label("Manage your account."));
+/// });
+/// # });
+/// ```
+///
+/// An item that stretches to the row's height (upstream's bordered content
+/// box beside an `h-fit` list) reads [`stretch_height`], as in [`row`].
+#[doc(alias = "items-start")]
+pub fn row_top<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    row_aligned(ui, gap, true, add)
+}
+
+/// [`row`] with its items at the top of the row (`items-start`) where
+/// `top` is set, else centred (`items-center`).
+pub(crate) fn row_aligned<R>(
+    ui: &mut Ui,
+    gap: f32,
+    top: bool,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let (stored, height, align) = row_band(ui, id);
+    let align = if top { egui::Align::Min } else { align };
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(align)
     } else {
@@ -1637,60 +1685,6 @@ pub(crate) fn reverse_column<R>(
         ui.data_mut(|d| d.insert_temp(fit_id, known));
     }
     inner
-}
-
-/// A shadcn Card at the default size, across the available width of a
-/// column and content-sized in a crate row. See
-/// [`crate::components::card::Card`] for sizes, a footer and its width.
-pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    crate::components::card::Card::new().show(ui, add)
-}
-
-/// A labeled control row: fixed-width label column + control filling the
-/// rest, as high as the taller of the two (never egui's `interact_size`),
-/// both centred in it. The height comes from the previous pass; where it
-/// changes, the pass is redone.
-pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce(&mut Ui)) {
-    let id = ui.next_auto_id().with("shadcn_egui::layout::form_row");
-    let (stored, band, align) = row_band(ui, id);
-    let mut lines = Vec::new();
-    // A cell measures its widgets, not its own rect: egui makes a centred
-    // cell as high as the band, so the row would never shrink.
-    let mut cell = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
-        ui.with_layout(egui::Layout::left_to_right(align), |ui| {
-            let items = RowItems::begin(ui);
-            add(ui);
-            lines.extend(items.finish(ui, false));
-        });
-    };
-    let mut control = Some(control);
-    ui.allocate_ui(egui::vec2(ui.available_width(), band), |ui| {
-        StripBuilder::new(ui)
-            .size(Size::exact(label_width))
-            .size(Size::remainder())
-            .horizontal(|mut strip| {
-                strip.cell(|ui| {
-                    cell(ui, &mut |ui| {
-                        ui.add(crate::components::label::Label::new(label));
-                    })
-                });
-                strip.cell(|ui| {
-                    cell(ui, &mut |ui| {
-                        if let Some(control) = control.take() {
-                            control(ui);
-                        }
-                    })
-                });
-            });
-    });
-    settle_row_band(
-        ui,
-        id,
-        stored,
-        band,
-        &lines,
-        "layout::form_row content height changed",
-    );
 }
 
 #[cfg(test)]

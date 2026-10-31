@@ -360,7 +360,7 @@ See `references/gotchas.md` for the reasons.
 - egui is single-pass: a widget sets its own size before placement; there is
   no `flex-grow` distribution across siblings. Use the `shadcn_egui::layout`
   helpers, or `egui_extras::StripBuilder` (`Size::relative`, `exact`,
-  `remainder`) where none fits.
+  `remainder`; a dependency of your app) where none fits.
 - No `available_width()` arithmetic when a helper exists.
 - Hover, active and focus follow the style's recipe; never invent a state
   colour.

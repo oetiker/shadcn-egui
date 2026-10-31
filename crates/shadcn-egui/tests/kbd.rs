@@ -5,7 +5,6 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
 use shadcn_egui::components::icon_atom::IconAtom;
 use shadcn_egui::components::kbd::{kbd, Kbd, KbdGroup, KbdRecipes, KbdVariant};
-use shadcn_egui::components::label::description;
 use shadcn_egui::components::text::TextLook;
 use shadcn_egui::style::Style;
 use shadcn_egui::style::{AppVariant, State};
@@ -268,12 +267,12 @@ fn kbd_demo(ui: &mut egui::Ui) {
         });
         ctrl_plus_b(ui);
         ui.horizontal_wrapped(|ui| {
-            description(ui, "Use");
+            common::muted_text(ui, "Use");
             KbdGroup::new().show(ui, |ui| {
                 kbd(ui, "Ctrl + B");
                 kbd(ui, "Ctrl + K");
             });
-            description(ui, "to open the command palette");
+            common::muted_text(ui, "to open the command palette");
         });
         ui.add(Kbd::icon_only(icons.check, "Enter"));
     });

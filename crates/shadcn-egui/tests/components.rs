@@ -491,15 +491,16 @@ fn tabs_report_the_selected_trigger() {
     use egui_kittest::kittest::{NodeT, Queryable};
     let (mut h, _) = tabs_harness(&["Account", "Notifications"], 1);
     h.run();
-    // egui reports `selected` as the node's toggled state.
-    use egui::accesskit::Toggled;
+    // bits' `aria-selected`, not a toggle.
     assert_eq!(
-        h.get_by_label("Notifications").accesskit_node().toggled(),
-        Some(Toggled::True)
+        h.get_by_label("Notifications")
+            .accesskit_node()
+            .is_selected(),
+        Some(true)
     );
     assert_eq!(
-        h.get_by_label("Account").accesskit_node().toggled(),
-        Some(Toggled::False)
+        h.get_by_label("Account").accesskit_node().is_selected(),
+        Some(false)
     );
 }
 
@@ -981,7 +982,7 @@ fn disabled_label_paints_half_alpha_text() {
 /// full row height when vertical.
 #[test]
 fn separators_are_one_pixel_border_lines() {
-    use shadcn_egui::components::separator::{separator, separator_vertical};
+    use shadcn_egui::components::separator::{separator, Separator};
     let mode = egui::Theme::Light;
     let theme = shadcn_egui::Theme::vega();
     let (_, out) = common::measure_output(&theme, mode, |ui| {
@@ -999,7 +1000,7 @@ fn separators_are_one_pixel_border_lines() {
     let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.horizontal(|ui| {
             ui.set_height(24.0);
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
         })
         .response
     });
@@ -1014,19 +1015,19 @@ fn separators_are_one_pixel_border_lines() {
 
 #[test]
 fn label_separator_snapshot() {
-    use shadcn_egui::components::label::{description, Label};
-    use shadcn_egui::components::separator::{separator, separator_vertical};
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::separator::{separator, Separator};
     common::snapshot_all("label_separator", egui::vec2(360.0, 200.0), |ui| {
         ui.add(Label::new("Email"));
         ui.add(Label::new("Email (disabled)").enabled(false));
-        description(ui, "We'll never share your email.");
+        common::muted_text(ui, "We'll never share your email.");
         separator(ui);
         ui.horizontal(|ui| {
             ui.set_height(20.0);
             ui.label("Docs");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             ui.label("Source");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             ui.label("Blog");
         });
     });
@@ -1039,8 +1040,8 @@ fn label_separator_snapshot() {
 fn separator_vertical_row_snapshot() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
     use shadcn_egui::components::button::Button;
-    use shadcn_egui::components::label::{description, Label};
-    use shadcn_egui::components::separator::separator_vertical;
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::separator::Separator;
     use shadcn_egui::layout;
     let themes = common::themes().into_iter().take(2).collect();
     common::snapshot_with_themes(
@@ -1050,14 +1051,14 @@ fn separator_vertical_row_snapshot() {
         |ui| {
             layout::row(ui, 12.0, |ui| {
                 ui.add(Label::new("Docs"));
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
                 ui.add(Button::new("Open"));
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
                 badge(ui, "New", BadgeVariant::Secondary);
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
                 layout::vstack(ui, 2.0, |ui| {
                     ui.add(Label::new("Account"));
-                    description(ui, "Signed in");
+                    common::muted_text(ui, "Signed in");
                 });
             });
         },
@@ -2209,16 +2210,12 @@ fn slider_click_on_track_snaps_and_drag_follows_outside() {
 
 #[test]
 fn slider_vertical_has_minimum_at_the_bottom() {
-    use shadcn_egui::components::slider::{Slider, SliderOrientation};
+    use shadcn_egui::components::slider::Slider;
     let mut h = egui_kittest::Harness::new_ui_state(
         |ui, s: &mut (f32, egui::Rect)| {
             shadcn_egui::Theme::vega().apply(ui.ctx());
             s.1 = ui
-                .add(
-                    Slider::new(&mut s.0, 0.0..=100.0)
-                        .orientation(SliderOrientation::Vertical)
-                        .label("V"),
-                )
+                .add(Slider::new(&mut s.0, 0.0..=100.0).vertical().label("V"))
                 .rect;
         },
         (50.0, egui::Rect::NOTHING),
@@ -2295,7 +2292,7 @@ fn slider_reports_role_label_and_value_to_accesskit() {
 
 #[test]
 fn slider_snapshot() {
-    use shadcn_egui::components::slider::{Slider, SliderOrientation};
+    use shadcn_egui::components::slider::Slider;
     let (mut a, mut b, mut c, mut d) = (30.0, 70.0, 50.0, 100.0);
     common::snapshot_all("slider", egui::vec2(320.0, 200.0), |ui| {
         shadcn_egui::layout::row(ui, 24.0, |ui| {
@@ -2305,11 +2302,7 @@ fn slider_snapshot() {
                 ui.add(Slider::new(&mut b, 0.0..=100.0).enabled(false).label("B"));
                 ui.add(Slider::new(&mut d, 0.0..=100.0).label("D"));
             });
-            ui.add(
-                Slider::new(&mut c, 0.0..=100.0)
-                    .orientation(SliderOrientation::Vertical)
-                    .label("C"),
-            );
+            ui.add(Slider::new(&mut c, 0.0..=100.0).vertical().label("C"));
         });
     });
 }
@@ -2455,27 +2448,6 @@ fn tab_click_shows_no_focus_ring() {
     h.run();
     assert_eq!(active.get(), 2);
     assert!(three_px(&h), "keyboard focus shows the ring");
-}
-
-/// `description` is `text-sm`: each wrapped line is 20px, Tailwind's line
-/// height for `text-sm`, not egui's font row height.
-#[test]
-fn description_lines_are_text_sm_line_height() {
-    use shadcn_egui::components::label::description;
-    for (name, theme, mode) in common::themes() {
-        let one = common::measure(&theme, mode, |ui| description(ui, "Short."));
-        assert_eq!(one.height(), 20.0, "{name}");
-        let wrapped = common::measure(&theme, mode, |ui| {
-            ui.set_max_width(120.0);
-            description(
-                ui,
-                "We will never share your email with anyone else, ever, at all.",
-            )
-        });
-        let lines = (wrapped.height() / 20.0).round();
-        assert!(lines >= 3.0, "{name}: {wrapped:?}");
-        assert_eq!(wrapped.height(), lines * 20.0, "{name}");
-    }
 }
 
 /// The switch paints the shadow its style sets (`shadow-xs` on vega's track).

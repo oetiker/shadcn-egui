@@ -441,7 +441,7 @@ fn tooltip_colours_come_from_the_style() {
 
 #[test]
 fn separator_line_comes_from_the_style() {
-    use shadcn_egui::components::separator::{separator, separator_vertical};
+    use shadcn_egui::components::separator::{separator, Separator};
     use shadcn_egui::style::Prop;
     let mode = egui::Theme::Light;
     let line = |theme: &Theme| {
@@ -480,7 +480,7 @@ fn separator_line_comes_from_the_style() {
     let (_, out) = common::measure_output(&vertical, mode, |ui| {
         ui.horizontal(|ui| {
             ui.allocate_response(vec2(0.0, 40.0), egui::Sense::hover());
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
         })
         .response
     });

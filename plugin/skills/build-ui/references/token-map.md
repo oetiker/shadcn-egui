@@ -4,7 +4,7 @@
 |---|---|
 | `--background` | `Visuals.panel_fill`; `Palette.background` |
 | `--foreground` | `Visuals.override_text_color`; `Palette.foreground` |
-| `--card` / `--card-foreground` | `layout::card` fill / text |
+| `--card` / `--card-foreground` | `Card` fill / text |
 | `--popover` | ComboBox/menu surfaces (`window_fill`) |
 | `--primary` / `-foreground` | Button Default fill / text |
 | `--secondary` / `-foreground` | Button Secondary; `widgets.*.bg_fill` |

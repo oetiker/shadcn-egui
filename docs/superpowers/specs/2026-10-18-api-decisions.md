@@ -2914,6 +2914,11 @@ recommended.
 Decision: (a); `required` behavioural in questionnaire, AccessKit-only on
 Field — as recommended.
 
+Consequence (field port, 2026-10-31, maintainer): Field gets no
+`required`. Upstream's v4 Field has no such prop, which axiom 1 requires of
+a setter; formsnap's `aria-required` is not the component. `required`
+stays behavioural in questionnaire.
+
 ### D-85 · `read_only`
 
 - **Case:** Calendar has `readonly` in shadcn's demo; bits-ui radio-group
@@ -3033,6 +3038,11 @@ Decision: (a) with the per-component answers — as recommended.
 Consequence (rules, 2026-10-19): The AccessKit role is set after
 `widget_info`, which sets one from `WidgetType`. The decorative separator
 reports no `widget_info` (conformance 8).
+
+Consequence (field port, 2026-10-31): "field error ... `status`" in the
+per-component list is wrong: upstream's FieldError has `role="alert"`, so it
+reports `Role::Alert` with an assertive live region, as CP-07-17 and the
+alert do (conformance 8). The marker's `status` stays.
 
 Consequence (maintainer, 2026-10-31): The spinner's name setter is
 `.alt_text(impl Into<String>)`, default "Loading", as on the avatar; it

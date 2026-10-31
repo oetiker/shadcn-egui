@@ -22,6 +22,7 @@
 //! }
 //! ```
 
+use crate::components::field::ControlSlot;
 use crate::components::icon_atom::retint;
 use crate::components::shared::disabled_cursor;
 use crate::components::text::Leading;
@@ -55,7 +56,7 @@ pub struct Textarea<'t> {
     hint_text: Atoms<'static>,
     desired_width: Option<f32>,
     id_salt: Option<egui::Id>,
-    invalid: bool,
+    invalid: Option<bool>,
     variant: TextareaVariant,
 }
 
@@ -69,7 +70,7 @@ impl<'t> Textarea<'t> {
             hint_text: Atoms::default(),
             desired_width: None,
             id_salt: None,
-            invalid: false,
+            invalid: None,
             variant: TextareaVariant::Default,
         }
     }
@@ -102,10 +103,12 @@ impl<'t> Textarea<'t> {
         self
     }
 
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the textarea is
+    /// invalid unless this says `false`.
     #[inline]
     pub fn invalid(mut self, invalid: bool) -> Self {
-        self.invalid = invalid;
+        self.invalid = Some(invalid);
         self
     }
 
@@ -122,7 +125,8 @@ impl<'t> Textarea<'t> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.textarea, |r| &r.textarea)];
-        let context = v.bits().with(State::INVALID, self.invalid);
+        let slot = ControlSlot::of(ui);
+        let context = v.bits().with(State::INVALID, slot.invalid(self.invalid));
         // A `<textarea>`'s rows are line boxes, placed as inline text.
         let frame = TextEntry::resolve(
             ui,
@@ -143,7 +147,14 @@ impl<'t> Textarea<'t> {
         // A `<textarea>` breaks a word wider than the field
         // (`overflow-wrap: break-word`, the browser's default for it).
         let look = frame.look.clone().break_word(true);
-        let max_width = self.desired_width.unwrap_or(t.metrics.field_max_width);
+        // In a vertical field it takes the field's width (`*:w-full`).
+        let fill = if slot.fills() {
+            f32::INFINITY
+        } else {
+            t.metrics.field_max_width
+        };
+        let max_width = self.desired_width.unwrap_or(fill);
+        slot.want(ui, max_width);
         let width = layout::capped_width(ui, max_width, frame.content_min);
         let wrap = frame.content_width(width);
 
@@ -191,6 +202,12 @@ impl<'t> Textarea<'t> {
         // has no `disabled:pointer-events-none` that would let the pointer
         // through.
         disabled_cursor(&out.response.response, disabled);
+        let resp = &out.response.response;
+        if slot.pressed && !disabled {
+            resp.request_focus();
+        }
+        let st = State::NONE.with(State::FOCUS_VISIBLE, resp.has_focus());
+        slot.done(ui, resp, st, !disabled, false);
         out
     }
 }

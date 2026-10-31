@@ -3,6 +3,7 @@
 //! recipe. A frameless egui `TextEdit` sits inside a box this widget
 //! paints.
 
+use crate::components::field::ControlSlot;
 use crate::components::icon_atom::retint;
 use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextClip, TextEntry};
@@ -32,7 +33,7 @@ pub struct Input<'a> {
     max_width: Option<f32>,
     id_salt: Option<egui::Id>,
     enabled: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     variant: InputVariant,
 }
 
@@ -47,7 +48,7 @@ impl<'a> Input<'a> {
             max_width: None,
             id_salt: None,
             enabled: true,
-            invalid: false,
+            invalid: None,
             variant: InputVariant::Default,
         }
     }
@@ -62,8 +63,10 @@ impl<'a> Input<'a> {
         self.password = yes;
         self
     }
-    /// Override the default maximum width (`Metrics::field_max_width`). Pass
-    /// `f32::INFINITY` for full-width.
+    /// Override the default maximum width (`Metrics::field_max_width`, the
+    /// field's width in a vertical
+    /// [`Field`](crate::components::field::Field)). Pass `f32::INFINITY`
+    /// for full-width.
     pub fn max_width(mut self, w: f32) -> Self {
         self.max_width = Some(w);
         self
@@ -82,9 +85,11 @@ impl<'a> Input<'a> {
         self.enabled = yes;
         self
     }
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the input is
+    /// invalid unless this says `false`.
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// An app variant ([`InputVariant::app`]).
@@ -99,7 +104,8 @@ impl<'a> Widget for Input<'a> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.input, |r| &r.input)];
-        let context = v.bits().with(State::INVALID, self.invalid);
+        let slot = ControlSlot::of(ui);
+        let context = v.bits().with(State::INVALID, slot.invalid(self.invalid));
         // The field's text sits in its line box as in a browser's
         // text-entry field: the leading's half above rounds up.
         let mut frame = TextEntry::resolve(
@@ -139,7 +145,14 @@ impl<'a> Widget for Input<'a> {
                 .galley()
                 .clone()
         };
-        let max_width = self.max_width.unwrap_or(t.metrics.field_max_width);
+        // In a vertical field it takes the field's width (`*:w-full`).
+        let fill = if slot.fills() {
+            f32::INFINITY
+        } else {
+            t.metrics.field_max_width
+        };
+        let max_width = self.max_width.unwrap_or(fill);
+        slot.want(ui, max_width);
         let width = layout::capped_width(ui, max_width, frame.content_min);
         let mut edit = TextEdit::singleline(self.text);
         if !self.hint.is_empty() {
@@ -176,10 +189,17 @@ impl<'a> Widget for Input<'a> {
         // `disabled:cursor-not-allowed` comes with
         // `disabled:pointer-events-none`, so the browser shows the cursor
         // of what lies under the field.
-        frame
+        let enabled = frame.enabled;
+        let resp = frame
             .show(ui, Vec2::new(width, height), edit, self.id_salt)
             .response
-            .response
+            .response;
+        if slot.pressed && enabled {
+            resp.request_focus();
+        }
+        let st = State::NONE.with(State::FOCUS_VISIBLE, resp.has_focus());
+        slot.done(ui, &resp, st, enabled, false);
+        resp
     }
 }
 
