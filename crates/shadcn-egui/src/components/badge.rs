@@ -177,11 +177,12 @@ impl Widget for Badge {
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
         });
-        for _ in [self.icon, self.icon_end]
+        for (slot, _) in [self.icon, self.icon_end]
             .iter()
-            .filter(|g| **g == Some(Glyph::Spinner))
+            .enumerate()
+            .filter(|(_, g)| **g == Some(Glyph::Spinner))
         {
-            crate::components::spinner::report_hosted(ui, &resp);
+            crate::components::spinner::report_hosted(ui, &resp, slot);
         }
         if !ui.is_rect_visible(rect) {
             return resp;

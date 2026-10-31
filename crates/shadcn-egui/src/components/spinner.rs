@@ -124,13 +124,19 @@ fn report_status(resp: &Response, enabled: bool, name: &str) {
         .accesskit_node_builder(resp.id, |node| node.set_live(Live::Polite));
 }
 
-/// The status node of a spinner a host draws in its icon slot
+/// The status node of a spinner a host draws in its icon slot `slot`
 /// ([`Glyph::Spinner`]): a child of the host's node, named "Loading", as
 /// upstream's `<svg role="status">` stays a node inside the button.
-pub(crate) fn report_hosted(ui: &mut Ui, host: &Response) {
-    let child = ui.new_child(
+///
+/// The node's `Ui` is a top-level one, not a child of `ui`: a child would
+/// take one of `ui`'s auto ids, and the widgets after the host would get
+/// other ids while a spinner shows (a text field would lose its focus).
+pub(crate) fn report_hosted(ui: &Ui, host: &Response, slot: usize) {
+    let child = Ui::new(
+        ui.ctx().clone(),
+        host.id.with("spinner").with(slot),
         UiBuilder::new()
-            .id_salt(host.id.with("spinner"))
+            .layer_id(ui.layer_id())
             .max_rect(Rect::from_min_size(host.rect.min, Vec2::ZERO))
             .accessibility_parent(host.id),
     );

@@ -351,8 +351,12 @@ impl Widget for Button {
             Some(glyph) => [Some(glyph), None],
             None => [self.icon, self.icon_end],
         };
-        for _ in shown.iter().filter(|g| **g == Some(Glyph::Spinner)) {
-            crate::components::spinner::report_hosted(ui, &resp);
+        for (slot, _) in shown
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| **g == Some(Glyph::Spinner))
+        {
+            crate::components::spinner::report_hosted(ui, &resp, slot);
         }
         if !ui.is_rect_visible(rect) {
             return resp;

@@ -412,3 +412,31 @@ fn a_hidden_host_asks_for_no_repaint() {
     assert!(painted.is_empty());
     assert!(!moving);
 }
+
+/// Turning a button's icon into a spinner and back leaves the ids of the
+/// widgets after it alone: a focused text field keeps its focus.
+#[test]
+fn a_hosted_spinner_keeps_the_ids_after_it() {
+    let ctx = egui::Context::default();
+    let mut text = String::new();
+    let mut field = |glyph: Glyph, focus: bool| {
+        let mut id = egui::Id::NULL;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.add(Button::new("Save").icon(glyph));
+            ui.add(Badge::new("Draft").icon_end(glyph));
+            let resp = ui.text_edit_singleline(&mut text);
+            if focus {
+                resp.request_focus();
+            }
+            id = resp.id;
+        });
+        id
+    };
+    let check: Glyph = Theme::vega().icons.check.into();
+    let first = field(check, true);
+    for glyph in [Glyph::Spinner, check, Glyph::Spinner] {
+        assert_eq!(field(glyph, false), first, "{glyph:?}");
+        assert_eq!(ctx.memory(|m| m.focused()), Some(first), "{glyph:?}");
+    }
+}
