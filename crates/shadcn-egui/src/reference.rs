@@ -13,6 +13,7 @@ use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
 use crate::components::icon::{Glyph, IconView};
 use crate::components::input::Input;
+use crate::components::item::{item_separator, Item, ItemGroup, ItemSize, ItemVariant};
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
 use crate::components::label::{description, label};
 use crate::components::popover::{popover_header, Popover};
@@ -659,6 +660,7 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 avatar_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
+                item_group(ui);
             });
             layout::vstack(right, 24.0, |ui| {
                 inputs_group(ui, state);
@@ -813,6 +815,65 @@ fn spinner_group(ui: &mut egui::Ui) {
             });
         });
     });
+}
+
+/// shadcn-svelte's item demos: the outline variant with icon media and an
+/// action, a muted link item at the small size, and a group of avatar
+/// items between separators.
+fn item_group(ui: &mut egui::Ui) {
+    use crate::icons::lucide;
+    group(
+        ui,
+        "Item",
+        "Variants, sizes, media and a group with separators.",
+        |ui| {
+            layout::vstack(ui, 16.0, |ui| {
+                Item::new()
+                    .variant(ItemVariant::Outline)
+                    .icon(lucide::SHIELD_ALERT)
+                    .title("Security Alert")
+                    .description("New login detected from unknown device.")
+                    .show(ui, |ui| {
+                        let _ = ui.add(Button::new("Review").size(ButtonSize::Sm));
+                    });
+                let _ = ui.add(
+                    Item::new()
+                        .variant(ItemVariant::Muted)
+                        .size(ItemSize::Sm)
+                        .icon(lucide::BADGE_CHECK)
+                        .title("Your profile has been verified.")
+                        .link(true),
+                );
+                ItemGroup::new().show(ui, |ui| {
+                    for (i, (name, mail)) in [
+                        ("shadcn", "shadcn@vercel.com"),
+                        ("maxleiter", "maxleiter@vercel.com"),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        if i > 0 {
+                            let _ = item_separator(ui);
+                        }
+                        Item::new()
+                            .media(move |ui| {
+                                let _ = ui.add(Avatar::new(&name[..1]));
+                            })
+                            .title(name)
+                            .description(mail)
+                            .show(ui, |ui| {
+                                let _ = ui.add(
+                                    Button::new("Add")
+                                        .variant(ButtonVariant::Ghost)
+                                        .size(ButtonSize::Icon)
+                                        .icon(lucide::PLUS),
+                                );
+                            });
+                    }
+                });
+            });
+        },
+    );
 }
 
 /// shadcn-svelte's avatar demos without images (the gallery installs no
