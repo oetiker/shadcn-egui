@@ -568,3 +568,61 @@ fn text_selection_follows_egui_selectable_labels() {
         assert_eq!(badge.is_some(), selectable, "badge: {badge:?}");
     }
 }
+
+/// A link badge (`href`, an `<a>`) takes the style's `[a]:hover` fill,
+/// shows the pointing hand, reports the link role, focuses on a press and
+/// clicks on Enter only; a plain badge keeps its fill under the pointer.
+#[test]
+fn a_link_badge_hovers_clicks_and_activates_on_enter_only() {
+    use shadcn_egui::components::badge::Badge;
+    let theme = common::resolved(&Theme::vega(), egui::Theme::Light);
+    let primary = theme.role(shadcn_egui::style::Role::Primary);
+    let fill_and_click = |link: bool, events: &[Vec<egui::Event>]| {
+        let ctx = egui::Context::default();
+        ctx.set_theme(egui::Theme::Light);
+        ctx.all_styles_mut(|s| s.animation_time = 0.0);
+        let (mut fill, mut clicks, mut cursor) = (None, 0, egui::CursorIcon::Default);
+        let (mut info, mut rect) = (None, egui::Rect::NOTHING);
+        let mut frames = vec![
+            vec![],
+            vec![egui::Event::PointerMoved(egui::pos2(500.0, 300.0))],
+        ];
+        frames.extend_from_slice(events);
+        frames.push(vec![egui::Event::PointerMoved(egui::pos2(20.0, 10.0))]);
+        frames.push(vec![]);
+        for events in frames {
+            let out = common::pass(Loop::RunUi, &ctx, events, |ui| {
+                Theme::vega().apply(ui.ctx());
+                let resp = ui.add(Badge::new("Docs").link(link));
+                clicks += usize::from(resp.clicked());
+                info = Some(resp.has_focus());
+                rect = resp.rect;
+            });
+            fill = common::box_fills(&out)
+                .into_iter()
+                .find(|f| f.0 == rect)
+                .map(|f| f.1);
+            cursor = out.platform_output.cursor_icon;
+        }
+        (fill, clicks, cursor, info)
+    };
+    let (fill, _, cursor, _) = fill_and_click(true, &[]);
+    assert_eq!(fill, Some(primary.gamma_multiply(0.8)), "link hover fill");
+    assert_eq!(cursor, egui::CursorIcon::PointingHand);
+    let (fill, _, cursor, _) = fill_and_click(false, &[]);
+    assert_eq!(fill, Some(primary), "a plain badge keeps its fill");
+    assert_ne!(cursor, egui::CursorIcon::PointingHand);
+
+    // A press focuses the link; Space then does nothing, Enter clicks.
+    let press = common::click(egui::pos2(20.0, 10.0));
+    let (_, clicks, _, focused) = fill_and_click(true, std::slice::from_ref(&press));
+    assert_eq!(
+        (clicks, focused),
+        (1, Some(true)),
+        "a press clicks and focuses"
+    );
+    let (_, clicks, _, _) = fill_and_click(true, &[press.clone(), common::key(Key::Space)]);
+    assert_eq!(clicks, 1, "Space does not activate a link");
+    let (_, clicks, _, _) = fill_and_click(true, &[press, common::key(Key::Enter)]);
+    assert_eq!(clicks, 2, "Enter activates a link");
+}

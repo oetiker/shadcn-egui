@@ -99,3 +99,18 @@ fn aria_invalid_reaches_the_accessibility_node() {
         }
     }
 }
+
+/// A link badge reports the link role (an `<a>`), a plain badge none of
+/// it.
+#[test]
+fn a_link_badge_reports_the_link_role() {
+    use shadcn_egui::components::badge::Badge;
+    for link in [true, false] {
+        let mut harness = Harness::new_ui(move |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.add(Badge::new("Docs").link(link));
+        });
+        harness.run();
+        assert_eq!(harness.query_by_role(Role::Link).is_some(), link, "{link}");
+    }
+}
