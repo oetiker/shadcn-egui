@@ -2,9 +2,9 @@
 //! `tools/stylegen/PIN`. Every value comes from the style's `cn-tabs-list`,
 //! `cn-tabs-list-variant-*`, `cn-tabs-trigger` recipes and the trigger's
 //! `after:` recipe (the line indicator). Behaviour follows bits-ui Tabs: a press focuses and selects,
-//! Left/Right move the selection (and wrap), Home/End jump to the first/last
-//! tab (automatic activation). The list is one Tab stop, on the selected
-//! trigger (roving focus).
+//! Left/Right (Up/Down in a vertical list) move the selection (and wrap),
+//! Home/End jump to the first/last tab (automatic activation). The list is
+//! one Tab stop, on the selected trigger (roving focus).
 
 use crate::color::Tone;
 use crate::components::shared::{
@@ -106,7 +106,9 @@ impl VariantEnum for TabsVariant {}
 /// is as wide as its triggers and each trigger as wide as its label;
 /// [`Tabs::width`] makes it wider. The response is the
 /// list's, marked changed when the selection moved. Content below the list
-/// sits [`Tabs::content_gap`] under it (shadcn `Tabs` root `gap`).
+/// sits [`Tabs::content_gap`] under it (shadcn `Tabs` root `gap`), in a
+/// [`layout::vstack`]; beside a vertical list it sits that gap to its right,
+/// in a [`layout::row_top`].
 pub struct Tabs<'a> {
     active: &'a mut usize,
     labels: Vec<String>,
@@ -133,10 +135,12 @@ impl<'a> Tabs<'a> {
         self.variant = v.into();
         self
     }
-    /// shadcn `Tabs` `orientation`, `Horizontal` by default. The crate
-    /// draws the list horizontally only: a vertical list needs a content
-    /// layout beside the list that the crate does not have, so `Vertical`
-    /// draws as `Horizontal`.
+    /// shadcn `Tabs` `orientation`, `Horizontal` by default. `Vertical`
+    /// stacks the triggers in a column as wide as the widest, their labels
+    /// at the start, moves the selection with Up/Down instead of
+    /// Left/Right, and puts the line variant's bar on the right. Its
+    /// content goes beside it:
+    /// `layout::row_top(ui, Tabs::content_gap(ui), |ui| { ui.add(tabs); content })`.
     pub fn orientation(mut self, o: Orientation) -> Self {
         self.orientation = o;
         self
@@ -176,8 +180,12 @@ impl Widget for Tabs<'_> {
         let enabled = self.enabled && ui.is_enabled();
         let v = t.resolve(self.variant);
         let variant_bit = v.bits();
-        // `Vertical` draws as `Horizontal` (see `Tabs::orientation`).
-        let _ = self.orientation;
+        let vertical = self.orientation == Orientation::Vertical;
+        let axis = if vertical {
+            State::VERTICAL
+        } else {
+            State::HORIZONTAL
+        };
         let root = [&*s.tabs];
         let list = [
             &*s.tabs_list,
@@ -187,7 +195,7 @@ impl Widget for Tabs<'_> {
         let after = [v.part(s, |_, s| &s.tabs_trigger_after, |r| &r.tabs_trigger_after)];
 
         // Geometry depends neither on the selection nor on interaction.
-        let g = t.state(ui.ctx(), State::HORIZONTAL.or(variant_bit));
+        let g = t.state(ui.ctx(), axis.or(variant_bit));
         let geo = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, g);
         let (pad_t, pad_r, pad_b, pad_l) = (
             geo(&list, |r| &r.pad_top),
@@ -212,24 +220,32 @@ impl Widget for Tabs<'_> {
             .iter()
             .map(|l| look.layout(ui, l.as_str(), TextWrapMode::Extend, f32::INFINITY))
             .collect();
-        // No list height: CSS's initial `auto`, the triggers' own height,
-        // which `h-[calc(100%-1px)]` of an `auto` parent leaves at `auto` too.
-        // A trigger's content is its line box.
+        // No list height: CSS's initial `auto` (a vertical list's `h-fit`),
+        // the triggers' own height, which `h-[calc(100%-1px)]` of an `auto`
+        // parent leaves at `auto` too. A trigger's content is its line box.
         let trigger_auto = look.line_height()
             + geo(&trigger, |r| &r.pad_top)
             + geo(&trigger, |r| &r.pad_bottom)
             + border_w * 2.0;
+        let n = galleys.len();
+        let gaps = gap * n.saturating_sub(1) as f32;
         let (list_h, trigger_h) = match pick(&list, |r| &r.height, g) {
             Some(h) => (h, h - pad_t - pad_b - geo(&trigger, |r| &r.height_inset)),
+            None if vertical => (trigger_auto * n as f32 + gaps + pad_t + pad_b, trigger_auto),
             None => (trigger_auto + pad_t + pad_b, trigger_auto),
         };
         let widths: Vec<f32> = galleys
             .iter()
             .map(|g| g.size().x + tpad_l + tpad_r + border_w * 2.0)
             .collect();
-        let n = widths.len();
-        let chrome = gap * n.saturating_sub(1) as f32 + pad_l + pad_r;
-        let hug_w = widths.iter().sum::<f32>() + chrome;
+        // A column is as wide as its widest trigger (`w-fit`), and every
+        // trigger as wide as the column (`w-full`).
+        let chrome = if vertical { 0.0 } else { gaps } + pad_l + pad_r;
+        let hug_w = if vertical {
+            widths.iter().copied().fold(0.0, f32::max)
+        } else {
+            widths.iter().sum::<f32>()
+        } + chrome;
         // A NaN width, one below the triggers' own, or an unbounded `Ui`
         // leaves the list as wide as its triggers. Without a width, a
         // justified layout gives the list its width, as egui's `Button`
@@ -241,7 +257,9 @@ impl Widget for Tabs<'_> {
             }
             None => hug_w,
         };
-        let widths = if list_w > hug_w {
+        let widths = if vertical {
+            vec![list_w - chrome; n]
+        } else if list_w > hug_w {
             flex_shares(&widths, list_w - chrome)
         } else {
             widths
@@ -253,15 +271,22 @@ impl Widget for Tabs<'_> {
             layout::allocate_overflowing(ui, vec2(list_w, list_h), Sense::hover());
         let ids: Vec<egui::Id> = (0..n).map(|i| resp.id.with(("tab", i))).collect();
         let mut x = list_rect.left() + pad_l;
+        let mut y = list_rect.top() + pad_t;
         let trigger_rects: Vec<Rect> = widths
             .iter()
             .map(|w| {
-                let r = Rect::from_min_size(
-                    pos2(x, list_rect.center().y - trigger_h / 2.0),
-                    vec2(*w, trigger_h),
-                );
-                x += w + gap;
-                r
+                if vertical {
+                    let r = Rect::from_min_size(pos2(x, y), vec2(*w, trigger_h));
+                    y += trigger_h + gap;
+                    r
+                } else {
+                    let r = Rect::from_min_size(
+                        pos2(x, list_rect.center().y - trigger_h / 2.0),
+                        vec2(*w, trigger_h),
+                    );
+                    x += w + gap;
+                    r
+                }
             })
             .collect();
         // Roving focus: the list is one Tab stop, on the selected trigger.
@@ -287,7 +312,13 @@ impl Widget for Tabs<'_> {
 
         // Selection: a click, focus (bits' automatic activation, so a press
         // selects as it focuses), or the arrow/Home/End keys on a focused
-        // trigger, which move the focus along.
+        // trigger, which move the focus along. The arrows of the list's
+        // axis move; bits' roving focus ignores the others.
+        let (key_fwd, key_back) = if vertical {
+            (Key::ArrowDown, Key::ArrowUp)
+        } else {
+            (Key::ArrowRight, Key::ArrowLeft)
+        };
         let mut next = None;
         let mut by_key = false;
         if enabled {
@@ -301,15 +332,16 @@ impl Widget for Tabs<'_> {
                         m.set_focus_lock_filter(
                             r.id,
                             egui::EventFilter {
-                                horizontal_arrows: true,
+                                horizontal_arrows: !vertical,
+                                vertical_arrows: vertical,
                                 ..Default::default()
                             },
                         )
                     });
                     let pressed = |key| ui.input_mut(|inp| inp.consume_key(Modifiers::NONE, key));
-                    let key_next = if pressed(Key::ArrowRight) {
+                    let key_next = if pressed(key_fwd) {
                         Some((i + 1) % n)
-                    } else if pressed(Key::ArrowLeft) {
+                    } else if pressed(key_back) {
                         Some((i + n - 1) % n)
                     } else if pressed(Key::Home) {
                         Some(0)
@@ -336,8 +368,25 @@ impl Widget for Tabs<'_> {
         }
         let active = *self.active;
 
-        // The line indicator may reach below the list (`after:bottom-[-5px]`).
-        let reach = (-geo(&after, |r| &r.inset_bottom)).max(0.0);
+        // The line indicator may reach past the list (`after:bottom-[-5px]`,
+        // `after:-right-1`).
+        let reach = [
+            geo(&after, |r| &r.inset_top),
+            geo(&after, |r| &r.inset_right),
+            geo(&after, |r| &r.inset_bottom),
+            geo(&after, |r| &r.inset_left),
+        ]
+        .into_iter()
+        .fold(0.0_f32, |m, i| m.max(-i));
+        // bits' list: `role="tablist"` with `aria-orientation`.
+        ui.ctx().accesskit_node_builder(resp.id, |node| {
+            node.set_role(egui::accesskit::Role::TabList);
+            node.set_orientation(if vertical {
+                egui::accesskit::Orientation::Vertical
+            } else {
+                egui::accesskit::Orientation::Horizontal
+            });
+        });
         for (i, r) in resps.iter().enumerate() {
             r.widget_info(|| {
                 egui::WidgetInfo::selected(
@@ -358,7 +407,7 @@ impl Widget for Tabs<'_> {
             let list_text = pick(&list, |r| &r.text, g).map(|p| t.tone(p));
 
             for (i, (rect, r)) in trigger_rects.iter().zip(&resps).enumerate() {
-                let context = State::HORIZONTAL
+                let context = axis
                     .or(variant_bit)
                     .with(State::SELECTED, i == active);
                 let st = interaction_state(&t, r, context.with(State::DISABLED, !enabled));
@@ -366,7 +415,7 @@ impl Widget for Tabs<'_> {
                 let tone = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<Paint>| {
                     pick(l, f, st).map(|p| t.tone(p))
                 };
-                let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick_len(l, f, st);
+                let px = |l: &[&Recipe], f: fn(&Recipe) -> &Prop<f32>| pick(l, f, st);
 
                 let fg = tone(&trigger, |r| &r.text)
                     .or(list_text)
@@ -381,14 +430,19 @@ impl Widget for Tabs<'_> {
                     transitioned_opacity(ui.ctx(), r.id.with("after"), &[&after[..]], st);
                 if bar_alpha > 0.0 {
                     let inner = rect.shrink(border_w);
-                    let bottom = inner.bottom() - px(&after, |r| &r.inset_bottom);
-                    let bar = Rect::from_min_max(
-                        pos2(
-                            inner.left() + px(&after, |r| &r.inset_left),
-                            bottom - px(&after, |r| &r.height),
-                        ),
-                        pos2(inner.right() - px(&after, |r| &r.inset_right), bottom),
+                    let (left, right) = absolute_span(
+                        inner.x_range(),
+                        px(&after, |r| &r.inset_left),
+                        px(&after, |r| &r.inset_right),
+                        px(&after, |r| &r.width),
                     );
+                    let (top, bottom) = absolute_span(
+                        inner.y_range(),
+                        px(&after, |r| &r.inset_top),
+                        px(&after, |r| &r.inset_bottom),
+                        px(&after, |r| &r.height),
+                    );
+                    let bar = Rect::from_min_max(pos2(left, top), pos2(right, bottom));
                     shapes.extend(
                         RecipeBox::resolve(ui.ctx(), &t, &after, st)
                             .faded(bar_alpha)
@@ -397,10 +451,37 @@ impl Widget for Tabs<'_> {
                 }
                 painter.extend(shapes);
                 let galley = &galleys[i];
-                galley.paint(&painter, rect.center() - galley.size() / 2.0, fg);
+                // A vertical trigger's label sits at its start (`justify-start`).
+                let at = if vertical {
+                    pos2(
+                        rect.left() + border_w + tpad_l,
+                        rect.center().y - galley.size().y / 2.0,
+                    )
+                } else {
+                    rect.center() - galley.size() / 2.0
+                };
+                galley.paint(&painter, at, fg);
             }
         }
         resp
+    }
+}
+
+/// One axis of an absolutely placed box in its containing block `range`,
+/// as CSS places it: both insets set span the box between them, one inset
+/// and a size anchor it to that side, and neither leaves it at the start.
+fn absolute_span(
+    range: egui::Rangef,
+    start: Option<f32>,
+    end: Option<f32>,
+    size: Option<f32>,
+) -> (f32, f32) {
+    let size = size.unwrap_or(0.0); // behaviour-ok: CSS's initial size of an empty box
+    match (start, end) {
+        (Some(s), Some(e)) => (range.min + s, range.max - e),
+        (None, Some(e)) => (range.max - e - size, range.max - e),
+        (Some(s), None) => (range.min + s, range.min + s + size),
+        (None, None) => (range.min, range.min + size),
     }
 }
 

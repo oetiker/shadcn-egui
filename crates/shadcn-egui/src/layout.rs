@@ -72,6 +72,27 @@ pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     row_aligned(ui, gap, false, add)
 }
 
+/// [`row`] with its items at the top of the row: the browser's flex row
+/// (`flex-direction: row; gap: N`) whose items keep their own height at the
+/// row's start, as `items-start` or an `h-fit` item in a stretching row
+/// (egui's `ui.horizontal_top`). A vertical
+/// [`Tabs`](crate::components::tabs::Tabs) list and its content sit in one:
+///
+/// ```
+/// # egui::__run_test_ui(|ui| {
+/// use shadcn_egui::components::tabs::Tabs;
+/// use shadcn_egui::{layout, Orientation};
+/// let mut tab = 0;
+/// layout::row_top(ui, Tabs::content_gap(ui), |ui| {
+///     ui.add(Tabs::new(&mut tab, &["Account", "Password"]).orientation(Orientation::Vertical));
+///     layout::vstack(ui, 0.0, |ui| ui.label("Manage your account."));
+/// });
+/// # });
+/// ```
+pub fn row_top<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    row_aligned(ui, gap, true, add)
+}
+
 /// [`row`] with its items at the top of the row (`items-start`) where
 /// `top` is set, else centred (`items-center`).
 pub(crate) fn row_aligned<R>(
