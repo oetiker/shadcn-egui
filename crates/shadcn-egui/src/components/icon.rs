@@ -116,10 +116,8 @@ impl Widget for IconView<'_> {
         // No label of its own (the icon's name is an id, not text a reader
         // should hear): name it with `labelled_by(label.id)`, which an own
         // label would override.
-        let enabled = ui.is_enabled();
-        resp.widget_info(|| egui::WidgetInfo {
-            enabled,
-            ..egui::WidgetInfo::new(egui::WidgetType::Image)
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::new(egui::WidgetType::Image)
         });
         if ui.is_rect_visible(rect) {
             let color = self.color.unwrap_or(ui.visuals().text_color());

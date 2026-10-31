@@ -89,8 +89,8 @@ impl Widget for Label {
             size = egui::vec2(block.size().x.max(width), block.size().y);
         }
         let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &self.text)
         });
         // `peer-disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);

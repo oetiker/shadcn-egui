@@ -337,7 +337,9 @@ impl<'a> Card<'a> {
         }
 
         let response = crate::layout::end_item(ui, frame, outer, Sense::hover());
-        response.widget_info(|| WidgetInfo::new(WidgetType::Panel));
+        crate::components::shared::widget_info_never_disabled(&response, || {
+            WidgetInfo::new(WidgetType::Panel)
+        });
         result
     }
 }

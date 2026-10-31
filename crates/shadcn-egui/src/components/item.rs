@@ -909,9 +909,14 @@ impl<'a> Item<'a> {
             WidgetType::Other
         };
         let enabled = response.enabled();
-        response.widget_info(|| {
-            WidgetInfo::labeled(kind, enabled, title_text.as_deref().unwrap_or(""))
-        });
+        let info = || WidgetInfo::labeled(kind, enabled, title_text.as_deref().unwrap_or(""));
+        // A plain item is a `<div>`, with no disabled state; a link or
+        // button item is a control.
+        if kind == WidgetType::Other {
+            crate::components::shared::widget_info_never_disabled(&response, info);
+        } else {
+            response.widget_info(info);
+        }
         if spinner {
             crate::components::spinner::report_hosted(ui, &response, 0);
         }

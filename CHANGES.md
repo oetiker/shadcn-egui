@@ -36,7 +36,7 @@ are recorded here. The format is based on
 - A widget with a shadow (a selected tab, a card, a dialog, a popover) no longer stalls the app each time it moves, fades in or out, or comes back after a frame without it: the shadow is built once per size and reused, where before every such frame built it again (about 100 ms in a debug build). The first frame that shows a shadow, and each frame of a shadow that changes size or grows in as a tab is selected, still build it, now in half the time (a tab bar's first frame in a debug build: 115 ms before, 51 ms now). (#25)
 - Text you pass to a crate widget as an egui `LayoutJob` with a row limit (`job.wrap.max_rows`) now stops after that many rows and ends with its overflow character, as in an egui `Label`; before, the widget showed every row. The job's `break_anywhere` and `overflow_character` are kept as well. (#29)
 - Badge text can now be selected with the mouse and copied with Ctrl+C, as on the shadcn page; before, a drag over a badge selected nothing. Setting egui's `selectable_labels` to false turns selection off for badges as for all other crate text; the build-ui skill now names this switch.
-- Screen readers no longer announce the spinner in a disabled button, badge or item as disabled; the button itself still is.
+- Screen readers no longer announce a Label, Badge, Kbd, Card, Alert, Progress bar, `IconView` icon or the text of a crate widget as disabled when it sits in a disabled area (`ui.add_enabled_ui(false, ..)`, `ui.disable()`), as a browser does not for these elements; buttons, inputs and the other controls there are still announced as disabled. A label in such an area still looks faded.
 
 ## 0.7.0 - 2026-10-29
 ### New

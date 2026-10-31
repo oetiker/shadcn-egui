@@ -1926,6 +1926,31 @@ pub fn widget_info_with_role(
         .accesskit_node_builder(resp.id, |node| node.set_role(role));
 }
 
+/// Reports `make_info` for a part whose upstream element has no disabled
+/// state (a `<label>`, `<div>`, `<span>`, `<kbd>`, `<svg>`, `<legend>`, or
+/// `role="status"`, `progressbar`, `alert`): HTML-AAM and ARIA 1.2
+/// give it none, so a disabled `Ui` does not make it disabled to assistive
+/// technology (conformance 8). egui marks every widget in a disabled `Ui`
+/// disabled and adds ": disabled" to its spoken text; this reports the
+/// part as enabled and takes the flag out of its node again. Controls keep
+/// egui's disabled state.
+pub(crate) fn widget_info_never_disabled(
+    resp: &Response,
+    make_info: impl Fn() -> egui::WidgetInfo,
+) {
+    resp.widget_info(|| egui::WidgetInfo {
+        enabled: true,
+        ..make_info()
+    });
+    never_disabled(&resp.ctx, resp.id);
+}
+
+/// Takes egui's disabled flag out of the accessibility node `id`, a part
+/// [`widget_info_never_disabled`] describes that reports no `widget_info`.
+pub(crate) fn never_disabled(ctx: &egui::Context, id: Id) {
+    ctx.accesskit_node_builder(id, |node| node.clear_disabled());
+}
+
 /// Upstream's `aria-invalid`: while `invalid`, the accessibility node of
 /// `resp` says its value is invalid, as the browser reports the attribute.
 /// `widget_info` sets no invalid state, so the call may come before or

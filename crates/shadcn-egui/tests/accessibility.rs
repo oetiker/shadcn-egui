@@ -157,10 +157,11 @@ fn put(ui: &mut egui::Ui, how: How, leaf: impl egui::Widget) -> egui::Response {
 }
 
 /// D-1: a leaf has no `enabled` flag of its own; the `Ui` disables it, by
-/// `add_enabled` or `Ui::disable`, as an egui leaf. Every leaf in a
+/// `add_enabled` or `Ui::disable`, as an egui leaf. Every control in a
 /// disabled `Ui` reports the disabled state to assistive technology and
-/// ignores a click and typed text; the same leaf in an enabled `Ui` takes
-/// them.
+/// ignores a click and typed text; the same control in an enabled `Ui`
+/// takes them. A label is no control: upstream's `<label>` has no disabled
+/// state, so it reports none ([`a_disabled_ui_disables_no_part_without_a_disabled_state`]).
 #[test]
 fn a_disabled_ui_disables_every_leaf() {
     use shadcn_egui::components::label::Label;
@@ -226,7 +227,8 @@ fn a_disabled_ui_disables_every_leaf() {
             },
             Some(|s| s.tab == 1),
         ),
-        // A label takes no input; it only looks and reads disabled.
+        // A label takes no input and reports no disabled state; it only
+        // looks disabled.
         (
             "label",
             Ok("Email"),
@@ -254,7 +256,8 @@ fn a_disabled_ui_disables_every_leaf() {
                 Ok(label) => harness.get_by_label(label),
                 Err(role) => harness.get_by_role(role),
             };
-            let disabled = how != How::Enabled;
+            // Only a leaf that takes input is a control.
+            let disabled = how != How::Enabled && changed.is_some();
             assert_eq!(
                 target().accesskit_node().is_disabled(),
                 disabled,
@@ -270,6 +273,163 @@ fn a_disabled_ui_disables_every_leaf() {
                 !disabled,
                 "{name}, {how:?}: a click changed the leaf"
             );
+        }
+    }
+}
+
+/// Upstream draws these parts as a `<label>`, `<div>`, `<span>`, `<kbd>`,
+/// `<svg>`, `<legend>` or with `role="status"`, `progressbar`, `alert` or
+/// `list`: HTML-AAM and ARIA 1.2 give none of them a disabled state, so
+/// none reports one in a disabled `Ui` (conformance 8), although egui
+/// marks every widget there disabled. The controls among them, and a
+/// FieldSet (`<fieldset disabled>`), still report it.
+#[test]
+fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
+    use shadcn_egui::components::alert::{alert_title, Alert};
+    use shadcn_egui::components::avatar::{avatar_group_count, Avatar};
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::card::{card_header, Card};
+    use shadcn_egui::components::field::{Field, FieldLabel, FieldSet};
+    use shadcn_egui::components::icon::IconView;
+    use shadcn_egui::components::item::{Item, ItemGroup};
+    use shadcn_egui::components::kbd::Kbd;
+    use shadcn_egui::components::label::Label;
+    use shadcn_egui::components::progress::Progress;
+    use shadcn_egui::components::spinner::Spinner;
+    type Add = fn(&mut egui::Ui);
+    // Each case: what it draws, the roles that must be there and report
+    // no disabled state, and the roles that must report it.
+    let cases: [(&str, Add, &[Role], &[Role]); 14] = [
+        (
+            "label",
+            |ui| drop(ui.add(Label::new("Email"))),
+            &[Role::Label],
+            &[],
+        ),
+        (
+            "kbd",
+            |ui| drop(ui.add(Kbd::new("Ctrl"))),
+            &[Role::Label],
+            &[],
+        ),
+        (
+            "card",
+            |ui| Card::new().show(ui, |ui| card_header(ui, "Title", "Description")),
+            &[Role::Pane, Role::Label],
+            &[],
+        ),
+        (
+            "badge",
+            |ui| drop(ui.add(Badge::new("New"))),
+            &[Role::Label],
+            &[],
+        ),
+        (
+            "alert",
+            |ui| drop(Alert::new().show(ui, |ui| alert_title(ui, "Saved"))),
+            &[Role::Alert, Role::Label],
+            &[],
+        ),
+        (
+            "progress",
+            |ui| drop(ui.add(Progress::new(0.4))),
+            &[Role::ProgressIndicator],
+            &[],
+        ),
+        (
+            "icon",
+            |ui| drop(ui.add(IconView::new(&shadcn_egui::icons::lucide::INBOX))),
+            &[Role::Image],
+            &[],
+        ),
+        (
+            "spinner",
+            |ui| drop(ui.add(Spinner::new())),
+            &[Role::Status],
+            &[],
+        ),
+        (
+            "avatar",
+            |ui| {
+                ui.add(Avatar::new("CN"));
+                avatar_group_count(ui, "+3");
+            },
+            &[Role::Label],
+            &[],
+        ),
+        (
+            "item",
+            |ui| {
+                ItemGroup::new().show(ui, |ui| {
+                    Item::new().title("Inbox").show(ui, |_| ());
+                });
+            },
+            &[Role::List, Role::Unknown],
+            &[],
+        ),
+        (
+            "field",
+            |ui| {
+                Field::new()
+                    .label("Email")
+                    .error("Required.")
+                    .show(ui, |ui| ui.add(Input::new(&mut String::new())));
+            },
+            &[Role::Group, Role::Label, Role::Alert],
+            &[Role::TextInput],
+        ),
+        (
+            "choice card",
+            |ui| {
+                FieldLabel::choice_card().show(ui, |ui| {
+                    Field::new()
+                        .title("Share")
+                        .show(ui, |ui| ui.add(Switch::new(&mut false)));
+                });
+            },
+            &[Role::Label],
+            &[Role::CheckBox],
+        ),
+        (
+            "fieldset",
+            |ui| drop(FieldSet::new().legend("Address").show(ui, |_| ())),
+            &[Role::Legend],
+            &[Role::Group],
+        ),
+        (
+            "button",
+            |ui| drop(ui.add(Button::new("Save"))),
+            &[],
+            &[Role::Button],
+        ),
+    ];
+    for (name, add, quiet, disabled) in cases {
+        let mut harness = Harness::new_ui(move |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.disable();
+            add(ui);
+        });
+        harness.run();
+        for (roles, want) in [(quiet, false), (disabled, true)] {
+            for &role in roles {
+                // egui's bare interaction nodes are `Unknown` without a
+                // name; an item's node has its title.
+                let named = |n: &egui_kittest::kittest::AccessKitNode<'_>| {
+                    n.role() == role && (role != Role::Unknown || n.label().is_some())
+                };
+                let nodes: Vec<_> = harness
+                    .query_all(egui_kittest::kittest::By::new().predicate(named))
+                    .collect();
+                assert!(!nodes.is_empty(), "{name}: no {role:?} node");
+                for node in nodes {
+                    assert_eq!(
+                        node.accesskit_node().is_disabled(),
+                        want,
+                        "{name}: {role:?} {:?} disabled state",
+                        node.accesskit_node().label()
+                    );
+                }
+            }
         }
     }
 }
