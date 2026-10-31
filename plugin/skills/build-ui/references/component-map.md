@@ -32,6 +32,7 @@ variants"), and its parts follow it.
 | `<Tooltip>` | `shadcn_egui::components::tooltip::tooltip(ui.add(..), "text")`, or `Tooltip::new(&resp).show(ui, \|ui\| ..)` for other content; text inside takes the tooltip's look. Markers: `cn-tooltip-content`, `cn-tooltip-arrow` |
 | `<Kbd>` + `<Kbd.Group>` | `shadcn_egui::components::kbd::kbd(ui, "Ctrl")`, or `ui.add(Kbd::new(content))` with any `IntoAtoms` content (text, `IconAtom`s); `Kbd::icon_only(icon, name)` for an icon alone, `name` its accessible name. A shortcut of several keys: `KbdGroup::new().show(ui, \|ui\| ..)`, which lays its chips and any text between them out in one row (plain text such as a `+` as body text: `TextLook::resolve(ui, &[], State::NONE).label(ui, "+", TextWrapMode::Extend)`, centred on the chips as in the browser; `ui.label` sits low); its `.variant(..)` reaches the chips. A chip in a tooltip does not yet take the tooltip's look. Markers: `cn-kbd`, `cn-kbd-group` |
 | `<Avatar size>` + Image/Fallback/Badge, `<Avatar.Group>` + GroupCount | `shadcn_egui::components::avatar::Avatar::new("CN")` (the fallback; text and icons in one row) or `Avatar::icon_only(icon, name)`, with `.image(src)` (a uri an installed egui image loader reads, or `(uri, bytes)`; not a texture: the inner border blends with the image's pixels), `.alt_text(..)`, `.size(AvatarSize::…)` (`Sm`, `Default`, `Lg`), `.badge(AvatarBadge::new().icon(..))`. The fallback shows until the image has loaded and when it fails. A group: `AvatarGroup::new().show(ui, \|ui\| ..)` with avatars and `avatar_group_count(ui, "+3")` (or `AvatarGroupCount::icon_only(icon, name)`), which takes the size of the group's largest or smallest avatar; `.id_salt(..)` for two groups in one `Ui` whose avatars change. A demo's badge colour (`bg-green-600`) is an app variant with an app colour; the demos' `grayscale` class is not offered. Markers: `cn-avatar` (its `after:` border is `avatar_after`), `cn-avatar-image`, `cn-avatar-fallback`, `cn-avatar-badge`, `cn-avatar-group`, `cn-avatar-group-count` |
+| `<Item variant size>` + Media/Content/Title/Description/Actions/Header/Footer, `<ItemGroup>` + `<ItemSeparator>` | `shadcn_egui::components::item::Item::new()` with `.title(..)`, `.description(..)` (clamped at the style's line count), one media setter: `.icon(lucide::INBOX)` or `.icon(Glyph::Spinner)` (`variant="icon"`), `.image(src)` with `.alt_text(..)` (`variant="image"`: the item size's square, the picture cropped to fill it), or `.media(\|ui\| ..)` (an avatar); `.variant(ItemVariant::…)` (`Default`, `Outline`, `Muted`), `.size(ItemSize::…)` (`Default`, `Sm`, `Xs`). `.show(ui, \|ui\| ..)`: the closure is the actions row at the line's end; `item_header(ui, \|ui\| ..)` first and `item_footer(ui, \|ui\| ..)` last in it put a row above or below, its widgets spread (`justify-between`). `ui.add(item)` for an item without actions. A link (`asChild` with `<a>`): `.link(true)`, the style's hover fill, Enter, `clicked()` opens the target; a button: `.sense(Sense::click())`; `.selected(..)` (`aria-selected`) draws no look of its own. A group: `ItemGroup::new().show(ui, \|ui\| ..)` with items and `item_separator(ui)`; `.variant(..)` reaches the items that name none; its gap follows the items' size only, not other sized widgets inside them. `.id_salt(..)` for items or groups whose parts change between passes. Markers: `cn-item`, `cn-item-variant-*`, `cn-item-size-*`, `cn-item-media`, `cn-item-media-variant-*`, `cn-item-content`, `cn-item-title`, `cn-item-description`, `cn-item-actions`, `cn-item-header`, `cn-item-footer`, `cn-item-group`, `cn-item-separator` |
 | Lucide `<Mic />` | `shadcn_egui::components::icon::IconView::new(&shadcn_egui::icons::lucide::MIC)` with `.size(..)`, `.color(..)`; `paint_icon(painter, rect, icon, color, stroke)` for custom widgets. See `icons.md` |
 | An icon inside `IntoAtoms` content (`egui::Button`, a crate widget's content) | `shadcn_egui::components::icon_atom::IconAtom::new(icon)`, with `.size(..)` and `.tint(..)`. Without a size it is a crate widget's icon size (12 px in a `Kbd`), `Metrics::icon` in a plain egui widget. Without a tint it draws in the theme's text colour, and a crate widget draws it in its state colour, as its `.icon` slot; a tinted one keeps its colour everywhere. A text colour a host `Ui` overrides does not reach an untinted atom in a plain egui widget (egui gives image atoms no `Ui` colour), so tint it there. Needs `Theme::apply` |
 | `transition-*` (`transition-all duration-200 ease-in-out`) on a value of your own widget | `shadcn_egui::components::motion::transition(ui.ctx(), id, target, &stack, Transition::OTHER, state)` with the part's recipe stack: the value moves over the recipe's `duration` along its `easing` (150 ms `ease-in-out` where it sets none) when its `transition` names the property, and jumps under `animation_time == 0` |
@@ -83,5 +84,34 @@ fn alerts(ui: &mut egui::Ui) -> bool {
                 .inner
         })
         .inner
+}
+```
+
+```rust
+use shadcn_egui::components::avatar::Avatar;
+use shadcn_egui::components::button::{Button, ButtonSize};
+use shadcn_egui::components::item::{item_separator, Item, ItemGroup, ItemVariant};
+use shadcn_egui::icons::lucide;
+
+fn people(ui: &mut egui::Ui) {
+    Item::new()
+        .variant(ItemVariant::Outline)
+        .icon(lucide::SHIELD_ALERT)
+        .title("Security Alert")
+        .description("New login detected from unknown device.")
+        .show(ui, |ui| ui.add(Button::new("Review").size(ButtonSize::Sm)));
+    ItemGroup::new().show(ui, |ui| {
+        for (i, name) in ["shadcn", "maxleiter"].into_iter().enumerate() {
+            if i > 0 {
+                item_separator(ui);
+            }
+            Item::new()
+                .media(move |ui| {
+                    ui.add(Avatar::new(&name[..1]));
+                })
+                .title(name)
+                .show(ui, |_| ());
+        }
+    });
 }
 ```
