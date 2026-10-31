@@ -373,6 +373,249 @@ fn input_snapshot() {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Input: upstream's demos that wrap the field in Field
+
+/// `add` in a column `w` wide: upstream's `max-w-*` on the demo's root.
+fn max_w(ui: &mut egui::Ui, w: f32, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui(egui::vec2(w, ui.available_height()), |ui| {
+        ui.set_width(w);
+        add(ui);
+    });
+}
+
+/// One snapshot per style and mode of an input demo `w` wide (the docs'
+/// `max-w-xs` preview column where the demo sets no width of its own).
+fn input_demo(name: &str, w: f32, height: f32, mut ui_fn: impl FnMut(&mut egui::Ui)) {
+    common::snapshot_all(name, egui::vec2(w + 48.0, height), |ui| {
+        max_w(ui, w, &mut ui_fn)
+    });
+}
+
+/// The style's field-group gap: the grid gap of a group that is a grid.
+fn field_group_gap(ui: &egui::Ui) -> f32 {
+    use shadcn_egui::style::{pick, State};
+    let t = Theme::current(ui.ctx());
+    pick(&[&*t.style.field_group], |r| &r.gap, State::NONE).unwrap_or(0.0)
+}
+
+#[test]
+fn input_demo_snapshot() {
+    use shadcn_egui::components::field::Field;
+    use shadcn_egui::components::input::Input;
+    input_demo("input_demo", 320.0, 150.0, |ui| {
+        Field::new()
+            .label("API Key")
+            .description("Your API key is encrypted and stored securely.")
+            .show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).password(true).hint("sk-..."))
+            });
+    });
+}
+
+#[test]
+fn input_field_snapshot() {
+    use shadcn_egui::components::field::Field;
+    use shadcn_egui::components::input::Input;
+    input_demo("input_field", 320.0, 150.0, |ui| {
+        Field::new()
+            .label("Username")
+            .description("Choose a unique username for your account.")
+            .show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).hint("Enter your username"))
+            });
+    });
+}
+
+#[test]
+fn input_invalid_snapshot() {
+    use shadcn_egui::components::field::Field;
+    use shadcn_egui::components::input::Input;
+    input_demo("input_invalid", 320.0, 150.0, |ui| {
+        Field::new()
+            .invalid(true)
+            .label("Invalid Input")
+            .description("This field contains validation errors.")
+            .show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).hint("Error").invalid(true))
+            });
+    });
+}
+
+/// `data-disabled` on the field and `disabled` on the input: a disabled
+/// `Ui` around the field (D-1).
+#[test]
+fn input_disabled_snapshot() {
+    use shadcn_egui::components::field::Field;
+    use shadcn_egui::components::input::Input;
+    input_demo("input_disabled", 320.0, 150.0, |ui| {
+        ui.add_enabled_ui(false, |ui| {
+            Field::new()
+                .label("Email")
+                .description("This field is currently disabled.")
+                .show(ui, |ui| {
+                    ui.add(Input::new(&mut String::new()).hint("Email"))
+                });
+        });
+    });
+}
+
+/// The label's `*` is a `text-destructive` span; `required` has no look.
+#[test]
+fn input_required_snapshot() {
+    use shadcn_egui::components::field::Field;
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::text::TextLook;
+    use shadcn_egui::style::{Role, State};
+    input_demo("input_required", 320.0, 150.0, |ui| {
+        let t = Theme::current(ui.ctx());
+        // The field label's font: `cn-label` under `cn-field-label`.
+        let st = t.state(ui.ctx(), State::NONE);
+        let font =
+            TextLook::resolve(ui, &[&*t.style.label, &*t.style.field_label], st).font_id(ui.ctx());
+        let mut label = egui::text::LayoutJob::default();
+        // The label's own colour and font where the job leaves them.
+        label.append(
+            "Required Field ",
+            0.0,
+            egui::TextFormat::simple(font.clone(), egui::Color32::PLACEHOLDER),
+        );
+        label.append(
+            "*",
+            0.0,
+            egui::TextFormat::simple(font, t.role(Role::Destructive)),
+        );
+        Field::new()
+            .label(label)
+            .description("This field must be filled out.")
+            .show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).hint("This field is required"))
+            });
+    });
+}
+
+#[test]
+fn input_fieldgroup_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    input_demo("input_fieldgroup", 320.0, 300.0, |ui| {
+        FieldGroup::new().show(ui, |ui| {
+            Field::new().label("Name").show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).hint("Jordan Lee"))
+            });
+            Field::new()
+                .label("Email")
+                .description("We'll send updates to this address.")
+                .show(ui, |ui| {
+                    ui.add(Input::new(&mut String::new()).hint("name@example.com"))
+                });
+            Field::new().horizontal().show(ui, |ui| {
+                ui.add(Button::new("Reset").variant(ButtonVariant::Outline));
+                ui.add(Button::new("Submit"));
+            });
+        });
+    });
+}
+
+/// `grid max-w-sm grid-cols-2` on the group: two columns the group's gap
+/// apart.
+#[test]
+fn input_grid_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    input_demo("input_grid", 384.0, 110.0, |ui| {
+        FieldGroup::new().show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = field_group_gap(ui);
+            ui.columns_const(|[a, b]| {
+                Field::new().label("First Name").show(a, |ui| {
+                    ui.add(Input::new(&mut String::new()).hint("Jordan"))
+                });
+                Field::new()
+                    .label("Last Name")
+                    .show(b, |ui| ui.add(Input::new(&mut String::new()).hint("Lee")));
+            });
+        });
+    });
+}
+
+#[test]
+fn input_inline_snapshot() {
+    use shadcn_egui::components::field::Field;
+    use shadcn_egui::components::input::Input;
+    input_demo("input_inline", 320.0, 70.0, |ui| {
+        Field::new().horizontal().show(ui, |ui| {
+            ui.add(Input::new(&mut String::new()).hint("Search..."));
+            ui.add(Button::new("Search"));
+        });
+    });
+}
+
+/// The badge sits in the label (`ml-auto`): the label row holds the
+/// field label at its start and the badge at its end.
+#[test]
+fn input_badge_snapshot() {
+    use shadcn_egui::components::field::{field_label, Field};
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::layout;
+    input_demo("input_badge", 320.0, 110.0, |ui| {
+        Field::new().show(ui, |ui| {
+            layout::space_between(
+                ui,
+                |ui| {
+                    field_label(ui, "Webhook URL");
+                },
+                |ui| {
+                    badge(ui, "Beta", BadgeVariant::Secondary);
+                },
+            );
+            ui.add(Input::new(&mut String::new()).hint("https://api.example.com/webhook"))
+        });
+    });
+}
+
+/// input-form, with Select: `max-w-sm`, the phone and country fields in a
+/// `grid-cols-2 gap-4` row.
+#[test]
+fn input_form_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::select::Select;
+    input_demo("input_form", 384.0, 470.0, |ui| {
+        let mut country = 0;
+        FieldGroup::new().show(ui, |ui| {
+            Field::new().label("Name").show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).hint("Evil Rabbit"))
+            });
+            Field::new()
+                .label("Email")
+                .description("We'll never share your email with anyone.")
+                .show(ui, |ui| {
+                    ui.add(Input::new(&mut String::new()).hint("john@example.com"))
+                });
+            ui.spacing_mut().item_spacing.x = 16.0;
+            ui.columns_const(|[a, b]| {
+                Field::new().label("Phone").show(a, |ui| {
+                    ui.add(Input::new(&mut String::new()).hint("+1 (555) 123-4567"))
+                });
+                Field::new().label("Country").show(b, |ui| {
+                    ui.add(Select::new(
+                        "form-country",
+                        &mut country,
+                        &["United States", "United Kingdom", "Canada"],
+                    ))
+                });
+            });
+            Field::new().label("Address").show(ui, |ui| {
+                ui.add(Input::new(&mut String::new()).hint("123 Main St"))
+            });
+            Field::new().horizontal().show(ui, |ui| {
+                ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                ui.add(Button::new("Submit"));
+            });
+        });
+    });
+}
+
 /// Runs `Tabs` with state in a cell; the harness draws it under the dark vega theme.
 fn tabs_harness(
     labels: &'static [&'static str],
