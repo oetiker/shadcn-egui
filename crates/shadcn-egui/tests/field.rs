@@ -734,6 +734,149 @@ fn a_focused_control_in_a_choice_card_keeps_its_ring() {
     assert_eq!(rings.len(), 2, "{rings:?}");
 }
 
+/// The control a choice card holds in the card tests.
+#[derive(Clone, Copy, Debug)]
+enum CardControl {
+    Switch,
+    Input,
+}
+
+/// The rects of a choice card, its control and its title.
+#[derive(Clone, Copy, Debug)]
+struct CardRects {
+    card: Rect,
+    control: Rect,
+    title: Rect,
+}
+
+/// A choice card with a title and `control`, run on one context. The
+/// second frame gets the events `act` makes from the first frame's rects,
+/// and three frames without input follow (the pointer stays where the
+/// events left it). The rects, whether the switch is on or the text field
+/// focused, and the last frame's output.
+fn card_after(
+    control: CardControl,
+    act: impl Fn(CardRects) -> Vec<egui::Event>,
+) -> (CardRects, bool, egui::FullOutput) {
+    let ctx = egui::Context::default();
+    vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    ctx.all_styles_mut(|s| s.animation_time = 0.0);
+    let (mut on, mut text) = (false, String::new());
+    let mut frame = |events: Vec<egui::Event>| {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 300.0))),
+            events,
+            ..Default::default()
+        };
+        let mut r = CardRects {
+            card: Rect::NOTHING,
+            control: Rect::NOTHING,
+            title: Rect::NOTHING,
+        };
+        let mut active = false;
+        let out = ctx.run_ui(input, |ui| {
+            r.card = FieldLabel::choice_card()
+                .show(ui, |ui| {
+                    Field::new().horizontal().show(ui, |ui| {
+                        field_content(ui, |ui| r.title = field_title(ui, "Share").rect);
+                        let c = match control {
+                            CardControl::Switch => ui.add(Switch::new(&mut on)),
+                            CardControl::Input => ui.add(Input::new(&mut text).max_width(120.0)),
+                        };
+                        active = on || c.has_focus();
+                        r.control = c.rect;
+                    });
+                })
+                .response
+                .rect;
+        });
+        (r, active, out)
+    };
+    let mut last = frame(Vec::new());
+    for _ in 0..2 {
+        last = frame(Vec::new());
+    }
+    last = frame(act(last.0));
+    for _ in 0..3 {
+        last = frame(Vec::new());
+    }
+    last
+}
+
+/// The 3 px focus rings a frame paints.
+fn rings(out: &egui::FullOutput) -> Vec<Rect> {
+    let ring = role(&vega(), Palette::Ring).gamma_multiply(0.5);
+    common::rect_shapes(out)
+        .into_iter()
+        .filter(|r| r.stroke.width == 3.0 && r.stroke.color == ring)
+        .map(|r| r.rect)
+        .collect()
+}
+
+/// A pointer press on a choice card's text or on its switch toggles the
+/// switch and shows no ring: pointer focus is not `:focus-visible`.
+#[test]
+fn a_pointer_press_in_a_choice_card_shows_no_ring() {
+    for on_switch in [false, true] {
+        let (_, on, out) = card_after(CardControl::Switch, |r| {
+            common::click(if on_switch {
+                r.control.center()
+            } else {
+                r.title.center()
+            })
+        });
+        assert!(on, "on switch {on_switch}");
+        assert_eq!(rings(&out), [], "on switch {on_switch}");
+    }
+}
+
+/// A pointer press on a text field in a choice card focuses it and rings
+/// both: a text field matches `:focus-visible` also on pointer focus.
+#[test]
+fn a_pointer_press_on_a_text_field_in_a_choice_card_rings_both() {
+    let (r, focused, out) = card_after(CardControl::Input, |r| common::click(r.control.center()));
+    assert!(focused);
+    let rings = rings(&out);
+    assert!(rings.contains(&r.card), "no card ring in {rings:?}");
+    assert!(
+        rings.iter().any(|x| r.control.contains_rect(*x)),
+        "no input ring in {rings:?}, input {:?}",
+        r.control
+    );
+    assert_eq!(rings.len(), 2, "{rings:?}");
+}
+
+/// The card keeps its hover fill (`hover:bg-muted/50`) while the pointer
+/// is over its control or its text, and drops it outside.
+#[test]
+fn a_choice_card_stays_hovered_over_its_control_and_text() {
+    let hover = role(&vega(), Palette::Muted).gamma_multiply(0.5);
+    let filled = |out: &egui::FullOutput, card: Rect| {
+        common::rect_shapes(out)
+            .iter()
+            .any(|s| card.contains_rect(s.rect) && s.fill == hover)
+    };
+    type Spot = fn(CardRects) -> egui::Pos2;
+    let spots: [(&str, Spot); 3] = [
+        ("control", |r| r.control.center()),
+        ("title", |r| r.title.center()),
+        ("card", |r| r.card.left_top() + vec2(4.0, 4.0)),
+    ];
+    for (name, at) in spots {
+        let (r, _, out) = card_after(CardControl::Switch, |r| {
+            vec![egui::Event::PointerMoved(at(r))]
+        });
+        assert!(filled(&out, r.card), "not hovered over the {name}");
+    }
+    let (r, _, out) = card_after(CardControl::Switch, |r| {
+        vec![egui::Event::PointerMoved(
+            r.card.right_bottom() + vec2(20.0, 20.0),
+        )]
+    });
+    assert!(!filled(&out, r.card), "hovered outside");
+}
+
 /// Degenerate input: no content, empty text, zero width.
 #[test]
 fn degenerate_fields_do_not_panic() {
