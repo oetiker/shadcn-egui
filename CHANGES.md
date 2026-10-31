@@ -7,6 +7,7 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+- App variants can style the parts of a field by its states: `State::HAS_CHECKED`, `HAS_FIELD`, `HAS_FOCUS_VISIBLE` and `HAS_DISABLED` for a choice card, `VARIANT_LABEL` and `VARIANT_LEGEND` for a legend, `AFTER_LEGEND`, `NTH_LAST_2`, `IN_FIELD_GROUP`, `IN_FIELD_LABEL`, `HAS_FIELD_CONTENT` and `HAS_HORIZONTAL`. Each stands for the shadcn attribute it is named after, as the existing flags do. (#27)
 - Avatar shows a round picture with initials while it loads or when it fails: `ui.add(Avatar::new("CN").image("https://…/me.png").alt_text("@me"))`, `Avatar::icon_only(icon, name)` for an icon instead of initials, `.size(AvatarSize::Sm)` or `Lg`, and `.badge(AvatarBadge::new())` for the status dot, with an icon by `.icon(..)`. `AvatarGroup::new().show(ui, |ui| ..)` overlaps avatars in a row, and `avatar_group_count(ui, "+3")` ends it in the size of the group's avatars. The image is a uri an installed egui image loader reads, or encoded bytes; a texture is not accepted, as the avatar's thin inner border is blended with the picture's pixels as on the shadcn page (#30).
 
 ### Changed
