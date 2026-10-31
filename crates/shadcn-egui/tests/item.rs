@@ -1,10 +1,12 @@
 mod common;
 
+use egui::accesskit::Role;
 use egui::vec2;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
 use shadcn_egui::components::button::{Button, ButtonSize};
-use shadcn_egui::components::item::{Item, ItemGroup, ItemSize};
+use shadcn_egui::components::icon::Glyph;
+use shadcn_egui::components::item::{Item, ItemGroup, ItemSize, ItemVariant};
 use shadcn_egui::Theme;
 
 #[derive(Default)]
@@ -401,7 +403,6 @@ fn selected_reaches_accesskit() {
 /// item a link; the description is the node's description.
 #[test]
 fn an_items_role_follows_its_sense() {
-    use egui::accesskit::Role;
     let cases: [(fn() -> Item<'static>, Role); 3] = [
         (|| Item::new().title("Row"), Role::Unknown),
         (
@@ -540,4 +541,67 @@ fn the_group_gap_follows_the_item_sizes() {
     assert_eq!(group_gaps(&[Default, Sm]), [10.0]);
     assert_eq!(group_gaps(&[Xs, Default]), [8.0]);
     assert_eq!(group_gaps(&[Sm, Xs, Default]), [8.0, 8.0]);
+}
+
+/// The textured meshes a frame painted: the icons.
+fn icon_meshes(out: &egui::FullOutput) -> Vec<egui::Mesh> {
+    common::mesh_shapes(out)
+        .into_iter()
+        .filter(|m| m.texture_id != egui::TextureId::default())
+        .collect()
+}
+
+/// `spinner-item-demo`: a `<Spinner />` in `Item.Media variant="icon"`
+/// keeps its own `size-4` (the media's size is `:not([class*='size-'])`)
+/// and takes the colour an icon there takes.
+#[test]
+fn a_spinner_media_keeps_its_size_and_the_icons_colour() {
+    for (name, theme, mode) in common::themes() {
+        let painted = |glyph: Glyph| {
+            let (_, out) = common::measure_output(&theme, mode, |ui| {
+                Item::new()
+                    .variant(ItemVariant::Outline)
+                    .icon(glyph)
+                    .title("Downloading...")
+                    .description("129 MB / 1000 MB")
+                    .show(ui, |_| ())
+                    .response
+            });
+            icon_meshes(&out)
+        };
+        let spinner = painted(Glyph::Spinner);
+        let icon = painted(Glyph::Icon(shadcn_egui::icons::lucide::INBOX));
+        assert_eq!(spinner.len(), 1, "{name}");
+        assert_eq!(
+            spinner[0].calc_bounds().size(),
+            vec2(16.0, 16.0),
+            "{name}"
+        );
+        assert_eq!(
+            common::mesh_colour(&spinner[0]),
+            common::mesh_colour(&icon[0]),
+            "{name}"
+        );
+    }
+}
+
+/// The spinner stays a `role="status"` node named "Loading" inside the
+/// item, and the item keeps its title as its name.
+#[test]
+fn a_spinner_media_is_a_status_inside_the_item() {
+    let mut h = Harness::new_ui(|ui| {
+        Item::new()
+            .icon(Glyph::Spinner)
+            .title("Downloading...")
+            .sense(egui::Sense::click())
+            .show(ui, |_| ());
+    });
+    h.run();
+    let item = h.get_by_role_and_label(Role::Button, "Downloading...");
+    let status = item.get_by_role(Role::Status);
+    assert_eq!(status.accesskit_node().label().as_deref(), Some("Loading"));
+    assert_eq!(
+        status.accesskit_node().parent().map(|p| p.id()),
+        Some(item.accesskit_node().id())
+    );
 }

@@ -15,7 +15,7 @@
 //! (conformance 3.2).
 
 use crate::components::context;
-use crate::components::icon::{paint_icon, Icon};
+use crate::components::icon::{paint_icon_rotated, Glyph};
 use crate::components::registry::{self, Group};
 use crate::components::shared::{
     interaction_state, line_width, part_painter, part_ui, pressable, shift, ActivationKeys,
@@ -310,7 +310,7 @@ fn cover_uv(image: Vec2, frame: Vec2) -> Rect {
 type MediaFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 
 enum Media<'a> {
-    Icon(Icon),
+    Icon(Glyph),
     Image(ImageSource<'a>),
     Ui(MediaFn<'a>),
 }
@@ -410,10 +410,11 @@ impl<'a> Item<'a> {
     }
 
     /// Icon media (`Item.Media variant="icon"`), at the style's icon size
-    /// in the item's text colour.
+    /// in the item's text colour, or [`Glyph::Spinner`] (`<Spinner />` in
+    /// the media) at the spinner's own size.
     #[inline]
-    pub fn icon(mut self, icon: Icon) -> Self {
-        self.set_media(Media::Icon(icon));
+    pub fn icon(mut self, icon: impl Into<Glyph>) -> Self {
+        self.set_media(Media::Icon(icon.into()));
         self
     }
 
@@ -617,16 +618,29 @@ impl<'a> Item<'a> {
         };
         let painter = part_painter(ui, fid, &[&root[..]], rest);
         let alt = self.alt.clone();
+        let spinner = matches!(self.media, Some(Media::Icon(Glyph::Spinner)));
         match self.media {
-            Some(Media::Icon(icon)) => {
-                let s = pick(&media_l, |r| &r.icon_size, rest).unwrap_or(t.metrics.icon);
+            Some(Media::Icon(glyph)) => {
+                // The spinner's `size-4` is a `size-*` class: the media's
+                // `[&_svg:not([class*='size-'])]` size does not reach it.
+                let (icon, s, angle) = match glyph {
+                    Glyph::Icon(icon) => {
+                        let s = pick(&media_l, |r| &r.icon_size, rest).unwrap_or(t.metrics.icon);
+                        (icon, s, 0.0)
+                    }
+                    Glyph::Spinner => {
+                        let angle = crate::components::spinner::spin(ui, &[&*t.style.spinner]);
+                        (t.icons.loader, crate::components::spinner::own_size(&t), angle)
+                    }
+                };
                 let at = Rect::from_min_size(egui::pos2(left, media_top(s)), Vec2::splat(s));
-                paint_icon(
+                paint_icon_rotated(
                     &painter,
                     at,
                     &icon,
                     look.resolved_color(ui),
                     t.metrics.icon_stroke,
+                    angle,
                 );
                 next.media = at.size();
             }
@@ -868,6 +882,9 @@ impl<'a> Item<'a> {
         response.widget_info(|| {
             WidgetInfo::labeled(kind, enabled, title_text.as_deref().unwrap_or(""))
         });
+        if spinner {
+            crate::components::spinner::report_hosted(ui, &response, 0);
+        }
         // `aria-selected` is AccessKit's selected state; egui's
         // `WidgetInfo::selected` is a toggle button's pressed state.
         let selected = self.selected;
