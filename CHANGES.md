@@ -13,6 +13,12 @@ are recorded here. The format is based on
 
 ### Changed
 - Separator and Tabs take the crate-wide `shadcn_egui::Orientation` in `.orientation(..)`; `SeparatorOrientation` and `TabsOrientation` are gone, so replace either with `Orientation`. A vertical separator is now `ui.add(Separator::new().vertical())`, which replaces `separator_vertical(ui)`. (#27)
+- `label::description` is gone. Inside a Field, give the text with `.description(..)` or `field_description(ui, text)`; elsewhere draw your own muted text, for example `TextLook::resolve(ui, &[&recipe], state).label(ui, text, TextWrapMode::Wrap)` with a recipe of `text-sm` in the muted foreground colour. That text is 14 px in every style, as on the shadcn pages; in lyra and mira `label::description` drew 12 px. (#27)
+- `layout::form_row` is gone: replace `layout::form_row(ui, w, "Name", |ui| ..)` with `Field::new().horizontal().label("Name").show(ui, |ui| ..)`. The label then takes the room the control leaves instead of a fixed column, and the row stays as high as the label's line or the control. (#27)
+- `layout::card(ui, |ui| ..)` is gone; `Card::new().show(ui, |ui| ..)` draws the same card. (#27)
+- shadcn-egui no longer depends on `egui_extras`, so an app that does not use it builds one crate fewer. An app that uses `StripBuilder` or egui's image loaders keeps `egui_extras` in its own Cargo.toml. (#27)
+- A `Label` now takes the text colour of the `Ui` around it instead of the foreground colour, as shadcn's label sets no colour of its own: under `override_text_color` or inside an invalid Field it follows that colour. With the theme's own text colour it looks as before. (#27)
+- The settings screen and the gallery (`reference::settings_ui`, `gallery_ui`) lay out their labelled controls as Fields: labels sit the style's field gap above their controls, selects fill their row, and each preset picker shows its help as the field's description. (#27)
 - build-ui skill: the guide for apps that run their own egui frame loop now says to run each frame with `Context::run_ui` instead of `begin_pass`/`end_pass`. In such a loop, a drag over dialog, card or alert text left a selection that kept following the pointer after the button came up, and Ctrl+C copied nothing. The guide also shows how to pass copied text to your own clipboard when `egui-winit` runs without its clipboard features, and says what `is_pointer_over_egui()` reports under a `CentralPanel`.
 
 ### Fixed
