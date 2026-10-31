@@ -22,6 +22,7 @@ pub mod select;
 pub mod separator;
 pub mod shared;
 pub mod slider;
+pub mod spinner;
 pub mod switch;
 pub mod tabs;
 pub mod text;

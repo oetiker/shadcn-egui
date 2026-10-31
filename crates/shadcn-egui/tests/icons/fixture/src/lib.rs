@@ -50,5 +50,6 @@ pub const SLOTS: IconSlots = {
     s.chevron_right = RING;
     s.more_horizontal = RING;
     s.close = X;
+    s.loader = RING;
     s
 };

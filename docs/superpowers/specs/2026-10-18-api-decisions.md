@@ -3009,7 +3009,7 @@ behaviour, as setters.
   through `accesskit_node_builder` where it does not (switch, tab,
   tablist, log, table, live regions, expanded); (b) `WidgetType` only.
   Per component: toggle `Button` + selected; toggle-group upstream roles;
-  spinner `.label` default "Loading"; skeleton `Other`; separator
+  spinner `.alt_text` default "Loading"; skeleton `Other`; separator
   decorative; command highlight as `selected`; accordion `expanded`;
   carousel roledescription; field error and marker `status` live regions;
   item `Button`/`Other`.
@@ -3024,6 +3024,10 @@ Decision: (a) with the per-component answers — as recommended.
 Consequence (rules, 2026-10-19): The AccessKit role is set after
 `widget_info`, which sets one from `WidgetType`. The decorative separator
 reports no `widget_info` (conformance 8).
+
+Consequence (maintainer, 2026-10-31): The spinner's name setter is
+`.alt_text(impl Into<String>)`, default "Loading", as on the avatar; it
+was `.label`, which reads as visible text the spinner does not show.
 
 ## Shortcut functions
 

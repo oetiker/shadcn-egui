@@ -5,7 +5,7 @@
 
 use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
-use crate::components::icon::Icon;
+use crate::components::icon::Glyph;
 use crate::components::motion::transition;
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, report_invalid, shift,
@@ -168,8 +168,8 @@ pub struct Button {
     variant: ButtonVariant,
     size: ButtonSize,
     enabled: bool,
-    icon: Option<Icon>,
-    icon_end: Option<Icon>,
+    icon: Option<Glyph>,
+    icon_end: Option<Glyph>,
     expanded: bool,
     invalid: bool,
     has_popup: bool,
@@ -205,16 +205,18 @@ impl Button {
         self.enabled = yes;
         self
     }
-    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
+    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`),
+    /// or [`Glyph::Spinner`] (`<Spinner data-icon="inline-start" />`).
     /// With an icon size (`ButtonSize::Icon`, …) only the icon is drawn and
     /// the text is the button's accessible name.
-    pub fn icon(mut self, icon: &Icon) -> Self {
-        self.icon = Some(*icon);
+    pub fn icon(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
-    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`).
-    pub fn icon_end(mut self, icon: &Icon) -> Self {
-        self.icon_end = Some(*icon);
+    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`),
+    /// or [`Glyph::Spinner`].
+    pub fn icon_end(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon_end = Some(icon.into());
         self
     }
     /// `aria-expanded`: the menu or popover this button opens is open.
@@ -262,7 +264,7 @@ impl Button {
     /// button as wide as its text.
     /// `size` is the built-in size the button draws with (an app size's
     /// base).
-    fn icon_only(&self, size: ButtonSize) -> Option<Icon> {
+    fn icon_only(&self, size: ButtonSize) -> Option<Glyph> {
         let square = size.is_icon();
         let icon = self.icon.or(self.icon_end);
         debug_assert!(
@@ -315,6 +317,7 @@ impl Widget for Button {
         let (pad_t, pad_b) = (get(|r| &r.pad_top), get(|r| &r.pad_bottom));
         let row = row
             .icon_size(icon_px)
+            .sized_icon_size(pick(l, |r| &r.sized_icon_size, g))
             .gap(gap)
             .inset(
                 pad_l + border_w,
@@ -344,6 +347,17 @@ impl Widget for Button {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
         });
         report_invalid(&resp, self.invalid);
+        let shown = match icon_only {
+            Some(glyph) => [Some(glyph), None],
+            None => [self.icon, self.icon_end],
+        };
+        for (slot, _) in shown
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| **g == Some(Glyph::Spinner))
+        {
+            crate::components::spinner::report_hosted(ui, &resp, slot);
+        }
         if !ui.is_rect_visible(rect) {
             return resp;
         }
@@ -460,6 +474,6 @@ mod tests {
         // An app size from an icon size draws icon only.
         assert_eq!(base, ButtonSize::Icon);
         let icon = crate::icons::lucide::X;
-        assert!(Button::new("x").icon(&icon).icon_only(base).is_some());
+        assert!(Button::new("x").icon(icon).icon_only(base).is_some());
     }
 }

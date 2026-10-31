@@ -10,7 +10,8 @@
 //! colour (rules, Media and icons); other images draw as given. Typed icon
 //! slots and [`IconAtom`]s without a caller side are the part's icon size
 //! ([`AtomRow::icon_size`]), as upstream sizes an svg without a `size-*`
-//! class.
+//! class. A [`Glyph::Spinner`] in a slot keeps the spinner's own size
+//! unless the part sizes every icon ([`AtomRow::sized_icon_size`]).
 //!
 //! Use it in two steps, as the size never depends on the interaction
 //! state: [`AtomRow::lay_out`] gives the row's border-box size to allocate;
@@ -19,7 +20,7 @@
 //!
 //! [`IconAtom`]: crate::components::icon_atom::IconAtom
 
-use crate::components::icon::{paint_icon, Icon};
+use crate::components::icon::{paint_icon, paint_icon_rotated, Glyph, Icon};
 use crate::components::icon_atom::{resize, retint};
 #[cfg(doc)]
 use crate::components::text::selectable_sense;
@@ -33,9 +34,10 @@ use egui::{
 #[must_use = "Call .lay_out(ui, look)"]
 pub(crate) struct AtomRow<'a> {
     atoms: Atoms<'a>,
-    start: Option<Icon>,
-    end: Option<Icon>,
+    start: Option<Glyph>,
+    end: Option<Glyph>,
     icon_size: f32,
+    spinner_size: f32,
     icon_stroke: f32,
     gap: f32,
     /// Left, right, top and bottom: padding plus border.
@@ -45,12 +47,14 @@ pub(crate) struct AtomRow<'a> {
 impl<'a> AtomRow<'a> {
     /// `atoms` with no icon slots, no gap and no inset.
     pub(crate) fn new(ui: &Ui, atoms: impl IntoAtoms<'a>) -> Self {
-        let metrics = crate::Theme::current(ui.ctx()).metrics;
+        let t = crate::Theme::current(ui.ctx());
+        let metrics = t.metrics;
         Self {
             atoms: atoms.into_atoms(),
             start: None,
             end: None,
             icon_size: metrics.icon,
+            spinner_size: crate::components::spinner::own_size(&t),
             icon_stroke: metrics.icon_stroke,
             gap: 0.0,
             inset: [0.0; 4],
@@ -58,7 +62,7 @@ impl<'a> AtomRow<'a> {
     }
 
     /// The typed icon slots before and after the content.
-    pub(crate) fn icons(mut self, start: Option<Icon>, end: Option<Icon>) -> Self {
+    pub(crate) fn icons(mut self, start: Option<Glyph>, end: Option<Glyph>) -> Self {
         self.start = start;
         self.end = end;
         self
@@ -69,6 +73,15 @@ impl<'a> AtomRow<'a> {
     /// side; `Metrics::icon` by default.
     pub(crate) fn icon_size(mut self, size: f32) -> Self {
         self.icon_size = size;
+        self
+    }
+
+    /// The part's size for every icon (`[&>svg]:size-*`), which also
+    /// reaches a spinner; `None` keeps the spinner's own `size-4`.
+    pub(crate) fn sized_icon_size(mut self, size: Option<f32>) -> Self {
+        if let Some(size) = size {
+            self.spinner_size = size;
+        }
         self
     }
 
@@ -91,11 +104,17 @@ impl<'a> AtomRow<'a> {
     pub(crate) fn lay_out(self, ui: &Ui, look: &TextLook) -> LaidRow<'a> {
         let font = egui::FontSelection::FontId(look.font_id(ui.ctx()));
         let mut items = Vec::new();
-        let icon = |i: Icon| Item {
-            kind: ItemKind::Icon(i),
-            size: Vec2::splat(self.icon_size),
-            align: Align2::CENTER_CENTER,
-            grow: false,
+        let icon = |g: Glyph| {
+            let (kind, side) = match g {
+                Glyph::Icon(i) => (ItemKind::Icon(i), self.icon_size),
+                Glyph::Spinner => (ItemKind::Spinner, self.spinner_size),
+            };
+            Item {
+                kind,
+                size: Vec2::splat(side),
+                align: Align2::CENTER_CENTER,
+                grow: false,
+            }
         };
         items.extend(self.start.map(icon));
         for atom in self.atoms {
@@ -163,6 +182,8 @@ struct Item<'a> {
 
 enum ItemKind<'a> {
     Icon(Icon),
+    /// The theme's `loader` icon, turning.
+    Spinner,
     /// The source text, to lay out again in a look of the paint state.
     Text {
         text: WidgetText,
@@ -234,6 +255,12 @@ impl LaidRow<'_> {
             let at = item.align.align_size_within_rect(item.size, cell);
             match item.kind {
                 ItemKind::Icon(icon) => paint_icon(painter, at, &icon, color, self.icon_stroke),
+                ItemKind::Spinner => {
+                    let t = crate::Theme::current(ui.ctx());
+                    let angle = crate::components::spinner::spin(ui, &[&*t.style.spinner]);
+                    let loader = &t.icons.loader;
+                    paint_icon_rotated(painter, at, loader, color, self.icon_stroke, angle);
+                }
                 ItemKind::Text { text, block } => {
                     let block = if relayout {
                         lay_out_text(ui, look, text)
@@ -297,14 +324,14 @@ mod tests {
             sizes.push(size(AtomRow::new(ui, "Save").inset(8.0, 6.0, 3.0, 3.0)));
             sizes.push(size(
                 AtomRow::new(ui, "Save")
-                    .icons(Some(icons.check), Some(icons.check))
+                    .icons(Some(icons.check.into()), Some(icons.check.into()))
                     .icon_size(12.0)
                     .gap(4.0),
             ));
             // An empty text is no item: one icon, no gap.
             sizes.push(size(
                 AtomRow::new(ui, "")
-                    .icons(Some(icons.check), None)
+                    .icons(Some(icons.check.into()), None)
                     .icon_size(24.0)
                     .gap(4.0),
             ));
