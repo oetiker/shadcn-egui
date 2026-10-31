@@ -2209,16 +2209,12 @@ fn slider_click_on_track_snaps_and_drag_follows_outside() {
 
 #[test]
 fn slider_vertical_has_minimum_at_the_bottom() {
-    use shadcn_egui::components::slider::{Slider, SliderOrientation};
+    use shadcn_egui::components::slider::Slider;
     let mut h = egui_kittest::Harness::new_ui_state(
         |ui, s: &mut (f32, egui::Rect)| {
             shadcn_egui::Theme::vega().apply(ui.ctx());
             s.1 = ui
-                .add(
-                    Slider::new(&mut s.0, 0.0..=100.0)
-                        .orientation(SliderOrientation::Vertical)
-                        .label("V"),
-                )
+                .add(Slider::new(&mut s.0, 0.0..=100.0).vertical().label("V"))
                 .rect;
         },
         (50.0, egui::Rect::NOTHING),
@@ -2295,7 +2291,7 @@ fn slider_reports_role_label_and_value_to_accesskit() {
 
 #[test]
 fn slider_snapshot() {
-    use shadcn_egui::components::slider::{Slider, SliderOrientation};
+    use shadcn_egui::components::slider::Slider;
     let (mut a, mut b, mut c, mut d) = (30.0, 70.0, 50.0, 100.0);
     common::snapshot_all("slider", egui::vec2(320.0, 200.0), |ui| {
         shadcn_egui::layout::row(ui, 24.0, |ui| {
@@ -2305,11 +2301,7 @@ fn slider_snapshot() {
                 ui.add(Slider::new(&mut b, 0.0..=100.0).enabled(false).label("B"));
                 ui.add(Slider::new(&mut d, 0.0..=100.0).label("D"));
             });
-            ui.add(
-                Slider::new(&mut c, 0.0..=100.0)
-                    .orientation(SliderOrientation::Vertical)
-                    .label("C"),
-            );
+            ui.add(Slider::new(&mut c, 0.0..=100.0).vertical().label("C"));
         });
     });
 }

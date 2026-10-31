@@ -13,16 +13,8 @@ use crate::components::shared::{
 };
 use crate::style::app::default_variant;
 use crate::style::{pick_len, Recipe, State};
-use crate::{layout, Theme};
+use crate::{layout, Orientation, Theme};
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
-
-/// shadcn `orientation` of the slider.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SliderOrientation {
-    #[default]
-    Horizontal,
-    Vertical,
-}
 
 default_variant!(
     /// The slider's variant: upstream has none, so only app variants
@@ -54,7 +46,7 @@ pub struct Slider<'a> {
     value: &'a mut f32,
     range: std::ops::RangeInclusive<f32>,
     step: f32,
-    orientation: SliderOrientation,
+    orientation: Orientation,
     enabled: bool,
     label: String,
     variant: SliderVariant,
@@ -66,7 +58,7 @@ impl<'a> Slider<'a> {
             value,
             range,
             step: 0.0,
-            orientation: SliderOrientation::Horizontal,
+            orientation: Orientation::Horizontal,
             enabled: true,
             label: String::new(),
             variant: SliderVariant::Default,
@@ -77,9 +69,14 @@ impl<'a> Slider<'a> {
         self.step = step;
         self
     }
-    pub fn orientation(mut self, o: SliderOrientation) -> Self {
+    /// shadcn `orientation`, `Horizontal` by default.
+    pub fn orientation(mut self, o: Orientation) -> Self {
         self.orientation = o;
         self
+    }
+    /// Shortcut for `.orientation(Orientation::Vertical)`.
+    pub fn vertical(self) -> Self {
+        self.orientation(Orientation::Vertical)
     }
     /// `false` draws the slider disabled: no hover, no focus, no changes.
     pub fn enabled(mut self, yes: bool) -> Self {
@@ -118,7 +115,7 @@ impl Widget for Slider<'_> {
         let range = [v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range)];
         let thumb = [v.part(&t.style, |_, s| &s.slider_thumb, |r| &r.slider_thumb)];
         let enabled = self.enabled && ui.is_enabled();
-        let vertical = self.orientation == SliderOrientation::Vertical;
+        let vertical = self.orientation == Orientation::Vertical;
         let orient = if vertical {
             State::VERTICAL
         } else {

@@ -226,7 +226,7 @@ fn row_centres_children_of_mixed_height() {
 /// widget settles: after the first frame no pass is redone.
 #[test]
 fn row_with_a_nested_stack_settles() {
-    use shadcn_egui::components::slider::{Slider, SliderOrientation};
+    use shadcn_egui::components::slider::Slider;
     for (name, theme, mode) in common::themes() {
         let ctx = egui::Context::default();
         theme.apply(&ctx);
@@ -243,11 +243,7 @@ fn row_with_a_nested_stack_settles() {
                                 ui.add(Slider::new(&mut a, 0.0..=100.0).label("A"));
                                 ui.add(Slider::new(&mut a, 0.0..=100.0).label("B"));
                             });
-                            ui.add(
-                                Slider::new(&mut b, 0.0..=100.0)
-                                    .orientation(SliderOrientation::Vertical)
-                                    .label("C"),
-                            );
+                            ui.add(Slider::new(&mut b, 0.0..=100.0).vertical().label("C"));
                         });
                     })
                     .response
