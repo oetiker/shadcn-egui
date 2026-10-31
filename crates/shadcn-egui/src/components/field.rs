@@ -321,14 +321,24 @@ struct Children {
     /// The widths the controls after the growing part ask for, with the
     /// row's gaps before them.
     wanted: f32,
+    /// The width each text field of a row takes where the first text
+    /// field grows ([`text_share`]).
+    text_share: Option<f32>,
+    /// The text fields that took that width.
+    texts: usize,
+    /// Their widths after the first one.
+    text_after: f32,
 }
 
 /// What a container learned in the previous pass.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Learned {
     count: usize,
-    /// The width a row's growing part leaves to what follows it.
+    /// The width a row's growing part leaves to what follows it, less
+    /// the text fields that share the room with it.
     trailing: f32,
+    /// [`Children::texts`].
+    texts: usize,
     labelled: bool,
     /// [`Children::form_control`].
     form_control: bool,
@@ -427,6 +437,7 @@ fn end_children(ui: &Ui, id: Id, trailing: f32) -> Children {
     let now = Learned {
         count,
         trailing,
+        texts: c.texts,
         labelled: c.label_drawn,
         form_control: c.form_control,
         presence: c.presence,
@@ -437,6 +448,7 @@ fn end_children(ui: &Ui, id: Id, trailing: f32) -> Children {
         let differs = before.is_none_or(|b| {
             b.count != now.count
                 || (b.trailing - now.trailing).abs() > 0.01 // behaviour-ok: float tolerance
+                || b.texts != now.texts
                 || b.labelled != now.labelled
                 || b.form_control != now.form_control
                 || b.presence != now.presence
@@ -499,6 +511,36 @@ fn grown(ui: &Ui, p: &Parent, right: f32) {
     with_children(ui, p.id, |c| c.grower_right = Some(right));
 }
 
+/// The width of a text field (`w-full min-w-0`) in a horizontal field
+/// where the first text field is the part that grows: the text fields
+/// have the same basis (100 %) and shrink alike, so each takes an equal
+/// share of the room less the other parts of the previous pass.
+fn text_share(ui: &Ui, p: &Parent, natural: f32) -> Option<f32> {
+    if let Some(w) = with_children(ui, p.id, |c| c.text_share) {
+        return Some(w);
+    }
+    let w = grower_width(ui, p, natural)?;
+    let w = if ui.available_width().is_finite() {
+        w / learned(ui, p.id).texts.max(1) as f32
+    } else {
+        w
+    };
+    with_children(ui, p.id, |c| c.text_share = Some(w));
+    Some(w)
+}
+
+/// A text field took its [`text_share`]: the first one is the part that
+/// grows, the later ones count with it.
+fn took_share(ui: &Ui, p: &Parent, rect: Rect) {
+    with_children(ui, p.id, |c| {
+        c.texts += 1;
+        match c.grower_right {
+            None => c.grower_right = Some(rect.right()),
+            Some(_) => c.text_after += rect.width(),
+        }
+    });
+}
+
 /// Report `flags` to the record of the container `id`.
 fn report(ui: &Ui, id: Id, flags: State) {
     with_children(ui, id, |c| c.presence = c.presence | flags);
@@ -532,8 +574,8 @@ pub(crate) struct ControlSlot {
     /// The control sits in a row of its own inside the field, where the
     /// field's `*:w-full` does not reach.
     in_row: bool,
-    /// The control is the part that grows in a horizontal field
-    /// ([`ControlSlot::text_width`]).
+    /// The control takes a text field's share of a horizontal field's
+    /// room ([`ControlSlot::text_width`]).
     grows: bool,
 }
 
@@ -610,10 +652,11 @@ impl ControlSlot {
 
     /// The width of a text field (`w-full min-w-0`): `requested` where the
     /// caller set one; else the field's width in a vertical field; else,
-    /// as the first part to grow in a horizontal field, the room the parts
-    /// after it left in the previous pass (the browser shrinks it for
-    /// them, as input-inline's button); else `default`. Capped to the room
-    /// and raised to `content_min`.
+    /// in a horizontal field whose first part to grow is a text field, an
+    /// equal share among its text fields of the room the other parts after
+    /// the first left in the previous pass (the browser shrinks them for
+    /// those, as input-inline's button); else `default`. Capped to the
+    /// room and raised to `content_min`.
     pub(crate) fn text_width(
         &mut self,
         ui: &Ui,
@@ -622,7 +665,7 @@ impl ControlSlot {
         content_min: f32,
     ) -> f32 {
         if requested.is_none() && self.field.is_some() {
-            if let Some(w) = self.parent.and_then(|p| grower_width(ui, &p, default)) {
+            if let Some(w) = self.parent.and_then(|p| text_share(ui, &p, default)) {
                 self.grows = true;
                 return w.max(content_min);
             }
@@ -649,7 +692,7 @@ impl ControlSlot {
     /// state to the label after it.
     pub(crate) fn done(&self, ui: &Ui, resp: &Response, st: State, enabled: bool, peer: bool) {
         if let Some(p) = self.parent.filter(|_| self.grows) {
-            grown(ui, &p, resp.rect.right());
+            took_share(ui, &p, resp.rect);
         }
         if let Some(label) = self.label {
             let _ = resp.clone().labelled_by(label);
@@ -987,8 +1030,8 @@ impl Field {
                     }
                     let right = ui.min_rect().right();
                     let grower = with_children(ui, id, |c| c.grower_right);
-                    let wanted = with_children(ui, id, |c| c.wanted);
-                    let trailing = grower.map_or(0.0, |g| (right - g).max(wanted));
+                    let (wanted, text_after) = with_children(ui, id, |c| (c.wanted, c.text_after));
+                    let trailing = grower.map_or(0.0, |g| (right - g - text_after).max(wanted));
                     (inner, trailing)
                 })
             } else {

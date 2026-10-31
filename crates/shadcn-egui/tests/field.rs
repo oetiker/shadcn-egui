@@ -303,6 +303,28 @@ fn a_text_field_first_in_a_horizontal_field_leaves_room_for_what_follows() {
     }
 }
 
+/// Two text fields in a horizontal field have the same basis (`w-full`,
+/// 100 %) and shrink alike for the button (`shrink-0`): equal widths,
+/// the button ends the row.
+#[test]
+fn text_fields_in_a_horizontal_field_share_the_room() {
+    let ((a, b, button), _) = settle(&vega(), 400.0, |ui| {
+        let (mut x, mut y) = (String::new(), String::new());
+        let mut r = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
+        Field::new().horizontal().show(ui, |ui| {
+            r.0 = ui.add(Input::new(&mut x)).rect;
+            r.1 = ui.add(Input::new(&mut y)).rect;
+            r.2 = ui.add(Button::new("Go")).rect;
+        });
+        r
+    });
+    assert_eq!(a.left(), 0.0);
+    assert_eq!(a.width(), b.width(), "{a:?} {b:?}");
+    assert_eq!(b.left() - a.right(), 12.0);
+    assert_eq!(button.left() - b.right(), 12.0);
+    assert_eq!(button.right(), 400.0, "the button ends the row");
+}
+
 /// A control in a row inside a vertical field is not the field's own
 /// child, so `*:w-full` does not reach it: an input beside a button keeps
 /// its default width and the button stays in the field.
