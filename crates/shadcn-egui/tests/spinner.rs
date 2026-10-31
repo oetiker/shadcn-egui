@@ -366,3 +366,49 @@ fn spinner_snapshot() {
         });
     });
 }
+
+/// A spinner in a button or badge turns as a bare one does, and each
+/// frame that shows it asks for the next.
+#[test]
+fn a_hosted_spinner_turns() {
+    let hosts: [fn(&mut egui::Ui); 2] = [
+        |ui| {
+            ui.add(Button::new("Saving").icon(Glyph::Spinner));
+        },
+        |ui| {
+            ui.add(Badge::new("Syncing").icon_end(Glyph::Spinner));
+        },
+    ];
+    for (i, host) in hosts.into_iter().enumerate() {
+        let ctx = egui::Context::default();
+        let (start, moving) = timed(&ctx, 0.0, host);
+        assert!(moving, "{i}");
+        let (quarter, moving) = timed(&ctx, 2.25, host);
+        assert!(moving, "{i}");
+        let turned = angle(&quarter[0]) - angle(&start[0]);
+        assert!(
+            (turned - std::f32::consts::FRAC_PI_2).abs() < 1e-3,
+            "{i}: {turned}"
+        );
+    }
+}
+
+/// A button or badge outside the visible area draws no spinner and asks
+/// for no repaint.
+#[test]
+fn a_hidden_host_asks_for_no_repaint() {
+    let ctx = egui::Context::default();
+    let hidden = |ui: &mut egui::Ui| {
+        ui.set_clip_rect(egui::Rect::from_min_size(
+            egui::pos2(-100.0, -100.0),
+            Vec2::splat(1.0),
+        ));
+        ui.add(Button::new("Saving").icon(Glyph::Spinner));
+        ui.add(Badge::new("Syncing").icon_end(Glyph::Spinner));
+    };
+    // The first pass applies the theme, which asks for a pass of its own.
+    timed(&ctx, 0.0, hidden);
+    let (painted, moving) = timed(&ctx, 0.5, hidden);
+    assert!(painted.is_empty());
+    assert!(!moving);
+}
