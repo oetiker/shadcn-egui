@@ -51,8 +51,25 @@ pub use theme::{theme, Metrics, Palette, ShadowLayer, Theme, ThemeFonts};
 
 // API decision D-1: a leaf widget has no `enabled` flag of its own; the
 // `Ui` disables it (`ui.add_enabled(false, ..)`, `Ui::disable`), as an egui
-// leaf.
+// leaf. Stable rustdoc does not check the error code of a compile_fail
+// block, so the first block builds the same eight leaves without
+// `.enabled`: a constructor change breaks it instead of letting the
+// others fail for another reason.
 #[cfg(doctest)]
+/// ```
+/// use shadcn_egui::components::{button::Button, checkbox::Checkbox, input::Input};
+/// use shadcn_egui::components::{label::Label, select::Select, slider::Slider};
+/// use shadcn_egui::components::{switch::Switch, tabs::Tabs};
+/// let _ = Button::new("Save");
+/// let _ = Checkbox::new(&mut false);
+/// let _ = Input::new(&mut String::new());
+/// let _ = Label::new("Email");
+/// let _ = Select::new("s", &mut 0, &["A"]);
+/// let _ = Slider::new(&mut 0.0, 0.0..=1.0);
+/// let _ = Switch::new(&mut false);
+/// let _ = Tabs::new(&mut 0, &["A"]);
+/// ```
+///
 /// ```compile_fail,E0599
 /// use shadcn_egui::components::button::Button;
 /// let _ = Button::new("Save").enabled(false);

@@ -2336,7 +2336,7 @@ fn text_paint(out: &egui::FullOutput) -> Vec<(egui::Color32, egui::Color32, f32)
 /// shadcn `disabled:opacity-50` applies once: a widget disabled by
 /// `ui.add_enabled(false, ..)`, by a disabled area
 /// (`ui.add_enabled_ui(false, ..)`), or by both paints exactly the same
-/// shapes.
+/// shapes, and not those it paints enabled.
 #[test]
 fn disabled_widgets_fade_once() {
     use shadcn_egui::components::checkbox::Checkbox;
@@ -2378,7 +2378,15 @@ fn disabled_widgets_fade_once() {
     let mode = egui::Theme::Light;
     let theme = Theme::vega();
     for (name, add) in widgets {
+        let (_, on) = common::measure_output(&theme, mode, |ui| add(ui, true));
         let (_, leaf) = common::measure_output(&theme, mode, |ui| add(ui, false));
+        // The three paths share egui's disable: a leaf that ignored it
+        // would paint them alike, so the disabled paint must differ.
+        assert_ne!(
+            (rect_paint(&leaf), text_paint(&leaf)),
+            (rect_paint(&on), text_paint(&on)),
+            "{name}: disabled paints as enabled"
+        );
         let (_, by_ui) = common::measure_output(&theme, mode, |ui| {
             ui.add_enabled_ui(false, |ui| add(ui, true)).inner
         });

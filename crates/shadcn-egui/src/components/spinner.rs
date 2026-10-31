@@ -126,7 +126,10 @@ fn report_status(resp: &Response, enabled: bool, name: &str) {
 
 /// The status node of a spinner a host draws in its icon slot `slot`
 /// ([`Glyph::Spinner`]): a child of the host's node, named "Loading", as
-/// upstream's `<svg role="status">` stays a node inside the button.
+/// upstream's `<svg role="status">` stays a node inside the button. A
+/// disabled host does not disable it: `role="status"` takes no
+/// `aria-disabled`, and CORE-AAM passes a disabled state to focusable
+/// descendants only.
 ///
 /// The node's `Ui` is a top-level one, not a child of `ui`: a child would
 /// take one of `ui`'s auto ids, and the widgets after the host would get
@@ -141,14 +144,10 @@ pub(crate) fn report_hosted(ui: &Ui, host: &Response, slot: usize) {
             .accessibility_parent(host.id),
     );
     let id = child.unique_id();
-    let enabled = host.enabled();
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_role(Role::Status);
         node.set_label(LOADING);
         node.set_live(Live::Polite);
-        if !enabled {
-            node.set_disabled();
-        }
     });
 }
 
