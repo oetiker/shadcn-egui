@@ -160,10 +160,10 @@ Unsupported classes in shipped markers: **30** (not exportable)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
-- **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `border-b-input`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t or border-l (underline-style inputs)
 - **unsupported** `transition-[color,border-color]`: transition value
 - ignored `file:h-7`: file-input button; egui has no file input
 - ignored `file:text-sm`: file-input button; egui has no file input
@@ -221,10 +221,10 @@ Unsupported classes in shipped markers: **30** (not exportable)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
-- **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `border-b-input`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t or border-l (underline-style inputs)
 - **unsupported** `transition-[color,border-color]`: transition value
 - ignored `*:data-[slot=select-value]:flex`: structure: egui layout is done by the component
 - ignored `w-fit`: the component's default sizing
@@ -613,7 +613,7 @@ Unsupported classes in shipped markers: **30** (not exportable)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
-- **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `border-b-input`: single-side border other than border-t or border-l (underline-style inputs)
 - **unsupported** `group-has-[>[data-variant=outline]]/button-group:border-border`: variant `group-has-[>[data-variant=outline]]/button-group`
 - ignored `items-center`: structure: egui layout is done by the component
 - ignored `[&_svg]:pointer-events-none`: svg child behaviour (pointer events, shrink); the crate paints icons itself
@@ -629,10 +629,10 @@ Unsupported classes in shipped markers: **30** (not exportable)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:rounded-t-none` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:first-child)]:border-t-0` under State::IN_BUTTON_GROUP.or(State::NOT_FIRST).or(State::IN_GROUP_VERTICAL)
 - from `cn-button-group-orientation-vertical`: `[&>*:not(:last-child)]:rounded-b-none` under State::IN_BUTTON_GROUP.or(State::NOT_LAST).or(State::IN_GROUP_VERTICAL)
-- **unsupported** `border-b-input`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t (underline-style inputs)
-- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t (underline-style inputs)
+- **unsupported** `border-b-input`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `focus-visible:border-b-ring`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `aria-invalid:border-b-destructive`: single-side border other than border-t or border-l (underline-style inputs)
+- **unsupported** `dark:aria-invalid:border-b-destructive/50`: single-side border other than border-t or border-l (underline-style inputs)
 - **unsupported** `transition-[color,border-color]`: transition value
 - ignored `w-full`: size or alignment relative to the parent; egui layout is done by the component
 - ignored `disabled:cursor-not-allowed`: browser behaviour the component handles itself

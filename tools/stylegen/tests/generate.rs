@@ -71,7 +71,7 @@ fn failed_generate_leaves_the_crate_untouched() {
         let text = std::fs::read_to_string(&css).expect("read");
         let broken = text.replacen(
             ".cn-progress {\n    @apply ",
-            ".cn-progress {\n    @apply rounded-[inherit] ",
+            ".cn-progress {\n    @apply border-r-input ",
             1,
         );
         assert_ne!(text, broken, "{style}: fixture changed; pick another rule");

@@ -1276,3 +1276,57 @@ fn state_ranks_compose_like_a_class() {
     // one under HOVER of equal specificity.
     assert!(compose(&["EXPANDED"]) > compose(&["HOVER"]));
 }
+
+/// `border-{t,l}-<role>` colours the one border side; on a box where that
+/// side is the only one with a width it is the box's border colour, exactly
+/// (the scroll-area bar: `data-horizontal:border-t
+/// data-horizontal:border-t-transparent`). Anywhere else the crate would
+/// need per-side colours, so the class stays unsupported.
+#[test]
+fn side_border_colour_is_the_border_colour_of_a_one_side_box() {
+    let run = |classes: &[&str]| {
+        let classes: Vec<String> = classes.iter().map(|c| (*c).to_owned()).collect();
+        translate(&classes, &Vars::new())
+    };
+    let bar = [
+        "data-horizontal:border-t",
+        "data-horizontal:border-t-transparent",
+        "data-vertical:border-l",
+        "data-vertical:border-l-transparent",
+    ];
+    let m = run(&bar);
+    assert!(m.unsupported.is_empty(), "{:?}", m.unsupported);
+    let transparent = Some(Value::Paint {
+        role: "Transparent",
+        alpha: 1.0,
+    });
+    for o in ["HORIZONTAL", "VERTICAL"] {
+        assert_eq!(
+            winner(&bar, Field::BorderColor, flag(o)),
+            transparent,
+            "{o}"
+        );
+    }
+    assert!(run(&["border-t", "border-t-transparent"])
+        .unsupported
+        .is_empty());
+    for classes in [
+        &["border", "border-t-transparent"][..],
+        &["border-t", "border-l", "border-t-transparent"],
+        &["border-l-2", "border-t-transparent"],
+        &["border-t", "data-vertical:border-l", "border-t-transparent"],
+        &["border-t", "border-border", "border-t-transparent"],
+        &["*:border-t", "*:border-t-transparent"],
+        &["border-b", "border-b-input"],
+        &["border-r-input"],
+    ] {
+        assert!(!run(classes).unsupported.is_empty(), "{classes:?}");
+    }
+}
+
+/// `rounded-[inherit]` (the scroll-area viewport) clips the content to the
+/// root's radius; egui clips to rectangles, an accepted difference.
+#[test]
+fn inherited_radius_is_ignored() {
+    assert!(matches!(utility("rounded-[inherit]", None), U::Ignore(_)));
+}
