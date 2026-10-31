@@ -394,7 +394,10 @@ fn crate_source_has_consts_all_and_slots() {
         src.contains("pub const SLOTS: IconSlots = {\n    let mut s = IconSlots::all(MIXED);\n    s.check = MIXED;\n    s.select_trigger = RING;\n"),
         "{src}"
     );
-    assert!(src.contains("    s.close = X;\n    s\n};\n"), "{src}");
+    assert!(
+        src.contains("    s.close = X;\n    s.loader = RING;\n    s\n};\n"),
+        "{src}"
+    );
     let total: usize = icons
         .iter()
         .map(|i| encode(i).expect("encodes").len())

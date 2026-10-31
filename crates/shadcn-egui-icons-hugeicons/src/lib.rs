@@ -12191,5 +12191,6 @@ pub const SLOTS: IconSlots = {
     s.chevron_right = ARROW_RIGHT_01;
     s.more_horizontal = MORE_HORIZONTAL_CIRCLE_01;
     s.close = CANCEL_01;
+    s.loader = LOADING_03;
     s
 };

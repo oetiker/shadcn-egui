@@ -281,6 +281,8 @@ pub struct Style {
     pub item_group: Box<Recipe>,
     /// `cn-item-separator`
     pub item_separator: Box<Recipe>,
+    /// `data-slot="spinner"` (no style marker)
+    pub spinner: Box<Recipe>,
 }
 
 /// The rank a generated rule under one state flag has: the rank of the

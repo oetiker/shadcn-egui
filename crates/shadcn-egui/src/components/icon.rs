@@ -10,8 +10,27 @@
 
 use super::icon_raster;
 use crate::Theme;
-use egui::{pos2, Color32, Painter, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
+use egui::emath::Rot2;
+use egui::{pos2, Color32, Mesh, Painter, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
 pub use shadcn_egui_core::{Icon, IconLayer, IconShape, IconSlots, Seg};
+
+/// What a part's icon slot shows (`data-icon="inline-start"`,
+/// `"inline-end"`): an icon, or upstream's `<Spinner>` in its place, the
+/// theme's `loader` icon turning
+/// ([`Spinner`](crate::components::spinner::Spinner)).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Glyph {
+    Icon(Icon),
+    /// The theme's `loader` icon, turning; its accessible name is
+    /// "Loading".
+    Spinner,
+}
+
+impl From<Icon> for Glyph {
+    fn from(icon: Icon) -> Self {
+        Glyph::Icon(icon)
+    }
+}
 
 /// Paint `icon` scaled into the square `rect`: the fill (if any) and the
 /// strokes of each layer at the layer's alpha, from one coverage texture
@@ -23,6 +42,19 @@ pub use shadcn_egui_core::{Icon, IconLayer, IconShape, IconSlots, Seg};
 /// An icon larger than 1024 physical pixels is drawn from a 1024-pixel
 /// texture scaled up. A curve with no start point is skipped.
 pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, stroke_width: f32) {
+    paint_icon_rotated(painter, rect, icon, color, stroke_width, 0.0);
+}
+
+/// [`paint_icon`], turned clockwise by `angle` radians about the centre of
+/// the snapped rect. The texture is the unturned one.
+pub(crate) fn paint_icon_rotated(
+    painter: &Painter,
+    rect: Rect,
+    icon: &Icon,
+    color: Color32,
+    stroke_width: f32,
+    angle: f32,
+) {
     let ppp = painter.pixels_per_point();
     let (x0, y0) = ((rect.min.x * ppp).round(), (rect.min.y * ppp).round());
     let w = (rect.width() * ppp).round().max(1.0); // behaviour-ok: at least one device pixel
@@ -38,11 +70,18 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
     let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0)); // behaviour-ok: at least one device pixel
     let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width);
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
-    painter.image(tex.id(), drawn, uv, color);
+    let mut mesh = Mesh::with_texture(tex.id());
+    mesh.add_rect_with_uv(drawn, uv, color);
+    // At 0 the vertices stay as they are, bit for bit.
+    if angle != 0.0 {
+        mesh.rotate(Rot2::from_angle(angle), drawn.center());
+    }
+    painter.add(mesh);
 }
 
 /// An icon as a widget: `ui.add(IconView::new(&icons::MIC))`. Sized
-/// `Metrics::icon`, colored `foreground`, stroked `Metrics::icon_stroke`.
+/// `Metrics::icon`, in the `Ui`'s text colour (`currentColor`), stroked
+/// `Metrics::icon_stroke`.
 /// It has no accessible name; give it one with `.labelled_by(label.id)`.
 pub struct IconView<'a> {
     icon: &'a Icon,
@@ -62,8 +101,9 @@ impl<'a> IconView<'a> {
         self.size = Some(size);
         self
     }
-    pub fn color(mut self, color: Color32) -> Self {
-        self.color = Some(color);
+    /// The colour; the `Ui`'s text colour by default.
+    pub fn color(mut self, color: impl Into<Color32>) -> Self {
+        self.color = Some(color.into());
         self
     }
 }
@@ -82,7 +122,7 @@ impl Widget for IconView<'_> {
             ..egui::WidgetInfo::new(egui::WidgetType::Image)
         });
         if ui.is_rect_visible(rect) {
-            let color = self.color.unwrap_or(t.palette().foreground);
+            let color = self.color.unwrap_or(ui.visuals().text_color());
             paint_icon(ui.painter(), rect, self.icon, color, t.metrics.icon_stroke);
         }
         resp

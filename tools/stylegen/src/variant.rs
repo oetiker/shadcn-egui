@@ -58,7 +58,11 @@ use crate::model::flag;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pseudo {
     After,
+    /// `[&_svg:not([class*='size-'])]`: an icon without a size of its own.
     Svg,
+    /// `[&>svg]`: every icon, also one with a size of its own (the spinner's
+    /// `size-4`), which the host's size overrides.
+    SvgAll,
 }
 
 #[derive(Debug, PartialEq)]
@@ -320,7 +324,7 @@ pub const TRANSLATED: &[(&str, Meaning, Spec)] = &[
         Target(Pseudo::Svg),
         SVG_NOT,
     ),
-    ("[&>svg]", Target(Pseudo::Svg), ZERO),
+    ("[&>svg]", Target(Pseudo::SvgAll), ZERO),
 ];
 
 const LEADING_IMAGE: &str = "card with a leading image is not offered";
