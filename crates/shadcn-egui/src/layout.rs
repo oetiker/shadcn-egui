@@ -5,6 +5,17 @@ use crate::components::context;
 use egui::Ui;
 use egui_extras::{Size, StripBuilder};
 
+/// shadcn `orientation`, shared by every component that has one
+/// (`.orientation(..)`). It has no default: each component keeps
+/// upstream's own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Orientation {
+    /// Laid out along a row (`data-orientation="horizontal"`).
+    Horizontal,
+    /// Laid out along a column (`data-orientation="vertical"`).
+    Vertical,
+}
+
 /// A row height or stack width change below this is float noise, not a
 /// reason to redo a pass.
 const ROW_HEIGHT_EPSILON: f32 = 0.01; // behaviour-ok: float tolerance, not a design token
@@ -56,7 +67,8 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// `ui.horizontal` cannot do that (see [`allocate_overflowing`]).
 ///
 /// A child that is as high as the row's other children (`self-stretch`,
-/// as `separator_vertical`) takes its height from [`stretch_height`].
+/// as a vertical [`Separator`](crate::components::separator::Separator))
+/// takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let (stored, height, align) = row_band(ui, id);

@@ -16,7 +16,7 @@ use crate::style::app::Sealed;
 use crate::style::{
     pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
-use crate::{layout, Theme};
+use crate::{layout, Orientation, Theme};
 use egui::{pos2, vec2, Key, Modifiers, Rect, Response, Sense, TextWrapMode, Ui, Widget};
 
 /// shadcn `TabsList` `variant`, or an app variant ([`TabsVariant::app`]).
@@ -102,15 +102,6 @@ impl AppEnum for TabsVariant {
 }
 impl VariantEnum for TabsVariant {}
 
-/// shadcn `Tabs` `orientation`. The crate offers `Horizontal` only: a vertical
-/// list needs a content layout beside the list that the crate does not have.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum TabsOrientation {
-    #[default]
-    Horizontal,
-}
-
 /// A tab list (shadcn `TabsList` with its `TabsTrigger`s). By default the list
 /// is as wide as its triggers and each trigger as wide as its label;
 /// [`Tabs::width`] makes it wider. The response is the
@@ -120,7 +111,7 @@ pub struct Tabs<'a> {
     active: &'a mut usize,
     labels: Vec<String>,
     variant: TabsVariant,
-    orientation: TabsOrientation,
+    orientation: Orientation,
     enabled: bool,
     width: Option<f32>,
 }
@@ -132,7 +123,7 @@ impl<'a> Tabs<'a> {
             active,
             labels: labels.iter().map(|l| (*l).to_owned()).collect(),
             variant: TabsVariant::Default,
-            orientation: TabsOrientation::Horizontal,
+            orientation: Orientation::Horizontal,
             enabled: true,
             width: None,
         }
@@ -142,7 +133,11 @@ impl<'a> Tabs<'a> {
         self.variant = v.into();
         self
     }
-    pub fn orientation(mut self, o: TabsOrientation) -> Self {
+    /// shadcn `Tabs` `orientation`, `Horizontal` by default. The crate
+    /// draws the list horizontally only: a vertical list needs a content
+    /// layout beside the list that the crate does not have, so `Vertical`
+    /// draws as `Horizontal`.
+    pub fn orientation(mut self, o: Orientation) -> Self {
         self.orientation = o;
         self
     }
@@ -181,7 +176,8 @@ impl Widget for Tabs<'_> {
         let enabled = self.enabled && ui.is_enabled();
         let v = t.resolve(self.variant);
         let variant_bit = v.bits();
-        let TabsOrientation::Horizontal = self.orientation;
+        // `Vertical` draws as `Horizontal` (see `Tabs::orientation`).
+        let _ = self.orientation;
         let root = [&*s.tabs];
         let list = [
             &*s.tabs_list,

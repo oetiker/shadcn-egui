@@ -768,7 +768,7 @@ fn a_separator_in_a_stack_in_a_row_settles() {
 /// is given.
 #[test]
 fn a_vertical_separator_stretches_in_a_row() {
-    use shadcn_egui::components::separator::separator_vertical;
+    use shadcn_egui::components::separator::Separator;
     let rule = |out: &egui::FullOutput, theme: &Theme| {
         let border = theme.palette_of(egui::Theme::Dark).border;
         common::rect_shapes(out)
@@ -790,7 +790,7 @@ fn a_vertical_separator_stretches_in_a_row() {
             out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 layout::row(ui, 8.0, |ui| {
                     label = ui.label("Docs").rect;
-                    separator_vertical(ui);
+                    ui.add(Separator::new().vertical());
                     if tall > 0.0 {
                         ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover());
                     }
@@ -814,7 +814,7 @@ fn a_vertical_separator_stretches_in_a_row() {
         out = ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.horizontal(|ui| {
                 ui.set_height(24.0);
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
             });
         });
     }
@@ -2128,8 +2128,8 @@ fn dialog_footer_stacks_its_actions_below_sm() {
 /// its height stays finite.
 #[test]
 fn a_vertical_separator_outside_a_row_takes_its_minimum_height() {
-    use shadcn_egui::components::separator::{Separator, SeparatorOrientation};
-    let vertical = || Separator::new().orientation(SeparatorOrientation::Vertical);
+    use shadcn_egui::components::separator::Separator;
+    let vertical = || Separator::new().vertical();
     let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
         layout::vstack(ui, 4.0, |ui| out.push(ui.add(vertical()).rect));
         out.push(ui.add(vertical()).rect);

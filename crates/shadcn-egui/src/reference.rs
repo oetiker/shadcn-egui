@@ -18,7 +18,7 @@ use crate::components::label::{description, label};
 use crate::components::popover::{popover_header, Popover};
 use crate::components::progress::Progress;
 use crate::components::select::Select;
-use crate::components::separator::{separator, separator_vertical};
+use crate::components::separator::{separator, Separator};
 use crate::components::slider::Slider;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
@@ -971,9 +971,9 @@ fn tabs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
         separator(ui);
         layout::row(ui, 12.0, |ui| {
             label(ui, "Blog");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             label(ui, "Docs");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             label(ui, "Source");
         });
     });

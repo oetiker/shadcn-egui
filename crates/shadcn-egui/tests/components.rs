@@ -981,7 +981,7 @@ fn disabled_label_paints_half_alpha_text() {
 /// full row height when vertical.
 #[test]
 fn separators_are_one_pixel_border_lines() {
-    use shadcn_egui::components::separator::{separator, separator_vertical};
+    use shadcn_egui::components::separator::{separator, Separator};
     let mode = egui::Theme::Light;
     let theme = shadcn_egui::Theme::vega();
     let (_, out) = common::measure_output(&theme, mode, |ui| {
@@ -999,7 +999,7 @@ fn separators_are_one_pixel_border_lines() {
     let (_, out) = common::measure_output(&theme, mode, |ui| {
         ui.horizontal(|ui| {
             ui.set_height(24.0);
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
         })
         .response
     });
@@ -1015,7 +1015,7 @@ fn separators_are_one_pixel_border_lines() {
 #[test]
 fn label_separator_snapshot() {
     use shadcn_egui::components::label::{description, Label};
-    use shadcn_egui::components::separator::{separator, separator_vertical};
+    use shadcn_egui::components::separator::{separator, Separator};
     common::snapshot_all("label_separator", egui::vec2(360.0, 200.0), |ui| {
         ui.add(Label::new("Email"));
         ui.add(Label::new("Email (disabled)").enabled(false));
@@ -1024,9 +1024,9 @@ fn label_separator_snapshot() {
         ui.horizontal(|ui| {
             ui.set_height(20.0);
             ui.label("Docs");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             ui.label("Source");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             ui.label("Blog");
         });
     });
@@ -1040,7 +1040,7 @@ fn separator_vertical_row_snapshot() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
     use shadcn_egui::components::button::Button;
     use shadcn_egui::components::label::{description, Label};
-    use shadcn_egui::components::separator::separator_vertical;
+    use shadcn_egui::components::separator::Separator;
     use shadcn_egui::layout;
     let themes = common::themes().into_iter().take(2).collect();
     common::snapshot_with_themes(
@@ -1050,11 +1050,11 @@ fn separator_vertical_row_snapshot() {
         |ui| {
             layout::row(ui, 12.0, |ui| {
                 ui.add(Label::new("Docs"));
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
                 ui.add(Button::new("Open"));
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
                 badge(ui, "New", BadgeVariant::Secondary);
-                separator_vertical(ui);
+                ui.add(Separator::new().vertical());
                 layout::vstack(ui, 2.0, |ui| {
                     ui.add(Label::new("Account"));
                     description(ui, "Signed in");
