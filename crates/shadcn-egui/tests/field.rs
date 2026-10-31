@@ -303,6 +303,29 @@ fn a_text_field_first_in_a_horizontal_field_leaves_room_for_what_follows() {
     }
 }
 
+/// A control in a row inside a vertical field is not the field's own
+/// child, so `*:w-full` does not reach it: an input beside a button keeps
+/// its default width and the button stays in the field.
+#[test]
+fn a_control_in_a_row_in_a_vertical_field_keeps_its_own_width() {
+    let ((field, input, button), _) = settle(&vega(), 400.0, |ui| {
+        let mut text = String::new();
+        let mut r = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
+        r.0 = Field::new()
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    r.1 = ui.add(Input::new(&mut text)).rect;
+                    r.2 = ui.add(Button::new("Go")).rect;
+                });
+            })
+            .response
+            .rect;
+        r
+    });
+    assert!(input.width() < field.width(), "{input:?} in {field:?}");
+    assert!(button.right() <= field.right(), "{button:?} in {field:?}");
+}
+
 /// With a FieldContent the row is `items-start` and the checkbox moves
 /// down by `mt-px`.
 #[test]
