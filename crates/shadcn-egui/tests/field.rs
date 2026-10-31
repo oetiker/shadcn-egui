@@ -621,6 +621,50 @@ fn a_choice_card_press_toggles_its_control() {
     assert!(h.state().0);
 }
 
+/// A keyboard-focused control in a choice card keeps its own ring next to
+/// the card's. Upstream's `group-has-[:focus-visible]/field-label:ring-0`
+/// ties `focus-visible:ring-3` on specificity and Tailwind emits it first,
+/// so in Chrome the control's `ring-3` wins; only a control without its own
+/// focus (the switch here) drops its ring.
+#[test]
+fn a_focused_control_in_a_choice_card_keeps_its_ring() {
+    let theme = vega();
+    let ((card, checkbox, switch), out) = settle(&theme, 400.0, |ui| {
+        let mut r = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
+        r.0 = FieldLabel::choice_card()
+            .show(ui, |ui| {
+                Field::new().horizontal().show(ui, |ui| {
+                    let c = ui.add(Checkbox::new(&mut false));
+                    if !c.has_focus() {
+                        c.request_focus();
+                    }
+                    r.1 = c.rect;
+                    field_label(ui, "Touch ID");
+                    r.2 = ui.add(Switch::new(&mut false)).rect;
+                });
+            })
+            .response
+            .rect;
+        r
+    });
+    let ring = role(&theme, Palette::Ring).gamma_multiply(0.5);
+    let rings: Vec<Rect> = common::rect_shapes(&out)
+        .into_iter()
+        .filter(|r| r.stroke.width == 3.0 && r.stroke.color == ring)
+        .map(|r| r.rect)
+        .collect();
+    assert!(rings.contains(&card), "no card ring in {rings:?}");
+    assert!(
+        rings.iter().any(|r| checkbox.contains_rect(*r)),
+        "no checkbox ring in {rings:?}, checkbox {checkbox:?}"
+    );
+    assert!(
+        !rings.iter().any(|r| switch.contains_rect(*r)),
+        "a switch ring in {rings:?}, switch {switch:?}"
+    );
+    assert_eq!(rings.len(), 2, "{rings:?}");
+}
+
 /// Degenerate input: no content, empty text, zero width.
 #[test]
 fn degenerate_fields_do_not_panic() {
