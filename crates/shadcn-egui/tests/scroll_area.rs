@@ -171,6 +171,46 @@ fn bar_hides_600ms_after_pointer_leaves() {
     assert!(thumbs(&sim, &out).is_empty(), "hidden at 0.7 s");
 }
 
+/// The delay before the next pass the root viewport asked for.
+fn repaint_delay(out: &egui::FullOutput) -> std::time::Duration {
+    out.viewport_output[&egui::ViewportId::ROOT].repaint_delay
+}
+
+/// An app that is idle repaints only when asked: a shown bar asks for a
+/// pass at its hide time, the passes it asks for then hide it, and a
+/// hidden bar asks for none. egui wakes the app one predicted frame
+/// (`predicted_dt`, 1/60 s here) before the time asked for.
+#[test]
+fn a_shown_bar_asks_for_a_pass_at_its_hide_time() {
+    let mut sim = Sim::vega();
+    let entered = sim.time;
+    sim.pass(moved(INSIDE), tall);
+    sim.pass(moved(OUTSIDE), tall);
+    // The pass after an event asks for the next one at once.
+    sim.pass(vec![], tall);
+    let quiet = sim.time;
+    let (_, out) = sim.pass(vec![], tall);
+    assert_eq!(thumbs(&sim, &out).len(), 1, "shown after leaving");
+    let delay = repaint_delay(&out).as_secs_f64();
+    let hide = entered + 0.6;
+    assert!(
+        (quiet + delay + 1.0 / 60.0 - hide).abs() < 1e-4,
+        "asked for {delay} s at {quiet} s"
+    );
+    // Run the passes the app asks for, as an integration does.
+    sim.time = quiet + delay;
+    let (_, out) = sim.pass(vec![], tall);
+    assert_eq!(thumbs(&sim, &out).len(), 1, "a frame before the hide");
+    assert_eq!(repaint_delay(&out), std::time::Duration::ZERO);
+    let (_, out) = sim.pass(vec![], tall);
+    assert!(thumbs(&sim, &out).is_empty(), "hidden in the next pass");
+    assert_eq!(
+        repaint_delay(&out),
+        std::time::Duration::MAX,
+        "hidden: no pass asked"
+    );
+}
+
 #[test]
 fn thumb_is_border_colour_at_recipe_geometry() {
     for (name, theme, mode) in common::snapshot_themes() {
