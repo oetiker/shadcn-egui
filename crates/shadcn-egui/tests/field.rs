@@ -325,6 +325,37 @@ fn text_fields_in_a_horizontal_field_share_the_room() {
     assert_eq!(button.right(), 400.0, "the button ends the row");
 }
 
+/// A label first in a horizontal field (`flex-auto`, its content width
+/// as basis, no narrower than its longest word) before text fields
+/// (`w-full min-w-0`, the field's width as basis): the text fields shrink
+/// far more, the label keeps its width and the text fields share the
+/// rest alike.
+#[test]
+fn a_label_before_text_fields_keeps_its_width() {
+    let natural = settle(&vega(), 400.0, |ui| field_label(ui, "Name").rect.width()).0;
+    for n in [1, 2] {
+        let ((label, inputs), _) = settle(&vega(), 400.0, |ui| {
+            let mut texts = vec![String::new(); n];
+            let mut r = (Rect::NOTHING, Vec::new());
+            Field::new().horizontal().show(ui, |ui| {
+                r.0 = field_label(ui, "Name").rect;
+                for t in &mut texts {
+                    r.1.push(ui.add(Input::new(t)).rect);
+                }
+            });
+            r
+        });
+        assert_eq!(label.width(), natural, "{n} inputs: {label:?}");
+        assert_eq!(inputs[0].left() - label.right(), 12.0, "{n} inputs");
+        let last = inputs[n - 1];
+        assert_eq!(last.right(), 400.0, "{n} inputs: {inputs:?}");
+        assert!(
+            inputs.iter().all(|i| i.width() == inputs[0].width()),
+            "{inputs:?}"
+        );
+    }
+}
+
 /// A text field with its own width after the growing text field is not
 /// shrunk to the room left: the field measures what follows the grower
 /// in its first pass, and the first frame ends the row at the field's

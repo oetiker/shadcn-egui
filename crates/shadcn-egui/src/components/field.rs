@@ -529,6 +529,29 @@ fn text_share(ui: &Ui, p: &Parent, natural: f32) -> Option<f32> {
     Some(w)
 }
 
+/// The widths of a growing label (`flex-auto`: its content width as
+/// basis, no narrower than its longest word) and of each of the `texts`
+/// text fields after it (`w-full min-w-0`: the field's width `room` as
+/// basis) in the width `left` they share: both shrink in proportion to
+/// their basis, the label down to `longest`, the text fields take the
+/// rest alike. With no text field learned yet the label takes it all.
+fn label_share(left: f32, natural: f32, longest: f32, room: f32, texts: usize) -> (f32, f32) {
+    if texts == 0 {
+        return (left, 0.0);
+    }
+    let n = texts as f32;
+    let total = natural + n * room;
+    if total <= left {
+        return (natural, room);
+    }
+    let label = natural * left / total;
+    if label < longest {
+        (longest, ((left - longest) / n).max(0.0))
+    } else {
+        (label, room * left / total)
+    }
+}
+
 /// A text field took its [`text_share`]: the first one is the part that
 /// grows, the later ones count with it.
 fn took_share(ui: &Ui, p: &Parent, rect: Rect) {
@@ -1294,6 +1317,21 @@ impl Widget for FieldLabel {
             let grow = p.and_then(|p| grower_width(ui, &p, natural).map(|w| (p, w)));
             let room = ui.available_width();
             let width = match grow {
+                Some((p, left)) if room.is_finite() => {
+                    let longest = text
+                        .text()
+                        .split_whitespace()
+                        .map(|w| {
+                            look.layout(ui, w, TextWrapMode::Extend, f32::INFINITY)
+                                .size()
+                                .x
+                        })
+                        .fold(0.0, f32::max);
+                    let (w, share) =
+                        label_share(left, natural, longest, room, learned(ui, p.id).texts);
+                    with_children(ui, p.id, |c| c.text_share = Some(share));
+                    w
+                }
                 Some((_, w)) => w,
                 // `*:w-full` reaches the field's own children, not a
                 // label in a row inside it.
