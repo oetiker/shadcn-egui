@@ -7,7 +7,9 @@
 //! with `ui.add_enabled(false, Label::new(..))`. Placed directly in a
 //! [`Field`](crate::components::field::Field), it is the field's label,
 //! as upstream's `<Label for>` in the demos: it names the field's first
-//! crate control, and a press on it acts on that control.
+//! crate control, and a press on it acts on that control. There, after a
+//! disabled checkbox or switch, it fades and shows the not-allowed cursor
+//! by itself (`peer-disabled:`).
 
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
@@ -55,7 +57,9 @@ impl Widget for Label {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.label, |r| &r.label)];
-        let enabled = ui.is_enabled();
+        // `peer-disabled:opacity-50`: in a field, after a disabled
+        // checkbox or switch, it fades as in a disabled `Ui`.
+        let enabled = ui.is_enabled() && !crate::components::field::peer_disabled(ui);
         let st = t.state(ui.ctx(), v.bits().with(State::DISABLED, !enabled));
         let look = TextLook::resolve(ui, &l, st);
         // `cn-label` sets no colour: the label takes its `Ui`'s text

@@ -634,6 +634,15 @@ impl ControlSlot {
     }
 }
 
+/// `peer-disabled:` for a crate [`Label`](crate::components::label::Label)
+/// placed directly in a field: a checkbox or switch before it in the same
+/// field or content is disabled.
+pub(crate) fn peer_disabled(ui: &Ui) -> bool {
+    parent(ui)
+        .filter(|p| matches!(p.kind, Kind::Field | Kind::Content))
+        .is_some_and(|p| with_children(ui, p.id, |c| c.peer_disabled))
+}
+
 /// A crate [`Label`](crate::components::label::Label) placed directly in
 /// a field (upstream's demos write `<Label for=..>` there): sense its
 /// `rect` as the field's label, so it names the field's first crate

@@ -16,6 +16,7 @@ use shadcn_egui::components::field::{
     FieldSetVariant, FieldVariant,
 };
 use shadcn_egui::components::input::Input;
+use shadcn_egui::components::label::Label;
 use shadcn_egui::components::select::Select;
 use shadcn_egui::components::slider::Slider;
 use shadcn_egui::components::switch::Switch;
@@ -435,18 +436,51 @@ fn disabled_fades_label_and_title_only() {
 }
 
 /// `peer-disabled:opacity-50`: a label after a disabled checkbox fades, a
-/// label before it does not.
+/// label before it does not. A plain `Label` there is `cn-label` too
+/// (checkbox-demo's `<Label for>`): it fades and shows the not-allowed
+/// cursor (`peer-disabled:cursor-not-allowed`) as a field label does. A
+/// `<label>` has no disabled state (D-1), so neither label reports one to
+/// assistive technology; the checkbox does.
 #[test]
 fn a_label_after_a_disabled_peer_fades() {
-    let (_, out) = settle(&vega(), 400.0, |ui| {
+    fn row(ui: &mut Ui) {
         Field::new().horizontal().show(ui, |ui| {
             field_label(ui, "Before");
+            ui.add(Label::new("Plain before"));
             ui.add_enabled(false, Checkbox::new(&mut true));
             field_label(ui, "After");
+            ui.add(Label::new("Plain after"));
         });
-    });
+    }
+    let (_, out) = settle(&vega(), 600.0, row);
     assert_eq!(faded(&out, "Before"), 1.0);
+    assert_eq!(faded(&out, "Plain before"), 1.0);
     assert_eq!(faded(&out, "After"), 0.5);
+    assert_eq!(faded(&out, "Plain after"), 0.5);
+
+    let mut h = Harness::builder()
+        .with_size(vec2(600.0, 200.0))
+        .build_ui(|ui| {
+            vega().apply(ui.ctx());
+            row(ui);
+        });
+    h.run();
+    assert!(h.get_by_role(Role::CheckBox).accesskit_node().is_disabled());
+    for text in ["Before", "Plain before", "After", "Plain after"] {
+        let label = h.get_by_role_and_label(Role::Label, text);
+        assert!(!label.accesskit_node().is_disabled(), "{text}");
+    }
+    for (text, not_allowed) in [("Plain before", false), ("Plain after", true)] {
+        let at = h.get_by_role_and_label(Role::Label, text).rect().center();
+        h.input_mut().events.push(egui::Event::PointerMoved(at));
+        h.run();
+        let cursor = h.output().platform_output.cursor_icon;
+        assert_eq!(
+            cursor == egui::CursorIcon::NotAllowed,
+            not_allowed,
+            "{text}: {cursor:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
