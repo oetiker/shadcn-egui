@@ -8,8 +8,8 @@
 //! [`Field`](crate::components::field::Field), it is the field's label,
 //! as upstream's `<Label for>` in the demos: it names the field's first
 //! crate control, and a press on it acts on that control. There, after a
-//! disabled checkbox or switch, it fades and shows the not-allowed cursor
-//! by itself (`peer-disabled:`).
+//! disabled checkbox or switch in the same `Ui`, it fades and shows the
+//! not-allowed cursor by itself (`peer-disabled:`).
 
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;

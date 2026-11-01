@@ -1383,3 +1383,62 @@ fn field_choice_card_snapshot() {
         });
     });
 }
+
+/// `.peer:disabled ~ label` matches siblings only: of two rows in one
+/// field, only the labels in the row of the disabled checkbox fade, a
+/// plain `Label` and a field label alike.
+#[test]
+fn a_disabled_peer_fades_only_the_labels_in_its_row() {
+    let (_, out) = settle(&vega(), 600.0, |ui| {
+        Field::new().show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_enabled(false, Checkbox::new(&mut true));
+                ui.add(Label::new("Row one"));
+                field_label(ui, "Row one field");
+            });
+            ui.horizontal(|ui| {
+                ui.add(Checkbox::new(&mut true));
+                ui.add(Label::new("Row two"));
+                field_label(ui, "Row two field");
+            });
+        });
+    });
+    assert_eq!(faded(&out, "Row one"), 0.5);
+    assert_eq!(faded(&out, "Row one field"), 0.5);
+    assert_eq!(faded(&out, "Row two"), 1.0, "row two");
+    assert_eq!(faded(&out, "Row two field"), 1.0, "row two");
+}
+
+/// A disabled peer fades no label in a later field, nor one outside any
+/// field.
+#[test]
+fn a_disabled_peer_fades_no_label_in_a_later_field() {
+    let (_, out) = settle(&vega(), 600.0, |ui| {
+        Field::new().horizontal().show(ui, |ui| {
+            ui.add_enabled(false, Checkbox::new(&mut true));
+            ui.add(Label::new("First"));
+        });
+        Field::new().horizontal().show(ui, |ui| {
+            ui.add(Checkbox::new(&mut true));
+            ui.add(Label::new("Second"));
+        });
+        ui.add(Label::new("Outside"));
+    });
+    assert_eq!(faded(&out, "First"), 0.5);
+    assert_eq!(faded(&out, "Second"), 1.0);
+    assert_eq!(faded(&out, "Outside"), 1.0);
+}
+
+/// A disabled switch is a peer as a checkbox is.
+#[test]
+fn a_label_after_a_disabled_switch_fades() {
+    let (_, out) = settle(&vega(), 600.0, |ui| {
+        Field::new().horizontal().show(ui, |ui| {
+            ui.add(Label::new("Before"));
+            ui.add_enabled(false, Switch::new(&mut true));
+            ui.add(Label::new("After"));
+        });
+    });
+    assert_eq!(faded(&out, "Before"), 1.0);
+    assert_eq!(faded(&out, "After"), 0.5);
+}

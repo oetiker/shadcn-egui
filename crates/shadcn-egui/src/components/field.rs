@@ -305,8 +305,6 @@ struct Children {
     index: usize,
     /// The last child is a legend of the `Legend` variant.
     after_legend: bool,
-    /// A peer control before this point is disabled (`peer-disabled:`).
-    peer_disabled: bool,
     /// The field's label is drawn.
     label_drawn: bool,
     /// A control took the field's label.
@@ -354,7 +352,10 @@ fn begin_children(ui: &Ui, id: Id) {
         mark: ui.cursor().min,
         ..Children::default()
     };
-    ui.data_mut(|d| d.insert_temp(children_key(id), c));
+    ui.data_mut(|d| {
+        d.insert_temp(children_key(id), c);
+        d.remove_temp::<Vec<Id>>(peer_key(id));
+    });
 }
 
 fn with_children<R>(ui: &Ui, id: Id, f: impl FnOnce(&mut Children) -> R) -> R {
@@ -375,7 +376,6 @@ struct Place {
     /// The previous pass's child count.
     count: usize,
     after_legend: bool,
-    peer_disabled: bool,
 }
 
 impl Place {
@@ -403,7 +403,6 @@ fn enter(ui: &Ui, p: &Parent) -> Place {
             index: c.index,
             count,
             after_legend: c.after_legend,
-            peer_disabled: c.peer_disabled,
         }
     })
 }
@@ -626,21 +625,42 @@ impl ControlSlot {
                 .with(State::HAS_DISABLED, !enabled);
             report(ui, card.id, flags);
         }
-        if peer && !enabled {
-            if let Some(p) = self.parent {
-                with_children(ui, p.id, |c| c.peer_disabled = true);
-            }
+        if let Some(p) = self.parent.filter(|_| peer && !enabled) {
+            // `ui.add_enabled` draws the control into this `Ui`, the row
+            // its sibling labels share.
+            let row = ui.unique_id();
+            ui.data_mut(|d| {
+                d.get_temp_mut_or_default::<Vec<Id>>(peer_key(p.id))
+                    .push(row)
+            });
         }
     }
 }
 
+/// The `Ui`s of a container's disabled peers in this pass, as
+/// `.peer:disabled ~ label` matches siblings only. Sibling `Ui`s share
+/// their `id`, so the record holds their unique ids.
+fn peer_key(id: Id) -> Id {
+    id.with("shadcn_egui::field::peer_disabled")
+}
+
+/// `peer-disabled:`: a checkbox or switch before this point, in the same
+/// `Ui` of the container `p`, is disabled.
+fn peer_disabled_here(ui: &Ui, p: &Parent) -> bool {
+    let row = ui.unique_id();
+    ui.data(|d| {
+        d.get_temp::<Vec<Id>>(peer_key(p.id))
+            .is_some_and(|rows| rows.contains(&row))
+    })
+}
+
 /// `peer-disabled:` for a crate [`Label`](crate::components::label::Label)
 /// placed directly in a field: a checkbox or switch before it in the same
-/// field or content is disabled.
+/// row of the field or content is disabled.
 pub(crate) fn peer_disabled(ui: &Ui) -> bool {
     parent(ui)
         .filter(|p| matches!(p.kind, Kind::Field | Kind::Content))
-        .is_some_and(|p| with_children(ui, p.id, |c| c.peer_disabled))
+        .is_some_and(|p| peer_disabled_here(ui, &p))
 }
 
 /// A crate [`Label`](crate::components::label::Label) placed directly in
@@ -1224,8 +1244,8 @@ impl Widget for FieldLabel {
             .filter(|_| p.is_some_and(|p| matches!(p.kind, Kind::Field | Kind::Content)));
         let base = p.map_or(State::NONE, |p| p.state);
         let text = self.text;
-        as_child(ui, false, |ui, place| {
-            let disabled = !ui.is_enabled() || place.peer_disabled;
+        as_child(ui, false, |ui, _| {
+            let disabled = !ui.is_enabled() || p.is_some_and(|p| peer_disabled_here(ui, &p));
             let st = t.state(
                 ui.ctx(),
                 base.with(State::DISABLED, disabled || base.contains(State::DISABLED)),
