@@ -4,7 +4,12 @@
 //! disabled control shows the not-allowed cursor. Its look comes from the
 //! style's `cn-label` recipe. `peer-disabled:opacity-50` arrives as the
 //! DISABLED state of that recipe: draw the label of a disabled control
-//! with `ui.add_enabled(false, Label::new(..))`.
+//! with `ui.add_enabled(false, Label::new(..))`. Placed directly in a
+//! [`Field`](crate::components::field::Field), it is the field's label,
+//! as upstream's `<Label for>` in the demos: it names the field's first
+//! crate control, and a press on it acts on that control. There, after a
+//! disabled checkbox or switch in the same `Ui`, it fades and shows the
+//! not-allowed cursor by itself (`peer-disabled:`).
 
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
@@ -52,7 +57,9 @@ impl Widget for Label {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.label, |r| &r.label)];
-        let enabled = ui.is_enabled();
+        // `peer-disabled:opacity-50`: in a field, after a disabled
+        // checkbox or switch, it fades as in a disabled `Ui`.
+        let enabled = ui.is_enabled() && !crate::components::field::peer_disabled(ui);
         let st = t.state(ui.ctx(), v.bits().with(State::DISABLED, !enabled));
         let look = TextLook::resolve(ui, &l, st);
         // `cn-label` sets no colour: the label takes its `Ui`'s text
@@ -89,6 +96,8 @@ impl Widget for Label {
             size = egui::vec2(block.size().x.max(width), block.size().y);
         }
         let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
+        // In a field it is the field's label, as upstream's `<Label for>`.
+        let resp = crate::components::field::label_in_field(ui, rect).unwrap_or(resp);
         crate::components::shared::widget_info_never_disabled(&resp, || {
             egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &self.text)
         });

@@ -566,7 +566,7 @@ fn a_recipe_that_does_not_grow_fails_a_debug_assert() {
 /// (`disabled` from the `Ui`) and invalid (`aria-invalid`) states on the
 /// bare field, a filled field with a wrapped and a broken line, and a
 /// focused one. textarea-field, -disabled and -invalid wrap the field in
-/// Field, which waits for the Field port.
+/// a Field: their own snapshots follow.
 #[test]
 fn textarea_snapshot() {
     use shadcn_egui::components::button::Button;
@@ -608,6 +608,61 @@ fn textarea_snapshot() {
         ui.add_space(16.0);
         let resp = ui.add(Textarea::new(&mut focused).id_salt("focused"));
         resp.request_focus();
+    });
+}
+
+/// A Field demo at the desktop width, where `md:text-sm` applies as on
+/// the docs page; the bare field's phone size is in `textarea_snapshot`.
+/// The demos set no width: the field gets 384 points here.
+fn field_demo(name: &str, add: impl Fn(&mut egui::Ui)) {
+    common::snapshot_all(name, egui::vec2(800.0, 190.0), |ui| {
+        ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
+            ui.set_width(384.0);
+            add(ui);
+        });
+    });
+}
+
+/// textarea-field: a label, a description, then the field.
+#[test]
+fn textarea_field_snapshot() {
+    use shadcn_egui::components::field::{field_description, field_label, Field};
+    field_demo("textarea_field", |ui| {
+        Field::new().show(ui, |ui| {
+            field_label(ui, "Message");
+            field_description(ui, "Enter your message below.");
+            ui.add(Textarea::new(&mut String::new()).hint_text("Type your message here."));
+        });
+    });
+}
+
+/// textarea-disabled: `data-disabled` on the field and `disabled` on the
+/// textarea, both from a disabled `Ui`.
+#[test]
+fn textarea_disabled_snapshot() {
+    use shadcn_egui::components::field::Field;
+    field_demo("textarea_disabled", |ui| {
+        ui.add_enabled_ui(false, |ui| {
+            Field::new().label("Message").show(ui, |ui| {
+                ui.add(Textarea::new(&mut String::new()).hint_text("Type your message here."))
+            });
+        });
+    });
+}
+
+/// textarea-invalid: `data-invalid` on the field; the textarea takes
+/// `aria-invalid` from it, the description follows it.
+#[test]
+fn textarea_invalid_snapshot() {
+    use shadcn_egui::components::field::Field;
+    field_demo("textarea_invalid", |ui| {
+        Field::new()
+            .invalid(true)
+            .label("Message")
+            .description("Please enter a valid message.")
+            .show(ui, |ui| {
+                ui.add(Textarea::new(&mut String::new()).hint_text("Type your message here."))
+            });
     });
 }
 
