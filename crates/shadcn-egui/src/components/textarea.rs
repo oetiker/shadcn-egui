@@ -29,7 +29,7 @@ use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
-use crate::{layout, Theme};
+use crate::Theme;
 use egui::text_edit::TextEditOutput;
 use egui::{
     AtomKind, Atoms, IntoAtoms, Response, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget,
@@ -86,8 +86,10 @@ impl<'t> Textarea<'t> {
     }
 
     /// The width the field asks for, in points, capped to the available
-    /// width (default `Metrics::field_max_width`). `f32::INFINITY` fills
-    /// the `Ui`'s width.
+    /// width (default `Metrics::field_max_width`; in a vertical
+    /// [`Field`](crate::components::field::Field) the field's width, first
+    /// in a horizontal one the room the parts after it leave).
+    /// `f32::INFINITY` fills the `Ui`'s width.
     #[inline]
     pub fn desired_width(mut self, desired_width: f32) -> Self {
         self.desired_width = Some(desired_width);
@@ -125,7 +127,7 @@ impl<'t> Textarea<'t> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.textarea, |r| &r.textarea)];
-        let slot = ControlSlot::of(ui);
+        let mut slot = ControlSlot::of(ui);
         let context = v.bits().with(State::INVALID, slot.invalid(self.invalid));
         // A `<textarea>`'s rows are line boxes, placed as inline text.
         let frame = TextEntry::resolve(
@@ -146,15 +148,14 @@ impl<'t> Textarea<'t> {
         // A `<textarea>` breaks a word wider than the field
         // (`overflow-wrap: break-word`, the browser's default for it).
         let look = frame.look.clone().break_word(true);
-        // In a vertical field it takes the field's width (`*:w-full`).
-        let fill = if slot.fills() {
-            f32::INFINITY
-        } else {
-            t.metrics.field_max_width
-        };
-        let max_width = self.desired_width.unwrap_or(fill);
-        slot.want(ui, max_width);
-        let width = layout::capped_width(ui, max_width, frame.content_min);
+        // The field's width in a vertical field (`*:w-full`), the room
+        // left in a horizontal one.
+        let width = slot.text_width(
+            ui,
+            self.desired_width,
+            t.metrics.field_max_width,
+            frame.content_min,
+        );
         let wrap = frame.content_width(width);
 
         // `field-sizing-content`: the box holds its text, or its hint text
