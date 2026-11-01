@@ -327,10 +327,9 @@ fn tabs_vertical_snapshot() {
                     .variant(TabsVariant::Line),
             );
             ui.memory_mut(|m| m.request_focus(resp.id.with(("tab", 2))));
-            ui.add(
-                Tabs::new(&mut 0, &["Disabled", "Tabs"])
-                    .orientation(Orientation::Vertical)
-                    .enabled(false),
+            ui.add_enabled(
+                false,
+                Tabs::new(&mut 0, &["Disabled", "Tabs"]).orientation(Orientation::Vertical),
             );
         });
     });

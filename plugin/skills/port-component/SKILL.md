@@ -227,8 +227,10 @@ back, Right and Down forward) whatever its orientation.
   (`ActivationKeys::Button` for a `<button>`: Enter on press, Space on
   release; `EnterAndSpace`, `Space` or `Enter` for a bits primitive or a
   link; `None` for a slider thumb).
-- Disabled state comes from the `Ui`; a widget with its own `enabled` flag
-  adds `DISABLED` to the context. A disabled widget never gets `HOVER`,
+- Disabled state comes from the `Ui`: a leaf widget has no `enabled`
+  setter, the caller writes `ui.add_enabled(false, widget)` as for an egui
+  widget. An item or container with its own `enabled` flag adds
+  `DISABLED` to the context. A disabled widget never gets `HOVER`,
   `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`. It gets `DISABLED` only.
 - A part fades by its recipe's `opacity` (`disabled:opacity-50`):
   `shared::opacity(&[part_stack, parent_stack], state)` multiplies the
@@ -272,6 +274,12 @@ back, Right and Down forward) whatever its orientation.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`;
   a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
   `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.
+  A part whose upstream element has no disabled state (a `<label>`, a
+  `<div>`, `role="status"`) reports none in a disabled `Ui`
+  (conformance 8): in the crate through `shared::widget_info_never_disabled`
+  or, where the role is set by hand, `shared::never_disabled`; in an app
+  through `node.clear_disabled()` in `ctx.accesskit_node_builder` after
+  its `widget_info`.
 
 ## Dependency discipline
 

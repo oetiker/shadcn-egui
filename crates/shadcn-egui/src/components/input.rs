@@ -32,7 +32,6 @@ pub struct Input<'a> {
     password: bool,
     max_width: Option<f32>,
     id_salt: Option<egui::Id>,
-    enabled: bool,
     invalid: Option<bool>,
     variant: InputVariant,
 }
@@ -47,7 +46,6 @@ impl<'a> Input<'a> {
             password: false,
             max_width: None,
             id_salt: None,
-            enabled: true,
             invalid: None,
             variant: InputVariant::Default,
         }
@@ -80,11 +78,6 @@ impl<'a> Input<'a> {
         self.id_salt = Some(egui::Id::new(salt));
         self
     }
-    /// `false` draws the field disabled: no focus, no typing.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
-    }
     /// shadcn `aria-invalid`: destructive border and ring. Inside an
     /// invalid [`Field`](crate::components::field::Field) the input is
     /// invalid unless this says `false`.
@@ -113,7 +106,6 @@ impl<'a> Widget for Input<'a> {
             &t,
             &l,
             context,
-            self.enabled,
             Leading::Field,
             TextClip::Content,
             "shadcn_egui::input",

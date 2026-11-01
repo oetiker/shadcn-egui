@@ -707,7 +707,7 @@ fn buttons_group(ui: &mut egui::Ui) {
                     );
                 }
                 let _ = ui.add(Button::new("Confirm").icon(icons.check));
-                let _ = ui.add(Button::new("Disabled").enabled(false));
+                let _ = ui.add_enabled(false, Button::new("Disabled"));
             });
         });
     });
@@ -876,12 +876,12 @@ fn spinner_group(ui: &mut egui::Ui) {
                 }
             });
             layout::wrap_row(ui, 8.0, |ui| {
-                let _ = ui.add(
+                let _ = ui.add_enabled(
+                    false,
                     Button::new("Please wait")
                         .size(ButtonSize::Sm)
                         .variant(ButtonVariant::Outline)
-                        .icon(Glyph::Spinner)
-                        .enabled(false),
+                        .icon(Glyph::Spinner),
                 );
                 let _ = ui.add(Badge::new("Syncing").icon(Glyph::Spinner));
                 let _ = ui.add(

@@ -364,8 +364,8 @@ impl TextLook {
         } else {
             place_rows(ui.ctx(), source, self.place(), pos.y)
         };
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, ui.is_enabled(), galley.text())
+        crate::components::shared::widget_info_never_disabled(&response, || {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, galley.text())
         });
         if ui.is_rect_visible(response.rect) {
             if galley.elided {

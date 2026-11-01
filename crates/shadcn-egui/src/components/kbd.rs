@@ -150,8 +150,9 @@ impl Widget for Kbd<'_> {
         ui.set_clip_rect(egui::Rect::NOTHING);
         let resp = ui.interact(rect, id, Sense::hover());
         ui.set_clip_rect(clip);
-        let enabled = ui.is_enabled();
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &name));
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &name)
+        });
         if !ui.is_rect_visible(rect) {
             return resp;
         }

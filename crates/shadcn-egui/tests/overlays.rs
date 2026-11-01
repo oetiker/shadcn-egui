@@ -353,6 +353,39 @@ fn tooltip_shows_on_hover() {
     h.get_by_label("Add to library");
 }
 
+/// shadcn's `disabled:pointer-events-none`: the pointer on a disabled
+/// trigger does not reach it, so neither the crate's tooltip nor egui's
+/// `on_hover_text` opens there. egui's `on_disabled_hover_text` is the
+/// hint for a disabled widget.
+#[test]
+fn a_disabled_trigger_shows_no_tooltip() {
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 160.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.style_mut().interaction.tooltip_delay = 0.0;
+            ui.add_space(32.0);
+            ui.horizontal(|ui| {
+                ui.add_space(32.0);
+                tooltip(ui.add_enabled(false, Button::new("Crate")), "Crate tip");
+                ui.add_enabled(false, Button::new("Egui"))
+                    .on_hover_text("Egui tip");
+                ui.add_enabled(false, Button::new("Hint"))
+                    .on_disabled_hover_text("Hint tip");
+            });
+        });
+    h.run();
+    for (trigger, tip, shows) in [
+        ("Crate", "Crate tip", false),
+        ("Egui", "Egui tip", false),
+        ("Hint", "Hint tip", true),
+    ] {
+        h.get_by_label(trigger).hover();
+        h.run();
+        assert_eq!(h.query_by_label(tip).is_some(), shows, "{trigger}");
+    }
+}
+
 #[test]
 fn tooltip_is_inverted_with_an_arrow_toward_the_trigger() {
     for (name, theme, mode) in common::themes() {
@@ -569,7 +602,7 @@ fn select_disabled_does_not_open() {
         .build_ui_state(
             |ui, value: &mut usize| {
                 Theme::vega().apply(ui.ctx());
-                ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
+                ui.add_enabled(false, Select::new("fruit", value, &FRUITS));
             },
             0usize,
         );
@@ -609,11 +642,7 @@ fn select_triggers(ui: &mut egui::Ui) {
     );
     ui.add(Select::new("b", &mut b, &FRUITS).width(180.0));
     ui.add(Select::new("c", &mut c, &FRUITS).invalid(true).width(180.0));
-    ui.add(
-        Select::new("d", &mut d, &FRUITS)
-            .enabled(false)
-            .width(180.0),
-    );
+    ui.add_enabled(false, Select::new("d", &mut d, &FRUITS).width(180.0));
     ui.add(Select::new("e", &mut e, &FRUITS).size(SelectSize::Sm));
 }
 

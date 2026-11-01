@@ -286,6 +286,23 @@ fn a_hosted_spinner_is_a_status_inside_its_host() {
     }
 }
 
+/// A disabled button reports itself disabled, but not the spinner's
+/// status inside it: ARIA's `role="status"` takes no `aria-disabled`, and
+/// CORE-AAM passes a disabled state down to focusable descendants only;
+/// upstream's `<svg role="status">` is neither a form control nor
+/// focusable.
+#[test]
+fn a_hosted_spinner_in_a_disabled_host_is_not_disabled() {
+    let mut h = Harness::new_ui(|ui| {
+        ui.add_enabled(false, Button::new("Processing").icon(Glyph::Spinner));
+    });
+    h.run();
+    let host = h.get_by_role_and_label(Role::Button, "Processing");
+    assert!(host.accesskit_node().is_disabled(), "the button");
+    let status = host.get_by_role(Role::Status);
+    assert!(!status.accesskit_node().is_disabled(), "its status");
+}
+
 /// The size, colour, button and badge demos. `spinner-custom-demo` is not
 /// ported: it turns another icon itself and uses no `<Spinner>`.
 #[test]

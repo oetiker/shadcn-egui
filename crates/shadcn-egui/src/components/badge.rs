@@ -200,7 +200,14 @@ impl Widget for Badge {
         } else {
             WidgetType::Label
         };
-        resp.widget_info(|| egui::WidgetInfo::labeled(role, enabled, &self.text));
+        let info = || egui::WidgetInfo::labeled(role, enabled, &self.text);
+        // A plain badge is a `<span>`, with no disabled state; a link badge
+        // is a control.
+        if role == WidgetType::Link {
+            resp.widget_info(info);
+        } else {
+            crate::components::shared::widget_info_never_disabled(&resp, info);
+        }
         for (slot, _) in [self.icon, self.icon_end]
             .iter()
             .enumerate()

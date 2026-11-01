@@ -233,10 +233,9 @@ fn disabled_line_bar_is_faded_with_its_trigger() {
     let mode = egui::Theme::Light;
     let theme = Theme::vega();
     let (_, out) = common::measure_output(&theme, mode, |ui| {
-        ui.add(
-            Tabs::new(&mut 0, &["A", "B"])
-                .variant(TabsVariant::Line)
-                .enabled(false),
+        ui.add_enabled(
+            false,
+            Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line),
         )
     });
     let fg = theme.palette_of(mode).foreground;
@@ -503,7 +502,7 @@ fn button_disabled_opacity_comes_from_the_style() {
     });
     let (_, on) = common::measure_output(&theme, mode, |ui| ui.add(Button::new("Save")));
     let (_, off) = common::measure_output(&theme, mode, |ui| {
-        ui.add(Button::new("Save").enabled(false))
+        ui.add_enabled(false, Button::new("Save"))
     });
     assert_eq!(
         common::text_colour(&off),
@@ -602,7 +601,7 @@ fn input_placeholder_and_fade_come_from_the_style() {
     });
     assert_eq!(common::text_colour(&on), theme.palette_of(mode).primary);
     let (_, off) = common::measure_output(&theme, mode, |ui| {
-        ui.add(Input::new(&mut String::new()).hint("Email").enabled(false))
+        ui.add_enabled(false, Input::new(&mut String::new()).hint("Email"))
     });
     assert_eq!(
         common::text_colour(&off),
@@ -635,7 +634,7 @@ fn select_fade_and_offset() {
         ui.add(Select::new("s", &mut 0, &["Apple"]))
     });
     let (_, off) = common::measure_output(&theme, mode, |ui| {
-        ui.add(Select::new("s", &mut 0, &["Apple"]).enabled(false))
+        ui.add_enabled(false, Select::new("s", &mut 0, &["Apple"]))
     });
     assert_eq!(
         common::text_colour(&off),
@@ -762,7 +761,7 @@ fn switch_fade_comes_from_the_style() {
     });
     let fills = |enabled: bool| {
         let (track, out) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Switch::new(&mut true).enabled(enabled))
+            ui.add_enabled(enabled, Switch::new(&mut true))
         });
         // Faded, the track paints as a mesh with the thumb cut out of it
         // (its bounds the track's plus egui's feathering): its fill is its
@@ -800,7 +799,7 @@ fn checkbox_fade_comes_from_the_style() {
     });
     let fill = |enabled: bool| {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Checkbox::new(&mut true).enabled(enabled))
+            ui.add_enabled(enabled, Checkbox::new(&mut true))
         });
         // Faded, the box paints as meshes: its first is the fill.
         common::box_fills(&out)
@@ -837,7 +836,7 @@ fn slider_fade_multiplies_down_the_parts() {
     // border (the thumb) paints its fill and border as one mesh.
     let rects = |enabled: bool| {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(enabled))
+            ui.add_enabled(enabled, Slider::new(&mut 50.0, 0.0..=100.0))
         });
         fn walk(s: &egui::Shape, out: &mut Vec<egui::Color32>) {
             match s {
