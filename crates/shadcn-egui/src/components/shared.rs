@@ -1893,13 +1893,13 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
 /// is set while `resp` has focus; `FOCUS_VISIBLE` too where the browser's
 /// `:focus-visible` would match: focus moved by keyboard, not by a pointer
 /// press (crate-wide modality, conformance 2.6). A held Space on a
-/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`, or
-/// `DISABLED` in `context` for a widget's own `enabled` flag) gets
-/// `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`, even if
-/// `context` has them: shadcn's `disabled:pointer-events-none`. A
-/// composite widget passes the response of its focusable inner part (a
-/// select's trigger, a slider's thumb), so focus and press are read where
-/// they happen. For a widget that takes typed text use [`text_entry_state`].
+/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`,
+/// or `DISABLED` in `context`) gets `DISABLED` and no `HOVER`, `ACTIVE`,
+/// `FOCUS` or `FOCUS_VISIBLE`, even if `context` has them: shadcn's
+/// `disabled:pointer-events-none`. A composite widget passes the
+/// response of its focusable inner part (a select's trigger, a slider's
+/// thumb), so focus and press are read where they happen. For a widget
+/// that takes typed text use [`text_entry_state`].
 pub fn interaction_state(theme: &Theme, resp: &Response, context: State) -> State {
     state_of(theme, resp, context, focus_modality_keyboard(&resp.ctx))
 }
@@ -1924,6 +1924,31 @@ pub fn widget_info_with_role(
     resp.widget_info(make_info);
     resp.ctx
         .accesskit_node_builder(resp.id, |node| node.set_role(role));
+}
+
+/// Reports `make_info` for a part whose upstream element has no disabled
+/// state (a `<label>`, `<div>`, `<span>`, `<kbd>`, `<svg>`, `<legend>`, or
+/// `role="status"`, `progressbar`, `alert`): HTML-AAM and ARIA 1.2
+/// give it none, so a disabled `Ui` does not make it disabled to assistive
+/// technology (conformance 8). egui marks every widget in a disabled `Ui`
+/// disabled and adds ": disabled" to its spoken text; this reports the
+/// part as enabled and takes the flag out of its node again. Controls keep
+/// egui's disabled state.
+pub(crate) fn widget_info_never_disabled(
+    resp: &Response,
+    make_info: impl Fn() -> egui::WidgetInfo,
+) {
+    resp.widget_info(|| egui::WidgetInfo {
+        enabled: true,
+        ..make_info()
+    });
+    never_disabled(&resp.ctx, resp.id);
+}
+
+/// Takes egui's disabled flag out of the accessibility node `id`, a part
+/// [`widget_info_never_disabled`] describes that reports no `widget_info`.
+pub(crate) fn never_disabled(ctx: &egui::Context, id: Id) {
+    ctx.accesskit_node_builder(id, |node| node.clear_disabled());
 }
 
 /// Upstream's `aria-invalid`: while `invalid`, the accessibility node of

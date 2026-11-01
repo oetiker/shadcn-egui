@@ -148,9 +148,8 @@ impl Widget for Progress {
         }
 
         let (value, max) = (self.value, self.max);
-        resp.widget_info(|| {
+        crate::components::shared::widget_info_never_disabled(&resp, || {
             let mut info = WidgetInfo::new(WidgetType::ProgressIndicator);
-            info.enabled = ui.is_enabled();
             info.value = value.is_finite().then_some(f64::from(value));
             info
         });

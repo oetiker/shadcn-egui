@@ -168,7 +168,6 @@ pub struct Button {
     text: String,
     variant: ButtonVariant,
     size: ButtonSize,
-    enabled: bool,
     icon: Option<Glyph>,
     icon_end: Option<Glyph>,
     expanded: bool,
@@ -183,7 +182,6 @@ impl Button {
             text: text.into(),
             variant: ButtonVariant::Default,
             size: ButtonSize::Default,
-            enabled: true,
             icon: None,
             icon_end: None,
             expanded: false,
@@ -198,12 +196,6 @@ impl Button {
     }
     pub fn size(mut self, s: impl Into<ButtonSize>) -> Self {
         self.size = s.into();
-        self
-    }
-    /// Disabled buttons do not sense clicks, cannot take focus, show no
-    /// hover or press styling, and paint at the style's disabled opacity.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
         self
     }
     /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`),
@@ -292,7 +284,7 @@ impl Widget for Button {
         let z = size.part(&t.style, ButtonSize::layer, |r| &r.button);
         let (layers, n) = Self::layers(&t.style, v, z, self.extra.as_ref());
         let l = &layers[..n];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let slot = ControlSlot::of_button(ui);
         let invalid = slot.invalid(self.invalid);
         let context = (variant.bits() | size.bits())

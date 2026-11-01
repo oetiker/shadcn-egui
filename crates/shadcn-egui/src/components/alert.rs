@@ -515,6 +515,7 @@ impl Alert {
         widget_info_with_role(&response, egui::accesskit::Role::Alert, || {
             WidgetInfo::new(WidgetType::Other)
         });
+        crate::components::shared::never_disabled(&response.ctx, response.id);
         InnerResponse::new(inner, response)
     }
 }

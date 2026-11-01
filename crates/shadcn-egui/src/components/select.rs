@@ -93,7 +93,6 @@ pub struct Select<'a> {
     size: SelectSize,
     variant: SelectVariant,
     placeholder: String,
-    enabled: bool,
     invalid: Option<bool>,
     width: Option<f32>,
     side_offset: f32,
@@ -109,7 +108,6 @@ impl<'a> Select<'a> {
             size: SelectSize::Default,
             variant: SelectVariant::Default,
             placeholder: String::new(),
-            enabled: true,
             invalid: None,
             width: None,
             side_offset: DEFAULT_SIDE_OFFSET,
@@ -128,11 +126,6 @@ impl<'a> Select<'a> {
     /// Text shown while `selected` is past the end of the options.
     pub fn placeholder(mut self, text: impl Into<String>) -> Self {
         self.placeholder = text.into();
-        self
-    }
-    /// `false` draws the select disabled: no hover, no focus, no opening.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
         self
     }
     /// shadcn `aria-invalid`: destructive border and ring. Inside an
@@ -161,7 +154,7 @@ impl Widget for Select<'_> {
         let ctx = ui.ctx().clone();
         let v = t.resolve_pair(self.variant, self.size);
         let trig = [v.part(&t.style, |s| &s.select_trigger, |r| &r.select_trigger)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let n = self.options.len();
         let has_value = *self.selected < n;
         let slot = ControlSlot::of(ui);

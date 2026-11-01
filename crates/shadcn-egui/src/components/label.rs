@@ -3,7 +3,8 @@
 //! `peer-disabled:cursor-not-allowed` matters in egui: the label of a
 //! disabled control shows the not-allowed cursor. Its look comes from the
 //! style's `cn-label` recipe. `peer-disabled:opacity-50` arrives as the
-//! DISABLED state of that recipe. Placed directly in a
+//! DISABLED state of that recipe: draw the label of a disabled control
+//! with `ui.add_enabled(false, Label::new(..))`. Placed directly in a
 //! [`Field`](crate::components::field::Field), it is the field's label,
 //! as upstream's `<Label for>` in the demos: it names the field's first
 //! crate control, and a press on it acts on that control.
@@ -28,7 +29,6 @@ default_variant!(
 
 pub struct Label {
     text: String,
-    enabled: bool,
     variant: LabelVariant,
 }
 
@@ -36,14 +36,8 @@ impl Label {
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
-            enabled: true,
             variant: LabelVariant::Default,
         }
-    }
-    /// `false` draws the label as the label of a disabled peer control.
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
     }
     /// An app variant ([`LabelVariant::app`]).
     pub fn variant(mut self, v: impl Into<LabelVariant>) -> Self {
@@ -61,7 +55,7 @@ impl Widget for Label {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.label, |r| &r.label)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let st = t.state(ui.ctx(), v.bits().with(State::DISABLED, !enabled));
         let look = TextLook::resolve(ui, &l, st);
         // `cn-label` sets no colour: the label takes its `Ui`'s text
@@ -100,8 +94,8 @@ impl Widget for Label {
         let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
         // In a field it is the field's label, as upstream's `<Label for>`.
         let resp = crate::components::field::label_in_field(ui, rect).unwrap_or(resp);
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &self.text)
         });
         // `peer-disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);

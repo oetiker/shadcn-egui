@@ -87,8 +87,7 @@ impl Widget for Spinner {
         let l = [&*t.style.spinner];
         let side = self.size.unwrap_or_else(|| own_size(&t));
         let (rect, resp) = crate::layout::allocate_item(ui, Vec2::splat(side), Sense::hover());
-        let enabled = ui.is_enabled();
-        report_status(&resp, enabled, &self.alt_text);
+        report_status(&resp, &self.alt_text);
         if ui.is_rect_visible(rect) {
             let color = self.color.unwrap_or(ui.visuals().text_color());
             let angle = spin(ui, &l);
@@ -116,17 +115,22 @@ pub(crate) fn own_size(t: &Theme) -> f32 {
 }
 
 /// `role="status"`, with its implicit `aria-live="polite"`, named `name`.
-fn report_status(resp: &Response, enabled: bool, name: &str) {
+/// No disabled state: `role="status"` takes none.
+fn report_status(resp: &Response, name: &str) {
     widget_info_with_role(resp, Role::Status, || {
-        WidgetInfo::labeled(WidgetType::ProgressIndicator, enabled, name)
+        WidgetInfo::labeled(WidgetType::ProgressIndicator, true, name)
     });
+    crate::components::shared::never_disabled(&resp.ctx, resp.id);
     resp.ctx
         .accesskit_node_builder(resp.id, |node| node.set_live(Live::Polite));
 }
 
 /// The status node of a spinner a host draws in its icon slot `slot`
 /// ([`Glyph::Spinner`]): a child of the host's node, named "Loading", as
-/// upstream's `<svg role="status">` stays a node inside the button.
+/// upstream's `<svg role="status">` stays a node inside the button. A
+/// disabled host does not disable it: `role="status"` takes no
+/// `aria-disabled`, and CORE-AAM passes a disabled state to focusable
+/// descendants only.
 ///
 /// The node's `Ui` is a top-level one, not a child of `ui`: a child would
 /// take one of `ui`'s auto ids, and the widgets after the host would get
@@ -141,14 +145,10 @@ pub(crate) fn report_hosted(ui: &Ui, host: &Response, slot: usize) {
             .accessibility_parent(host.id),
     );
     let id = child.unique_id();
-    let enabled = host.enabled();
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_role(Role::Status);
         node.set_label(LOADING);
         node.set_live(Live::Polite);
-        if !enabled {
-            node.set_disabled();
-        }
     });
 }
 

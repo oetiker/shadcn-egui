@@ -35,7 +35,8 @@
 
 use crate::components::context;
 use crate::components::shared::{
-    disabled_cursor, line_width, part_painter, part_ui, widget_info_with_role, RecipeBox,
+    disabled_cursor, line_width, never_disabled, part_painter, part_ui, widget_info_never_disabled,
+    widget_info_with_role, RecipeBox,
 };
 use crate::components::text::{content_scope, TextLook};
 use crate::layout;
@@ -1008,9 +1009,11 @@ impl Field {
         };
         let outer = Rect::from_min_size(origin, egui::vec2(width, pad_t + height + pad_b));
         let response = layout::end_item(ui, frame, outer, Sense::hover());
+        // A `<div role="group">` with no `aria-disabled`.
         widget_info_with_role(&response, Role::Group, || {
             WidgetInfo::new(WidgetType::Other)
         });
+        never_disabled(&response.ctx, response.id);
         InnerResponse::new(inner, response)
     }
 }
@@ -1256,7 +1259,10 @@ impl Widget for FieldLabel {
                 }
             }
             let name = text.text().to_owned();
-            resp.widget_info(|| WidgetInfo::labeled(WidgetType::Label, !disabled, &name));
+            // A `<label>` has no disabled state; it only looks disabled.
+            widget_info_never_disabled(&resp, || {
+                WidgetInfo::labeled(WidgetType::Label, true, &name)
+            });
             // `peer-disabled:cursor-not-allowed`.
             disabled_cursor(&resp, disabled);
             if ui.is_rect_visible(rect) {
@@ -1368,6 +1374,7 @@ impl Widget for FieldError {
         widget_info_with_role(&response, Role::Alert, || {
             WidgetInfo::new(WidgetType::Other)
         });
+        never_disabled(&response.ctx, response.id);
         response
             .ctx
             .accesskit_node_builder(response.id, |node| node.set_live(Live::Assertive));
@@ -1912,7 +1919,7 @@ impl FieldChoiceCard {
             }
             inner
         });
-        resp.widget_info(|| WidgetInfo::new(WidgetType::Label));
+        widget_info_never_disabled(&resp, || WidgetInfo::new(WidgetType::Label));
         InnerResponse::new(inner, resp)
     }
 }

@@ -320,14 +320,13 @@ impl Widget for Avatar<'_> {
 
         let (id, rect) = layout::allocate_item_space(ui, size);
         let resp = ui.interact(rect, id, Sense::hover());
-        let enabled = ui.is_enabled();
         let shown_image = pixels.is_some();
         let alt = self.alt.unwrap_or_default();
-        resp.widget_info(|| {
+        crate::components::shared::widget_info_never_disabled(&resp, || {
             if shown_image {
-                WidgetInfo::labeled(WidgetType::Image, enabled, &alt)
+                WidgetInfo::labeled(WidgetType::Image, true, &alt)
             } else {
-                WidgetInfo::labeled(WidgetType::Label, enabled, &fallback_name)
+                WidgetInfo::labeled(WidgetType::Label, true, &fallback_name)
             }
         });
         if !ui.is_rect_visible(rect) {
@@ -826,8 +825,9 @@ impl Widget for AvatarGroupCount<'_> {
         );
         let (id, rect) = layout::allocate_item_space(ui, size);
         let resp = ui.interact(rect, id, Sense::hover());
-        let enabled = ui.is_enabled();
-        resp.widget_info(|| WidgetInfo::labeled(WidgetType::Label, enabled, &name));
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            WidgetInfo::labeled(WidgetType::Label, true, &name)
+        });
         if !ui.is_rect_visible(rect) {
             return resp;
         }

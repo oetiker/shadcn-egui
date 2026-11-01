@@ -133,7 +133,6 @@ impl<'t> Textarea<'t> {
             &t,
             &l,
             context,
-            true,
             Leading::Inline,
             TextClip::Padding,
             "shadcn_egui::textarea",
