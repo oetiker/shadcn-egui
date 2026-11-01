@@ -489,23 +489,37 @@ fn progress_label(ui: &mut egui::Ui) {
     ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
         ui.set_width(384.0);
         Field::new().show(ui, |ui| {
-            shadcn_egui::layout::space_between(
-                ui,
-                |ui| {
-                    field_label(ui, "Upload progress");
-                },
-                |ui| {
-                    // The label's look, in its normal weight.
-                    let t = Theme::current(ui.ctx());
-                    let st = t.state(ui.ctx(), State::NONE);
-                    let look = TextLook::resolve(ui, &[&*t.style.label, &*t.style.field_label], st);
-                    let value =
-                        egui::RichText::new("56%").family(family_for(ui.ctx(), Weight::Normal));
-                    let block = look.layout(ui, value, egui::TextWrapMode::Extend, f32::INFINITY);
-                    let (_, rect) = ui.allocate_space(block.size());
-                    block.paint(ui.painter(), rect.min, t.role(Token::MutedForeground));
-                },
+            // One label, "Upload progress" then " 56%" in the label's
+            // size, normal weight and muted colour (`ml-auto` on the
+            // span: the space before it fills the row).
+            let t = Theme::current(ui.ctx());
+            let st = t.state(ui.ctx(), State::NONE);
+            let look = TextLook::resolve(ui, &[&*t.style.label, &*t.style.field_label], st);
+            let normal = egui::FontId::new(look.size(), family_for(ui.ctx(), Weight::Normal));
+            let width = |text: egui::WidgetText| {
+                look.layout(ui, text, egui::TextWrapMode::Extend, f32::INFINITY)
+                    .size()
+                    .x
+            };
+            let name = width("Upload progress".into());
+            let value = width(
+                egui::RichText::new(" 56%")
+                    .family(normal.family.clone())
+                    .into(),
             );
+            let fill = (384.0 - name - value).max(0.0);
+            let mut job = egui::text::LayoutJob::default();
+            job.append(
+                "Upload progress",
+                0.0,
+                egui::TextFormat::simple(look.font_id(ui.ctx()), egui::Color32::PLACEHOLDER),
+            );
+            job.append(
+                " 56%",
+                fill,
+                egui::TextFormat::simple(normal, t.role(Token::MutedForeground)),
+            );
+            field_label(ui, job);
             ui.add(Progress::from_value(56.0, 100.0))
         });
     });
@@ -523,5 +537,5 @@ fn progress_label_has_one_label() {
     let mut h = Harness::new_ui(progress_label);
     h.run();
     assert_eq!(h.get_all_by_role(Role::Label).count(), 1);
-    let _ = h.get_by_role_and_label(Role::Label, "Upload progress");
+    let _ = h.get_by_role_and_label(Role::Label, "Upload progress 56%");
 }
