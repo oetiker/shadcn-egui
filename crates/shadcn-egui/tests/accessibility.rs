@@ -295,11 +295,12 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
     use shadcn_egui::components::kbd::Kbd;
     use shadcn_egui::components::label::Label;
     use shadcn_egui::components::progress::Progress;
+    use shadcn_egui::components::scroll_area::ScrollArea;
     use shadcn_egui::components::spinner::Spinner;
     type Add = fn(&mut egui::Ui);
     // Each case: what it draws, the roles that must be there and report
     // no disabled state, and the roles that must report it.
-    let cases: [(&str, Add, &[Role], &[Role]); 14] = [
+    let cases: [(&str, Add, &[Role], &[Role]); 19] = [
         (
             "label",
             |ui| drop(ui.add(Label::new("Email"))),
@@ -365,6 +366,56 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
                 });
             },
             &[Role::List, Role::Unknown],
+            &[],
+        ),
+        (
+            "item image",
+            |ui| {
+                drop(
+                    Item::new()
+                        .image("bytes://none.png")
+                        .title("Cover")
+                        .show(ui, |_| ()),
+                )
+            },
+            &[Role::Image],
+            &[],
+        ),
+        (
+            "link item",
+            |ui| drop(Item::new().title("Open").link(true).show(ui, |_| ())),
+            &[],
+            &[Role::Link],
+        ),
+        (
+            "button item",
+            |ui| {
+                drop(
+                    Item::new()
+                        .title("Open")
+                        .sense(egui::Sense::click())
+                        .show(ui, |_| ()),
+                )
+            },
+            &[],
+            &[Role::Button],
+        ),
+        (
+            "link badge",
+            |ui| drop(ui.add(Badge::new("Docs").link(true))),
+            &[],
+            &[Role::Link],
+        ),
+        (
+            "scroll area",
+            |ui| {
+                ScrollArea::vertical().max_height(40.0).show(ui, |ui| {
+                    for i in 0..20 {
+                        ui.add(Label::new(format!("Row {i}")));
+                    }
+                });
+            },
+            &[Role::ScrollView, Role::Label],
             &[],
         ),
         (

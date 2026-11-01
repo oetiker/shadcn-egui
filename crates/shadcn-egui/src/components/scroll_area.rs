@@ -414,8 +414,10 @@ impl ScrollArea {
         let focus_id = id.with("shadcn_egui::scroll_area::viewport");
         if (overflow[0] || overflow[1]) && !scan.focusable {
             let resp = ui.interact(inner, focus_id, Sense::FOCUSABLE);
+            // A scroller `<div>` has no disabled state.
             ctx.accesskit_node_builder(resp.id, |node| {
                 node.set_role(egui::accesskit::Role::ScrollView);
+                node.clear_disabled();
             });
             if resp.has_focus() {
                 ctx.memory_mut(|m| {

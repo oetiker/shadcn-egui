@@ -1443,10 +1443,8 @@ impl Widget for FieldLegend {
         if let Some(p) = in_set {
             with_children(ui, p.id, |c| c.legend = Some(resp.id));
         }
-        resp.ctx.accesskit_node_builder(resp.id, |node| {
-            node.set_role(Role::Legend);
-            node.clear_disabled();
-        });
+        resp.ctx
+            .accesskit_node_builder(resp.id, |node| node.set_role(Role::Legend));
         resp
     }
 }

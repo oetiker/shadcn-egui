@@ -274,6 +274,12 @@ back, Right and Down forward) whatever its orientation.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`;
   a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
   `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.
+  A part whose upstream element has no disabled state (a `<label>`, a
+  `<div>`, `role="status"`) reports none in a disabled `Ui`
+  (conformance 8): in the crate through `shared::widget_info_never_disabled`
+  or, where the role is set by hand, `shared::never_disabled`; in an app
+  through `node.clear_disabled()` in `ctx.accesskit_node_builder` after
+  its `widget_info`.
 
 ## Dependency discipline
 

@@ -684,7 +684,9 @@ impl<'a> Item<'a> {
                 if let Some(alt) = alt {
                     image = image.alt_text(alt);
                 }
-                let _ = frame.put(at, image);
+                // An `<img>` has no disabled state.
+                let r = frame.put(at, image);
+                crate::components::shared::never_disabled(&r.ctx, r.id);
                 next.media = at.size();
             }
             Some(Media::Ui(add)) => {
