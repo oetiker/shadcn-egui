@@ -656,7 +656,8 @@ impl ControlSlot {
     /// equal share among its text fields of the room the other parts after
     /// the first left in the previous pass (the browser shrinks them for
     /// those, as input-inline's button); else `default`. Capped to the
-    /// room and raised to `content_min`.
+    /// room, except after the growing part, where the field measures what
+    /// follows it; raised to `content_min`.
     pub(crate) fn text_width(
         &mut self,
         ui: &Ui,
@@ -673,7 +674,16 @@ impl ControlSlot {
         let fill = if self.fills() { f32::INFINITY } else { default };
         let width = requested.unwrap_or(fill);
         self.want(ui, width);
+        if width.is_finite() && self.after_grower(ui) {
+            return width.max(content_min);
+        }
         layout::capped_width(ui, width, content_min)
+    }
+
+    /// The control comes after the growing part of a horizontal field.
+    fn after_grower(&self, ui: &Ui) -> bool {
+        self.field
+            .is_some_and(|f| with_children(ui, f.id, |c| c.grower_right.is_some()))
     }
 
     /// The bits a control's recipe reads from the field and the card

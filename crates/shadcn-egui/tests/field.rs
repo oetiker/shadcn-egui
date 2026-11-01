@@ -325,6 +325,34 @@ fn text_fields_in_a_horizontal_field_share_the_room() {
     assert_eq!(button.right(), 400.0, "the button ends the row");
 }
 
+/// A text field with its own width after the growing text field is not
+/// shrunk to the room left: the field measures what follows the grower
+/// in its first pass, and the first frame ends the row at the field's
+/// edge.
+#[test]
+fn a_sized_text_field_after_the_growing_one_fits_in_the_first_frame() {
+    let ctx = egui::Context::default();
+    vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let input = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 800.0))),
+        ..Default::default()
+    };
+    let mut r = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
+    let _ = ctx.run_ui(input, |ui| {
+        let (mut x, mut y) = (String::new(), String::new());
+        Field::new().horizontal().show(ui, |ui| {
+            r.0 = ui.add(Input::new(&mut x)).rect;
+            r.1 = ui.add(Input::new(&mut y).max_width(100.0)).rect;
+            r.2 = ui.add(Button::new("Go")).rect;
+        });
+    });
+    let (a, b, button) = r;
+    assert_eq!(b.width(), 100.0, "{b:?}");
+    assert_eq!(b.left() - a.right(), 12.0);
+    assert_eq!(button.right(), 400.0, "{a:?} {b:?} {button:?}");
+}
+
 /// A control in a row inside a vertical field is not the field's own
 /// child, so `*:w-full` does not reach it: an input beside a button keeps
 /// its default width and the button stays in the field.
