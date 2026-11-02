@@ -5,13 +5,21 @@
 //! translucent layers (Hugeicons' faded parts) are composited into that one
 //! texture at their own alpha.
 //!
+//! A turned icon (the spinner) is rasterised at its angle with the turn
+//! applied to its geometry, so it keeps the edges of the unturned icon; a
+//! bitmap turned on the GPU would be resampled. Its texture is reused for
+//! the next angle on the next pass.
+//!
 //! Coverage is a distance field: strokes by the distance of each pixel
 //! centre to the flattened stroke segments, which is exact for SVG round
 //! caps and round joins (every shipped set uses both); fills by the distance
 //! to the fill boundary, signed by the pre-triangulated inside.
 
 use crate::FillMesh;
-use egui::{pos2, Color32, ColorImage, Context, Id, Pos2, TextureHandle, TextureOptions};
+use egui::{
+    pos2, vec2, Color32, ColorImage, Context, Id, Pos2, TextureHandle, TextureOptions, Vec2,
+    ViewportId,
+};
 use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg};
 use std::collections::HashMap;
 
@@ -32,6 +40,13 @@ pub(crate) const MAX_SIDE: usize = 1024;
 const MAX_ENTRIES: usize = 1024;
 /// ... and at most this many pixels (64 MiB of RGBA) in all.
 const MAX_PIXELS: usize = 16 << 20;
+
+/// Turned icons ([`turned_texture`]) keep at most this many textures ...
+const MAX_TURNED: usize = 64;
+/// ... and at most this many pixels (4 MiB of RGBA) in all.
+const MAX_TURNED_PIXELS: usize = 1 << 20;
+/// A turned texture its viewport has not drawn for this many passes is freed.
+const KEEP_PASSES: u64 = 60;
 
 /// What makes two icon textures the same. `Icon` compares blob records by
 /// their bytes; the cache keys by address, which at worst caches an icon
@@ -133,19 +148,210 @@ pub(crate) fn texture(
     tex
 }
 
+/// Turned icon textures, one per icon, size, stroke and viewport that
+/// shows it, more where one pass draws the icon at several angles. A
+/// texture is rasterised again in place for the next angle, never while
+/// a mesh of the same pass still shows its old angle.
+#[derive(Clone, Default)]
+struct TurnedCache {
+    slots: Vec<Turned>,
+    pixels: usize,
+}
+
+#[derive(Clone)]
+struct Turned {
+    key: Key,
+    viewport: ViewportId,
+    angle: u32,
+    /// The viewport's pass that last drew it.
+    pass: u64,
+    tex: TextureHandle,
+}
+
+/// The margin, in pixels on each side, around a `w`×`h` box that holds
+/// the box turned to any angle about its centre, its edge ramp included.
+pub(crate) fn turned_margin(w: usize, h: usize) -> [usize; 2] {
+    let d = (w as f32).hypot(h as f32);
+    let m = |s: usize| ((d - s as f32) / 2.0).ceil().max(0.0) as usize + 1;
+    [m(w), m(h)]
+}
+
+/// The texture of `icon` in a `w`×`h` physical pixel box turned clockwise
+/// by `angle` radians about the box's centre, rasterised at that angle,
+/// with [`turned_margin`] pixels around the box. `None` when the turned
+/// textures are at their bounds, all drawn in this pass.
+pub(crate) fn turned_texture(
+    ctx: &Context,
+    icon: &Icon,
+    w: usize,
+    h: usize,
+    stroke_width: f32,
+    angle: f32,
+) -> Option<TextureHandle> {
+    let id = Id::new("shadcn_egui::icon_raster::turned");
+    let key = Key::new(icon, w, h, stroke_width);
+    let [mx, my] = turned_margin(w, h);
+    let (tw, th) = (w + 2 * mx, h + 2 * my);
+    let viewport = ctx.viewport_id();
+    let pass = ctx.cumulative_pass_nr();
+    let bits = angle.to_bits();
+    enum Found {
+        Same(TextureHandle),
+        Reuse(TextureHandle),
+        New,
+        Full,
+    }
+    let found = ctx.data_mut(|d| {
+        let cache = d.get_temp_mut_or_default::<TurnedCache>(id);
+        let mut freed = 0;
+        cache.slots.retain(|s| {
+            let keep = s.viewport != viewport || s.pass + KEEP_PASSES >= pass;
+            if !keep {
+                let [ow, oh] = s.tex.size();
+                freed += ow * oh;
+            }
+            keep
+        });
+        cache.pixels -= freed;
+        let mine = |s: &&mut Turned| s.key == key && s.viewport == viewport;
+        if let Some(s) = cache
+            .slots
+            .iter_mut()
+            .filter(mine)
+            .find(|s| s.angle == bits)
+        {
+            s.pass = pass;
+            return Found::Same(s.tex.clone());
+        }
+        if let Some(s) = cache.slots.iter_mut().filter(mine).find(|s| s.pass != pass) {
+            // Taken for this pass now, so no other call reuses it.
+            (s.angle, s.pass) = (bits, pass);
+            return Found::Reuse(s.tex.clone());
+        }
+        if cache.slots.len() >= MAX_TURNED || cache.pixels + tw * th > MAX_TURNED_PIXELS {
+            Found::Full
+        } else {
+            Found::New
+        }
+    });
+    let image = || {
+        let scale = w as f32 / icon.size;
+        let (sin, cos) = angle.sin_cos();
+        let turn = Turn {
+            sin,
+            cos,
+            centre: pos2(w as f32 / 2.0, h as f32 / 2.0),
+            margin: vec2(mx as f32, my as f32),
+            half: vec2(w as f32 / 2.0, h as f32 / 2.0),
+        };
+        let place = Place {
+            scale,
+            turn: Some(turn),
+        };
+        let alpha = placed_coverage(icon, tw, th, place, stroke_width * scale);
+        // token-ok: a coverage mask, tinted by the caller's colour when drawn
+        let pixels = alpha.into_iter().map(Color32::from_white_alpha).collect();
+        ColorImage::new([tw, th], pixels)
+    };
+    // Rasterise and upload outside `data_mut`: textures lock the context too.
+    match found {
+        Found::Same(tex) => Some(tex),
+        Found::Full => None,
+        Found::Reuse(mut tex) => {
+            tex.set(image(), TextureOptions::NEAREST);
+            Some(tex)
+        }
+        Found::New => {
+            let name = format!("icon:{}:turned", icon.name);
+            let tex = ctx.load_texture(name, image(), TextureOptions::NEAREST);
+            ctx.data_mut(|d| {
+                let cache = d.get_temp_mut_or_default::<TurnedCache>(id);
+                cache.pixels += tw * th;
+                cache.slots.push(Turned {
+                    key,
+                    viewport,
+                    angle: bits,
+                    pass,
+                    tex: tex.clone(),
+                });
+            });
+            Some(tex)
+        }
+    }
+}
+
+/// How icon units map to the pixels of a texture: scaled and, for a
+/// turned icon, turned about the centre of its box.
+#[derive(Clone, Copy)]
+struct Place {
+    scale: f32,
+    turn: Option<Turn>,
+}
+
+/// A clockwise turn by the angle of `sin` and `cos` about `centre` (the
+/// scaled box's centre, `half` its half size), moved by `margin`.
+#[derive(Clone, Copy)]
+struct Turn {
+    sin: f32,
+    cos: f32,
+    centre: Pos2,
+    margin: Vec2,
+    half: Vec2,
+}
+
+impl Place {
+    fn scaled(scale: f32) -> Self {
+        Self { scale, turn: None }
+    }
+
+    fn map(&self, x: f32, y: f32) -> Pos2 {
+        let p = pos2(x * self.scale, y * self.scale);
+        match self.turn {
+            // Unturned points are only scaled, bit for bit as before.
+            None => p,
+            Some(t) => {
+                let d = p - t.centre;
+                t.centre + t.margin + vec2(d.x * t.cos - d.y * t.sin, d.x * t.sin + d.y * t.cos)
+            }
+        }
+    }
+
+    /// How much of pixel `(x, y)` lies in the turned box (the SVG's
+    /// view box, which clips the icon), with the same one-pixel ramp as
+    /// the strokes; 1 everywhere for an unturned icon, whose texture is
+    /// the box.
+    fn in_box(&self, x: usize, y: usize) -> f32 {
+        let Some(t) = self.turn else { return 1.0 };
+        let d = pixel_centre(x, y) - (t.centre + t.margin);
+        let (u, v) = (d.x * t.cos + d.y * t.sin, d.y * t.cos - d.x * t.sin);
+        let ramp = |a: f32, half: f32| (HALF_PX + half - a.abs()).clamp(0.0, 1.0);
+        ramp(u, t.half.x) * ramp(v, t.half.y)
+    }
+}
+
 /// Coverage (0..=255) of `icon` on a `w`×`h` pixel grid, row by row.
 /// `scale` maps icon units to pixels, `stroke_px` is the stroke width in
 /// pixels. Each layer is rasterised on its own, scaled by its alpha and
 /// composited over the layers before it. Any input gives an image, never a
 /// panic.
 pub(crate) fn coverage(icon: &Icon, w: usize, h: usize, scale: f32, stroke_px: f32) -> Vec<u8> {
+    placed_coverage(icon, w, h, Place::scaled(scale), stroke_px)
+}
+
+/// [`coverage`] with the icon's points mapped by `place`.
+fn placed_coverage(icon: &Icon, w: usize, h: usize, place: Place, stroke_px: f32) -> Vec<u8> {
     let mut total: Vec<f32> = vec![0.0; w * h];
     for layer in icon.layers() {
-        let cov = layer_coverage(&layer, w, h, scale, stroke_px);
+        let cov = layer_coverage(&layer, w, h, place, stroke_px);
         let alpha = layer.alpha.clamp(0.0, 1.0);
         for (t, c) in total.iter_mut().zip(cov) {
             let src = c * alpha;
             *t = src + *t * (1.0 - src);
+        }
+    }
+    if place.turn.is_some() {
+        for (i, t) in total.iter_mut().enumerate() {
+            *t *= place.in_box(i % w, i / w);
         }
     }
     total
@@ -155,12 +361,12 @@ pub(crate) fn coverage(icon: &Icon, w: usize, h: usize, scale: f32, stroke_px: f
 }
 
 /// Coverage (0..=1) of one layer: its strokes and its fill, overlaps once.
-fn layer_coverage(layer: &IconLayer, w: usize, h: usize, scale: f32, stroke_px: f32) -> Vec<f32> {
+fn layer_coverage(layer: &IconLayer, w: usize, h: usize, place: Place, stroke_px: f32) -> Vec<f32> {
     let mut cov: Vec<f32> = vec![0.0; w * h];
     if stroke_px > 0.0 && stroke_px.is_finite() {
         let half = stroke_px / 2.0;
         let mut dist = vec![f32::INFINITY; w * h];
-        for (a, b) in stroke_segments(layer.segs.clone(), scale) {
+        for (a, b) in stroke_segments(layer.segs.clone(), place) {
             min_distance(&mut dist, w, h, a, b, half + HALF_PX);
         }
         for (c, d) in cov.iter_mut().zip(&dist) {
@@ -168,14 +374,14 @@ fn layer_coverage(layer: &IconLayer, w: usize, h: usize, scale: f32, stroke_px: 
         }
     }
     if let Some(fill) = &layer.fill {
-        fill_coverage(&mut cov, w, h, fill, scale);
+        fill_coverage(&mut cov, w, h, fill, place);
     }
     cov
 }
 
 /// Raises `cov` to the fill's coverage where that is higher.
-fn fill_coverage(cov: &mut [f32], w: usize, h: usize, fill: &FillMesh, scale: f32) {
-    let map = |[x, y]: [f32; 2]| pos2(x * scale, y * scale);
+fn fill_coverage(cov: &mut [f32], w: usize, h: usize, fill: &FillMesh, place: Place) {
+    let map = |[x, y]: [f32; 2]| place.map(x, y);
     let mut inside = vec![false; w * h];
     for &t in fill.indices.as_chunks::<3>().0 {
         let [a, b, c] = t.map(|i| {
@@ -265,8 +471,8 @@ fn pixel_centre(x: usize, y: usize) -> Pos2 {
 /// closes it and returns to its start, a lone `M` is a dot (a round cap); a
 /// curve without a start point is skipped, a line without one starts a
 /// sub-path.
-fn stroke_segments(segs: impl Iterator<Item = Seg>, scale: f32) -> Vec<(Pos2, Pos2)> {
-    let map = |x: f32, y: f32| pos2(x * scale, y * scale);
+fn stroke_segments(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Pos2, Pos2)> {
+    let map = |x: f32, y: f32| place.map(x, y);
     let mut out = Vec::new();
     let (mut start, mut cur): (Option<Pos2>, Option<Pos2>) = (None, None);
     let mut drawn = false;
@@ -393,7 +599,7 @@ mod tests {
             Seg::M(12.0, 2.0),
             Seg::C(12.0, 7.523, 7.523, 12.0, 2.0, 12.0),
         ];
-        let segs = stroke_segments(icon(&ARC).layers().flat_map(|l| l.segs), 1.0);
+        let segs = stroke_segments(icon(&ARC).layers().flat_map(|l| l.segs), Place::scaled(1.0));
         assert!(segs.len() > 4, "flattened into {} pieces", segs.len());
         for (a, _) in segs {
             let r = (a - pos2(2.0, 2.0)).length();
