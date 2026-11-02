@@ -173,7 +173,11 @@ impl Rasterizer {
     /// Drops the textures egui freed; call after [`Self::render`].
     pub fn free_textures(&mut self, delta: &TexturesDelta) {
         for id in &delta.free {
-            self.textures.remove(id);
+            // A mesh may still name the texture next frame; egui-wgpu then
+            // skips it, and its old pixels must go. Frees are rare.
+            if self.textures.remove(id).is_some() {
+                self.full_damage = true;
+            }
         }
     }
 
@@ -194,6 +198,10 @@ impl Rasterizer {
             let Primitive::Mesh(mesh) = &prim.primitive else {
                 continue;
             };
+            if !self.textures.contains_key(&mesh.texture_id) {
+                // Once per mesh and frame, as egui-wgpu warns.
+                log::warn!("Missing texture: {:?}", mesh.texture_id);
+            }
             let scissor = scissor_rect(prim.clip_rect, pixels_per_point, frame);
             let base = hash_words(
                 0x9e37_79b9,
@@ -245,7 +253,6 @@ impl Rasterizer {
                 }
                 // egui-wgpu skips a mesh whose texture it lacks.
                 let Some(texture) = self.textures.get(&mesh.texture_id) else {
-                    log::warn!("Missing texture: {:?}", mesh.texture_id);
                     continue;
                 };
                 for (tri, key) in mesh.indices.as_chunks::<3>().0.iter().zip(tris) {
@@ -585,7 +592,7 @@ fn raster_triangle(canvas: &mut Canvas, clip: IRect, v: [&Vertex; 3], ppp: f32, 
     let uvs = v.map(|v| [v.uv.x, v.uv.y]);
     let flat_color = v[0].color == v[1].color && v[1].color == v[2].color;
     let flat_uv = uvs[0] == uvs[1] && uvs[1] == uvs[2];
-    let filter = texture_filter(texture, &p, &uvs, area);
+    let filter = texture_filter(texture, &uvs, area);
     let sample = |uv: [f32; 2]| texture.sample(uv, filter);
 
     // A constant source color: fill opaque spans, blend translucent ones.
@@ -649,12 +656,7 @@ fn raster_triangle(canvas: &mut Canvas, clip: IRect, v: [&Vertex; 3], ppp: f32, 
 
 /// The filter the GPU picks for this triangle: magnification when a
 /// texel covers at least a pixel, minification otherwise.
-fn texture_filter(
-    t: &Texture,
-    p: &[(i64, i64); 3],
-    uvs: &[[f32; 2]; 3],
-    area: i64,
-) -> TextureFilter {
+fn texture_filter(t: &Texture, uvs: &[[f32; 2]; 3], area: i64) -> TextureFilter {
     let o = t.options;
     if o.magnification == o.minification {
         return o.magnification;
@@ -664,7 +666,6 @@ fn texture_filter(
         .abs()
         * (t.size[0] * t.size[1]) as f32;
     let px_area = area as f32 / (SUB * SUB) as f32;
-    let _ = p;
     if tex_area <= px_area {
         o.magnification
     } else {
@@ -732,6 +733,48 @@ mod tests {
             "{:x?}",
             c.pixels
         );
+    }
+
+    #[test]
+    fn a_freed_texture_still_in_use_leaves_no_stale_pixels() {
+        // egui-wgpu draws nothing for a mesh whose texture was freed, so
+        // the damage render must clear the pixels it drew before, as a
+        // full render of the same frame shows.
+        let id = TextureId::Managed(9);
+        let mut mesh = Mesh::with_texture(id);
+        mesh.add_rect_with_uv(
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(4.0, 4.0)),
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        let mut red = TexturesDelta::default();
+        red.set.push((
+            id,
+            egui::epaint::ImageDelta::full(
+                egui::ColorImage::filled([2, 2], Color32::RED),
+                TextureOptions::NEAREST,
+            ),
+        ));
+        let mut r = Rasterizer::with_white_atlas();
+        let mut c = Canvas::new(4, 4);
+        r.set_textures(&red);
+        render(&mut r, &mut c, &[prim(mesh.clone())]);
+        assert!(
+            c.pixels.iter().all(|&p| p == 0x00ff_0000),
+            "{:x?}",
+            c.pixels
+        );
+        let mut freed = TexturesDelta::default();
+        freed.free.push(id);
+        r.free_textures(&freed);
+        render(&mut r, &mut c, &[prim(mesh.clone())]);
+        let mut full = Canvas::new(4, 4);
+        render(
+            &mut Rasterizer::with_white_atlas(),
+            &mut full,
+            &[prim(mesh)],
+        );
+        assert_eq!(c.pixels, full.pixels, "stale pixels of a freed texture");
     }
 
     #[test]

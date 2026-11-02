@@ -92,37 +92,88 @@ fn parse_args(args: &[String]) -> (bool, Option<&str>, Option<&str>) {
 }
 
 /// What eframe logs as it ends its loop on an error; it returns the error
-/// only from `run_native`, which the gallery cannot use (see `main`).
+/// only from `run_native`, which the gallery cannot use (see `main`). The
+/// text is eframe's wording, not its API: the test
+/// `eframe_still_logs_the_exit_error_the_gallery_reads` finds it in the
+/// eframe source `Cargo.lock` pins.
 #[cfg(not(target_arch = "wasm32"))]
 const EFRAME_EXIT: &str = "Exiting because of error: ";
 
-/// Keeps the error eframe ended its loop with, the last one if several.
+/// The process's logger: it keeps the error eframe ended its loop with
+/// (the last one if several) and hands every other record to `inner`, the
+/// logger the app would have set anyway. An app with its own logger puts
+/// that one in `inner` instead of [`Stderr`].
 #[cfg(not(target_arch = "wasm32"))]
-struct EframeError(std::sync::Mutex<Option<String>>);
-
-#[cfg(not(target_arch = "wasm32"))]
-static EFRAME_ERROR: EframeError = EframeError(std::sync::Mutex::new(None));
+struct EframeError {
+    inner: &'static dyn log::Log,
+    cause: std::sync::Mutex<Option<String>>,
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 impl EframeError {
+    /// Sets the logger for the whole process; `max_level` is what `inner`
+    /// wants to see. `None` when another logger is set already: eframe's
+    /// error is then lost.
+    fn install(inner: &'static dyn log::Log, max_level: log::LevelFilter) -> Option<&'static Self> {
+        let logger: &'static Self = Box::leak(Box::new(Self::new(inner)));
+        log::set_logger(logger).ok()?;
+        log::set_max_level(max_level.max(log::LevelFilter::Error));
+        Some(logger)
+    }
+
+    fn new(inner: &'static dyn log::Log) -> Self {
+        Self {
+            inner,
+            cause: std::sync::Mutex::new(None),
+        }
+    }
+
     fn take(&self) -> Option<String> {
-        self.0.lock().map_or(None, |mut e| e.take())
+        self.cause.lock().map_or(None, |mut e| e.take())
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl log::Log for EframeError {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() == log::Level::Error
+        metadata.level() == log::Level::Error || self.inner.enabled(metadata)
     }
 
     fn log(&self, record: &log::Record) {
-        if !self.enabled(record.metadata()) {
-            return;
+        if record.level() == log::Level::Error {
+            let message = record.args().to_string();
+            if let Some(cause) = message.strip_prefix(EFRAME_EXIT) {
+                // The gallery reports it itself, after the loop.
+                if let Ok(mut slot) = self.cause.lock() {
+                    *slot = Some(cause.to_owned());
+                }
+                return;
+            }
         }
-        let message = record.args().to_string();
-        if let (Some(cause), Ok(mut slot)) = (message.strip_prefix(EFRAME_EXIT), self.0.lock()) {
-            *slot = Some(cause.to_owned());
+        if self.inner.enabled(record.metadata()) {
+            self.inner.log(record);
+        }
+    }
+
+    fn flush(&self) {
+        self.inner.flush();
+    }
+}
+
+/// Prints warnings and errors to stderr: the crate's own (a preset value
+/// this build cannot show), egui's, eframe's and wgpu's.
+#[cfg(not(target_arch = "wasm32"))]
+struct Stderr;
+
+#[cfg(not(target_arch = "wasm32"))]
+impl log::Log for Stderr {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Warn
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            eprintln!("[{} {}] {}", record.level(), record.target(), record.args());
         }
     }
 
@@ -147,10 +198,20 @@ fn after_eframe(started: bool, error: Option<String>) -> Result<Option<String>, 
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("gallery: {e}");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     use egui_winit::winit::event_loop::EventLoop;
     use egui_winit::winit::platform::run_on_demand::EventLoopExtRunOnDemand as _;
 
+    // Before anything logs: the preset warnings come from initial_state.
+    let logger = EframeError::install(&Stderr, log::LevelFilter::Warn);
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (cpu, preset, mode) = parse_args(&args);
     let (state, warning) = initial_state(preset, mode);
@@ -170,9 +231,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let wgpu_started = std::rc::Rc::new(std::cell::Cell::new(false));
         let started = wgpu_started.clone();
         let state = state.take();
-        if log::set_logger(&EFRAME_ERROR).is_ok() {
-            log::set_max_level(log::LevelFilter::Error);
-        }
         let mut app = eframe::create_native(
             TITLE,
             eframe::NativeOptions {
@@ -188,7 +246,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         event_loop.run_app_on_demand(&mut app)?;
         drop(app);
-        match after_eframe(wgpu_started.get(), EFRAME_ERROR.take())? {
+        let error = logger.and_then(EframeError::take);
+        match after_eframe(wgpu_started.get(), error).map_err(|e| format!("wgpu failed: {e}"))? {
             None => return Ok(()),
             Some(note) => eprintln!("{note}"),
         }
@@ -202,7 +261,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = cpu::CpuApp::new(ctx, state, viewport(), event_loop.create_proxy());
     event_loop.run_app_on_demand(&mut app)?;
     match app.error.take() {
-        Some(e) => Err(e.into()),
+        Some(e) => Err(format!("cpu renderer failed: {e}").into()),
         None => Ok(()),
     }
 }
@@ -324,10 +383,26 @@ mod tests {
         );
     }
 
+    /// Counts the records it is handed, as an app's own logger would get
+    /// them.
+    struct Counter(std::sync::atomic::AtomicUsize);
+
+    impl log::Log for Counter {
+        fn enabled(&self, metadata: &log::Metadata) -> bool {
+            metadata.level() <= log::Level::Warn
+        }
+        fn log(&self, _: &log::Record) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        fn flush(&self) {}
+    }
+
     #[test]
-    fn the_logger_keeps_eframe_s_exit_error_only() {
+    fn the_logger_keeps_eframe_s_exit_error_and_passes_the_rest_on() {
         use log::Log as _;
-        let logger = EframeError(std::sync::Mutex::new(None));
+        static INNER: Counter = Counter(std::sync::atomic::AtomicUsize::new(0));
+        let passed = || INNER.0.load(std::sync::atomic::Ordering::Relaxed);
+        let logger = EframeError::new(&INNER);
         let record = |level, message: &str| {
             logger.log(
                 &log::Record::builder()
@@ -338,10 +413,66 @@ mod tests {
         };
         record(log::Level::Error, "something else");
         record(log::Level::Warn, "Exiting because of error: a warning");
+        record(log::Level::Warn, "Missing texture: Managed(9)");
+        record(log::Level::Info, "not for the inner logger");
         assert_eq!(logger.take(), None);
+        assert_eq!(passed(), 3);
         record(log::Level::Error, "Exiting because of error: no adapter");
+        assert_eq!(passed(), 3, "the gallery reports the cause itself");
         assert_eq!(logger.take().as_deref(), Some("no adapter"));
         assert_eq!(logger.take(), None);
+    }
+
+    /// `EFRAME_EXIT` is eframe's log text, not its API: this fails when the
+    /// eframe that `Cargo.lock` pins no longer logs it as an error.
+    #[test]
+    fn eframe_still_logs_the_exit_error_the_gallery_reads() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let lock = std::fs::read_to_string(root.join("Cargo.lock")).expect("Cargo.lock");
+        let version = lock
+            .split("[[package]]")
+            .find(|p| p.contains("\nname = \"eframe\"\n"))
+            .and_then(|p| p.lines().find_map(|l| l.strip_prefix("version = ")))
+            .expect("eframe in Cargo.lock")
+            .trim_matches('"');
+        let cargo_home = std::env::var_os("CARGO_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".cargo")))
+            .expect("CARGO_HOME or HOME");
+        let registry = cargo_home.join("registry/src");
+        let wanted = format!("log::error!(\"{EFRAME_EXIT}{{");
+        let mut searched = Vec::new();
+        for index in std::fs::read_dir(&registry).expect("the registry sources") {
+            let src = index
+                .expect("a registry index")
+                .path()
+                .join(format!("eframe-{version}/src"));
+            if !src.is_dir() {
+                continue;
+            }
+            if contains_text(&src, &wanted) {
+                return;
+            }
+            searched.push(src);
+        }
+        panic!(
+            "eframe {version} does not log `{wanted}` (searched {searched:?} under {})",
+            registry.display()
+        );
+    }
+
+    fn contains_text(dir: &std::path::Path, text: &str) -> bool {
+        std::fs::read_dir(dir)
+            .expect("a source directory")
+            .any(|entry| {
+                let path = entry.expect("a directory entry").path();
+                if path.is_dir() {
+                    contains_text(&path, text)
+                } else {
+                    path.extension().is_some_and(|e| e == "rs")
+                        && std::fs::read_to_string(&path).is_ok_and(|s| s.contains(text))
+                }
+            })
     }
 
     #[test]

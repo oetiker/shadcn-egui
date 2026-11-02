@@ -234,11 +234,17 @@ impl CpuApp {
     /// Draws the frame when it is due and sets when the loop wakes next.
     fn schedule(&mut self, event_loop: &ActiveEventLoop) {
         if self.next_frame.is_some_and(|at| at <= Instant::now()) {
-            // Asked only when a frame is due: on X11 it is a round trip.
+            // `is_minimized` is an X11 round trip: take what the last
+            // frame's `update_viewport_info` read, one frame old. On macOS
+            // that field is set only once, so ask the window there, as
+            // eframe does.
             let hidden = self.surface.as_ref().is_some_and(|s| {
-                s.shown
-                    && (s.window.is_visible() == Some(false)
-                        || s.window.is_minimized() == Some(true))
+                let minimized = if cfg!(target_os = "macos") {
+                    s.window.is_minimized()
+                } else {
+                    s.info.minimized
+                };
+                s.shown && (s.window.is_visible() == Some(false) || minimized == Some(true))
             });
             let at = earliest_frame(self.last_frame, hidden);
             if at > Instant::now() {

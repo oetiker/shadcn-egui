@@ -256,22 +256,35 @@ fn on_grid(seed: u64, i: usize, j: usize) -> bool {
 }
 
 /// The real gallery: damage rendering over a stream of input equals a
-/// full redraw.
+/// full redraw. Trimmed for the gates; the long run is
+/// `damage_equals_full_redraw_on_the_gallery_long`.
 #[test]
 fn damage_equals_full_redraw_on_the_gallery() {
+    gallery_damage_check(640.0, 480.0, 24);
+}
+
+/// The same check at 900x700 points and 160 frames per set-up, about 15 s
+/// in release: `cargo test --release -p shadcn-egui --example
+/// gallery --features fonts-all,icons-all -- --ignored gallery_long`.
+#[test]
+#[ignore = "long; run by hand after a change to the rasterizer"]
+fn damage_equals_full_redraw_on_the_gallery_long() {
+    gallery_damage_check(900.0, 700.0, 160);
+}
+
+fn gallery_damage_check(wp: f32, hp: f32, frames: usize) {
     for (ppp, dark) in [(1.0f32, false), (1.5, true), (2.0, false)] {
         let ctx = egui::Context::default();
         let (mut state, _) = crate::initial_state(None, Some(if dark { "dark" } else { "light" }));
         state.preset.apply(&ctx);
         ctx.set_theme(state.mode);
-        let (wp, hp) = (640.0f32, 480.0f32);
         let (w, h) = ((wp * ppp) as usize, (hp * ppp) as usize);
         let mut canvas = Canvas::new(w, h);
         let mut inc = Rasterizer::default();
         let mut full_r = Rasterizer::default();
         let mut r = Rng(12345);
         let mut t = 0.0f64;
-        for step in 0..24 {
+        for step in 0..frames {
             let mut events = Vec::new();
             let p = pos2(r.f(0.0, wp), r.f(0.0, hp));
             events.push(egui::Event::PointerMoved(p));

@@ -129,6 +129,19 @@ one UV, and blends the rest per pixel.
   up the window's surface. Loop ended and flag unset → wgpu did not start;
   run the CPU loop on the same event loop. Test it with
   `WGPU_BACKEND=metal` on Linux (no adapter of that backend).
+  `run_app_on_demand` drops eframe's error, so with the flag alone a
+  wgpu failure after the start ends the app with exit 0, and the
+  fallback cannot name its cause. eframe logs the error as it ends the
+  loop (`log::error!("Exiting because of error: {err}")`), and the gallery
+  reads it from there: its `EframeError` logger keeps that record and
+  passes every other one to an inner logger, which prints warnings and
+  errors to stderr. An app with its own logger puts that one in as the
+  inner logger (`EframeError::install(inner, max_level)`; for env_logger,
+  `Box::leak(Box::new(builder.build()))` and the logger's `filter()`), so the
+  capture adds to it rather than replacing it. The text is eframe's
+  wording, not its API: if eframe rewords it, the cause is lost without
+  notice. The gallery's test `eframe_still_logs_the_exit_error_the_gallery_reads`
+  fails when the eframe in `Cargo.lock` no longer logs it.
 
 - **Run each frame with `ctx.run_ui(raw_input, |ui| ..)`**, not
   `begin_pass`/`end_pass` or the deprecated `ctx.run`. Only `run_ui` runs
