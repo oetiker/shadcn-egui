@@ -76,6 +76,13 @@ const LINE_STEP: f32 = 40.0; // behaviour-ok: Chrome's arrow-key scroll step
 /// Chrome's page step as a share of the visible length
 /// (`ScrollableArea::PageStep`).
 const PAGE_SHARE: f32 = 0.875; // behaviour-ok: Chrome's page step, 87.5 % of the visible length
+/// A fling in a disabled `Ui` stops below this speed, in points per second.
+const PAN_STOP_SPEED: f32 = 20.0; // behaviour-ok: egui ScrollArea kinetic `stop_speed`
+/// A fling in a disabled `Ui` slows by this much, in points per second
+/// squared.
+const PAN_FRICTION: f32 = 1000.0; // behaviour-ok: egui ScrollArea kinetic `friction_coeff`
+/// The longest pass a fling step counts, in seconds.
+const PAN_MAX_DT: f32 = 0.1; // behaviour-ok: egui ScrollArea kinetic `dt.at_most(0.1)`
 
 /// A scroll area with shadcn's bars: `ScrollArea::vertical().show(ui, |ui|
 /// ..)`, as egui's [`egui::ScrollArea`], whose name and setters it keeps.
@@ -377,14 +384,11 @@ impl ScrollArea {
             if resp.drag_stopped() {
                 mem.pan_vel = self.direction.to_vec2() * ctx.input(|i| i.pointer.velocity());
             }
-            // egui's kinetic scrolling: points per second, and per second
-            // squared.
-            let (stop_speed, friction_coeff) = (20.0, 1000.0);
-            let dt = ctx.input(|i| i.stable_dt).min(0.1);
-            let friction = friction_coeff * dt;
+            let dt = ctx.input(|i| i.stable_dt).min(PAN_MAX_DT);
+            let friction = PAN_FRICTION * dt;
             for d in 0..2 {
                 let vel = &mut mem.pan_vel[d];
-                if friction > vel.abs() || vel.abs() < stop_speed {
+                if friction > vel.abs() || vel.abs() < PAN_STOP_SPEED {
                     *vel = 0.0;
                 } else {
                     *vel -= friction * vel.signum();
