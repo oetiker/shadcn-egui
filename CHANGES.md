@@ -38,6 +38,7 @@ are recorded here. The format is based on
 - Badge text can now be selected with the mouse and copied with Ctrl+C, as on the shadcn page; before, a drag over a badge selected nothing. Setting egui's `selectable_labels` to false turns selection off for badges as for all other crate text; the build-ui skill now names this switch.
 - Screen readers no longer announce a Label, Badge, Kbd, Card, Alert, Progress bar, `IconView` icon or the text of a crate widget as disabled when it sits in a disabled area (`ui.add_enabled_ui(false, ..)`, `ui.disable()`), as a browser does not for these elements; buttons, inputs and the other controls there are still announced as disabled. A label in such an area still looks faded.
 - Screen readers no longer announce an app's own widget as disabled in a disabled area when it is given the role alert, alert dialog, navigation, status or another role that has no disabled state in the browser through `widget_info_with_role`. A widget given a role that has one, such as group, is still announced as disabled there.
+- The curved strokes of icons (circles, arcs, the loader, the heart) now follow the curve: their edges could sit up to a tenth of a pixel off it, so curves showed faint flat facets and edge pixels up to a tenth too light or too dark.
 
 ## 0.7.0 - 2026-10-29
 ### New

@@ -23,8 +23,11 @@ use egui::{
 use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg};
 use std::collections::HashMap;
 
-/// Curve flattening tolerance in physical pixels.
-const TOLERANCE_PX: f32 = 0.1; // behaviour-ok: curve flattening tolerance, not a design token
+/// Curve flattening tolerance in physical pixels. A stroke's edge ramps
+/// over one pixel, so a piece this far off the curve moves a pixel's
+/// coverage by up to 0.015 x 255 = 3.8 levels: within the 4 levels an
+/// opaque edge may differ from the exact one.
+const TOLERANCE_PX: f32 = 0.015; // behaviour-ok: curve flattening tolerance, not a design token
 /// At most this many line pieces per curve, so a curve with absurd control
 /// points cannot allocate without bound.
 const MAX_CURVE_PIECES: f32 = 256.0; // behaviour-ok: allocation bound, not a design token
@@ -59,10 +62,11 @@ struct Key {
     w: usize,
     h: usize,
     stroke: u32,
+    linear: bool,
 }
 
 impl Key {
-    fn new(icon: &Icon, w: usize, h: usize, stroke_width: f32) -> Self {
+    fn new(icon: &Icon, w: usize, h: usize, stroke_width: f32, linear: bool) -> Self {
         let shape = match icon.shape {
             IconShape::Segs(s) => (s.as_ptr() as usize, s.len(), 0, 0),
             IconShape::Blob(r) => (r.blob.as_ptr() as usize, r.blob.len(), r.start, r.len),
@@ -74,6 +78,7 @@ impl Key {
             w,
             h,
             stroke: stroke_width.to_bits(),
+            linear,
         }
     }
 }
@@ -88,16 +93,19 @@ struct IconCache {
 }
 
 /// The texture of `icon` at `w`×`h` physical pixels: from the cache, or
-/// rasterised and uploaded once.
+/// rasterised and uploaded once. `linear` samples it smoothed, for a
+/// texture drawn turned or scaled; otherwise it is smoothed only when
+/// clamped to [`MAX_SIDE`].
 pub(crate) fn texture(
     ctx: &Context,
     icon: &Icon,
     w: usize,
     h: usize,
     stroke_width: f32,
+    linear: bool,
 ) -> TextureHandle {
     let id = Id::new("shadcn_egui::icon_raster");
-    let key = Key::new(icon, w, h, stroke_width);
+    let key = Key::new(icon, w, h, stroke_width, linear);
     let hit = ctx.data_mut(|d| {
         let cache = d.get_temp_mut_or_default::<IconCache>(id);
         cache.tick += 1;
@@ -120,7 +128,7 @@ pub(crate) fn texture(
         alpha.into_iter().map(Color32::from_white_alpha).collect(),
     );
     // 1:1 pixels stay exact; a clamped texture is scaled up and smoothed.
-    let options = if w.max(h) >= MAX_SIDE {
+    let options = if linear || w.max(h) >= MAX_SIDE {
         TextureOptions::LINEAR
     } else {
         TextureOptions::NEAREST
@@ -189,7 +197,7 @@ pub(crate) fn turned_texture(
     angle: f32,
 ) -> Option<TextureHandle> {
     let id = Id::new("shadcn_egui::icon_raster::turned");
-    let key = Key::new(icon, w, h, stroke_width);
+    let key = Key::new(icon, w, h, stroke_width, false);
     let [mx, my] = turned_margin(w, h);
     let (tw, th) = (w + 2 * mx, h + 2 * my);
     let viewport = ctx.viewport_id();
@@ -236,18 +244,7 @@ pub(crate) fn turned_texture(
     });
     let image = || {
         let scale = w as f32 / icon.size;
-        let (sin, cos) = angle.sin_cos();
-        let turn = Turn {
-            sin,
-            cos,
-            centre: pos2(w as f32 / 2.0, h as f32 / 2.0),
-            margin: vec2(mx as f32, my as f32),
-            half: vec2(w as f32 / 2.0, h as f32 / 2.0),
-        };
-        let place = Place {
-            scale,
-            turn: Some(turn),
-        };
+        let place = Place::turned(scale, w, h, angle);
         let alpha = placed_coverage(icon, tw, th, place, stroke_width * scale);
         // token-ok: a coverage mask, tinted by the caller's colour when drawn
         let pixels = alpha.into_iter().map(Color32::from_white_alpha).collect();
@@ -286,6 +283,9 @@ pub(crate) fn turned_texture(
 struct Place {
     scale: f32,
     turn: Option<Turn>,
+    /// How far a flattened curve may stray from the curve, in pixels,
+    /// and the most pieces a curve is cut into.
+    flatten: (f32, f32),
 }
 
 /// A clockwise turn by the angle of `sin` and `cos` about `centre` (the
@@ -301,7 +301,29 @@ struct Turn {
 
 impl Place {
     fn scaled(scale: f32) -> Self {
-        Self { scale, turn: None }
+        Self {
+            scale,
+            turn: None,
+            flatten: (TOLERANCE_PX, MAX_CURVE_PIECES),
+        }
+    }
+
+    /// A `w`×`h` pixel box at `scale`, turned clockwise by `angle` about
+    /// its centre, in a texture with [`turned_margin`] around it.
+    fn turned(scale: f32, w: usize, h: usize, angle: f32) -> Self {
+        let [mx, my] = turned_margin(w, h);
+        let (sin, cos) = angle.sin_cos();
+        let half = vec2(w as f32 / 2.0, h as f32 / 2.0);
+        Self {
+            turn: Some(Turn {
+                sin,
+                cos,
+                centre: half.to_pos2(),
+                margin: vec2(mx as f32, my as f32),
+                half,
+            }),
+            ..Self::scaled(scale)
+        }
     }
 
     fn map(&self, x: f32, y: f32) -> Pos2 {
@@ -502,13 +524,13 @@ fn stroke_segments(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Pos2, 
             Seg::Q(x1, y1, x, y) => {
                 let Some(c) = cur else { continue };
                 let p = map(x, y);
-                curve(&mut out, &[c, map(x1, y1), p]);
+                curve(&mut out, &[c, map(x1, y1), p], place.flatten);
                 (cur, drawn) = (Some(p), true);
             }
             Seg::C(x1, y1, x2, y2, x, y) => {
                 let Some(c) = cur else { continue };
                 let p = map(x, y);
-                curve(&mut out, &[c, map(x1, y1), map(x2, y2), p]);
+                curve(&mut out, &[c, map(x1, y1), map(x2, y2), p], place.flatten);
                 (cur, drawn) = (Some(p), true);
             }
             Seg::Z => {
@@ -524,19 +546,20 @@ fn stroke_segments(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Pos2, 
 }
 
 /// Flattens a quadratic (3 points) or cubic (4 points) Bézier into uniform
-/// pieces, enough that none strays more than [`TOLERANCE_PX`] from the
-/// curve: the deviation of `n` pieces is at most `max|B''| / (8 n²)`.
-fn curve(out: &mut Vec<(Pos2, Pos2)>, p: &[Pos2]) {
+/// pieces, enough that none strays more than `tolerance` pixels from the
+/// curve, and at most `max_pieces`: the deviation of `n` pieces is at most
+/// `max|B''| / (8 n²)`.
+fn curve(out: &mut Vec<(Pos2, Pos2)>, p: &[Pos2], (tolerance, max_pieces): (f32, f32)) {
     let second = p
         .windows(3)
         .map(|w| (w[0].to_vec2() - w[1].to_vec2() * 2.0 + w[2].to_vec2()).length())
         .fold(0.0, f32::max);
     let degree = (p.len() - 1) as f32;
     let bound = degree * (degree - 1.0) * second;
-    let n = (bound / (8.0 * TOLERANCE_PX)) // behaviour-ok: from the error bound above
+    let n = (bound / (8.0 * tolerance)) // behaviour-ok: from the error bound above
         .sqrt()
         .ceil()
-        .clamp(1.0, MAX_CURVE_PIECES);
+        .clamp(1.0, max_pieces);
     let n = if n.is_nan() { 1 } else { n as usize };
     let mut prev = p[0];
     for i in 1..=n {
@@ -605,6 +628,56 @@ mod tests {
             let r = (a - pos2(2.0, 2.0)).length();
             assert!((r - 10.0).abs() < 0.11, "radius {r}");
         }
+    }
+
+    /// The worst difference, in levels of 255, between `icon` rasterised as
+    /// painted and with every curve cut into 512 pieces (the curve itself
+    /// for all a pixel can show), at `side` pixels and `angle`.
+    fn curve_error(icon: &Icon, side: usize, angle: f32) -> u8 {
+        let scale = side as f32 / icon.size;
+        let (place, w) = if angle == 0.0 {
+            (Place::scaled(scale), side)
+        } else {
+            let [m, _] = turned_margin(side, side);
+            (Place::turned(scale, side, side, angle), side + 2 * m)
+        };
+        let fine = Place {
+            flatten: (0.0, 512.0),
+            ..place
+        };
+        let painted = placed_coverage(icon, w, w, place, 2.0 * scale);
+        let exact = placed_coverage(icon, w, w, fine, 2.0 * scale);
+        painted
+            .iter()
+            .zip(&exact)
+            .map(|(a, b)| a.abs_diff(*b))
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Precision by visibility: a flattened curve stays within 4 levels of
+    /// the curve on an opaque icon, at any size and angle.
+    #[test]
+    fn a_curve_is_within_four_levels_of_the_true_curve() {
+        use crate::icons::lucide;
+        let mut fails = Vec::new();
+        for icon in [
+            lucide::CIRCLE,
+            lucide::LOADER_CIRCLE,
+            lucide::HEART,
+            lucide::SEARCH,
+        ] {
+            for side in [12, 16, 20, 24, 32, 48, 64, 96, 192] {
+                for angle in [0.0, 0.3, 1.1, 2.0] {
+                    let e = curve_error(&icon, side, angle);
+                    eprintln!("CURVE {} {side} {angle}: {e}", icon.name);
+                    if e > 4 {
+                        fails.push(format!("{} {side} px {angle} rad: {e}", icon.name));
+                    }
+                }
+            }
+        }
+        assert!(fails.is_empty(), "{fails:#?}");
     }
 
     #[test]

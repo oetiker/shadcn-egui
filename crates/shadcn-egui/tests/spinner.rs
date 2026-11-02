@@ -528,7 +528,7 @@ impl Scaled for shadcn_egui::components::icon::Seg {
 }
 
 /// A stroke-only icon's line pieces in device px at `scale`, each curve
-/// cut into as many uniform pieces as the crate cuts it (0.1 px
+/// cut into as many uniform pieces as the crate cuts it (0.015 px
 /// tolerance), so the comparison measures the turn, not the flattening.
 fn pieces(icon: &shadcn_egui::components::icon::Icon, scale: f32) -> Vec<(egui::Pos2, egui::Pos2)> {
     use shadcn_egui::components::icon::Seg;
@@ -562,7 +562,7 @@ fn pieces(icon: &shadcn_egui::components::icon::Icon, scale: f32) -> Vec<(egui::
                 .fold(0.0, f32::max);
             let degree = (ctrl.len() - 1) as f32;
             let bound = degree * (degree - 1.0) * second;
-            let n = (bound / 0.8).sqrt().ceil().clamp(1.0, 256.0) as usize;
+            let n = (bound / (8.0 * 0.015)).sqrt().ceil().clamp(1.0, 256.0) as usize;
             let at = |t: f32| {
                 let mut p = ctrl.clone();
                 while p.len() > 1 {
@@ -782,5 +782,45 @@ fn spinner_turned_snapshot() {
                 format!("spinner_turned_vega_{m}_{suffix}"),
             ));
         }
+    }
+}
+
+/// More spinner sizes in one pass than turned textures are kept: the
+/// spinners past the bound draw the unturned bitmap turned, sampled
+/// smoothed (a nearest sample would leave stair steps), never ragged.
+#[test]
+fn spinners_past_the_turned_texture_bound_are_smoothed() {
+    let ctx = egui::Context::default();
+    let mut options = std::collections::HashMap::new();
+    let mut meshes = Vec::new();
+    for time in [0.3, 0.4] {
+        let out = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| {
+                Theme::vega().apply(ui.ctx());
+                ui.horizontal_wrapped(|ui| {
+                    for side in 10..80 {
+                        ui.add(Spinner::new().size(side as f32));
+                    }
+                });
+            },
+        );
+        for (id, delta) in &out.textures_delta.set {
+            options.insert(*id, delta.options);
+        }
+        meshes = icons(&out);
+    }
+    let turned: Vec<_> = meshes.iter().filter(|m| angle(m).abs() > 1e-3).collect();
+    assert!(!turned.is_empty(), "the bound is reached");
+    for m in turned {
+        assert_eq!(
+            options[&m.texture_id].magnification,
+            egui::TextureFilter::Linear,
+            "{:?}",
+            m.calc_bounds()
+        );
     }
 }

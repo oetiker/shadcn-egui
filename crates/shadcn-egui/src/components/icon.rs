@@ -49,7 +49,8 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
 /// the snapped rect: rasterised at that angle, as a browser rasterises a
 /// turned SVG, into a texture drawn 1:1 on the pixel grid. Only when the
 /// turned box is larger than the texture limit, or the turned textures
-/// are at their bounds, is the unturned texture drawn turned.
+/// are at their bounds, is the unturned texture drawn turned, sampled
+/// smoothed.
 pub(crate) fn paint_icon_rotated(
     painter: &Painter,
     rect: Rect,
@@ -91,7 +92,9 @@ pub(crate) fn paint_icon_rotated(
             return;
         }
     }
-    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width);
+    // A bitmap drawn turned is sampled smoothed: nearest samples would
+    // leave stair steps along its edges.
+    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width, turned);
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
     let mut mesh = Mesh::with_texture(tex.id());
     mesh.add_rect_with_uv(drawn, uv, color);
