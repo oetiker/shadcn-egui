@@ -243,7 +243,11 @@ impl Rasterizer {
                 if clip.is_empty() {
                     continue;
                 }
-                let texture = self.textures.get(&mesh.texture_id);
+                // egui-wgpu skips a mesh whose texture it lacks.
+                let Some(texture) = self.textures.get(&mesh.texture_id) else {
+                    log::warn!("Missing texture: {:?}", mesh.texture_id);
+                    continue;
+                };
                 for (tri, key) in mesh.indices.as_chunks::<3>().0.iter().zip(tris) {
                     if key.bbox.intersect(&clip).is_empty() {
                         continue;
@@ -549,13 +553,7 @@ fn snap(v: f32, ppp: f32) -> i64 {
     ((v * ppp).clamp(-MAX_PX, MAX_PX) * SUB as f32).round() as i64
 }
 
-fn raster_triangle(
-    canvas: &mut Canvas,
-    clip: IRect,
-    v: [&Vertex; 3],
-    ppp: f32,
-    texture: Option<&Texture>,
-) {
+fn raster_triangle(canvas: &mut Canvas, clip: IRect, v: [&Vertex; 3], ppp: f32, texture: &Texture) {
     let mut p = v.map(|v| (snap(v.pos.x, ppp), snap(v.pos.y, ppp)));
     let mut v = v;
     let orient = |p: &[(i64, i64); 3]| {
@@ -587,11 +585,8 @@ fn raster_triangle(
     let uvs = v.map(|v| [v.uv.x, v.uv.y]);
     let flat_color = v[0].color == v[1].color && v[1].color == v[2].color;
     let flat_uv = uvs[0] == uvs[1] && uvs[1] == uvs[2];
-    let filter = texture.map(|t| texture_filter(t, &p, &uvs, area));
-    let sample = |uv: [f32; 2]| match (texture, filter) {
-        (Some(t), Some(f)) => t.sample(uv, f),
-        _ => [1.0; 4],
-    };
+    let filter = texture_filter(texture, &p, &uvs, area);
+    let sample = |uv: [f32; 2]| texture.sample(uv, filter);
 
     // A constant source color: fill opaque spans, blend translucent ones.
     let flat = (flat_color && flat_uv).then(|| {
@@ -678,6 +673,26 @@ fn texture_filter(
 }
 
 #[cfg(test)]
+impl Rasterizer {
+    /// A rasterizer holding a 1x1 white font atlas, as egui uploads one
+    /// before the first frame: meshes with the default texture draw in
+    /// their vertex colours.
+    fn with_white_atlas() -> Self {
+        let mut r = Self::default();
+        let mut delta = TexturesDelta::default();
+        delta.set.push((
+            TextureId::default(),
+            egui::epaint::ImageDelta::full(
+                egui::ColorImage::filled([1, 1], Color32::WHITE),
+                TextureOptions::LINEAR,
+            ),
+        ));
+        r.set_textures(&delta);
+        r
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use egui::epaint::Mesh;
@@ -701,9 +716,28 @@ mod tests {
     }
 
     #[test]
+    fn a_mesh_whose_texture_is_missing_draws_nothing() {
+        // egui-wgpu skips the draw of a mesh whose texture it does not
+        // have; plain vertex colour would show a solid box instead.
+        let mut c = Canvas::new(8, 8);
+        let mut r = Rasterizer::with_white_atlas();
+        let mut mesh = rect_mesh(
+            Rect::from_min_max(pos2(2.0, 2.0), pos2(6.0, 6.0)),
+            Color32::RED,
+        );
+        mesh.texture_id = TextureId::Managed(7);
+        render(&mut r, &mut c, &[prim(mesh)]);
+        assert!(
+            c.pixels.iter().all(|&p| p == 0x00ff_ffff),
+            "{:x?}",
+            c.pixels
+        );
+    }
+
+    #[test]
     fn an_opaque_rect_covers_exactly_its_pixels() {
         let mut c = Canvas::new(8, 8);
-        let mut r = Rasterizer::default();
+        let mut r = Rasterizer::with_white_atlas();
         let mesh = rect_mesh(
             Rect::from_min_max(pos2(2.0, 3.0), pos2(5.0, 4.0)),
             Color32::RED,
@@ -723,7 +757,7 @@ mod tests {
         // Two triangles of a translucent quad: a pixel center on the
         // diagonal belongs to one of them only (top-left rule).
         let mut c = Canvas::new(8, 8);
-        let mut r = Rasterizer::default();
+        let mut r = Rasterizer::with_white_atlas();
         let half = Color32::from_black_alpha(128);
         let mesh = rect_mesh(Rect::from_min_max(pos2(1.0, 1.0), pos2(6.0, 6.0)), half);
         render(&mut r, &mut c, &[prim(mesh)]);
@@ -739,7 +773,7 @@ mod tests {
     #[test]
     fn an_unchanged_frame_redraws_nothing_and_a_change_only_its_box() {
         let mut c = Canvas::new(64, 64);
-        let mut r = Rasterizer::default();
+        let mut r = Rasterizer::with_white_atlas();
         let a = rect_mesh(
             Rect::from_min_max(pos2(0.0, 0.0), pos2(64.0, 64.0)),
             Color32::GRAY,
@@ -764,7 +798,7 @@ mod tests {
 
         // Drawing the damage only gives the same pixels as a full redraw.
         let mut full = Canvas::new(64, 64);
-        Rasterizer::default().render(&mut full, &[prim(a), prim(moved)], 1.0, 0x00ff_ffff);
+        Rasterizer::with_white_atlas().render(&mut full, &[prim(a), prim(moved)], 1.0, 0x00ff_ffff);
         assert_eq!(c.pixels, full.pixels);
     }
 
@@ -802,3 +836,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "raster_checks.rs"]
+mod checks;

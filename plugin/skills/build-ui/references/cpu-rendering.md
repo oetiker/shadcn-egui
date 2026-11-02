@@ -6,9 +6,13 @@ surface on a box with no usable GPU. eframe + wgpu/glow handles most of this
 for you; a hand-rolled loop does not.
 
 The gallery example (`crates/shadcn-egui/examples/gallery/`, `cpu.rs` and
-`raster.rs`, run with `--cpu`) is a working loop that follows this page:
-damage tracking, frame pacing, accesskit, IME and clipboard, and pixels
-that match egui-wgpu's.
+`raster.rs`, run with `--cpu`) is a working loop for sections 1, 2, 4 and
+5: frame pacing, damage tracking, the fallback from eframe, the clipboard,
+and pixels that match egui-wgpu's. It wires accesskit and IME as eframe
+does (`egui_winit::State::init_accesskit` before the window shows,
+`handle_platform_output` after every pass), but neither was tested with
+an input method or a screen reader. Of section 3 it follows the texture
+bullets only; see there.
 
 **Measure before optimizing.** Time the raster, the composite copy and the
 present separately. In practice the raster dominates (~100 ms on a trivial
@@ -20,7 +24,7 @@ killer is *how often* you raster, not how long one raster takes.
 | Symptom | Cause | Fix |
 |---|---|---|
 | New screen, cursor blink or animation appears only after the next mouse move | loop runs `ControlFlow::Wait` and ignores egui's own repaint requests | read `full_output.viewport_output[&ViewportId::ROOT].repaint_delay`: finite → next frame at `frame_start + delay.max(refresh_interval)` via `ControlFlow::WaitUntil`; `Duration::MAX` → wait for the next OS event. Also install `ctx.set_request_repaint_callback` and send its requests to the loop as user events, for repaints asked from outside a pass |
-| A turning spinner or a fade pins a CPU core | `repaint_delay` is zero during an animation, and the loop draws again at once | never draw sooner than the display's refresh interval (`monitor.refresh_rate_millihertz()`, else 16.7 ms) after the last frame; the same cap stops a stream of mouse moves from drawing faster than the screen shows |
+| A turning spinner or a fade pins a CPU core | `repaint_delay` is zero during an animation, and the loop draws again at once | never draw sooner than the display's refresh interval (`monitor.refresh_rate_millihertz()`, else 16.7 ms) after the last frame; the same cap stops a stream of mouse moves from drawing faster than the screen shows. While the window is hidden or minimised (`window.is_visible() == Some(false)` or `window.is_minimized() == Some(true)`), draw no more than every 100 ms, as eframe does |
 | 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 4) |
 | Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | raster only the damage (see 4): an animation then costs its own small area. If that is still too slow, `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
 | The window stays blank or black after it opens, or parts of it after another window moved off it (X11 without a compositor) | the loop presents only damage rectangles, and X11 dropped what the window showed (pixels presented while it was unmapped are lost too) | on a `RedrawRequested` the system sent, present the whole frame. winit merges the system's redraws (X11 expose) with the ones you request into one event, so do not call `request_redraw()` for your own frames: draw them in `about_to_wait` when they are due, and every `RedrawRequested` is then the system's |
@@ -53,6 +57,11 @@ screen with fallback fonts until the user moves the mouse.
   `pixels_per_point` warnings.
 
 ## 3. The rasterizer itself
+
+The first two bullets are fast paths for a rasterizer that runs with
+feathering off. The gallery keeps feathering on and takes neither: it
+fills the spans of any triangle whose three vertices share one color and
+one UV, and blends the rest per pixel.
 
 - **Solid-fill fast path: key it on `egui::epaint::WHITE_UV`, never a
   literal.** epaint 0.34 tags solid fills with `WHITE_UV = (0.0, 0.0)`; older

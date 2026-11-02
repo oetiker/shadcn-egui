@@ -16,7 +16,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use eframe::UserEvent;
-use egui::{Color32, ViewportId, ViewportInfo};
+use egui::epaint::ClippedPrimitive;
+use egui::{Color32, TexturesDelta, ViewportId, ViewportInfo};
 use egui_winit::accesskit_winit;
 use egui_winit::winit::application::ApplicationHandler;
 use egui_winit::winit::event::WindowEvent;
@@ -28,6 +29,10 @@ use super::raster::{Canvas, IRect, Rasterizer};
 
 /// Presents kept for `buffer.age()`: older back buffers get a full copy.
 const DAMAGE_HISTORY: usize = 3;
+
+/// The shortest time between frames while the window is hidden or
+/// minimised, as eframe has it.
+const HIDDEN_FRAME_INTERVAL: Duration = Duration::from_millis(100);
 
 struct Surface {
     window: Arc<Window>,
@@ -120,12 +125,8 @@ impl CpuApp {
             None,
         );
         egui_winit.init_accesskit(event_loop, &window, self.proxy.clone());
-        if let Some(mhz) = window
-            .current_monitor()
-            .and_then(|m| m.refresh_rate_millihertz())
-            .filter(|&mhz| mhz > 0)
-        {
-            self.frame_interval = Duration::from_secs_f64(1000.0 / f64::from(mhz));
+        if let Some(interval) = refresh_interval(&window) {
+            self.frame_interval = interval;
         }
         let mut info = ViewportInfo::default();
         egui_winit::update_viewport_info(&mut info, &self.ctx, &window, true);
@@ -178,8 +179,9 @@ impl CpuApp {
 
         let size = s.window.inner_size();
         let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) else {
-            self.raster.free_textures(&output.textures_delta);
-            return; // minimized
+            // Minimised on Windows: nothing to draw into.
+            raster_frame(&mut self.raster, None, &[], 1.0, &output.textures_delta);
+            return;
         };
         if (s.canvas.width, s.canvas.height) != (w.get() as usize, h.get() as usize) {
             if let Err(e) = s.surface.resize(w, h) {
@@ -193,11 +195,13 @@ impl CpuApp {
         let ppp = output.pixels_per_point;
         let primitives = self.ctx.tessellate(output.shapes, ppp);
         let tessellated = Instant::now();
-        self.raster.set_textures(&output.textures_delta);
-        let damage = self
-            .raster
-            .render(&mut s.canvas, &primitives, ppp, clear_color());
-        self.raster.free_textures(&output.textures_delta);
+        let damage = raster_frame(
+            &mut self.raster,
+            Some(&mut s.canvas),
+            &primitives,
+            ppp,
+            &output.textures_delta,
+        );
         let rastered = Instant::now();
 
         // Pixels presented while the window is still hidden are lost; the
@@ -230,7 +234,18 @@ impl CpuApp {
     /// Draws the frame when it is due and sets when the loop wakes next.
     fn schedule(&mut self, event_loop: &ActiveEventLoop) {
         if self.next_frame.is_some_and(|at| at <= Instant::now()) {
-            self.redraw(event_loop, false);
+            // Asked only when a frame is due: on X11 it is a round trip.
+            let hidden = self.surface.as_ref().is_some_and(|s| {
+                s.shown
+                    && (s.window.is_visible() == Some(false)
+                        || s.window.is_minimized() == Some(true))
+            });
+            let at = earliest_frame(self.last_frame, hidden);
+            if at > Instant::now() {
+                self.next_frame = Some(at);
+            } else {
+                self.redraw(event_loop, false);
+            }
         }
         match self.next_frame {
             Some(at) => event_loop.set_control_flow(ControlFlow::WaitUntil(at)),
@@ -249,6 +264,44 @@ impl CpuApp {
         let at = (self.last_frame + self.frame_interval).max(Instant::now());
         self.next_frame = Some(self.next_frame.map_or(at, |t| t.min(at)));
     }
+}
+
+/// The refresh interval of the monitor the window is on, if it says.
+fn refresh_interval(window: &Window) -> Option<Duration> {
+    let mhz = window
+        .current_monitor()?
+        .refresh_rate_millihertz()
+        .filter(|&mhz| mhz > 0)?;
+    Some(Duration::from_secs_f64(1000.0 / f64::from(mhz)))
+}
+
+/// When the next frame may be drawn at the earliest: at once, or while the
+/// window is hidden or minimised [`HIDDEN_FRAME_INTERVAL`] after the last
+/// one, so a turning spinner nobody sees costs little.
+fn earliest_frame(last_frame: Instant, hidden: bool) -> Instant {
+    if hidden {
+        last_frame + HIDDEN_FRAME_INTERVAL
+    } else {
+        last_frame
+    }
+}
+
+/// Rasterizes one frame into `canvas` and returns the rectangles it
+/// redrew; `None` is a window without area, which gets no pixels. The
+/// frame's texture uploads apply either way: egui sends each only once.
+fn raster_frame(
+    raster: &mut Rasterizer,
+    canvas: Option<&mut Canvas>,
+    primitives: &[ClippedPrimitive],
+    ppp: f32,
+    textures: &TexturesDelta,
+) -> Vec<IRect> {
+    raster.set_textures(textures);
+    let damage = canvas
+        .map(|canvas| raster.render(canvas, primitives, ppp, clear_color()))
+        .unwrap_or_default();
+    raster.free_textures(textures);
+    damage
 }
 
 /// Copies what changed since this back buffer was last shown and presents
@@ -338,6 +391,12 @@ impl ApplicationHandler<UserEvent> for CpuApp {
                     event,
                     WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. }
                 );
+                if matches!(event, WindowEvent::Moved(_)) {
+                    // Another monitor may show frames at another rate.
+                    if let Some(interval) = refresh_interval(&s.window) {
+                        self.frame_interval = interval;
+                    }
+                }
                 let response = s.egui_winit.on_window_event(&s.window, &event);
                 if resized {
                     // A resize shows a frame at the new size at once.
@@ -362,7 +421,13 @@ impl ApplicationHandler<UserEvent> for CpuApp {
                 }
             }
             UserEvent::AccessKitActionRequest(request) => {
-                let Some(s) = self.surface.as_mut() else {
+                // After a failed wgpu start, eframe's adapter may have left
+                // a request for its own window.
+                let Some(s) = self
+                    .surface
+                    .as_mut()
+                    .filter(|s| s.window.id() == request.window_id)
+                else {
                     return;
                 };
                 match request.window_event {
@@ -390,5 +455,94 @@ impl ApplicationHandler<UserEvent> for CpuApp {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         // The window and its surface go while the event loop still runs.
         self.surface = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::epaint::{ImageDelta, Mesh, Primitive};
+    use egui::{pos2, vec2, ColorImage, Rect, TextureId, TextureOptions};
+
+    const ID: TextureId = TextureId::User(7);
+
+    fn textured_quad(size: f32) -> ClippedPrimitive {
+        let mut mesh = Mesh::with_texture(ID);
+        mesh.add_rect_with_uv(
+            Rect::from_min_size(pos2(0.0, 0.0), vec2(size, size)),
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        ClippedPrimitive {
+            clip_rect: Rect::EVERYTHING,
+            primitive: Primitive::Mesh(mesh),
+        }
+    }
+
+    fn upload(delta: ImageDelta) -> TexturesDelta {
+        TexturesDelta {
+            set: vec![(ID, delta)],
+            free: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_hidden_window_draws_at_most_every_100_ms() {
+        let last = Instant::now();
+        assert_eq!(earliest_frame(last, false), last);
+        assert_eq!(
+            earliest_frame(last, true),
+            last + Duration::from_millis(100)
+        );
+    }
+
+    #[test]
+    fn a_texture_sent_while_minimised_is_drawn_after() {
+        let mut raster = Rasterizer::default();
+        let red = ColorImage::filled([2, 2], Color32::RED);
+        let full = upload(ImageDelta::full(red, TextureOptions::NEAREST));
+        raster_frame(&mut raster, None, &[], 1.0, &full);
+
+        let mut canvas = Canvas::new(4, 4);
+        let quad = [textured_quad(4.0)];
+        raster_frame(
+            &mut raster,
+            Some(&mut canvas),
+            &quad,
+            1.0,
+            &TexturesDelta::default(),
+        );
+        assert!(
+            canvas.pixels.iter().all(|&p| p == 0x00ff_0000),
+            "{:x?}",
+            canvas.pixels
+        );
+    }
+
+    #[test]
+    fn a_patch_sent_while_minimised_is_drawn_after() {
+        let mut raster = Rasterizer::default();
+        let mut canvas = Canvas::new(4, 4);
+        let quad = [textured_quad(4.0)];
+        let red = ColorImage::filled([2, 2], Color32::RED);
+        let full = upload(ImageDelta::full(red, TextureOptions::NEAREST));
+        raster_frame(&mut raster, Some(&mut canvas), &quad, 1.0, &full);
+
+        // The right column of texels turns blue while the window has no area.
+        let blue = ColorImage::filled([1, 2], Color32::BLUE);
+        let patch = upload(ImageDelta::partial([1, 0], blue, TextureOptions::NEAREST));
+        raster_frame(&mut raster, None, &[], 1.0, &patch);
+
+        raster_frame(
+            &mut raster,
+            Some(&mut canvas),
+            &quad,
+            1.0,
+            &TexturesDelta::default(),
+        );
+        for (i, &p) in canvas.pixels.iter().enumerate() {
+            let want = if i % 4 < 2 { 0x00ff_0000 } else { 0x0000_00ff };
+            assert_eq!(p, want, "pixel {i}: {:x?}", canvas.pixels);
+        }
     }
 }

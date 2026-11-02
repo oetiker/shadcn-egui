@@ -91,6 +91,61 @@ fn parse_args(args: &[String]) -> (bool, Option<&str>, Option<&str>) {
     (cpu, rest.next(), rest.next())
 }
 
+/// What eframe logs as it ends its loop on an error; it returns the error
+/// only from `run_native`, which the gallery cannot use (see `main`).
+#[cfg(not(target_arch = "wasm32"))]
+const EFRAME_EXIT: &str = "Exiting because of error: ";
+
+/// Keeps the error eframe ended its loop with, the last one if several.
+#[cfg(not(target_arch = "wasm32"))]
+struct EframeError(std::sync::Mutex<Option<String>>);
+
+#[cfg(not(target_arch = "wasm32"))]
+static EFRAME_ERROR: EframeError = EframeError(std::sync::Mutex::new(None));
+
+#[cfg(not(target_arch = "wasm32"))]
+impl EframeError {
+    fn take(&self) -> Option<String> {
+        self.0.lock().map_or(None, |mut e| e.take())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl log::Log for EframeError {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() == log::Level::Error
+    }
+
+    fn log(&self, record: &log::Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let message = record.args().to_string();
+        if let (Some(cause), Ok(mut slot)) = (message.strip_prefix(EFRAME_EXIT), self.0.lock()) {
+            *slot = Some(cause.to_owned());
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// What follows eframe's loop: `Ok(None)` ends the gallery, `Ok(Some(..))`
+/// is the note to print before the CPU takes over, `Err` is the error
+/// wgpu failed with after it had started.
+#[cfg(not(target_arch = "wasm32"))]
+fn after_eframe(started: bool, error: Option<String>) -> Result<Option<String>, String> {
+    match (started, error) {
+        (true, None) => Ok(None),
+        (true, Some(e)) => Err(e),
+        (false, Some(e)) => Ok(Some(format!(
+            "gallery: wgpu did not start ({e}); drawing on the CPU"
+        ))),
+        (false, None) => Ok(Some(
+            "gallery: wgpu did not start; drawing on the CPU".to_owned(),
+        )),
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use egui_winit::winit::event_loop::EventLoop;
@@ -98,13 +153,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (cpu, preset, mode) = parse_args(&args);
-    let state = || {
-        let (state, warning) = initial_state(preset, mode);
-        if let Some(warning) = warning {
-            eprintln!("{warning}");
-        }
-        state
-    };
+    let (state, warning) = initial_state(preset, mode);
+    if let Some(warning) = warning {
+        eprintln!("{warning}");
+    }
+    let mut state = Some(state);
 
     // winit allows one event loop per process: both renderers run on it,
     // the CPU one after a failed wgpu start.
@@ -116,7 +169,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // before that, whatever the cause.
         let wgpu_started = std::rc::Rc::new(std::cell::Cell::new(false));
         let started = wgpu_started.clone();
-        let state = state();
+        let state = state.take();
+        if log::set_logger(&EFRAME_ERROR).is_ok() {
+            log::set_max_level(log::LevelFilter::Error);
+        }
         let mut app = eframe::create_native(
             TITLE,
             eframe::NativeOptions {
@@ -125,20 +181,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             Box::new(move |cc| {
                 started.set(true);
+                let state = state.unwrap_or_else(|| initial_state(preset, mode).0);
                 Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))
             }),
             &event_loop,
         );
         event_loop.run_app_on_demand(&mut app)?;
         drop(app);
-        if wgpu_started.get() {
-            return Ok(());
+        match after_eframe(wgpu_started.get(), EFRAME_ERROR.take())? {
+            None => return Ok(()),
+            Some(note) => eprintln!("{note}"),
         }
-        eprintln!("gallery: wgpu did not start (no usable GPU adapter); drawing on the CPU");
     }
 
     let ctx = egui::Context::default();
-    let state = state();
+    // A failed wgpu start used the state up; its warning is out already.
+    let state = state.unwrap_or_else(|| initial_state(preset, mode).0);
     state.preset.apply(&ctx);
     ctx.set_theme(state.mode);
     let mut app = cpu::CpuApp::new(ctx, state, viewport(), event_loop.create_proxy());
@@ -243,6 +301,47 @@ mod tests {
         assert_eq!(parse_args(&middle), (true, Some("bIkeymG"), Some("dark")));
         let plain = args(&["bIkeymG"]);
         assert_eq!(parse_args(&plain), (false, Some("bIkeymG"), None));
+    }
+
+    #[test]
+    fn eframe_s_error_ends_the_gallery_or_names_the_fallback_s_cause() {
+        assert_eq!(after_eframe(true, None), Ok(None));
+        assert_eq!(
+            after_eframe(true, Some("device lost".into())),
+            Err("device lost".to_owned())
+        );
+        assert_eq!(
+            after_eframe(false, Some("no adapter".into())),
+            Ok(Some(
+                "gallery: wgpu did not start (no adapter); drawing on the CPU".to_owned()
+            ))
+        );
+        assert_eq!(
+            after_eframe(false, None),
+            Ok(Some(
+                "gallery: wgpu did not start; drawing on the CPU".to_owned()
+            ))
+        );
+    }
+
+    #[test]
+    fn the_logger_keeps_eframe_s_exit_error_only() {
+        use log::Log as _;
+        let logger = EframeError(std::sync::Mutex::new(None));
+        let record = |level, message: &str| {
+            logger.log(
+                &log::Record::builder()
+                    .level(level)
+                    .args(format_args!("{message}"))
+                    .build(),
+            );
+        };
+        record(log::Level::Error, "something else");
+        record(log::Level::Warn, "Exiting because of error: a warning");
+        assert_eq!(logger.take(), None);
+        record(log::Level::Error, "Exiting because of error: no adapter");
+        assert_eq!(logger.take().as_deref(), Some("no adapter"));
+        assert_eq!(logger.take(), None);
     }
 
     #[test]
