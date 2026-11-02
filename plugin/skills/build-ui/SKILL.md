@@ -390,8 +390,8 @@ subtle 1px borders, one radius, a muted palette, 14px text and consistent
 focus rings. In a checkout of the shadcn-egui repository,
 `cargo run --example settings` shows it live, and
 `cargo run --example gallery --features fonts-all,icons-all` shows every
-component under any preset; it draws on the CPU when no GPU is usable, or
-with `-- --cpu` (its `cpu.rs` and `raster.rs` show the CPU renderer that
+component under any preset; it draws on the CPU when no GPU is usable or
+wgpu finds only a software adapter such as llvmpipe, or with `-- --cpu` (its `cpu.rs` and `raster.rs` show the CPU renderer that
 `references/cpu-rendering.md` describes).
 
 Before calling a screen done, scan the project's UI files for literals that

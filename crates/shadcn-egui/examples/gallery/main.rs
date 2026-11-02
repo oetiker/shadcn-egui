@@ -4,8 +4,9 @@
 //! On the desktop it draws with wgpu, as eframe does by default. `--cpu`
 //! draws on the CPU instead (egui-winit, a rasterizer of egui's meshes and
 //! softbuffer, in `cpu.rs` and `raster.rs`), and the gallery switches to the
-//! CPU by itself when wgpu finds no adapter. `SHADCN_EGUI_CPU_STATS=1`
-//! prints the frame times of either path.
+//! CPU by itself when wgpu finds no adapter, or only a software one such
+//! as llvmpipe (`SHADCN_EGUI_SOFTWARE_GPU=1` lets wgpu use that one).
+//! `SHADCN_EGUI_CPU_STATS=1` prints the frame times of either path.
 //!
 //! The same example runs in the browser: `scripts/build-web-gallery.sh`
 //! builds it, and the page takes `?preset=<code>&mode=dark`; it always
@@ -180,6 +181,91 @@ impl log::Log for Stderr {
     fn flush(&self) {}
 }
 
+/// `SHADCN_EGUI_SOFTWARE_GPU=1` lets wgpu draw on a software adapter.
+#[cfg(not(target_arch = "wasm32"))]
+const ALLOW_SOFTWARE: &str = "SHADCN_EGUI_SOFTWARE_GPU";
+
+/// What the gallery needs to know of a wgpu adapter to choose one.
+#[cfg(not(target_arch = "wasm32"))]
+struct Adapter {
+    device_type: eframe::wgpu::DeviceType,
+    name: String,
+    /// It can draw to the window's surface.
+    fits: bool,
+}
+
+/// The adapter wgpu would choose for `power` (its own order of device
+/// types, the first of a kind), as an index into `adapters`. A software
+/// adapter (`DeviceType::Cpu`: llvmpipe, lavapipe, WARP) is refused unless
+/// `allow_software`: the gallery's own CPU renderer then draws instead,
+/// at a fraction of the CPU time.
+#[cfg(not(target_arch = "wasm32"))]
+fn choose_adapter(
+    adapters: &[Adapter],
+    power: eframe::wgpu::PowerPreference,
+    allow_software: bool,
+) -> Result<usize, String> {
+    use eframe::wgpu::{DeviceType, PowerPreference};
+    // wgpu-core's order in `request_adapter`.
+    let order = |t: DeviceType| match (power, t) {
+        (PowerPreference::None, _) => 0,
+        (PowerPreference::LowPower, DeviceType::IntegratedGpu) => 1,
+        (PowerPreference::LowPower, DeviceType::DiscreteGpu) => 2,
+        (_, DeviceType::DiscreteGpu) => 1,
+        (_, DeviceType::IntegratedGpu) => 2,
+        (_, DeviceType::Other) => 3,
+        (_, DeviceType::VirtualGpu) => 4,
+        (_, DeviceType::Cpu) => 5,
+    };
+    let usable = |a: &Adapter| a.fits && (allow_software || a.device_type != DeviceType::Cpu);
+    let best = adapters
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| usable(a))
+        .min_by_key(|(_, a)| order(a.device_type));
+    if let Some((i, _)) = best {
+        return Ok(i);
+    }
+    Err(match adapters.iter().find(|a| a.fits) {
+        Some(software) => format!(
+            "only a software adapter, {}; {ALLOW_SOFTWARE}=1 draws on it",
+            software.name
+        ),
+        None if adapters.is_empty() => "no wgpu adapter".to_owned(),
+        None => "no wgpu adapter can draw to the window".to_owned(),
+    })
+}
+
+/// eframe's wgpu set-up with the gallery's choice of adapter.
+#[cfg(not(target_arch = "wasm32"))]
+fn wgpu_options(allow_software: bool) -> eframe::egui_wgpu::WgpuConfiguration {
+    use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
+    use eframe::wgpu::PowerPreference;
+    let power = PowerPreference::from_env().unwrap_or(PowerPreference::HighPerformance);
+    let setup = WgpuSetupCreateNew {
+        power_preference: power,
+        native_adapter_selector: Some(std::sync::Arc::new(move |adapters, surface| {
+            let found: Vec<Adapter> = adapters
+                .iter()
+                .map(|a| {
+                    let info = a.get_info();
+                    Adapter {
+                        device_type: info.device_type,
+                        name: info.name,
+                        fits: surface.is_none_or(|s| a.is_surface_supported(s)),
+                    }
+                })
+                .collect();
+            choose_adapter(&found, power, allow_software).map(|i| adapters[i].clone())
+        })),
+        ..WgpuSetupCreateNew::without_display_handle()
+    };
+    WgpuConfiguration {
+        wgpu_setup: WgpuSetup::CreateNew(setup),
+        ..Default::default()
+    }
+}
+
 /// What follows eframe's loop: `Ok(None)` ends the gallery, `Ok(Some(..))`
 /// is the note to print before the CPU takes over, `Err` is the error
 /// wgpu failed with after it had started.
@@ -235,6 +321,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             TITLE,
             eframe::NativeOptions {
                 viewport: viewport(),
+                wgpu_options: wgpu_options(
+                    std::env::var_os(ALLOW_SOFTWARE).is_some_and(|v| v == "1"),
+                ),
                 ..Default::default()
             },
             Box::new(move |cc| {
@@ -473,6 +562,63 @@ mod tests {
                         && std::fs::read_to_string(&path).is_ok_and(|s| s.contains(text))
                 }
             })
+    }
+
+    #[test]
+    fn a_software_adapter_is_refused_unless_allowed() {
+        use eframe::wgpu::{DeviceType, PowerPreference};
+        let high = PowerPreference::HighPerformance;
+        let a = |device_type, name: &str, fits| Adapter {
+            device_type,
+            name: name.to_owned(),
+            fits,
+        };
+        let llvmpipe = a(DeviceType::Cpu, "llvmpipe", true);
+        let gpu = a(DeviceType::DiscreteGpu, "gpu", true);
+        let igpu = a(DeviceType::IntegratedGpu, "igpu", true);
+        let gl = a(DeviceType::Other, "gl", true);
+
+        // Software only: the gallery draws on the CPU, and says why.
+        let only =
+            choose_adapter(std::slice::from_ref(&llvmpipe), high, false).expect_err("refused");
+        assert!(only.contains("software adapter, llvmpipe"), "{only}");
+        assert!(only.contains("SHADCN_EGUI_SOFTWARE_GPU=1"), "{only}");
+        assert_eq!(
+            choose_adapter(std::slice::from_ref(&llvmpipe), high, true),
+            Ok(0)
+        );
+
+        // A real GPU is used, software or not beside it, in wgpu's order.
+        let list = [llvmpipe, igpu, gpu, gl];
+        assert_eq!(choose_adapter(&list, high, false), Ok(2));
+        assert_eq!(choose_adapter(&list, high, true), Ok(2));
+        assert_eq!(
+            choose_adapter(&list, PowerPreference::LowPower, false),
+            Ok(1)
+        );
+        assert_eq!(
+            choose_adapter(&[a(DeviceType::Other, "gl", true)], high, false),
+            Ok(0)
+        );
+        // `PowerPreference::None` keeps the listed order, so llvmpipe comes
+        // first, yet a GPU beside it is used.
+        assert_eq!(choose_adapter(&list, PowerPreference::None, false), Ok(1));
+        assert_eq!(choose_adapter(&list, PowerPreference::None, true), Ok(0));
+
+        // An adapter that cannot draw to the window does not count.
+        let unfit = [
+            a(DeviceType::DiscreteGpu, "gpu", false),
+            a(DeviceType::Cpu, "llvmpipe", true),
+        ];
+        assert!(choose_adapter(&unfit, high, false).is_err());
+        assert_eq!(
+            choose_adapter(&[], high, false),
+            Err("no wgpu adapter".to_owned())
+        );
+        assert_eq!(
+            choose_adapter(&unfit[..1], high, false),
+            Err("no wgpu adapter can draw to the window".to_owned())
+        );
     }
 
     #[test]

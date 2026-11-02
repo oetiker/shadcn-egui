@@ -143,6 +143,24 @@ one UV, and blends the rest per pixel.
   notice. The gallery's test `eframe_still_logs_the_exit_error_the_gallery_reads`
   fails when the eframe in `Cargo.lock` no longer logs it.
 
+- **Treat a software adapter as no GPU.** On a machine without a GPU,
+  wgpu does start: on Mesa's llvmpipe or lavapipe, or WARP on Windows,
+  which wgpu reports as `wgpu::DeviceType::Cpu`. The fallback above then
+  never runs, and drawing through the software adapter costs far more
+  CPU than a CPU rasterizer that redraws only the damage (a turning
+  spinner in the gallery: 316 % on llvmpipe, 26 % on its CPU path). Refuse
+  such adapters in eframe's adapter choice:
+  `NativeOptions::wgpu_options.wgpu_setup =
+  WgpuSetup::CreateNew(WgpuSetupCreateNew { native_adapter_selector:
+  Some(..), ..WgpuSetupCreateNew::without_display_handle() })`. The
+  selector gets every adapter and the window's surface; return the
+  adapter wgpu would pick among those that are not `DeviceType::Cpu` and
+  `is_surface_supported`, or an `Err` naming the software adapter. eframe
+  then ends its loop before it creates the app, and the fallback runs
+  with that cause. The gallery's `choose_adapter` and `wgpu_options` in
+  `main.rs` do this; `SHADCN_EGUI_SOFTWARE_GPU=1` lets it use the
+  software adapter.
+
 - **Run each frame with `ctx.run_ui(raw_input, |ui| ..)`**, not
   `begin_pass`/`end_pass` or the deprecated `ctx.run`. Only `run_ui` runs
   egui's plugins. Without them, label text selection never ends: after a
