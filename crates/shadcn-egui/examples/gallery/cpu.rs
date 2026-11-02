@@ -4,6 +4,12 @@
 //! It redraws only when egui asks for it (`repaint_delay`, or an input
 //! event egui wants), re-rasterizes only the triangles that changed, and
 //! sends only the changed rectangles to the window.
+//!
+//! It draws its own frames in `about_to_wait` and never asks winit for a
+//! redraw, so a `RedrawRequested` always comes from the system: on X11 an
+//! expose, after which the window has lost its pixels and gets the whole
+//! frame. (winit merges expose and requested redraws into one event, so
+//! the two could not be told apart otherwise.)
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -134,8 +140,9 @@ impl CpuApp {
         })
     }
 
-    /// Runs one egui pass and shows what changed.
-    fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+    /// Runs one egui pass and shows what changed, or the whole frame after
+    /// an `expose`.
+    fn redraw(&mut self, event_loop: &ActiveEventLoop, expose: bool) {
         let Some(s) = self.surface.as_mut() else {
             return;
         };
@@ -193,8 +200,10 @@ impl CpuApp {
         self.raster.free_textures(&output.textures_delta);
         let rastered = Instant::now();
 
-        if !damage.is_empty() || !s.shown {
-            if let Err(e) = present(s, damage.clone()) {
+        // Pixels presented while the window is still hidden are lost; the
+        // expose that follows `set_visible` presents them again.
+        if !damage.is_empty() || expose || !s.shown {
+            if let Err(e) = present(s, damage.clone(), expose) {
                 self.fail(event_loop, "softbuffer present", e);
                 return;
             }
@@ -218,18 +227,20 @@ impl CpuApp {
         }
     }
 
+    /// Draws the frame when it is due and sets when the loop wakes next.
     fn schedule(&mut self, event_loop: &ActiveEventLoop) {
+        if self.next_frame.is_some_and(|at| at <= Instant::now()) {
+            self.redraw(event_loop, false);
+        }
         match self.next_frame {
-            Some(at) if at <= Instant::now() => {
-                if let Some(s) = &self.surface {
-                    s.window.request_redraw();
-                }
-                self.next_frame = None;
-                event_loop.set_control_flow(ControlFlow::Wait);
-            }
             Some(at) => event_loop.set_control_flow(ControlFlow::WaitUntil(at)),
             None => event_loop.set_control_flow(ControlFlow::Wait),
         }
+    }
+
+    /// Draws a frame at the end of this round of events.
+    fn frame_now(&mut self) {
+        self.next_frame = Some(Instant::now());
     }
 
     fn want_frame_now(&mut self) {
@@ -242,8 +253,12 @@ impl CpuApp {
 
 /// Copies what changed since this back buffer was last shown and presents
 /// those rectangles only (on X11 with shared memory only they go to the
-/// server).
-fn present(s: &mut Surface, damage: Vec<IRect>) -> Result<(), softbuffer::SoftBufferError> {
+/// server), or the whole frame when `all`.
+fn present(
+    s: &mut Surface,
+    damage: Vec<IRect>,
+    all: bool,
+) -> Result<(), softbuffer::SoftBufferError> {
     let full = s.canvas.rect();
     s.history.insert(0, damage);
     s.history.truncate(DAMAGE_HISTORY);
@@ -264,7 +279,7 @@ fn present(s: &mut Surface, damage: Vec<IRect>) -> Result<(), softbuffer::SoftBu
     }
     let rects: Vec<softbuffer::Rect> = s.history[0]
         .iter()
-        .chain(if age == 0 {
+        .chain(if age == 0 || all {
             std::slice::from_ref(&full)
         } else {
             &[]
@@ -299,8 +314,8 @@ impl ApplicationHandler<UserEvent> for CpuApp {
         }
         match self.open_window(event_loop) {
             Ok(s) => {
-                s.window.request_redraw();
                 self.surface = Some(s);
+                self.frame_now();
             }
             Err(e) => self.fail(event_loop, "cpu renderer", e),
         }
@@ -311,9 +326,8 @@ impl ApplicationHandler<UserEvent> for CpuApp {
             return;
         };
         match event {
-            WindowEvent::RedrawRequested => {
-                self.redraw(event_loop);
-            }
+            // Only the system asks for this (see the module comment).
+            WindowEvent::RedrawRequested => self.redraw(event_loop, true),
             WindowEvent::CloseRequested | WindowEvent::Destroyed => {
                 event_loop.exit();
             }
@@ -325,16 +339,15 @@ impl ApplicationHandler<UserEvent> for CpuApp {
                 let response = s.egui_winit.on_window_event(&s.window, &event);
                 if resized {
                     // A resize shows a frame at the new size at once.
-                    s.window.request_redraw();
+                    self.frame_now();
                 } else if response.repaint {
                     self.want_frame_now();
                 }
             }
         }
-        self.schedule(event_loop);
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::RequestRepaint {
                 when,
@@ -353,7 +366,7 @@ impl ApplicationHandler<UserEvent> for CpuApp {
                 match request.window_event {
                     accesskit_winit::WindowEvent::InitialTreeRequested => {
                         self.ctx.enable_accesskit();
-                        s.window.request_redraw();
+                        self.frame_now();
                     }
                     accesskit_winit::WindowEvent::ActionRequested(action) => {
                         s.egui_winit.on_accesskit_action_request(action);
@@ -365,9 +378,9 @@ impl ApplicationHandler<UserEvent> for CpuApp {
                 }
             }
         }
-        self.schedule(event_loop);
     }
 
+    // Every round of events ends here: one frame answers all of them.
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.schedule(event_loop);
     }

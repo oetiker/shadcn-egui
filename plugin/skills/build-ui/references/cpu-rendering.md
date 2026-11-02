@@ -5,6 +5,11 @@ not eframe) and rasterize its meshes on the CPU, for example into a `softbuffer`
 surface on a box with no usable GPU. eframe + wgpu/glow handles most of this
 for you; a hand-rolled loop does not.
 
+The gallery example (`crates/shadcn-egui/examples/gallery/`, `cpu.rs` and
+`raster.rs`, run with `--cpu`) is a working loop that follows this page:
+damage tracking, frame pacing, accesskit, IME and clipboard, and pixels
+that match egui-wgpu's.
+
 **Measure before optimizing.** Time the raster, the composite copy and the
 present separately. In practice the raster dominates (~100 ms on a trivial
 1280x800 screen) while copy and present are sub-millisecond, and the second
@@ -14,22 +19,35 @@ killer is *how often* you raster, not how long one raster takes.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| New screen, cursor blink or animation appears only after the next mouse move | loop runs `ControlFlow::Wait` and ignores egui's own repaint requests | read `full_output.viewport_output[&ViewportId::ROOT].repaint_delay`: zero → `request_redraw()` now; finite → `ControlFlow::WaitUntil(now + delay)`; `Duration::MAX` → wait for the next OS event |
-| 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 3) |
-| Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
+| New screen, cursor blink or animation appears only after the next mouse move | loop runs `ControlFlow::Wait` and ignores egui's own repaint requests | read `full_output.viewport_output[&ViewportId::ROOT].repaint_delay`: finite → next frame at `frame_start + delay.max(refresh_interval)` via `ControlFlow::WaitUntil`; `Duration::MAX` → wait for the next OS event. Also install `ctx.set_request_repaint_callback` and send its requests to the loop as user events, for repaints asked from outside a pass |
+| A turning spinner or a fade pins a CPU core | `repaint_delay` is zero during an animation, and the loop draws again at once | never draw sooner than the display's refresh interval (`monitor.refresh_rate_millihertz()`, else 16.7 ms) after the last frame; the same cap stops a stream of mouse moves from drawing faster than the screen shows |
+| 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 4) |
+| Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | raster only the damage (see 4): an animation then costs its own small area. If that is still too slow, `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
+| The window stays blank or black after it opens, or parts of it after another window moved off it (X11 without a compositor) | the loop presents only damage rectangles, and X11 dropped what the window showed (pixels presented while it was unmapped are lost too) | on a `RedrawRequested` the system sent, present the whole frame. winit merges the system's redraws (X11 expose) with the ones you request into one event, so do not call `request_redraw()` for your own frames: draw them in `about_to_wait` when they are due, and every `RedrawRequested` is then the system's |
 
 The deferred first-frame build of the font atlas (`set_fonts` lands next frame) also
 arrives as a repaint request, so ignoring `repaint_delay` leaves the first
 screen with fallback fonts until the user moves the mouse.
 
-## 2. Tessellation settings for a non-AA rasterizer
+## 2. Tessellation settings
 
-- `ctx.options_mut(|o| o.tessellation_options.feathering = false)`.
-  Feathering adds ~1 px alpha "wings" that assume coverage-based blending. An
-  integer rasterizer turns them into hard partial-alpha fringes (dimmed
-  rounded-corner strokes, banding in stacked translucent focus rings). Off,
-  every solid fill is a clean 4-vertex / 6-index quad, which enables the
-  row-fill fast path below. Text is unaffected (pre-antialiased atlas texture).
+- **For the same look as on the GPU, keep feathering on** and rasterize as
+  the GPU does: sample each pixel at its center, apply the top-left fill
+  rule on positions snapped to a subpixel grid (1/256 px), interpolate the
+  vertex colors across the triangle, and blend premultiplied
+  (`One`, `OneMinusSrcAlpha`). Feathering's ~1 px alpha "wings" are then the
+  anti-aliased edges egui-wgpu draws. eframe's default surface is gamma
+  space (`*8Unorm`): multiply vertex colors and texture samples, filter
+  textures, in gamma space, and add egui-wgpu's dither (interleaved
+  gradient noise, ±0.475/255) before the blend.
+- **For speed over looks**,
+  `ctx.options_mut(|o| o.tessellation_options.feathering = false)`.
+  A rasterizer that does not interpolate vertex colors turns the wings into
+  hard partial-alpha fringes (dimmed rounded-corner strokes, banding in
+  stacked translucent focus rings). Off, every solid fill is a clean
+  4-vertex / 6-index quad, which enables the row-fill fast path below, and
+  shapes lose their anti-aliased edges. Text is unaffected
+  (pre-antialiased atlas texture).
 - Tessellate with the **same** `pixels_per_point` egui laid out with. A
   mismatch gives misshapen, mis-sized text and a flood of epaint
   `pixels_per_point` warnings.
@@ -61,23 +79,47 @@ screen with fallback fonts until the user moves the mouse.
   `textures_delta` and no external damage → skip raster and present
   entirely. `egui-winit` requests a repaint on every `CursorMoved`, so
   without this a mouse move re-rasters the whole window.
+- **Find the damage per triangle, not per primitive.** egui merges all
+  shapes of a layer with the same clip rect and texture into one mesh, so
+  a hover on one button changes the primitive of the whole panel. Hash each
+  triangle (its vertices' pos/uv/color bits, the clip rect and texture),
+  match last frame's list against this frame's in order (common prefix and
+  suffix, then each new triangle takes the next equal old one), and damage
+  the pixel boxes of the triangles left unmatched on either side. Where no
+  box touches, the same triangles cover each pixel in the same order, so
+  it cannot have changed. A changed texture other than the font atlas
+  (which egui only grows into unused space) damages everything.
 - **Clip the raster to damage.** Damage = changed external content ∪ egui's
-  area this frame ∪ egui's area last frame (so vanished widgets get erased).
+  damage above (so vanished widgets get erased).
   Per damage rect: restore the background under it, then raster egui clipped
   to it. If your rect coalescing does not return disjoint rects, do restore →
   raster per rect in sequence, otherwise overlaps blend translucent egui
   pixels twice.
-- **Copy only what changed to the surface.** softbuffer's `buffer.age()` says
+- **Copy and send only what changed.** softbuffer's `buffer.age()` says
   how many presents ago this back buffer was shown; copy the union of the
-  damage since then (full copy when age is 0 or after a resize). Plain
-  `present()` is enough: the whole buffer must be valid anyway, and the
-  damage list of `present_with_damage` is only a compositor hint.
+  damage since then (full copy when age is 0 or after a resize). Then
+  present with `present_with_damage(&rects)`: on X11 with shared memory
+  softbuffer sends only those rectangles to the server (plain `present()`
+  sends the whole window every frame), and Wayland gets them as buffer
+  damage. On X11 the age is 1 after the first present (one buffer).
+  The whole window must still go out after a system redraw (see 1).
 - **Modal over live content:** do not alpha-blend a full-window dimmed
   backdrop every frame. Dim the current background **once** into the
   background layer when the modal opens, pause updates of the content behind
   it, and let only the dialog re-raster; on close, mark everything dirty.
 
 ## 5. Integration traps (custom loop)
+
+- **Falling back from eframe to the CPU in one process.** winit allows one
+  event loop per process, and `eframe::run_native` makes its own and
+  never returns it. Build the loop yourself
+  (`EventLoop::<eframe::UserEvent>::with_user_event().build()`), run
+  eframe on it with `eframe::create_native(..)` and
+  `event_loop.run_app_on_demand(&mut app)`, and set a flag in the app
+  creator closure: eframe calls it only after wgpu found an adapter and set
+  up the window's surface. Loop ended and flag unset → wgpu did not start;
+  run the CPU loop on the same event loop. Test it with
+  `WGPU_BACKEND=metal` on Linux (no adapter of that backend).
 
 - **Run each frame with `ctx.run_ui(raw_input, |ui| ..)`**, not
   `begin_pass`/`end_pass` or the deprecated `ctx.run`. Only `run_ui` runs
