@@ -1162,8 +1162,7 @@ impl Theme {
             d.insert_temp(theme_id(), self.clone());
             d.insert_temp(hairline_id(), hairline);
         });
-        install_hairline_hook(ctx);
-        install_mode_switch_hook(ctx);
+        ctx.plugin_or_default::<ThemeHooks>();
     }
 
     /// One mode's egui style: type scale, spacing and colours.
@@ -1292,7 +1291,7 @@ fn font_installs(ctx: &egui::Context) -> u64 {
 /// once, and repaint for a loop that cannot redo it. A font install since
 /// the pass started does the same: egui swaps in new fonts only at the
 /// next pass, so the whole pass is in the old fonts. Runs at the start and
-/// end of every pass ([`install_mode_switch_hook`]) and in every
+/// end of every pass ([`ThemeHooks`]) and in every
 /// [`Theme::current`], so an app's own loop, which runs no pass hook, is
 /// caught by the next crate widget.
 fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
@@ -1315,22 +1314,6 @@ fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
         }
     }
     mode
-}
-
-/// Run [`check_mode_switch`] at the start and end of every pass of `ctx`,
-/// so a switch after the pass's last crate widget, or before a plain egui
-/// `Area`, does not leave a mixed or stale frame; installed once.
-fn install_mode_switch_hook(ctx: &egui::Context) {
-    let hook_id = egui::Id::new("shadcn_egui::mode_switch_hook");
-    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(hook_id, true));
-    let check = |ui: &mut egui::Ui| {
-        check_mode_switch(ui.ctx());
-    };
-    ctx.on_begin_pass("shadcn_egui::mode_switch", Arc::new(check));
-    ctx.on_end_pass("shadcn_egui::mode_switch", Arc::new(check));
 }
 
 fn generation_id() -> egui::Id {
@@ -1362,26 +1345,49 @@ fn set_hairline(v: &mut egui::Visuals, width: f32) {
     }
 }
 
-/// Keep the hairline of plain egui widgets on whole device pixels, as the
-/// crate's own borders: `Theme::apply` runs once, often before the window's
-/// scale is known, and the scale can change later (zoom, another monitor).
-/// Each pass checks the scale and rewrites the stroke widths only when the
-/// snapped width changes, so style writes of the app's own stay.
-fn install_hairline_hook(ctx: &egui::Context) {
-    let hook_id = egui::Id::new("shadcn_egui::hairline_hook");
-    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
-        return;
+/// The theme's pass hooks, registered once per context by
+/// [`Theme::apply`]. A plugin, not a flag in egui's memory: a memory reset
+/// (egui's "Reset memory" button) dropped such a flag and the next apply
+/// installed a second set of hooks.
+///
+/// egui runs plugin pass hooks only in `Context::run_ui`; under
+/// `Context::run` or `begin_pass`/`end_pass` no hook runs. There the next
+/// crate widget catches a mode or font switch through
+/// [`Theme::current`], and the hairline follows a scale change only at
+/// the next [`Theme::apply`].
+#[derive(Default)]
+struct ThemeHooks;
+
+impl egui::plugin::Plugin for ThemeHooks {
+    fn debug_name(&self) -> &'static str {
+        "shadcn_egui::theme"
     }
-    ctx.data_mut(|d| d.insert_temp(hook_id, true));
-    ctx.on_begin_pass(
-        "shadcn_egui::hairline",
-        Arc::new(|ui: &mut egui::Ui| {
-            if let Some(width) = snap_hairline(ui.ctx()) {
-                // The root ui was built before this hook ran.
-                set_hairline(&mut ui.style_mut().visuals, width);
-            }
-        }),
-    );
+
+    /// Keep the hairline of plain egui widgets on whole device pixels, as
+    /// the crate's own borders: `Theme::apply` runs once, often before the
+    /// window's scale is known, and the scale can change later (zoom,
+    /// another monitor). Each pass checks the scale and rewrites the stroke
+    /// widths only when the snapped width changes, so style writes of the
+    /// app's own stay. Then check for a mode switch.
+    fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
+        #[cfg(test)]
+        hook_tests::count();
+        if let Some(width) = snap_hairline(ui.ctx()) {
+            // The root ui was built before this hook ran.
+            set_hairline(&mut ui.style_mut().visuals, width);
+        }
+        #[cfg(test)]
+        hook_tests::count();
+        check_mode_switch(ui.ctx());
+    }
+
+    /// Check for a mode switch after the pass's last crate widget, or
+    /// before a plain egui `Area`, so the frame is not mixed or stale.
+    fn on_end_pass(&mut self, ui: &mut egui::Ui) {
+        #[cfg(test)]
+        hook_tests::count();
+        check_mode_switch(ui.ctx());
+    }
 }
 
 /// The hairline for the context's current scale, written to both styles
@@ -1403,4 +1409,44 @@ fn snap_hairline(ctx: &egui::Context) -> Option<f32> {
 /// Convenience accessor for components.
 pub fn theme(ctx: &egui::Context) -> Theme {
     Theme::current(ctx)
+}
+
+#[cfg(test)]
+mod hook_tests {
+    use super::Theme;
+    use std::cell::Cell;
+
+    thread_local! {
+        /// The theme's pass hooks run so far on this thread.
+        static RUNS: Cell<u32> = const { Cell::new(0) };
+    }
+
+    /// Counts one run of a theme pass hook.
+    pub(super) fn count() {
+        RUNS.with(|r| r.set(r.get() + 1));
+    }
+
+    /// The theme's pass hooks that run in one empty `run_ui` pass.
+    fn runs_per_pass(ctx: &egui::Context) -> u32 {
+        let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+        let before = RUNS.with(Cell::get);
+        let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+        RUNS.with(Cell::get) - before
+    }
+
+    /// A reset of egui's memory (its "Reset memory" button) and a new
+    /// `Theme::apply` install no second set of pass hooks.
+    #[test]
+    fn a_memory_reset_installs_no_second_set_of_hooks() {
+        let ctx = egui::Context::default();
+        let mut runs = Vec::new();
+        for _ in 0..3 {
+            Theme::vega().apply(&ctx);
+            runs.push(runs_per_pass(&ctx));
+            ctx.memory_mut(|m| *m = Default::default());
+        }
+        // The hairline check at the start of a pass, the mode check at its
+        // start and at its end.
+        assert_eq!(runs, [3; 3]);
+    }
 }
