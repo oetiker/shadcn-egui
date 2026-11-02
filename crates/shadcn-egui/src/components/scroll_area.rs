@@ -136,7 +136,7 @@ struct Memory {
     /// The widget inside that had focus at the end of the last pass.
     focused: Option<Id>,
     /// egui's touch-drag rect for a disabled `Ui`: the viewport of the
-    /// last pass, while its content was too large for it.
+    /// last pass after auto-shrink, while its content was too large for it.
     pan_rect: Option<Rect>,
     /// The fling a touch pan in a disabled `Ui` left, in points per
     /// second, as egui's kinetic scrolling keeps it.
@@ -509,10 +509,9 @@ impl ScrollArea {
         let mut offset = out.state.offset;
 
         // The next pass's touch pan, where egui's would be: the viewport
-        // while the content is too large for it.
-        let too_large =
-            |d: usize| self.direction[d] && out.inner_rect.size()[d] < out.content_size[d];
-        mem.pan_rect = (too_large(0) || too_large(1)).then_some(out.inner_rect);
+        // after auto-shrink, while the content is too large for it.
+        let too_large = |d: usize| self.direction[d] && inner.size()[d] < out.content_size[d];
+        mem.pan_rect = (too_large(0) || too_large(1)).then_some(inner);
 
         // Viewport focus and bars of a disabled `Ui` (see above).
         if !ui.is_enabled() && enabled_ui.is_none() && (overflow[0] || overflow[1]) {

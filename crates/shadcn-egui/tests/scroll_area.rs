@@ -751,10 +751,10 @@ fn a_disabled_ui_scrolls_by_keys_wheel_and_thumb() {
     );
 }
 
-/// The offsets a touch pan from (150, 200) up by 80 px leaves, pass by
+/// The offsets a touch pan from `from` up by 80 px leaves, pass by
 /// pass, through the press, the moves, the release and a fling's coast,
 /// with `area` drawn in a `Ui` that is disabled or not.
-fn touch_pan(disabled: bool, area: fn(&mut Ui) -> [Vec2; 2]) -> Vec<[Vec2; 2]> {
+fn touch_pan(disabled: bool, from: Pos2, area: fn(&mut Ui) -> [Vec2; 2]) -> Vec<[Vec2; 2]> {
     let mut sim = Sim::vega();
     let mut add = move |ui: &mut Ui| {
         if disabled {
@@ -762,7 +762,6 @@ fn touch_pan(disabled: bool, area: fn(&mut Ui) -> [Vec2; 2]) -> Vec<[Vec2; 2]> {
         }
         area(ui)
     };
-    let from = pos2(150.0, 200.0);
     let touch = Event::Touch {
         device_id: egui::TouchDeviceId(1),
         id: egui::TouchId(0),
@@ -789,13 +788,29 @@ fn touch_pan(disabled: bool, area: fn(&mut Ui) -> [Vec2; 2]) -> Vec<[Vec2; 2]> {
 
 /// A browser pans a scroller inside `<fieldset disabled>` by touch as it
 /// pans an enabled one, fling included; in nested areas the inner one
-/// under the finger takes the pan.
+/// under the finger takes the pan, and a drag beside an area shrunk to
+/// its content pans nothing.
 #[test]
 fn a_disabled_ui_pans_by_touch_as_an_enabled_one() {
     type Area = fn(&mut Ui) -> [Vec2; 2];
-    let scenes: [(&str, Area); 2] = [
-        ("tall", |ui| [tall(ui), Vec2::ZERO]),
-        ("nested", |ui| {
+    let centre = pos2(150.0, 200.0);
+    let scenes: [(&str, Pos2, Area); 3] = [
+        ("tall", centre, |ui| [tall(ui), Vec2::ZERO]),
+        // Content 100 wide shrinks the area from the 200 px room to
+        // x 100..200; the finger at x 250 is beside it.
+        ("beside a shrunk area", pos2(250.0, 200.0), |ui| {
+            let offset = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(AREA), |ui| {
+                    ScrollArea::vertical()
+                        .max_height(AREA.height())
+                        .show(ui, block(vec2(100.0, 1000.0)))
+                        .state
+                        .offset
+                })
+                .inner;
+            [offset, Vec2::ZERO]
+        }),
+        ("nested", centre, |ui| {
             let mut inner = Vec2::ZERO;
             let outer = place(ui, ScrollArea::vertical(), |ui| {
                 inner = ScrollArea::vertical()
@@ -810,17 +825,26 @@ fn a_disabled_ui_pans_by_touch_as_an_enabled_one() {
             [outer, inner]
         }),
     ];
-    for (name, area) in scenes {
-        let enabled = touch_pan(false, area);
-        let disabled = touch_pan(true, area);
-        let moved_at_all = enabled.iter().any(|o| o[0].y + o[1].y > 0.0);
-        assert!(moved_at_all, "{name}: the enabled area pans");
-        // Pass 7 is the release; the fling carries the area on.
+    for (name, from, area) in scenes {
+        let enabled = touch_pan(false, from, area);
+        let disabled = touch_pan(true, from, area);
         let sum = |o: &[Vec2; 2]| o[0].y + o[1].y;
-        assert!(
-            sum(enabled.last().unwrap()) > sum(&enabled[7]) + 1.0,
-            "{name}: the release leaves a fling"
-        );
+        if name == "beside a shrunk area" {
+            assert!(
+                enabled.iter().all(|o| sum(o) == 0.0),
+                "{name}: the enabled area does not pan"
+            );
+        } else {
+            assert!(
+                enabled.iter().any(|o| sum(o) > 0.0),
+                "{name}: the enabled area pans"
+            );
+            // Pass 7 is the release; the fling carries the area on.
+            assert!(
+                sum(enabled.last().unwrap()) > sum(&enabled[7]) + 1.0,
+                "{name}: the release leaves a fling"
+            );
+        }
         if name == "nested" {
             assert!(
                 enabled.iter().all(|o| o[0].y == 0.0),
