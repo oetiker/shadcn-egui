@@ -14,7 +14,7 @@ repository = "https://github.com/oetiker/shadcn-egui"
 
 [workspace.dependencies]
 egui = "0.34"
-egui_extras = { version = "0.34", default-features = false }
+egui_extras = { version = "0.35", default-features = false }
 log = "0.4"
 # Font tables for the text path: glyph advances at the face's variation
 # location and GPOS kerning, which egui does not apply. Pinned to the
