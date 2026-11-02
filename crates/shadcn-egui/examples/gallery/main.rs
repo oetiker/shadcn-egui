@@ -242,7 +242,7 @@ fn choose_adapter(
     }
     Err(match adapters.iter().find(|a| a.fits) {
         Some(software) => format!(
-            "only a software adapter, {}. Set {ALLOW_SOFTWARE}=1 to use it",
+            "only a software adapter, {}. Set {ALLOW_SOFTWARE}=1 to use it.",
             software.name
         ),
         None if adapters.is_empty() => "no wgpu adapter".to_owned(),
@@ -658,7 +658,10 @@ mod tests {
         let only =
             choose_adapter(std::slice::from_ref(&llvmpipe), high, false).expect_err("refused");
         assert!(only.contains("software adapter, llvmpipe"), "{only}");
-        assert!(only.contains("SHADCN_EGUI_SOFTWARE_GPU=1"), "{only}");
+        assert!(
+            only.ends_with("Set SHADCN_EGUI_SOFTWARE_GPU=1 to use it."),
+            "{only}"
+        );
         assert_eq!(
             choose_adapter(std::slice::from_ref(&llvmpipe), high, true),
             Ok(0)
