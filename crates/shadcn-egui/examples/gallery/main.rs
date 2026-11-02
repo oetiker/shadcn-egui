@@ -118,8 +118,13 @@ impl EframeError {
     fn install(inner: &'static dyn log::Log, max_level: log::LevelFilter) -> Option<&'static Self> {
         let logger: &'static Self = Box::leak(Box::new(Self::new(inner)));
         log::set_logger(logger).ok()?;
-        log::set_max_level(max_level.max(log::LevelFilter::Error));
+        log::set_max_level(Self::global_level(max_level));
         Some(logger)
+    }
+
+    /// The process's level: what `inner` wants, and eframe's error always.
+    fn global_level(max_level: log::LevelFilter) -> log::LevelFilter {
+        max_level.max(log::LevelFilter::Error)
     }
 
     fn new(inner: &'static dyn log::Log) -> Self {
@@ -162,14 +167,23 @@ impl log::Log for EframeError {
 }
 
 /// Prints warnings and errors to stderr: the crate's own (a preset value
-/// this build cannot show), egui's, eframe's and wgpu's.
+/// this build cannot show), egui's, eframe's and wgpu's. winit's only from
+/// errors up: it warns on every start on many X11 desktops (no XSETTINGS
+/// daemon, a screen of 0 mm), which the user cannot act on.
 #[cfg(not(target_arch = "wasm32"))]
 struct Stderr;
 
 #[cfg(not(target_arch = "wasm32"))]
 impl log::Log for Stderr {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= log::Level::Warn
+        let target = metadata.target();
+        let winit = target == "winit" || target.starts_with("winit::");
+        metadata.level()
+            <= if winit {
+                log::Level::Error
+            } else {
+                log::Level::Warn
+            }
     }
 
     fn log(&self, record: &log::Record) {
@@ -228,7 +242,7 @@ fn choose_adapter(
     }
     Err(match adapters.iter().find(|a| a.fits) {
         Some(software) => format!(
-            "only a software adapter, {}; {ALLOW_SOFTWARE}=1 draws on it",
+            "only a software adapter, {}. Set {ALLOW_SOFTWARE}=1 to use it",
             software.name
         ),
         None if adapters.is_empty() => "no wgpu adapter".to_owned(),
@@ -275,10 +289,10 @@ fn after_eframe(started: bool, error: Option<String>) -> Result<Option<String>, 
         (true, None) => Ok(None),
         (true, Some(e)) => Err(e),
         (false, Some(e)) => Ok(Some(format!(
-            "gallery: wgpu did not start ({e}); drawing on the CPU"
+            "gallery: drawing on the CPU, as wgpu did not start: {e}"
         ))),
         (false, None) => Ok(Some(
-            "gallery: wgpu did not start; drawing on the CPU".to_owned(),
+            "gallery: drawing on the CPU, as wgpu did not start".to_owned(),
         )),
     }
 }
@@ -461,13 +475,13 @@ mod tests {
         assert_eq!(
             after_eframe(false, Some("no adapter".into())),
             Ok(Some(
-                "gallery: wgpu did not start (no adapter); drawing on the CPU".to_owned()
+                "gallery: drawing on the CPU, as wgpu did not start: no adapter".to_owned()
             ))
         );
         assert_eq!(
             after_eframe(false, None),
             Ok(Some(
-                "gallery: wgpu did not start; drawing on the CPU".to_owned()
+                "gallery: drawing on the CPU, as wgpu did not start".to_owned()
             ))
         );
     }
@@ -512,6 +526,67 @@ mod tests {
         assert_eq!(logger.take(), None);
     }
 
+    /// The only test in this binary that sets the process's logger.
+    #[test]
+    fn the_installed_logger_lets_warnings_through_to_the_inner_one() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        /// Notes the one warning this test logs; other tests may log too.
+        struct Seen(AtomicBool);
+        impl log::Log for Seen {
+            fn enabled(&self, metadata: &log::Metadata) -> bool {
+                metadata.level() <= log::Level::Warn
+            }
+            fn log(&self, record: &log::Record) {
+                if record.args().to_string() == "a preset value this build cannot show" {
+                    self.0.store(true, Ordering::Relaxed);
+                }
+            }
+            fn flush(&self) {}
+        }
+        static SEEN: Seen = Seen(AtomicBool::new(false));
+        let logger = EframeError::install(&SEEN, log::LevelFilter::Warn).expect("the first logger");
+        assert_eq!(log::max_level(), log::LevelFilter::Warn);
+        log::warn!(target: "shadcn_egui", "a preset value this build cannot show");
+        assert!(
+            SEEN.0.load(Ordering::Relaxed),
+            "the warning did not reach the inner logger"
+        );
+        log::error!("{EFRAME_EXIT}no adapter");
+        assert_eq!(logger.take().as_deref(), Some("no adapter"));
+
+        // eframe's error is kept even when the inner logger wants nothing.
+        assert_eq!(
+            EframeError::global_level(log::LevelFilter::Off),
+            log::LevelFilter::Error
+        );
+        assert_eq!(
+            EframeError::global_level(log::LevelFilter::Info),
+            log::LevelFilter::Info
+        );
+    }
+
+    #[test]
+    fn stderr_prints_warnings_but_only_winit_s_errors() {
+        use log::Log as _;
+        let enabled = |level, target| {
+            Stderr.enabled(&log::Metadata::builder().level(level).target(target).build())
+        };
+        for target in [
+            "shadcn_egui::preset",
+            "egui_wgpu",
+            "eframe",
+            "gallery",
+            "winitish",
+        ] {
+            assert!(enabled(log::Level::Warn, target), "{target}");
+            assert!(!enabled(log::Level::Info, target), "{target}");
+        }
+        for target in ["winit", "winit::platform_impl::linux::x11::xdisplay"] {
+            assert!(!enabled(log::Level::Warn, target), "{target}");
+            assert!(enabled(log::Level::Error, target), "{target}");
+        }
+    }
+
     /// `EFRAME_EXIT` is eframe's log text, not its API: this fails when the
     /// eframe that `Cargo.lock` pins no longer logs it as an error.
     #[test]
@@ -530,23 +605,24 @@ mod tests {
             .expect("CARGO_HOME or HOME");
         let registry = cargo_home.join("registry/src");
         let wanted = format!("log::error!(\"{EFRAME_EXIT}{{");
-        let mut searched = Vec::new();
-        for index in std::fs::read_dir(&registry).expect("the registry sources") {
-            let src = index
-                .expect("a registry index")
-                .path()
-                .join(format!("eframe-{version}/src"));
-            if !src.is_dir() {
-                continue;
-            }
-            if contains_text(&src, &wanted) {
-                return;
-            }
-            searched.push(src);
-        }
-        panic!(
-            "eframe {version} does not log `{wanted}` (searched {searched:?} under {})",
+        let package = format!("eframe-{version}/src");
+        let sources: Vec<_> = std::fs::read_dir(&registry)
+            .map(|indexes| {
+                indexes
+                    .filter_map(|index| Some(index.ok()?.path().join(&package)))
+                    .filter(|src| src.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(
+            !sources.is_empty(),
+            "the eframe {version} source was not found: looked for `{package}` in every \
+             index under {} (vendored sources or a source replacement keep it elsewhere)",
             registry.display()
+        );
+        assert!(
+            sources.iter().any(|src| contains_text(src, &wanted)),
+            "eframe {version} no longer logs `{wanted}`: searched {sources:?}"
         );
     }
 

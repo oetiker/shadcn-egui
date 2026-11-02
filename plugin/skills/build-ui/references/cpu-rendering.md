@@ -135,7 +135,8 @@ one UV, and blends the rest per pixel.
   loop (`log::error!("Exiting because of error: {err}")`), and the gallery
   reads it from there: its `EframeError` logger keeps that record and
   passes every other one to an inner logger, which prints warnings and
-  errors to stderr. An app with its own logger puts that one in as the
+  errors to stderr (winit's errors only: winit warns on every start on
+  many X11 desktops). An app with its own logger puts that one in as the
   inner logger (`EframeError::install(inner, max_level)`; for env_logger,
   `Box::leak(Box::new(builder.build()))` and the logger's `filter()`), so the
   capture adds to it rather than replacing it. The text is eframe's
