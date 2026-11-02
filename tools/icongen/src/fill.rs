@@ -8,8 +8,39 @@ use lyon_tessellation::path::{Path, PathEvent};
 use lyon_tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
 use usvg::tiny_skia_path::{PathSegment, Point};
 
-/// Curve flattening tolerance in the 24-unit icon box.
-pub const FLATTEN_TOLERANCE: f32 = 0.02;
+/// Curve flattening tolerance in the 24-unit icon box: the largest at which
+/// flattening plus the blob's rounding keeps a fill within 4 levels of its
+/// true outline up to 256 px (`tests/fill_precision.rs`, `tolerance_scan`).
+/// It needs lyon_geom 1.0.20 or later: 1.0.19 truncated the piece count of
+/// a curve that needs more than 24 pieces, so its last piece sagged up to 4x.
+pub const FLATTEN_TOLERANCE: f32 = 0.0012;
+
+/// How finely fills are flattened, and whether their points are rounded to
+/// the blob's grid. [`Precision::BLOB`] is what the blob stores; a finer,
+/// unrounded precision gives the reference the tests measure it against.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Precision {
+    /// Curve flattening tolerance in the 24-unit box.
+    pub tolerance: f32,
+    /// Round every point to the blob's coordinate grid.
+    pub quantise: bool,
+}
+
+impl Precision {
+    /// The precision of the blob: [`FLATTEN_TOLERANCE`], rounded points.
+    pub const BLOB: Precision = Precision {
+        tolerance: FLATTEN_TOLERANCE,
+        quantise: true,
+    };
+
+    fn round(self, v: f32) -> f32 {
+        if self.quantise {
+            quantise(v)
+        } else {
+            v
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FillRule {
@@ -36,13 +67,14 @@ pub struct Fill {
 }
 
 /// Flatten one usvg path (transform applied, then scaled into the 24-unit
-/// box) into closed, quantised polylines. Consecutive duplicate points and a
+/// box) into closed polylines at `prec`. Consecutive duplicate points and a
 /// closing point equal to the first are dropped; contours with fewer than
 /// three points are dropped.
 pub fn flatten(
     path: &usvg::tiny_skia_path::Path,
     ts: usvg::Transform,
     scale: f32,
+    prec: Precision,
 ) -> Vec<Vec<[f32; 2]>> {
     let map = |mut p: Point| {
         ts.map_point(&mut p);
@@ -89,13 +121,13 @@ pub fn flatten(
 
     let mut contours = Vec::new();
     let mut cur: Vec<[f32; 2]> = Vec::new();
-    for evt in b.build().iter().flattened(FLATTEN_TOLERANCE) {
+    for evt in b.build().iter().flattened(prec.tolerance) {
         match evt {
             PathEvent::Begin { at } => {
                 cur.clear();
-                push(&mut cur, at.x, at.y);
+                push(&mut cur, at.x, at.y, prec);
             }
-            PathEvent::Line { to, .. } => push(&mut cur, to.x, to.y),
+            PathEvent::Line { to, .. } => push(&mut cur, to.x, to.y, prec),
             PathEvent::End { .. } => {
                 if cur.len() > 1 && cur.first() == cur.last() {
                     cur.pop();
@@ -113,16 +145,17 @@ pub fn flatten(
     contours
 }
 
-fn push(c: &mut Vec<[f32; 2]>, x: f32, y: f32) {
-    let q = [quantise(x), quantise(y)];
+fn push(c: &mut Vec<[f32; 2]>, x: f32, y: f32, prec: Precision) {
+    let q = [prec.round(x), prec.round(y)];
     if c.last() != Some(&q) {
         c.push(q);
     }
 }
 
 /// Tessellate every filled path of one icon and trace the fringe contours.
-/// `None` when the icon has no fill (or only zero-area fill).
-pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
+/// `None` when the icon has no fill (or only zero-area fill). `prec` is the
+/// precision `paths` were flattened at.
+pub fn build(name: &str, paths: &[FillPath], prec: Precision) -> Result<Option<Fill>, String> {
     let mut fill = Fill::default();
     for fp in paths {
         let mut b = Path::builder();
@@ -141,7 +174,7 @@ pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
         FillTessellator::new()
             .tessellate_path(
                 &b.build(),
-                &FillOptions::tolerance(FLATTEN_TOLERANCE).with_fill_rule(rule),
+                &FillOptions::tolerance(prec.tolerance).with_fill_rule(rule),
                 &mut BuffersBuilder::new(&mut buf, |v: FillVertex| v.position().to_array()),
             )
             .map_err(|e| format!("{name}: tessellation failed: {e:?}"))?;
@@ -154,7 +187,7 @@ pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
         fill.vertices.extend(
             buf.vertices
                 .iter()
-                .map(|v| [quantise(v[0]), quantise(v[1])]),
+                .map(|v| [prec.round(v[0]), prec.round(v[1])]),
         );
         fill.indices
             .extend(buf.indices.iter().map(|&i| i + base as u16));
@@ -162,7 +195,7 @@ pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
     if fill.indices.is_empty() {
         return Ok(None);
     }
-    fill.contours = boundary(name, paths)?;
+    fill.contours = boundary(name, paths, prec)?;
     Ok(Some(fill))
 }
 
@@ -181,7 +214,7 @@ pub fn build(name: &str, paths: &[FillPath]) -> Result<Option<Fill>, String> {
 /// f64 on the exact crossing points; only the finished loops are quantised,
 /// so the arrangement stays consistent even where crossings lie closer
 /// together than one quantum.
-fn boundary(name: &str, paths: &[FillPath]) -> Result<Vec<Contour>, String> {
+fn boundary(name: &str, paths: &[FillPath], prec: Precision) -> Result<Vec<Contour>, String> {
     let edges: Vec<[P; 2]> = paths
         .iter()
         .flat_map(|fp| &fp.contours)
@@ -268,7 +301,7 @@ fn boundary(name: &str, paths: &[FillPath]) -> Result<Vec<Contour>, String> {
             }
             cur = next;
         }
-        if let Some(l) = quantise_loop(&points) {
+        if let Some(l) = quantise_loop(&points, prec) {
             loops.push(l);
         }
     }
@@ -318,13 +351,13 @@ type P = [f64; 2];
 /// One fringe loop: (point, outward miter) per vertex.
 type Contour = Vec<([f32; 2], [f32; 2])>;
 
-/// Quantise a closed loop. Runs of points that land on the same grid point
+/// Quantise a closed loop at `prec`. Runs of points that land on the same point
 /// become one vertex whose miter joins the run's incoming and outgoing edges,
 /// so pieces shorter than a quantum do not turn the miter. `None` when fewer
 /// than three vertices remain.
-fn quantise_loop(points: &[P]) -> Option<Contour> {
+fn quantise_loop(points: &[P], prec: Precision) -> Option<Contour> {
     let n = points.len();
-    let q = |p: P| [quantise(p[0] as f32), quantise(p[1] as f32)];
+    let q = |p: P| [prec.round(p[0] as f32), prec.round(p[1] as f32)];
     let normal = |i: usize| {
         let (p, r) = (points[i], points[(i + 1) % n]);
         let d = sub(r, p);

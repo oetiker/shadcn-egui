@@ -14,7 +14,7 @@ use usvg::tiny_skia_path::{PathSegment, Point};
 pub mod blob;
 pub mod fill;
 
-pub use fill::{Fill, FillPath, FillRule};
+pub use fill::{Fill, FillPath, FillRule, Precision};
 
 /// Mirror of `shadcn_egui_core::Seg`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,6 +70,12 @@ impl Gather {
 /// Convert one SVG document. `name` becomes the icon's accessible name and,
 /// upper-cased, its constant name.
 pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
+    convert_with(name, svg, Precision::BLOB)
+}
+
+/// [`convert`] with the fills flattened at `prec` instead of the blob's
+/// precision.
+pub fn convert_with(name: &str, svg: &str, prec: Precision) -> Result<Converted, String> {
     let tree =
         usvg::Tree::from_str(svg, &usvg::Options::default()).map_err(|e| format!("{name}: {e}"))?;
     let size = tree.size();
@@ -88,14 +94,15 @@ pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
         24.0 / size.width(),
         1.0,
         0,
+        prec,
         &mut gathered,
     )?;
     let mut gathered = gathered.into_iter();
     let base = gathered.next().expect("layer 0");
-    let fill = fill::build(name, &base.fills)?;
+    let fill = fill::build(name, &base.fills, prec)?;
     let mut layers = Vec::new();
     for g in gathered {
-        let fill = fill::build(name, &g.fills)?;
+        let fill = fill::build(name, &g.fills, prec)?;
         if !g.segs.is_empty() || fill.is_some() {
             layers.push(Layer {
                 alpha: g.alpha,
@@ -140,6 +147,7 @@ fn walk(
     scale: f32,
     alpha: f32,
     layer: usize,
+    prec: Precision,
     layers: &mut Vec<Gather>,
 ) -> Result<(), String> {
     for node in group.children() {
@@ -147,7 +155,7 @@ fn walk(
             usvg::Node::Group(g) => {
                 if let Some(l) = layer_for(layers, layer, alpha, g.opacity().get()) {
                     let a = layers[l].alpha;
-                    walk(name, g, scale, a, l, layers)?;
+                    walk(name, g, scale, a, l, prec, layers)?;
                 }
             }
             usvg::Node::Path(p) => {
@@ -159,7 +167,7 @@ fn walk(
                         usvg::FillRule::NonZero => FillRule::NonZero,
                         usvg::FillRule::EvenOdd => FillRule::EvenOdd,
                     };
-                    let contours = fill::flatten(p.data(), p.abs_transform(), scale);
+                    let contours = fill::flatten(p.data(), p.abs_transform(), scale, prec);
                     let l = layer_for(layers, layer, alpha, f.opacity().get());
                     if let (Some(l), false) = (l, contours.is_empty()) {
                         layers[l].fills.push(FillPath { rule, contours });
