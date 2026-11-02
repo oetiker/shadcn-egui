@@ -5,7 +5,7 @@
 //! draws on the CPU instead (egui-winit, a rasterizer of egui's meshes and
 //! softbuffer, in `cpu.rs` and `raster.rs`), and the gallery switches to the
 //! CPU by itself when wgpu finds no adapter. `SHADCN_EGUI_CPU_STATS=1`
-//! prints the CPU path's frame times.
+//! prints the frame times of either path.
 //!
 //! The same example runs in the browser: `scripts/build-web-gallery.sh`
 //! builds it, and the page takes `?preset=<code>&mode=dark`; it always
@@ -21,6 +21,9 @@ use shadcn_egui::Preset;
 
 struct GalleryApp {
     state: GalleryState,
+    /// `SHADCN_EGUI_CPU_STATS=1` on the desktop: prints the wgpu path's
+    /// frame times too, for comparison with the CPU path.
+    stats: bool,
 }
 
 impl GalleryApp {
@@ -30,13 +33,20 @@ impl GalleryApp {
     fn new(ctx: &egui::Context, state: GalleryState) -> Self {
         state.preset.apply(ctx);
         ctx.set_theme(state.mode);
-        Self { state }
+        let stats = cfg!(not(target_arch = "wasm32"))
+            && std::env::var_os("SHADCN_EGUI_CPU_STATS").is_some_and(|v| v == "1");
+        Self { state, stats }
     }
 }
 
 impl eframe::App for GalleryApp {
     // gallery_ui applies the preset itself, only when a picker changed it.
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if let Some(seconds) = frame.info().cpu_usage.filter(|_| self.stats) {
+            // eframe's own measure: pass, tessellation and the wgpu
+            // submission, without the wait for the display.
+            eprintln!("wgpu frame (previous): {:.1} ms", seconds * 1e3);
+        }
         gallery_ui(ui, &mut self.state);
     }
 }

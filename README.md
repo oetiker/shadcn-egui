@@ -70,7 +70,8 @@ In a git checkout of this repository,
 component, each variant and size, and the icons of the chosen icon library.
 Paste a preset code or pick each preset part (style, colours, fonts, icon
 library, radius, menu) and the light or dark mode, and the gallery restyles
-live.
+live. Without a usable GPU the gallery draws on the CPU; add `-- --cpu` to
+the command to make it do so on a machine with a GPU.
 
 `cargo run --example settings` opens a settings page built from Badge,
 Button, Card, Checkbox, Input, Label, Select, Separator, Slider, Switch and

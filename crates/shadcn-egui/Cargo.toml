@@ -210,7 +210,8 @@ shadcn-egui-font-oxanium.workspace = true
 
 # The gallery example's CPU renderer (`--cpu`, or no GPU): its window,
 # input, accessibility and clipboard (the egui-winit features eframe
-# enables) and the surface it shows its pixels on.
+# enables; eframe turns `clipboard` on in any case, so both paths share it)
+# and the surface it shows its pixels on.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 egui-winit = { version = "0.34", default-features = false, features = ["accesskit", "clipboard", "links", "wayland", "x11"] }
 softbuffer = { version = "0.4", default-features = false, features = ["x11", "x11-dlopen", "wayland", "wayland-dlopen"] }

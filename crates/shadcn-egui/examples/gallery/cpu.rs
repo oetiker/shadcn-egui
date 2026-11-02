@@ -321,8 +321,10 @@ impl ApplicationHandler<UserEvent> for CpuApp {
         }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let Some(s) = self.surface.as_mut() else {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        // After a failed wgpu start, the window eframe opened on this loop
+        // still reports its `Destroyed` here; it is not ours to act on.
+        let Some(s) = self.surface.as_mut().filter(|s| s.window.id() == id) else {
             return;
         };
         match event {

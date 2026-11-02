@@ -157,12 +157,17 @@ screen with fallback fonts until the user moves the mouse.
   `.interactable(false)` so it does not claim the pointer; a modal backdrop
   is the opposite case and must keep blocking clicks. Unit-test the routing predicate itself:
   `egui::Context::default()` runs headless; feed it a `RawInput`.
-- **`egui-winit` default features pull `smithay-clipboard`**, which segfaults
-  on Wayland (its thread shares winit's `wl_display`; unmaintained, egui#3805).
-  Use `egui-winit = { version = "0.34", default-features = false, features =
-  ["links", "wayland", "x11"] }` and, if you need a clipboard, a crate with its
-  own Wayland connection (`wl-clipboard-rs`). Check with `cargo tree -i
-  smithay-clipboard`.
+- **`egui-winit`'s `clipboard` feature (on by default) pulls
+  `smithay-clipboard` on Wayland**, whose worker thread shares winit's
+  `wl_display`; on WSLg it panics with "Broken pipe" when the window is
+  resized and takes the app down (egui#3805, open). eframe turns the same
+  feature on, so every eframe app has it, and Cargo unifies features: an app
+  that also links eframe (the gallery, for its wgpu path) keeps the feature
+  whatever its own `egui-winit` line says, and the gallery therefore names it
+  too. An app without eframe can drop it, `egui-winit = { version = "0.34",
+  default-features = false, features = ["links", "wayland", "x11"] }`, and
+  use a clipboard crate with its own Wayland connection (`wl-clipboard-rs`).
+  Check with `cargo tree -i smithay-clipboard`.
 - **Clipboard without egui-winit's clipboard features:** egui-winit then
   keeps copied text in an in-process string. Before `handle_platform_output`,
   take each `egui::OutputCommand::CopyText(text)` out of
