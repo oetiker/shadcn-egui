@@ -1,8 +1,20 @@
 //! Every component under a live preset picker:
-//! `cargo run --example gallery --features fonts-all,icons-all [-- <preset code> [dark|light]]`.
+//! `cargo run --example gallery --features fonts-all,icons-all [-- [--cpu] <preset code> [dark|light]]`.
+//!
+//! On the desktop it draws with wgpu, as eframe does by default. `--cpu`
+//! draws on the CPU instead (egui-winit, a rasterizer of egui's meshes and
+//! softbuffer, in `cpu.rs` and `raster.rs`), and the gallery switches to the
+//! CPU by itself when wgpu finds no adapter. `SHADCN_EGUI_CPU_STATS=1`
+//! prints the CPU path's frame times.
 //!
 //! The same example runs in the browser: `scripts/build-web-gallery.sh`
-//! builds it, and the page takes `?preset=<code>&mode=dark`.
+//! builds it, and the page takes `?preset=<code>&mode=dark`; it always
+//! draws with WebGPU or WebGL.
+
+#[cfg(not(target_arch = "wasm32"))]
+mod cpu;
+#[cfg(not(target_arch = "wasm32"))]
+mod raster;
 
 use shadcn_egui::reference::{gallery_ui, GalleryState};
 use shadcn_egui::Preset;
@@ -49,24 +61,82 @@ fn initial_state(preset: Option<&str>, mode: Option<&str>) -> (GalleryState, Opt
     (GalleryState::new(preset, mode), warning)
 }
 
+/// The window both renderers open.
 #[cfg(not(target_arch = "wasm32"))]
-fn main() -> eframe::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    let (state, warning) = initial_state(
-        args.get(1).map(String::as_str),
-        args.get(2).map(String::as_str),
-    );
-    if let Some(warning) = warning {
-        eprintln!("{warning}");
+fn viewport() -> egui::ViewportBuilder {
+    egui::ViewportBuilder::default()
+        .with_title(TITLE)
+        .with_app_id(TITLE)
+        .with_inner_size([1280.0, 900.0])
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const TITLE: &str = "shadcn-egui gallery";
+
+/// `--cpu` anywhere, the preset code and the mode in that order.
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_args(args: &[String]) -> (bool, Option<&str>, Option<&str>) {
+    let cpu = args.iter().any(|a| a == "--cpu");
+    let mut rest = args.iter().filter(|a| *a != "--cpu").map(String::as_str);
+    (cpu, rest.next(), rest.next())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use egui_winit::winit::event_loop::EventLoop;
+    use egui_winit::winit::platform::run_on_demand::EventLoopExtRunOnDemand as _;
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let (cpu, preset, mode) = parse_args(&args);
+    let state = || {
+        let (state, warning) = initial_state(preset, mode);
+        if let Some(warning) = warning {
+            eprintln!("{warning}");
+        }
+        state
+    };
+
+    // winit allows one event loop per process: both renderers run on it,
+    // the CPU one after a failed wgpu start.
+    let mut event_loop = EventLoop::<eframe::UserEvent>::with_user_event().build()?;
+
+    if !cpu {
+        // eframe creates the app only once wgpu has an adapter, a device
+        // and a surface for the window; any failure there ends the loop
+        // before that, whatever the cause.
+        let wgpu_started = std::rc::Rc::new(std::cell::Cell::new(false));
+        let started = wgpu_started.clone();
+        let state = state();
+        let mut app = eframe::create_native(
+            TITLE,
+            eframe::NativeOptions {
+                viewport: viewport(),
+                ..Default::default()
+            },
+            Box::new(move |cc| {
+                started.set(true);
+                Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))
+            }),
+            &event_loop,
+        );
+        event_loop.run_app_on_demand(&mut app)?;
+        drop(app);
+        if wgpu_started.get() {
+            return Ok(());
+        }
+        eprintln!("gallery: wgpu did not start (no usable GPU adapter); drawing on the CPU");
     }
-    eframe::run_native(
-        "shadcn-egui gallery",
-        eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 900.0]),
-            ..Default::default()
-        },
-        Box::new(move |cc| Ok(Box::new(GalleryApp::new(&cc.egui_ctx, state)))),
-    )
+
+    let ctx = egui::Context::default();
+    let state = state();
+    state.preset.apply(&ctx);
+    ctx.set_theme(state.mode);
+    let mut app = cpu::CpuApp::new(ctx, state, viewport(), event_loop.create_proxy());
+    event_loop.run_app_on_demand(&mut app)?;
+    match app.error.take() {
+        Some(e) => Err(e.into()),
+        None => Ok(()),
+    }
 }
 
 /// The page's loader script (`web/index.html`) defines both functions:
@@ -150,6 +220,19 @@ mod tests {
         assert_eq!(state.preset, Preset::default());
         let warning = warning.expect("a warning");
         assert!(warning.contains("c0"), "{warning}");
+    }
+
+    #[test]
+    fn cpu_is_a_flag_anywhere_and_the_rest_stays_in_order() {
+        let args = |a: &[&str]| a.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let none = args(&[]);
+        assert_eq!(parse_args(&none), (false, None, None));
+        let first = args(&["--cpu", "bIkeymG", "dark"]);
+        assert_eq!(parse_args(&first), (true, Some("bIkeymG"), Some("dark")));
+        let middle = args(&["bIkeymG", "--cpu", "dark"]);
+        assert_eq!(parse_args(&middle), (true, Some("bIkeymG"), Some("dark")));
+        let plain = args(&["bIkeymG"]);
+        assert_eq!(parse_args(&plain), (false, Some("bIkeymG"), None));
     }
 
     #[test]
