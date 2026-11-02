@@ -1947,9 +1947,11 @@ pub fn widget_info_with_role(
 /// `listbox`, `menu`, `menubar`, `menuitemcheckbox`, `menuitemradio`,
 /// `option`, `radio`, `radiogroup`, `row`, `rowheader`, `searchbox`,
 /// `slider`, `spinbutton`, `switch`, `tablist`, `textbox`, `toolbar`,
-/// `tree`, `treegrid`, `treeitem`) and DPUB-ARIA's `link` subroles, as
-/// AccessKit names them. Its global use is deprecated in 1.2, so every
-/// other role has no disabled state.
+/// `tree`, `treegrid`, `treeitem`), the roles of other specs that are a
+/// subclass of one of them (DPUB-ARIA's `link` subroles, Graphics-ARIA's
+/// `graphics-object`, a `group`) and `<details>`, which HTML-AAM maps to
+/// `group`, as AccessKit names them. Its global use is deprecated in
+/// 1.2, so every other role has no disabled state.
 fn has_disabled_state(role: egui::accesskit::Role) -> bool {
     use egui::accesskit::Role as R;
     matches!(
@@ -1980,6 +1982,8 @@ fn has_disabled_state(role: egui::accesskit::Role) -> bool {
             | R::Group
             | R::Row
             | R::Toolbar
+            | R::Details
+            | R::GraphicsObject
             // input
             | R::CheckBox
             | R::Switch

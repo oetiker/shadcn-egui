@@ -25,6 +25,11 @@
 //! into view, centred if it was not fully visible, as the browser scrolls
 //! a focused element.
 //!
+//! In a disabled `Ui` the area scrolls as in an enabled one, as a browser
+//! scroller inside `<fieldset disabled>` does: it is a Tab stop and
+//! scrolls by keys, wheel, thumb and touch drag; the widgets in it stay
+//! disabled.
+//!
 //! Differences from upstream:
 //! - The content is clipped to a rectangle, not to the root's radius
 //!   (`rounded-[inherit]`): egui clips to rectangles only. The focus ring
@@ -123,6 +128,12 @@ struct Memory {
     moved: bool,
     /// The widget inside that had focus at the end of the last pass.
     focused: Option<Id>,
+    /// egui's touch-drag rect for a disabled `Ui`: the viewport of the
+    /// last pass, while its content was too large for it.
+    pan_rect: Option<Rect>,
+    /// The fling a touch pan in a disabled `Ui` left, in points per
+    /// second, as egui's kinetic scrolling keeps it.
+    pan_vel: Vec2,
 }
 
 /// What the content held, read at its end inside the egui area.
@@ -329,6 +340,66 @@ impl ScrollArea {
         })
     }
 
+    /// egui's touch drag and fling, which its area runs only in an
+    /// enabled `Ui`, for an area in a disabled one: run before the content,
+    /// as egui runs it, so a nested area's pan lies above it, and applied
+    /// to egui's state, so the content moves in this pass. Returns whether
+    /// it moved the offset.
+    fn touch_pan(
+        &self,
+        ui: &Ui,
+        id: Id,
+        touch: bool,
+        mem: &mut Memory,
+        enabled_ui: &mut Option<Ui>,
+        make_enabled_ui: impl FnOnce(&Ui) -> Ui,
+    ) -> bool {
+        let ctx = ui.ctx();
+        let Some(mut state) = egui::scroll_area::State::load(ctx, id) else {
+            return false;
+        };
+        let start = state.offset;
+        let rect = mem.pan_rect.filter(|_| touch);
+        let resp = rect.map(|rect| {
+            enabled_ui
+                .get_or_insert_with(|| make_enabled_ui(ui))
+                .interact(rect, id.with("shadcn_egui::scroll_area::pan"), Sense::DRAG)
+        });
+        if resp.as_ref().is_some_and(|r| r.dragged()) {
+            let delta = ctx.input(|i| i.pointer.delta());
+            for d in 0..2 {
+                if self.direction[d] {
+                    state.offset[d] -= delta[d];
+                }
+            }
+            mem.pan_vel = Vec2::ZERO;
+        } else if let Some(resp) = resp {
+            if resp.drag_stopped() {
+                mem.pan_vel = self.direction.to_vec2() * ctx.input(|i| i.pointer.velocity());
+            }
+            // egui's kinetic scrolling: points per second, and per second
+            // squared.
+            let (stop_speed, friction_coeff) = (20.0, 1000.0);
+            let dt = ctx.input(|i| i.stable_dt).min(0.1);
+            let friction = friction_coeff * dt;
+            for d in 0..2 {
+                let vel = &mut mem.pan_vel[d];
+                if friction > vel.abs() || vel.abs() < stop_speed {
+                    *vel = 0.0;
+                } else {
+                    *vel -= friction * vel.signum();
+                    state.offset[d] -= *vel * dt;
+                    ctx.request_repaint();
+                }
+            }
+        }
+        let moved = state.offset != start;
+        if moved {
+            state.store(ctx, id);
+        }
+        moved
+    }
+
     fn run<R>(
         self,
         ui: &mut Ui,
@@ -338,18 +409,42 @@ impl ScrollArea {
         let id = ui.make_persistent_id(self.salt);
         let mem_id = id.with("shadcn_egui::scroll_area");
         let mut mem: Memory = ctx.data(|d| d.get_temp(mem_id)).unwrap_or_default();
+        let touch = ctx.input(|i| i.has_touch_screen());
+
+        // A scroller `<div>` has no disabled state: inside `<fieldset
+        // disabled>` it stays a Tab stop and scrolls by keys, wheel, thumb
+        // and touch, while the controls in it are disabled. egui gives a
+        // disabled `Ui` no focus, drag or wheel, so the area takes that
+        // input through an enabled `Ui` on the same layer and clip, made
+        // only where there is something to scroll.
+        let make_enabled_ui = |ui: &Ui| {
+            Ui::new(
+                ctx.clone(),
+                id.with("shadcn_egui::scroll_area::input"),
+                UiBuilder::new()
+                    .layer_id(ui.layer_id())
+                    .max_rect(ui.clip_rect())
+                    .accessibility_parent(ui.unique_id()),
+            )
+        };
+        let mut enabled_ui = None;
+        let mut panned = false;
+        if !ui.is_enabled() {
+            panned = self.touch_pan(ui, id, touch, &mut mem, &mut enabled_ui, make_enabled_ui);
+        }
+
         let area = self
             .area
             // An offset this area set in the last pass is the user's
             // scroll, which egui's stick-to-end would undo.
-            .stick_to_bottom(self.stick_to_bottom && !mem.moved)
+            .stick_to_bottom(self.stick_to_bottom && !mem.moved && !panned)
             // bits' bars lie over the viewport and take no room.
             .scroll_bar_visibility(ScrollBarVisibility::AlwaysHidden)
             .content_margin(Margin::ZERO)
             // The browser scrolls by dragging the content only on touch.
             .scroll_source(ScrollSource {
                 scroll_bar: false,
-                drag: ctx.input(|i| i.has_touch_screen()),
+                drag: touch,
                 mouse_wheel: true,
             });
         let mut scan = Scan {
@@ -409,25 +504,18 @@ impl ScrollArea {
         let overflow = [overflows(0), overflows(1)];
         let mut offset = out.state.offset;
 
-        // A scroller `<div>` has no disabled state: inside `<fieldset
-        // disabled>` it stays a Tab stop and scrolls by keys, wheel and
-        // thumb, while the controls in it are disabled. egui gives a
-        // disabled `Ui` no focus, drag or wheel, so the viewport and the
-        // bars take input through an enabled `Ui` on the same layer and
-        // clip, and the wheel is read here.
-        let enabled_ui = (!ui.is_enabled()).then(|| {
-            Ui::new(
-                ctx.clone(),
-                id.with("shadcn_egui::scroll_area::input"),
-                UiBuilder::new()
-                    .layer_id(ui.layer_id())
-                    .max_rect(ui.clip_rect())
-                    .accessibility_parent(ui.unique_id()),
-            )
-        });
+        // The next pass's touch pan, where egui's would be: the viewport
+        // while the content is too large for it.
+        let too_large =
+            |d: usize| self.direction[d] && out.inner_rect.size()[d] < out.content_size[d];
+        mem.pan_rect = (too_large(0) || too_large(1)).then_some(out.inner_rect);
+
+        // Viewport focus and bars of a disabled `Ui` (see above).
+        if !ui.is_enabled() && enabled_ui.is_none() && (overflow[0] || overflow[1]) {
+            enabled_ui = Some(make_enabled_ui(ui));
+        }
         let input = enabled_ui.as_ref().unwrap_or(ui);
-        if enabled_ui.is_some() && input.rect_contains_pointer(inner) && ctx.dragged_id().is_none()
-        {
+        if !ui.is_enabled() && input.rect_contains_pointer(inner) && ctx.dragged_id().is_none() {
             // egui's wheel step, which its area skips in a disabled `Ui`.
             let only =
                 ui.style().always_scroll_the_only_direction && self.direction.x != self.direction.y;
@@ -612,7 +700,7 @@ impl ScrollArea {
         }
 
         let offset = offset.clamp(Vec2::ZERO, max_scroll);
-        mem.moved = offset != out.state.offset;
+        mem.moved = offset != out.state.offset || panned;
         if mem.moved {
             out.state.offset = offset;
             out.state.store(&ctx, out.id);

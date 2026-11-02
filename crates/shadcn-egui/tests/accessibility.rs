@@ -308,7 +308,7 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
     type Add = fn(&mut egui::Ui);
     // Each case: what it draws, the roles that must be there and report
     // no disabled state, and the roles that must report it.
-    let cases: [(&str, Add, &[Role], &[Role]); 21] = [
+    let cases: [(&str, Add, &[Role], &[Role]); 23] = [
         (
             "label",
             |ui| drop(ui.add(Label::new("Email"))),
@@ -474,6 +474,19 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
             |ui| app_widget_with_role(ui, Role::Group),
             &[],
             &[Role::Group],
+        ),
+        // `<details>` (HTML-AAM) and `graphics-object` are a `group`.
+        (
+            "app details",
+            |ui| app_widget_with_role(ui, Role::Details),
+            &[],
+            &[Role::Details],
+        ),
+        (
+            "app graphics object",
+            |ui| app_widget_with_role(ui, Role::GraphicsObject),
+            &[],
+            &[Role::GraphicsObject],
         ),
     ];
     for (name, add, quiet, disabled) in cases {

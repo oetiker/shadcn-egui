@@ -751,6 +751,122 @@ fn a_disabled_ui_scrolls_by_keys_wheel_and_thumb() {
     );
 }
 
+/// The offsets a touch pan from (150, 200) up by 80 px leaves, pass by
+/// pass, through the press, the moves, the release and a fling's coast,
+/// with `area` drawn in a `Ui` that is disabled or not.
+fn touch_pan(disabled: bool, area: fn(&mut Ui) -> [Vec2; 2]) -> Vec<[Vec2; 2]> {
+    let mut sim = Sim::vega();
+    let mut add = move |ui: &mut Ui| {
+        if disabled {
+            ui.disable();
+        }
+        area(ui)
+    };
+    let from = pos2(150.0, 200.0);
+    let touch = Event::Touch {
+        device_id: egui::TouchDeviceId(1),
+        id: egui::TouchId(0),
+        phase: egui::TouchPhase::Start,
+        pos: from,
+        force: None,
+    };
+    let mut offsets = vec![sim.pass(vec![touch], &mut add).0];
+    offsets.push(sim.pass(moved(from), &mut add).0);
+    offsets.push(sim.pass(common::pointer_down(from), &mut add).0);
+    // Fast moves, so the release leaves a fling.
+    for e in common::pointer_path(from, from - vec2(0.0, 80.0), 4) {
+        offsets.push(sim.pass(vec![e], &mut add).0);
+    }
+    offsets.push(
+        sim.pass(common::pointer_up(from - vec2(0.0, 80.0)), &mut add)
+            .0,
+    );
+    for _ in 0..20 {
+        offsets.push(sim.pass(vec![], &mut add).0);
+    }
+    offsets
+}
+
+/// A browser pans a scroller inside `<fieldset disabled>` by touch as it
+/// pans an enabled one, fling included; in nested areas the inner one
+/// under the finger takes the pan.
+#[test]
+fn a_disabled_ui_pans_by_touch_as_an_enabled_one() {
+    type Area = fn(&mut Ui) -> [Vec2; 2];
+    let scenes: [(&str, Area); 2] = [
+        ("tall", |ui| [tall(ui), Vec2::ZERO]),
+        ("nested", |ui| {
+            let mut inner = Vec2::ZERO;
+            let outer = place(ui, ScrollArea::vertical(), |ui| {
+                inner = ScrollArea::vertical()
+                    .id_salt("inner")
+                    .max_height(150.0)
+                    .auto_shrink(false)
+                    .show(ui, block(vec2(180.0, 600.0)))
+                    .state
+                    .offset;
+                ui.allocate_space(vec2(200.0, 600.0));
+            });
+            [outer, inner]
+        }),
+    ];
+    for (name, area) in scenes {
+        let enabled = touch_pan(false, area);
+        let disabled = touch_pan(true, area);
+        let moved_at_all = enabled.iter().any(|o| o[0].y + o[1].y > 0.0);
+        assert!(moved_at_all, "{name}: the enabled area pans");
+        // Pass 7 is the release; the fling carries the area on.
+        let sum = |o: &[Vec2; 2]| o[0].y + o[1].y;
+        assert!(
+            sum(enabled.last().unwrap()) > sum(&enabled[7]) + 1.0,
+            "{name}: the release leaves a fling"
+        );
+        if name == "nested" {
+            assert!(
+                enabled.iter().all(|o| o[0].y == 0.0),
+                "{name}: the inner area takes the pan"
+            );
+        }
+        for (pass, (e, d)) in enabled.iter().zip(&disabled).enumerate() {
+            for k in 0..2 {
+                assert!(
+                    (e[k].y - d[k].y).abs() < 0.01,
+                    "{name} pass {pass} area {k}: enabled {} disabled {}",
+                    e[k].y,
+                    d[k].y
+                );
+            }
+        }
+    }
+}
+
+/// The number of accessibility nodes a pass reported.
+fn node_count(out: &egui::FullOutput) -> usize {
+    out.platform_output
+        .accesskit_update
+        .as_ref()
+        .map_or(0, |u| u.nodes.len())
+}
+
+/// A disabled area that does not overflow reports the same nodes as an
+/// enabled one: nothing in it takes input.
+#[test]
+fn a_disabled_area_without_overflow_adds_no_node() {
+    let count = |disabled: bool| {
+        let mut sim = Sim::vega();
+        sim.ctx.enable_accesskit();
+        let mut add = move |ui: &mut Ui| {
+            if disabled {
+                ui.disable();
+            }
+            place(ui, ScrollArea::vertical(), block(vec2(200.0, 150.0)))
+        };
+        sim.pass(vec![], &mut add);
+        node_count(&sim.pass(vec![], &mut add).1)
+    };
+    assert_eq!(count(true), count(false));
+}
+
 /// The browser scrolls an element that takes focus into view, centred.
 #[test]
 fn a_focused_widget_is_scrolled_into_view() {
