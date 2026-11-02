@@ -510,204 +510,6 @@ fn a_hosted_spinner_keeps_the_ids_after_it() {
     }
 }
 
-trait Scaled {
-    fn scaled(self, k: f32) -> Self;
-}
-
-impl Scaled for shadcn_egui::components::icon::Seg {
-    fn scaled(self, k: f32) -> Self {
-        use shadcn_egui::components::icon::Seg;
-        match self {
-            Seg::M(x, y) => Seg::M(x * k, y * k),
-            Seg::L(x, y) => Seg::L(x * k, y * k),
-            Seg::Q(a, b, x, y) => Seg::Q(a * k, b * k, x * k, y * k),
-            Seg::C(a, b, c, d, x, y) => Seg::C(a * k, b * k, c * k, d * k, x * k, y * k),
-            Seg::Z => Seg::Z,
-        }
-    }
-}
-
-/// A stroke-only icon's line pieces in device px at `scale`, each curve
-/// cut into as many uniform pieces as the crate cuts it (0.015 px
-/// tolerance), so the comparison measures the turn, not the flattening.
-fn pieces(icon: &shadcn_egui::components::icon::Icon, scale: f32) -> Vec<(egui::Pos2, egui::Pos2)> {
-    use shadcn_egui::components::icon::Seg;
-    let mut out = Vec::new();
-    for layer in icon.layers() {
-        assert!(
-            layer.fill.is_none() && layer.alpha == 1.0,
-            "stroke-only icon"
-        );
-        let (mut start, mut cur) = (None, egui::Pos2::ZERO);
-        let mut drawn = false;
-        for seg in layer.segs {
-            let ctrl: Vec<egui::Pos2> = match seg.scaled(scale) {
-                Seg::M(x, y) => {
-                    if let (false, Some(s)) = (drawn, start) {
-                        out.push((s, s));
-                    }
-                    (start, cur, drawn) = (Some(egui::pos2(x, y)), egui::pos2(x, y), false);
-                    continue;
-                }
-                Seg::L(x, y) => vec![cur, egui::pos2(x, y)],
-                Seg::Q(a, b, x, y) => vec![cur, egui::pos2(a, b), egui::pos2(x, y)],
-                Seg::C(a, b, c, d, x, y) => {
-                    vec![cur, egui::pos2(a, b), egui::pos2(c, d), egui::pos2(x, y)]
-                }
-                Seg::Z => vec![cur, start.unwrap_or(cur)],
-            };
-            let second = ctrl
-                .windows(3)
-                .map(|w| (w[0].to_vec2() - w[1].to_vec2() * 2.0 + w[2].to_vec2()).length())
-                .fold(0.0, f32::max);
-            let degree = (ctrl.len() - 1) as f32;
-            let bound = degree * (degree - 1.0) * second;
-            let n = (bound / (8.0 * 0.015)).sqrt().ceil().clamp(1.0, 256.0) as usize;
-            let at = |t: f32| {
-                let mut p = ctrl.clone();
-                while p.len() > 1 {
-                    p = p.windows(2).map(|w| w[0].lerp(w[1], t)).collect();
-                }
-                p[0]
-            };
-            let mut prev = cur;
-            for i in 1..=n {
-                let q = at(i as f32 / n as f32);
-                out.push((prev, q));
-                prev = q;
-            }
-            (cur, drawn) = (prev, true);
-        }
-        if let (false, Some(s)) = (drawn, start) {
-            out.push((s, s));
-        }
-    }
-    out
-}
-
-/// The exact coverage (0..=1) at device pixel `(x, y)` of `pieces`
-/// (device px from `origin`) stroked `stroke` device px wide, turned
-/// clockwise by `angle` about `centre`, all in device px: the crate's
-/// coverage model (a one-pixel ramp across the stroke's edge), applied to
-/// the turned geometry.
-fn turned_coverage(
-    pieces: &[(egui::Pos2, egui::Pos2)],
-    origin: egui::Pos2,
-    centre: egui::Pos2,
-    angle: f64,
-    stroke: f64,
-    x: usize,
-    y: usize,
-) -> f64 {
-    let (s, c) = angle.sin_cos();
-    let map = |p: egui::Pos2| {
-        let (px, py) = (
-            f64::from(origin.x) + f64::from(p.x) - f64::from(centre.x),
-            f64::from(origin.y) + f64::from(p.y) - f64::from(centre.y),
-        );
-        (
-            f64::from(centre.x) + px * c - py * s,
-            f64::from(centre.y) + px * s + py * c,
-        )
-    };
-    let (qx, qy) = (x as f64 + 0.5, y as f64 + 0.5);
-    let mut d = f64::INFINITY;
-    for &(a, b) in pieces {
-        let ((ax, ay), (bx, by)) = (map(a), map(b));
-        let (ex, ey) = (bx - ax, by - ay);
-        let len2 = ex * ex + ey * ey;
-        let t = if len2 > 0.0 {
-            (((qx - ax) * ex + (qy - ay) * ey) / len2).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        d = d.min(((qx - ax - ex * t).powi(2) + (qy - ay - ey * t).powi(2)).sqrt());
-    }
-    (0.5 + stroke / 2.0 - d).clamp(0.0, 1.0)
-}
-
-/// The worst difference, in levels of 255, between a black spinner of
-/// `side` on white, rendered at `ppp` with the clock at `time`, and the
-/// exact raster of the loader icon turned to that angle.
-fn turned_error(ppp: f32, side: f32, time: f64) -> (u32, f64) {
-    let theme = Theme::vega();
-    let loader = theme.icons.loader;
-    let stroke = theme.metrics.icon_stroke;
-    let at = std::cell::Cell::new(egui::Rect::NOTHING);
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(80.0, 80.0))
-        .with_pixels_per_point(ppp)
-        .with_theme(egui::Theme::Light)
-        .build_ui(|ui| {
-            Theme::vega().apply(ui.ctx());
-            ui.ctx().all_styles_mut(|s| s.animation_time = 0.1);
-            ui.painter()
-                .rect_filled(ui.ctx().content_rect(), 0.0, Color32::WHITE);
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(
-                egui::Rect::from_min_size(egui::pos2(20.3, 21.7), Vec2::splat(side)),
-            ));
-            at.set(
-                child
-                    .add(Spinner::new().size(side).color(Color32::BLACK))
-                    .rect,
-            );
-        });
-    for _ in 0..3 {
-        h.input_mut().time = Some(time);
-        h.step();
-    }
-    let img = h.render().expect("wgpu render");
-    let rect = at.get();
-    let (x0, y0) = ((rect.min.x * ppp).round(), (rect.min.y * ppp).round());
-    let w = (side * ppp).round();
-    let centre = egui::pos2(x0 + w / 2.0, y0 + w / 2.0);
-    let angle = (time.fract()) * std::f64::consts::TAU;
-    let scale = w / loader.size;
-    let pieces = pieces(&loader, scale);
-    let reach = (w * 0.75 + 2.0) as i64;
-    let (mut worst, mut sum, mut n) = (0u32, 0.0, 0.0);
-    for y in (centre.y as i64 - reach)..(centre.y as i64 + reach) {
-        for x in (centre.x as i64 - reach)..(centre.x as i64 + reach) {
-            let (x, y) = (x as usize, y as usize);
-            let exact = turned_coverage(
-                &pieces,
-                egui::pos2(x0, y0),
-                centre,
-                angle,
-                f64::from(stroke * scale),
-                x,
-                y,
-            );
-            let painted = f64::from(255 - img.get_pixel(x as u32, y as u32)[0]);
-            let e = (painted - exact * 255.0).abs();
-            worst = worst.max(e.round() as u32);
-            sum += e;
-            n += 1.0;
-        }
-    }
-    (worst, sum / n)
-}
-
-/// `animate-spin` turns the SVG and the browser rasterises it at each
-/// angle: a turned spinner shows the loader rasterised at its angle, as
-/// sharp as the unturned one, not a turned bitmap.
-#[test]
-fn a_turned_spinner_is_the_icon_rasterised_at_its_angle() {
-    let mut fails = Vec::new();
-    for ppp in [1.0, 1.25, 2.0] {
-        for side in [16.0, 24.0] {
-            for time in [0.0, 0.03, 0.125, 0.3, 0.55, 0.81] {
-                let (worst, mean) = turned_error(ppp, side, time);
-                eprintln!("ppp {ppp} side {side} time {time}: worst {worst} mean {mean:.2}");
-                if worst > 1 {
-                    fails.push(format!("ppp {ppp} side {side} time {time}: {worst}"));
-                }
-            }
-        }
-    }
-    assert!(fails.is_empty(), "{fails:#?}");
-}
-
 /// A spinner keeps one texture per size however long it turns: each
 /// frame rasterises the next angle into the texture of the frame before,
 /// and the texture of a size no longer shown is freed after a while.
@@ -822,5 +624,104 @@ fn spinners_past_the_turned_texture_bound_are_smoothed() {
             "{:?}",
             m.calc_bounds()
         );
+    }
+}
+
+/// One pass of `add` in viewport `vp` at `time` on `ctx`, with vega
+/// applied.
+fn run_in(
+    ctx: &egui::Context,
+    vp: egui::ViewportId,
+    time: f64,
+    mut add: impl FnMut(&mut egui::Ui),
+) -> egui::FullOutput {
+    let mut input = egui::RawInput {
+        time: Some(time),
+        viewport_id: vp,
+        ..Default::default()
+    };
+    if vp != egui::ViewportId::ROOT {
+        input.viewports.insert(vp, Default::default());
+    }
+    ctx.run_ui(input, |ui| {
+        Theme::vega().apply(ui.ctx());
+        add(ui);
+    })
+}
+
+/// How many turned icons a frame draws as the unturned bitmap turned
+/// (the fallback: a turned quad) and how many rasterised at their angle
+/// (an upright quad).
+fn fallen_and_turned(out: &egui::FullOutput) -> (usize, usize) {
+    let all = icons(out);
+    let fallen = all.iter().filter(|m| angle(m).abs() > 1e-3).count();
+    (fallen, all.len() - fallen)
+}
+
+/// The turned textures `ctx` holds.
+fn turned_textures(ctx: &egui::Context) -> usize {
+    let mngr = ctx.tex_manager();
+    let mngr = mngr.read();
+    mngr.allocated()
+        .filter(|(_, m)| m.name.ends_with(":turned"))
+        .count()
+}
+
+/// Every size of a pass that fills the turned textures.
+fn many_sizes(ui: &mut egui::Ui) {
+    ui.horizontal_wrapped(|ui| {
+        for side in 10..80 {
+            ui.add(Spinner::new().size(side as f32));
+        }
+    });
+}
+
+/// A viewport that drew many spinners and is gone leaves no textures
+/// behind: after a while the spinner of another viewport is rasterised
+/// at its angle again, and when no spinner turns, no turned texture is
+/// kept.
+#[test]
+fn a_gone_viewports_turned_textures_are_freed() {
+    let ctx = egui::Context::default();
+    let popup = egui::ViewportId::from_hash_of("popup");
+    let out = run_in(&ctx, popup, 0.3, many_sizes);
+    assert!(fallen_and_turned(&out).0 > 0, "the bound is reached");
+    let mut last = (0, 0);
+    for frame in 0..100 {
+        let out = run_in(
+            &ctx,
+            egui::ViewportId::ROOT,
+            0.31 + f64::from(frame) * 0.017,
+            |ui| {
+                ui.add(Spinner::new().size(16.0));
+            },
+        );
+        last = fallen_and_turned(&out);
+    }
+    assert_eq!(last, (0, 1), "the root spinner is rasterised at its angle");
+    for frame in 0..100 {
+        run_in(
+            &ctx,
+            egui::ViewportId::ROOT,
+            2.0 + f64::from(frame) * 0.017,
+            |_| {},
+        );
+    }
+    assert_eq!(turned_textures(&ctx), 0, "nothing turns, nothing is kept");
+}
+
+/// A new spinner size takes the room of sizes the last pass drew and
+/// this one does not, at once, even when they filled the turned
+/// textures.
+#[test]
+fn a_new_size_takes_the_room_of_sizes_no_longer_drawn() {
+    let ctx = egui::Context::default();
+    let root = egui::ViewportId::ROOT;
+    run_in(&ctx, root, 0.3, many_sizes);
+    for frame in 0..10 {
+        let out = run_in(&ctx, root, 0.31 + f64::from(frame) * 0.017, |ui| {
+            ui.add(Spinner::new().size(100.0));
+        });
+        assert_eq!(fallen_and_turned(&out), (0, 1), "frame {frame}");
     }
 }

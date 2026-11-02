@@ -67,6 +67,11 @@ fn icons(ui: &mut egui::Ui) {
 - Icons are rasterised on the CPU into a cached texture per icon and pixel
   size, so a translucent colour applies once and very large icons cost a
   texture each. This works the same under a CPU rasterizer.
+- A turning Spinner is the exception: it is rasterised at its new angle and
+  its texture is uploaded again on every frame it turns. Measured extra cost
+  per frame (release build, one spinner, at 1x / 2x pixels per point):
+  16 pt 0.02 / 0.04 ms, 48 pt 0.06 / 0.12 ms, 128 pt 0.17 / 0.43 ms,
+  256 pt 0.44 / 1.3 ms. Keep a full-page loading spinner modest in size.
 
 ## Icon slots
 
