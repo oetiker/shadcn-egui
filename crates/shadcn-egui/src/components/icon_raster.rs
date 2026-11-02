@@ -158,17 +158,19 @@ pub(crate) fn texture(
 /// shows it, more where one pass draws the icon at several angles. A
 /// texture is rasterised again in place for the next angle, never while
 /// a mesh of the same pass still shows its old angle.
-#[derive(Clone, Default)]
+///
+/// An egui plugin, so it lives outside `Memory` (a memory reset keeps
+/// it) and `Context::end_pass` ages it: every loop style calls that,
+/// `run_ui`, the deprecated `run` and `begin_pass`/`end_pass` alike,
+/// while egui runs a plugin's pass hooks under `run_ui` only.
+#[derive(Default)]
 struct TurnedCache {
     slots: Vec<Turned>,
     pixels: usize,
     /// The passes ended so far, of all viewports.
     clock: u64,
-    /// Whether the end-of-pass hook that frees old textures is installed.
-    hooked: bool,
 }
 
-#[derive(Clone)]
 struct Turned {
     key: Key,
     viewport: ViewportId,
@@ -204,10 +206,23 @@ impl TurnedCache {
         let old = |s: &Turned| s.used + KEEP_PASSES < clock;
         self.free(old, |c| c.slots.iter().any(old));
     }
+
+    /// Runs `f` on the context's cache, registered on first use. egui
+    /// adds a plugin type once and ignores a second registration.
+    fn with<R>(ctx: &Context, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(&mut ctx.plugin_or_default::<Self>().lock())
+    }
 }
 
-fn turned_id() -> Id {
-    Id::new("shadcn_egui::icon_raster::turned")
+impl egui::plugin::Plugin for TurnedCache {
+    fn debug_name(&self) -> &'static str {
+        "shadcn_egui::turned_icons"
+    }
+
+    /// Runs in `Context::end_pass`, once per pass of every viewport.
+    fn output_hook(&mut self, _output: &mut egui::FullOutput) {
+        self.end_pass();
+    }
 }
 
 /// The margin, in pixels on each side, around a `w`×`h` box that holds
@@ -243,9 +258,7 @@ pub(crate) fn turned_texture(
         New,
         Full,
     }
-    let (found, hook) = ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<TurnedCache>(turned_id());
-        let hook = !std::mem::replace(&mut cache.hooked, true);
+    let found = TurnedCache::with(ctx, |cache| {
         let used = cache.clock;
         let mine = |s: &&mut Turned| s.key == key && s.viewport == viewport;
         if let Some(s) = cache
@@ -255,37 +268,30 @@ pub(crate) fn turned_texture(
             .find(|s| s.angle == bits)
         {
             (s.pass, s.used) = (pass, used);
-            return (Found::Same(s.tex.clone()), hook);
+            return Found::Same(s.tex.clone());
         }
         if let Some(s) = cache.slots.iter_mut().filter(mine).find(|s| s.pass != pass) {
             // Taken for this pass now, so no other call reuses it.
             (s.angle, s.pass, s.used) = (bits, pass, used);
-            return (Found::Reuse(s.tex.clone()), hook);
+            return Found::Reuse(s.tex.clone());
         }
         // Room from this viewport's textures that this pass has not drawn.
         let full =
             |c: &TurnedCache| c.slots.len() >= MAX_TURNED || c.pixels + tw * th > MAX_TURNED_PIXELS;
         cache.free(|s| s.viewport == viewport && s.pass != pass, full);
-        (if full(cache) { Found::Full } else { Found::New }, hook)
+        if full(cache) {
+            Found::Full
+        } else {
+            Found::New
+        }
     });
-    if hook {
-        ctx.on_end_pass(
-            "shadcn_egui::turned_icons",
-            std::sync::Arc::new(|ui: &mut egui::Ui| {
-                ui.ctx().data_mut(|d| {
-                    d.get_temp_mut_or_default::<TurnedCache>(turned_id())
-                        .end_pass();
-                });
-            }),
-        );
-    }
     let image = || {
         let scale = w as f32 / icon.size;
         let place = Place::turned(scale, w, h, angle);
         let pixels = placed_coverage(icon, tw, th, place, stroke_width * scale, mask);
         ColorImage::new([tw, th], pixels)
     };
-    // Rasterise and upload outside `data_mut`: textures lock the context too.
+    // Rasterise and upload outside the cache's lock.
     match found {
         Found::Same(tex) => Some(tex),
         Found::Full => None,
@@ -296,8 +302,7 @@ pub(crate) fn turned_texture(
         Found::New => {
             let name = format!("icon:{}:turned", icon.name);
             let tex = ctx.load_texture(name, image(), TextureOptions::NEAREST);
-            ctx.data_mut(|d| {
-                let cache = d.get_temp_mut_or_default::<TurnedCache>(turned_id());
+            TurnedCache::with(ctx, |cache| {
                 cache.pixels += tw * th;
                 let used = cache.clock;
                 cache.slots.push(Turned {
@@ -1077,7 +1082,11 @@ mod tests {
 
     /// [`distances`] visits only the band beside each piece and the caps
     /// and bends at its ends. It gives, bit for bit, the distances of
-    /// visiting the whole box around every piece.
+    /// visiting the whole box around every piece: for strokes 2 units
+    /// wide and, on every 7th icon, 6 units wide and for a fill's closed
+    /// contour (the stroke's pieces closed, at a fill's half-pixel reach).
+    /// Pixels [`Place::inner_cols`] skips are checked by
+    /// `inner_columns_lie_wholly_in_the_box`.
     #[test]
     fn distances_equal_those_of_the_whole_boxes() {
         use crate::icons::lucide;
@@ -1085,7 +1094,7 @@ mod tests {
         let all = lucide::ALL.iter().map(|&i| (i, 24));
         let some = lucide::ALL.iter().step_by(40).map(|&i| (i, 96));
         let loader = std::iter::once((&lucide::LOADER_CIRCLE, 512));
-        for (icon, side) in all.chain(some).chain(loader) {
+        for (k, (icon, side)) in all.chain(some).chain(loader).enumerate() {
             for angle in [0.0, 0.7, 2.9] {
                 let scale = side as f32 / icon.size;
                 let [m, _] = turned_margin(side, side);
@@ -1094,7 +1103,6 @@ mod tests {
                 } else {
                     (Place::turned(scale, side, side, angle), side + 2 * m)
                 };
-                let reach = scale + HALF_PX;
                 let area = Area {
                     x0: 0,
                     x1: w,
@@ -1102,44 +1110,57 @@ mod tests {
                     y1: w,
                 };
                 for layer in icon.layers() {
-                    let pieces = stroke_segments(layer.segs, place);
-                    let mut fast = vec![f32::INFINITY; w * w];
-                    distances(&mut fast, area, &pieces, reach);
-                    let mut boxes = vec![f32::INFINITY; w * w];
-                    for &(a, b) in &pieces {
-                        let xs = area.cols(a.x.min(b.x), a.x.max(b.x), reach);
-                        for y in area.rows(a.y.min(b.y), a.y.max(b.y), reach) {
-                            for x in xs.clone() {
-                                lower(&mut boxes, area, (a, b), x, y);
+                    let stroke = stroke_segments(layer.segs, place);
+                    let mut sets = vec![(stroke.clone(), scale + HALF_PX)];
+                    if k % 7 == 0 {
+                        sets.push((stroke.clone(), 3.0 * scale + HALF_PX));
+                        let mut closed = stroke.clone();
+                        if let (Some(&(first, _)), Some(&(_, last))) =
+                            (stroke.first(), stroke.last())
+                        {
+                            closed.push((last, first));
+                        }
+                        sets.push((closed, HALF_PX));
+                    }
+                    for (pieces, reach) in sets {
+                        let mut fast = vec![f32::INFINITY; w * w];
+                        distances(&mut fast, area, &pieces, reach);
+                        let mut boxes = vec![f32::INFINITY; w * w];
+                        for &(a, b) in &pieces {
+                            let xs = area.cols(a.x.min(b.x), a.x.max(b.x), reach);
+                            for y in area.rows(a.y.min(b.y), a.y.max(b.y), reach) {
+                                for x in xs.clone() {
+                                    lower(&mut boxes, area, (a, b), x, y);
+                                }
                             }
                         }
-                    }
-                    // Beyond `reach` a distance only says "no coverage".
-                    let near = |d: f32| if d.sqrt() < reach { d } else { f32::INFINITY };
-                    let diff = fast
-                        .iter()
-                        .zip(&boxes)
-                        .position(|(f, b)| near(*f).to_bits() != near(*b).to_bits());
-                    if let Some(i) = diff {
-                        let (x, y) = (i % w, i / w);
-                        let p = pixel_centre(x, y);
-                        let mut one = vec![f32::INFINITY; w * w];
-                        let near_pieces: Vec<String> = pieces
+                        // Beyond `reach` a distance only says "no coverage".
+                        let near = |d: f32| if d.sqrt() < reach { d } else { f32::INFINITY };
+                        let diff = fast
                             .iter()
-                            .enumerate()
-                            .filter_map(|(j, &(a, b))| {
-                                one[i] = f32::INFINITY;
-                                lower(&mut one, area, (a, b), x, y);
-                                (one[i].sqrt() < reach)
-                                    .then(|| format!("#{j} {a:?}-{b:?}: {}", one[i]))
-                            })
-                            .collect();
-                        panic!(
+                            .zip(&boxes)
+                            .position(|(f, b)| near(*f).to_bits() != near(*b).to_bits());
+                        if let Some(i) = diff {
+                            let (x, y) = (i % w, i / w);
+                            let p = pixel_centre(x, y);
+                            let mut one = vec![f32::INFINITY; w * w];
+                            let near_pieces: Vec<String> = pieces
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(j, &(a, b))| {
+                                    one[i] = f32::INFINITY;
+                                    lower(&mut one, area, (a, b), x, y);
+                                    (one[i].sqrt() < reach)
+                                        .then(|| format!("#{j} {a:?}-{b:?}: {}", one[i]))
+                                })
+                                .collect();
+                            panic!(
                             "{} at {side} px, {angle} rad: pixel ({x}, {y}) centre {p:?}: fast {} boxes {}; {} pieces; near: {near_pieces:#?}",
                             icon.name, fast[i], boxes[i], pieces.len()
                         );
+                        }
+                        cases += 1;
                     }
-                    cases += 1;
                 }
             }
         }

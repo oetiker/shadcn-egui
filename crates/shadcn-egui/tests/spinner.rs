@@ -627,9 +627,32 @@ fn spinners_past_the_turned_texture_bound_are_smoothed() {
     }
 }
 
+/// How an app drives egui each frame.
+#[derive(Clone, Copy, Debug)]
+enum Loop {
+    /// `Context::run_ui`, which runs egui's plugin pass hooks.
+    RunUi,
+    /// The deprecated `Context::run` of custom loops.
+    Run,
+    /// `Context::begin_pass` and `Context::end_pass` of custom loops.
+    Split,
+}
+
 /// One pass of `add` in viewport `vp` at `time` on `ctx`, with vega
 /// applied.
 fn run_in(
+    ctx: &egui::Context,
+    vp: egui::ViewportId,
+    time: f64,
+    add: impl FnMut(&mut egui::Ui),
+) -> egui::FullOutput {
+    run_by(Loop::RunUi, ctx, vp, time, add)
+}
+
+/// [`run_in`], driven by `by`.
+#[expect(deprecated, reason = "custom loops still call `Context::run`")]
+fn run_by(
+    by: Loop,
     ctx: &egui::Context,
     vp: egui::ViewportId,
     time: f64,
@@ -643,10 +666,32 @@ fn run_in(
     if vp != egui::ViewportId::ROOT {
         input.viewports.insert(vp, Default::default());
     }
-    ctx.run_ui(input, |ui| {
-        Theme::vega().apply(ui.ctx());
-        add(ui);
-    })
+    match by {
+        Loop::RunUi => ctx.run_ui(input, |ui| {
+            Theme::vega().apply(ui.ctx());
+            add(ui);
+        }),
+        Loop::Run => ctx.run(input, |ctx| central(ctx, &mut add)),
+        Loop::Split => {
+            ctx.begin_pass(input);
+            central(ctx, &mut add);
+            ctx.end_pass()
+        }
+    }
+}
+
+/// `add` in a root `Ui` of its own, with vega applied: a custom loop's
+/// pass, which runs no plugin pass hooks.
+fn central(ctx: &egui::Context, add: &mut dyn FnMut(&mut egui::Ui)) {
+    Theme::vega().apply(ctx);
+    let mut ui = egui::Ui::new(
+        ctx.clone(),
+        egui::Id::new("custom_loop"),
+        egui::UiBuilder::new()
+            .layer_id(egui::LayerId::background())
+            .max_rect(ctx.content_rect()),
+    );
+    add(&mut ui);
 }
 
 /// How many turned icons a frame draws as the unturned bitmap turned
@@ -679,35 +724,86 @@ fn many_sizes(ui: &mut egui::Ui) {
 /// A viewport that drew many spinners and is gone leaves no textures
 /// behind: after a while the spinner of another viewport is rasterised
 /// at its angle again, and when no spinner turns, no turned texture is
-/// kept.
+/// kept; also in custom loops, which run no plugin pass hooks.
 #[test]
 fn a_gone_viewports_turned_textures_are_freed() {
-    let ctx = egui::Context::default();
-    let popup = egui::ViewportId::from_hash_of("popup");
-    let out = run_in(&ctx, popup, 0.3, many_sizes);
-    assert!(fallen_and_turned(&out).0 > 0, "the bound is reached");
-    let mut last = (0, 0);
-    for frame in 0..100 {
-        let out = run_in(
-            &ctx,
-            egui::ViewportId::ROOT,
-            0.31 + f64::from(frame) * 0.017,
-            |ui| {
-                ui.add(Spinner::new().size(16.0));
-            },
+    // Per loop: what the root's last spinner frame drew (fallen back,
+    // rasterised at its angle) and the turned textures kept when idle.
+    let mut got = Vec::new();
+    for by in [Loop::RunUi, Loop::Run, Loop::Split] {
+        let ctx = egui::Context::default();
+        let popup = egui::ViewportId::from_hash_of("popup");
+        let out = run_by(by, &ctx, popup, 0.3, many_sizes);
+        assert!(
+            fallen_and_turned(&out).0 > 0,
+            "{by:?}: the bound is reached"
         );
-        last = fallen_and_turned(&out);
+        let mut last = (0, 0);
+        for frame in 0..100 {
+            let out = run_by(
+                by,
+                &ctx,
+                egui::ViewportId::ROOT,
+                0.31 + f64::from(frame) * 0.017,
+                |ui| {
+                    ui.add(Spinner::new().size(16.0));
+                },
+            );
+            last = fallen_and_turned(&out);
+        }
+        for frame in 0..100 {
+            run_by(
+                by,
+                &ctx,
+                egui::ViewportId::ROOT,
+                2.0 + f64::from(frame) * 0.017,
+                |_| {},
+            );
+        }
+        got.push((by, last, turned_textures(&ctx)));
     }
-    assert_eq!(last, (0, 1), "the root spinner is rasterised at its angle");
-    for frame in 0..100 {
+    let want = [Loop::RunUi, Loop::Run, Loop::Split].map(|by| (by, (0, 1), 0));
+    assert_eq!(format!("{got:?}"), format!("{want:?}"));
+}
+
+/// The idle passes until the turned textures are freed after the last
+/// spinner pass.
+fn passes_to_free(ctx: &egui::Context) -> Option<u32> {
+    (1..=200).find(|&i| {
         run_in(
-            &ctx,
+            ctx,
             egui::ViewportId::ROOT,
-            2.0 + f64::from(frame) * 0.017,
+            1.0 + f64::from(i) * 0.017,
             |_| {},
         );
+        turned_textures(ctx) == 0
+    })
+}
+
+/// A turned texture lives as many idle passes after a reset of egui's
+/// memory (its "Reset memory" button) as before.
+#[test]
+fn a_memory_reset_keeps_how_long_turned_textures_live() {
+    let ctx = egui::Context::default();
+    let spin = |ctx: &egui::Context, t0: f64| {
+        for f in 0..5 {
+            run_in(
+                ctx,
+                egui::ViewportId::ROOT,
+                t0 + f64::from(f) * 0.017,
+                |ui| {
+                    ui.add(Spinner::new().size(16.0));
+                },
+            );
+        }
+    };
+    let mut lives = Vec::new();
+    for _ in 0..3 {
+        spin(&ctx, 0.3);
+        lives.push(passes_to_free(&ctx));
+        ctx.memory_mut(|m| *m = Default::default());
     }
-    assert_eq!(turned_textures(&ctx), 0, "nothing turns, nothing is kept");
+    assert_eq!(lives, [Some(60); 3]);
 }
 
 /// A new spinner size takes the room of sizes the last pass drew and
