@@ -42,7 +42,7 @@ use crate::style::app::default_variant;
 use crate::style::{pick_len, Recipe, State};
 use crate::Theme;
 use egui::scroll_area::{ScrollAreaOutput, ScrollBarVisibility, ScrollSource};
-use egui::{Id, Key, Margin, Modifiers, Rect, Sense, Ui, Vec2, Vec2b};
+use egui::{Id, Key, Margin, Modifiers, Rect, Sense, Ui, UiBuilder, Vec2, Vec2b};
 
 default_variant!(
     /// The scroll area's variant: upstream has none, so only app variants
@@ -409,11 +409,59 @@ impl ScrollArea {
         let overflow = [overflows(0), overflows(1)];
         let mut offset = out.state.offset;
 
+        // A scroller `<div>` has no disabled state: inside `<fieldset
+        // disabled>` it stays a Tab stop and scrolls by keys, wheel and
+        // thumb, while the controls in it are disabled. egui gives a
+        // disabled `Ui` no focus, drag or wheel, so the viewport and the
+        // bars take input through an enabled `Ui` on the same layer and
+        // clip, and the wheel is read here.
+        let enabled_ui = (!ui.is_enabled()).then(|| {
+            Ui::new(
+                ctx.clone(),
+                id.with("shadcn_egui::scroll_area::input"),
+                UiBuilder::new()
+                    .layer_id(ui.layer_id())
+                    .max_rect(ui.clip_rect())
+                    .accessibility_parent(ui.unique_id()),
+            )
+        });
+        let input = enabled_ui.as_ref().unwrap_or(ui);
+        if enabled_ui.is_some() && input.rect_contains_pointer(inner) && ctx.dragged_id().is_none()
+        {
+            // egui's wheel step, which its area skips in a disabled `Ui`.
+            let only =
+                ui.style().always_scroll_the_only_direction && self.direction.x != self.direction.y;
+            for d in 0..2 {
+                if !self.direction[d] {
+                    continue;
+                }
+                let delta = ctx.input(|i| {
+                    let v = i.smooth_scroll_delta;
+                    if only {
+                        v.x + v.y
+                    } else {
+                        v[d]
+                    }
+                });
+                if (offset[d] > 0.0 && delta > 0.0) || (offset[d] < max_scroll[d] && delta < 0.0) {
+                    offset[d] -= delta;
+                    // A parent area does not scroll by it too.
+                    ctx.input_mut(|i| {
+                        if only {
+                            i.smooth_scroll_delta = Vec2::ZERO;
+                        } else {
+                            i.smooth_scroll_delta[d] = 0.0;
+                        }
+                    });
+                }
+            }
+        }
+
         // Keyboard: a Tab stop where the area overflows and holds nothing
         // focusable (Chrome's focusable scrollers).
         let focus_id = id.with("shadcn_egui::scroll_area::viewport");
         if (overflow[0] || overflow[1]) && !scan.focusable {
-            let resp = ui.interact(inner, focus_id, Sense::FOCUSABLE);
+            let resp = input.interact(inner, focus_id, Sense::FOCUSABLE);
             // A scroller `<div>` has no disabled state.
             ctx.accesskit_node_builder(resp.id, |node| {
                 node.set_role(egui::accesskit::Role::ScrollView);
@@ -529,7 +577,7 @@ impl ScrollArea {
 
             // Interacted after the content, so it lies above it, as bits'
             // absolute bar does. A press drags at once (no click sense).
-            let resp = ui.interact(bar_rect, bar_id(d), Sense::DRAG);
+            let resp = input.interact(bar_rect, bar_id(d), Sense::DRAG);
             if let Some(p) = resp.interact_pointer_pos() {
                 if resp.drag_started() {
                     let start = thumb_start(offset[d]);

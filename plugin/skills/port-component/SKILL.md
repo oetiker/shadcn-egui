@@ -276,10 +276,14 @@ back, Right and Down forward) whatever its orientation.
   `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.
   A part whose upstream element has no disabled state (a `<label>`, a
   `<div>`, `role="status"`) reports none in a disabled `Ui`
-  (conformance 8): in the crate through `shared::widget_info_never_disabled`
-  or, where the role is set by hand, `shared::never_disabled`; in an app
-  through `node.clear_disabled()` in `ctx.accesskit_node_builder` after
-  its `widget_info`.
+  (conformance 8). `widget_info_with_role` already does this for a role
+  without `aria-disabled` in ARIA 1.2 (`alert`, `alertdialog`,
+  `navigation`, `status`, …) and keeps the disabled state of a role
+  with it (`group`, a `<fieldset disabled>`). Any other part: in the crate
+  through `shared::widget_info_never_disabled` or, where a role with a
+  disabled state is set by hand (a `<div role="group">`),
+  `shared::never_disabled`; in an app through `node.clear_disabled()` in
+  `ctx.accesskit_node_builder` after its `widget_info`.
 
 ## Dependency discipline
 

@@ -705,6 +705,52 @@ fn keys_scroll_a_focused_area() {
     assert_eq!(sim.ctx.memory(|m| m.focused()), focused);
 }
 
+/// A browser scroller inside `<fieldset disabled>` stays a Tab stop and
+/// scrolls by keys, wheel and thumb; the controls in it stay disabled, so
+/// the area is the Tab stop even with a button inside.
+#[test]
+fn a_disabled_ui_scrolls_by_keys_wheel_and_thumb() {
+    fn disabled(ui: &mut Ui) -> Vec2 {
+        ui.disable();
+        place(ui, ScrollArea::vertical(), |ui| {
+            ui.allocate_space(vec2(200.0, 900.0));
+            let button = ui.button("inside");
+            assert!(!button.enabled(), "the button inside stays disabled");
+            ui.allocate_space(vec2(200.0, 100.0));
+        })
+    }
+    fn disabled_tall(ui: &mut Ui) -> Vec2 {
+        ui.disable();
+        tall(ui)
+    }
+    let mut sim = Sim::vega();
+    sim.ctx.enable_accesskit();
+    sim.pass(vec![], disabled);
+    sim.pass(tab(), disabled);
+    let (_, out) = sim.pass(vec![], disabled);
+    assert!(sim.ctx.memory(|m| m.focused()).is_some(), "Tab focus");
+    assert!(has_scroll_view(&out), "scroll view node");
+    sim.pass(common::key(Key::ArrowDown), disabled);
+    let (offset, _) = sim.pass(vec![], disabled);
+    assert_eq!(offset.y, 40.0, "ArrowDown");
+
+    let mut sim = Sim::vega();
+    sim.pass(moved(INSIDE), disabled_tall);
+    sim.pass(vec![wheel(-100.0)], disabled_tall);
+    let (offset, _) = sim.pass(vec![], disabled_tall);
+    assert!(offset.y > 0.0, "wheel: {offset:?}");
+
+    let mut sim = Sim::vega();
+    let grab = pos2(295.0, TRACK_TOP + 10.0);
+    let [.., after] = drag(&mut sim, grab, grab + vec2(0.0, 50.0), disabled_tall);
+    let want = offset_for_thumb_move(50.0);
+    assert!(
+        (after.y - want).abs() < 0.01,
+        "thumb: {} want {want}",
+        after.y
+    );
+}
+
 /// The browser scrolls an element that takes focus into view, centred.
 #[test]
 fn a_focused_widget_is_scrolled_into_view() {

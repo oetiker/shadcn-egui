@@ -120,7 +120,6 @@ fn report_status(resp: &Response, name: &str) {
     widget_info_with_role(resp, Role::Status, || {
         WidgetInfo::labeled(WidgetType::ProgressIndicator, true, name)
     });
-    crate::components::shared::never_disabled(&resp.ctx, resp.id);
     resp.ctx
         .accesskit_node_builder(resp.id, |node| node.set_live(Live::Polite));
 }

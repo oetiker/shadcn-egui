@@ -1150,7 +1150,8 @@ impl Field {
         };
         let outer = Rect::from_min_size(origin, egui::vec2(width, pad_t + height + pad_b));
         let response = layout::end_item(ui, frame, outer, Sense::hover());
-        // A `<div role="group">` with no `aria-disabled`.
+        // A `<div role="group">` with no `aria-disabled`: `group` has a
+        // disabled state, so it is taken out by hand.
         widget_info_with_role(&response, Role::Group, || {
             WidgetInfo::new(WidgetType::Other)
         });
@@ -1532,7 +1533,6 @@ impl Widget for FieldError {
         widget_info_with_role(&response, Role::Alert, || {
             WidgetInfo::new(WidgetType::Other)
         });
-        never_disabled(&response.ctx, response.id);
         response
             .ctx
             .accesskit_node_builder(response.id, |node| node.set_live(Live::Assertive));

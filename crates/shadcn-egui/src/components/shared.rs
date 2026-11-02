@@ -1915,15 +1915,109 @@ pub fn text_entry_state(theme: &Theme, resp: &Response, context: State) -> State
 /// gives the widget an accessible `role` that egui's `WidgetType` lacks
 /// (upstream's `role="alert"`, `alertdialog`, `navigation`, `group`).
 /// `widget_info` sets a role from the `WidgetType`, so the role is set
-/// after it; the name, value and state stay those of `make_info`.
+/// after it; the name and value stay those of `make_info`.
+///
+/// The disabled state follows the role (conformance 8). A role that
+/// supports `aria-disabled` in WAI-ARIA 1.2 (its "Used in Roles" and
+/// "Inherits into Roles": `button`, `group`, `link`, the
+/// `input`, `composite`, `menuitem` and `gridcell` families, …) keeps
+/// egui's state, so it is disabled in a disabled `Ui`, as a
+/// `<fieldset disabled>` is. A role without it (`alert`, `alertdialog`,
+/// `navigation`, `status`, `dialog`, `region`, …) is never reported
+/// disabled, although egui marks every widget in a disabled `Ui` so.
 pub fn widget_info_with_role(
     resp: &Response,
     role: egui::accesskit::Role,
     make_info: impl Fn() -> egui::WidgetInfo,
 ) {
-    resp.widget_info(make_info);
+    if has_disabled_state(role) {
+        resp.widget_info(make_info);
+    } else {
+        widget_info_never_disabled(resp, make_info);
+    }
     resp.ctx
         .accesskit_node_builder(resp.id, |node| node.set_role(role));
+}
+
+/// Whether `role` supports `aria-disabled` in WAI-ARIA 1.2
+/// (<https://www.w3.org/TR/wai-aria-1.2/#aria-disabled>): the roles it is
+/// used in (`application`, `button`, `composite`, `gridcell`, `group`,
+/// `input`, `link`, `menuitem`, `scrollbar`, `separator`, `tab`), the
+/// roles that inherit it (`checkbox`, `columnheader`, `combobox`, `grid`,
+/// `listbox`, `menu`, `menubar`, `menuitemcheckbox`, `menuitemradio`,
+/// `option`, `radio`, `radiogroup`, `row`, `rowheader`, `searchbox`,
+/// `slider`, `spinbutton`, `switch`, `tablist`, `textbox`, `toolbar`,
+/// `tree`, `treegrid`, `treeitem`) and DPUB-ARIA's `link` subroles, as
+/// AccessKit names them. Its global use is deprecated in 1.2, so every
+/// other role has no disabled state.
+fn has_disabled_state(role: egui::accesskit::Role) -> bool {
+    use egui::accesskit::Role as R;
+    matches!(
+        role,
+        R::Application
+            // button
+            | R::Button
+            | R::DefaultButton
+            | R::DisclosureTriangle
+            // composite
+            | R::ComboBox
+            | R::EditableComboBox
+            | R::Grid
+            | R::ListGrid
+            | R::TreeGrid
+            | R::ListBox
+            | R::Menu
+            | R::MenuBar
+            | R::MenuListPopup
+            | R::RadioGroup
+            | R::TabList
+            | R::Tree
+            // gridcell
+            | R::GridCell
+            | R::ColumnHeader
+            | R::RowHeader
+            // group
+            | R::Group
+            | R::Row
+            | R::Toolbar
+            // input
+            | R::CheckBox
+            | R::Switch
+            | R::RadioButton
+            | R::ListBoxOption
+            | R::MenuListOption
+            | R::TreeItem
+            | R::Slider
+            | R::SpinButton
+            | R::TextInput
+            | R::MultilineTextInput
+            | R::SearchInput
+            | R::DateInput
+            | R::DateTimeInput
+            | R::WeekInput
+            | R::MonthInput
+            | R::TimeInput
+            | R::EmailInput
+            | R::NumberInput
+            | R::PasswordInput
+            | R::PhoneNumberInput
+            | R::UrlInput
+            | R::ColorWell
+            // link
+            | R::Link
+            | R::DocBackLink
+            | R::DocBiblioRef
+            | R::DocGlossRef
+            | R::DocNoteRef
+            // menuitem
+            | R::MenuItem
+            | R::MenuItemCheckBox
+            | R::MenuItemRadio
+            // scrollbar, separator, tab
+            | R::ScrollBar
+            | R::Splitter
+            | R::Tab
+    )
 }
 
 /// Reports `make_info` for a part whose upstream element has no disabled

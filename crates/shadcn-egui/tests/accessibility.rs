@@ -277,6 +277,14 @@ fn a_disabled_ui_disables_every_leaf() {
     }
 }
 
+/// An app widget that reports `role` through `widget_info_with_role`.
+fn app_widget_with_role(ui: &mut egui::Ui, role: Role) {
+    let resp = ui.allocate_response(egui::vec2(120.0, 30.0), egui::Sense::hover());
+    widget_info_with_role(&resp, role, || {
+        egui::WidgetInfo::labeled(egui::WidgetType::Other, ui.is_enabled(), "App widget")
+    });
+}
+
 /// Upstream draws these parts as a `<label>`, `<div>`, `<span>`, `<kbd>`,
 /// `<svg>`, `<legend>` or with `role="status"`, `progressbar`, `alert` or
 /// `list`: HTML-AAM and ARIA 1.2 give none of them a disabled state, so
@@ -300,7 +308,7 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
     type Add = fn(&mut egui::Ui);
     // Each case: what it draws, the roles that must be there and report
     // no disabled state, and the roles that must report it.
-    let cases: [(&str, Add, &[Role], &[Role]); 19] = [
+    let cases: [(&str, Add, &[Role], &[Role]); 21] = [
         (
             "label",
             |ui| drop(ui.add(Label::new("Email"))),
@@ -452,6 +460,20 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
             |ui| drop(ui.add(Button::new("Save"))),
             &[],
             &[Role::Button],
+        ),
+        // An app widget given a role through `widget_info_with_role`:
+        // `alert` has no `aria-disabled` in ARIA 1.2, `group` has it.
+        (
+            "app alert",
+            |ui| app_widget_with_role(ui, Role::Alert),
+            &[Role::Alert],
+            &[],
+        ),
+        (
+            "app group",
+            |ui| app_widget_with_role(ui, Role::Group),
+            &[],
+            &[Role::Group],
         ),
     ];
     for (name, add, quiet, disabled) in cases {
