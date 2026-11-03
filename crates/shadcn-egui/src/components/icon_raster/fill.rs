@@ -112,9 +112,12 @@ fn add_triangle(area: &mut [f32], run: &mut Vec<f32>, w: usize, h: usize, tri: [
         if row.n < 3 {
             continue;
         }
-        let (lo, hi) = row.points().iter().fold((f32::INFINITY, f32::NEG_INFINITY), |(l, h), p| {
-            (l.min(p[0]), h.max(p[0]))
-        });
+        let (lo, hi) = row
+            .points()
+            .iter()
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(l, h), p| {
+                (l.min(p[0]), h.max(p[0]))
+            });
         let cols = span(lo, hi, w);
         let x0 = cols.start as f32;
         for p in &mut row.p[..row.n] {

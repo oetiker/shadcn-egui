@@ -51,7 +51,11 @@ impl Measure {
 
 /// The shipped fills of an icon at `prec`, each with the upstream geometry
 /// of its layer.
-pub fn layers(name: &str, svg: &str, prec: Precision) -> Result<Vec<(Fill, Vec<FillPath>)>, String> {
+pub fn layers(
+    name: &str,
+    svg: &str,
+    prec: Precision,
+) -> Result<Vec<(Fill, Vec<FillPath>)>, String> {
     let shipped = fill_paths(name, svg, prec)?;
     let upstream = fill_paths(name, svg, REFERENCE)?;
     if shipped.len() != upstream.len() {
@@ -85,7 +89,11 @@ pub fn coverage(fill: &Fill, side: usize) -> Vec<u8> {
 }
 
 fn worst(a: &[u8], b: &[u8]) -> u8 {
-    a.iter().zip(b).map(|(x, y)| x.abs_diff(*y)).max().unwrap_or(0)
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| x.abs_diff(*y))
+        .max()
+        .unwrap_or(0)
 }
 
 /// All three measures of one shipped fill against its upstream geometry.

@@ -66,8 +66,7 @@ pub fn sides(paths: &[FillPath]) -> Vec<[P; 2]> {
             next += 1;
         }
         let ym = (y0 + y1) / 2.0;
-        let mut order: Vec<(f64, usize)> =
-            active.iter().map(|&i| (edges[i].x_at(ym), i)).collect();
+        let mut order: Vec<(f64, usize)> = active.iter().map(|&i| (edges[i].x_at(ym), i)).collect();
         order.sort_by(|p, q| p.0.total_cmp(&q.0));
         winding.fill(0);
         let mut left: Option<usize> = None;

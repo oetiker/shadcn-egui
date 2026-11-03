@@ -516,7 +516,9 @@ fn ported_components_take_values_from_the_style() {
     for path in files {
         // A rasterizer, not a component: its numbers are pixel arithmetic.
         if path.ends_with("icon_raster.rs")
-            || path.parent().is_some_and(|dir| dir.ends_with("icon_raster"))
+            || path
+                .parent()
+                .is_some_and(|dir| dir.ends_with("icon_raster"))
         {
             continue;
         }

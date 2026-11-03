@@ -654,11 +654,21 @@ mod tests {
         // A 45° edge through pixel corners halves the diagonal pixels.
         let cov = fill_cov(8, &[[[0.0, 0.0], [8.0, 8.0], [0.0, 8.0]]]);
         for i in 0..8 {
-            assert!((cov[i * 8 + i] - 0.5).abs() < 1e-5, "{i}: {}", cov[i * 8 + i]);
+            assert!(
+                (cov[i * 8 + i] - 0.5).abs() < 1e-5,
+                "{i}: {}",
+                cov[i * 8 + i]
+            );
             assert_eq!(cov[i * 8 + (i + 1).min(7)], if i == 7 { 0.5 } else { 0.0 });
         }
         // A sliver 0.1 px thin across a row covers each pixel by 0.1.
-        let cov = fill_cov(8, &[[[0.0, 3.2], [8.0, 3.2], [8.0, 3.3]], [[0.0, 3.2], [8.0, 3.3], [0.0, 3.3]]]);
+        let cov = fill_cov(
+            8,
+            &[
+                [[0.0, 3.2], [8.0, 3.2], [8.0, 3.3]],
+                [[0.0, 3.2], [8.0, 3.3], [0.0, 3.3]],
+            ],
+        );
         assert!((1..7).all(|x| (cov[3 * 8 + x] - 0.1).abs() < 1e-5));
     }
 
@@ -671,7 +681,10 @@ mod tests {
             let (s, c) = t.sin_cos();
             let p = |x: f32, y: f32| [16.0 + x * c - y * s, 16.0 + x * s + y * c];
             let quad = [p(-9.0, -7.3), p(8.1, -7.3), p(8.1, 6.6), p(-9.0, 6.6)];
-            let cov = fill_cov(32, &[[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]]);
+            let cov = fill_cov(
+                32,
+                &[[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]],
+            );
             for y in 12..20 {
                 for x in 12..20 {
                     let v = cov[y * 32 + x];
@@ -753,7 +766,10 @@ mod tests {
             // Every fifth triangle is a sliver: c close to the line ab.
             let c = if n % 5 == 0 {
                 let t = rnd();
-                [a[0] + (b[0] - a[0]) * t + 0.01 * rnd(), a[1] + (b[1] - a[1]) * t]
+                [
+                    a[0] + (b[0] - a[0]) * t + 0.01 * rnd(),
+                    a[1] + (b[1] - a[1]) * t,
+                ]
             } else {
                 p()
             };
@@ -764,7 +780,11 @@ mod tests {
                 worst = worst.max((x - y).abs());
             }
         }
-        assert!(worst * 255.0 < 0.05, "worst difference {} levels", worst * 255.0);
+        assert!(
+            worst * 255.0 < 0.05,
+            "worst difference {} levels",
+            worst * 255.0
+        );
     }
 
     #[test]
