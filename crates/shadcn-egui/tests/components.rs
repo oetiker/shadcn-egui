@@ -2727,11 +2727,16 @@ fn shadow_paints_only_outside_the_border_box() {
     let mode = egui::Theme::Light;
     let theme = Theme::vega();
     let mut text = String::new();
-    let (rect, out) = common::measure_output(&theme, mode, |ui| {
+    let (rect, out, ctx) = common::measure_frame(&theme, mode, |ui| {
         ui.add(shadcn_egui::components::input::Input::new(&mut text))
     });
-    let meshes = common::mesh_shapes(&out);
+    let ids = common::shadow_textures(&ctx);
+    let meshes: Vec<egui::Mesh> = common::mesh_shapes(&out)
+        .into_iter()
+        .filter(|m| ids.contains(&m.texture_id))
+        .collect();
     assert!(!meshes.is_empty(), "no shadow painted");
+    let images = common::texture_images(&out);
     // Inside the box: the rect minus its rounded corners, with a hair of slack.
     let r = 12.0;
     let inside = |p: egui::Pos2| {
@@ -2739,19 +2744,25 @@ fn shadow_paints_only_outside_the_border_box() {
         let b = rect.shrink2(egui::vec2(0.01, r));
         a.contains(p) || b.contains(p)
     };
-    for m in &meshes {
-        for tri in m.indices.as_chunks::<3>().0 {
-            let c = tri
-                .iter()
-                .map(|&i| m.vertices[i as usize].pos.to_vec2())
-                .fold(egui::Vec2::ZERO, |a, b| a + b)
-                / 3.0;
-            assert!(
-                !inside(c.to_pos2()),
-                "shadow triangle at {c:?} under {rect:?}"
-            );
+    // The quads over a side the texture does not stretch cross the box;
+    // their texels there are clear, so sample every pixel centre.
+    let ppp = ctx.pixels_per_point();
+    let (mut painted, mut sampled) = (0, 0);
+    let px = |v: f32| (v * ppp).floor() as i32;
+    for y in px(rect.min.y)..=px(rect.max.y) {
+        for x in px(rect.min.x - 8.0)..=px(rect.max.x + 8.0) {
+            let p = egui::pos2((x as f32 + 0.5) / ppp, (y as f32 + 0.5) / ppp);
+            let a = common::textured_alpha(&meshes, &images, p);
+            if inside(p) {
+                sampled += 1;
+                assert_eq!(a, 0.0, "shadow alpha {a} at {p:?} under {rect:?}");
+            } else if a > 0.0 {
+                painted += 1;
+            }
         }
     }
+    assert!(sampled > 100, "{sampled} pixels inside");
+    assert!(painted > 0, "the samples outside the box show no shadow");
 }
 
 /// A container's fade ends with its content, but a `Ui::disable` inside

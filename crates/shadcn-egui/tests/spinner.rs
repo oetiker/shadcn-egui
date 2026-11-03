@@ -12,10 +12,11 @@ use shadcn_egui::components::spinner::{spinner, Spinner};
 use shadcn_egui::{layout, Theme};
 
 /// The textured meshes a frame painted: the icons.
-fn icons(out: &egui::FullOutput) -> Vec<egui::Mesh> {
+fn icons(ctx: &egui::Context, out: &egui::FullOutput) -> Vec<egui::Mesh> {
+    let shadows = common::shadow_textures(ctx);
     common::mesh_shapes(out)
         .into_iter()
-        .filter(|m| m.texture_id != TextureId::default())
+        .filter(|m| m.texture_id != TextureId::default() && !shadows.contains(&m.texture_id))
         .collect()
 }
 
@@ -38,7 +39,7 @@ fn timed(
     );
     let repaint =
         out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
-    (icons(&out), repaint)
+    (icons(ctx, &out), repaint)
 }
 
 /// The angle of a painted icon quad: of its first edge against the x axis.
@@ -59,11 +60,11 @@ fn a_spinner_is_the_styles_size() {
 fn size_sets_the_side() {
     let theme = Theme::vega();
     for side in [12.0, 24.0, 32.0] {
-        let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        let (rect, out, ctx) = common::measure_frame(&theme, egui::Theme::Light, |ui| {
             ui.add(Spinner::new().size(side))
         });
         assert_eq!(rect.size(), Vec2::splat(side));
-        assert_eq!(icons(&out)[0].calc_bounds().size(), Vec2::splat(side));
+        assert_eq!(icons(&ctx, &out)[0].calc_bounds().size(), Vec2::splat(side));
     }
 }
 
@@ -126,14 +127,14 @@ fn alt_text_renames_it() {
 #[test]
 fn a_spinner_takes_the_uis_text_colour() {
     let colour = |set: Option<Color32>| {
-        let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
+        let (_, out, ctx) = common::measure_frame(&Theme::vega(), egui::Theme::Light, |ui| {
             ui.visuals_mut().override_text_color = Some(Color32::RED);
             match set {
                 Some(c) => ui.add(Spinner::new().color(c)),
                 None => spinner(ui),
             }
         });
-        common::mesh_colour(&icons(&out)[0])
+        common::mesh_colour(&icons(&ctx, &out)[0])
     };
     assert_eq!(colour(None), Color32::RED);
     assert_eq!(colour(Some(Color32::BLUE)), Color32::BLUE);
@@ -202,7 +203,7 @@ fn reduced_motion_stops_it() {
 fn a_spinner_in_a_button_keeps_its_size_and_takes_the_buttons_colour() {
     for (name, theme, mode) in common::themes() {
         for size in [ButtonSize::Sm, ButtonSize::Default, ButtonSize::Icon] {
-            let (_, out) = common::measure_output(&theme, mode, |ui| {
+            let (_, out, ctx) = common::measure_frame(&theme, mode, |ui| {
                 ui.add(
                     Button::new("Loading")
                         .size(size)
@@ -210,7 +211,7 @@ fn a_spinner_in_a_button_keeps_its_size_and_takes_the_buttons_colour() {
                         .icon(Glyph::Spinner),
                 )
             });
-            let painted = icons(&out);
+            let painted = icons(&ctx, &out);
             assert_eq!(painted.len(), 1, "{name}");
             assert_eq!(
                 painted[0].calc_bounds().size(),
@@ -234,7 +235,7 @@ fn a_spinner_in_a_button_keeps_its_size_and_takes_the_buttons_colour() {
 fn a_spinner_in_a_badge_takes_the_badges_icon_size() {
     for (name, theme, mode) in common::themes() {
         for end in [false, true] {
-            let (_, out) = common::measure_output(&theme, mode, |ui| {
+            let (_, out, ctx) = common::measure_frame(&theme, mode, |ui| {
                 let b = Badge::new("Syncing").variant(BadgeVariant::Secondary);
                 ui.add(if end {
                     b.icon_end(Glyph::Spinner)
@@ -242,7 +243,7 @@ fn a_spinner_in_a_badge_takes_the_badges_icon_size() {
                     b.icon(Glyph::Spinner)
                 })
             });
-            let painted = icons(&out);
+            let painted = icons(&ctx, &out);
             assert_eq!(painted.len(), 1, "{name}");
             let want = theme.style.badge.sized_icon_size.get(Default::default());
             assert_eq!(
