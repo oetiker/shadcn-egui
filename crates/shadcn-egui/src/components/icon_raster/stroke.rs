@@ -510,7 +510,9 @@ const NONE: usize = usize::MAX;
 
 /// Two pieces closer than this (relative to x) at a band's end touch
 /// there: well above f32 rounding of the outline's points, well below
-/// any gap that shows.
+/// any gap that shows. The case that needs it is a square cap whose
+/// corner lies on another piece's side (`a_reversal_keeps_its_join`);
+/// no bundled icon renders differently with an exact-zero test.
 const TOUCH: f32 = 2e-5;
 
 /// One pixel row's edges and the scratch to walk them, kept between rows
@@ -963,37 +965,105 @@ mod tests {
         f(b) - f(a)
     }
 
+    /// A convex polygon of the reference, in pixels.
+    type Poly = Vec<[f64; 2]>;
+
+    /// The area of the convex polygon `poly` inside pixel (`x`, `y`):
+    /// the polygon clipped by the pixel's four sides, then the shoelace.
+    fn pixel_area(poly: &[[f64; 2]], x: f64, y: f64) -> f64 {
+        let mut p: Vec<[f64; 2]> = poly.to_vec();
+        // Keep `sign * (q[axis] - edge) >= 0` for each side of the pixel.
+        let sides = [
+            (0, x, 1.0),
+            (0, x + 1.0, -1.0),
+            (1, y, 1.0),
+            (1, y + 1.0, -1.0),
+        ];
+        for (axis, edge, sign) in sides {
+            let side = |q: [f64; 2]| sign * (q[axis] - edge);
+            let mut out = Vec::with_capacity(p.len() + 2);
+            for k in 0..p.len() {
+                let (a, b) = (p[k], p[(k + 1) % p.len()]);
+                let (fa, fb) = (side(a), side(b));
+                if fa >= 0.0 {
+                    out.push(a);
+                }
+                if (fa >= 0.0) != (fb >= 0.0) {
+                    let t = fa / (fa - fb);
+                    out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+                }
+            }
+            p = out;
+            if p.is_empty() {
+                return 0.0;
+            }
+        }
+        let n = p.len();
+        (0..n)
+            .map(|k| p[k][0] * p[(k + 1) % n][1] - p[(k + 1) % n][0] * p[k][1])
+            .sum::<f64>()
+            .abs()
+            / 2.0
+    }
+
     /// A sub-path that turns straight back, A→B→C with C between A and B:
-    /// the area is the stroke of A–B alone plus, past B, the join (a half
-    /// disc for a round join, nothing for a bevel, and a miter falls back
-    /// to a bevel since it is infinitely long). Every direction and both
-    /// orders, since a reversal's turn is ±0 and either sign must work.
+    /// the stroke of A–B alone plus, past B, the join (a half disc for a
+    /// round join, nothing for a bevel, and a miter falls back to a bevel
+    /// since it is infinitely long); C's cap lies inside A–B's stroke.
+    /// Every pixel against the exact area of those pieces (convex
+    /// polygons, a half disc as 512 chords, under 2e-5 px² short), so a
+    /// join of the right area in the wrong place fails too. Every
+    /// direction and both orders, since a reversal's turn is ±0 and
+    /// either sign must work.
     #[test]
     fn a_reversal_keeps_its_join() {
         let (h, l, back) = (1.25f32, 9.0f32, 3.5f32);
         let c = [16.0f32, 16.0];
+        let mut worst = 0.0f64;
         for k in 0..16 {
             let (s, co) = (k as f32 * PI / 8.0).sin_cos();
             let at = |t: f32| [c[0] + t * co, c[1] + t * s];
             // A at -l/2, B at +l/2, C back towards A.
             let path = [at(-l / 2.0), at(l / 2.0), at(l / 2.0 - back)];
-            let half_disc = PI * h * h / 2.0;
-            let rect = 2.0 * h * l;
-            let cases = [
-                (Cap::Round, Join::Round, rect + 2.0 * half_disc),
-                (Cap::Butt, Join::Round, rect + half_disc),
-                (Cap::Square, Join::Round, rect + 2.0 * h * h + half_disc),
-                (Cap::Butt, Join::Bevel, rect),
-                (Cap::Butt, Join::Miter, rect),
-                (Cap::Round, Join::Bevel, rect + half_disc),
-                (Cap::Square, Join::Miter, rect + 2.0 * h * h),
+            // The reference in f64, at `t` along A→B and `n` across it.
+            let (hd, ld) = (f64::from(h), f64::from(l));
+            let (sd, cd) = (f64::from(s), f64::from(co));
+            let pt = |t: f64, n: f64| [16.0 + t * cd - n * sd, 16.0 + t * sd + n * cd];
+            let quad = |t0: f64, t1: f64| vec![pt(t0, -hd), pt(t1, -hd), pt(t1, hd), pt(t0, hd)];
+            // The half disc at `t` on the side `dir` (1 past B, -1 before A).
+            let half_disc = |t: f64, dir: f64| {
+                (0..=512)
+                    .map(|i| {
+                        let a = (i as f64 / 512.0 - 0.5) * std::f64::consts::PI;
+                        pt(t + dir * hd * a.cos(), dir * hd * a.sin())
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let rect = quad(-ld / 2.0, ld / 2.0);
+            let round_cap = half_disc(-ld / 2.0, -1.0);
+            let square_cap = quad(-ld / 2.0 - hd, -ld / 2.0);
+            let round_join = half_disc(ld / 2.0, 1.0);
+            let cases: [(Cap, Join, &[&Poly]); 7] = [
+                (Cap::Round, Join::Round, &[&rect, &round_cap, &round_join]),
+                (Cap::Butt, Join::Round, &[&rect, &round_join]),
+                (Cap::Square, Join::Round, &[&rect, &square_cap, &round_join]),
+                (Cap::Butt, Join::Bevel, &[&rect]),
+                (Cap::Butt, Join::Miter, &[&rect]),
+                (Cap::Round, Join::Bevel, &[&rect, &round_cap]),
+                (Cap::Square, Join::Miter, &[&rect, &square_cap]),
             ];
-            for (cap, join, want) in cases {
-                let got = total(&cov(32, h, style(cap, join), &[(&path, false)]));
-                assert!(
-                    near(got, want, 2e-3),
-                    "{k} {cap:?} {join:?}: {got} vs {want}"
-                );
+            for (cap, join, pieces) in cases {
+                let got = cov(32, h, style(cap, join), &[(&path, false)]);
+                for (i, g) in got.iter().enumerate() {
+                    let (x, y) = ((i % 32) as f64, (i / 32) as f64);
+                    let want: f64 = pieces.iter().map(|p| pixel_area(p, x, y)).sum();
+                    let e = (f64::from(*g) - want).abs();
+                    worst = worst.max(e);
+                    assert!(
+                        e <= 2e-4,
+                        "{k} {cap:?} {join:?} pixel ({x},{y}): {g} vs {want}"
+                    );
+                }
             }
             // Nearly a reversal (179.9°), turning either way: about the
             // same area, the join's half disc included.
@@ -1008,10 +1078,11 @@ mod tests {
                     [b[0] + back * dir[0], b[1] + back * dir[1]],
                 ];
                 let got = total(&cov(32, h, Style::ROUND, &[(&near_path, false)]));
-                let want = rect + 2.0 * half_disc;
+                let want = 2.0 * h * l + PI * h * h;
                 assert!(near(got, want, 0.02), "{k} {turn}: {got} vs {want}");
             }
         }
+        eprintln!("a reversal: worst pixel {worst:.2e} off");
     }
 
     /// The two Tabler icons where the defect showed, at 16 px (stroke 2

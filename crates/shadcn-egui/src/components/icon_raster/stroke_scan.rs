@@ -6,6 +6,10 @@
 //! lost join, cap or band shows as a pixel far off. The fill alone is
 //! checked by icongen's `fill_scan`.
 //!
+//! Every icon is checked at 16 and 24 px; an icon with a reversal (a
+//! sub-path turning back by 179° or more, where the round join is hardest
+//! to keep) also at 64 px, since the limit holds at every size.
+//!
 //! The reference's own error is the sub-row sampling: an edge along a row
 //! is off by up to half a sub-row, 255 / (2 x SUB) = 1 level, and a pixel
 //! crossed by two such edges twice that.
@@ -20,6 +24,8 @@ const SUB: usize = 128;
 /// lost piece of area is tens to hundreds of levels.
 const LEVELS: f64 = 4.0;
 const SIDES: [usize; 2] = [16, 24];
+/// The extra size for icons with a reversal.
+const REVERSAL_SIDE: usize = 64;
 
 type P = [f64; 2];
 
@@ -157,6 +163,17 @@ fn has_reversal(pts: &[[f32; 2]], closed: bool) -> bool {
     })
 }
 
+/// Whether a stroked sub-path of `icon` (flattened at 24 px) has a
+/// reversal.
+fn reversed(icon: &Icon) -> bool {
+    let place = Place::scaled(24.0 / icon.size);
+    icon.layers().any(|layer| {
+        stroke_paths(layer.segs.clone(), place)
+            .iter()
+            .any(|(p, c)| has_reversal(p, *c))
+    })
+}
+
 /// Checks every stroked layer of `all`; returns the failures, the number
 /// of icons with a reversal and the worst difference in levels.
 fn scan(all: &[&Icon]) -> (Vec<String>, usize, f64) {
@@ -164,8 +181,9 @@ fn scan(all: &[&Icon]) -> (Vec<String>, usize, f64) {
     let mut reversals = 0;
     let mut overall = 0.0f64;
     for icon in all {
-        let mut reversed = false;
-        for side in SIDES {
+        let reversed = reversed(icon);
+        let extra = reversed.then_some(REVERSAL_SIDE);
+        for side in SIDES.into_iter().chain(extra) {
             let scale = side as f32 / icon.size;
             let place = Place::scaled(scale);
             let stroke_px = 2.0 * scale;
@@ -176,7 +194,6 @@ fn scan(all: &[&Icon]) -> (Vec<String>, usize, f64) {
                 if paths.is_empty() {
                     continue;
                 }
-                reversed |= paths.iter().any(|(p, c)| has_reversal(p, *c));
                 let f = |p: [f32; 2]| [f64::from(p[0]), f64::from(p[1])];
                 let mut caps = Vec::new();
                 for (pts, closed) in &paths {
@@ -222,8 +239,14 @@ fn scan(all: &[&Icon]) -> (Vec<String>, usize, f64) {
 }
 
 /// Checks part `part` of `parts` of `all` (the long sets are split so the
-/// test threads share them).
-fn check(set: &str, all: &[&Icon], part: usize, parts: usize) {
+/// test threads share them). Part 0 also checks that `reversals` icons of
+/// the whole set have a reversal, so a filter that stops finding them
+/// (and with it the 64 px check) fails.
+fn check(set: &str, all: &[&Icon], part: usize, parts: usize, reversals: usize) {
+    if part == 0 {
+        let found = all.iter().filter(|i| reversed(i)).count();
+        assert_eq!(found, reversals, "{set}: icons with a reversal");
+    }
     let n = all.len().div_ceil(parts);
     let all = &all[(part * n).min(all.len())..((part + 1) * n).min(all.len())];
     let (fails, reversals, worst) = scan(all);
@@ -239,47 +262,47 @@ fn check(set: &str, all: &[&Icon], part: usize, parts: usize) {
 
 #[test]
 fn every_lucide_stroke_matches_its_capsules() {
-    check("lucide", crate::icons::lucide::ALL, 0, 1);
+    check("lucide", crate::icons::lucide::ALL, 0, 1, 4);
 }
 
 #[cfg(feature = "icons-tabler")]
 #[test]
 fn every_tabler_stroke_matches_its_capsules_1() {
-    check("tabler", crate::icons::tabler::ALL, 0, 2);
+    check("tabler", crate::icons::tabler::ALL, 0, 2, 101);
 }
 
 #[cfg(feature = "icons-tabler")]
 #[test]
 fn every_tabler_stroke_matches_its_capsules_2() {
-    check("tabler", crate::icons::tabler::ALL, 1, 2);
+    check("tabler", crate::icons::tabler::ALL, 1, 2, 101);
 }
 
 #[cfg(feature = "icons-hugeicons")]
 #[test]
 fn every_hugeicons_stroke_matches_its_capsules_1() {
-    check("hugeicons", crate::icons::hugeicons::ALL, 0, 3);
+    check("hugeicons", crate::icons::hugeicons::ALL, 0, 3, 69);
 }
 
 #[cfg(feature = "icons-hugeicons")]
 #[test]
 fn every_hugeicons_stroke_matches_its_capsules_2() {
-    check("hugeicons", crate::icons::hugeicons::ALL, 1, 3);
+    check("hugeicons", crate::icons::hugeicons::ALL, 1, 3, 69);
 }
 
 #[cfg(feature = "icons-hugeicons")]
 #[test]
 fn every_hugeicons_stroke_matches_its_capsules_3() {
-    check("hugeicons", crate::icons::hugeicons::ALL, 2, 3);
+    check("hugeicons", crate::icons::hugeicons::ALL, 2, 3, 69);
 }
 
 #[cfg(feature = "icons-phosphor")]
 #[test]
 fn every_phosphor_stroke_matches_its_capsules() {
-    check("phosphor", crate::icons::phosphor::ALL, 0, 1);
+    check("phosphor", crate::icons::phosphor::ALL, 0, 1, 0);
 }
 
 #[cfg(feature = "icons-remixicon")]
 #[test]
 fn every_remixicon_stroke_matches_its_capsules() {
-    check("remixicon", crate::icons::remixicon::ALL, 0, 1);
+    check("remixicon", crate::icons::remixicon::ALL, 0, 1, 0);
 }
