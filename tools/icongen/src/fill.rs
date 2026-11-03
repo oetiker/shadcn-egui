@@ -2,18 +2,18 @@
 //! compute outward miters for the painter's one-pixel fringe.
 
 use crate::blob::quantise;
-use lyon_tessellation::math::point;
-use lyon_tessellation::path::iterator::PathIterator;
+use lyon_tessellation::geom::{CubicBezierSegment, QuadraticBezierSegment};
+use lyon_tessellation::math::{point, vector};
 use lyon_tessellation::path::{Path, PathEvent};
 use lyon_tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
 use usvg::tiny_skia_path::{PathSegment, Point};
 
 /// Curve flattening tolerance in the 24-unit icon box: the largest at which
 /// flattening plus the blob's rounding keeps a fill within 4 levels of its
-/// true outline up to 256 px (`tests/fill_precision.rs`, `tolerance_scan`).
-/// It needs lyon_geom 1.0.20 or later: 1.0.19 truncated the piece count of
+/// true outline up to 256 px, over every shipped icon (`tests/fill_scan.rs`;
+/// at 0.0012, 135 icons reached 5 levels). It needs lyon_geom 1.0.20 or later: 1.0.19 truncated the piece count of
 /// a curve that needs more than 24 pieces, so its last piece sagged up to 4x.
-pub const FLATTEN_TOLERANCE: f32 = 0.0012;
+pub const FLATTEN_TOLERANCE: f32 = 0.001;
 
 /// How finely fills are flattened, and whether their points are rounded to
 /// the blob's grid. [`Precision::BLOB`] is what the blob stores; a finer,
@@ -121,13 +121,32 @@ pub fn flatten(
 
     let mut contours = Vec::new();
     let mut cur: Vec<[f32; 2]> = Vec::new();
-    for evt in b.build().iter().flattened(prec.tolerance) {
+    for evt in b.build().iter() {
         match evt {
             PathEvent::Begin { at } => {
                 cur.clear();
                 push(&mut cur, at.x, at.y, prec);
             }
             PathEvent::Line { to, .. } => push(&mut cur, to.x, to.y, prec),
+            PathEvent::Quadratic { from, ctrl, to } => {
+                let q = QuadraticBezierSegment { from, ctrl, to };
+                curve(&mut cur, &q.to_cubic(), prec);
+            }
+            PathEvent::Cubic {
+                from,
+                ctrl1,
+                ctrl2,
+                to,
+            } => curve(
+                &mut cur,
+                &CubicBezierSegment {
+                    from,
+                    ctrl1,
+                    ctrl2,
+                    to,
+                },
+                prec,
+            ),
             PathEvent::End { .. } => {
                 if cur.len() > 1 && cur.first() == cur.last() {
                     cur.pop();
@@ -137,12 +156,40 @@ pub fn flatten(
                 }
                 cur.clear();
             }
-            PathEvent::Quadratic { .. } | PathEvent::Cubic { .. } => {
-                unreachable!("flattened paths hold only lines")
-            }
         }
     }
     contours
+}
+
+/// Flattens `c` to pieces within `prec.tolerance` of it and pushes their
+/// ends. A piece's chord lies on the inner side of the curve, up to its
+/// sag (the distance from the curve) away; each point between two pieces
+/// moves out by half their mean sag, so a piece strays by half the sag
+/// either way instead of all of it on one side. The curve's ends stay.
+fn curve(cur: &mut Vec<[f32; 2]>, c: &CubicBezierSegment<f32>, prec: Precision) {
+    let mut ends = Vec::new();
+    let mut sags = Vec::new();
+    c.for_each_flattened_with_t(prec.tolerance, &mut |l, t| {
+        let d = l.to - l.from;
+        let len = d.length();
+        let sag = if len > 0.0 {
+            // The curve at the piece's middle parameter, off the chord
+            // along its normal.
+            let n = vector(-d.y, d.x) / len;
+            n * (c.sample((t.start + t.end) / 2.0) - l.from).dot(n)
+        } else {
+            vector(0.0, 0.0)
+        };
+        ends.push(l.to);
+        sags.push(sag);
+    });
+    for (i, p) in ends.iter().enumerate() {
+        let p = match sags.get(i + 1) {
+            Some(next) => *p + (sags[i] + *next) * 0.25,
+            None => *p,
+        };
+        push(cur, p.x, p.y, prec);
+    }
 }
 
 fn push(c: &mut Vec<[f32; 2]>, x: f32, y: f32, prec: Precision) {
@@ -158,26 +205,7 @@ fn push(c: &mut Vec<[f32; 2]>, x: f32, y: f32, prec: Precision) {
 pub fn build(name: &str, paths: &[FillPath], prec: Precision) -> Result<Option<Fill>, String> {
     let mut fill = Fill::default();
     for fp in paths {
-        let mut b = Path::builder();
-        for c in &fp.contours {
-            b.begin(point(c[0][0], c[0][1]));
-            for p in &c[1..] {
-                b.line_to(point(p[0], p[1]));
-            }
-            b.end(true);
-        }
-        let rule = match fp.rule {
-            FillRule::NonZero => lyon_tessellation::FillRule::NonZero,
-            FillRule::EvenOdd => lyon_tessellation::FillRule::EvenOdd,
-        };
-        let mut buf: VertexBuffers<[f32; 2], u16> = VertexBuffers::new();
-        FillTessellator::new()
-            .tessellate_path(
-                &b.build(),
-                &FillOptions::tolerance(prec.tolerance).with_fill_rule(rule),
-                &mut BuffersBuilder::new(&mut buf, |v: FillVertex| v.position().to_array()),
-            )
-            .map_err(|e| format!("{name}: tessellation failed: {e:?}"))?;
+        let buf = tessellate(name, fp, prec)?;
         let base = fill.vertices.len();
         if base + buf.vertices.len() > usize::from(u16::MAX) {
             return Err(format!("{name}: fill mesh has more than 65535 vertices"));
@@ -199,6 +227,82 @@ pub fn build(name: &str, paths: &[FillPath], prec: Precision) -> Result<Option<F
     Ok(Some(fill))
 }
 
+/// The triangles of one filled path, checked against the area of the
+/// path's own fill boundary. lyon 1.0.22 (and 1.0.23) covers 3 units² too
+/// much of Remix Icon's earthquake-line, a wedge of the empty room beside
+/// the crack; the same path with x and y swapped comes out right. So a
+/// mesh whose area is off is tessellated again with the axes swapped, and
+/// an icon whose mesh is off both ways fails.
+fn tessellate(
+    name: &str,
+    fp: &FillPath,
+    prec: Precision,
+) -> Result<VertexBuffers<[f32; 2], u16>, String> {
+    let expected = boundary(name, std::slice::from_ref(fp), prec)?
+        .iter()
+        .map(|l| area(l.iter().map(|&(p, _)| p)))
+        .sum::<f64>()
+        .abs();
+    let rule = match fp.rule {
+        FillRule::NonZero => lyon_tessellation::FillRule::NonZero,
+        FillRule::EvenOdd => lyon_tessellation::FillRule::EvenOdd,
+    };
+    let mut off = 0.0;
+    for swap in [false, true] {
+        let axes = |p: [f32; 2]| if swap { [p[1], p[0]] } else { p };
+        let mut b = Path::builder();
+        for c in &fp.contours {
+            let q = axes(c[0]);
+            b.begin(point(q[0], q[1]));
+            for &p in &c[1..] {
+                let q = axes(p);
+                b.line_to(point(q[0], q[1]));
+            }
+            b.end(true);
+        }
+        let mut buf: VertexBuffers<[f32; 2], u16> = VertexBuffers::new();
+        FillTessellator::new()
+            .tessellate_path(
+                &b.build(),
+                &FillOptions::tolerance(prec.tolerance).with_fill_rule(rule),
+                &mut BuffersBuilder::new(&mut buf, |v: FillVertex| axes(v.position().to_array())),
+            )
+            .map_err(|e| format!("{name}: tessellation failed: {e:?}"))?;
+        if swap {
+            // Swapping the axes mirrors the mesh: restore the triangles' turn.
+            for t in buf.indices.chunks_mut(3) {
+                t.swap(1, 2);
+            }
+        }
+        let got: f64 = buf
+            .indices
+            .chunks(3)
+            .map(|t| area(t.iter().map(|&i| buf.vertices[usize::from(i)])).abs())
+            .sum();
+        off = (got - expected).abs();
+        if off <= AREA_SLACK {
+            return Ok(buf);
+        }
+    }
+    Err(format!(
+        "{name}: fill mesh area is off by {off:.4} units² from its outline"
+    ))
+}
+
+/// How far, in units², a path's mesh area may differ from the area inside
+/// its boundary loops. Both are quantised, so they differ by rounding only,
+/// far less than this; at 256 px it is about one pixel.
+const AREA_SLACK: f64 = 0.01;
+
+/// Signed area of a closed polygon (shoelace), in units².
+fn area(points: impl Iterator<Item = [f32; 2]>) -> f64 {
+    let p: Vec<P> = points.map(|v| v.map(f64::from)).collect();
+    (0..p.len())
+        .map(|i| cross(p[i], p[(i + 1) % p.len()]))
+        .sum::<f64>()
+        / 2.0
+}
+
 /// The fringe contours of an icon: the boundary of the union of all its
 /// filled paths, as closed loops with an outward miter per vertex.
 ///
@@ -215,6 +319,7 @@ pub fn build(name: &str, paths: &[FillPath], prec: Precision) -> Result<Option<F
 /// so the arrangement stays consistent even where crossings lie closer
 /// together than one quantum.
 fn boundary(name: &str, paths: &[FillPath], prec: Precision) -> Result<Vec<Contour>, String> {
+    let paths = &merge_close(paths);
     let edges: Vec<[P; 2]> = paths
         .iter()
         .flat_map(|fp| &fp.contours)
@@ -307,6 +412,69 @@ fn boundary(name: &str, paths: &[FillPath], prec: Precision) -> Result<Vec<Conto
     }
     zero_pinches(&mut loops);
     Ok(loops)
+}
+
+/// Input points closer than this are one point. The input is f32, so two
+/// copies of one point reached along different paths (a subpath drawn
+/// once each way) differ by a few f32 steps, about 2e-6 near 24 units.
+/// Far below the blob's grid step (1/1024), so blob input never changes,
+/// and below the finest flattening tolerance the tests use (1e-4).
+const SAME: f32 = 1e-5;
+
+/// `paths` with points closer than [`SAME`] made one point, repeats
+/// dropped, and contours left with fewer than three points dropped.
+///
+/// The tracer tells points apart at [`WELD`] and edges apart at ten times
+/// that, both far below the input's own rounding. Remix Icon's
+/// blender-fill draws its inner disc once each way; unrounded, the two
+/// copies lie one f32 step apart, so an edge of one copy counted as lying
+/// on a piece's line while its end, a distinct point, split nothing, and
+/// the boundary did not close.
+fn merge_close(paths: &[FillPath]) -> Vec<FillPath> {
+    let mut cells: std::collections::HashMap<[i64; 2], Vec<[f32; 2]>> =
+        std::collections::HashMap::new();
+    let mut snap = |p: [f32; 2]| {
+        // `as` saturates, so a non-finite point lands in some cell.
+        let c = p.map(|v| (v / SAME).floor() as i64);
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                let found = cells.get(&[c[0] + dx, c[1] + dy]).and_then(|ps| {
+                    ps.iter()
+                        .find(|q| (q[0] - p[0]).hypot(q[1] - p[1]) < SAME)
+                        .copied()
+                });
+                if let Some(q) = found {
+                    return q;
+                }
+            }
+        }
+        cells.entry(c).or_default().push(p);
+        p
+    };
+    paths
+        .iter()
+        .map(|fp| FillPath {
+            rule: fp.rule,
+            contours: fp
+                .contours
+                .iter()
+                .map(|c| {
+                    let mut out: Vec<[f32; 2]> = Vec::new();
+                    for &p in c {
+                        let q = snap(p);
+                        if out.last() != Some(&q) {
+                            out.push(q);
+                        }
+                    }
+                    while out.len() > 1 && out.first() == out.last() {
+                        out.pop();
+                    }
+                    out
+                })
+                .filter(|c| c.len() >= 3)
+                .collect(),
+        })
+        .collect()
 }
 
 /// Zero the miter of every vertex whose quantised position occurs twice

@@ -103,3 +103,11 @@ tail -n +2 "$repo/tools/icongen/SETS.tsv" | while IFS=$'\t' read -r lib package 
   [ -n "$lic" ] || { echo "$lib: no licence file in $dir/package" >&2; exit 1; }
   cp "$lic" "$crate/LICENSE-ICONS.txt"
 done
+
+# Every shipped fill against the exact coverage of its upstream outline
+# (tests/fill_scan.rs). It reads every shipped set from $scratch, so it runs
+# after a full generation only.
+if [ $# -eq 0 ]; then
+  ICONGEN_DOWNLOADS=$scratch cargo test --manifest-path "$repo/tools/icongen/Cargo.toml" \
+    --jobs 4 --test fill_scan -- --test-threads 4
+fi

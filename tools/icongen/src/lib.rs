@@ -76,6 +76,46 @@ pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
 /// [`convert`] with the fills flattened at `prec` instead of the blob's
 /// precision.
 pub fn convert_with(name: &str, svg: &str, prec: Precision) -> Result<Converted, String> {
+    let (size, gathered) = gather(name, svg, prec)?;
+    let mut gathered = gathered.into_iter();
+    let base = gathered.next().expect("layer 0");
+    let fill = fill::build(name, &base.fills, prec)?;
+    let mut layers = Vec::new();
+    for g in gathered {
+        let fill = fill::build(name, &g.fills, prec)?;
+        if !g.segs.is_empty() || fill.is_some() {
+            layers.push(Layer {
+                alpha: g.alpha,
+                segs: g.segs,
+                fill,
+            });
+        }
+    }
+    if base.segs.is_empty() && fill.is_none() && layers.is_empty() {
+        return Err(format!("{name}: no stroked or filled paths"));
+    }
+    Ok(Converted {
+        name: name.to_owned(),
+        size,
+        segs: base.segs,
+        fill,
+        layers,
+    })
+}
+
+/// The filled paths of one SVG document flattened at `prec`, one entry per
+/// layer in paint order, before [`fill::build`] tessellates them: layer 0
+/// holds everything opaque. The tests measure fills against these.
+pub fn fill_paths(name: &str, svg: &str, prec: Precision) -> Result<Vec<Vec<FillPath>>, String> {
+    Ok(gather(name, svg, prec)?
+        .1
+        .into_iter()
+        .map(|g| g.fills)
+        .collect())
+}
+
+/// Parse `svg` and collect its strokes and fill paths per layer.
+fn gather(name: &str, svg: &str, prec: Precision) -> Result<(f32, Vec<Gather>), String> {
     let tree =
         usvg::Tree::from_str(svg, &usvg::Options::default()).map_err(|e| format!("{name}: {e}"))?;
     let size = tree.size();
@@ -97,30 +137,7 @@ pub fn convert_with(name: &str, svg: &str, prec: Precision) -> Result<Converted,
         prec,
         &mut gathered,
     )?;
-    let mut gathered = gathered.into_iter();
-    let base = gathered.next().expect("layer 0");
-    let fill = fill::build(name, &base.fills, prec)?;
-    let mut layers = Vec::new();
-    for g in gathered {
-        let fill = fill::build(name, &g.fills, prec)?;
-        if !g.segs.is_empty() || fill.is_some() {
-            layers.push(Layer {
-                alpha: g.alpha,
-                segs: g.segs,
-                fill,
-            });
-        }
-    }
-    if base.segs.is_empty() && fill.is_none() && layers.is_empty() {
-        return Err(format!("{name}: no stroked or filled paths"));
-    }
-    Ok(Converted {
-        name: name.to_owned(),
-        size: size.width(),
-        segs: base.segs,
-        fill,
-        layers,
-    })
+    Ok((size.width(), gathered))
 }
 
 /// The layer to paint into at `alpha` (the opacity of `layers[current]`)

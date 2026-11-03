@@ -10,10 +10,10 @@
 //! bitmap turned on the GPU would be resampled. Its texture is reused for
 //! the next angle on the next pass.
 //!
-//! Coverage is a distance field: strokes by the distance of each pixel
+//! Strokes are a distance field: coverage by the distance of each pixel
 //! centre to the flattened stroke segments, which is exact for SVG round
-//! caps and round joins (every shipped set uses both); fills by the distance
-//! to the fill boundary, signed by the pre-triangulated inside.
+//! caps and round joins (every shipped set uses both). Fills are exact: each
+//! pixel gets the area of it that the pre-triangulated fill covers.
 
 use crate::FillMesh;
 use egui::{
@@ -22,6 +22,8 @@ use egui::{
 };
 use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg};
 use std::collections::HashMap;
+
+mod fill;
 
 /// Curve flattening tolerance in physical pixels. A stroke's edge ramps
 /// over one pixel, so a piece this far off the curve moves a pixel's
@@ -33,9 +35,6 @@ const TOLERANCE_PX: f32 = 0.015; // behaviour-ok: curve flattening tolerance, no
 const MAX_CURVE_PIECES: f32 = 256.0; // behaviour-ok: allocation bound, not a design token
 /// Coverage ramps from 0 to 1 over one pixel centred on an edge.
 const HALF_PX: f32 = 0.5; // behaviour-ok: anti-aliasing ramp, not a design token
-/// A pixel centre this far outside a fill triangle's edge still counts as
-/// inside, so rounding cannot open a seam along a shared interior edge.
-const EDGE_SLACK_PX: f32 = 1e-3; // behaviour-ok: rounding slack, not a design token
 /// The largest texture side; a bigger icon is drawn from a texture of at
 /// most this size, scaled up.
 pub(crate) const MAX_SIDE: usize = 1024;
@@ -403,57 +402,8 @@ fn layer_coverage(layer: &IconLayer, w: usize, h: usize, place: Place, stroke_px
 
 /// Raises `cov` to the fill's coverage where that is higher.
 fn fill_coverage(cov: &mut [f32], w: usize, h: usize, fill: &FillMesh, place: Place) {
-    let map = |[x, y]: [f32; 2]| place.map(x, y);
-    let mut inside = vec![false; w * h];
-    for &t in fill.indices.as_chunks::<3>().0 {
-        let [a, b, c] = t.map(|i| {
-            fill.vertices
-                .get(usize::from(i))
-                .copied()
-                .map_or(pos2(f32::NAN, f32::NAN), map)
-        });
-        mark_triangle(&mut inside, w, h, [a, b, c]);
-    }
-    let mut dist = vec![f32::INFINITY; w * h];
-    for contour in &fill.contours {
-        let pts: Vec<Pos2> = contour.iter().map(|&(p, _)| map(p)).collect();
-        let Some(&last) = pts.last() else { continue };
-        let mut prev = last;
-        for &p in &pts {
-            min_distance(&mut dist, w, h, prev, p, HALF_PX);
-            prev = p;
-        }
-    }
-    for ((c, d), &inn) in cov.iter_mut().zip(&dist).zip(&inside) {
-        let f = if inn { HALF_PX + d } else { HALF_PX - d };
-        *c = c.max(f.clamp(0.0, 1.0));
-    }
-}
-
-/// Marks the pixels whose centre lies in the triangle (either orientation).
-fn mark_triangle(inside: &mut [bool], w: usize, h: usize, [a, b, c]: [Pos2; 3]) {
-    let area2 = (b - a).x * (c - a).y - (c - a).x * (b - a).y;
-    if area2.abs() <= f32::EPSILON || !area2.is_finite() {
-        return;
-    }
-    let sign = area2.signum();
-    let edges = [(a, b), (b, c), (c, a)].map(|(p, q)| (p, q - p, (q - p).length()));
-    let (xs, ys) = (
-        span(a.x.min(b.x).min(c.x), a.x.max(b.x).max(c.x), 0.0, w),
-        span(a.y.min(b.y).min(c.y), a.y.max(b.y).max(c.y), 0.0, h),
-    );
-    for y in ys {
-        for x in xs.clone() {
-            let p = pixel_centre(x, y);
-            let hit = edges.iter().all(|&(o, e, len)| {
-                let cross = e.x * (p - o).y - e.y * (p - o).x;
-                cross * sign >= -EDGE_SLACK_PX * len
-            });
-            if hit {
-                inside[y * w + x] = true;
-            }
-        }
-    }
+    let map = |[x, y]: [f32; 2]| place.map(x, y).into();
+    fill::fill_coverage(cov, w, h, &fill.vertices, &fill.indices, map);
 }
 
 /// Lowers `dist` to the distance from each pixel centre within `reach` of
@@ -678,6 +628,143 @@ mod tests {
             }
         }
         assert!(fails.is_empty(), "{fails:#?}");
+    }
+
+    /// The fill's coverage of `tris` (pixel coordinates) on a `side`² grid.
+    fn fill_cov(side: usize, tris: &[[[f32; 2]; 3]]) -> Vec<f32> {
+        let vertices: Vec<[f32; 2]> = tris.iter().flatten().copied().collect();
+        let indices: Vec<u16> = (0..vertices.len() as u16).collect();
+        let mut cov = vec![0.0; side * side];
+        fill::fill_coverage(&mut cov, side, side, &vertices, &indices, |p| p);
+        cov
+    }
+
+    /// A fill covers each pixel by the area of it that lies inside.
+    #[test]
+    fn a_fill_covers_each_pixel_by_its_area() {
+        // A square from 2.25 to 5.5, as two triangles of either turn.
+        let (a, b, c, d) = ([2.25, 2.25], [5.5, 2.25], [5.5, 5.5], [2.25, 5.5]);
+        let cov = fill_cov(8, &[[a, b, c], [a, d, c]]);
+        let at = |x: usize, y: usize| cov[y * 8 + x];
+        assert!((at(2, 2) - 0.75 * 0.75).abs() < 1e-5);
+        assert!((at(3, 3) - 1.0).abs() < 1e-5);
+        assert!((at(5, 2) - 0.75 * 0.5).abs() < 1e-5);
+        assert!((at(4, 5) - 0.5).abs() < 1e-5);
+        assert_eq!(at(6, 6), 0.0);
+        // A 45° edge through pixel corners halves the diagonal pixels.
+        let cov = fill_cov(8, &[[[0.0, 0.0], [8.0, 8.0], [0.0, 8.0]]]);
+        for i in 0..8 {
+            assert!((cov[i * 8 + i] - 0.5).abs() < 1e-5, "{i}: {}", cov[i * 8 + i]);
+            assert_eq!(cov[i * 8 + (i + 1).min(7)], if i == 7 { 0.5 } else { 0.0 });
+        }
+        // A sliver 0.1 px thin across a row covers each pixel by 0.1.
+        let cov = fill_cov(8, &[[[0.0, 3.2], [8.0, 3.2], [8.0, 3.3]], [[0.0, 3.2], [8.0, 3.3], [0.0, 3.3]]]);
+        assert!((1..7).all(|x| (cov[3 * 8 + x] - 0.1).abs() < 1e-5));
+    }
+
+    /// Triangles that meet along a slanted edge add up to full coverage:
+    /// no seam, at any angle.
+    #[test]
+    fn abutting_triangles_leave_no_seam() {
+        for k in 0..16 {
+            let t = k as f32 * 0.37;
+            let (s, c) = t.sin_cos();
+            let p = |x: f32, y: f32| [16.0 + x * c - y * s, 16.0 + x * s + y * c];
+            let quad = [p(-9.0, -7.3), p(8.1, -7.3), p(8.1, 6.6), p(-9.0, 6.6)];
+            let cov = fill_cov(32, &[[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]]);
+            for y in 12..20 {
+                for x in 12..20 {
+                    let v = cov[y * 32 + x];
+                    assert!((v - 1.0).abs() < 1e-5, "{t} rad ({x}, {y}): {v}");
+                }
+            }
+            let total: f32 = cov.iter().sum();
+            assert!((total - 17.1 * 13.9).abs() < 2e-3, "{t} rad: area {total}");
+        }
+    }
+
+    /// The previous fill raster: each row cut out of the triangle, each
+    /// pixel the row's area left of its right side minus left of its left
+    /// side. The per-row edge walk must give the same coverage.
+    fn fill_cov_by_clipping(side: usize, tris: &[[[f32; 2]; 3]]) -> Vec<f32> {
+        type P = [f32; 2];
+        fn cut(pts: &[P], d: impl Fn(P) -> f32, on: impl Fn(P) -> P) -> Vec<P> {
+            let mut out = Vec::new();
+            for (i, &q) in pts.iter().enumerate() {
+                let p = pts[(i + pts.len() - 1) % pts.len()];
+                let (dp, dq) = (d(p), d(q));
+                if (dp >= 0.0) != (dq >= 0.0) {
+                    let t = dp / (dp - dq);
+                    out.push(on([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]));
+                }
+                if dq >= 0.0 {
+                    out.push(q);
+                }
+            }
+            out
+        }
+        fn left_of(pts: &[P], x: f32) -> f32 {
+            let part = cut(pts, |p| x - p[0], |p| [x, p[1]]);
+            let mut sum = 0.0;
+            for (i, &q) in part.iter().enumerate() {
+                let p = part[(i + part.len() - 1) % part.len()];
+                sum += (p[0] - q[0]) * (p[1] + q[1]);
+            }
+            sum / 2.0
+        }
+        let mut cov = vec![0.0f32; side * side];
+        for &[a, b, c] in tris {
+            let turn = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+            let tri = if turn >= 0.0 { [a, b, c] } else { [a, c, b] };
+            for y in 0..side {
+                let y0 = y as f32;
+                let local: Vec<P> = tri.iter().map(|p| [p[0], p[1] - y0]).collect();
+                let row = cut(&local, |p| p[1], |p| [p[0], 0.0]);
+                let row = cut(&row, |p| 1.0 - p[1], |p| [p[0], 1.0]);
+                if row.len() < 3 {
+                    continue;
+                }
+                for x in 0..side {
+                    let (l, r) = (x as f32, x as f32 + 1.0);
+                    cov[y * side + x] += left_of(&row, r) - left_of(&row, l);
+                }
+            }
+        }
+        cov.iter().map(|a| a.clamp(0.0, 1.0)).collect()
+    }
+
+    /// The per-row edge walk matches clipping each pixel out of each row,
+    /// within f32 rounding far below one level, on random triangles of
+    /// every size and slant, slivers included.
+    #[test]
+    fn the_edge_walk_matches_clipping() {
+        let mut seed = 0x2545_f491_u32;
+        let mut rnd = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed as f32 / u32::MAX as f32
+        };
+        let mut worst = 0.0f32;
+        for n in 0..400 {
+            let scale = [1.0, 4.0, 15.0, 30.0][n % 4];
+            let mut p = || [1.0 + rnd() * scale, 1.0 + rnd() * scale];
+            let (a, b) = (p(), p());
+            // Every fifth triangle is a sliver: c close to the line ab.
+            let c = if n % 5 == 0 {
+                let t = rnd();
+                [a[0] + (b[0] - a[0]) * t + 0.01 * rnd(), a[1] + (b[1] - a[1]) * t]
+            } else {
+                p()
+            };
+            let tris = [[a, b, c]];
+            let new = fill_cov(32, &tris);
+            let old = fill_cov_by_clipping(32, &tris);
+            for (x, y) in new.iter().zip(&old) {
+                worst = worst.max((x - y).abs());
+            }
+        }
+        assert!(worst * 255.0 < 0.05, "worst difference {} levels", worst * 255.0);
     }
 
     #[test]

@@ -15,3 +15,8 @@ publish = false
 usvg = { version = "0.48", default-features = false }
 # Tessellates filled paths at generation time; the runtime gets plain data.
 lyon_tessellation = "1"
+
+# The tests rasterise every shipped icon (`tests/fill_scan.rs`); optimised,
+# that takes about as long as in a release build.
+[profile.test]
+opt-level = 3
