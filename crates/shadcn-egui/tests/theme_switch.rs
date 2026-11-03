@@ -444,3 +444,128 @@ fn the_same_fonts_applied_every_pass_settle() {
         }
     }
 }
+
+/// Native viewports for this thread's contexts, run as eframe runs an
+/// immediate one: a `run_ui` pass of its own, inside its parent's pass.
+fn native_viewports(ctx: &egui::Context) {
+    ctx.set_embed_viewports(false);
+    egui::Context::set_immediate_viewport_renderer(|ctx, mut viewport| {
+        let id = viewport.ids.this;
+        let input = egui::RawInput {
+            viewport_id: id,
+            viewports: [(id, egui::ViewportInfo::default())].into_iter().collect(),
+            ..Default::default()
+        };
+        let _ = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+    });
+}
+
+fn child_viewport() -> egui::ViewportId {
+    egui::ViewportId::from_hash_of("shadcn_egui_test_child")
+}
+
+/// The delay before the root viewport's next frame.
+fn root_repaint_delay(out: &egui::FullOutput) -> std::time::Duration {
+    out.viewport_output[&egui::ViewportId::ROOT].repaint_delay
+}
+
+/// `Theme::apply` of other fonts in the root's pass, and then a window
+/// (an immediate viewport) that opens and draws a crate widget: the
+/// window counts its passes apart from the root, and its check does not
+/// hide the font change from the root's own check. The frame `run_ui`
+/// returns draws the root's widget in the new fonts.
+#[test]
+fn a_font_change_before_a_new_window_shows_the_new_fonts() {
+    use shadcn_egui::components::label::label;
+    let new = label_width(&oxanium());
+    let ctx = egui::Context::default();
+    native_viewports(&ctx);
+    Theme::vega().apply(&ctx);
+    let switch = std::cell::Cell::new(false);
+    let width = std::cell::Cell::new(0.0);
+    let frame = || {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            width.set(label(ui, "Accept terms").rect.width());
+            if switch.get() {
+                oxanium().apply(ui.ctx());
+                let builder = egui::ViewportBuilder::default();
+                ui.ctx()
+                    .show_viewport_immediate(child_viewport(), builder, |ui, _| {
+                        drop(label(ui, "Settings"));
+                    });
+            }
+        })
+    };
+    let _ = frame();
+    let _ = frame();
+    switch.set(true);
+    let _ = frame();
+    assert_eq!(width.get(), new);
+}
+
+/// Vega with its light and dark palettes swapped: other colours, the
+/// same fonts.
+fn swapped() -> Theme {
+    Theme::new(Style::vega(), Palette::dark(), Palette::light(), 10.0)
+}
+
+/// What a window applies in [`a_theme_change_in_a_window_repaints_the_root`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Change {
+    /// The first `Theme::apply` on the context.
+    First,
+    /// A theme with other fonts.
+    Fonts,
+    /// A theme with other colours and the same fonts.
+    Colours,
+}
+
+/// Fonts or styles changed in a window (an immediate viewport) belong to
+/// the whole context: the root viewport, which drew in the old ones,
+/// repaints.
+#[test]
+fn a_theme_change_in_a_window_repaints_the_root() {
+    use std::time::Duration;
+    let changes = [Change::First, Change::Fonts, Change::Colours];
+    let mut delays = Vec::new();
+    for change in changes {
+        let ctx = egui::Context::default();
+        native_viewports(&ctx);
+        if change != Change::First {
+            Theme::vega().apply(&ctx);
+        }
+        let switch = std::cell::Cell::new(false);
+        let frame = || {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.label("Accept terms");
+                let builder = egui::ViewportBuilder::default();
+                ui.ctx()
+                    .show_viewport_immediate(child_viewport(), builder, |ui, _| {
+                        ui.label("Settings");
+                        if switch.get() {
+                            match change {
+                                Change::First => Theme::vega().apply(ui.ctx()),
+                                Change::Fonts => oxanium().apply(ui.ctx()),
+                                Change::Colours => swapped().apply(ui.ctx()),
+                            }
+                        }
+                    });
+            })
+        };
+        for _ in 0..3 {
+            let _ = frame();
+        }
+        let still = frame();
+        assert_eq!(
+            root_repaint_delay(&still),
+            Duration::MAX,
+            "{change:?}: a still frame"
+        );
+        switch.set(true);
+        let out = frame();
+        switch.set(false);
+        delays.push((change, root_repaint_delay(&out)));
+    }
+    let repaint = changes.map(|change| (change, Duration::ZERO));
+    assert_eq!(delays, repaint, "the root repaints");
+}

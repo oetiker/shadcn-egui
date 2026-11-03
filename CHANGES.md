@@ -39,6 +39,7 @@ are recorded here. The format is based on
 - Screen readers no longer announce a Label, Badge, Kbd, Card, Alert, Progress bar, `IconView` icon or the text of a crate widget as disabled when it sits in a disabled area (`ui.add_enabled_ui(false, ..)`, `ui.disable()`), as a browser does not for these elements; buttons, inputs and the other controls there are still announced as disabled. A label in such an area still looks faded.
 - Screen readers no longer announce an app's own widget as disabled in a disabled area when it is given the role alert, alert dialog, navigation, status or another role that has no disabled state in the browser through `widget_info_with_role`. A widget given a role that has one, such as group, is still announced as disabled there.
 - The curved strokes of icons (circles, arcs, the loader, the heart) now follow the curve: their edges could sit up to a tenth of a pixel off it, so curves showed faint flat facets and edge pixels up to a tenth too light or too dark.
+- In an app with several windows (egui viewports), a `Theme::apply` in one window now redraws the other windows at once; before, they kept the old fonts, and after the first apply also the old colours, until their next input. A font change in the main window followed by a window that opens in the same frame no longer leaves the main window showing the old fonts until its next input.
 
 ## 0.7.0 - 2026-10-29
 ### New

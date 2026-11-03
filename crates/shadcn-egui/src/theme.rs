@@ -888,14 +888,18 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
     // and is redone. Where no crate call has seen this pass yet, a call
     // between two passes cannot be told from the first call of a pass:
     // repaint, so a pass that drew in the old fonts is not the last one.
-    // egui repaints after the first pass anyway.
+    // egui repaints after the first pass anyway. The fonts are the
+    // context's, not the viewport's: every other viewport that drew in the
+    // old fonts repaints too.
+    let record = pass_mode_id(ctx);
     let seen = ctx.data(|d| {
-        d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())
+        d.get_temp::<(u64, egui::Theme, u64)>(record)
             .is_some_and(|(p, ..)| p == pass)
     });
     if pass > 0 && !seen {
         ctx.request_repaint();
     }
+    repaint_other_viewports(ctx);
     ctx.data_mut(|d| {
         let n = d.get_temp::<u64>(font_installs_id()).unwrap_or(0);
         d.insert_temp(font_installs_id(), n + 1);
@@ -1141,14 +1145,20 @@ impl Theme {
             ctx.style_mut_of(mode, |s| self.style_egui(s, p, dark, hairline, &heading));
         }
 
-        ctx.data_mut(|d| {
-            if d.get_temp::<Theme>(theme_id()).as_ref() != Some(self) {
+        let changed = ctx.data_mut(|d| {
+            let changed = d.get_temp::<Theme>(theme_id()).as_ref() != Some(self);
+            if changed {
                 let generation = d.get_temp::<u64>(generation_id()).unwrap_or(0);
                 d.insert_temp(generation_id(), generation + 1);
             }
             d.insert_temp(theme_id(), self.clone());
             d.insert_temp(hairline_id(), hairline);
+            changed
         });
+        // The styles are the context's: other viewports drew in the old ones.
+        if changed {
+            repaint_other_viewports(ctx);
+        }
         // egui takes the list of pass hooks before a `run_ui` pass, so hooks
         // first registered in a pass do not run at its end: check here, so
         // a font install after the pass's last crate widget redoes the pass
@@ -1263,9 +1273,27 @@ fn hairline_id() -> egui::Id {
 }
 
 /// The pass number, and the mode and the font install the pass started
-/// with, as first seen by [`check_mode_switch`].
-fn pass_mode_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::pass_mode")
+/// with, as first seen by [`check_mode_switch`]. One per viewport: each
+/// counts its own passes, and an immediate viewport runs its passes inside
+/// its parent's.
+fn pass_mode_id(ctx: &egui::Context) -> egui::Id {
+    egui::Id::new("shadcn_egui::pass_mode").with(ctx.viewport_id())
+}
+
+/// Repaint every viewport but the current one that has drawn a frame:
+/// fonts and styles belong to the context, so a change made in one
+/// viewport leaves the others' last frame stale until their next input.
+/// egui lists the open viewports in the raw input (eframe fills it); a
+/// viewport that has drawn no frame has nothing stale.
+fn repaint_other_viewports(ctx: &egui::Context) {
+    let current = ctx.viewport_id();
+    let mut ids: Vec<egui::ViewportId> = ctx.input(|i| i.raw.viewports.keys().copied().collect());
+    ids.extend([egui::ViewportId::ROOT, ctx.parent_viewport_id()]);
+    for id in ids {
+        if id != current && ctx.cumulative_pass_nr_for(id) > 0 {
+            ctx.request_repaint_of(id);
+        }
+    }
 }
 
 /// The font definitions [`install_fonts`] installed last.
@@ -1296,7 +1324,9 @@ fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
     let mode = ctx.theme();
     let pass = ctx.cumulative_pass_nr();
     let fonts = font_installs(ctx);
-    match ctx.data(|d| d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())) {
+    // Outside the closures: `viewport_id` locks the context.
+    let record = pass_mode_id(ctx);
+    match ctx.data(|d| d.get_temp::<(u64, egui::Theme, u64)>(record)) {
         Some((p, start, start_fonts)) if p == pass => {
             if start != mode {
                 ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
@@ -1308,7 +1338,7 @@ fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
             }
         }
         _ => {
-            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode, fonts)));
+            ctx.data_mut(|d| d.insert_temp(record, (pass, mode, fonts)));
         }
     }
     mode
