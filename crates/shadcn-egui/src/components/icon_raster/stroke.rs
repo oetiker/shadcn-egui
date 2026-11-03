@@ -321,7 +321,8 @@ impl Outline {
     }
 
     /// The outer side of a joint at `jp`, from `from` (offset `u` x half)
-    /// to `to` (offset `v` x half), turning from `u` towards `v`.
+    /// to `to` (offset `v` x half), turning from `u` towards `v` the
+    /// positive way (from x towards y), by up to half a turn.
     #[allow(clippy::too_many_arguments)]
     fn join(
         &mut self,
@@ -337,7 +338,11 @@ impl Outline {
         let cos = dot(u, v);
         match style.join {
             Join::Round => {
-                let sweep = cross(u, v).atan2(cos);
+                // The turn is never negative here. At a reversal (u = -v)
+                // the cross product is +0 or -0 by rounding alone, and
+                // -0 would send the arc back over the stroke instead of
+                // round its far side.
+                let sweep = cross(u, v).abs().atan2(cos);
                 self.arc(jp, from, to, half, sweep, flatten);
             }
             // The miter is 1 / cos(turn / 2) half widths long.
@@ -503,6 +508,11 @@ impl Outline {
 /// No link: the end of a chain.
 const NONE: usize = usize::MAX;
 
+/// Two pieces closer than this (relative to x) at a band's end touch
+/// there: well above f32 rounding of the outline's points, well below
+/// any gap that shows.
+const TOUCH: f32 = 2e-5;
+
 /// One pixel row's edges and the scratch to walk them, kept between rows
 /// so a row allocates nothing.
 #[derive(Default)]
@@ -592,12 +602,17 @@ impl Row {
                 if hi <= lo {
                     continue;
                 }
-                let f0 = s.x_at(lo) - t.x_at(lo);
-                let f1 = s.x_at(hi) - t.x_at(hi);
-                if f0 == 0.0 {
+                let (x0, x1) = (s.x_at(lo), s.x_at(hi));
+                let f0 = x0 - t.x_at(lo);
+                let f1 = x1 - t.x_at(hi);
+                // A touch, up to rounding: a piece that starts or ends on
+                // another (a cap's corner on the stroke's side, say) may
+                // leave it there, so the band is cut. A cut too many
+                // costs a band, never area.
+                if f0.abs() <= TOUCH * (1.0 + x0.abs()) {
                     cuts.push(lo);
                 }
-                if f1 == 0.0 {
+                if f1.abs() <= TOUCH * (1.0 + x1.abs()) {
                     cuts.push(hi);
                 }
                 if (f0 < 0.0 && f1 > 0.0) || (f0 > 0.0 && f1 < 0.0) {
@@ -937,6 +952,95 @@ mod tests {
         assert!(near(total(&c), 64.0 + 24.0 - 8.0, 1e-3), "{}", total(&c));
         assert!(c.iter().all(|x| *x <= 1.0 + 1e-6));
         assert!(near(c[8 * 16 + 11], 1.0, 1e-6) && near(c[8 * 16 + 7], 1.0, 1e-6));
+    }
+
+    /// ∫ √(r² - t²) dt from `a` to `b` (both within -r..=r): a slice of a
+    /// half disc of radius `r` between the lines t = a and t = b.
+    fn half_disc_slice(r: f32, a: f32, b: f32) -> f32 {
+        let f = |t: f32| {
+            0.5 * (t * (r * r - t * t).max(0.0).sqrt() + r * r * (t / r).clamp(-1.0, 1.0).asin())
+        };
+        f(b) - f(a)
+    }
+
+    /// A sub-path that turns straight back, A→B→C with C between A and B:
+    /// the area is the stroke of A–B alone plus, past B, the join (a half
+    /// disc for a round join, nothing for a bevel, and a miter falls back
+    /// to a bevel since it is infinitely long). Every direction and both
+    /// orders, since a reversal's turn is ±0 and either sign must work.
+    #[test]
+    fn a_reversal_keeps_its_join() {
+        let (h, l, back) = (1.25f32, 9.0f32, 3.5f32);
+        let c = [16.0f32, 16.0];
+        for k in 0..16 {
+            let (s, co) = (k as f32 * PI / 8.0).sin_cos();
+            let at = |t: f32| [c[0] + t * co, c[1] + t * s];
+            // A at -l/2, B at +l/2, C back towards A.
+            let path = [at(-l / 2.0), at(l / 2.0), at(l / 2.0 - back)];
+            let half_disc = PI * h * h / 2.0;
+            let rect = 2.0 * h * l;
+            let cases = [
+                (Cap::Round, Join::Round, rect + 2.0 * half_disc),
+                (Cap::Butt, Join::Round, rect + half_disc),
+                (Cap::Square, Join::Round, rect + 2.0 * h * h + half_disc),
+                (Cap::Butt, Join::Bevel, rect),
+                (Cap::Butt, Join::Miter, rect),
+                (Cap::Round, Join::Bevel, rect + half_disc),
+                (Cap::Square, Join::Miter, rect + 2.0 * h * h),
+            ];
+            for (cap, join, want) in cases {
+                let got = total(&cov(32, h, style(cap, join), &[(&path, false)]));
+                assert!(
+                    near(got, want, 2e-3),
+                    "{k} {cap:?} {join:?}: {got} vs {want}"
+                );
+            }
+            // Nearly a reversal (179.9°), turning either way: about the
+            // same area, the join's half disc included.
+            for turn in [1.0f32, -1.0] {
+                let e = turn * 0.1f32.to_radians();
+                let (es, ec) = e.sin_cos();
+                let b = at(l / 2.0);
+                let dir = [-(co * ec - s * es), -(s * ec + co * es)];
+                let near_path = [
+                    at(-l / 2.0),
+                    b,
+                    [b[0] + back * dir[0], b[1] + back * dir[1]],
+                ];
+                let got = total(&cov(32, h, Style::ROUND, &[(&near_path, false)]));
+                let want = rect + 2.0 * half_disc;
+                assert!(near(got, want, 0.02), "{k} {turn}: {got} vs {want}");
+            }
+        }
+    }
+
+    /// The two Tabler icons where the defect showed, at 16 px (stroke 2
+    /// units = 4/3 px): `currency-rupee` (`M 18 5 h -11 h 3`) and
+    /// `number-23-small` (`h -1.5 h 1.5` at y = 12), their reversals'
+    /// pixels against the analytic area of the strokes there.
+    #[test]
+    fn tabler_reversals_at_16_px() {
+        let s = 16.0f32 / 24.0;
+        let h = s;
+        let px = |x: f32, y: f32| [x * s, y * s];
+        let rupee = [px(18.0, 5.0), px(7.0, 5.0), px(10.0, 5.0)];
+        let c = cov(16, h, Style::ROUND, &[(&rupee, false)]);
+        // Pixel (4, 3): the joint is at (14/3, 10/3); the bar covers
+        // x 14/3..5 of it, the join's half disc the rest, y 3..4 of it.
+        let want = (5.0 - 14.0 / 3.0) + half_disc_slice(h, 3.0 - 10.0 / 3.0, 4.0 - 10.0 / 3.0);
+        let got = c[3 * 16 + 4];
+        assert!(near(got, want, 1e-3), "rupee (4,3): {got} vs {want}");
+        // The joint at (10, 8): pixels (9, 7) and (9, 8) hold a quarter
+        // disc each.
+        let n23 = [px(16.5, 12.0), px(15.0, 12.0), px(16.5, 12.0)];
+        let c = cov(16, h, Style::ROUND, &[(&n23, false)]);
+        for (x, y) in [(9, 7), (9, 8)] {
+            let got = c[y * 16 + x];
+            assert!(
+                near(got, PI * h * h / 4.0, 1e-3),
+                "23-small ({x},{y}): {got}"
+            );
+        }
     }
 
     #[test]

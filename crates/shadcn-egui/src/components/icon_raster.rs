@@ -26,6 +26,8 @@ use std::collections::HashMap;
 
 mod fill;
 mod stroke;
+#[cfg(test)]
+mod stroke_scan;
 
 /// Curve flattening tolerance in physical pixels. A piece this far off the
 /// curve moves the stroke's edge by as much, a pixel's coverage by up to
