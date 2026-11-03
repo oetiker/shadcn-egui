@@ -131,17 +131,8 @@ fn add_triangle(area: &mut [f32], run: &mut Vec<f32>, w: usize, h: usize, tri: [
         for (i, &q) in pts.iter().enumerate() {
             let p = pts[(i + pts.len() - 1) % pts.len()];
             let dy = q[1] - p[1];
-            if dy == 0.0 {
-                continue;
-            }
-            let (el, eh) = (p[0].min(q[0]), p[0].max(q[0]));
-            // Pixels left of the edge's first pixel: all of dy.
-            let first = (el.floor().max(0.0) as usize).min(k);
-            run[0] += dy;
-            run[first] -= dy;
-            let end = (eh.ceil().max(0.0) as usize).min(k);
-            for (x, cell) in line.iter_mut().enumerate().take(end).skip(first) {
-                *cell += dy * mean_overlap(el, eh, x as f32);
+            if dy != 0.0 {
+                add_edge(line, run, dy, p[0], q[0]);
             }
         }
         let mut sum = 0.0;
@@ -149,6 +140,24 @@ fn add_triangle(area: &mut [f32], run: &mut Vec<f32>, w: usize, h: usize, tri: [
             sum += r;
             *cell += sum;
         }
+    }
+}
+
+/// Adds one edge of a row's polygon to the row: `dy` (signed) times the
+/// edge's mean overlap with each pixel's column span, the pixels left of
+/// it all of `dy` through `run` (summed from the left afterwards). `xa`
+/// and `xb` are the edge's ends, local to `line`'s first pixel; `run` is
+/// one longer than `line`.
+pub(super) fn add_edge(line: &mut [f32], run: &mut [f32], dy: f32, xa: f32, xb: f32) {
+    let k = line.len();
+    let (el, eh) = (xa.min(xb), xa.max(xb));
+    // Pixels left of the edge's first pixel: all of dy.
+    let first = (el.floor().max(0.0) as usize).min(k);
+    run[0] += dy;
+    run[first] -= dy;
+    let end = (eh.ceil().max(0.0) as usize).min(k);
+    for (x, cell) in line.iter_mut().enumerate().take(end).skip(first) {
+        *cell += dy * mean_overlap(el, eh, x as f32);
     }
 }
 

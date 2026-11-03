@@ -10,12 +10,13 @@
 //! bitmap turned on the GPU would be resampled. Its texture is reused for
 //! the next angle on the next pass.
 //!
-//! Strokes are a distance field: coverage by the distance of each pixel
-//! centre to the flattened stroke segments, which is exact for SVG round
-//! caps and round joins (every shipped set uses both). Fills are exact: each
-//! pixel gets the area of it that the pre-triangulated fill covers.
+//! Coverage is exact area: each pixel gets the share of it that a layer
+//! covers. A layer's strokes become closed outlines (round caps and round
+//! joins, as every shipped set draws them), and the pixel area of the union
+//! of those outlines and the fill's triangles is found row by row, so
+//! strokes that meet or overlap count once. A fill alone takes the triangles
+//! directly, which never overlap.
 
-use crate::FillMesh;
 use egui::{
     pos2, vec2, Color32, ColorImage, Context, Id, Pos2, TextureHandle, TextureOptions, Vec2,
     ViewportId,
@@ -24,12 +25,13 @@ use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg};
 use std::collections::HashMap;
 
 mod fill;
+mod stroke;
 
-/// Curve flattening tolerance in physical pixels. A stroke's edge ramps
-/// over one pixel, so a piece this far off the curve moves a pixel's
-/// coverage by up to 0.015 x 255 = 3.8 levels: within the 4 levels an
-/// opaque edge may differ from the exact one.
-const TOLERANCE_PX: f32 = 0.015; // behaviour-ok: curve flattening tolerance, not a design token
+/// Curve flattening tolerance in physical pixels. A piece this far off the
+/// curve moves the stroke's edge by as much, a pixel's coverage by up to
+/// 0.01 x 255 = 2.6 levels: within the 4 levels an opaque edge may differ
+/// from the exact one, rounding to whole levels included.
+const TOLERANCE_PX: f32 = 0.01; // behaviour-ok: curve flattening tolerance, not a design token
 /// At most this many line pieces per curve, so a curve with absurd control
 /// points cannot allocate without bound.
 const MAX_CURVE_PIECES: f32 = 256.0; // behaviour-ok: allocation bound, not a design token
@@ -381,117 +383,104 @@ fn placed_coverage(icon: &Icon, w: usize, h: usize, place: Place, stroke_px: f32
         .collect()
 }
 
-/// Coverage (0..=1) of one layer: its strokes and its fill, overlaps once.
+/// Coverage (0..=1) of one layer: the exact area of the union of its
+/// strokes and its fill, so overlaps count once. A fill alone takes the
+/// fill raster, whose triangles never overlap.
 fn layer_coverage(layer: &IconLayer, w: usize, h: usize, place: Place, stroke_px: f32) -> Vec<f32> {
     let mut cov: Vec<f32> = vec![0.0; w * h];
-    if stroke_px > 0.0 && stroke_px.is_finite() {
-        let half = stroke_px / 2.0;
-        let mut dist = vec![f32::INFINITY; w * h];
-        for (a, b) in stroke_segments(layer.segs.clone(), place) {
-            min_distance(&mut dist, w, h, a, b, half + HALF_PX);
+    let map = |[x, y]: [f32; 2]| place.map(x, y).into();
+    let paths = if stroke_px > 0.0 && stroke_px.is_finite() {
+        stroke_paths(layer.segs.clone(), place)
+    } else {
+        Vec::new()
+    };
+    if paths.is_empty() {
+        if let Some(fill) = &layer.fill {
+            fill::fill_coverage(&mut cov, w, h, &fill.vertices, &fill.indices, map);
         }
-        for (c, d) in cov.iter_mut().zip(&dist) {
-            *c = (HALF_PX + half - d).clamp(0.0, 1.0);
-        }
+        return cov;
+    }
+    let mut outline = stroke::Outline::default();
+    for (pts, closed) in &paths {
+        outline.stroke(
+            pts,
+            *closed,
+            stroke_px / 2.0,
+            stroke::Style::ROUND,
+            place.flatten,
+        );
     }
     if let Some(fill) = &layer.fill {
-        fill_coverage(&mut cov, w, h, fill, place);
+        outline.triangles(&fill.vertices, &fill.indices, map);
     }
+    outline.coverage(&mut cov, w, h);
     cov
-}
-
-/// Raises `cov` to the fill's coverage where that is higher.
-fn fill_coverage(cov: &mut [f32], w: usize, h: usize, fill: &FillMesh, place: Place) {
-    let map = |[x, y]: [f32; 2]| place.map(x, y).into();
-    fill::fill_coverage(cov, w, h, &fill.vertices, &fill.indices, map);
-}
-
-/// Lowers `dist` to the distance from each pixel centre within `reach` of
-/// the segment `a`–`b` (a point when they coincide).
-fn min_distance(dist: &mut [f32], w: usize, h: usize, a: Pos2, b: Pos2, reach: f32) {
-    let ab = b - a;
-    let len2 = ab.length_sq();
-    for y in span(a.y.min(b.y), a.y.max(b.y), reach, h) {
-        for x in span(a.x.min(b.x), a.x.max(b.x), reach, w) {
-            let p = pixel_centre(x, y);
-            let t = if len2 > 0.0 {
-                ((p - a).dot(ab) / len2).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let d = (p - (a + ab * t)).length();
-            let slot = &mut dist[y * w + x];
-            *slot = slot.min(d);
-        }
-    }
-}
-
-/// The pixel indices whose centres lie in `lo - reach ..= hi + reach`,
-/// clipped to `0..n`. Non-finite bounds give an empty or clipped range.
-fn span(lo: f32, hi: f32, reach: f32, n: usize) -> std::ops::Range<usize> {
-    let first = (lo - reach - HALF_PX).ceil().max(0.0);
-    let end = (hi + reach - HALF_PX).floor() + 1.0;
-    // `as` saturates: NaN becomes 0, huge values become `usize::MAX`.
-    (first as usize).min(n)..(end.max(0.0) as usize).min(n)
 }
 
 fn pixel_centre(x: usize, y: usize) -> Pos2 {
     pos2(x as f32 + HALF_PX, y as f32 + HALF_PX)
 }
 
-/// A layer's strokes as line pieces in pixels. `M` starts a sub-path, `Z`
-/// closes it and returns to its start, a lone `M` is a dot (a round cap); a
-/// curve without a start point is skipped, a line without one starts a
-/// sub-path.
-fn stroke_segments(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Pos2, Pos2)> {
-    let map = |x: f32, y: f32| place.map(x, y);
-    let mut out = Vec::new();
-    let (mut start, mut cur): (Option<Pos2>, Option<Pos2>) = (None, None);
-    let mut drawn = false;
-    fn dot(out: &mut Vec<(Pos2, Pos2)>, start: Option<Pos2>, drawn: bool) {
-        if let (Some(s), false) = (start, drawn) {
-            out.push((s, s));
+/// A layer's strokes as sub-paths of points in pixels, each with whether
+/// `Z` closed it. `M` starts a sub-path; a lone `M` is a dot; a curve
+/// without a start point is skipped, a line without one starts a sub-path.
+fn stroke_paths(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Vec<[f32; 2]>, bool)> {
+    let map = |x: f32, y: f32| <[f32; 2]>::from(place.map(x, y));
+    let mut out: Paths = Vec::new();
+    // Whether the last sub-path takes more pieces, and where a piece
+    // after `Z` starts.
+    let (mut open, mut after_z) = (false, None);
+    type Paths = Vec<(Vec<[f32; 2]>, bool)>;
+    // Starts a sub-path for a piece that has none open.
+    fn current(out: &mut Paths, open: &mut bool, after_z: &mut Option<[f32; 2]>) {
+        if !*open {
+            out.push((after_z.take().into_iter().collect(), false));
+            *open = true;
         }
     }
     for seg in segs {
         match seg {
             Seg::M(x, y) => {
-                dot(&mut out, start, drawn);
-                let p = map(x, y);
-                (start, cur, drawn) = (Some(p), Some(p), false);
+                out.push((vec![map(x, y)], false));
+                (open, after_z) = (true, None);
             }
             Seg::L(x, y) => {
-                let p = map(x, y);
-                match cur {
-                    Some(c) => {
-                        out.push((c, p));
-                        drawn = true;
-                    }
-                    None => (start, drawn) = (Some(p), false),
+                current(&mut out, &mut open, &mut after_z);
+                if let Some((pts, _)) = out.last_mut() {
+                    pts.push(map(x, y));
                 }
-                cur = Some(p);
             }
             Seg::Q(x1, y1, x, y) => {
-                let Some(c) = cur else { continue };
-                let p = map(x, y);
-                curve(&mut out, &[c, map(x1, y1), p], place.flatten);
-                (cur, drawn) = (Some(p), true);
+                current(&mut out, &mut open, &mut after_z);
+                let Some((pts, _)) = out.last_mut() else {
+                    continue;
+                };
+                let Some(&c) = pts.last() else { continue };
+                curve(pts, &[c, map(x1, y1), map(x, y)], place.flatten);
             }
             Seg::C(x1, y1, x2, y2, x, y) => {
-                let Some(c) = cur else { continue };
-                let p = map(x, y);
-                curve(&mut out, &[c, map(x1, y1), map(x2, y2), p], place.flatten);
-                (cur, drawn) = (Some(p), true);
+                current(&mut out, &mut open, &mut after_z);
+                let Some((pts, _)) = out.last_mut() else {
+                    continue;
+                };
+                let Some(&c) = pts.last() else { continue };
+                curve(
+                    pts,
+                    &[c, map(x1, y1), map(x2, y2), map(x, y)],
+                    place.flatten,
+                );
             }
             Seg::Z => {
-                if let (Some(c), Some(s)) = (cur, start) {
-                    out.push((c, s));
-                    (cur, drawn) = (Some(s), true);
+                if let Some((pts, closed)) = out.last_mut().filter(|_| open) {
+                    if let Some(&start) = pts.first() {
+                        *closed = true;
+                        (open, after_z) = (false, Some(start));
+                    }
                 }
             }
         }
     }
-    dot(&mut out, start, drawn);
+    out.retain(|(pts, _)| !pts.is_empty());
     out
 }
 
@@ -499,7 +488,8 @@ fn stroke_segments(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Pos2, 
 /// pieces, enough that none strays more than `tolerance` pixels from the
 /// curve, and at most `max_pieces`: the deviation of `n` pieces is at most
 /// `max|B''| / (8 n²)`.
-fn curve(out: &mut Vec<(Pos2, Pos2)>, p: &[Pos2], (tolerance, max_pieces): (f32, f32)) {
+fn curve(out: &mut Vec<[f32; 2]>, p: &[[f32; 2]], (tolerance, max_pieces): (f32, f32)) {
+    let p: Vec<Pos2> = p.iter().map(|&q| q.into()).collect();
     let second = p
         .windows(3)
         .map(|w| (w[0].to_vec2() - w[1].to_vec2() * 2.0 + w[2].to_vec2()).length())
@@ -511,12 +501,9 @@ fn curve(out: &mut Vec<(Pos2, Pos2)>, p: &[Pos2], (tolerance, max_pieces): (f32,
         .ceil()
         .clamp(1.0, max_pieces);
     let n = if n.is_nan() { 1 } else { n as usize };
-    let mut prev = p[0];
     for i in 1..=n {
         let t = i as f32 / n as f32;
-        let q = bezier(p, t);
-        out.push((prev, q));
-        prev = q;
+        out.push(bezier(&p, t).into());
     }
 }
 
@@ -556,6 +543,27 @@ mod tests {
         assert_eq!(at(2, 11), 0, "nothing beyond the cap");
     }
 
+    /// Where two strokes meet, a pixel gets the area their union covers,
+    /// not the coverage of the nearer one: the pixel in the inside corner
+    /// of a right angle is three quarters covered (191 of 255), and the
+    /// strokes of an X fill the corners between their arms the same way.
+    #[test]
+    fn strokes_cover_each_pixel_by_their_union() {
+        static CORNER: [Seg; 3] = [Seg::M(0.0, 5.5), Seg::L(5.5, 5.5), Seg::L(5.5, 0.0)];
+        let cov = coverage(&icon(&CORNER), 12, 12, 1.0, 2.0);
+        assert_eq!(cov[4 * 12 + 4], 191, "inside corner");
+        static CROSS: [Seg; 4] = [
+            Seg::M(2.0, 12.5),
+            Seg::L(22.0, 12.5),
+            Seg::M(12.5, 2.0),
+            Seg::L(12.5, 22.0),
+        ];
+        let cov = coverage(&icon(&CROSS), 24, 24, 1.0, 2.0);
+        for (x, y) in [(11, 11), (13, 11), (11, 13), (13, 13)] {
+            assert_eq!(cov[y * 24 + x], 191, "corner pixel ({x}, {y})");
+        }
+    }
+
     #[test]
     fn a_lone_move_is_a_dot() {
         static DOT: [Seg; 1] = [Seg::M(12.0, 12.0)];
@@ -572,16 +580,17 @@ mod tests {
             Seg::M(12.0, 2.0),
             Seg::C(12.0, 7.523, 7.523, 12.0, 2.0, 12.0),
         ];
-        let segs = stroke_segments(icon(&ARC).layers().flat_map(|l| l.segs), Place::scaled(1.0));
-        assert!(segs.len() > 4, "flattened into {} pieces", segs.len());
-        for (a, _) in segs {
-            let r = (a - pos2(2.0, 2.0)).length();
+        let paths = stroke_paths(icon(&ARC).layers().flat_map(|l| l.segs), Place::scaled(1.0));
+        let pts = &paths[0].0;
+        assert!(pts.len() > 4, "flattened into {} pieces", pts.len());
+        for &a in pts {
+            let r = (Pos2::from(a) - pos2(2.0, 2.0)).length();
             assert!((r - 10.0).abs() < 0.11, "radius {r}");
         }
     }
 
     /// The worst difference, in levels of 255, between `icon` rasterised as
-    /// painted and with every curve cut into 512 pieces (the curve itself
+    /// painted and with every curve and arc flattened to 1e-4 px (the curve itself
     /// for all a pixel can show), at `side` pixels and `angle`.
     fn curve_error(icon: &Icon, side: usize, angle: f32) -> u8 {
         let scale = side as f32 / icon.size;
@@ -592,7 +601,7 @@ mod tests {
             (Place::turned(scale, side, side, angle), side + 2 * m)
         };
         let fine = Place {
-            flatten: (0.0, 512.0),
+            flatten: (1e-4, 4096.0),
             ..place
         };
         let painted = placed_coverage(icon, w, w, place, 2.0 * scale);

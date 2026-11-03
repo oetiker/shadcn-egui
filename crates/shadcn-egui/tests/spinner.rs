@@ -528,7 +528,7 @@ impl Scaled for shadcn_egui::components::icon::Seg {
 }
 
 /// A stroke-only icon's line pieces in device px at `scale`, each curve
-/// cut into as many uniform pieces as the crate cuts it (0.015 px
+/// cut into as many uniform pieces as the crate cuts it (0.01 px
 /// tolerance), so the comparison measures the turn, not the flattening.
 fn pieces(icon: &shadcn_egui::components::icon::Icon, scale: f32) -> Vec<(egui::Pos2, egui::Pos2)> {
     use shadcn_egui::components::icon::Seg;
@@ -562,7 +562,7 @@ fn pieces(icon: &shadcn_egui::components::icon::Icon, scale: f32) -> Vec<(egui::
                 .fold(0.0, f32::max);
             let degree = (ctrl.len() - 1) as f32;
             let bound = degree * (degree - 1.0) * second;
-            let n = (bound / (8.0 * 0.015)).sqrt().ceil().clamp(1.0, 256.0) as usize;
+            let n = (bound / (8.0 * 0.01)).sqrt().ceil().clamp(1.0, 256.0) as usize;
             let at = |t: f32| {
                 let mut p = ctrl.clone();
                 while p.len() > 1 {
@@ -587,9 +587,11 @@ fn pieces(icon: &shadcn_egui::components::icon::Icon, scale: f32) -> Vec<(egui::
 
 /// The exact coverage (0..=1) at device pixel `(x, y)` of `pieces`
 /// (device px from `origin`) stroked `stroke` device px wide, turned
-/// clockwise by `angle` about `centre`, all in device px: the crate's
-/// coverage model (a one-pixel ramp across the stroke's edge), applied to
-/// the turned geometry.
+/// clockwise by `angle` about `centre`, all in device px: the share of the
+/// pixel that the union of the pieces' round-ended strokes covers, as
+/// SVG's round caps and joins draw them. A pixel the stroke's edge passes
+/// through is integrated over 256 columns, each the length of the union of
+/// the strokes' spans on it.
 fn turned_coverage(
     pieces: &[(egui::Pos2, egui::Pos2)],
     origin: egui::Pos2,
@@ -610,10 +612,9 @@ fn turned_coverage(
             f64::from(centre.y) + px * s + py * c,
         )
     };
+    let r = stroke / 2.0;
     let (qx, qy) = (x as f64 + 0.5, y as f64 + 0.5);
-    let mut d = f64::INFINITY;
-    for &(a, b) in pieces {
-        let ((ax, ay), (bx, by)) = (map(a), map(b));
+    let dist = |(ax, ay): (f64, f64), (bx, by): (f64, f64)| {
         let (ex, ey) = (bx - ax, by - ay);
         let len2 = ex * ex + ey * ey;
         let t = if len2 > 0.0 {
@@ -621,14 +622,89 @@ fn turned_coverage(
         } else {
             0.0
         };
-        d = d.min(((qx - ax - ex * t).powi(2) + (qy - ay - ey * t).powi(2)).sqrt());
+        ((qx - ax - ex * t).powi(2) + (qy - ay - ey * t).powi(2)).sqrt()
+    };
+    // Half the pixel's diagonal: a stroke farther than r + this misses
+    // the pixel, one nearer than r - this covers it.
+    let corner = std::f64::consts::FRAC_1_SQRT_2;
+    let near: Vec<_> = pieces
+        .iter()
+        .map(|&(a, b)| (map(a), map(b)))
+        .filter(|&(a, b)| dist(a, b) < r + corner)
+        .collect();
+    let d = near
+        .iter()
+        .map(|&(a, b)| dist(a, b))
+        .fold(f64::INFINITY, f64::min);
+    if d >= r + corner {
+        return 0.0;
     }
-    (0.5 + stroke / 2.0 - d).clamp(0.0, 1.0)
+    if d <= r - corner {
+        return 1.0;
+    }
+    // The span of y (within the pixel) on the column at `cx` that one
+    // round-ended stroke covers: a convex shape, so one interval, the hull
+    // of the spans of its two end discs and its body.
+    let (y0, y1) = (y as f64, y as f64 + 1.0);
+    let span = |cx: f64, (ax, ay): (f64, f64), (bx, by): (f64, f64)| -> Option<(f64, f64)> {
+        let mut lo = f64::INFINITY;
+        let mut hi = f64::NEG_INFINITY;
+        for (px, py) in [(ax, ay), (bx, by)] {
+            let h2 = r * r - (cx - px).powi(2);
+            if h2 >= 0.0 {
+                lo = lo.min(py - h2.sqrt());
+                hi = hi.max(py + h2.sqrt());
+            }
+        }
+        // The body: 0 <= (p - a)·e <= |e|² and |(p - a)×e| <= r|e|, each
+        // linear in the column's y.
+        let (ex, ey) = (bx - ax, by - ay);
+        let len2 = ex * ex + ey * ey;
+        if len2 > 0.0 {
+            let (mut blo, mut bhi) = (f64::NEG_INFINITY, f64::INFINITY);
+            let mut within = |k: f64, m: f64, min: f64, max: f64| {
+                // min <= k + m y <= max
+                if m == 0.0 {
+                    if k < min || k > max {
+                        bhi = f64::NEG_INFINITY;
+                    }
+                } else {
+                    let (u, v) = ((min - k) / m, (max - k) / m);
+                    blo = blo.max(u.min(v));
+                    bhi = bhi.min(u.max(v));
+                }
+            };
+            within((cx - ax) * ex - ay * ey, ey, 0.0, len2);
+            let rl = r * len2.sqrt();
+            within((cx - ax) * ey + ay * ex, -ex, -rl, rl);
+            if blo <= bhi {
+                lo = lo.min(blo);
+                hi = hi.max(bhi);
+            }
+        }
+        let (lo, hi) = (lo.max(y0), hi.min(y1));
+        (lo < hi).then_some((lo, hi))
+    };
+    let n = 256;
+    let mut area = 0.0;
+    let mut spans: Vec<(f64, f64)> = Vec::new();
+    for i in 0..n {
+        let cx = x as f64 + (i as f64 + 0.5) / n as f64;
+        spans.clear();
+        spans.extend(near.iter().filter_map(|&(a, b)| span(cx, a, b)));
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let (mut len, mut reach) = (0.0, f64::NEG_INFINITY);
+        for &(lo, hi) in &spans {
+            if hi > reach {
+                len += hi - lo.max(reach);
+                reach = hi;
+            }
+        }
+        area += len;
+    }
+    area / n as f64
 }
 
-/// The worst difference, in levels of 255, between a black spinner of
-/// `side` on white, rendered at `ppp` with the clock at `time`, and the
-/// exact raster of the loader icon turned to that angle.
 fn turned_error(ppp: f32, side: f32, time: f64) -> (u32, f64) {
     let theme = Theme::vega();
     let loader = theme.icons.loader;
