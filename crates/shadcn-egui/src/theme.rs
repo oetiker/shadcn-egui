@@ -946,7 +946,8 @@ fn heading_bound(ctx: &egui::Context) -> bool {
 }
 
 /// The family `TextStyle::Heading` may name now: the heading family once it
-/// is known to be bound, else `Proportional`, upgraded by [`bind_heading`].
+/// is known to be bound, else `Proportional`, upgraded by [`bind_heading`]
+/// at the start of a later pass ([`ThemeHooks`]).
 fn heading_family_now(ctx: &egui::Context) -> FontFamily {
     if heading_bound(ctx) {
         if is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
@@ -954,19 +955,6 @@ fn heading_family_now(ctx: &egui::Context) -> FontFamily {
         }
         // The app replaced the fonts; this apply installs the theme's again.
         ctx.data_mut(|d| d.remove::<bool>(heading_bound_id()));
-    }
-    let hook_id = egui::Id::new("shadcn_egui::heading_hook");
-    if !ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
-        ctx.data_mut(|d| d.insert_temp(hook_id, true));
-        ctx.on_begin_pass(
-            "shadcn_egui::bind_heading",
-            Arc::new(|ui: &mut egui::Ui| {
-                if let Some(id) = check_heading(ui.ctx()) {
-                    // The root ui was built before this hook ran.
-                    ui.style_mut().text_styles.insert(TextStyle::Heading, id);
-                }
-            }),
-        );
     }
     FontFamily::Proportional
 }
@@ -1138,7 +1126,6 @@ impl Theme {
     fn apply_inner(&self, ctx: &egui::Context, base: Option<FontDefinitions>) {
         install_fonts(ctx, self.fonts, base);
         crate::components::icon_atom::install(ctx);
-        crate::components::shared::install_focus_modality(ctx);
         let m = &self.metrics;
         let hairline = crate::components::shared::line_width(m.border, ctx.pixels_per_point());
         let heading = FontId::new(m.text_heading, heading_family_now(ctx));
@@ -1162,7 +1149,18 @@ impl Theme {
             d.insert_temp(theme_id(), self.clone());
             d.insert_temp(hairline_id(), hairline);
         });
-        ctx.plugin_or_default::<ThemeHooks>();
+        // egui takes the list of pass hooks before a `run_ui` pass, so hooks
+        // first registered in a pass do not run at its end: check here, so
+        // a font install after the pass's last crate widget redoes the pass
+        // as the end check would, and repaint for what that check would
+        // catch later in the pass (a `ctx.set_theme(..)`).
+        if ctx.plugin_opt::<ThemeHooks>().is_none() {
+            ctx.plugin_or_default::<ThemeHooks>();
+            if ctx.cumulative_pass_nr() > 0 {
+                check_mode_switch(ctx);
+                ctx.request_repaint();
+            }
+        }
     }
 
     /// One mode's egui style: type scale, spacing and colours.
@@ -1368,8 +1366,18 @@ impl egui::plugin::Plugin for ThemeHooks {
     /// window's scale is known, and the scale can change later (zoom,
     /// another monitor). Each pass checks the scale and rewrites the stroke
     /// widths only when the snapped width changes, so style writes of the
-    /// app's own stay. Then check for a mode switch.
+    /// app's own stay. Before that, bind a waiting heading and track the
+    /// focus modality; after it, check for a mode switch.
     fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
+        #[cfg(test)]
+        hook_tests::count();
+        if let Some(id) = check_heading(ui.ctx()) {
+            // The root ui was built before this hook ran.
+            ui.style_mut().text_styles.insert(TextStyle::Heading, id);
+        }
+        #[cfg(test)]
+        hook_tests::count();
+        crate::components::shared::focus_modality_keyboard(ui.ctx());
         #[cfg(test)]
         hook_tests::count();
         if let Some(width) = snap_hairline(ui.ctx()) {
@@ -1381,9 +1389,13 @@ impl egui::plugin::Plugin for ThemeHooks {
         check_mode_switch(ui.ctx());
     }
 
-    /// Check for a mode switch after the pass's last crate widget, or
-    /// before a plain egui `Area`, so the frame is not mixed or stale.
+    /// Track the focus modality, then check for a mode switch after the
+    /// pass's last crate widget, or before a plain egui `Area`, so the
+    /// frame is not mixed or stale.
     fn on_end_pass(&mut self, ui: &mut egui::Ui) {
+        #[cfg(test)]
+        hook_tests::count();
+        crate::components::shared::focus_modality_keyboard(ui.ctx());
         #[cfg(test)]
         hook_tests::count();
         check_mode_switch(ui.ctx());
@@ -1445,8 +1457,9 @@ mod hook_tests {
             runs.push(runs_per_pass(&ctx));
             ctx.memory_mut(|m| *m = Default::default());
         }
-        // The hairline check at the start of a pass, the mode check at its
-        // start and at its end.
-        assert_eq!(runs, [3; 3]);
+        // At the start of a pass the heading binding, the focus modality,
+        // the hairline and the mode check; at its end the focus modality
+        // and the mode check.
+        assert_eq!(runs, [6; 3]);
     }
 }

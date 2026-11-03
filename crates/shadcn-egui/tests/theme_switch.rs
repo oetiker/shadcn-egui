@@ -350,6 +350,39 @@ fn a_font_change_after_the_last_crate_widget_shows_the_new_fonts() {
     assert_eq!(width.get(), new);
 }
 
+/// The first `Theme::apply` on a context, after the last crate widget of
+/// a `run_ui` pass (a button that turns the theme on): egui took the list
+/// of pass hooks before the pass, so the theme's hooks do not run in it.
+/// The frame `run_ui` returns still draws the widget in the theme's fonts,
+/// and a repaint follows.
+#[test]
+fn a_first_apply_after_the_last_crate_widget_shows_the_new_fonts() {
+    use shadcn_egui::components::label::label;
+    let vega = label_width(&Theme::vega());
+    let ctx = egui::Context::default();
+    let switch = std::cell::Cell::new(false);
+    let width = std::cell::Cell::new(0.0);
+    let frame = || {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            width.set(label(ui, "Accept terms").rect.width());
+            if switch.get() {
+                Theme::vega().apply(ui.ctx());
+            }
+        })
+    };
+    let _ = frame();
+    let _ = frame();
+    assert_ne!(width.get(), vega, "egui's default fonts measure apart");
+    switch.set(true);
+    let out = frame();
+    assert_eq!(width.get(), vega, "the frame is in the theme's fonts");
+    assert_eq!(
+        out.viewport_output[&egui::ViewportId::ROOT].repaint_delay,
+        std::time::Duration::ZERO,
+        "a repaint follows"
+    );
+}
+
 /// An app's own loop whose pass starts with `Theme::apply` of other fonts
 /// and draws no crate widget after it: no crate call saw the pass start,
 /// so the change cannot be told from one between two passes, and a

@@ -1826,21 +1826,6 @@ pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
     m.keyboard
 }
 
-/// Run [`focus_modality_keyboard`] at the start and end of every pass of
-/// `ctx`; installed once.
-pub(crate) fn install_focus_modality(ctx: &Context) {
-    let id = Id::new("shadcn_egui::focus_modality_hooks");
-    if ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(id, true));
-    let track = |ui: &mut Ui| {
-        focus_modality_keyboard(ui.ctx());
-    };
-    ctx.on_begin_pass("shadcn_egui::focus_modality", std::sync::Arc::new(track));
-    ctx.on_end_pass("shadcn_egui::focus_modality", std::sync::Arc::new(track));
-}
-
 /// Make `resp` act on press and keys as upstream's element: a pointer
 /// press focuses it, as the browser focuses a button, a tab trigger or a
 /// slider thumb on press, without a ring (conformance 2.6, 4.1); and
