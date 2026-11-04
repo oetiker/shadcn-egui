@@ -90,6 +90,21 @@ pub enum SegIter {
     Words(BlobSegs),
 }
 
+impl SegIter {
+    /// The icon blob's STYLE word in effect at the last segment returned:
+    /// the caps (bits 0-1: 0 round, 1 butt, 2 square) and joins (bits 2-3:
+    /// 0 round, 1 miter with limit 4, 2 bevel) of its sub-path. 0, round
+    /// and round, for a `Seg` slice and before any STYLE. For shadcn-egui's
+    /// raster; the format may change in any release.
+    #[doc(hidden)]
+    pub fn stroke_style(&self) -> u16 {
+        match self {
+            SegIter::Slice(_) => 0,
+            SegIter::Words(w) => w.style(),
+        }
+    }
+}
+
 impl Iterator for SegIter {
     type Item = Seg;
 

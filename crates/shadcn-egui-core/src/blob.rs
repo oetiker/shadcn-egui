@@ -91,6 +91,8 @@ impl Reader {
 pub struct BlobSegs {
     /// Reads only the stroke section, so an opcode cut short ends it.
     r: Reader,
+    /// The last STYLE word read; 0 (round caps, round joins) before any.
+    style: u16,
 }
 
 impl BlobSegs {
@@ -98,12 +100,24 @@ impl BlobSegs {
     fn new(bytes: &'static [u8]) -> Self {
         BlobSegs {
             r: Reader { bytes, pos: 0 },
+            style: 0,
         }
+    }
+
+    /// The STYLE word in effect at the last segment returned.
+    pub(crate) fn style(&self) -> u16 {
+        self.style
     }
 
     fn seg(&mut self) -> Option<Seg> {
         let r = &mut self.r;
-        Some(match r.word()? {
+        let mut op = r.word()?;
+        // STYLE is no segment: it sets the style of the sub-paths after it.
+        while op == 5 {
+            self.style = r.word()?;
+            op = r.word()?;
+        }
+        Some(match op {
             0 => Seg::M(r.coord()?, r.coord()?),
             1 => Seg::L(r.coord()?, r.coord()?),
             2 => Seg::Q(r.coord()?, r.coord()?, r.coord()?, r.coord()?),
@@ -405,6 +419,45 @@ mod tests {
         };
         assert_eq!(segs(&icon), SEGS.to_vec());
         assert_eq!(fill(&icon), None);
+    }
+
+    #[test]
+    fn style_words_set_the_style_and_are_no_segments() {
+        // STYLE butt + miter, M(1, 1) L(2, 1); STYLE round, M(3, 3); no fill.
+        let blob = leak(&[
+            13, 5, 5, 0, 1024, 1024, 1, 2048, 1024, 5, 0, 0, 3072, 3072, 0, 0, 0,
+        ]);
+        let icon = blob_icon(blob, 0, blob.len() as u32);
+        let mut segs = icon.layers().next().expect("one layer").segs;
+        assert_eq!(segs.stroke_style(), 0, "round before any segment");
+        let mut got = Vec::new();
+        while let Some(s) = segs.next() {
+            got.push((s, segs.stroke_style()));
+        }
+        assert_eq!(
+            got,
+            vec![
+                (Seg::M(1.0, 1.0), 5),
+                (Seg::L(2.0, 1.0), 5),
+                (Seg::M(3.0, 3.0), 0)
+            ]
+        );
+        // A STYLE cut short ends the strokes.
+        let blob = leak(&[4, 0, 1024, 1024, 5]);
+        assert_eq!(segs_of(blob), vec![Seg::M(1.0, 1.0)]);
+        let blob = leak(&[2, 5, 5]);
+        assert_eq!(segs_of(blob), vec![]);
+        // `Seg` slices are round.
+        static SEGS: [Seg; 1] = [Seg::M(0.0, 0.0)];
+        let mut s = SegIter::Slice(SEGS.iter());
+        s.next();
+        assert_eq!(s.stroke_style(), 0);
+    }
+
+    /// The strokes of a stroke section `blob` (no fill section needed).
+    fn segs_of(blob: &'static [u8]) -> Vec<Seg> {
+        let len = usize::from(u16::from_le_bytes([blob[0], blob[1]]));
+        BlobSegs::new(&blob[2..(2 + 2 * len).min(blob.len())]).collect()
     }
 
     #[test]

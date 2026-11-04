@@ -11,8 +11,9 @@
 //! the next angle on the next pass.
 //!
 //! Coverage is exact area: each pixel gets the share of it that a layer
-//! covers. A layer's strokes become closed outlines (round caps and round
-//! joins, as every shipped set draws them), and the pixel area of the union
+//! covers. A layer's strokes become closed outlines, with the caps and
+//! joins the icon gives each sub-path (round unless it says otherwise),
+//! and the pixel area of the union
 //! of those outlines and the fill's triangles is found row by row, so
 //! strokes that meet or overlap count once. A fill alone takes the triangles
 //! directly, which never overlap.
@@ -21,7 +22,7 @@ use egui::{
     pos2, vec2, Color32, ColorImage, Context, Id, Pos2, TextureHandle, TextureOptions, Vec2,
     ViewportId,
 };
-use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg};
+use shadcn_egui_core::{Icon, IconLayer, IconShape, Seg, SegIter};
 use std::collections::HashMap;
 
 mod fill;
@@ -403,14 +404,8 @@ fn layer_coverage(layer: &IconLayer, w: usize, h: usize, place: Place, stroke_px
         return cov;
     }
     let mut outline = stroke::Outline::default();
-    for (pts, closed) in &paths {
-        outline.stroke(
-            pts,
-            *closed,
-            stroke_px / 2.0,
-            stroke::Style::ROUND,
-            place.flatten,
-        );
+    for (pts, closed, style) in &paths {
+        outline.stroke(pts, *closed, stroke_px / 2.0, *style, place.flatten);
     }
     if let Some(fill) = &layer.fill {
         outline.triangles(&fill.vertices, &fill.indices, map);
@@ -423,46 +418,56 @@ fn pixel_centre(x: usize, y: usize) -> Pos2 {
     pos2(x as f32 + HALF_PX, y as f32 + HALF_PX)
 }
 
-/// A layer's strokes as sub-paths of points in pixels, each with whether
-/// `Z` closed it. `M` starts a sub-path; a lone `M` is a dot; a curve
-/// without a start point is skipped, a line without one starts a sub-path.
-fn stroke_paths(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Vec<[f32; 2]>, bool)> {
+/// One stroked sub-path: its points in pixels, whether `Z` closed it, and
+/// its caps and joins.
+type Path = (Vec<[f32; 2]>, bool, stroke::Style);
+
+/// A layer's strokes as sub-paths. `M` starts a sub-path; a lone `M` is a
+/// dot; a curve without a start point is skipped, a line without one
+/// starts a sub-path. A sub-path takes the style in effect at its first
+/// segment.
+fn stroke_paths(mut segs: SegIter, place: Place) -> Vec<Path> {
     let map = |x: f32, y: f32| <[f32; 2]>::from(place.map(x, y));
-    let mut out: Paths = Vec::new();
+    let mut out: Vec<Path> = Vec::new();
     // Whether the last sub-path takes more pieces, and where a piece
     // after `Z` starts.
     let (mut open, mut after_z) = (false, None);
-    type Paths = Vec<(Vec<[f32; 2]>, bool)>;
     // Starts a sub-path for a piece that has none open.
-    fn current(out: &mut Paths, open: &mut bool, after_z: &mut Option<[f32; 2]>) {
+    fn current(
+        out: &mut Vec<Path>,
+        open: &mut bool,
+        after_z: &mut Option<[f32; 2]>,
+        style: stroke::Style,
+    ) {
         if !*open {
-            out.push((after_z.take().into_iter().collect(), false));
+            out.push((after_z.take().into_iter().collect(), false, style));
             *open = true;
         }
     }
-    for seg in segs {
+    while let Some(seg) = segs.next() {
+        let style = stroke::Style::from_word(segs.stroke_style());
         match seg {
             Seg::M(x, y) => {
-                out.push((vec![map(x, y)], false));
+                out.push((vec![map(x, y)], false, style));
                 (open, after_z) = (true, None);
             }
             Seg::L(x, y) => {
-                current(&mut out, &mut open, &mut after_z);
-                if let Some((pts, _)) = out.last_mut() {
+                current(&mut out, &mut open, &mut after_z, style);
+                if let Some((pts, ..)) = out.last_mut() {
                     pts.push(map(x, y));
                 }
             }
             Seg::Q(x1, y1, x, y) => {
-                current(&mut out, &mut open, &mut after_z);
-                let Some((pts, _)) = out.last_mut() else {
+                current(&mut out, &mut open, &mut after_z, style);
+                let Some((pts, ..)) = out.last_mut() else {
                     continue;
                 };
                 let Some(&c) = pts.last() else { continue };
                 curve(pts, &[c, map(x1, y1), map(x, y)], place.flatten);
             }
             Seg::C(x1, y1, x2, y2, x, y) => {
-                current(&mut out, &mut open, &mut after_z);
-                let Some((pts, _)) = out.last_mut() else {
+                current(&mut out, &mut open, &mut after_z, style);
+                let Some((pts, ..)) = out.last_mut() else {
                     continue;
                 };
                 let Some(&c) = pts.last() else { continue };
@@ -473,7 +478,7 @@ fn stroke_paths(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Vec<[f32;
                 );
             }
             Seg::Z => {
-                if let Some((pts, closed)) = out.last_mut().filter(|_| open) {
+                if let Some((pts, closed, _)) = out.last_mut().filter(|_| open) {
                     if let Some(&start) = pts.first() {
                         *closed = true;
                         (open, after_z) = (false, Some(start));
@@ -482,7 +487,7 @@ fn stroke_paths(segs: impl Iterator<Item = Seg>, place: Place) -> Vec<(Vec<[f32;
             }
         }
     }
-    out.retain(|(pts, _)| !pts.is_empty());
+    out.retain(|(pts, ..)| !pts.is_empty());
     out
 }
 
@@ -582,7 +587,8 @@ mod tests {
             Seg::M(12.0, 2.0),
             Seg::C(12.0, 7.523, 7.523, 12.0, 2.0, 12.0),
         ];
-        let paths = stroke_paths(icon(&ARC).layers().flat_map(|l| l.segs), Place::scaled(1.0));
+        let layer = icon(&ARC).layers().next().expect("one layer");
+        let paths = stroke_paths(layer.segs, Place::scaled(1.0));
         let pts = &paths[0].0;
         assert!(pts.len() > 4, "flattened into {} pieces", pts.len());
         for &a in pts {

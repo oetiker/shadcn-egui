@@ -24,10 +24,6 @@ type P = [f32; 2];
 
 /// How the open ends of a sub-path are drawn (SVG `stroke-linecap`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "icons carry no styles yet: every stroke is round")
-)]
 pub(super) enum Cap {
     Round,
     Butt,
@@ -36,10 +32,6 @@ pub(super) enum Cap {
 
 /// How two pieces of a sub-path meet (SVG `stroke-linejoin`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "icons carry no styles yet: every stroke is round")
-)]
 pub(super) enum Join {
     Round,
     Miter,
@@ -57,11 +49,34 @@ pub(super) struct Style {
 
 impl Style {
     /// Round caps and round joins.
+    #[cfg(test)]
     pub const ROUND: Style = Style {
         cap: Cap::Round,
         join: Join::Round,
         miter_limit: 4.0,
     };
+
+    /// The style of an icon blob's STYLE word (`SegIter::stroke_style`):
+    /// cap in bits 0-1 (0 round, 1 butt, 2 square), join in bits 2-3 (0
+    /// round, 1 miter, 2 bevel), miter limit 4. Values icongen does not
+    /// write draw round.
+    pub fn from_word(w: u16) -> Style {
+        let cap = match w & 3 {
+            1 => Cap::Butt,
+            2 => Cap::Square,
+            _ => Cap::Round,
+        };
+        let join = match (w >> 2) & 3 {
+            1 => Join::Miter,
+            2 => Join::Bevel,
+            _ => Join::Round,
+        };
+        Style {
+            cap,
+            join,
+            miter_limit: 4.0,
+        }
+    }
 }
 
 /// An edge of the outline, top end first; `dir` is +1 for an edge that

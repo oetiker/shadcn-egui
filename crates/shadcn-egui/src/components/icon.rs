@@ -6,7 +6,9 @@
 //!
 //! Lucide icons are 24x24 outlines drawn with a 2-unit round-capped stroke.
 //! Round caps matter: some icons draw dots as zero-length lines, which vanish
-//! without them. Every stroke is painted with round caps and round joins.
+//! without them. Every stroke is painted with the caps and joins its icon
+//! gives it: round in Lucide and Tabler, and in Hugeicons also butt or
+//! square ends and miter or bevel corners where the set draws them.
 
 use super::icon_raster;
 use crate::Theme;
