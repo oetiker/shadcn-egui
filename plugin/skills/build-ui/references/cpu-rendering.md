@@ -112,6 +112,12 @@ one UV, and blends the rest per pixel.
   sends the whole window every frame), and Wayland gets them as buffer
   damage. On X11 the age is 1 after the first present (one buffer).
   The whole window must still go out after a system redraw (see 1).
+- **A turning Spinner changes a texture every frame.** It rasterises its
+  icon at the new angle and sends the texture in `textures_delta` each
+  frame, so the frame is never skipped and the spinner's box is damage. Its
+  own raster costs 0.09 ms at 16 pt and 3.4 ms at 256 pt per frame at 2x
+  (`icons.md`); a large one also costs a large damage rect. Under
+  `animation_time == 0` it stands still and its texture stays as it is.
 - **Modal over live content:** do not alpha-blend a full-window dimmed
   backdrop every frame. Dim the current background **once** into the
   background layer when the modal opens, pause updates of the content behind

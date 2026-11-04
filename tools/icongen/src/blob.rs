@@ -6,6 +6,11 @@
 //! - Stroke section: `len` (words that follow), then opcodes, each followed by
 //!   its coordinates: 0=M(2) 1=L(2) 2=Q(4) 3=C(6) 4=Z(0). Coordinates are in
 //!   the 24-unit box, stored as `round(v * 1024)` (i16, so −32..32 units).
+//!   Opcode 5=STYLE(1), written only before an M, sets the caps and joins of
+//!   the sub-paths that follow, up to the next STYLE or the end of the layer:
+//!   cap in bits 0-1 (0 round, 1 butt, 2 square), join in bits 2-3 (0 round,
+//!   1 miter with limit 4, 2 bevel). A layer starts round and round, so a
+//!   set drawn that way holds no STYLE.
 //! - Fill section (always present; all zero = no fill): `nv, ni, nc`;
 //!   `nv × (x, y)`; `ni × index` (u16); `nc ×` contours `{ len, len × (x, y, mx, my) }`,
 //!   miters stored as `round(m * 8192)`, |m| ≤ 2.
@@ -13,7 +18,7 @@
 //! An icon without translucent parts is one layer, so its record ends after
 //! the first fill section.
 
-use crate::{Converted, Fill, Layer, Seg};
+use crate::{Converted, Fill, Layer, Seg, StrokeStyle};
 
 pub const COORD_SCALE: f32 = 1024.0;
 pub const MITER_SCALE: f32 = 8192.0;
@@ -80,6 +85,10 @@ fn encode_layer(
             Seg::Q(a, b, x, y) => (2, vec![a, b, x, y]),
             Seg::C(a, b, c, d, x, y) => (3, vec![a, b, c, d, x, y]),
             Seg::Z => (4, vec![]),
+            Seg::Style(st) => {
+                stroke.extend([5, st.word()]);
+                continue;
+            }
         };
         stroke.push(op);
         for v in coords {
@@ -172,6 +181,14 @@ fn decode_layer(words: &mut impl Iterator<Item = u16>) -> (Vec<Seg>, Option<Fill
     let (mut segs, mut used) = (Vec::new(), 0);
     while used < stroke_len {
         let op = next();
+        if op == 5 {
+            let w = next();
+            segs.push(Seg::Style(
+                StrokeStyle::from_word(w).expect("a style word icongen writes"),
+            ));
+            used += 2;
+            continue;
+        }
         let n = [2, 2, 4, 6, 0][usize::from(op)];
         let v: Vec<f32> = (0..n).map(|_| c(next())).collect();
         used += 1 + n;

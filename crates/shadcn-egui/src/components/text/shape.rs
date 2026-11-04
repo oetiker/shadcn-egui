@@ -7,6 +7,7 @@
 //! crate ships has. [`advances`] measures a job as Chrome does; the text
 //! path moves egui's glyphs there and breaks lines on these widths.
 
+use crate::components::shared::{with_viewport_state, PerViewport};
 use egui::text::LayoutJob;
 use egui::FontData;
 use skrifa::instance::{Location, Size};
@@ -407,12 +408,34 @@ type MeasureKey = (usize, Vec<(Tag, u32)>, u32, u32);
 /// frame it was last used.
 type MeasureEntry = (Arc<FontData>, Arc<Mutex<Measures>>, u64);
 
-/// The [`Measures`] of the faces jobs used in this frame and the one
-/// before.
+/// Per viewport, the [`Measures`] of the faces jobs used in its frame and
+/// the one before. A viewport new to a face takes the entry another
+/// viewport holds.
 #[derive(Clone, Default)]
 struct MeasureCache {
-    frame: u64,
     entries: HashMap<MeasureKey, MeasureEntry>,
+}
+
+fn measures_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::text::measures")
+}
+
+/// [`Measures`] entries made so far, for the tests.
+#[cfg(test)]
+pub(crate) fn measure_builds(ctx: &egui::Context) -> u64 {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<MeasureCache>>(measures_id())
+            .builds
+    })
+}
+
+/// Viewports with a state in the [`Measures`] cache, for the tests.
+#[cfg(test)]
+pub(crate) fn measure_viewports(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<MeasureCache>>(measures_id())
+            .len()
+    })
 }
 
 /// Per section of `job` with face data in `faces`: its [`Measures`], all
@@ -423,35 +446,62 @@ fn measures(
     faces: &[Option<Arc<FontData>>],
 ) -> Vec<Option<Arc<Mutex<Measures>>>> {
     let ppp = ctx.pixels_per_point();
+    let viewport = ctx.viewport_id();
     let frame = ctx.cumulative_frame_nr();
-    let id = egui::Id::new("shadcn_egui::text::measures");
-    ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<MeasureCache>(id);
-        if cache.frame != frame {
-            cache.entries.retain(|_, e| e.2 + 1 >= frame);
-            cache.frame = frame;
-        }
-        job.sections
-            .iter()
-            .zip(faces)
-            .map(|(s, data)| {
-                let data = data.as_ref()?;
+    let id = measures_id();
+    with_viewport_state(
+        ctx,
+        id,
+        viewport,
+        frame,
+        |all: &mut PerViewport<MeasureCache>, closed| {
+            // Made at the first use of a face in any viewport.
+            let mut builds = 0;
+            let mut found = Vec::new();
+            for (s, data) in job.sections.iter().zip(faces) {
+                let Some(data) = data.as_ref() else {
+                    found.push(None);
+                    continue;
+                };
                 let coords = s.format.coords.as_ref();
-                let key = (
+                let key: MeasureKey = (
                     Arc::as_ptr(data) as usize,
                     coords.iter().map(|(t, v)| (*t, v.to_bits())).collect(),
                     s.format.font_id.size.to_bits(),
                     ppp.to_bits(),
                 );
-                let e = cache
-                    .entries
-                    .entry(key)
-                    .or_insert_with(|| (data.clone(), Arc::default(), frame));
-                e.2 = frame;
-                Some(e.1.clone())
-            })
-            .collect()
-    })
+                let shared = all
+                    .get(viewport)
+                    .is_none_or(|c| !c.entries.contains_key(&key))
+                    .then(|| {
+                        all.others(viewport)
+                            .find_map(|c| c.entries.get(&key))
+                            .cloned()
+                    })
+                    .flatten();
+                found.push(Some((key, data, shared)));
+            }
+            let cache = all.at(closed, viewport, frame, |c, _| {
+                c.entries.retain(|_, e| e.2 + 1 >= frame);
+            });
+            let out = found
+                .into_iter()
+                .map(|f| {
+                    let (key, data, shared) = f?;
+                    let e = cache.entries.entry(key).or_insert_with(|| {
+                        shared.unwrap_or_else(|| {
+                            builds += 1;
+                            (data.clone(), Arc::default(), frame)
+                        })
+                    });
+                    e.2 = frame;
+                    Some(e.1.clone())
+                })
+                .collect();
+            all.builds += builds;
+            out
+        },
+    )
 }
 
 fn lock(m: &Mutex<Measures>) -> std::sync::MutexGuard<'_, Measures> {

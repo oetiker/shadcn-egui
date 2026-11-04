@@ -14,9 +14,9 @@ use usvg::tiny_skia_path::{PathSegment, Point};
 pub mod blob;
 pub mod fill;
 
-pub use fill::{Fill, FillPath, FillRule};
+pub use fill::{Fill, FillPath, FillRule, Precision};
 
-/// Mirror of `shadcn_egui_core::Seg`.
+/// Mirror of `shadcn_egui_core::Seg`, plus the blob's style command.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
     M(f32, f32),
@@ -24,6 +24,102 @@ pub enum Seg {
     Q(f32, f32, f32, f32),
     C(f32, f32, f32, f32, f32, f32),
     Z,
+    /// The caps and joins of the sub-paths that follow, up to the next
+    /// `Style` or the end of the layer. A layer starts round and round, so
+    /// a set drawn that way never holds one.
+    Style(StrokeStyle),
+}
+
+/// SVG `stroke-linecap`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cap {
+    Round,
+    Butt,
+    Square,
+}
+
+/// SVG `stroke-linejoin`; a miter takes SVG's default limit of 4.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Join {
+    Round,
+    Miter,
+    Bevel,
+}
+
+/// How a stroked sub-path ends and turns. The stroke width is not part of
+/// it: every stroke is drawn at the caller's width, as shadcn's icon
+/// components set it on every element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StrokeStyle {
+    pub cap: Cap,
+    pub join: Join,
+}
+
+impl StrokeStyle {
+    /// Round caps and round joins: where every layer starts.
+    pub const ROUND: StrokeStyle = StrokeStyle {
+        cap: Cap::Round,
+        join: Join::Round,
+    };
+
+    /// The blob's style word: cap in bits 0-1 (0 round, 1 butt, 2 square),
+    /// join in bits 2-3 (0 round, 1 miter, 2 bevel).
+    pub fn word(self) -> u16 {
+        let cap = match self.cap {
+            Cap::Round => 0,
+            Cap::Butt => 1,
+            Cap::Square => 2,
+        };
+        let join = match self.join {
+            Join::Round => 0,
+            Join::Miter => 1,
+            Join::Bevel => 2,
+        };
+        cap | join << 2
+    }
+
+    /// The style of a style word; `None` for a word icongen does not write.
+    pub fn from_word(w: u16) -> Option<StrokeStyle> {
+        let cap = match w & 3 {
+            0 => Cap::Round,
+            1 => Cap::Butt,
+            2 => Cap::Square,
+            _ => return None,
+        };
+        let join = match w >> 2 {
+            0 => Join::Round,
+            1 => Join::Miter,
+            2 => Join::Bevel,
+            _ => return None,
+        };
+        Some(StrokeStyle { cap, join })
+    }
+
+    /// The style of a usvg stroke. A miter limit other than SVG's default
+    /// 4 and SVG 2's `miter-clip` and `arcs` joins are errors: the blob
+    /// cannot hold them.
+    fn of(name: &str, s: &usvg::Stroke) -> Result<StrokeStyle, String> {
+        let cap = match s.linecap() {
+            usvg::LineCap::Round => Cap::Round,
+            usvg::LineCap::Butt => Cap::Butt,
+            usvg::LineCap::Square => Cap::Square,
+        };
+        let join = match s.linejoin() {
+            usvg::LineJoin::Round => Join::Round,
+            usvg::LineJoin::Bevel => Join::Bevel,
+            usvg::LineJoin::Miter => {
+                if s.miterlimit().get() != 4.0 {
+                    return Err(format!(
+                        "{name}: stroke-miterlimit {} not supported, only the default 4",
+                        s.miterlimit().get()
+                    ));
+                }
+                Join::Miter
+            }
+            j => return Err(format!("{name}: stroke-linejoin {j:?} not supported")),
+        };
+        Ok(StrokeStyle { cap, join })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -70,6 +166,52 @@ impl Gather {
 /// Convert one SVG document. `name` becomes the icon's accessible name and,
 /// upper-cased, its constant name.
 pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
+    convert_with(name, svg, Precision::BLOB)
+}
+
+/// [`convert`] with the fills flattened at `prec` instead of the blob's
+/// precision.
+pub fn convert_with(name: &str, svg: &str, prec: Precision) -> Result<Converted, String> {
+    let (size, gathered) = gather(name, svg, prec)?;
+    let mut gathered = gathered.into_iter();
+    let base = gathered.next().expect("layer 0");
+    let fill = fill::build(name, &base.fills, prec)?;
+    let mut layers = Vec::new();
+    for g in gathered {
+        let fill = fill::build(name, &g.fills, prec)?;
+        if !g.segs.is_empty() || fill.is_some() {
+            layers.push(Layer {
+                alpha: g.alpha,
+                segs: g.segs,
+                fill,
+            });
+        }
+    }
+    if base.segs.is_empty() && fill.is_none() && layers.is_empty() {
+        return Err(format!("{name}: no stroked or filled paths"));
+    }
+    Ok(Converted {
+        name: name.to_owned(),
+        size,
+        segs: base.segs,
+        fill,
+        layers,
+    })
+}
+
+/// The filled paths of one SVG document flattened at `prec`, one entry per
+/// layer in paint order, before [`fill::build`] tessellates them: layer 0
+/// holds everything opaque. The tests measure fills against these.
+pub fn fill_paths(name: &str, svg: &str, prec: Precision) -> Result<Vec<Vec<FillPath>>, String> {
+    Ok(gather(name, svg, prec)?
+        .1
+        .into_iter()
+        .map(|g| g.fills)
+        .collect())
+}
+
+/// Parse `svg` and collect its strokes and fill paths per layer.
+fn gather(name: &str, svg: &str, prec: Precision) -> Result<(f32, Vec<Gather>), String> {
     let tree =
         usvg::Tree::from_str(svg, &usvg::Options::default()).map_err(|e| format!("{name}: {e}"))?;
     let size = tree.size();
@@ -88,32 +230,10 @@ pub fn convert(name: &str, svg: &str) -> Result<Converted, String> {
         24.0 / size.width(),
         1.0,
         0,
+        prec,
         &mut gathered,
     )?;
-    let mut gathered = gathered.into_iter();
-    let base = gathered.next().expect("layer 0");
-    let fill = fill::build(name, &base.fills)?;
-    let mut layers = Vec::new();
-    for g in gathered {
-        let fill = fill::build(name, &g.fills)?;
-        if !g.segs.is_empty() || fill.is_some() {
-            layers.push(Layer {
-                alpha: g.alpha,
-                segs: g.segs,
-                fill,
-            });
-        }
-    }
-    if base.segs.is_empty() && fill.is_none() && layers.is_empty() {
-        return Err(format!("{name}: no stroked or filled paths"));
-    }
-    Ok(Converted {
-        name: name.to_owned(),
-        size: size.width(),
-        segs: base.segs,
-        fill,
-        layers,
-    })
+    Ok((size.width(), gathered))
 }
 
 /// The layer to paint into at `alpha` (the opacity of `layers[current]`)
@@ -140,6 +260,7 @@ fn walk(
     scale: f32,
     alpha: f32,
     layer: usize,
+    prec: Precision,
     layers: &mut Vec<Gather>,
 ) -> Result<(), String> {
     for node in group.children() {
@@ -147,7 +268,7 @@ fn walk(
             usvg::Node::Group(g) => {
                 if let Some(l) = layer_for(layers, layer, alpha, g.opacity().get()) {
                     let a = layers[l].alpha;
-                    walk(name, g, scale, a, l, layers)?;
+                    walk(name, g, scale, a, l, prec, layers)?;
                 }
             }
             usvg::Node::Path(p) => {
@@ -159,7 +280,7 @@ fn walk(
                         usvg::FillRule::NonZero => FillRule::NonZero,
                         usvg::FillRule::EvenOdd => FillRule::EvenOdd,
                     };
-                    let contours = fill::flatten(p.data(), p.abs_transform(), scale);
+                    let contours = fill::flatten(p.data(), p.abs_transform(), scale, prec);
                     let l = layer_for(layers, layer, alpha, f.opacity().get());
                     if let (Some(l), false) = (l, contours.is_empty()) {
                         layers[l].fills.push(FillPath { rule, contours });
@@ -167,7 +288,8 @@ fn walk(
                 }
                 if let Some(s) = p.stroke() {
                     if let Some(l) = layer_for(layers, layer, alpha, s.opacity().get()) {
-                        path_segs(p.data(), p.abs_transform(), &mut layers[l].segs);
+                        let style = StrokeStyle::of(name, s)?;
+                        path_segs(p.data(), p.abs_transform(), style, &mut layers[l].segs);
                     }
                 }
             }
@@ -192,10 +314,37 @@ pub fn ensure_stroke_only(icon: &Converted) -> Result<(), String> {
             icon.name
         ));
     }
+    if icon.segs.iter().any(|s| matches!(s, Seg::Style(_))) {
+        return Err(format!(
+            "{}: stroke caps or joins that are not round; --out writes round strokes only, use --crate-dir",
+            icon.name
+        ));
+    }
     Ok(())
 }
 
-fn path_segs(path: &usvg::tiny_skia_path::Path, ts: usvg::Transform, out: &mut Vec<Seg>) {
+/// The style in effect at the end of `segs`.
+fn style_at_end(segs: &[Seg]) -> StrokeStyle {
+    segs.iter()
+        .rev()
+        .find_map(|s| match s {
+            Seg::Style(st) => Some(*st),
+            _ => None,
+        })
+        .unwrap_or(StrokeStyle::ROUND)
+}
+
+/// Appends the path's segments to `out`, after a `Style` when `style` is
+/// not the one in effect there.
+fn path_segs(
+    path: &usvg::tiny_skia_path::Path,
+    ts: usvg::Transform,
+    style: StrokeStyle,
+    out: &mut Vec<Seg>,
+) {
+    if path.segments().next().is_some() && style_at_end(out) != style {
+        out.push(Seg::Style(style));
+    }
     let map = |mut p: Point| {
         ts.map_point(&mut p);
         (round(p.x), round(p.y))
@@ -304,6 +453,8 @@ pub fn render_module(icons: &[Converted], module_path: &str, provenance: &str) -
                     )
                 }
                 Seg::Z => "Z".to_owned(),
+                // `ensure_stroke_only` rejects these; a `Seg` slice is round.
+                Seg::Style(_) => continue,
             };
             out.push_str(&format!("        {line},\n"));
         }

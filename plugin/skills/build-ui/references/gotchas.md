@@ -97,3 +97,8 @@
 - **Icons are rasterised.** `paint_icon` draws each icon from a cached
   coverage texture at the physical pixel size, so a translucent colour
   applies once; very large icons cost a texture each.
+- **A turning Spinner rasterises every frame.** While it turns, the Spinner
+  rasterises its icon at the new angle and uploads the texture again each
+  frame: about 0.09 ms at 16 pt and 3.4 ms at 256 pt per frame at 2x (see
+  `icons.md`). It stands still, and costs nothing, under
+  `animation_time == 0`.

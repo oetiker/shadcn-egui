@@ -6,7 +6,9 @@
 //!
 //! Lucide icons are 24x24 outlines drawn with a 2-unit round-capped stroke.
 //! Round caps matter: some icons draw dots as zero-length lines, which vanish
-//! without them. Every stroke is painted with round caps and round joins.
+//! without them. Every stroke is painted with the caps and joins its icon
+//! gives it: round in Lucide and Tabler, and in Hugeicons also butt or
+//! square ends and miter or bevel corners where the set draws them.
 
 use super::icon_raster;
 use crate::Theme;
@@ -46,7 +48,11 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
 }
 
 /// [`paint_icon`], turned clockwise by `angle` radians about the centre of
-/// the snapped rect. The texture is the unturned one.
+/// the snapped rect: rasterised at that angle, as a browser rasterises a
+/// turned SVG, into a texture drawn 1:1 on the pixel grid. Only when the
+/// turned box is larger than the texture limit, or the turned textures
+/// are at their bounds, is the unturned texture drawn turned, sampled
+/// smoothed.
 pub(crate) fn paint_icon_rotated(
     painter: &Painter,
     rect: Rect,
@@ -68,7 +74,29 @@ pub(crate) fn paint_icon_rotated(
     let side = icon_raster::MAX_SIDE.min(ctx.input(|i| i.max_texture_side)) as f32;
     let k = (side / w.max(h)).min(1.0); // behaviour-ok: never rasterise larger than drawn
     let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0)); // behaviour-ok: at least one device pixel
-    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width);
+
+    // Turned, and not scaled down to the texture limit: rasterise at the angle.
+    let turned = angle != 0.0; // behaviour-ok: 0 is the unturned angle
+    if turned && (tw, th) == (w, h) {
+        let [mx, my] = icon_raster::turned_margin(w as usize, h as usize);
+        let fits = (w as usize + 2 * mx).max(h as usize + 2 * my) as f32 <= side;
+        let tex = fits
+            .then(|| {
+                icon_raster::turned_texture(ctx, icon, w as usize, h as usize, stroke_width, angle)
+            })
+            .flatten();
+        if let Some(tex) = tex {
+            let margin = Vec2::new(mx as f32, my as f32) / ppp;
+            let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
+            let mut mesh = Mesh::with_texture(tex.id());
+            mesh.add_rect_with_uv(drawn.expand2(margin), uv, color);
+            painter.add(mesh);
+            return;
+        }
+    }
+    // A bitmap drawn turned is sampled smoothed: nearest samples would
+    // leave stair steps along its edges.
+    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width, turned);
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
     let mut mesh = Mesh::with_texture(tex.id());
     mesh.add_rect_with_uv(drawn, uv, color);

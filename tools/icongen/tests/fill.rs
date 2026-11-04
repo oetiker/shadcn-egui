@@ -332,7 +332,7 @@ fn coords(s: Seg) -> Vec<f32> {
         Seg::M(x, y) | Seg::L(x, y) => vec![x, y],
         Seg::Q(a, b, x, y) => vec![a, b, x, y],
         Seg::C(a, b, c, d, x, y) => vec![a, b, c, d, x, y],
-        Seg::Z => vec![],
+        Seg::Z | Seg::Style(_) => vec![],
     }
 }
 

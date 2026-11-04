@@ -125,7 +125,8 @@ crate builds each item in egui is in `2026-10-18-implementation-notes.md`.
   `:focus-visible` would: after focus moved by keyboard; not after a
   pointer press, and not after a focus move the crate makes in response
   to one (an overlay opened by click).
-- The modality of the last focus change is tracked crate-wide.
+- The modality of the last focus change is tracked per viewport (window),
+  as the browser tracks it per document.
 
 ### 2.7 Plain egui widgets
 

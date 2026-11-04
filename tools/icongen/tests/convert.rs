@@ -49,7 +49,7 @@ fn all_fixtures_convert() {
                 Seg::M(x, y) | Seg::L(x, y) => vec![x, y],
                 Seg::Q(a, b, x, y) => vec![a, b, x, y],
                 Seg::C(a, b, c, d, x, y) => vec![a, b, c, d, x, y],
-                Seg::Z => vec![],
+                Seg::Z | Seg::Style(_) => vec![],
             };
             assert!(
                 coords.iter().all(|v| (-1.0..=25.0).contains(v)),
@@ -62,7 +62,7 @@ fn all_fixtures_convert() {
 #[test]
 fn transforms_and_viewbox_are_applied() {
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 12 12"
-        fill="none" stroke="black"><g transform="translate(1 2)"><path d="M0 0L2 0"/></g></svg>"#;
+        fill="none" stroke="black" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1 2)"><path d="M0 0L2 0"/></g></svg>"#;
     let icon = convert("t", svg).expect("converts");
     assert_eq!(icon.size, 24.0);
     assert_eq!(icon.segs, vec![Seg::M(2.0, 4.0), Seg::L(6.0, 4.0)]);
