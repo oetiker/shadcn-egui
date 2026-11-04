@@ -43,7 +43,10 @@ fn harness(
     ppp: f32,
     mut field: impl FnMut(&mut egui::Ui) -> egui::Response + 'static,
 ) -> Harness<'static, Rect> {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(egui::vec2(200.0, 200.0))
         .with_pixels_per_point(ppp)
         .build_ui_state(

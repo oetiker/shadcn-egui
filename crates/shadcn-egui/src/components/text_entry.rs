@@ -155,7 +155,7 @@ impl<'a> TextEntry<'a> {
         ui: &mut Ui,
         size: Vec2,
         edit: TextEdit<'_>,
-        id_salt: Option<egui::Id>,
+        id_salt: Option<egui::IdSalt>,
     ) -> TextEditOutput {
         let enabled = self.enabled;
         let mut edit_inset = self.inset;

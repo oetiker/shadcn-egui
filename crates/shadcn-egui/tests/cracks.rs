@@ -42,7 +42,10 @@ fn render<S: Clone + 'static>(
     state: S,
     mut paint: impl FnMut(&mut egui::Ui, &mut S) + 'static,
 ) -> (image::RgbaImage, S) {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(size)
         .with_pixels_per_point(ppp)
         .with_theme(egui::Theme::Dark)

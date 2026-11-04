@@ -80,7 +80,7 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
                 .fill(t.palette().background)
                 .inner_margin(egui::Margin::same(32)),
         )
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             layout::vstack(ui, 24.0, |ui| {
                 card_title(ui, "Settings");
                 card_description(ui, "Manage your account settings and preferences.");
@@ -353,7 +353,7 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     let t = Theme::current(ui.ctx());
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(t.palette().background))
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
                 egui::Frame::new()
                     .inner_margin(egui::Margin::same(32))
@@ -440,7 +440,7 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
                 .fill(t.palette().background)
                 .inner_margin(egui::Margin::symmetric(32, 16)),
         )
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             layout::vstack(ui, 12.0, |ui| {
                 layout::row(ui, 8.0, |ui| {
                     let name = label(ui, "Preset code");
@@ -956,7 +956,7 @@ fn field_gallery(ui: &mut egui::Ui) {
         |ui| {
             // The switch's state lives in egui's memory: the gallery
             // keeps no app state for it.
-            let key = egui::Id::new("shadcn_egui::reference::field_share");
+            let key = egui::Id::unique("shadcn_egui::reference::field_share");
             let mut share = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(true);
             let mut terms = ui
                 .data(|d| d.get_temp::<bool>(key.with("terms")))

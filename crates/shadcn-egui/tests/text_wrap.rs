@@ -155,8 +155,9 @@ fn lines_break_where_chrome_breaks_them() {
             ctx.set_pixels_per_point(scale);
             Theme::vega().fonts(files, None).apply(&ctx);
             ctx.set_theme(egui::Theme::Light);
-            let _ = ctx.run_ui(RawInput::default(), |_| {});
-            let _ = ctx.run_ui(RawInput::default(), |ui| {
+            ctx.run_ui(RawInput::default(), |_| {})
+                .drop_without_applying_deltas();
+            ctx.run_ui(RawInput::default(), |ui| {
                 for f in rows
                     .iter()
                     .filter(|f| f[0] == name.id() && f[1] == scale_id)
@@ -200,7 +201,8 @@ fn lines_break_where_chrome_breaks_them() {
                         }
                     }
                 }
-            });
+            })
+            .drop_without_applying_deltas();
         }
         fonts_compared.push((name.id(), font_rows, compared - before));
     }
@@ -233,8 +235,9 @@ fn a_caller_layout_job_keeps_its_row_limit() {
     let ctx = egui::Context::default();
     Theme::vega().apply(&ctx);
     ctx.set_theme(egui::Theme::Light);
-    let _ = ctx.run_ui(RawInput::default(), |_| {});
-    let _ = ctx.run_ui(RawInput::default(), |ui| {
+    ctx.run_ui(RawInput::default(), |_| {})
+        .drop_without_applying_deltas();
+    ctx.run_ui(RawInput::default(), |ui| {
         let look = TextLook::resolve(ui, &[], State::NONE);
         let text = TEXTS.iter().find(|t| t.0 == "alert-dialog").unwrap().1;
         let mut job = spans(ui, &look, text);
@@ -247,7 +250,8 @@ fn a_caller_layout_job_keeps_its_row_limit() {
         let last = &galley.rows[1].row;
         assert_eq!(last.glyphs.last().map(|g| g.chr), Some('~'));
         assert!(galley.size().x <= 120.0 + 0.5, "{}", galley.size().x);
-    });
+    })
+    .drop_without_applying_deltas();
 }
 
 /// `line-clamp-2` (the item description): wrapped text keeps two rows,
@@ -258,8 +262,9 @@ fn a_line_clamp_keeps_that_many_rows() {
     let ctx = egui::Context::default();
     Theme::vega().apply(&ctx);
     ctx.set_theme(egui::Theme::Light);
-    let _ = ctx.run_ui(RawInput::default(), |_| {});
-    let _ = ctx.run_ui(RawInput::default(), |ui| {
+    ctx.run_ui(RawInput::default(), |_| {})
+        .drop_without_applying_deltas();
+    ctx.run_ui(RawInput::default(), |ui| {
         let recipe = Recipe {
             line_clamp: Prop::fixed(2),
             ..Recipe::default()
@@ -277,5 +282,6 @@ fn a_line_clamp_keeps_that_many_rows() {
         // Short text is not cut.
         let short = look.layout(ui, "Short", TextWrapMode::Wrap, 120.0);
         assert!(!short.galley().elided);
-    });
+    })
+    .drop_without_applying_deltas();
 }

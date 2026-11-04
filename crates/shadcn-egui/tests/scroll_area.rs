@@ -48,7 +48,8 @@ impl Sim {
             ..Default::default()
         };
         let mut r = None;
-        let out = self.ctx.run_ui(input, |ui| r = Some(add(ui)));
+        let mut out = self.ctx.run_ui(input, |ui| r = Some(add(ui)));
+        out.textures_delta.clear();
         self.time += 1.0 / 60.0;
         (r.unwrap(), out)
     }
@@ -67,7 +68,7 @@ fn place(ui: &mut Ui, area: ScrollArea, content: impl FnOnce(&mut Ui)) -> Vec2 {
             .auto_shrink(false)
             .show(ui, content)
             .state
-            .offset
+            .clamped_offset()
     })
     .inner
 }
@@ -178,8 +179,8 @@ fn repaint_delay(out: &egui::FullOutput) -> std::time::Duration {
 
 /// An app that is idle repaints only when asked: a shown bar asks for a
 /// pass at its hide time, the passes it asks for then hide it, and a
-/// hidden bar asks for none. egui wakes the app one predicted frame
-/// (`predicted_dt`, 1/60 s here) before the time asked for.
+/// hidden bar asks for none. egui 0.37 wakes the app at the time asked
+/// for (0.34 woke it one predicted frame before).
 #[test]
 fn a_shown_bar_asks_for_a_pass_at_its_hide_time() {
     let mut sim = Sim::vega();
@@ -194,16 +195,13 @@ fn a_shown_bar_asks_for_a_pass_at_its_hide_time() {
     let delay = repaint_delay(&out).as_secs_f64();
     let hide = entered + 0.6;
     assert!(
-        (quiet + delay + 1.0 / 60.0 - hide).abs() < 1e-4,
+        (quiet + delay - hide).abs() < 1e-4,
         "asked for {delay} s at {quiet} s"
     );
-    // Run the passes the app asks for, as an integration does.
+    // Run the pass the app asks for, as an integration does.
     sim.time = quiet + delay;
     let (_, out) = sim.pass(vec![], tall);
-    assert_eq!(thumbs(&sim, &out).len(), 1, "a frame before the hide");
-    assert_eq!(repaint_delay(&out), std::time::Duration::ZERO);
-    let (_, out) = sim.pass(vec![], tall);
-    assert!(thumbs(&sim, &out).is_empty(), "hidden in the next pass");
+    assert!(thumbs(&sim, &out).is_empty(), "hidden at the hide time");
     assert_eq!(
         repaint_delay(&out),
         std::time::Duration::MAX,
@@ -250,7 +248,7 @@ fn thumb_is_border_colour_at_recipe_geometry() {
 fn thumb_follows_the_offset_and_has_a_minimum_length() {
     let mut sim = Sim::vega();
     sim.pass(moved(INSIDE), tall);
-    let id = egui::Id::new("long");
+    let id = egui::Id::unique("long");
     let long = |ui: &mut Ui| {
         place(
             ui,
@@ -352,6 +350,7 @@ fn both_shortens_the_bars_by_the_corner() {
         unit: egui::MouseWheelUnit::Point,
         delta: vec2(-5000.0, -5000.0),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
         modifiers: Modifiers::NONE,
     }];
     sim.pass(end, both);
@@ -377,6 +376,7 @@ fn wheel(dy: f32) -> Event {
         unit: egui::MouseWheelUnit::Point,
         delta: vec2(0.0, dy),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
         modifiers: Modifiers::NONE,
     }
 }
@@ -394,14 +394,21 @@ fn wheel_over_the_bar_scrolls() {
 /// Hover, press at `from`, drag to `to` in steps, release; returns the
 /// offset after each of: the press, the last move, the release, one more
 /// pass.
+///
+/// A bar drag sets the offset after egui's area ran, which egui 0.37
+/// takes only in the next pass: each offset is read in a pass without
+/// events after the one that moved it.
 fn drag(sim: &mut Sim, from: Pos2, to: Pos2, mut area: impl FnMut(&mut Ui) -> Vec2) -> [Vec2; 4] {
     sim.pass(moved(from), &mut area);
-    let (pressed, _) = sim.pass(common::pointer_down(from), &mut area);
+    sim.pass(common::pointer_down(from), &mut area);
+    let (pressed, _) = sim.pass(vec![], &mut area);
     let mut last = pressed;
     for e in common::pointer_path(from, to, 5) {
-        last = sim.pass(vec![e], &mut area).0;
+        sim.pass(vec![e], &mut area);
+        last = sim.pass(vec![], &mut area).0;
     }
-    let (released, _) = sim.pass(common::pointer_up(to), &mut area);
+    sim.pass(common::pointer_up(to), &mut area);
+    let (released, _) = sim.pass(vec![], &mut area);
     let (after, _) = sim.pass(vec![], &mut area);
     [pressed, last, released, after]
 }
@@ -805,7 +812,7 @@ fn a_disabled_ui_pans_by_touch_as_an_enabled_one() {
                         .max_height(AREA.height())
                         .show(ui, block(vec2(100.0, 1000.0)))
                         .state
-                        .offset
+                        .clamped_offset()
                 })
                 .inner;
             [offset, Vec2::ZERO]
@@ -819,7 +826,7 @@ fn a_disabled_ui_pans_by_touch_as_an_enabled_one() {
                     .auto_shrink(false)
                     .show(ui, block(vec2(180.0, 600.0)))
                     .state
-                    .offset;
+                    .clamped_offset();
                 ui.allocate_space(vec2(200.0, 600.0));
             });
             [outer, inner]
@@ -861,6 +868,56 @@ fn a_disabled_ui_pans_by_touch_as_an_enabled_one() {
                 );
             }
         }
+    }
+}
+
+/// Chrome's scroller stops at its edge: a touch pan past the start, and
+/// the fling it leaves, never move the content past it (egui 0.37's
+/// rubber band would), in an enabled and in a disabled `Ui`.
+#[test]
+fn a_touch_pan_past_the_edge_does_not_stretch() {
+    for disabled in [false, true] {
+        let mut sim = Sim::vega();
+        let mut area = move |ui: &mut Ui| {
+            if disabled {
+                ui.disable();
+            }
+            ui.scope_builder(egui::UiBuilder::new().max_rect(AREA), |ui| {
+                ScrollArea::vertical()
+                    .max_height(AREA.height())
+                    .auto_shrink(false)
+                    .show(ui, block(vec2(200.0, 1000.0)))
+                    .state
+                    .unclamped_offset()
+            })
+            .inner
+        };
+        let from = pos2(150.0, 100.0);
+        let touch = Event::Touch {
+            device_id: egui::TouchDeviceId(1),
+            id: egui::TouchId(0),
+            phase: egui::TouchPhase::Start,
+            pos: from,
+            force: None,
+        };
+        let mut offsets = vec![sim.pass(vec![touch], &mut area).0];
+        offsets.push(sim.pass(moved(from), &mut area).0);
+        offsets.push(sim.pass(common::pointer_down(from), &mut area).0);
+        // Down: the content would follow the finger past its start.
+        for e in common::pointer_path(from, from + vec2(0.0, 80.0), 4) {
+            offsets.push(sim.pass(vec![e], &mut area).0);
+        }
+        offsets.push(
+            sim.pass(common::pointer_up(from + vec2(0.0, 80.0)), &mut area)
+                .0,
+        );
+        for _ in 0..10 {
+            offsets.push(sim.pass(vec![], &mut area).0);
+        }
+        assert!(
+            offsets.iter().all(|o| o.y == 0.0),
+            "disabled {disabled}: {offsets:?}"
+        );
     }
 }
 
@@ -953,9 +1010,9 @@ fn the_default_id_is_egui_s() {
         let ours_default = ScrollArea::vertical().show(ui, |_| ()).id;
         (
             ours,
-            ui.make_persistent_id(egui::Id::new("list")),
+            ui.make_persistent_id(egui::IdSalt::new("list")),
             ours_default,
-            ui.make_persistent_id(egui::Id::new("scroll_area")),
+            ui.make_persistent_id(egui::IdSalt::new("scroll_area")),
         )
     });
     assert_eq!(ids.0, ids.1);
@@ -998,9 +1055,9 @@ fn show_rows_passes_egui_s_range() {
     assert_eq!(ranges[0], ranges[1]);
 }
 
-/// `overflow: hidden` clips at the viewport's edge: egui's
-/// `clip_rect_margin` would let scrolled content paint 3 px past it,
-/// over the root's border.
+/// `overflow: hidden` clips at the viewport's edge: scrolled content
+/// never paints past it, over the root's border (egui 0.34's
+/// `clip_rect_margin` let it paint 3 px past).
 #[test]
 fn content_is_clipped_at_the_viewport() {
     let mut sim = Sim::vega();
@@ -1049,6 +1106,7 @@ fn hover_and_scroll(at: Pos2, delta: Vec2) -> impl FnMut(&mut egui_kittest::Harn
             unit: egui::MouseWheelUnit::Point,
             delta,
             phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
             modifiers: Modifiers::NONE,
         });
         h.run();

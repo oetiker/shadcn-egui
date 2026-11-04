@@ -99,8 +99,9 @@ impl Widget for Label {
         // In a field it is the field's label, as upstream's `<Label for>`.
         let resp = crate::components::field::label_in_field(ui, rect).unwrap_or(resp);
         crate::components::shared::widget_info_never_disabled(&resp, || {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &self.text)
+            egui::WidgetInfo::labeled(egui::Role::Label, true, &self.text)
         });
+        crate::components::field::card_text(ui, &self.text);
         // `peer-disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);
         if ui.is_rect_visible(rect) {

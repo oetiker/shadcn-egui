@@ -7,7 +7,8 @@ use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
 
 fn render(ctx: &egui::Context, state: &mut SettingsState) {
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| settings_ui(ui, state));
+    ctx.run_ui(egui::RawInput::default(), |ui| settings_ui(ui, state))
+        .drop_without_applying_deltas();
 }
 
 /// Applying a second theme on a live context restyles the next frame: the
@@ -95,9 +96,10 @@ fn native_button_height_is_the_default_button_height() {
         let mut height = 0.0;
         // The second frame lays out with the installed fonts.
         for _ in 0..2 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 height = ui.button("Save").rect.height()
-            });
+            })
+            .drop_without_applying_deltas();
         }
         assert_eq!(height, ctx.global_style().spacing.interact_size.y, "{name}");
     }
@@ -218,7 +220,7 @@ fn a_mode_switch_before_a_plain_area_shows_no_mixed_frame() {
             if switch.get() {
                 ui.ctx().set_theme(egui::Theme::Light);
             }
-            let area = egui::Area::new(egui::Id::new("area"))
+            let area = egui::Area::new(egui::Id::unique("area"))
                 .fixed_pos(egui::pos2(300.0, 200.0))
                 .fade_in(false)
                 .show(ui.ctx(), |ui| ui.button("Area").rect)
@@ -263,9 +265,10 @@ fn label_width(theme: &Theme) -> f32 {
     theme.apply(&ctx);
     let mut width = 0.0;
     for _ in 0..2 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             width = label(ui, "Accept terms").rect.width();
-        });
+        })
+        .drop_without_applying_deltas();
     }
     width
 }
@@ -363,12 +366,12 @@ fn a_first_apply_after_the_last_crate_widget_shows_the_new_fonts() {
     let switch = std::cell::Cell::new(false);
     let width = std::cell::Cell::new(0.0);
     let frame = || {
-        ctx.run_ui(egui::RawInput::default(), |ui| {
+        common::no_textures(ctx.run_ui(egui::RawInput::default(), |ui| {
             width.set(label(ui, "Accept terms").rect.width());
             if switch.get() {
                 Theme::vega().apply(ui.ctx());
             }
-        })
+        }))
     };
     let _ = frame();
     let _ = frame();
@@ -421,7 +424,7 @@ fn the_same_fonts_applied_every_pass_settle() {
         };
         for frame in 0..6 {
             let mut passes = 0;
-            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 passes += 1;
                 if first {
                     apply(ui.ctx());
@@ -432,8 +435,11 @@ fn the_same_fonts_applied_every_pass_settle() {
                 }
                 ui.add(Button::new("B"));
             });
+            out.textures_delta.clear();
             assert_eq!(passes, 1, "first {first}, frame {frame}: passes");
-            if frame > 0 {
+            // egui 0.37 sends the window its theme in the first frame,
+            // which asks for a second one.
+            if frame > 1 {
                 let delay = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
                 assert_eq!(
                     delay,
@@ -456,7 +462,8 @@ fn native_viewports(ctx: &egui::Context) {
             viewports: [(id, egui::ViewportInfo::default())].into_iter().collect(),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+        ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui))
+            .drop_without_applying_deltas();
     });
 }
 
@@ -484,7 +491,7 @@ fn a_font_change_before_a_new_window_shows_the_new_fonts() {
     let switch = std::cell::Cell::new(false);
     let width = std::cell::Cell::new(0.0);
     let frame = || {
-        ctx.run_ui(egui::RawInput::default(), |ui| {
+        common::no_textures(ctx.run_ui(egui::RawInput::default(), |ui| {
             width.set(label(ui, "Accept terms").rect.width());
             if switch.get() {
                 oxanium().apply(ui.ctx());
@@ -494,7 +501,7 @@ fn a_font_change_before_a_new_window_shows_the_new_fonts() {
                         drop(label(ui, "Settings"));
                     });
             }
-        })
+        }))
     };
     let _ = frame();
     let _ = frame();
@@ -536,7 +543,7 @@ fn a_theme_change_in_a_window_repaints_the_root() {
         }
         let switch = std::cell::Cell::new(false);
         let frame = || {
-            ctx.run_ui(egui::RawInput::default(), |ui| {
+            common::no_textures(ctx.run_ui(egui::RawInput::default(), |ui| {
                 ui.label("Accept terms");
                 let builder = egui::ViewportBuilder::default();
                 ui.ctx()
@@ -550,7 +557,7 @@ fn a_theme_change_in_a_window_repaints_the_root() {
                             }
                         }
                     });
-            })
+            }))
         };
         for _ in 0..3 {
             let _ = frame();
@@ -584,7 +591,7 @@ fn a_first_apply_before_a_window_binds_the_window_heading() {
     let switch = std::cell::Cell::new(false);
     let families = std::cell::RefCell::new(Vec::new());
     let frame = || {
-        ctx.run_ui(egui::RawInput::default(), |ui| {
+        common::no_textures(ctx.run_ui(egui::RawInput::default(), |ui| {
             drop(label(ui, "Accept terms"));
             if switch.get() {
                 Theme::vega().apply(ui.ctx());
@@ -595,7 +602,7 @@ fn a_first_apply_before_a_window_binds_the_window_heading() {
                     let heading = &ui.style().text_styles[&egui::TextStyle::Heading];
                     families.borrow_mut().push(heading.family.clone());
                 })
-        })
+        }))
     };
     let _ = frame();
     let _ = frame();
@@ -821,7 +828,7 @@ fn a_window_with_its_own_theme_settles() {
                 viewports: viewports.clone(),
                 ..Default::default()
             };
-            let root = ctx.run_ui(input, |ui| {
+            let mut root = ctx.run_ui(input, |ui| {
                 if switch.get() {
                     Theme::new(Style::vega(), Palette::light(), Palette::dark(), 4.0)
                         .apply(ui.ctx());
@@ -838,6 +845,7 @@ fn a_window_with_its_own_theme_settles() {
                         .show_viewport_immediate(child, builder, |ui, _| window(ui));
                 }
             });
+            root.textures_delta.clear();
             let window_repaint = ctx.has_requested_repaint_for(&child);
             if deferred {
                 let input = egui::RawInput {
@@ -845,7 +853,7 @@ fn a_window_with_its_own_theme_settles() {
                     viewports: viewports.clone(),
                     ..Default::default()
                 };
-                let _ = ctx.run_ui(input, window);
+                ctx.run_ui(input, window).drop_without_applying_deltas();
             }
             let root_repaint = ctx.has_requested_repaint_for(&egui::ViewportId::ROOT);
             (root_repaint_delay(&root), window_repaint, root_repaint)
@@ -922,7 +930,7 @@ fn a_window_with_its_own_fonts_settles() {
                 ..Default::default()
             };
             let mut passes = 0;
-            let root = ctx.run_ui(input, |ui| {
+            let mut root = ctx.run_ui(input, |ui| {
                 passes += 1;
                 if switch.get() {
                     inter_body_oxanium_heading().apply(ui.ctx());
@@ -941,6 +949,7 @@ fn a_window_with_its_own_fonts_settles() {
                     }
                 }
             });
+            root.textures_delta.clear();
             let window_repaint = ctx.has_requested_repaint_for(&child);
             if deferred && open.get() {
                 let input = egui::RawInput {
@@ -948,7 +957,7 @@ fn a_window_with_its_own_fonts_settles() {
                     viewports: viewports(),
                     ..Default::default()
                 };
-                let _ = ctx.run_ui(input, window);
+                ctx.run_ui(input, window).drop_without_applying_deltas();
             }
             let root_repaint = ctx.has_requested_repaint_for(&egui::ViewportId::ROOT);
             (
@@ -1105,8 +1114,8 @@ fn run_with(
     ctx: &egui::Context,
     input: egui::RawInput,
     mut ui_fn: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
-    match app_loop {
+) -> common::Output {
+    common::Output(match app_loop {
         Loop::RunUi => ctx.run_ui(input, ui_fn),
         Loop::Own => {
             ctx.begin_pass(input);
@@ -1114,12 +1123,12 @@ fn run_with(
             let builder = egui::UiBuilder::new().max_rect(rect);
             ui_fn(&mut egui::Ui::new(
                 ctx.clone(),
-                egui::Id::new("own"),
+                egui::Id::unique("own"),
                 builder,
             ));
             ctx.end_pass()
         }
-    }
+    })
 }
 
 /// [`native_viewports`], with the immediate window's pass run by

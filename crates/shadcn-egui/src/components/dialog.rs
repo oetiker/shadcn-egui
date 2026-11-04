@@ -67,9 +67,9 @@ pub struct Dialog<'a> {
 }
 
 impl<'a> Dialog<'a> {
-    pub fn new(id_salt: impl std::hash::Hash, title: &'a str) -> Self {
+    pub fn new(id_salt: impl std::hash::Hash + std::fmt::Debug, title: &'a str) -> Self {
         Self {
-            id: Id::new(id_salt),
+            id: Id::unique(id_salt),
             variant: DialogVariant::Default,
             title,
             description: None,
@@ -222,13 +222,13 @@ fn header(
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(
             ui,
-            ui.id().with("shadcn_egui::dialog::header"),
+            ui.scope_id().with("shadcn_egui::dialog::header"),
             &[&header_l[..]],
             g,
             |ui| {
                 part_ui(
                     ui,
-                    ui.id().with("shadcn_egui::dialog::title"),
+                    ui.scope_id().with("shadcn_egui::dialog::title"),
                     &[&heading[..]],
                     g,
                     |ui| title_look.label(ui, title, TextWrapMode::Wrap),
@@ -236,7 +236,7 @@ fn header(
                 if let Some(d) = description {
                     part_ui(
                         ui,
-                        ui.id().with("shadcn_egui::dialog::description"),
+                        ui.scope_id().with("shadcn_egui::dialog::description"),
                         &[&desc[..]],
                         g,
                         |ui| desc_look.label(ui, d, TextWrapMode::Wrap),
@@ -428,7 +428,7 @@ mod tests {
         let ctx = egui::Context::default();
         let t = Theme::vega().variant(BRAND, DialogVariant::Default, brand);
         t.apply(&ctx);
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let mut open = true;
             let seen = Dialog::new("d", "Title")
                 .variant(BRAND)
@@ -442,6 +442,7 @@ mod tests {
             assert_eq!(seen, Some(Some(Paint::Role(Role::Primary, 1.0))));
             let t = Theme::current(ui.ctx());
             assert_eq!(dialog_recipes(ui, &t).base(), DialogVariant::Default);
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

@@ -1,4 +1,4 @@
-//! Accessible roles egui's `WidgetType` lacks (conformance 8,
+//! Accessible roles set past `WidgetInfo` (conformance 8,
 //! implementation notes 16), and states egui's `WidgetInfo` lacks
 //! (`aria-invalid`).
 
@@ -14,7 +14,7 @@ use shadcn_egui::components::switch::Switch;
 use shadcn_egui::components::textarea::Textarea;
 use shadcn_egui::Theme;
 
-/// The role replaces the one `widget_info` sets from the `WidgetType`, on
+/// The role replaces the one `widget_info` sets from the `WidgetInfo`, on
 /// a quiet pass and on a pass that reports an event (a click), while the
 /// name stays the widget info's.
 #[test]
@@ -28,7 +28,7 @@ fn widget_info_with_role_overrides_the_widget_type_role() {
         let mut harness = Harness::new_ui(move |ui| {
             let resp = ui.allocate_response(egui::vec2(120.0, 30.0), egui::Sense::click());
             widget_info_with_role(&resp, role, || {
-                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name)
+                egui::WidgetInfo::labeled(egui::Role::Button, true, name)
             });
         });
         harness.run();
@@ -85,10 +85,14 @@ fn aria_invalid_reaches_the_accessibility_node() {
     ];
     for (name, role, widget) in widgets {
         for invalid in [false, true] {
-            let mut harness = Harness::new_ui(move |ui| {
-                Theme::vega().apply(ui.ctx());
-                widget(ui, invalid);
-            });
+            // A control is unnamed on purpose: the test checks the names itself.
+            let mut harness =
+                Harness::builder()
+                    .with_accessibility_check(false)
+                    .build_ui(move |ui| {
+                        Theme::vega().apply(ui.ctx());
+                        widget(ui, invalid);
+                    });
             harness.run();
             let node = harness.get_by_role(role);
             assert_eq!(
@@ -240,16 +244,19 @@ fn a_disabled_ui_disables_every_leaf() {
     ];
     for (name, node, add, changed) in leaves {
         for how in [How::Enabled, How::AddEnabled, How::UiDisable] {
-            let mut harness = Harness::new_ui_state(
-                move |ui, s: &mut Leaves| {
-                    Theme::vega().apply(ui.ctx());
-                    if how == How::UiDisable {
-                        ui.disable();
-                    }
-                    add(ui, s, how);
-                },
-                Leaves::default(),
-            );
+            // A control is unnamed on purpose: the test checks the names itself.
+            let mut harness = Harness::builder()
+                .with_accessibility_check(false)
+                .build_ui_state(
+                    move |ui, s: &mut Leaves| {
+                        Theme::vega().apply(ui.ctx());
+                        if how == How::UiDisable {
+                            ui.disable();
+                        }
+                        add(ui, s, how);
+                    },
+                    Leaves::default(),
+                );
             harness.set_size(egui::vec2(300.0, 200.0));
             harness.run();
             let target = || match node {
@@ -281,7 +288,7 @@ fn a_disabled_ui_disables_every_leaf() {
 fn app_widget_with_role(ui: &mut egui::Ui, role: Role) {
     let resp = ui.allocate_response(egui::vec2(120.0, 30.0), egui::Sense::hover());
     widget_info_with_role(&resp, role, || {
-        egui::WidgetInfo::labeled(egui::WidgetType::Other, ui.is_enabled(), "App widget")
+        egui::WidgetInfo::labeled(egui::Role::Unknown, ui.is_enabled(), "App widget")
     });
 }
 

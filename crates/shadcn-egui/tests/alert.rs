@@ -27,7 +27,8 @@ fn settle<T>(theme: &Theme, width: f32, mut add: impl FnMut(&mut Ui) -> T) -> T 
     };
     let mut last = None;
     for _ in 0..3 {
-        let _ = ctx.run_ui(input(), |ui| last = Some(add(ui)));
+        ctx.run_ui(input(), |ui| last = Some(add(ui)))
+            .drop_without_applying_deltas();
     }
     last.expect("a frame ran")
 }
@@ -313,7 +314,7 @@ fn removing_the_action_gives_back_its_room() {
     t.apply(&ctx);
     let frame = |action: bool| {
         let mut desc = Rect::NOTHING;
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(900.0, 800.0))),
                 ..Default::default()
@@ -327,7 +328,8 @@ fn removing_the_action_gives_back_its_room() {
                     }
                 });
             },
-        );
+        )
+        .drop_without_applying_deltas();
         desc
     };
     let reserved = 448.0 - 1.0 - 72.0;

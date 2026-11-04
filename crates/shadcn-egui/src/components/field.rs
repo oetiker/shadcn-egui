@@ -46,7 +46,7 @@ use crate::{Orientation, Theme};
 use egui::accesskit::{Live, Role};
 use egui::{
     Align, Id, InnerResponse, Layout, Pos2, Rect, Response, Sense, Shape, TextWrapMode, Ui,
-    UiBuilder, Vec2, Widget, WidgetInfo, WidgetText, WidgetType,
+    UiBuilder, Vec2, Widget, WidgetInfo, WidgetText,
 };
 
 /// Tailwind's `@md` container size (28rem): a responsive field is
@@ -294,6 +294,29 @@ struct CardCx {
     id: Id,
     /// The card's `has-*` flags of the previous pass.
     state: State,
+}
+
+/// The text a choice card's content drew so far in this pass: the card's
+/// accessible name, as the browser names a `<label>` by the text inside
+/// it. Kept under [`CARD_NAME`] of the card's id, from the card's start
+/// to its end in the same pass.
+#[derive(Clone, Debug, Default)]
+struct CardName(String);
+
+const CARD_NAME: &str = "shadcn_egui::field::card_name";
+
+/// Adds `text`, drawn in `ui`, to the name of the choice card around it.
+pub(crate) fn card_text(ui: &Ui, text: &str) {
+    let text = text.trim();
+    if let Some(card) = context::find::<CardCx>(ui).filter(|_| !text.is_empty()) {
+        ui.data_mut(|d| {
+            let name = d.get_temp_mut_or_default::<CardName>(card.id.with(CARD_NAME));
+            if !name.0.is_empty() {
+                name.0.push(' ');
+            }
+            name.0.push_str(text);
+        });
+    }
 }
 
 /// A container's record of its children in one pass.
@@ -552,16 +575,36 @@ fn label_share(left: f32, natural: f32, longest: f32, room: f32, texts: usize) -
     }
 }
 
+/// The width of the longest word of `text` in `look`: a label's
+/// min-content.
+fn longest_word(ui: &Ui, look: &TextLook, text: &WidgetText) -> f32 {
+    text.text()
+        .split_whitespace()
+        .map(|w| {
+            look.layout(ui, w, TextWrapMode::Extend, f32::INFINITY)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max)
+}
+
 /// A text field took its [`text_share`]: the first one is the part that
 /// grows, the later ones count with it.
 fn took_share(ui: &Ui, p: &Parent, rect: Rect) {
     with_children(ui, p.id, |c| {
         c.texts += 1;
         match c.grower_right {
-            None => c.grower_right = Some(rect.right()),
-            Some(_) => c.text_after += rect.width(),
+            None => {
+                c.grower_right = Some(rect.right());
+                true
+            }
+            Some(_) => {
+                c.text_after += rect.width();
+                false
+            }
         }
-    });
+    })
+    .then(|| layout::flex_grower(ui, 0.0, 0.0, rect.width()));
 }
 
 /// Report `flags` to the record of the container `id`.
@@ -637,7 +680,10 @@ impl ControlSlot {
                 (take, learned.labelled || c.label_drawn)
             });
             if take.0 {
-                slot.label = take.1.then_some(f.label);
+                // A choice card is the label of the field it wraps, drawn
+                // or not: its text names the control.
+                let in_card = card.is_some_and(|c| c.id == f.label);
+                slot.label = (take.1 || in_card).then_some(f.label);
                 slot.pressed = ui
                     .data_mut(|d| d.remove_temp::<bool>(f.press))
                     .unwrap_or(false);
@@ -869,7 +915,7 @@ pub struct Field {
     orientation_set: bool,
     responsive: bool,
     variant: FieldVariant,
-    id_salt: Option<Id>,
+    id_salt: Option<egui::IdSalt>,
 }
 
 impl Default for Field {
@@ -975,8 +1021,8 @@ impl Field {
     /// children in the previous pass, scoped to the `Ui` (as
     /// `TextEdit::id_salt`).
     #[inline]
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(Id::new(salt));
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
 
@@ -1152,9 +1198,7 @@ impl Field {
         let response = layout::end_item(ui, frame, outer, Sense::hover());
         // A `<div role="group">` with no `aria-disabled`: `group` has a
         // disabled state, so it is taken out by hand.
-        widget_info_with_role(&response, Role::Group, || {
-            WidgetInfo::new(WidgetType::Other)
-        });
+        widget_info_with_role(&response, Role::Group, || WidgetInfo::new(Role::Unknown));
         never_disabled(&response.ctx, response.id);
         InnerResponse::new(inner, response)
     }
@@ -1235,6 +1279,8 @@ impl FieldContent {
                 Some((p, w)) => {
                     let r = draw(ui, Some(w).filter(|w| *w > 0.0));
                     grown(ui, &p, r.response.rect.right());
+                    // `flex-1`: a base size of 0.
+                    layout::flex_grower(ui, 0.0, 0.0, r.response.rect.width());
                     r
                 }
                 None => draw(ui, None),
@@ -1372,15 +1418,7 @@ impl Widget for FieldLabel {
             let room = ui.available_width();
             let width = match grow {
                 Some((p, left)) if room.is_finite() => {
-                    let longest = text
-                        .text()
-                        .split_whitespace()
-                        .map(|w| {
-                            look.layout(ui, w, TextWrapMode::Extend, f32::INFINITY)
-                                .size()
-                                .x
-                        })
-                        .fold(0.0, f32::max);
+                    let longest = longest_word(ui, &look, &text);
                     let (w, share) =
                         label_share(left, natural, longest, room, learned(ui, p.id).texts);
                     with_children(ui, p.id, |c| c.text_share = Some(share));
@@ -1398,6 +1436,7 @@ impl Widget for FieldLabel {
             let (rect, _) = layout::allocate_item(ui, size, Sense::hover());
             if let Some((p, _)) = grow {
                 grown(ui, &p, rect.right());
+                layout::flex_grower(ui, natural, longest_word(ui, &look, &text), rect.width());
             }
             // The field's first label takes the id fixed up front, which
             // its control names.
@@ -1418,10 +1457,9 @@ impl Widget for FieldLabel {
                 }
             }
             let name = text.text().to_owned();
+            card_text(ui, &name);
             // A `<label>` has no disabled state; it only looks disabled.
-            widget_info_never_disabled(&resp, || {
-                WidgetInfo::labeled(WidgetType::Label, true, &name)
-            });
+            widget_info_never_disabled(&resp, || WidgetInfo::labeled(Role::Label, true, &name));
             // `peer-disabled:cursor-not-allowed`.
             disabled_cursor(&resp, disabled);
             if ui.is_rect_visible(rect) {
@@ -1530,9 +1568,7 @@ impl Widget for FieldError {
             })
             .inner
         });
-        widget_info_with_role(&response, Role::Alert, || {
-            WidgetInfo::new(WidgetType::Other)
-        });
+        widget_info_with_role(&response, Role::Alert, || WidgetInfo::new(Role::Unknown));
         response
             .ctx
             .accesskit_node_builder(response.id, |node| node.set_live(Live::Assertive));
@@ -1729,9 +1765,7 @@ impl FieldSet {
             }
             add(ui)
         });
-        widget_info_with_role(&response, Role::Group, || {
-            WidgetInfo::new(WidgetType::Other)
-        });
+        widget_info_with_role(&response, Role::Group, || WidgetInfo::new(Role::Unknown));
         if let Some(legend) = children.legend {
             let _ = response.clone().labelled_by(legend);
         }
@@ -1964,15 +1998,15 @@ pub fn field_separator(ui: &mut Ui) -> Response {
 #[doc(alias = "FieldLabel")]
 #[must_use = "Call .show(ui, |ui| ..)"]
 pub struct FieldChoiceCard {
-    id_salt: Option<Id>,
+    id_salt: Option<egui::IdSalt>,
 }
 
 impl FieldChoiceCard {
     /// The id under which the card keeps its control's state from the
     /// previous pass, scoped to the `Ui`.
     #[inline]
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(Id::new(salt));
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
 
@@ -2016,6 +2050,7 @@ impl FieldChoiceCard {
             row: false,
         };
         let card = CardCx { id, state: had };
+        ui.data_mut(|d| d.remove_temp::<CardName>(id.with(CARD_NAME)));
         let inner = as_child(ui, false, |ui, _| {
             let bounded = ui.available_width().is_finite();
             let outer_w = layout::capped_width(ui, f32::INFINITY, border * 2.0);
@@ -2077,7 +2112,11 @@ impl FieldChoiceCard {
             }
             inner
         });
-        widget_info_never_disabled(&resp, || WidgetInfo::new(WidgetType::Label));
+        // Named by the text inside it, which names its control in turn.
+        let name = ui
+            .data_mut(|d| d.remove_temp::<CardName>(id.with(CARD_NAME)))
+            .unwrap_or_default();
+        widget_info_never_disabled(&resp, || WidgetInfo::labeled(Role::Label, true, &name.0));
         InnerResponse::new(inner, resp)
     }
 }

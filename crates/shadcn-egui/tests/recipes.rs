@@ -652,7 +652,10 @@ fn select_fade_and_offset() {
     assert_eq!(border(&off), border(&on).gamma_multiply(0.25));
 
     let item_top = |offset: f32| {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = egui_kittest::Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(320.0, 260.0))
             .build_ui(move |ui| {
                 Theme::vega().apply(ui.ctx());
@@ -693,13 +696,14 @@ fn click_flips(
         vec![egui::Event::PointerMoved(pos), press(true)],
         vec![press(false)],
     ] {
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 events,
                 ..Default::default()
             },
             |ui| add(ui, &mut value),
-        );
+        )
+        .drop_without_applying_deltas();
     }
     value
 }
@@ -977,7 +981,7 @@ fn dialog_close_recipe_paints_the_close_button() {
             time: Some(time),
             ..Default::default()
         };
-        out = ctx.run_ui(input, frame);
+        out = common::no_textures(ctx.run_ui(input, frame));
     }
     let filled: Vec<_> = common::rect_shapes(&out)
         .into_iter()
@@ -1193,7 +1197,10 @@ fn replaced_recipes_keep_their_icons() {
         ui.add(Checkbox::new(&mut true))
     });
     let ticks = icon_rects(&ctx, &out);
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = egui_kittest::Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui(move |ui| {
             cleared.apply(ui.ctx());
@@ -1322,7 +1329,10 @@ fn overlay_output(
     ui_fn: fn(&mut egui::Ui),
     act: fn(&mut egui_kittest::Harness<'static>),
 ) -> egui::FullOutput {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = egui_kittest::Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(520.0, 420.0))
         .with_theme(egui::Theme::Light)
         .build_ui(move |ui| {
@@ -1334,7 +1344,7 @@ fn overlay_output(
     act(&mut h);
     h.run();
     h.run();
-    h.output().clone()
+    common::no_textures(h.output().clone())
 }
 
 /// Issue #6, M2: every part's `opacity` takes effect, multiplied down the
@@ -1365,7 +1375,9 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
         r.opacity.base = Some(v);
     }
     fn leaf(theme: &Theme, f: fn(&mut egui::Ui) -> egui::Response) -> egui::FullOutput {
-        common::measure_output(theme, egui::Theme::Light, f).1
+        common::measure_output(theme, egui::Theme::Light, f)
+            .1
+            .into_inner()
     }
     fn click_open(h: &mut egui_kittest::Harness<'static>) {
         h.get_by_label("Open").click();

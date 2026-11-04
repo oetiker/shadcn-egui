@@ -145,7 +145,7 @@ impl Widget for IconView<'_> {
         // should hear): name it with `labelled_by(label.id)`, which an own
         // label would override.
         crate::components::shared::widget_info_never_disabled(&resp, || {
-            egui::WidgetInfo::new(egui::WidgetType::Image)
+            egui::WidgetInfo::new(egui::Role::Image)
         });
         if ui.is_rect_visible(rect) {
             let color = self.color.unwrap_or(ui.visuals().text_color());

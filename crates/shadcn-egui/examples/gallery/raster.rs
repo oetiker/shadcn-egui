@@ -137,33 +137,36 @@ impl Rasterizer {
     /// Applies the new and changed textures of a frame; call before
     /// [`Self::render`]. A replaced texture damages the whole frame.
     pub fn set_textures(&mut self, delta: &TexturesDelta) {
-        for (id, image_delta) in &delta.set {
-            let ImageData::Color(image) = &image_delta.image;
-            let [w, h] = image.size;
-            match image_delta.pos {
-                None => {
-                    self.textures.insert(
-                        *id,
-                        Texture {
-                            size: [w, h],
-                            pixels: image.pixels.clone(),
-                            options: image_delta.options,
-                        },
-                    );
-                    self.full_damage = true;
-                }
-                Some([x, y]) => {
-                    let Some(tex) = self.textures.get_mut(id) else {
-                        continue;
-                    };
-                    for row in 0..h {
-                        let dst = (y + row) * tex.size[0] + x;
-                        tex.pixels[dst..dst + w].copy_from_slice(&image.pixels[row * w..][..w]);
-                    }
-                    // The font atlas only grows into unused space; other
-                    // textures may change under triangles that did not.
-                    if *id != TextureId::default() {
+        // egui 0.37 sends a list of deltas per texture, in order.
+        for (id, image_deltas) in &delta.set {
+            for image_delta in image_deltas {
+                let ImageData::Color(image) = &image_delta.image;
+                let [w, h] = image.size;
+                match image_delta.pos {
+                    None => {
+                        self.textures.insert(
+                            *id,
+                            Texture {
+                                size: [w, h],
+                                pixels: image.pixels.clone(),
+                                options: image_delta.options,
+                            },
+                        );
                         self.full_damage = true;
+                    }
+                    Some([x, y]) => {
+                        let Some(tex) = self.textures.get_mut(id) else {
+                            continue;
+                        };
+                        for row in 0..h {
+                            let dst = (y + row) * tex.size[0] + x;
+                            tex.pixels[dst..dst + w].copy_from_slice(&image.pixels[row * w..][..w]);
+                        }
+                        // The font atlas only grows into unused space; other
+                        // textures may change under triangles that did not.
+                        if *id != TextureId::default() {
+                            self.full_damage = true;
+                        }
                     }
                 }
             }
@@ -681,14 +684,15 @@ impl Rasterizer {
     fn with_white_atlas() -> Self {
         let mut r = Self::default();
         let mut delta = TexturesDelta::default();
-        delta.set.push((
+        delta.push(
             TextureId::default(),
             egui::epaint::ImageDelta::full(
                 egui::ColorImage::filled([1, 1], Color32::WHITE),
                 TextureOptions::LINEAR,
             ),
-        ));
+        );
         r.set_textures(&delta);
+        delta.clear();
         r
     }
 }
@@ -748,16 +752,17 @@ mod tests {
             Color32::WHITE,
         );
         let mut red = TexturesDelta::default();
-        red.set.push((
+        red.push(
             id,
             egui::epaint::ImageDelta::full(
                 egui::ColorImage::filled([2, 2], Color32::RED),
                 TextureOptions::NEAREST,
             ),
-        ));
+        );
         let mut r = Rasterizer::with_white_atlas();
         let mut c = Canvas::new(4, 4);
         r.set_textures(&red);
+        red.clear();
         render(&mut r, &mut c, &[prim(mesh.clone())]);
         assert!(
             c.pixels.iter().all(|&p| p == 0x00ff_0000),
@@ -765,8 +770,9 @@ mod tests {
             c.pixels
         );
         let mut freed = TexturesDelta::default();
-        freed.free.push(id);
+        freed.free(id);
         r.free_textures(&freed);
+        freed.clear();
         render(&mut r, &mut c, &[prim(mesh.clone())]);
         let mut full = Canvas::new(4, 4);
         render(
@@ -795,16 +801,17 @@ mod tests {
             Color32::WHITE,
         );
         let mut delta = TexturesDelta::default();
-        delta.set.push((
+        delta.push(
             id,
             egui::epaint::ImageDelta::full(
                 egui::ColorImage::new([4, 1], texels.to_vec()),
                 TextureOptions::NEAREST,
             ),
-        ));
+        );
         let mut r = Rasterizer::with_white_atlas();
         let mut c = Canvas::new(4, 1);
         r.set_textures(&delta);
+        delta.clear();
         render(&mut r, &mut c, &[prim(mesh)]);
         let want: Vec<u32> = texels
             .iter()

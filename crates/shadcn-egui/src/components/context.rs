@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn the_nearest_context_of_the_type_wins() {
         let ctx = egui::Context::default();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             assert_eq!(find::<A>(ui), None);
             ui.scope_builder(push(push(UiBuilder::new(), A(1)), B(9)), |ui| {
                 ui.scope_builder(push(UiBuilder::new(), A(2)), |ui| {
@@ -80,6 +80,7 @@ mod tests {
                 });
                 assert_eq!(find::<A>(ui), Some(A(1)));
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

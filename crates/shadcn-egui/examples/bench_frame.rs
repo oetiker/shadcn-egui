@@ -66,14 +66,16 @@ fn main() {
         let ctx = egui::Context::default();
         let mut state = GalleryState::new(Preset::default().style(style), egui::Theme::Light);
         for _ in 0..WARMUP {
-            let _ = ctx.run_ui(input(), |ui| gallery_ui(ui, &mut state));
+            ctx.run_ui(input(), |ui| gallery_ui(ui, &mut state))
+                .drop_without_applying_deltas();
         }
         let mut times: Vec<Duration> = Vec::with_capacity(frames);
         let before = ALLOCS.load(Ordering::Relaxed);
         for _ in 0..frames {
             let raw = input();
             let start = Instant::now();
-            let _ = ctx.run_ui(raw, |ui| gallery_ui(ui, &mut state));
+            ctx.run_ui(raw, |ui| gallery_ui(ui, &mut state))
+                .drop_without_applying_deltas();
             times.push(start.elapsed());
         }
         let allocs = ALLOCS.load(Ordering::Relaxed) - before;

@@ -388,7 +388,7 @@ impl Widget for Select<'_> {
         resp.widget_info(|| egui::WidgetInfo {
             enabled,
             current_text_value: Some(shown.to_owned()),
-            ..egui::WidgetInfo::new(egui::WidgetType::ComboBox)
+            ..egui::WidgetInfo::new(egui::Role::ComboBox)
         });
         // The trigger's `disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);
@@ -481,7 +481,7 @@ impl Widget for Select<'_> {
                     let chain = [&group[..], &viewport[..], &l[..]];
                     content_ui(
                         ui,
-                        ui.id().with("shadcn_egui::select::content"),
+                        ui.scope_id().with("shadcn_egui::select::content"),
                         &chain,
                         gs,
                         |ui| {
@@ -584,7 +584,7 @@ impl Widget for Select<'_> {
                                         }
                                         r.widget_info(|| {
                                             egui::WidgetInfo::selected(
-                                                egui::WidgetType::SelectableLabel,
+                                                egui::Role::Button,
                                                 true,
                                                 i == current,
                                                 self.options[i],

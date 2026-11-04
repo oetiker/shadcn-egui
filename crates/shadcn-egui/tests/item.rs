@@ -103,7 +103,8 @@ fn settle<T>(theme: &Theme, width: f32, mut add: impl FnMut(&mut egui::Ui) -> T)
     };
     let mut last = None;
     for _ in 0..3 {
-        let _ = ctx.run_ui(input(), |ui| last = Some(add(ui)));
+        ctx.run_ui(input(), |ui| last = Some(add(ui)))
+            .drop_without_applying_deltas();
     }
     last.expect("a frame ran")
 }
@@ -212,11 +213,11 @@ impl Frames {
             events,
             ..Default::default()
         };
-        self.ctx.run_ui(input, |ui| {
+        common::no_textures(self.ctx.run_ui(input, |ui| {
             Theme::vega().apply(ui.ctx());
             ui.ctx().set_theme(egui::Theme::Light);
             add(ui);
-        })
+        }))
     }
 }
 
@@ -779,7 +780,7 @@ fn last_output(width: f32, mut add: impl FnMut(&mut egui::Ui)) -> egui::FullOutp
     };
     let mut out = None;
     for _ in 0..3 {
-        out = Some(ctx.run_ui(input(), &mut add));
+        out = Some(common::no_textures(ctx.run_ui(input(), &mut add)));
     }
     out.expect("a frame ran")
 }
@@ -870,7 +871,7 @@ fn a_moving_sensed_item_paints_no_id_clash() {
         let ctx = egui::Context::default();
         Theme::vega().apply(&ctx);
         for frame in 0..4 {
-            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 ui.add_space(10.0 * frame as f32);
                 let item = Item::new().title("Row");
                 let item = if link {
@@ -880,6 +881,7 @@ fn a_moving_sensed_item_paints_no_id_clash() {
                 };
                 ui.add(item);
             });
+            out.textures_delta.clear();
             let clash = common::text_shapes(&out)
                 .iter()
                 .any(|t| t.galley.text().contains("use of widget ID"));

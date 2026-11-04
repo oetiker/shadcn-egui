@@ -380,7 +380,7 @@ fn the_track_is_muted() {
 /// One pass at `time` showing `fraction`: the indicator's right edge and
 /// whether the pass asks for a repaint.
 fn timed_pass(ctx: &egui::Context, time: f64, fraction: f32) -> (f32, bool) {
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -390,6 +390,7 @@ fn timed_pass(ctx: &egui::Context, time: f64, fraction: f32) -> (f32, bool) {
             in_width(200.0, |ui| progress(ui, fraction))(ui);
         },
     );
+    out.textures_delta.clear();
     let primary = Theme::vega().palette_of(egui::Theme::Light).primary;
     let (_, hi) = painted_span(&out, primary).expect("an indicator");
     let repaint =
@@ -421,6 +422,9 @@ fn reduced_motion_jumps() {
     let ctx = egui::Context::default();
     ctx.set_theme(egui::Theme::Light);
     ctx.all_styles_mut(|s| s.animation_time = 0.0);
+    // egui 0.37 sends the window its theme in the first pass, which asks
+    // for a second one.
+    timed_pass(&ctx, 0.5, 0.13);
     let (start, _) = timed_pass(&ctx, 1.0, 0.13);
     let (end, moving) = timed_pass(&ctx, 2.0, 0.66);
     assert!(near(end - start, 106.0));

@@ -154,7 +154,7 @@ fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32, [
     let size = if tall { ButtonSize::Lg } else { ButtonSize::Sm };
     // Each run settles within egui's passes; a third run checks it stays put.
     for _ in 0..3 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             row = ui
                 .scope(|ui| {
                     layout::row(ui, 8.0, |ui| {
@@ -170,7 +170,8 @@ fn row_centres(ctx: &egui::Context, tall: bool, wrap: Wrap) -> (f32, f32, f32, [
                 })
                 .response
                 .rect;
-        });
+        })
+        .drop_without_applying_deltas();
     }
     (
         row.center().y,
@@ -234,7 +235,7 @@ fn row_with_a_nested_stack_settles() {
         let (mut a, mut b) = (30.0, 50.0);
         let mut run = || {
             let mut row = egui::Rect::NOTHING;
-            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 row = ui
                     .scope(|ui| {
                         layout::row(ui, 24.0, |ui| {
@@ -249,6 +250,7 @@ fn row_with_a_nested_stack_settles() {
                     .response
                     .rect;
             });
+            out.textures_delta.clear();
             (row, out.platform_output.num_completed_passes)
         };
         let _ = run();
@@ -268,7 +270,7 @@ fn row_centres_a_widget_beside_a_nested_stack() {
     Theme::vega().apply(&ctx);
     let (mut stack, mut button) = (egui::Rect::NOTHING, egui::Rect::NOTHING);
     for _ in 0..3 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             layout::row(ui, 8.0, |ui| {
                 stack = layout::vstack(ui, 8.0, |ui| {
                     ui.label("one");
@@ -278,7 +280,8 @@ fn row_centres_a_widget_beside_a_nested_stack() {
                 });
                 button = ui.add(Button::new("Button")).rect;
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
     assert!(stack.height() > button.height(), "{stack:?} {button:?}");
     assert_eq!(button.center().y, stack.center().y, "{stack:?} {button:?}");
@@ -292,7 +295,7 @@ fn row_centres_a_widget_beside_a_nested_stack() {
 fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
     fn frame(ctx: &egui::Context, image: &egui::TextureHandle) -> [egui::Rect; 3] {
         let mut out = [egui::Rect::NOTHING; 3];
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.scope(|ui| {
                 ui.set_max_width(200.0);
                 layout::row(ui, 8.0, |ui| {
@@ -313,7 +316,8 @@ fn a_stack_relearns_its_width_when_its_image_keeps_its_drawn_size() {
                         .0;
                 });
             });
-        });
+        })
+        .drop_without_applying_deltas();
         out
     }
     let texture = |ctx: &egui::Context, name: &str, w: usize| {
@@ -395,16 +399,17 @@ fn frame_in_window(
         let origin = ui.max_rect().min.to_vec2();
         rects.iter_mut().for_each(|r| *r = r.translate(-origin));
     };
-    let _ = ctx.run_ui(input, |ui| match host {
+    ctx.run_ui(input, |ui| match host {
         Host::Screen => {
             ui.scope(&mut run);
         }
         Host::Area(force) => {
-            egui::Area::new(egui::Id::new("popover"))
+            egui::Area::new(egui::Id::unique("popover"))
                 .sizing_pass(force)
                 .show(ui.ctx(), &mut run);
         }
-    });
+    })
+    .drop_without_applying_deltas();
     (ctx.cumulative_pass_nr() - before, rects)
 }
 
@@ -615,13 +620,14 @@ fn stretch_height_is_none_outside_a_row() {
     let mut seen = Vec::new();
     for _ in 0..2 {
         seen.clear();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             seen.push(layout::stretch_height(ui));
             layout::row(ui, 8.0, |ui| {
                 ui.label("a");
                 layout::vstack(ui, 4.0, |ui| seen.push(layout::stretch_height(ui)));
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
     assert_eq!(seen, vec![None; 2]);
 }
@@ -641,7 +647,7 @@ fn a_separator_in_a_stack_in_a_row_settles() {
         let mut passes = 0;
         for _ in 0..3 {
             let before = ctx.cumulative_pass_nr();
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 ui.set_max_width(300.0);
                 rects[0] = ui.max_rect();
                 layout::row(ui, 8.0, |ui| {
@@ -657,7 +663,8 @@ fn a_separator_in_a_stack_in_a_row_settles() {
                     });
                     rects[4] = ui.button("Go").rect;
                 });
-            });
+            })
+            .drop_without_applying_deltas();
             passes = ctx.cumulative_pass_nr() - before;
         }
         let [room, label, rule, stack, go] = rects;
@@ -675,13 +682,14 @@ fn a_separator_in_a_stack_in_a_row_settles() {
     let ctx = egui::Context::default();
     Theme::vega().apply(&ctx);
     let mut outside = (0.0, egui::Rect::NOTHING);
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+    ctx.run_ui(egui::RawInput::default(), |ui| {
         outside = (
             ui.available_width(),
             ui.add(shadcn_egui::components::separator::Separator::new())
                 .rect,
         );
-    });
+    })
+    .drop_without_applying_deltas();
     assert_eq!(outside.1.width(), outside.0, "outside a row it spans");
 }
 
@@ -710,7 +718,7 @@ fn a_vertical_separator_stretches_in_a_row() {
         let mut out = egui::FullOutput::default();
         for _ in 0..3 {
             let before = ctx.cumulative_pass_nr();
-            out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            out = common::no_textures(ctx.run_ui(egui::RawInput::default(), |ui| {
                 layout::row(ui, 8.0, |ui| {
                     label = ui.label("Docs").rect;
                     ui.add(Separator::new().vertical());
@@ -718,7 +726,7 @@ fn a_vertical_separator_stretches_in_a_row() {
                         ui.allocate_exact_size(egui::vec2(10.0, tall), egui::Sense::hover());
                     }
                 });
-            });
+            }));
             passes = ctx.cumulative_pass_nr() - before;
         }
         let rules = rule(&out, &theme);
@@ -734,12 +742,12 @@ fn a_vertical_separator_stretches_in_a_row() {
     ctx.set_theme(egui::Theme::Dark);
     let mut out = egui::FullOutput::default();
     for _ in 0..2 {
-        out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        out = common::no_textures(ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.horizontal(|ui| {
                 ui.set_height(24.0);
                 ui.add(Separator::new().vertical());
             });
-        });
+        }));
     }
     assert_eq!(rule(&out, &theme)[0].height(), 24.0, "outside a crate row");
 }
@@ -905,7 +913,7 @@ fn a_label_in_a_wrap_row_is_a_flex_item() {
     Theme::vega().apply(&ctx);
     let mut rects = [egui::Rect::NOTHING; 5];
     for _ in 0..3 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.set_max_width(200.0);
             layout::wrap_row(ui, 8.0, |ui| {
                 rects[0] = ui.label("one").rect;
@@ -921,7 +929,8 @@ fn a_label_in_a_wrap_row_is_a_flex_item() {
                     ui.min_rect()
                 });
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
     let [one, stack, two, long, narrow] = rects;
     assert_eq!(two.height(), one.height(), "{rects:?}");
@@ -1379,7 +1388,7 @@ fn a_shrunk_stack_relearns_its_width_when_its_font_changes() {
     use shadcn_egui::components::separator::Separator;
     fn frame(ctx: &egui::Context) -> [egui::Rect; 2] {
         let mut out = [egui::Rect::NOTHING; 2];
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.scope(|ui| {
                 ui.set_max_width(280.0);
                 layout::row(ui, 8.0, |ui| {
@@ -1398,7 +1407,8 @@ fn a_shrunk_stack_relearns_its_width_when_its_font_changes() {
                     }
                 });
             });
-        });
+        })
+        .drop_without_applying_deltas();
         out
     }
     let oxanium = || Theme::vega().fonts(&shadcn_egui_font_oxanium::FONT, None);
@@ -1577,11 +1587,10 @@ fn a_card_clips_its_footer_at_its_box() {
 /// is unbounded it takes its content's width. A still frame takes one
 /// pass.
 ///
-/// The stack is as wide as its label unwrapped (243.0625 in vega). The
-/// label's own rect is up to half a point narrower: at a finite width
-/// epaint wraps text at that width rounded to whole points, plus 0.5 so
-/// it never wraps earlier, and reports the galley no wider than the
-/// rounded width (`Fonts::layout_job`, `Galley::round_output_to_gui`).
+/// The stack is as wide as its label unwrapped (242.84375 in vega), and
+/// so is the label's own rect: epaint 0.37 wraps at the width it is given
+/// (0.34 rounded it to whole points) and reports the galley no wider
+/// than that width rounded down to its GUI grid (`Galley::round_output_to_gui`).
 #[test]
 fn a_card_fills_a_column_and_takes_its_content_width_when_unbounded() {
     let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
@@ -1607,17 +1616,17 @@ fn a_card_fills_a_column_and_takes_its_content_width_when_unbounded() {
     };
     assert_eq!(column.x_range(), space.x_range(), "{r:?}");
     assert_eq!(in_stack.x_range(), stack.x_range(), "{r:?}");
-    assert_eq!(stack.width(), 243.0625, "{r:?}");
-    assert_eq!(label.width(), stack.width().round(), "{r:?}");
+    assert_eq!(stack.width(), 242.84375, "{r:?}");
+    assert_eq!(label.width(), stack.width(), "{r:?}");
     assert_eq!(unbounded.width(), text.width() + 48.0, "{r:?}");
     assert_eq!(passes, 1, "{r:?}");
 }
 
-/// A stack that fits its row is laid out at its unwrapped width, where
-/// epaint reports a label up to half a point narrower than it measured
-/// unwrapped (see `a_card_fills_a_column_and_takes_its_content_width_when_unbounded`);
-/// that is no content change: a still frame takes one pass, on the
-/// screen and in an `egui::Area`, and on the screen asks for no repaint.
+/// A stack that fits its row is laid out at its unwrapped width, a
+/// fractional one (see
+/// `a_card_fills_a_column_and_takes_its_content_width_when_unbounded`):
+/// a still frame takes one pass, on the screen and in an `egui::Area`,
+/// and on the screen asks for no repaint.
 #[test]
 fn a_stack_of_a_label_with_a_fractional_width_settles() {
     for host in [Host::Screen, Host::Area(false)] {
@@ -1633,8 +1642,8 @@ fn a_stack_of_a_label_with_a_fractional_width_settles() {
         });
         let [label, row] = r[..] else { panic!("{r:?}") };
         assert_eq!(passes, 1, "{host:?} {r:?}");
-        assert_eq!(row.width(), 243.0625, "{host:?} {r:?}");
-        assert_eq!(label.width(), 243.0, "{host:?} {r:?}");
+        assert_eq!(row.width(), 242.84375, "{host:?} {r:?}");
+        assert_eq!(label.width(), 242.84375, "{host:?} {r:?}");
         // An Area's fade-in asks for repaints while the test's clock
         // stands still.
         if matches!(host, Host::Screen) {
@@ -1942,16 +1951,17 @@ fn a_content_sized_widget_takes_a_justified_layout_width() {
                 let (passes, r) = settled(&ctx, host, &content);
                 let case = format!("widget {widget} {host:?} place {place}: {r:?}");
                 assert_eq!(passes, 1, "{case}");
-                let out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
                     Host::Screen => content(ui, false, &mut Vec::new()),
                     // No fade-in: a faded box paints as meshes, and the
                     // painted width is read from rect shapes.
                     Host::Area(_) => {
-                        egui::Area::new(egui::Id::new("popover"))
+                        egui::Area::new(egui::Id::unique("popover"))
                             .fade_in(false)
                             .show(ui.ctx(), |ui| content(ui, false, &mut Vec::new()));
                     }
                 });
+                out.textures_delta.clear();
                 let painted = widest_box(&out);
                 assert_eq!(painted.width(), r[0].width(), "{case}: painted {painted:?}");
                 boxes.push(painted.width());
@@ -2309,13 +2319,14 @@ fn a_justified_tabs_list_shares_its_width_equally() {
         // The same frame again, with the rects on the screen, to compare
         // with the painted labels.
         let mut abs = Vec::new();
-        let out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| match host {
             Host::Screen => content(ui, false, &mut abs),
             Host::Area(_) => {
-                egui::Area::new(egui::Id::new("popover"))
+                egui::Area::new(egui::Id::unique("popover"))
                     .show(ui.ctx(), |ui| content(ui, false, &mut abs));
             }
         });
+        out.textures_delta.clear();
         let texts = common::text_shapes(&out);
         assert_eq!(texts.len(), 3, "{case}");
         for (t, trigger) in texts.iter().zip(&abs[1..]) {
@@ -2693,7 +2704,8 @@ fn a_hit_area_stays_no_row_content_across_an_immediate_viewport() {
             viewports: std::iter::once((id, egui::ViewportInfo::default())).collect(),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+        ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui))
+            .drop_without_applying_deltas();
     });
     let ctx = vega();
     ctx.set_embed_viewports(false);
@@ -2860,7 +2872,7 @@ fn label_rows_frames(in_pass: bool) -> Vec<(f32, usize, std::time::Duration)> {
     (0..4)
         .map(|frame| {
             let mut height = 0.0;
-            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 if in_pass && frame == 0 {
                     Theme::vega().apply(ui.ctx());
                 }
@@ -2886,6 +2898,7 @@ fn label_rows_frames(in_pass: bool) -> Vec<(f32, usize, std::time::Duration)> {
                     .rect
                     .height();
             });
+            out.textures_delta.clear();
             let delay = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
             (height, out.platform_output.num_completed_passes, delay)
         })

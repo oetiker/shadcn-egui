@@ -28,7 +28,7 @@ use crate::{layout, Theme};
 use egui::load::{Bytes, ImagePoll, SizeHint};
 use egui::{
     pos2, Color32, ColorImage, Context, Id, InnerResponse, IntoAtoms, Pos2, Rect, Response, Sense,
-    TextureHandle, TextureOptions, Ui, UiBuilder, Vec2, Widget, WidgetInfo, WidgetType,
+    TextureHandle, TextureOptions, Ui, UiBuilder, Vec2, Widget, WidgetInfo,
 };
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -324,9 +324,9 @@ impl Widget for Avatar<'_> {
         let alt = self.alt.unwrap_or_default();
         crate::components::shared::widget_info_never_disabled(&resp, || {
             if shown_image {
-                WidgetInfo::labeled(WidgetType::Image, true, &alt)
+                WidgetInfo::labeled(egui::Role::Image, true, &alt)
             } else {
-                WidgetInfo::labeled(WidgetType::Label, true, &fallback_name)
+                WidgetInfo::labeled(egui::Role::Label, true, &fallback_name)
             }
         });
         if !ui.is_rect_visible(rect) {
@@ -518,7 +518,7 @@ struct Composite {
 impl Composite {
     fn key(&self) -> Id {
         let b = &self.border;
-        Id::new((
+        Id::unique((
             &self.uri,
             Arc::as_ptr(&self.pixels) as usize,
             self.size,
@@ -649,7 +649,7 @@ struct CompositeCache {
 
 /// The texture of `job`: from the cache, or composited and uploaded once.
 fn composite_texture(ctx: &Context, job: Composite) -> TextureHandle {
-    let cache_id = Id::new("shadcn_egui::avatar::composite");
+    let cache_id = Id::unique("shadcn_egui::avatar::composite");
     let key = job.key();
     let hit = ctx.data_mut(|d| {
         let cache = d.get_temp_mut_or_default::<CompositeCache>(cache_id);
@@ -705,7 +705,7 @@ fn composite_texture(ctx: &Context, job: Composite) -> TextureHandle {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AvatarGroup {
     variant: AvatarVariant,
-    id_salt: Option<Id>,
+    id_salt: Option<egui::IdSalt>,
 }
 
 impl AvatarGroup {
@@ -726,8 +726,8 @@ impl AvatarGroup {
     /// The id under which the group keeps its avatars' sizes from the
     /// previous pass, scoped to the `Ui` (as `TextEdit::id_salt`).
     #[inline]
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(Id::new(salt));
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
 
@@ -826,7 +826,7 @@ impl Widget for AvatarGroupCount<'_> {
         let (id, rect) = layout::allocate_item_space(ui, size);
         let resp = ui.interact(rect, id, Sense::hover());
         crate::components::shared::widget_info_never_disabled(&resp, || {
-            WidgetInfo::labeled(WidgetType::Label, true, &name)
+            WidgetInfo::labeled(egui::Role::Label, true, &name)
         });
         if !ui.is_rect_visible(rect) {
             return resp;

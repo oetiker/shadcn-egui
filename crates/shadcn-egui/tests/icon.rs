@@ -16,10 +16,10 @@ use std::sync::Arc;
 /// texture's pixel space.
 fn raster(icon: &Icon, rect: Rect) -> (Rect, Arc<ColorImage>) {
     let ctx = egui::Context::default();
-    let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+    let out = common::Output(ctx.run_ui(egui::RawInput::default(), |ui| {
         let painter = ui.painter_at(Rect::EVERYTHING);
         paint_icon(&painter, rect, icon, Color32::RED, 2.0);
-    });
+    }));
     fn walk(s: &Shape, out: &mut Vec<Rect>) {
         match s {
             Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
@@ -33,10 +33,10 @@ fn raster(icon: &Icon, rect: Rect) -> (Rect, Arc<ColorImage>) {
         .textures_delta
         .set
         .iter()
-        .filter(|(id, _)| *id != TextureId::default())
-        .map(|(_, d)| {
-            let egui::ImageData::Color(img) = &d.image;
-            img.clone()
+        .filter(|(id, _)| **id != TextureId::default())
+        .filter_map(|(_, deltas)| {
+            let egui::ImageData::Color(img) = &deltas.last()?.image;
+            Some(img.clone())
         })
         .collect();
     assert_eq!((rects.len(), imgs.len()), (1, 1), "one textured image");

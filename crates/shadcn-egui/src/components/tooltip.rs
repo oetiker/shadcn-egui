@@ -125,7 +125,7 @@ impl<'a> Tooltip<'a> {
                 content_scope(ui, &look, |ui| {
                     content_ui(
                         ui,
-                        ui.id().with("shadcn_egui::tooltip::content"),
+                        ui.scope_id().with("shadcn_egui::tooltip::content"),
                         &[&content_l[..]],
                         g,
                         content,

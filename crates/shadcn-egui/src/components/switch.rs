@@ -185,7 +185,7 @@ impl Widget for Switch<'_> {
         resp.widget_info(|| egui::WidgetInfo {
             enabled,
             selected: Some(on),
-            ..egui::WidgetInfo::new(egui::WidgetType::Checkbox)
+            ..egui::WidgetInfo::new(egui::Role::CheckBox)
         });
         // `data-disabled:cursor-not-allowed`, on the hit area as on its
         // `::after`.

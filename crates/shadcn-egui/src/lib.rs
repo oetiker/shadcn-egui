@@ -20,7 +20,7 @@
 //! }
 //! # let ctx = egui::Context::default();
 //! # setup(&ctx);
-//! # let _ = ctx.run_ui(Default::default(), |u| ui(u));
+//! # ctx.run_ui(Default::default(), |u| ui(u)).drop_without_applying_deltas();
 //! ```
 //!
 //! Fonts other than Inter and icon sets other than Lucide are Cargo

@@ -10,7 +10,8 @@ use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
 use crate::Theme;
-use egui::text::LayoutJob;
+use egui::epaint::text::ByteRangeExt as _;
+use egui::text::{ByteIndex, LayoutJob};
 use egui::{
     AtomKind, Atoms, IntoAtoms, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget, WidgetText,
 };
@@ -31,7 +32,7 @@ pub struct Input<'a> {
     hint: Atoms<'static>,
     password: bool,
     max_width: Option<f32>,
-    id_salt: Option<egui::Id>,
+    id_salt: Option<egui::IdSalt>,
     invalid: Option<bool>,
     variant: InputVariant,
 }
@@ -74,8 +75,8 @@ impl<'a> Input<'a> {
     /// (a test, or `ctx.memory_mut(|m| m.request_focus(..))`) must address
     /// this field from outside the widget tree that builds it; without one,
     /// `TextEdit` falls back to an id keyed on widget position.
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(egui::Id::new(salt));
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
     /// shadcn `aria-invalid`: destructive border and ring. Inside an
@@ -175,7 +176,7 @@ impl<'a> Widget for Input<'a> {
         let edit = edit
             .layouter(&mut layouter)
             .password(password)
-            .vertical_align(egui::Align::Center);
+            .align(egui::Align2::LEFT_CENTER);
         // No not-allowed cursor while disabled: upstream's
         // `disabled:cursor-not-allowed` comes with
         // `disabled:pointer-events-none`, so the browser shows the cursor
@@ -204,11 +205,11 @@ fn drop_line_breaks(job: &mut LayoutJob) {
     for section in &mut job.sections {
         let start = text.len();
         text.extend(
-            job.text[section.byte_range.clone()]
+            job.text[section.byte_range.as_usize()]
                 .chars()
                 .filter(|c| !matches!(c, '\r' | '\n')),
         );
-        section.byte_range = start..text.len();
+        section.byte_range = ByteIndex(start)..ByteIndex(text.len());
     }
     job.text = text;
 }

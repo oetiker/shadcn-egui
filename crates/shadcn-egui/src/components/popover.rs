@@ -131,7 +131,7 @@ impl<'a> Popover<'a> {
                     content_scope(ui, &look, |ui| {
                         content_ui(
                             ui,
-                            ui.id().with("shadcn_egui::popover::content"),
+                            ui.scope_id().with("shadcn_egui::popover::content"),
                             &[&l[..]],
                             g,
                             |ui| free_content::body(ui, gap, 0.0, "popover", content),
@@ -187,20 +187,20 @@ fn header(ui: &mut Ui, title: &str, description: &str) {
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(
             ui,
-            ui.id().with("shadcn_egui::popover::header"),
+            ui.scope_id().with("shadcn_egui::popover::header"),
             &[&header_l[..]],
             g,
             |ui| {
                 part_ui(
                     ui,
-                    ui.id().with("shadcn_egui::popover::title"),
+                    ui.scope_id().with("shadcn_egui::popover::title"),
                     &[&title_l[..]],
                     g,
                     |ui| title_look.label(ui, title, TextWrapMode::Wrap),
                 );
                 part_ui(
                     ui,
-                    ui.id().with("shadcn_egui::popover::description"),
+                    ui.scope_id().with("shadcn_egui::popover::description"),
                     &[&desc_l2[..]],
                     g,
                     |ui| desc_look.label(ui, description, TextWrapMode::Wrap),

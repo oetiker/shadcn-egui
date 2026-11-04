@@ -303,6 +303,7 @@ fn gallery_damage_check(wp: f32, hp: f32, frames: usize) {
                     unit: egui::MouseWheelUnit::Point,
                     delta: egui::vec2(0.0, -r.f(50.0, 400.0)),
                     phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Wheel,
                     modifiers: Default::default(),
                 });
             }
@@ -323,7 +324,7 @@ fn gallery_damage_check(wp: f32, hp: f32, frames: usize) {
                 ..Default::default()
             };
             ctx.set_pixels_per_point(ppp);
-            let out = ctx.run_ui(raw, |ui| shadcn_egui::reference::gallery_ui(ui, &mut state));
+            let mut out = ctx.run_ui(raw, |ui| shadcn_egui::reference::gallery_ui(ui, &mut state));
             let ppp_out = out.pixels_per_point;
             let prims = ctx.tessellate(out.shapes, ppp_out);
             inc.set_textures(&out.textures_delta);
@@ -334,6 +335,7 @@ fn gallery_damage_check(wp: f32, hp: f32, frames: usize) {
             full_r.render(&mut full, &prims, ppp_out, 0x0011_2233);
             inc.free_textures(&out.textures_delta);
             full_r.free_textures(&out.textures_delta);
+            out.textures_delta.clear();
             let bad = canvas
                 .pixels
                 .iter()

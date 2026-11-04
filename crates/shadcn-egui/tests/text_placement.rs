@@ -171,13 +171,14 @@ fn frame(
         screen_rect: screen,
         ..Default::default()
     };
-    let out = ctx.run_ui(input, |ui| {
+    let mut out = ctx.run_ui(input, |ui| {
         for (i, rect) in items.iter_mut().enumerate() {
             let area =
-                egui::Area::new(egui::Id::new(i)).fixed_pos(pos2(8.0, 8.0 + 80.0 * i as f32));
+                egui::Area::new(egui::Id::unique(i)).fixed_pos(pos2(8.0, 8.0 + 80.0 * i as f32));
             *rect = area.show(ui.ctx(), |ui| item(ui, i)).inner.rect;
         }
     });
+    out.textures_delta.clear();
     let mut f = Frame {
         texts: Vec::new(),
         rects: Vec::new(),
@@ -663,7 +664,7 @@ fn underlines_sit_on_chromes_pixels() {
                 let want = (c[6].parse::<f32>().unwrap(), c[7].split(',').count() as f32);
                 // A new area shows from its second frame.
                 let run = |ui: &mut egui::Ui| {
-                    egui::Area::new(egui::Id::new("u"))
+                    egui::Area::new(egui::Id::unique("u"))
                         .fixed_pos(pos2(8.0, 8.0))
                         .show(ui.ctx(), |ui| {
                             let look = TextLook::resolve(ui, &[&recipe], State::NONE);
@@ -678,8 +679,10 @@ fn underlines_sit_on_chromes_pixels() {
                             text.paint(ui.painter(), rect.min, look.resolved_color(ui));
                         });
                 };
-                let _ = ctx.run_ui(RawInput::default(), run);
-                let out = ctx.run_ui(RawInput::default(), run);
+                ctx.run_ui(RawInput::default(), run)
+                    .drop_without_applying_deltas();
+                let mut out = ctx.run_ui(RawInput::default(), run);
+                out.textures_delta.clear();
                 let (mut texts, mut rects) = (Vec::new(), Vec::new());
                 for s in &out.shapes {
                     walk(&s.shape, &mut texts, &mut rects);

@@ -19,7 +19,7 @@ use crate::components::shared::widget_info_with_role;
 use crate::style::{pick, Easing, Recipe, State};
 use crate::Theme;
 use egui::accesskit::{Live, Role};
-use egui::{Color32, Rect, Response, Sense, Ui, UiBuilder, Vec2, Widget, WidgetInfo, WidgetType};
+use egui::{Color32, Rect, Response, Sense, Ui, UiBuilder, Vec2, Widget, WidgetInfo};
 
 /// A turning loader icon: `ui.add(Spinner::new())`, or [`spinner`].
 ///
@@ -118,7 +118,7 @@ pub(crate) fn own_size(t: &Theme) -> f32 {
 /// No disabled state: `role="status"` takes none.
 fn report_status(resp: &Response, name: &str) {
     widget_info_with_role(resp, Role::Status, || {
-        WidgetInfo::labeled(WidgetType::ProgressIndicator, true, name)
+        WidgetInfo::labeled(Role::ProgressIndicator, true, name)
     });
     resp.ctx
         .accesskit_node_builder(resp.id, |node| node.set_live(Live::Polite));

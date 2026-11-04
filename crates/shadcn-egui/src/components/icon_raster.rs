@@ -109,7 +109,7 @@ pub(crate) fn texture(
     stroke_width: f32,
     linear: bool,
 ) -> TextureHandle {
-    let id = Id::new("shadcn_egui::icon_raster");
+    let id = Id::unique("shadcn_egui::icon_raster");
     let key = Key::new(icon, w, h, stroke_width, linear);
     let hit = ctx.data_mut(|d| {
         let cache = d.get_temp_mut_or_default::<IconCache>(id);
@@ -164,9 +164,10 @@ pub(crate) fn texture(
 /// a mesh of the same pass still shows its old angle.
 ///
 /// An egui plugin, so it lives outside `Memory` (a memory reset keeps
-/// it) and `Context::end_pass` ages it: every loop style calls that,
-/// `run_ui`, the deprecated `run` and `begin_pass`/`end_pass` alike,
-/// while egui runs a plugin's pass hooks under `run_ui` only.
+/// it) and `Context::end_pass` ages it through the output hook: every
+/// loop style calls that, `run_ui`, `run_pass` and `begin_pass`/`end_pass`
+/// alike, while egui runs a plugin's begin and end hooks under `run_ui`
+/// and `run_pass` only.
 #[derive(Default)]
 struct TurnedCache {
     slots: Vec<Turned>,
@@ -224,7 +225,7 @@ impl egui::plugin::Plugin for TurnedCache {
     }
 
     /// Runs in `Context::end_pass`, once per pass of every viewport.
-    fn output_hook(&mut self, _output: &mut egui::FullOutput) {
+    fn output_hook(&mut self, _ctx: &Context, _output: &mut egui::FullOutput) {
         self.end_pass();
     }
 }

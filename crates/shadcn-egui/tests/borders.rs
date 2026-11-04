@@ -336,7 +336,10 @@ fn a_faded_thumb_hides_the_track_under_it() {
     use shadcn_egui::components::slider::Slider;
     use shadcn_egui::components::switch::Switch;
     for ppp in [1.0, 2.0] {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(160.0, 80.0))
             .with_pixels_per_point(ppp)
             .with_theme(egui::Theme::Dark)

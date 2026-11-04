@@ -15,7 +15,7 @@ use crate::style::{
     pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
 use crate::Theme;
-use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget, WidgetType};
+use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -196,14 +196,14 @@ impl Widget for Badge {
             if resp.hovered() {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
-            WidgetType::Link
+            egui::Role::Link
         } else {
-            WidgetType::Label
+            egui::Role::Label
         };
         let info = || egui::WidgetInfo::labeled(role, enabled, &self.text);
         // A plain badge is a `<span>`, with no disabled state; a link badge
         // is a control.
-        if role == WidgetType::Link {
+        if role == egui::Role::Link {
             resp.widget_info(info);
         } else {
             crate::components::shared::widget_info_never_disabled(&resp, info);

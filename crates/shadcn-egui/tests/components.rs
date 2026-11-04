@@ -179,13 +179,13 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
     let ctx = egui::Context::default();
     let (mut live, mut disabled) = (State::NONE, State::NONE);
     for events in [vec![], common::pointer_down(target.center()), vec![]] {
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 events,
                 ..Default::default()
             },
             |ui| {
-                let resp = ui.interact(target, egui::Id::new("target"), egui::Sense::click());
+                let resp = ui.interact(target, egui::Id::unique("target"), egui::Sense::click());
                 // The press focuses it.
                 if ui.input(|i| i.pointer.any_pressed()) {
                     resp.request_focus();
@@ -197,7 +197,8 @@ fn interaction_state_of_disabled_widget_has_no_pointer_or_focus() {
                     State::INVALID | State::FOCUS | State::DISABLED,
                 );
             },
-        );
+        )
+        .drop_without_applying_deltas();
     }
     // Control: the same response, enabled, is hovered, pressed and focused,
     // without a ring: a pointer press moved focus.
@@ -313,7 +314,7 @@ fn input_overflows_a_narrow_column_without_widening_it() {
     let mut text = String::new();
     let mut widths = (0.0, 0.0);
     for events in [vec![], vec![], vec![egui::Event::Text("ab".into())]] {
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 events,
                 ..Default::default()
@@ -326,7 +327,8 @@ fn input_overflows_a_narrow_column_without_widening_it() {
                     widths = (field.rect.width(), ui.min_rect().width());
                 });
             },
-        );
+        )
+        .drop_without_applying_deltas();
     }
     assert!(widths.0 > 10.0, "the field keeps its minimum: {widths:?}");
     assert_eq!(widths.1, 10.0, "the column keeps its width");
@@ -1315,12 +1317,16 @@ fn select_and_badge_shorthands_do_not_panic() {
     use shadcn_egui::components::badge::{badge, BadgeVariant};
     use shadcn_egui::components::select::select;
     use shadcn_egui::Theme;
-    let mut h = Harness::new_ui(|ui| {
-        Theme::vega().apply(ui.ctx());
-        let mut choice = 0usize;
-        select(ui, "lang", &mut choice, &["English", "German"]);
-        badge(ui, "New", BadgeVariant::Default);
-    });
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
+    let mut h = Harness::builder()
+        .with_accessibility_check(false)
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            let mut choice = 0usize;
+            select(ui, "lang", &mut choice, &["English", "German"]);
+            badge(ui, "New", BadgeVariant::Default);
+        });
     h.run();
 }
 
@@ -1720,7 +1726,7 @@ fn disabled_button_ignores_clicks() {
             events: Vec<egui::Event>,
         ) -> (egui::Rect, Vec<egui::epaint::RectShape>) {
             let mut rect = egui::Rect::NOTHING;
-            let out = ctx.run_ui(
+            let mut out = ctx.run_ui(
                 egui::RawInput {
                     events,
                     ..Default::default()
@@ -1730,6 +1736,7 @@ fn disabled_button_ignores_clicks() {
                     rect = ui.add_enabled(enabled, Button::new("Save")).rect;
                 },
             );
+            out.textures_delta.clear();
             (rect, common::rect_shapes(&out))
         }
         let ctx = egui::Context::default();
@@ -1913,7 +1920,7 @@ fn input_id_salt_is_stable() {
     fn id_after(ctx: &egui::Context, preceding: usize, salt: Option<&'static str>) -> egui::Id {
         let mut text = String::new();
         let mut id = None;
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             for i in 0..preceding {
                 ui.label(format!("filler {i}"));
             }
@@ -1923,7 +1930,8 @@ fn input_id_salt_is_stable() {
                 None => input,
             };
             id = Some(ui.add(input).id);
-        });
+        })
+        .drop_without_applying_deltas();
         id.expect("input was added")
     }
     let ctx = egui::Context::default();
@@ -1944,14 +1952,15 @@ fn input_id_salt_takes_runtime_salts() {
     let ids = |filler: usize| {
         let mut texts = vec![String::new(); 2];
         let mut ids = Vec::new();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             for i in 0..filler {
                 ui.label(format!("filler {i}"));
             }
             for (i, text) in texts.iter_mut().enumerate() {
                 ids.push(ui.add(Input::new(text).id_salt(format!("row{i}"))).id);
             }
-        });
+        })
+        .drop_without_applying_deltas();
         ids
     };
     let first = ids(0);
@@ -1968,7 +1977,8 @@ fn input_id_salt_keeps_the_0_4_id() {
     let ctx = egui::Context::default();
     let id_of = |add: &mut dyn FnMut(&mut egui::Ui) -> egui::Id| {
         let mut id = None;
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| id = Some(add(ui)));
+        ctx.run_ui(egui::RawInput::default(), |ui| id = Some(add(ui)))
+            .drop_without_applying_deltas();
         id.expect("field was added")
     };
     let mut text = String::new();
@@ -1991,10 +2001,11 @@ fn input_id_salt_keeps_the_0_4_id() {
 fn badge_takes_a_borrowed_icon() {
     use shadcn_egui::components::badge::Badge;
     let ctx = egui::Context::default();
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+    ctx.run_ui(egui::RawInput::default(), |ui| {
         let icons = Theme::current(ui.ctx()).icons;
         ui.add(Badge::new("Done").icon(icons.check).icon_end(icons.check));
-    });
+    })
+    .drop_without_applying_deltas();
 }
 
 /// Harness state for the checkbox tests: the value and the rect of the
@@ -2007,20 +2018,24 @@ struct CheckboxState {
 fn checkbox_harness(enabled: bool, checked: bool) -> egui_kittest::Harness<'static, CheckboxState> {
     use shadcn_egui::components::checkbox::Checkbox;
     use shadcn_egui::Theme;
-    let mut h = egui_kittest::Harness::new_ui_state(
-        move |ui, s: &mut CheckboxState| {
-            Theme::vega().apply(ui.ctx());
-            ui.add_space(20.0);
-            ui.horizontal(|ui| {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
+    let mut h = egui_kittest::Harness::builder()
+        .with_accessibility_check(false)
+        .build_ui_state(
+            move |ui, s: &mut CheckboxState| {
+                Theme::vega().apply(ui.ctx());
                 ui.add_space(20.0);
-                s.rect = ui.add_enabled(enabled, Checkbox::new(&mut s.checked)).rect;
-            });
-        },
-        CheckboxState {
-            checked,
-            rect: egui::Rect::NOTHING,
-        },
-    );
+                ui.horizontal(|ui| {
+                    ui.add_space(20.0);
+                    s.rect = ui.add_enabled(enabled, Checkbox::new(&mut s.checked)).rect;
+                });
+            },
+            CheckboxState {
+                checked,
+                rect: egui::Rect::NOTHING,
+            },
+        );
     h.run();
     h
 }
@@ -2146,20 +2161,24 @@ struct SwitchState {
 fn switch_harness(enabled: bool, on: bool) -> egui_kittest::Harness<'static, SwitchState> {
     use shadcn_egui::components::switch::Switch;
     use shadcn_egui::Theme;
-    let mut h = egui_kittest::Harness::new_ui_state(
-        move |ui, s: &mut SwitchState| {
-            Theme::vega().apply(ui.ctx());
-            ui.add_space(20.0);
-            ui.horizontal(|ui| {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
+    let mut h = egui_kittest::Harness::builder()
+        .with_accessibility_check(false)
+        .build_ui_state(
+            move |ui, s: &mut SwitchState| {
+                Theme::vega().apply(ui.ctx());
                 ui.add_space(20.0);
-                s.rect = ui.add_enabled(enabled, Switch::new(&mut s.on)).rect;
-            });
-        },
-        SwitchState {
-            on,
-            rect: egui::Rect::NOTHING,
-        },
-    );
+                ui.horizontal(|ui| {
+                    ui.add_space(20.0);
+                    s.rect = ui.add_enabled(enabled, Switch::new(&mut s.on)).rect;
+                });
+            },
+            SwitchState {
+                on,
+                rect: egui::Rect::NOTHING,
+            },
+        );
     h.run();
     h
 }
@@ -2227,9 +2246,12 @@ fn thumb_rect(
     let mut track = egui::Rect::NOTHING;
     let mut out = None;
     for _ in 0..3 {
-        out = Some(ctx.run_ui(egui::RawInput::default(), |ui| {
-            track = ui.add(Switch::new(&mut value).size(size)).rect;
-        }));
+        out = Some(common::no_textures(ctx.run_ui(
+            egui::RawInput::default(),
+            |ui| {
+                track = ui.add(Switch::new(&mut value).size(size)).rect;
+            },
+        )));
     }
     let mut thumb = None;
     for clipped in out.unwrap().shapes {
@@ -2776,9 +2798,9 @@ fn content_ui_keeps_a_disable_inside_its_content() {
     half.opacity.base = Some(0.5);
     let chain: &[&[&Recipe]] = &[&[&half]];
     let ctx = egui::Context::default();
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+    ctx.run_ui(egui::RawInput::default(), |ui| {
         let alpha = ui.visuals().disabled_alpha();
-        content_ui(ui, egui::Id::new("part"), chain, State::NONE, |ui| {
+        content_ui(ui, egui::Id::unique("part"), chain, State::NONE, |ui| {
             assert_eq!(ui.opacity(), 0.5);
             ui.disable()
         });
@@ -2788,12 +2810,13 @@ fn content_ui_keeps_a_disable_inside_its_content() {
             "opacity {} after a disable inside content_ui, egui's fade is {alpha}",
             ui.opacity()
         );
-        content_ui(ui, egui::Id::new("part"), chain, State::NONE, |_| {});
+        content_ui(ui, egui::Id::unique("part"), chain, State::NONE, |_| {});
         assert!(
             (ui.opacity() - alpha).abs() < 1e-6,
             "an already disabled Ui"
         );
-    });
+    })
+    .drop_without_applying_deltas();
 }
 
 /// A crate part paints at the `Ui`'s opacity with one egui disabled fade
@@ -2812,28 +2835,30 @@ fn part_opacity_takes_one_egui_fade_out() {
     });
     let plain = Recipe::default();
     let ctx = egui::Context::default();
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+    ctx.run_ui(egui::RawInput::default(), |ui| {
         assert_eq!(
-            part_opacity(ui, egui::Id::new("part"), &[&[&quarter]], State::NONE),
+            part_opacity(ui, egui::Id::unique("part"), &[&[&quarter]], State::NONE),
             1.0
         );
         ui.add_enabled_ui(false, |ui| {
             assert!(
-                (part_opacity(ui, egui::Id::new("part"), &[&[&quarter]], State::NONE) - 0.25).abs()
+                (part_opacity(ui, egui::Id::unique("part"), &[&[&quarter]], State::NONE) - 0.25)
+                    .abs()
                     < 1e-6
             );
             assert!(
-                (part_opacity(ui, egui::Id::new("part"), &[&[&plain]], State::NONE) - 1.0).abs()
+                (part_opacity(ui, egui::Id::unique("part"), &[&[&plain]], State::NONE) - 1.0).abs()
                     < 1e-6
             );
             // A nested disable fades twice in egui; one fade only comes out.
             ui.add_enabled_ui(false, |ui| {
                 let fade = ui.visuals().disabled_alpha();
-                let got = part_opacity(ui, egui::Id::new("part"), &[&[&plain]], State::NONE);
+                let got = part_opacity(ui, egui::Id::unique("part"), &[&[&plain]], State::NONE);
                 assert!((got - fade).abs() < 1e-6, "{got}");
             });
         });
-    });
+    })
+    .drop_without_applying_deltas();
 }
 
 /// `Theme::apply` gives plain egui widgets the style's control opacity.
@@ -2870,9 +2895,9 @@ fn input_text_follows_md_breakpoint() {
         let mut text = String::from("Hello");
         let mut out = None;
         for _ in 0..2 {
-            out = Some(ctx.run_ui(input.clone(), |ui| {
+            out = Some(common::no_textures(ctx.run_ui(input.clone(), |ui| {
                 ui.add(Input::new(&mut text));
-            }));
+            })));
         }
         common::text_shapes(&out.unwrap())
             .iter()

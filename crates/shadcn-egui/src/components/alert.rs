@@ -40,8 +40,8 @@ use crate::style::app::{Resolved, Sealed};
 use crate::style::{pick, pick_len, AppEnum, AppVariant, Recipe, State, Style, VariantEnum};
 use crate::Theme;
 use egui::{
-    Align, InnerResponse, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder,
-    Widget, WidgetInfo, WidgetText, WidgetType,
+    Align, InnerResponse, Layout, Rect, Response, Role, Sense, Shape, TextWrapMode, Ui, UiBuilder,
+    Widget, WidgetInfo, WidgetText,
 };
 
 /// shadcn `variant` of an alert, or an app variant ([`AlertVariant::app`]).
@@ -264,7 +264,7 @@ pub struct Alert {
     icon: Option<Icon>,
     title: Option<WidgetText>,
     description: Option<WidgetText>,
-    id_salt: Option<egui::Id>,
+    id_salt: Option<egui::IdSalt>,
 }
 
 impl Default for Alert {
@@ -320,8 +320,8 @@ impl Alert {
     /// The id under which the alert keeps what it learned about its parts
     /// in the previous pass, scoped to the `Ui` (as `TextEdit::id_salt`).
     #[inline]
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(egui::Id::new(salt));
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
 
@@ -513,7 +513,7 @@ impl Alert {
 
         let response = layout::end_item(ui, frame, outer, Sense::hover());
         widget_info_with_role(&response, egui::accesskit::Role::Alert, || {
-            WidgetInfo::new(WidgetType::Other)
+            WidgetInfo::new(Role::Unknown)
         });
         InnerResponse::new(inner, response)
     }
@@ -734,7 +734,7 @@ mod tests {
         Theme::vega()
             .variant(LOUD, AlertVariant::Default, |_, _| {})
             .apply(&ctx);
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             assert!(alert_context(ui).is_none());
             Alert::new().variant(LOUD).show(ui, |ui| {
                 let cx = alert_context(ui).expect("inside an alert");
@@ -747,6 +747,7 @@ mod tests {
                         assert!(cx.state.contains(State::VARIANT_DESTRUCTIVE));
                     });
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

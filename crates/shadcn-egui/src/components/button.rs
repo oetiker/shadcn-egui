@@ -346,9 +346,7 @@ impl Widget for Button {
             resp.flags
                 .insert(egui::response::Flags::FAKE_PRIMARY_CLICKED);
         }
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
-        });
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &self.text));
         report_invalid(&resp, invalid);
         let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
         slot.done(ui, &resp, st, enabled, false);

@@ -22,7 +22,9 @@ fn count_atlas(out: &egui::FullOutput) {
         .textures_delta
         .set
         .iter()
-        .filter(|(id, delta)| *id == egui::TextureId::default() && delta.pos.is_none())
+        .filter(|(id, deltas)| {
+            **id == egui::TextureId::default() && deltas.iter().any(|d| d.pos.is_none())
+        })
         .count() as u64;
     ATLAS_BUILDS.with(|b| b.set(b.get() + whole));
 }
@@ -47,7 +49,9 @@ fn context() -> egui::Context {
             viewports: [(id, info)].into_iter().collect(),
             ..Default::default()
         };
-        count_atlas(&ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui)));
+        let out = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+        count_atlas(&out);
+        out.drop_without_applying_deltas();
     });
     ctx
 }
@@ -68,14 +72,15 @@ fn alternate<T: PartialEq + std::fmt::Debug>(
 ) -> (T, T) {
     let ctx = context();
     for n in 0..3 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             Theme::vega().apply(ui.ctx());
             root(ui, n);
-        });
+        })
+        .drop_without_applying_deltas();
     }
     let mut first = None;
     for n in 3..3 + frames {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             Theme::vega().apply(ui.ctx());
             root(ui, n);
             ui.ctx().show_viewport_immediate(
@@ -86,7 +91,8 @@ fn alternate<T: PartialEq + std::fmt::Debug>(
                     win(ui, n);
                 },
             );
-        });
+        })
+        .drop_without_applying_deltas();
         if first.is_none() {
             first = Some(count(&ctx));
         }
@@ -107,10 +113,11 @@ fn text_in_one_window_is_laid_out_once() {
     let ctx = context();
     let mut seen = Vec::new();
     for _ in 0..5 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             Theme::vega().apply(ui.ctx());
             label(ui, "root text");
-        });
+        })
+        .drop_without_applying_deltas();
         seen.push(text::text_builds(&ctx));
     }
     assert_eq!(seen, [(1, 1), (2, 2), (2, 2), (2, 2), (2, 2)]);
@@ -175,8 +182,8 @@ fn a_window_without_crate_text_keeps_the_root_text() {
 }
 
 /// The ink egui's atlas has in the current pass.
-fn ink(ui: &Ui) -> egui::epaint::AlphaFromCoverage {
-    ui.ctx().fonts(|f| f.options().alpha_from_coverage)
+fn ink(ui: &Ui) -> egui::epaint::FontColorTransferFunction {
+    ui.ctx().fonts(|f| f.options().color_transfer_function)
 }
 
 /// `frames` frames of a root in the dark mode, and from the fourth on a
@@ -186,8 +193,8 @@ fn ink(ui: &Ui) -> egui::epaint::AlphaFromCoverage {
 type ModeFrame = (
     (u64, u64),
     u64,
-    egui::epaint::AlphaFromCoverage,
-    Option<egui::epaint::AlphaFromCoverage>,
+    egui::epaint::FontColorTransferFunction,
+    Option<egui::epaint::FontColorTransferFunction>,
 );
 
 fn dark_root_light_window(
@@ -198,7 +205,7 @@ fn dark_root_light_window(
     let mut seen = Vec::new();
     for n in 0..frames {
         let mut inks = None;
-        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.ctx().set_theme(egui::Theme::Dark);
             Theme::vega().apply(ui.ctx());
             let root = ink(ui);
@@ -218,6 +225,7 @@ fn dark_root_light_window(
             }
             inks = Some((root, win));
         });
+        out.textures_delta.clear();
         count_atlas(&out);
         let (root, win) = inks.expect("the root's pass ran");
         seen.push((text::text_builds(&ctx), atlas_builds(), root, win));
@@ -245,7 +253,7 @@ fn a_window_in_another_mode_keeps_the_atlas() {
 /// mode has its own ink again.
 #[test]
 fn the_root_keeps_its_ink_beside_a_window_in_another_mode() {
-    use egui::epaint::AlphaFromCoverage::{Gamma, Linear};
+    use egui::epaint::FontColorTransferFunction::{Gamma, Off};
     let (ctx, seen) = dark_root_light_window(10, |n| n < 7);
     // The first pass starts before the first apply, in egui's ink.
     let roots: Vec<_> = seen.iter().skip(1).map(|f| f.2).collect();
@@ -256,8 +264,8 @@ fn the_root_keeps_its_ink_beside_a_window_in_another_mode() {
         .style_of(egui::Theme::Light)
         .visuals
         .text_options
-        .alpha_from_coverage;
-    assert_eq!(light, Linear);
+        .color_transfer_function;
+    assert_eq!(light, Off);
 }
 
 /// A faded box with sides of unequal width, as the button group's
@@ -314,7 +322,7 @@ fn closed_windows_leave_no_cache() {
     let ctx = context();
     let mut most = [0; 4];
     for n in 0..50 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             Theme::vega().apply(ui.ctx());
             label(ui, "root text");
             faded_box(ui, 40.0);
@@ -327,7 +335,8 @@ fn closed_windows_leave_no_cache() {
                     faded_box(ui, 60.0);
                 },
             );
-        });
+        })
+        .drop_without_applying_deltas();
         let now = cache_viewports(&ctx);
         for (m, c) in most.iter_mut().zip(now) {
             *m = (*m).max(c);

@@ -55,7 +55,7 @@ pub struct Textarea<'t> {
     text: &'t mut dyn TextBuffer,
     hint_text: Atoms<'static>,
     desired_width: Option<f32>,
-    id_salt: Option<egui::Id>,
+    id_salt: Option<egui::IdSalt>,
     invalid: Option<bool>,
     variant: TextareaVariant,
 }
@@ -100,8 +100,8 @@ impl<'t> Textarea<'t> {
     /// `TextEdit::id_salt`. Needed only where a caller must address this
     /// field from outside the widget tree that builds it.
     #[inline]
-    pub fn id_salt(mut self, id_salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(egui::Id::new(id_salt));
+    pub fn id_salt(mut self, id_salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(id_salt));
         self
     }
 
@@ -195,7 +195,7 @@ impl<'t> Textarea<'t> {
             .layouter(&mut layouter)
             .desired_width(f32::INFINITY)
             .desired_rows(1)
-            .vertical_align(egui::Align::Min);
+            .align(egui::Align2::LEFT_TOP);
         let disabled = !frame.enabled;
         let out = frame.show(ui, Vec2::new(width, height), edit, self.id_salt);
         // `disabled:cursor-not-allowed`: unlike the input, the textarea

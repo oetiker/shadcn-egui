@@ -151,7 +151,7 @@ impl Widget for Kbd<'_> {
         let resp = ui.interact(rect, id, Sense::hover());
         ui.set_clip_rect(clip);
         crate::components::shared::widget_info_never_disabled(&resp, || {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &name)
+            egui::WidgetInfo::labeled(egui::Role::Label, true, &name)
         });
         if !ui.is_rect_visible(rect) {
             return resp;

@@ -28,7 +28,7 @@ fn two_targets(ctx: &egui::Context, events: Vec<egui::Event>) -> [State; 2] {
         let theme = common::resolved(&Theme::vega(), egui::Theme::Light);
         for (i, x) in [0.0, 100.0].into_iter().enumerate() {
             let rect = Rect::from_min_size(egui::pos2(x, 0.0), egui::vec2(80.0, 30.0));
-            let mut resp = ui.interact(rect, egui::Id::new(("target", i)), egui::Sense::click());
+            let mut resp = ui.interact(rect, egui::Id::unique(("target", i)), egui::Sense::click());
             pressable(&mut resp, ActivationKeys::Button);
             st[i] = interaction_state(&theme, &resp, State::NONE);
         }
@@ -101,7 +101,7 @@ fn the_modality_sees_passes_without_crate_widgets() {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
             Theme::vega().apply(ui.ctx());
             ui.ctx().set_theme(egui::Theme::Light);
-            let mut resp = ui.interact(rect, egui::Id::new("t"), egui::Sense::click());
+            let mut resp = ui.interact(rect, egui::Id::unique("t"), egui::Sense::click());
             if ask {
                 pressable(&mut resp, ActivationKeys::Button);
                 st = interaction_state(&Theme::current(ui.ctx()), &resp, State::NONE);

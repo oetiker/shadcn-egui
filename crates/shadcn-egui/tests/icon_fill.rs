@@ -98,9 +98,9 @@ struct Painted {
 /// Run one frame of `ctx` at `ppp`, painting with `paint`.
 fn frame(ctx: &egui::Context, ppp: f32, mut paint: impl FnMut(&egui::Painter)) -> Painted {
     ctx.set_pixels_per_point(ppp);
-    let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+    let out = common::Output(ctx.run_ui(egui::RawInput::default(), |ui| {
         paint(&ui.painter_at(Rect::EVERYTHING));
-    });
+    }));
     fn walk(s: &Shape, out: &mut Vec<(TextureId, Rect, Color32)>) {
         match s {
             Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
@@ -117,10 +117,10 @@ fn frame(ctx: &egui::Context, ppp: f32, mut paint: impl FnMut(&egui::Painter)) -
         .textures_delta
         .set
         .iter()
-        .filter(|(id, _)| *id != TextureId::default())
-        .map(|(id, d)| {
-            let egui::ImageData::Color(img) = &d.image;
-            (*id, img.clone())
+        .filter(|(id, _)| **id != TextureId::default())
+        .filter_map(|(id, deltas)| {
+            let egui::ImageData::Color(img) = &deltas.last()?.image;
+            Some((*id, img.clone()))
         })
         .collect();
     Painted { images, uploads }
@@ -200,7 +200,7 @@ fn crossing_strokes_blend_once() {
                 .rect_filled(page, 0.0, Color32::WHITE);
             let p = ui
                 .ctx()
-                .layer_painter(LayerId::new(Order::Foreground, Id::new("icon")));
+                .layer_painter(LayerId::new(Order::Foreground, Id::unique("icon")));
             let rect = Rect::from_min_size(pos2(8.0, 8.0), vec2(24.0, 24.0));
             paint_icon(&p, rect, &icon, Color32::RED.gamma_multiply(0.5), 2.0);
         });
@@ -355,7 +355,7 @@ fn filled_icon_has_no_seam_at_fractional_scale() {
                     );
                     let p = ui
                         .ctx()
-                        .layer_painter(LayerId::new(Order::Foreground, Id::new("icon")));
+                        .layer_painter(LayerId::new(Order::Foreground, Id::unique("icon")));
                     let rect = Rect::from_min_size(pos2(8.0, 8.0), vec2(24.0, 24.0));
                     paint_icon(&p, rect, &icon, Color32::RED.gamma_multiply(0.5), stroke);
                 });
@@ -399,7 +399,7 @@ fn zoomed(name: &str, alpha: f32) {
                 .rect_filled(page, 0.0, Color32::WHITE);
             let p = ui
                 .ctx()
-                .layer_painter(LayerId::new(Order::Foreground, Id::new("icons")));
+                .layer_painter(LayerId::new(Order::Foreground, Id::unique("icons")));
             let color = Color32::from_rgb(9, 9, 11).gamma_multiply(alpha);
             for (i, icon) in [&fixture::RING, &fixture::STAR_EVENODD, &fixture::MIXED]
                 .into_iter()

@@ -740,7 +740,7 @@ impl RecipeBox {
     ///     let popover = [&*theme.style.popover_content];
     ///     let state = theme.state(ctx, State::NONE);
     ///     let panel = RecipeBox::resolve(ctx, &theme, &popover, state);
-    ///     let shown = egui::Area::new(egui::Id::new("panel")).show(ctx, |ui| {
+    ///     let shown = egui::Area::new(egui::Id::unique("panel")).show(ctx, |ui| {
     ///         panel
     ///             .frame([16.0; 4])
     ///             .show(ui, |ui| {
@@ -866,7 +866,7 @@ struct CutCache {
 }
 
 fn cut_cache_id() -> Id {
-    Id::new("shadcn_egui::cut_cache")
+    Id::unique("shadcn_egui::cut_cache")
 }
 
 /// The mesh for `key`, from the cache or from `build`.
@@ -1008,7 +1008,10 @@ fn cut(
 /// The convex outline of a rounded rect, as egui's tessellator traces it.
 pub(crate) fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos2> {
     let mut points = Vec::new();
-    egui::epaint::tessellator::path::rounded_rectangle(&mut points, rect, radius.into());
+    egui::epaint::tessellator::path::rounded_rectangle(
+        &mut points,
+        egui::epaint::RoundedRect::new(rect, radius),
+    );
     points.dedup_by(|a, b| (*a - *b).length_sq() < 1e-6);
     points
 }
@@ -1704,7 +1707,7 @@ pub enum ActivationKeys {
 }
 
 fn modality_id() -> Id {
-    Id::new("shadcn_egui::focus_modality")
+    Id::unique("shadcn_egui::focus_modality")
 }
 
 /// The record of the button a held Space is down on, in `viewport`: each
@@ -1712,7 +1715,7 @@ fn modality_id() -> Id {
 /// held in two windows at once is two holds. The theme's hooks drop the
 /// record of a viewport egui has closed.
 pub(crate) fn space_id(viewport: egui::ViewportId) -> Id {
-    Id::new("shadcn_egui::space_down_on").with(viewport)
+    Id::unique("shadcn_egui::space_down_on").with(viewport)
 }
 
 /// The focus modality of one viewport: the focused widget as last seen,
@@ -1744,7 +1747,7 @@ struct HitAreas {
 type AllHitAreas = egui::ViewportIdMap<HitAreas>;
 
 fn hit_areas_id() -> Id {
-    Id::new("shadcn_egui::hit_areas")
+    Id::unique("shadcn_egui::hit_areas")
 }
 
 /// The viewports among `ids` egui has closed: with a pass count of 0
@@ -2139,11 +2142,11 @@ pub fn text_entry_state(theme: &Theme, resp: &Response, context: State) -> State
     state_of(theme, resp, context, true)
 }
 
-/// Reports `make_info` for `resp` as [`Response::widget_info`] does, then
-/// gives the widget an accessible `role` that egui's `WidgetType` lacks
-/// (upstream's `role="alert"`, `alertdialog`, `navigation`, `group`).
-/// `widget_info` sets a role from the `WidgetType`, so the role is set
-/// after it; the name and value stay those of `make_info`.
+/// Reports `make_info` for `resp` as [`Response::widget_info`] does, with
+/// `role` as the widget's accessible role (upstream's `role="alert"`,
+/// `alertdialog`, `navigation`, `group`). `widget_info` sets the role of
+/// `make_info`, so `role` is set after it; the name and value stay those
+/// of `make_info`.
 ///
 /// The disabled state follows the role (conformance 8). A role that
 /// supports `aria-disabled` in WAI-ARIA 1.2 (its "Used in Roles" and
@@ -2685,13 +2688,14 @@ mod tests {
         let rect = Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(40.0, 20.0));
         let mut vertices = 0;
         for _ in 0..4 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+            ctx.run_ui(egui::RawInput::default(), |_| {
                 for shape in b.shapes_at(&ctx, rect, 0.5) {
                     if let Shape::Mesh(m) = shape {
                         vertices = m.vertices.len();
                     }
                 }
-            });
+            })
+            .drop_without_applying_deltas();
         }
         assert!(vertices > 0, "the box is one mesh");
         assert_eq!(cut_cache(&ctx).0, 1, "builds over 4 frames");
@@ -2704,11 +2708,12 @@ mod tests {
         let b = one_side_off();
         let ctx = egui::Context::default();
         for frame in 0..20 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+            ctx.run_ui(egui::RawInput::default(), |_| {
                 let at = egui::pos2(10.0 + frame as f32, 10.0);
                 let rect = Rect::from_min_size(at, egui::vec2(40.0, 20.0));
                 let _ = b.shapes_at(&ctx, rect, 0.5);
-            });
+            })
+            .drop_without_applying_deltas();
         }
         let (builds, size) = cut_cache(&ctx);
         assert_eq!(builds, 20);

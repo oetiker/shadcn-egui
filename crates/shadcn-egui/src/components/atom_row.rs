@@ -279,6 +279,21 @@ impl LaidRow<'_> {
                     paint_image(painter, &retint(image, color), at);
                 }
                 ItemKind::Sized(SizedAtomKind::Empty { .. }) => {}
+                // egui's own atoms paint as egui's atom layout paints them,
+                // in `cell` with the row's colour.
+                ItemKind::Sized(SizedAtomKind::Paint { paint, .. }) => paint(
+                    ui,
+                    egui::AtomPaintArgs {
+                        rect: at,
+                        fallback_text_color: color,
+                    },
+                ),
+                ItemKind::Sized(SizedAtomKind::Widget(widget)) => {
+                    widget.paint_at(ui, cell);
+                }
+                ItemKind::Sized(SizedAtomKind::Container(container)) => {
+                    container.paint_at(ui, cell);
+                }
             }
         }
     }
@@ -315,7 +330,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::components::icon_atom::install(&ctx);
         let mut sizes = Vec::new();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let icons = crate::icons::lucide::SLOTS;
             let size = |row: AtomRow<'_>| row.lay_out(ui, &look).size();
@@ -338,7 +353,8 @@ mod tests {
             sizes.push(size(
                 AtomRow::new(ui, (IconAtom::new(icons.check).size(16.0), "Save")).gap(4.0),
             ));
-        });
+        })
+        .drop_without_applying_deltas();
         // The line box: 10 px text at line height 2.
         assert_eq!(sizes[0].y, 20.0);
         assert_eq!(sizes[1], sizes[0] + Vec2::new(14.0, 6.0));
@@ -353,7 +369,7 @@ mod tests {
     fn icon_atoms_take_the_row_colour_unless_tinted() {
         let ctx = egui::Context::default();
         crate::components::icon_atom::install(&ctx);
-        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let check = crate::icons::lucide::SLOTS.check;
             let atoms = (
@@ -366,6 +382,7 @@ mod tests {
             let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), row.size());
             row.paint(ui, &painter, rect, &look, Color32::RED);
         });
+        output.textures_delta.clear();
         let fills: Vec<Color32> = output
             .shapes
             .iter()
@@ -391,7 +408,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::components::icon_atom::install(&ctx);
         let mut sizes = Vec::new();
-        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let check = crate::icons::lucide::SLOTS.check;
             for atom in [IconAtom::new(check), IconAtom::new(check).size(20.0)] {
@@ -401,6 +418,7 @@ mod tests {
                 row.paint(ui, ui.painter(), rect, &look, Color32::RED);
             }
         });
+        output.textures_delta.clear();
         assert_eq!(sizes, [Vec2::splat(12.0), Vec2::splat(20.0)]);
         let painted: Vec<Vec2> = output
             .shapes
@@ -413,10 +431,48 @@ mod tests {
         assert_eq!(painted, [Vec2::splat(12.0), Vec2::splat(20.0)]);
     }
 
+    /// egui 0.37's container and widget atoms take their place in the
+    /// row and paint their own atoms there.
+    #[test]
+    fn container_and_widget_atoms_paint_their_atoms() {
+        let ctx = egui::Context::default();
+        let mut widths = Vec::new();
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let look = look(ui);
+            let alone = AtomRow::new(ui, "Save").lay_out(ui, &look).size().x;
+            let atoms = (
+                egui::ContainerAtom::new("In"),
+                "Save",
+                egui::WidgetAtom::new("Out"),
+            );
+            let row = AtomRow::new(ui, atoms).gap(4.0).lay_out(ui, &look);
+            widths.push((alone, row.size().x));
+            let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), row.size());
+            row.paint(ui, ui.painter(), rect, &look, Color32::RED);
+        });
+        let texts: Vec<(String, f32)> = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_owned(), t.pos.x)),
+                _ => None,
+            })
+            .collect();
+        output.drop_without_applying_deltas();
+        let names: Vec<&str> = texts.iter().map(|(t, _)| t.as_str()).collect();
+        assert_eq!(names, ["In", "Save", "Out"], "{texts:?}");
+        assert!(
+            texts[0].1 < texts[1].1 && texts[1].1 < texts[2].1,
+            "{texts:?}"
+        );
+        let (alone, row) = widths[0];
+        assert!(row > alone + 8.0, "{widths:?}");
+    }
+
     #[test]
     fn row_paints_its_content_centred_in_the_inset_box() {
         let ctx = egui::Context::default();
-        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let row = AtomRow::new(ui, "Save")
                 .inset(10.0, 2.0, 0.0, 0.0)
@@ -425,10 +481,11 @@ mod tests {
             let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), Vec2::new(100.0, 40.0));
             row.paint(ui, ui.painter(), rect, &look, Color32::RED);
             // Centred in 10..98: starts at 54 - w/2.
-            ui.data_mut(|d| d.insert_temp(egui::Id::new("left"), 54.0 - content.x / 2.0));
+            ui.data_mut(|d| d.insert_temp(egui::Id::unique("left"), 54.0 - content.x / 2.0));
         });
+        output.textures_delta.clear();
         let left: f32 = ctx
-            .data(|d| d.get_temp(egui::Id::new("left")))
+            .data(|d| d.get_temp(egui::Id::unique("left")))
             .expect("stored");
         let text = output
             .shapes

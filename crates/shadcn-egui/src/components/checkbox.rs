@@ -144,7 +144,7 @@ impl Widget for Checkbox<'_> {
         resp.widget_info(|| egui::WidgetInfo {
             enabled,
             selected: Some(checked),
-            ..egui::WidgetInfo::new(egui::WidgetType::Checkbox)
+            ..egui::WidgetInfo::new(egui::Role::CheckBox)
         });
         // `disabled:cursor-not-allowed`, on the hit area as on its `::after`.
         disabled_cursor(&resp, !enabled);

@@ -11,6 +11,45 @@ use egui_kittest::{Harness, SnapshotResults};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
 
+/// `out` without its texture uploads. egui 0.37 debug-asserts that a
+/// dropped `FullOutput` has no unapplied texture delta; a test that only
+/// reads shapes or AccessKit output has no renderer to apply it to.
+pub fn no_textures(mut out: egui::FullOutput) -> egui::FullOutput {
+    out.textures_delta.clear();
+    out
+}
+
+/// A pass's output that a helper hands back with its texture uploads (a
+/// test may read them), and that discards them when the test drops it,
+/// for the reason given at [`no_textures`].
+pub struct Output(pub egui::FullOutput);
+
+impl std::ops::Deref for Output {
+    type Target = egui::FullOutput;
+    fn deref(&self) -> &egui::FullOutput {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Output {
+    fn deref_mut(&mut self) -> &mut egui::FullOutput {
+        &mut self.0
+    }
+}
+
+impl Output {
+    /// The output itself, without its texture uploads.
+    pub fn into_inner(mut self) -> egui::FullOutput {
+        no_textures(std::mem::take(&mut self.0))
+    }
+}
+
+impl Drop for Output {
+    fn drop(&mut self) {
+        self.0.textures_delta.clear();
+    }
+}
+
 /// A test theme: its name suffix, the theme, and the mode it renders in.
 /// The mode travels beside the theme: an app picks it with
 /// `ctx.set_theme(..)`, and the helpers below do the same.
@@ -97,7 +136,11 @@ pub fn page_harness<'a>(
     mut ui_fn: impl FnMut(&mut egui::Ui) + 'a,
 ) -> Harness<'a> {
     let bg = theme.palette_of(mode).background;
+    // Snapshots show bare controls, as upstream's style demos do, most
+    // without an accessible name; tests/accessibility.rs and the
+    // interaction tests check the names.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(size)
         .with_theme(mode)
         .build_ui(move |ui| {
@@ -143,7 +186,7 @@ pub fn measure_output(
     theme: &Theme,
     mode: egui::Theme,
     add: impl FnMut(&mut egui::Ui) -> egui::Response,
-) -> (egui::Rect, egui::FullOutput) {
+) -> (egui::Rect, Output) {
     let (rect, out, _) = measure_frame(theme, mode, add);
     (rect, out)
 }
@@ -155,7 +198,7 @@ pub fn measure_frame(
     theme: &Theme,
     mode: egui::Theme,
     mut add: impl FnMut(&mut egui::Ui) -> egui::Response,
-) -> (egui::Rect, egui::FullOutput, egui::Context) {
+) -> (egui::Rect, Output, egui::Context) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     ctx.set_theme(mode);
@@ -166,7 +209,7 @@ pub fn measure_frame(
     let mut textures = first.textures_delta;
     textures.append(std::mem::take(&mut out.textures_delta));
     out.textures_delta = textures;
-    (rect, out, ctx)
+    (rect, Output(out), ctx)
 }
 
 /// The textures `ctx` holds for box shadows (the crate names them so).
@@ -186,10 +229,11 @@ pub fn texture_images(
     out.textures_delta
         .set
         .iter()
-        .filter(|(_, d)| d.pos.is_none())
-        .map(|(id, d)| {
+        .filter_map(|(id, deltas)| {
+            // The last whole image of the pass is the texture.
+            let d = deltas.iter().rev().find(|d| d.pos.is_none())?;
             let egui::ImageData::Color(image) = &d.image;
-            (*id, (**image).clone())
+            Some((*id, (**image).clone()))
         })
         .collect()
 }
@@ -420,9 +464,9 @@ pub fn pass(
     ctx: &egui::Context,
     events: Vec<egui::Event>,
     ui_fn: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
+) -> Output {
     match app_loop {
-        Loop::RunUi => ctx.run_ui(window_input(events), ui_fn),
+        Loop::RunUi => Output(ctx.run_ui(window_input(events), ui_fn)),
         Loop::Own => own_pass(ctx, events, ui_fn),
     }
 }
@@ -434,16 +478,16 @@ pub fn own_pass(
     ctx: &egui::Context,
     events: Vec<egui::Event>,
     mut ui_fn: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
+) -> Output {
     ctx.begin_pass(window_input(events));
     let window = egui::Rect::from_min_size(egui::Pos2::ZERO, PASS_WINDOW);
     let builder = egui::UiBuilder::new().max_rect(window);
     ui_fn(&mut egui::Ui::new(
         ctx.clone(),
-        egui::Id::new("own_pass"),
+        egui::Id::unique("own_pass"),
         builder,
     ));
-    ctx.end_pass()
+    Output(ctx.end_pass())
 }
 
 fn window_input(events: Vec<egui::Event>) -> egui::RawInput {

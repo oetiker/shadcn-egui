@@ -398,11 +398,7 @@ impl Widget for Tabs<'_> {
         // from `toggled` to `selected`.
         for (i, r) in resps.iter().enumerate() {
             r.widget_info(|| {
-                egui::WidgetInfo::labeled(
-                    egui::WidgetType::SelectableLabel,
-                    enabled,
-                    &self.labels[i],
-                )
+                egui::WidgetInfo::labeled(egui::Role::Button, enabled, &self.labels[i])
             });
             ui.ctx().accesskit_node_builder(r.id, |node| {
                 node.set_role(egui::accesskit::Role::Tab);

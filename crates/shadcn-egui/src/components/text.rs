@@ -42,7 +42,8 @@ use crate::components::shared::{self, PerViewport};
 use crate::style::{pick, pick_where, Recipe, State, TextSize, TextWrap, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
-use egui::text::{LayoutJob, TextWrapping};
+use egui::epaint::text::ByteRangeExt as _;
+use egui::text::{ByteIndex, LayoutJob, TextWrapping};
 use egui::FontData;
 use egui::{
     Align, Color32, FontFamily, FontId, FontSelection, Galley, Painter, Pos2, Response, Sense,
@@ -368,8 +369,9 @@ impl TextLook {
             place_rows(ui.ctx(), source, self.place(), pos.y)
         };
         crate::components::shared::widget_info_never_disabled(&response, || {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, galley.text())
+            egui::WidgetInfo::labeled(egui::Role::Label, true, galley.text())
         });
+        crate::components::field::card_text(ui, galley.text());
         if ui.is_rect_visible(response.rect) {
             if galley.elided {
                 let job = LayoutJob {
@@ -541,7 +543,7 @@ impl TextLook {
         for (si, s) in job.sections.iter().enumerate() {
             section_of.extend(std::iter::repeat_n(
                 si,
-                job.text[s.byte_range.clone()].chars().count(),
+                job.text[s.byte_range.as_usize()].chars().count(),
             ));
         }
         // `starts[i]`: a line starts at char `i` after a chosen break.
@@ -682,7 +684,7 @@ impl TextLook {
                 out.text.push('\n');
                 out.sections.push(egui::text::LayoutSection {
                     leading_space: 0.0,
-                    byte_range: at..at + 1,
+                    byte_range: ByteIndex(at)..ByteIndex(at + 1),
                     format: job.sections[section_of[i - 1]].format.clone(),
                 });
                 origin.push(None);
@@ -717,7 +719,7 @@ impl TextLook {
             out.text.push(c);
             out.sections.push(egui::text::LayoutSection {
                 leading_space: gap,
-                byte_range: at..out.text.len(),
+                byte_range: ByteIndex(at)..ByteIndex(out.text.len()),
                 format,
             });
             origin.push(Some(i));
@@ -801,11 +803,11 @@ struct LayoutCache {
 }
 
 fn laid_out_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::text::laid_out")
+    egui::Id::unique("shadcn_egui::text::laid_out")
 }
 
 fn placed_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::text::placed")
+    egui::Id::unique("shadcn_egui::text::placed")
 }
 
 /// Uses the probe galley of every viewport's [`LayoutCache`] at that
@@ -813,9 +815,9 @@ fn placed_id() -> egui::Id {
 /// begins, in any viewport: one that lays out no crate text, or one at
 /// another scale (a window on a 150 % monitor beside a root at 100 %).
 /// The theme's begin-of-pass hook calls it, which runs right after egui's
-/// cache dropped what the last pass did not use; under `Context::run`
-/// hooks do not run and such a pass makes the next crate text lay out
-/// again once.
+/// cache dropped what the last pass did not use; under
+/// `begin_pass`/`end_pass` hooks do not run and such a pass makes the next
+/// crate text lay out again once.
 ///
 /// egui lays text out at the current viewport's scale only, read from its
 /// input: the scale is set to each other one for its probe and back.
@@ -964,7 +966,7 @@ fn body_size(ui: &Ui) -> f32 {
 /// underline's line colour) set to `Color32::PLACEHOLDER`, and no font
 /// override. Built once per context style, not per frame.
 fn placeholder_style(ctx: &egui::Context) -> Arc<egui::Style> {
-    let id = egui::Id::new("shadcn_egui::text::placeholder_style");
+    let id = egui::Id::unique("shadcn_egui::text::placeholder_style");
     let source = ctx.global_style();
     let cached = ctx.data(|d| d.get_temp::<(Arc<egui::Style>, Arc<egui::Style>)>(id));
     if let Some((_, style)) = cached.filter(|(src, _)| Arc::ptr_eq(src, &source)) {
@@ -1068,14 +1070,14 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
     let (id, data) = ctx.fonts(|f| {
         let defs = f.definitions();
         let key = defs.families.get(family)?.first()?;
-        let id = egui::Id::new("shadcn_egui::text::vmetrics").with(key);
+        let id = egui::Id::unique("shadcn_egui::text::vmetrics").with(key);
         Some((id, defs.font_data.get(key)?.clone()))
     })?;
     let cached = ctx.data(|d| d.get_temp::<(Arc<FontData>, Option<VMetrics>)>(id));
     if let Some((_, m)) = cached.filter(|(src, _)| Arc::ptr_eq(src, &data)) {
         return m;
     }
-    let m = vmetrics(&data.font, data.index);
+    let m = vmetrics((*data.font).as_ref(), data.index);
     ctx.data_mut(|d| d.insert_temp(id, (data, m)));
     m
 }
@@ -1272,7 +1274,7 @@ fn place_galley_rows(
         let section = job
             .sections
             .iter()
-            .find(|s| s.byte_range.contains(&start))
+            .find(|s| s.byte_range.contains(&ByteIndex(start)))
             .or(job.sections.last());
         // The row's ascent, descent and line gap in device px, each
         // rounded: from its first font's tables, else egui's metrics.
@@ -1348,7 +1350,10 @@ fn underline_row(
     for glyph in &row.glyphs {
         let at = byte;
         byte += job.text[at..].chars().next().map_or(0, char::len_utf8);
-        let section = job.sections.iter().position(|s| s.byte_range.contains(&at));
+        let section = job
+            .sections
+            .iter()
+            .position(|s| s.byte_range.contains(&ByteIndex(at)));
         let same = section.is_some() && prev == section;
         prev = section;
         let Some(section) = section else {
@@ -1379,8 +1384,8 @@ fn uppercase(job: &mut LayoutJob) {
     let mut text = String::with_capacity(job.text.len());
     for section in &mut job.sections {
         let start = text.len();
-        text.push_str(&job.text[section.byte_range.clone()].to_uppercase());
-        section.byte_range = start..text.len();
+        text.push_str(&job.text[section.byte_range.as_usize()].to_uppercase());
+        section.byte_range = ByteIndex(start)..ByteIndex(text.len());
     }
     job.text = text;
 }
@@ -1393,11 +1398,12 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.set_pixels_per_point(ppp);
         let mut f = Some(f);
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        ctx.run_ui(Default::default(), |ui| {
             if let Some(f) = f.take() {
                 f(ui);
             }
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
     /// The caret in a line box (a textarea's row) spans the font's ascent
@@ -1696,7 +1702,8 @@ mod tests {
             ctx.set_pixels_per_point(ppp);
             crate::Theme::vega().apply(&ctx);
             ctx.set_theme(egui::Theme::Light);
-            let _ = ctx.run_ui(Default::default(), |_| {});
+            ctx.run_ui(Default::default(), |_| {})
+                .drop_without_applying_deltas();
             ctx
         };
         let measure = |ctx: &egui::Context, text: &str| {
@@ -1723,22 +1730,24 @@ mod tests {
         let ctx = egui::Context::default();
         let mut galleys = Vec::new();
         for _ in 0..3 {
-            let _ = ctx.run_ui(Default::default(), |ui| {
+            ctx.run_ui(Default::default(), |ui| {
                 let look = TextLook::resolve(ui, &[], State::NONE);
                 let block = look.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
                 galleys.push(block.galley().clone());
-            });
+            })
+            .drop_without_applying_deltas();
         }
         assert!(Arc::ptr_eq(&galleys[0], &galleys[1]));
         assert!(Arc::ptr_eq(&galleys[1], &galleys[2]));
         // Another scale places it again.
         ctx.set_pixels_per_point(2.0);
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        ctx.run_ui(Default::default(), |ui| {
             let look = TextLook::resolve(ui, &[], State::NONE);
             let block = look.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
             assert!(!Arc::ptr_eq(&galleys[2], block.galley()));
             assert_eq!(block.galley().pixels_per_point, 2.0);
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
     #[test]
@@ -1755,9 +1764,10 @@ mod tests {
         };
         let measure = |ctx: &egui::Context| {
             let mut m = None;
-            let _ = ctx.run_ui(Default::default(), |ui| {
+            ctx.run_ui(Default::default(), |ui| {
                 m = family_vmetrics(ui.ctx(), &FontFamily::Proportional);
-            });
+            })
+            .drop_without_applying_deltas();
             m.expect("font tables")
         };
         let other = egui::FontDefinitions::default();
@@ -1769,7 +1779,10 @@ mod tests {
         let after = measure(&ctx);
         assert_ne!(before, after);
         assert_eq!(after, vmetrics(inter.data, 0).expect("tables"));
-        assert_eq!(before, vmetrics(&ubuntu.font, 0).expect("tables"));
+        assert_eq!(
+            before,
+            vmetrics((*ubuntu.font).as_ref(), 0).expect("tables")
+        );
     }
 
     #[test]
@@ -1902,10 +1915,16 @@ mod tests {
     fn uppercase_keeps_sections_apart() {
         let mut job = LayoutJob::default();
         job.append("straße", 0.0, Default::default());
-        job.append("x", 0.0, Default::default());
+        // Another format: egui 0.37 merges a section into the one before
+        // it where the formats are equal.
+        let red = egui::TextFormat {
+            color: egui::Color32::RED,
+            ..Default::default()
+        };
+        job.append("x", 0.0, red);
         uppercase(&mut job);
         assert_eq!(job.text, "STRASSEX");
-        assert_eq!(job.sections[0].byte_range, 0..7);
-        assert_eq!(job.sections[1].byte_range, 7..8);
+        assert_eq!(job.sections[0].byte_range, ByteIndex(0)..ByteIndex(7));
+        assert_eq!(job.sections[1].byte_range, ByteIndex(7)..ByteIndex(8));
     }
 }

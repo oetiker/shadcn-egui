@@ -62,32 +62,35 @@ enum Place {
 
 /// The checkbox's value and the first label's rect, after the first frame.
 fn plain_label_harness(place: Place) -> Harness<'static, (bool, Rect)> {
-    Harness::new_ui_state(
-        move |ui, (on, label): &mut (bool, Rect)| {
-            Theme::vega().apply(ui.ctx());
-            let mut row = |ui: &mut Ui| match place {
-                Place::After | Place::Outside => {
-                    ui.add(Checkbox::new(on));
-                    *label = ui.add(Label::new("First")).rect;
+    // A control is unnamed on purpose: the test checks the names itself.
+    Harness::builder()
+        .with_accessibility_check(false)
+        .build_ui_state(
+            move |ui, (on, label): &mut (bool, Rect)| {
+                Theme::vega().apply(ui.ctx());
+                let mut row = |ui: &mut Ui| match place {
+                    Place::After | Place::Outside => {
+                        ui.add(Checkbox::new(on));
+                        *label = ui.add(Label::new("First")).rect;
+                    }
+                    Place::Before => {
+                        *label = ui.add(Label::new("First")).rect;
+                        ui.add(Checkbox::new(on));
+                    }
+                    Place::Two => {
+                        *label = ui.add(Label::new("First")).rect;
+                        ui.add(Checkbox::new(on));
+                        ui.add(Label::new("Second"));
+                    }
+                };
+                if place == Place::Outside {
+                    ui.horizontal(row);
+                } else {
+                    Field::new().horizontal().show(ui, |ui| row(ui));
                 }
-                Place::Before => {
-                    *label = ui.add(Label::new("First")).rect;
-                    ui.add(Checkbox::new(on));
-                }
-                Place::Two => {
-                    *label = ui.add(Label::new("First")).rect;
-                    ui.add(Checkbox::new(on));
-                    ui.add(Label::new("Second"));
-                }
-            };
-            if place == Place::Outside {
-                ui.horizontal(row);
-            } else {
-                Field::new().horizontal().show(ui, |ui| row(ui));
-            }
-        },
-        (false, Rect::NOTHING),
-    )
+            },
+            (false, Rect::NOTHING),
+        )
 }
 
 /// The labels that name the checkbox, as their text.

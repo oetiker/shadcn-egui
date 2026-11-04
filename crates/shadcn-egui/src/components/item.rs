@@ -29,8 +29,8 @@ use crate::style::{
 };
 use crate::Theme;
 use egui::{
-    Align, CursorIcon, Id, ImageSource, InnerResponse, Layout, Pos2, Rect, Response, Sense, Shape,
-    TextWrapMode, Ui, UiBuilder, Vec2, Widget, WidgetInfo, WidgetText, WidgetType,
+    Align, CursorIcon, Id, ImageSource, InnerResponse, Layout, Pos2, Rect, Response, Role, Sense,
+    Shape, TextWrapMode, Ui, UiBuilder, Vec2, Widget, WidgetInfo, WidgetText,
 };
 use std::hash::Hash;
 
@@ -376,7 +376,7 @@ pub struct Item<'a> {
     sense: Sense,
     link: bool,
     selected: Option<bool>,
-    id_salt: Option<Id>,
+    id_salt: Option<egui::IdSalt>,
 }
 
 impl Default for Item<'_> {
@@ -500,8 +500,8 @@ impl<'a> Item<'a> {
     /// The id under which the item keeps what it measured in the previous
     /// pass, scoped to the `Ui` (as `TextEdit::id_salt`).
     #[inline]
-    pub fn id_salt(mut self, salt: impl Hash) -> Self {
-        self.id_salt = Some(Id::new(salt));
+    pub fn id_salt(mut self, salt: impl Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
 
@@ -904,17 +904,17 @@ impl<'a> Item<'a> {
         );
 
         let kind = if self.link {
-            WidgetType::Link
+            Role::Link
         } else if sense.senses_click() {
-            WidgetType::Button
+            Role::Button
         } else {
-            WidgetType::Other
+            Role::Unknown
         };
         let enabled = response.enabled();
         let info = || WidgetInfo::labeled(kind, enabled, title_text.as_deref().unwrap_or(""));
         // A plain item is a `<div>`, with no disabled state; a link or
         // button item is a control.
-        if kind == WidgetType::Other {
+        if kind == Role::Unknown {
             crate::components::shared::widget_info_never_disabled(&response, info);
         } else {
             response.widget_info(info);
@@ -1175,7 +1175,7 @@ pub fn item_footer<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerRespo
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ItemGroup {
     variant: ItemVariant,
-    id_salt: Option<Id>,
+    id_salt: Option<egui::IdSalt>,
 }
 
 impl ItemGroup {
@@ -1194,8 +1194,8 @@ impl ItemGroup {
     /// The id under which the group keeps its items' sizes from the
     /// previous pass, scoped to the `Ui`.
     #[inline]
-    pub fn id_salt(mut self, salt: impl Hash) -> Self {
-        self.id_salt = Some(Id::new(salt));
+    pub fn id_salt(mut self, salt: impl Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
 

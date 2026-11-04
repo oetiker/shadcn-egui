@@ -27,7 +27,7 @@ fn timed(
     time: f64,
     mut add: impl FnMut(&mut egui::Ui),
 ) -> (Vec<egui::Mesh>, bool) {
-    let out = ctx.run_ui(
+    let out = common::Output(ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -36,7 +36,7 @@ fn timed(
             Theme::vega().apply(ui.ctx());
             add(ui);
         },
-    );
+    ));
     let repaint =
         out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
     (icons(ctx, &out), repaint)
@@ -52,7 +52,7 @@ fn angle(mesh: &egui::Mesh) -> f32 {
 /// fresh context (vega applied).
 fn uploaded(time: f64, add: impl Fn(&mut egui::Ui)) -> Vec<egui::ColorImage> {
     let ctx = egui::Context::default();
-    let out = ctx.run_ui(
+    let out = common::Output(ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -61,14 +61,14 @@ fn uploaded(time: f64, add: impl Fn(&mut egui::Ui)) -> Vec<egui::ColorImage> {
             Theme::vega().apply(ui.ctx());
             add(ui);
         },
-    );
+    ));
     out.textures_delta
         .set
         .iter()
-        .filter(|(id, _)| *id != TextureId::default())
-        .map(|(_, d)| {
-            let egui::ImageData::Color(img) = &d.image;
-            (**img).clone()
+        .filter(|(id, _)| **id != TextureId::default())
+        .filter_map(|(_, deltas)| {
+            let egui::ImageData::Color(img) = &deltas.last()?.image;
+            Some((**img).clone())
         })
         .collect()
 }
@@ -133,13 +133,13 @@ fn a_spinner_draws_the_themes_loader_icon() {
         Theme::vega().apply(&ctx);
         // A still spinner: the loader's own texture, unturned.
         ctx.all_styles_mut(|s| s.animation_time = 0.0);
-        let out = ctx.run_ui(egui::RawInput::default(), add);
+        let out = common::Output(ctx.run_ui(egui::RawInput::default(), add));
         let images: Vec<_> = out
             .textures_delta
             .set
             .iter()
-            .filter(|(id, _)| *id != TextureId::default())
-            .map(|(_, d)| d.image.clone())
+            .filter(|(id, _)| **id != TextureId::default())
+            .filter_map(|(_, deltas)| Some(deltas.last()?.image.clone()))
             .collect();
         assert_eq!(images.len(), 1, "one icon texture");
         images[0].clone()
@@ -226,7 +226,9 @@ fn a_hidden_spinner_asks_for_no_repaint() {
         ));
         spinner(ui);
     };
-    // The first pass applies the theme, which asks for a pass of its own.
+    // The first pass applies the theme, which asks for a pass of its own,
+    // and egui 0.37 sends the window its theme, which asks for one more.
+    timed(&ctx, 0.0, hidden);
     timed(&ctx, 0.0, hidden);
     let (painted, moving) = timed(&ctx, 0.5, hidden);
     assert!(painted.is_empty());
@@ -239,10 +241,13 @@ fn a_hidden_spinner_asks_for_no_repaint() {
 fn reduced_motion_stops_it() {
     let ctx = egui::Context::default();
     ctx.all_styles_mut(|s| s.animation_time = 0.0);
-    // The first pass applies the theme, which asks for a pass of its own.
-    timed(&ctx, 0.0, |ui| {
-        spinner(ui);
-    });
+    // The first pass applies the theme, which asks for a pass of its own,
+    // and egui 0.37 sends the window its theme, which asks for one more.
+    for _ in 0..2 {
+        timed(&ctx, 0.0, |ui| {
+            spinner(ui);
+        });
+    }
     for time in [0.3, 0.6] {
         let (painted, moving) = timed(&ctx, time, |ui| {
             spinner(ui);
@@ -476,7 +481,9 @@ fn a_hidden_host_asks_for_no_repaint() {
         ui.add(Button::new("Saving").icon(Glyph::Spinner));
         ui.add(Badge::new("Syncing").icon_end(Glyph::Spinner));
     };
-    // The first pass applies the theme, which asks for a pass of its own.
+    // The first pass applies the theme, which asks for a pass of its own,
+    // and egui 0.37 sends the window its theme, which asks for one more.
+    timed(&ctx, 0.0, hidden);
     timed(&ctx, 0.0, hidden);
     let (painted, moving) = timed(&ctx, 0.5, hidden);
     assert!(painted.is_empty());
@@ -491,7 +498,7 @@ fn a_hosted_spinner_keeps_the_ids_after_it() {
     let mut text = String::new();
     let mut field = |glyph: Glyph, focus: bool| {
         let mut id = egui::Id::NULL;
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             Theme::vega().apply(ui.ctx());
             ui.add(Button::new("Save").icon(glyph));
             ui.add(Badge::new("Draft").icon_end(glyph));
@@ -500,7 +507,8 @@ fn a_hosted_spinner_keeps_the_ids_after_it() {
                 resp.request_focus();
             }
             id = resp.id;
-        });
+        })
+        .drop_without_applying_deltas();
         id
     };
     let check: Glyph = Theme::vega().icons.check.into();
@@ -871,7 +879,7 @@ fn spinners_past_the_turned_texture_bound_are_smoothed() {
     let mut options = std::collections::HashMap::new();
     let mut meshes = Vec::new();
     for time in [0.3, 0.4] {
-        let out = ctx.run_ui(
+        let out = common::Output(ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
@@ -884,9 +892,11 @@ fn spinners_past_the_turned_texture_bound_are_smoothed() {
                     }
                 });
             },
-        );
-        for (id, delta) in &out.textures_delta.set {
-            options.insert(*id, delta.options);
+        ));
+        for (id, deltas) in &out.textures_delta.set {
+            for delta in deltas {
+                options.insert(*id, delta.options);
+            }
         }
         meshes = icons(&ctx, &out);
     }
@@ -907,8 +917,9 @@ fn spinners_past_the_turned_texture_bound_are_smoothed() {
 enum Loop {
     /// `Context::run_ui`, which runs egui's plugin pass hooks.
     RunUi,
-    /// The deprecated `Context::run` of custom loops.
-    Run,
+    /// `Context::run_pass`, egui 0.37's loop for a `Context` callback,
+    /// which runs the pass hooks too.
+    RunPass,
     /// `Context::begin_pass` and `Context::end_pass` of custom loops.
     Split,
 }
@@ -920,19 +931,18 @@ fn run_in(
     vp: egui::ViewportId,
     time: f64,
     add: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
+) -> common::Output {
     run_by(Loop::RunUi, ctx, vp, time, add)
 }
 
 /// [`run_in`], driven by `by`.
-#[expect(deprecated, reason = "custom loops still call `Context::run`")]
 fn run_by(
     by: Loop,
     ctx: &egui::Context,
     vp: egui::ViewportId,
     time: f64,
     mut add: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
+) -> common::Output {
     let mut input = egui::RawInput {
         time: Some(time),
         viewport_id: vp,
@@ -941,18 +951,18 @@ fn run_by(
     if vp != egui::ViewportId::ROOT {
         input.viewports.insert(vp, Default::default());
     }
-    match by {
+    common::Output(match by {
         Loop::RunUi => ctx.run_ui(input, |ui| {
             Theme::vega().apply(ui.ctx());
             add(ui);
         }),
-        Loop::Run => ctx.run(input, |ctx| central(ctx, &mut add)),
+        Loop::RunPass => ctx.run_pass(input, |ctx| central(ctx, &mut add)),
         Loop::Split => {
             ctx.begin_pass(input);
             central(ctx, &mut add);
             ctx.end_pass()
         }
-    }
+    })
 }
 
 /// `add` in a root `Ui` of its own, with vega applied: a custom loop's
@@ -961,7 +971,7 @@ fn central(ctx: &egui::Context, add: &mut dyn FnMut(&mut egui::Ui)) {
     Theme::vega().apply(ctx);
     let mut ui = egui::Ui::new(
         ctx.clone(),
-        egui::Id::new("custom_loop"),
+        egui::Id::unique("custom_loop"),
         egui::UiBuilder::new()
             .layer_id(egui::LayerId::background())
             .max_rect(ctx.content_rect()),
@@ -1005,7 +1015,7 @@ fn a_gone_viewports_turned_textures_are_freed() {
     // Per loop: what the root's last spinner frame drew (fallen back,
     // rasterised at its angle) and the turned textures kept when idle.
     let mut got = Vec::new();
-    for by in [Loop::RunUi, Loop::Run, Loop::Split] {
+    for by in [Loop::RunUi, Loop::RunPass, Loop::Split] {
         let ctx = egui::Context::default();
         let popup = egui::ViewportId::from_hash_of("popup");
         let out = run_by(by, &ctx, popup, 0.3, many_sizes);
@@ -1037,7 +1047,7 @@ fn a_gone_viewports_turned_textures_are_freed() {
         }
         got.push((by, last, turned_textures(&ctx)));
     }
-    let want = [Loop::RunUi, Loop::Run, Loop::Split].map(|by| (by, (0, 1), 0));
+    let want = [Loop::RunUi, Loop::RunPass, Loop::Split].map(|by| (by, (0, 1), 0));
     assert_eq!(format!("{got:?}"), format!("{want:?}"));
 }
 

@@ -46,8 +46,8 @@ use crate::components::shared::{interaction_state, part_painter, RecipeBox};
 use crate::style::app::default_variant;
 use crate::style::{pick_len, Recipe, State};
 use crate::Theme;
-use egui::scroll_area::{ScrollAreaOutput, ScrollBarVisibility, ScrollSource};
-use egui::{Id, Key, Margin, Modifiers, Rect, Sense, Ui, UiBuilder, Vec2, Vec2b};
+use egui::scroll_area::{DragScroll, ScrollAreaOutput, ScrollBarVisibility, ScrollSource};
+use egui::{Id, IdSalt, Key, Margin, Modifiers, Rect, Sense, Ui, UiBuilder, Vec2, Vec2b};
 
 default_variant!(
     /// The scroll area's variant: upstream has none, so only app variants
@@ -76,11 +76,6 @@ const LINE_STEP: f32 = 40.0; // behaviour-ok: Chrome's arrow-key scroll step
 /// Chrome's page step as a share of the visible length
 /// (`ScrollableArea::PageStep`).
 const PAGE_SHARE: f32 = 0.875; // behaviour-ok: Chrome's page step, 87.5 % of the visible length
-/// A fling in a disabled `Ui` stops below this speed, in points per second.
-const PAN_STOP_SPEED: f32 = 20.0; // behaviour-ok: egui ScrollArea kinetic `stop_speed`
-/// A fling in a disabled `Ui` slows by this much, in points per second
-/// squared.
-const PAN_FRICTION: f32 = 1000.0; // behaviour-ok: egui ScrollArea kinetic `friction_coeff`
 /// The longest pass a fling step counts, in seconds.
 const PAN_MAX_DT: f32 = 0.1; // behaviour-ok: egui ScrollArea kinetic `dt.at_most(0.1)`
 
@@ -115,7 +110,7 @@ pub struct ScrollArea {
     area: egui::ScrollArea,
     direction: Vec2b,
     /// The id salt as egui hashes it.
-    salt: Id,
+    salt: IdSalt,
     stick_to_bottom: bool,
     /// As given to egui's `auto_shrink`.
     shrink: Vec2b,
@@ -133,13 +128,17 @@ struct Memory {
     /// This area moved the offset in the last pass: egui's stick-to-end
     /// must not snap it back in this one.
     moved: bool,
+    /// The offset the last pass set after egui's area ran (keys, a bar
+    /// drag, the wheel in a disabled `Ui`), for egui's area in this pass:
+    /// egui takes an offset only through its builder.
+    offset: Option<Vec2>,
     /// The widget inside that had focus at the end of the last pass.
     focused: Option<Id>,
     /// egui's touch-drag rect for a disabled `Ui`: the viewport of the
     /// last pass after auto-shrink, while its content was too large for it.
     pan_rect: Option<Rect>,
-    /// The fling a touch pan in a disabled `Ui` left, in points per
-    /// second, as egui's kinetic scrolling keeps it.
+    /// The fling a touch pan in a disabled `Ui` left: the offset's speed
+    /// in points per second, as egui's kinetic scrolling keeps it.
     pan_vel: Vec2,
 }
 
@@ -152,10 +151,10 @@ struct Scan {
     focusable: bool,
     /// The widget inside that has focus.
     focused: Option<Id>,
-    /// The caller's `clip_rect_margin` and scroll fade, which the content
+    /// The caller's scroll fade and kinetic scrolling, which the content
     /// gets back.
-    clip_margin: f32,
     fade: egui::style::ScrollFadeStyle,
+    kinetic: egui::style::KineticScrollStyle,
     /// The axes the area scrolls.
     direction: Vec2b,
 }
@@ -189,8 +188,8 @@ impl Scan {
     /// Gives the content the caller's look back, and counts the widgets
     /// the `Ui`'s layer holds before the content.
     fn start(&self, ui: &mut Ui) -> usize {
-        ui.visuals_mut().clip_rect_margin = self.clip_margin;
         ui.spacing_mut().scroll.fade = self.fade;
+        ui.spacing_mut().scroll.kinetic = self.kinetic;
         // The viewport clips the axis it does not scroll too (bits'
         // `overflow-x: hidden` on a vertical area); egui clips only the
         // scrolled axes.
@@ -245,7 +244,7 @@ impl ScrollArea {
         Self {
             area: egui::ScrollArea::new(direction),
             direction,
-            salt: Id::new("scroll_area"),
+            salt: IdSalt::new("scroll_area"),
             stick_to_bottom: false,
             shrink: Vec2b::TRUE,
             variant: ScrollAreaVariant::Default,
@@ -305,9 +304,9 @@ impl ScrollArea {
     /// A source for the area's id where two areas share a `Ui`, as egui's
     /// `id_salt`; the default salt is `"scroll_area"`, egui's.
     #[inline]
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        // `Id::new` hashes `&salt` as `salt`: egui gets the same id.
-        self.salt = Id::new(&salt);
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        // `IdSalt::new` hashes `&salt` as `salt`: egui gets the same id.
+        self.salt = IdSalt::new(&salt);
         self.area = self.area.id_salt(salt);
         self
     }
@@ -349,23 +348,26 @@ impl ScrollArea {
 
     /// egui's touch drag and fling, which its area runs only in an
     /// enabled `Ui`, for an area in a disabled one: run before the content,
-    /// as egui runs it, so a nested area's pan lies above it, and applied
-    /// to egui's state, so the content moves in this pass. Returns whether
-    /// it moved the offset.
+    /// as egui runs it, so a nested area's pan lies above it, and moves
+    /// `offset`, which egui's area then takes, so the content moves in this
+    /// pass. Returns whether it moved the offset. As egui 0.37's
+    /// `AxisPhysics` without its rubber band (see [`ScrollArea::run`]):
+    /// the content follows the finger, the release leaves the pointer's
+    /// speed, and the fling decays exponentially (`decay_time`) until
+    /// less than `stop_distance` of it is left.
+    #[allow(clippy::too_many_arguments)]
     fn touch_pan(
         &self,
         ui: &Ui,
         id: Id,
         touch: bool,
         mem: &mut Memory,
+        offset: &mut Vec2,
         enabled_ui: &mut Option<Ui>,
         make_enabled_ui: impl FnOnce(&Ui) -> Ui,
     ) -> bool {
         let ctx = ui.ctx();
-        let Some(mut state) = egui::scroll_area::State::load(ctx, id) else {
-            return false;
-        };
-        let start = state.offset;
+        let start = *offset;
         let rect = mem.pan_rect.filter(|_| touch);
         let resp = rect.map(|rect| {
             enabled_ui
@@ -376,32 +378,32 @@ impl ScrollArea {
             let delta = ctx.input(|i| i.pointer.delta());
             for d in 0..2 {
                 if self.direction[d] {
-                    state.offset[d] -= delta[d];
+                    offset[d] -= delta[d];
                 }
             }
             mem.pan_vel = Vec2::ZERO;
         } else if let Some(resp) = resp {
             if resp.drag_stopped() {
-                mem.pan_vel = self.direction.to_vec2() * ctx.input(|i| i.pointer.velocity());
+                // The offset runs against the pointer.
+                mem.pan_vel = -(self.direction.to_vec2() * ctx.input(|i| i.pointer.velocity()));
             }
             let dt = ctx.input(|i| i.stable_dt).min(PAN_MAX_DT);
-            let friction = PAN_FRICTION * dt;
+            let kinetic = ui.spacing().scroll.kinetic;
+            let decay = kinetic.decay_time;
             for d in 0..2 {
                 let vel = &mut mem.pan_vel[d];
-                if friction > vel.abs() || vel.abs() < PAN_STOP_SPEED {
+                let left = vel.abs() * decay;
+                if left < kinetic.stop_distance || !left.is_finite() {
                     *vel = 0.0;
                 } else {
-                    *vel -= friction * vel.signum();
-                    state.offset[d] -= *vel * dt;
+                    let next = *vel * (-dt / decay).exp();
+                    offset[d] += decay * (*vel - next);
+                    *vel = next;
                     ctx.request_repaint();
                 }
             }
         }
-        let moved = state.offset != start;
-        if moved {
-            state.store(ctx, id);
-        }
-        moved
+        *offset != start
     }
 
     fn run<R>(
@@ -432,13 +434,30 @@ impl ScrollArea {
             )
         };
         let mut enabled_ui = None;
+        let state = egui::scroll_area::State::load(&ctx, id);
+        let mut start = mem
+            .offset
+            .take()
+            .or(state.map(|s| s.unclamped_offset()))
+            .unwrap_or_default();
         let mut panned = false;
-        if !ui.is_enabled() {
-            panned = self.touch_pan(ui, id, touch, &mut mem, &mut enabled_ui, make_enabled_ui);
+        if !ui.is_enabled() && state.is_some() {
+            panned = self.touch_pan(
+                ui,
+                id,
+                touch,
+                &mut mem,
+                &mut start,
+                &mut enabled_ui,
+                make_enabled_ui,
+            );
+        }
+        let mut area = self.area;
+        if panned || state.is_some_and(|s| s.unclamped_offset() != start) {
+            area = area.scroll_offset(start);
         }
 
-        let area = self
-            .area
+        let area = area
             // An offset this area set in the last pass is the user's
             // scroll, which egui's stick-to-end would undo.
             .stick_to_bottom(self.stick_to_bottom && !mem.moved && !panned)
@@ -448,24 +467,25 @@ impl ScrollArea {
             // The browser scrolls by dragging the content only on touch.
             .scroll_source(ScrollSource {
                 scroll_bar: false,
-                drag: touch,
+                drag: DragScroll::OnTouch,
                 mouse_wheel: true,
             });
         let mut scan = Scan {
             before: mem.focused,
-            clip_margin: ui.visuals().clip_rect_margin,
             fade: ui.spacing().scroll.fade,
+            kinetic: ui.spacing().scroll.kinetic,
             direction: self.direction,
             ..Scan::default()
         };
-        // Two egui extras upstream lacks: content painted 3 px past the
-        // viewport (`clip_rect_margin`), where `overflow: hidden` clips at
-        // its edge, and fades over a scrolled edge.
-        ui.visuals_mut().clip_rect_margin = 0.0;
+        // egui extras upstream lacks: fades over a scrolled edge, and a
+        // rubber band past the edge on touch and trackpad. Chrome's
+        // scroller stops at its edge (conformance 1: egui decides no
+        // behaviour).
         ui.spacing_mut().scroll.fade.strength = 0.0;
-        let mut out = show(area, ui, &mut scan);
-        ui.visuals_mut().clip_rect_margin = scan.clip_margin;
+        ui.spacing_mut().scroll.kinetic.rubber_band = false;
+        let out = show(area, ui, &mut scan);
         ui.spacing_mut().scroll.fade = scan.fade;
+        ui.spacing_mut().scroll.kinetic = scan.kinetic;
         debug_assert_eq!(out.id, id, "the crate's area id is egui's");
         mem.focused = scan.focused;
 
@@ -506,7 +526,8 @@ impl ScrollArea {
         let overflows =
             |d: usize| self.direction[d] && out.content_size[d].round() > inner.size()[d].round();
         let overflow = [overflows(0), overflows(1)];
-        let mut offset = out.state.offset;
+        let shown_offset = out.state.clamped_offset();
+        let mut offset = shown_offset;
 
         // The next pass's touch pan, where egui's would be: the viewport
         // after auto-shrink, while the content is too large for it.
@@ -518,8 +539,11 @@ impl ScrollArea {
             enabled_ui = Some(make_enabled_ui(ui));
         }
         let input = enabled_ui.as_ref().unwrap_or(ui);
-        if !ui.is_enabled() && input.rect_contains_pointer(inner) && ctx.dragged_id().is_none() {
-            // egui's wheel step, which its area skips in a disabled `Ui`.
+        if !ui.is_enabled() && input.rect_contains_pointer(inner) {
+            // egui's wheel step, which its area skips in a disabled `Ui`
+            // (egui 0.37 `AxisPhysics::wheel` without a rubber band: the
+            // offset stops at the edge, and a delta it cannot use goes on
+            // to a parent area).
             let only =
                 ui.style().always_scroll_the_only_direction && self.direction.x != self.direction.y;
             for d in 0..2 {
@@ -527,7 +551,7 @@ impl ScrollArea {
                     continue;
                 }
                 let delta = ctx.input(|i| {
-                    let v = i.smooth_scroll_delta;
+                    let v = i.smooth_scroll_delta();
                     if only {
                         v.x + v.y
                     } else {
@@ -703,10 +727,9 @@ impl ScrollArea {
         }
 
         let offset = offset.clamp(Vec2::ZERO, max_scroll);
-        mem.moved = offset != out.state.offset || panned;
-        if mem.moved {
-            out.state.offset = offset;
-            out.state.store(&ctx, out.id);
+        mem.moved = offset != shown_offset || panned;
+        if offset != shown_offset {
+            mem.offset = Some(offset);
             ctx.request_repaint();
         }
         ctx.data_mut(|d| d.insert_temp(mem_id, mem));

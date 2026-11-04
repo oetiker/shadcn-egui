@@ -8,6 +8,7 @@
 //! path moves egui's glyphs there and breaks lines on these widths.
 
 use crate::components::shared::{with_viewport_state, PerViewport};
+use egui::epaint::text::ByteRangeExt as _;
 use egui::text::LayoutJob;
 use egui::FontData;
 use skrifa::instance::{Location, Size};
@@ -161,7 +162,7 @@ pub(super) fn needs_opsz(data: &FontData, coords: &[(Tag, f32)]) -> bool {
     if set.into_iter().any(|(t, _)| *t == opsz) {
         return false;
     }
-    FontRef::from_index(&data.font, data.index)
+    FontRef::from_index((*data.font).as_ref(), data.index)
         .is_ok_and(|f| f.axes().iter().any(|a| a.tag() == opsz))
 }
 
@@ -179,7 +180,7 @@ struct Face<'a> {
 impl<'a> Face<'a> {
     /// `data` at the font size `size` (points) on a `ppp` device.
     fn new(data: &'a FontData, coords: &[(Tag, f32)], size: f32, ppp: f32) -> Option<Self> {
-        let font = FontRef::from_index(&data.font, data.index).ok()?;
+        let font = FontRef::from_index((*data.font).as_ref(), data.index).ok()?;
         let axes = font.axes();
         let opsz = Tag::new(b"opsz");
         // The theme's coordinates (`wght`), then the section's; `opsz`
@@ -417,7 +418,7 @@ struct MeasureCache {
 }
 
 fn measures_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::text::measures")
+    egui::Id::unique("shadcn_egui::text::measures")
 }
 
 /// [`Measures`] entries made so far, for the tests.
@@ -525,7 +526,7 @@ pub(super) fn advances(
     // face's tables are parsed only for what it lacks.
     let mut known: Vec<Vec<CharMeasure>> = Vec::with_capacity(job.sections.len());
     for (si, section) in job.sections.iter().enumerate() {
-        let text = &job.text[section.byte_range.clone()];
+        let text = &job.text[section.byte_range.as_usize()];
         let data = faces.get(si).and_then(Option::as_deref);
         let format = &section.format;
         let face = OnceCell::new();
@@ -574,7 +575,7 @@ pub(super) fn advances(
             .iter()
             .zip(&mut known)
             .map(|(section, row)| {
-                let text = &job.text[section.byte_range.clone()];
+                let text = &job.text[section.byte_range.as_usize()];
                 let font = &section.format.font_id;
                 text.chars()
                     .chain(hyphens)
@@ -597,7 +598,7 @@ pub(super) fn advances(
     let mut run: Option<(*const Mutex<Measures>, u32)> = None;
     for (si, ((section, row), asked)) in job.sections.iter().zip(&known).zip(&asked).enumerate() {
         let format = &section.format;
-        let text = &job.text[section.byte_range.clone()];
+        let text = &job.text[section.byte_range.as_usize()];
         let n = text.chars().count();
         let data = faces.get(si).and_then(Option::as_deref);
         let face = OnceCell::new();

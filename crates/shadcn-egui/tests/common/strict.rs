@@ -1,7 +1,7 @@
 //! Snapshot checks: egui_kittest's comparison, then a strict one.
 //!
-//! egui_kittest 0.34 compares with dify's anti-aliasing detection always on
-//! (snapshot.rs:484). A pixel dify takes for an anti-aliased edge never
+//! egui_kittest 0.37 compares with dify's anti-aliasing detection always on
+//! (snapshot.rs:572). A pixel dify takes for an anti-aliased edge never
 //! counts, so a 1 px border may change colour and the test still passes.
 //! After kittest's check passes, [`strict_check`] compares the render with
 //! the committed PNG again, every pixel, each channel within [`TOLERANCE`]
@@ -149,5 +149,6 @@ fn strict_check(image: &image::RgbaImage, name: &str, dir: &Path) -> SnapshotRes
         ),
         diff: failed,
         diff_path,
+        failing_pixels_by_threshold: Vec::new(),
     })
 }

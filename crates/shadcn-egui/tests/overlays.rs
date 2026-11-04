@@ -169,11 +169,14 @@ fn a_disabled_dialog_footer_keeps_its_strip_colour() {
         ctx.global_style_mut(|s| s.animation_time = 0.0);
         let mut out = None;
         for _ in 0..2 {
-            out = Some(ctx.run_ui(egui::RawInput::default(), |ui| {
-                Dialog::new("d", "Title").show(ui.ctx(), &mut true, |ui| {
-                    ui.add_enabled_ui(!disabled, |ui| dialog::footer(ui, |_| {}));
-                });
-            }));
+            out = Some(common::no_textures(ctx.run_ui(
+                egui::RawInput::default(),
+                |ui| {
+                    Dialog::new("d", "Title").show(ui.ctx(), &mut true, |ui| {
+                        ui.add_enabled_ui(!disabled, |ui| dialog::footer(ui, |_| {}));
+                    });
+                },
+            )));
         }
         common::rect_shapes(&out.expect("ran"))
             .into_iter()
@@ -457,7 +460,10 @@ fn tooltip_snapshot() {
 const FRUITS: [&str; 4] = ["Apple", "Banana", "Blueberry", "Cherry"];
 
 fn select_harness(start: usize) -> Harness<'static, usize> {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -533,7 +539,10 @@ fn select_escape_and_outside_click_keep_the_value() {
 /// to that widget: typing and Enter do not choose an option.
 #[test]
 fn open_select_ignores_keys_once_focus_moves_elsewhere() {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -597,7 +606,10 @@ fn select_trigger_reports_the_current_text() {
 
 #[test]
 fn select_disabled_does_not_open() {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -674,7 +686,10 @@ fn select_open_snapshot() {
 #[test]
 fn select_item_rows_have_the_text_sm_line_plus_padding() {
     for (name, theme, mode) in common::themes() {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(320.0, 260.0))
             .build_ui_state(
                 |ui, value: &mut usize| {
@@ -700,7 +715,10 @@ fn select_list_is_capped_to_the_window() {
         "Short",
         "An option whose text is far wider than this narrow window",
     ];
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(200.0, 300.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -728,7 +746,10 @@ fn select_list_is_capped_to_the_window() {
 /// window.
 fn long_select_harness() -> Harness<'static, usize> {
     let options: Vec<String> = (0..30).map(|i| format!("Option {i}")).collect();
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             move |ui, value: &mut usize| {
@@ -790,7 +811,10 @@ fn select_trigger_is_capped_to_the_room() {
         "An option whose text is far wider than this narrow window",
     ];
     for width in [None, Some(400.0)] {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(200.0, 300.0))
             .build_ui_state(
                 move |ui, value: &mut usize| {
@@ -825,12 +849,13 @@ fn select_trigger_in_no_room_takes_its_content_minimum() {
     let mut v = 0usize;
     let mut rects = (egui::Rect::NOTHING, egui::Rect::NOTHING);
     for _ in 0..2 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let parent = ui.allocate_ui(vec2(0.0, 100.0), |ui| {
                 ui.add(Select::new("fruit", &mut v, &FRUITS)).rect
             });
             rects = (parent.inner, parent.response.rect);
-        });
+        })
+        .drop_without_applying_deltas();
     }
     let (trigger, parent) = rects;
     // vega: pl-2.5, pr-2, a 1 px border each side, gap-1.5, a size-4 chevron.
@@ -842,7 +867,10 @@ fn select_trigger_in_no_room_takes_its_content_minimum() {
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
     let mode = egui::Theme::Light;
     let bg = theme.palette_of(mode).background;
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(260.0, 260.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());

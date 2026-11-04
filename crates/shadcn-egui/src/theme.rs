@@ -597,7 +597,7 @@ use std::sync::Arc;
 
 fn theme_id() -> egui::Id {
     static ID: std::sync::LazyLock<egui::Id> =
-        std::sync::LazyLock::new(|| egui::Id::new("shadcn_egui::active_theme"));
+        std::sync::LazyLock::new(|| egui::Id::unique("shadcn_egui::active_theme"));
     *ID
 }
 
@@ -900,7 +900,7 @@ fn is_bound(ctx: &egui::Context, family: &str) -> bool {
 /// nothing; with `base` it installs the fonts that stay on top of `base`,
 /// so the app's own definitions still go in.
 fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefinitions>) {
-    let id = egui::Id::new("shadcn_egui::installed_fonts");
+    let id = egui::Id::unique("shadcn_egui::installed_fonts");
     let mut key = InstalledFonts::of(fonts);
     let mut fonts = fonts;
     let last = ctx.data(|d| d.get_temp::<InstalledFonts>(id));
@@ -1001,14 +1001,14 @@ impl PendingHeading {
 }
 
 fn pending_heading_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::pending_heading")
+    egui::Id::unique("shadcn_egui::pending_heading")
 }
 
 /// Set once the heading family was seen bound. Every install defines it,
 /// but an app's own `ctx.set_fonts` drops it: [`unbind_lost_heading`]
 /// clears the flag again.
 fn heading_bound_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::heading_bound")
+    egui::Id::unique("shadcn_egui::heading_bound")
 }
 
 fn heading_bound(ctx: &egui::Context) -> bool {
@@ -1050,7 +1050,7 @@ fn check_heading(ctx: &egui::Context) -> Option<FontId> {
 
 /// The pass of the viewport whose heading [`check_heading`] checked last.
 fn heading_checked_id(viewport: egui::ViewportId) -> egui::Id {
-    egui::Id::new("shadcn_egui::heading_checked").with(viewport)
+    egui::Id::unique("shadcn_egui::heading_checked").with(viewport)
 }
 
 /// `TextStyle::Heading` back to `Proportional` when the context's fonts no
@@ -1062,7 +1062,7 @@ fn unbind_lost_heading(ctx: &egui::Context) -> Option<FontId> {
     if !heading_bound(ctx) || is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
         return None;
     }
-    let warned = egui::Id::new("shadcn_egui::lost_heading_warned");
+    let warned = egui::Id::unique("shadcn_egui::lost_heading_warned");
     ctx.data_mut(|d| {
         d.remove::<bool>(heading_bound_id());
         if !d.get_temp::<bool>(warned).unwrap_or(false) {
@@ -1229,7 +1229,7 @@ impl Theme {
             let p = self.palette_of(mode);
             ctx.style_mut_of(mode, |s| {
                 self.style_egui(s, p, dark, hairline, &heading);
-                s.visuals.text_options.alpha_from_coverage = coverage(ink.unwrap_or(mode));
+                s.visuals.text_options.color_transfer_function = coverage(ink.unwrap_or(mode));
             });
         }
 
@@ -1383,17 +1383,17 @@ impl Theme {
 }
 
 fn hairline_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::hairline")
+    egui::Id::unique("shadcn_egui::hairline")
 }
 
 /// The ink of Chrome's grayscale anti-aliasing: light text on dark takes
 /// `coverage^0.81`, dark text on light the plain coverage
 /// (tests/text_coverage.rs). egui's dark default (`2c - c²`) draws 3 to
 /// 25 % more.
-fn coverage(mode: egui::Theme) -> egui::epaint::AlphaFromCoverage {
+fn coverage(mode: egui::Theme) -> egui::epaint::FontColorTransferFunction {
     match mode {
-        egui::Theme::Dark => egui::epaint::AlphaFromCoverage::Gamma(0.81),
-        egui::Theme::Light => egui::epaint::AlphaFromCoverage::Linear,
+        egui::Theme::Dark => egui::epaint::FontColorTransferFunction::Gamma(0.81),
+        egui::Theme::Light => egui::epaint::FontColorTransferFunction::Off,
     }
 }
 
@@ -1401,7 +1401,7 @@ fn coverage(mode: egui::Theme) -> egui::epaint::AlphaFromCoverage {
 /// modes: the root window's ([`ink_of_windows`]). `None`: each mode its
 /// own ink.
 fn shared_ink_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::shared_ink")
+    egui::Id::unique("shadcn_egui::shared_ink")
 }
 
 fn shared_ink(ctx: &egui::Context) -> Option<egui::Theme> {
@@ -1448,7 +1448,7 @@ fn set_shared_ink(ctx: &egui::Context, ink: Option<egui::Theme>) {
     }
     for mode in [egui::Theme::Dark, egui::Theme::Light] {
         ctx.style_mut_of(mode, |s| {
-            s.visuals.text_options.alpha_from_coverage = coverage(ink.unwrap_or(mode));
+            s.visuals.text_options.color_transfer_function = coverage(ink.unwrap_or(mode));
         });
     }
     ctx.request_repaint();
@@ -1483,7 +1483,7 @@ enum Check {
 /// counts its own passes, and an immediate viewport runs its passes inside
 /// its parent's.
 fn pass_mode_id(viewport: egui::ViewportId) -> egui::Id {
-    egui::Id::new("shadcn_egui::pass_mode").with(viewport)
+    egui::Id::unique("shadcn_egui::pass_mode").with(viewport)
 }
 
 /// Repaint every viewport but the current one that has drawn a frame:
@@ -1504,13 +1504,13 @@ fn repaint_other_viewports(ctx: &egui::Context) {
 
 /// The font definitions [`install_fonts`] installed last.
 fn last_defs_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::last_font_definitions")
+    egui::Id::unique("shadcn_egui::last_font_definitions")
 }
 
 /// How many times [`install_fonts`] has installed fonts that differ from
 /// the ones egui has.
 fn font_installs_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::font_installs")
+    egui::Id::unique("shadcn_egui::font_installs")
 }
 
 fn font_installs(ctx: &egui::Context) -> u64 {
@@ -1601,7 +1601,7 @@ fn check_mode_switch(ctx: &egui::Context, check: Check) -> egui::Theme {
 /// The generation of the applied theme: one number per theme, so a theme
 /// applied again has the number it had (see [`AppliedThemes`]).
 fn generation_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::theme_generation")
+    egui::Id::unique("shadcn_egui::theme_generation")
 }
 
 /// The themes each viewport applied in its last two passes, with their
@@ -1613,7 +1613,7 @@ fn generation_id() -> egui::Id {
 /// many. A viewport egui has closed is dropped
 /// ([`forget_closed_viewports`]).
 fn applied_themes_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::applied_themes")
+    egui::Id::unique("shadcn_egui::applied_themes")
 }
 
 type AppliedThemes = std::collections::HashMap<egui::ViewportId, Applied>;
@@ -1723,7 +1723,7 @@ impl Applied {
 
 /// The highest generation given out so far.
 fn generations_made_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::theme_generations_made")
+    egui::Id::unique("shadcn_egui::theme_generations_made")
 }
 
 fn theme_generation(ctx: &egui::Context) -> u64 {
@@ -1759,8 +1759,8 @@ fn set_hairline(v: &mut egui::Visuals, width: f32) {
 /// (egui's "Reset memory" button) dropped such a flag and the next apply
 /// installed a second set of hooks.
 ///
-/// egui runs plugin pass hooks only in `Context::run_ui`; under
-/// `Context::run` or `begin_pass`/`end_pass` no hook runs. There the next
+/// egui runs plugin pass hooks only in `Context::run_ui` and
+/// `Context::run_pass`; under `begin_pass`/`end_pass` no hook runs. There the next
 /// crate widget catches a mode or font switch through
 /// [`Theme::current`], and the hairline follows a scale change only at
 /// the next [`Theme::apply`].
@@ -1867,9 +1867,11 @@ mod hook_tests {
 
     /// The theme's pass hooks that run in one empty `run_ui` pass.
     fn runs_per_pass(ctx: &egui::Context) -> u32 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .drop_without_applying_deltas();
         let before = RUNS.with(Cell::get);
-        let _ = ctx.run_ui(egui::RawInput::default(), |_| {});
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .drop_without_applying_deltas();
         RUNS.with(Cell::get) - before
     }
 
@@ -1931,7 +1933,8 @@ mod viewport_tests {
                 events: WINDOW_EVENTS.with(|e| std::mem::take(&mut *e.borrow_mut())),
                 ..Default::default()
             };
-            let _ = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
+            ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui))
+                .drop_without_applying_deltas();
         });
         ctx
     }
@@ -1943,7 +1946,7 @@ mod viewport_tests {
     fn closed_windows_leave_no_record() {
         let ctx = windowed_context();
         let frame = |open: Option<u32>| {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 Theme::vega().apply(ui.ctx());
                 let _ = Theme::current(ui.ctx());
                 if let Some(n) = open {
@@ -1954,7 +1957,8 @@ mod viewport_tests {
                             let _ = Theme::current(ui.ctx());
                         });
                 }
-            });
+            })
+            .drop_without_applying_deltas();
         };
         let mut most = 0;
         for n in 0..50 {
@@ -1985,7 +1989,7 @@ mod viewport_tests {
     /// A focusable widget, focused when `focus`; the focus modality after it.
     fn target(ui: &mut egui::Ui, name: &str, focus: bool) -> bool {
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
-        let resp = ui.interact(rect, egui::Id::new(name), egui::Sense::click());
+        let resp = ui.interact(rect, egui::Id::unique(name), egui::Sense::click());
         if focus {
             resp.request_focus();
         }
@@ -2027,7 +2031,7 @@ mod viewport_tests {
             };
             let mut root = false;
             let mut win = false;
-            let _ = ctx.run_ui(input, |ui| {
+            ctx.run_ui(input, |ui| {
                 Theme::vega().apply(ui.ctx());
                 root = target(ui, "root target", root_focus);
                 let builder = egui::ViewportBuilder::default();
@@ -2035,7 +2039,8 @@ mod viewport_tests {
                     .show_viewport_immediate(window(0), builder, |ui, _| {
                         win = target(ui, "window target", window_focus);
                     });
-            });
+            })
+            .drop_without_applying_deltas();
             seen.push((root, win));
         }
         // Frame 0: the root's widget focused by a key, the window has no
@@ -2056,13 +2061,14 @@ mod viewport_tests {
         let ctx = windowed_context();
         WINDOW_SCALE.with(|s| s.set(Some(1.5)));
         let frame = || {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 let builder = egui::ViewportBuilder::default();
                 ui.ctx()
                     .show_viewport_immediate(window(0), builder, |ui, _| {
                         let _ = Theme::current(ui.ctx());
                     });
-            });
+            })
+            .drop_without_applying_deltas();
         };
         Theme::vega().apply(&ctx);
         for _ in 0..3 {
@@ -2092,7 +2098,7 @@ mod viewport_tests {
     /// clicked in this pass.
     fn space_button(ui: &mut egui::Ui, name: &str) -> bool {
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
-        let mut resp = ui.interact(rect, egui::Id::new(name), egui::Sense::click());
+        let mut resp = ui.interact(rect, egui::Id::unique(name), egui::Sense::click());
         resp.request_focus();
         crate::components::shared::pressable(
             &mut resp,
@@ -2123,7 +2129,7 @@ mod viewport_tests {
             };
             let mut root = false;
             let mut win = false;
-            let _ = ctx.run_ui(input, |ui| {
+            ctx.run_ui(input, |ui| {
                 Theme::vega().apply(ui.ctx());
                 root = space_button(ui, "root button");
                 let builder = egui::ViewportBuilder::default();
@@ -2131,7 +2137,8 @@ mod viewport_tests {
                     .show_viewport_immediate(window(0), builder, |ui, _| {
                         win = space_button(ui, "window button");
                     });
-            });
+            })
+            .drop_without_applying_deltas();
             seen.push((root, win));
         }
         assert_eq!(
@@ -2148,7 +2155,7 @@ mod viewport_tests {
         let ctx = windowed_context();
         let frame = |open: Option<u32>| {
             WINDOW_EVENTS.with(|e| *e.borrow_mut() = vec![space(true)]);
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 Theme::vega().apply(ui.ctx());
                 if let Some(n) = open {
                     let builder = egui::ViewportBuilder::default();
@@ -2157,7 +2164,8 @@ mod viewport_tests {
                             let _ = space_button(ui, "window button");
                         });
                 }
-            });
+            })
+            .drop_without_applying_deltas();
         };
         let held = |n: u32| {
             let id = crate::components::shared::space_id(window(n));
@@ -2184,16 +2192,17 @@ mod viewport_tests {
         let deferred = egui::ViewportId::from_hash_of("first-pass window");
         let hit = |ui: &mut egui::Ui| {
             let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
-            let id = egui::Id::new("hit");
+            let id = egui::Id::unique("hit");
             let _ = crate::components::shared::hit_area(ui, rect, id, egui::Sense::click());
         };
         for _ in 0..2 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 Theme::vega().apply(ui.ctx());
                 let builder = egui::ViewportBuilder::default();
                 ui.ctx()
                     .show_viewport_deferred(deferred, builder, |_, _| {});
-            });
+            })
+            .drop_without_applying_deltas();
         }
         let info = egui::ViewportInfo {
             parent: Some(egui::ViewportId::ROOT),
@@ -2205,7 +2214,7 @@ mod viewport_tests {
             ..Default::default()
         };
         let seen = Cell::new(((0, 0), 0));
-        let _ = ctx.run_ui(input, |ui| {
+        ctx.run_ui(input, |ui| {
             assert_eq!(ui.ctx().cumulative_pass_nr(), 0, "the window's first pass");
             Theme::vega().apply(ui.ctx());
             hit(ui);
@@ -2221,7 +2230,8 @@ mod viewport_tests {
                     .contains_key(&deferred)
             });
             seen.set((hit_areas, usize::from(applied)));
-        });
+        })
+        .drop_without_applying_deltas();
         assert_eq!(
             seen.get(),
             ((1, 1), 1),
@@ -2236,11 +2246,11 @@ mod viewport_tests {
         let ctx = windowed_context();
         let hit = |ui: &mut egui::Ui| {
             let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
-            let id = egui::Id::new("hit");
+            let id = egui::Id::unique("hit");
             let _ = crate::components::shared::hit_area(ui, rect, id, egui::Sense::click());
         };
         let frame = |open: Option<u32>| {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 Theme::vega().apply(ui.ctx());
                 hit(ui);
                 if let Some(n) = open {
@@ -2248,7 +2258,8 @@ mod viewport_tests {
                     ui.ctx()
                         .show_viewport_immediate(window(n), builder, |ui, _| hit(ui));
                 }
-            });
+            })
+            .drop_without_applying_deltas();
         };
         let all: Vec<egui::ViewportId> = std::iter::once(egui::ViewportId::ROOT)
             .chain((0..50).map(window))

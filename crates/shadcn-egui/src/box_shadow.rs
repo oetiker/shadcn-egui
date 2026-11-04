@@ -1046,12 +1046,13 @@ mod tests {
         opacity: f32,
     ) -> Shape {
         let mut shape = Shape::Noop;
-        let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+        ctx.run_ui(egui::RawInput::default(), |_| {
             if let Some(at) = at {
                 let rect = Rect::from_min_size(at, size);
                 shape = shadow_shape(ctx, rect, [6.0; 4], CornerRadius::same(6), layers, opacity);
             }
-        });
+        })
+        .drop_without_applying_deltas();
         shape
     }
 
@@ -1187,8 +1188,9 @@ mod tests {
             let built = count();
             let mut freed = Vec::new();
             for _ in 0..MAX_AGE + 2 {
-                let out = ctx.run_ui(egui::RawInput::default(), |_| {});
-                freed.extend(out.textures_delta.free);
+                let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+                freed.extend(std::mem::take(&mut out.textures_delta.free));
+                out.textures_delta.clear();
             }
             let _ = tx.send((before, built, count(), freed.len()));
         });
@@ -1274,7 +1276,7 @@ mod tests {
             }
             let mut shapes = Vec::new();
             let windows = self.windows.clone();
-            let out = self.ctx.run_ui(input, |ui| {
+            let mut out = self.ctx.run_ui(input, |ui| {
                 if viewport == egui::ViewportId::ROOT {
                     for w in &windows {
                         let builder = egui::ViewportBuilder::default();
@@ -1291,7 +1293,7 @@ mod tests {
                 .filter(|(v, _)| **v != viewport)
                 .flat_map(|(_, ids)| ids.iter().copied())
                 .collect();
-            for (id, _) in &out.textures_delta.set {
+            for id in out.textures_delta.set.keys() {
                 if !self.uploaded.insert(*id) {
                     assert!(
                         !others.contains(id),
@@ -1306,6 +1308,7 @@ mod tests {
                 );
             }
             self.freed.extend(&out.textures_delta.free);
+            out.textures_delta.clear();
             let ids: Vec<Vec<egui::TextureId>> = shapes.iter().map(texture_ids).collect();
             self.named.insert(viewport, ids.concat());
             ids
@@ -1829,7 +1832,7 @@ mod tests {
         ];
         for rect in rects {
             let mut shape = None;
-            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+            ctx.run_ui(egui::RawInput::default(), |_| {
                 shape = Some(shadow_shape(
                     &ctx,
                     rect,
@@ -1838,7 +1841,8 @@ mod tests {
                     shadow_sm(),
                     1.0,
                 ));
-            });
+            })
+            .drop_without_applying_deltas();
             assert!(matches!(shape, Some(Shape::Noop)), "{rect:?}");
         }
         assert_eq!(shadow_builds(&ctx), 0);

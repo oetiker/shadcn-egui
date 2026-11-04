@@ -173,6 +173,7 @@ impl CpuApp {
         s.egui_winit
             .handle_platform_output(&s.window, output.platform_output);
         if s.info.close_requested() {
+            output.textures_delta.clear();
             event_loop.exit();
             return;
         }
@@ -180,11 +181,12 @@ impl CpuApp {
         let size = s.window.inner_size();
         let (Some(w), Some(h)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) else {
             // Minimised on Windows: nothing to draw into.
-            raster_frame(&mut self.raster, None, &[], 1.0, &output.textures_delta);
+            raster_frame(&mut self.raster, None, &[], 1.0, &mut output.textures_delta);
             return;
         };
         if (s.canvas.width, s.canvas.height) != (w.get() as usize, h.get() as usize) {
             if let Err(e) = s.surface.resize(w, h) {
+                output.textures_delta.clear();
                 self.fail(event_loop, "softbuffer resize", e);
                 return;
             }
@@ -200,7 +202,7 @@ impl CpuApp {
             Some(&mut s.canvas),
             &primitives,
             ppp,
-            &output.textures_delta,
+            &mut output.textures_delta,
         );
         let rastered = Instant::now();
 
@@ -295,18 +297,21 @@ fn earliest_frame(last_frame: Instant, hidden: bool) -> Instant {
 /// Rasterizes one frame into `canvas` and returns the rectangles it
 /// redrew; `None` is a window without area, which gets no pixels. The
 /// frame's texture uploads apply either way: egui sends each only once.
+/// `textures` is empty afterwards: egui 0.37 asserts in a debug build that
+/// a dropped delta was applied.
 fn raster_frame(
     raster: &mut Rasterizer,
     canvas: Option<&mut Canvas>,
     primitives: &[ClippedPrimitive],
     ppp: f32,
-    textures: &TexturesDelta,
+    textures: &mut TexturesDelta,
 ) -> Vec<IRect> {
     raster.set_textures(textures);
     let damage = canvas
         .map(|canvas| raster.render(canvas, primitives, ppp, clear_color()))
         .unwrap_or_default();
     raster.free_textures(textures);
+    textures.clear();
     damage
 }
 
@@ -486,10 +491,9 @@ mod tests {
     }
 
     fn upload(delta: ImageDelta) -> TexturesDelta {
-        TexturesDelta {
-            set: vec![(ID, delta)],
-            free: Vec::new(),
-        }
+        let mut deltas = TexturesDelta::default();
+        deltas.push(ID, delta);
+        deltas
     }
 
     #[test]
@@ -506,8 +510,8 @@ mod tests {
     fn a_texture_sent_while_minimised_is_drawn_after() {
         let mut raster = Rasterizer::default();
         let red = ColorImage::filled([2, 2], Color32::RED);
-        let full = upload(ImageDelta::full(red, TextureOptions::NEAREST));
-        raster_frame(&mut raster, None, &[], 1.0, &full);
+        let mut full = upload(ImageDelta::full(red, TextureOptions::NEAREST));
+        raster_frame(&mut raster, None, &[], 1.0, &mut full);
 
         let mut canvas = Canvas::new(4, 4);
         let quad = [textured_quad(4.0)];
@@ -516,7 +520,7 @@ mod tests {
             Some(&mut canvas),
             &quad,
             1.0,
-            &TexturesDelta::default(),
+            &mut TexturesDelta::default(),
         );
         assert!(
             canvas.pixels.iter().all(|&p| p == 0x00ff_0000),
@@ -531,20 +535,20 @@ mod tests {
         let mut canvas = Canvas::new(4, 4);
         let quad = [textured_quad(4.0)];
         let red = ColorImage::filled([2, 2], Color32::RED);
-        let full = upload(ImageDelta::full(red, TextureOptions::NEAREST));
-        raster_frame(&mut raster, Some(&mut canvas), &quad, 1.0, &full);
+        let mut full = upload(ImageDelta::full(red, TextureOptions::NEAREST));
+        raster_frame(&mut raster, Some(&mut canvas), &quad, 1.0, &mut full);
 
         // The right column of texels turns blue while the window has no area.
         let blue = ColorImage::filled([1, 2], Color32::BLUE);
-        let patch = upload(ImageDelta::partial([1, 0], blue, TextureOptions::NEAREST));
-        raster_frame(&mut raster, None, &[], 1.0, &patch);
+        let mut patch = upload(ImageDelta::partial([1, 0], blue, TextureOptions::NEAREST));
+        raster_frame(&mut raster, None, &[], 1.0, &mut patch);
 
         raster_frame(
             &mut raster,
             Some(&mut canvas),
             &quad,
             1.0,
-            &TexturesDelta::default(),
+            &mut TexturesDelta::default(),
         );
         for (i, &p) in canvas.pixels.iter().enumerate() {
             let want = if i % 4 < 2 { 0x00ff_0000 } else { 0x0000_00ff };

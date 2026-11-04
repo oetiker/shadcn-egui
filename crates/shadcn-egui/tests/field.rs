@@ -50,7 +50,8 @@ fn settle<T>(
     let mut last = None;
     for _ in 0..4 {
         let mut t = None;
-        let out = ctx.run_ui(input(), |ui| t = Some(add(ui)));
+        let mut out = ctx.run_ui(input(), |ui| t = Some(add(ui)));
+        out.textures_delta.clear();
         last = Some((t.expect("ran"), out));
     }
     last.expect("a frame ran")
@@ -371,14 +372,15 @@ fn a_sized_text_field_after_the_growing_one_fits_in_the_first_frame() {
         ..Default::default()
     };
     let mut r = (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING);
-    let _ = ctx.run_ui(input, |ui| {
+    ctx.run_ui(input, |ui| {
         let (mut x, mut y) = (String::new(), String::new());
         Field::new().horizontal().show(ui, |ui| {
             r.0 = ui.add(Input::new(&mut x)).rect;
             r.1 = ui.add(Input::new(&mut y).max_width(100.0)).rect;
             r.2 = ui.add(Button::new("Go")).rect;
         });
-    });
+    })
+    .drop_without_applying_deltas();
     let (a, b, button) = r;
     assert_eq!(b.width(), 100.0, "{b:?}");
     assert_eq!(b.left() - a.right(), 12.0);
@@ -506,12 +508,16 @@ fn invalid_flows_into_the_controls() {
             ("error", || Field::new().error("Required.")),
         ] {
             let invalid = how == "invalid";
-            let mut h = Harness::new_ui(move |ui| {
-                Theme::vega().apply(ui.ctx());
-                let f = field();
-                let f = if invalid { f.invalid(true) } else { f };
-                f.show(ui, plain);
-            });
+            // A bare control has no accessible name (as upstream's demo); names are
+            // not what this test checks.
+            let mut h = Harness::builder()
+                .with_accessibility_check(false)
+                .build_ui(move |ui| {
+                    Theme::vega().apply(ui.ctx());
+                    let f = field();
+                    let f = if invalid { f.invalid(true) } else { f };
+                    f.show(ui, plain);
+                });
             h.run();
             assert_eq!(
                 invalid_node(&h, role),
@@ -519,16 +525,24 @@ fn invalid_flows_into_the_controls() {
                 "{role:?} {how}"
             );
         }
-        let mut h = Harness::new_ui(move |ui| {
-            Theme::vega().apply(ui.ctx());
-            Field::new().invalid(true).show(ui, opted_out);
-        });
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
+        let mut h = Harness::builder()
+            .with_accessibility_check(false)
+            .build_ui(move |ui| {
+                Theme::vega().apply(ui.ctx());
+                Field::new().invalid(true).show(ui, opted_out);
+            });
         h.run();
         assert_eq!(invalid_node(&h, role), None, "{role:?} opted out");
-        let mut h = Harness::new_ui(move |ui| {
-            Theme::vega().apply(ui.ctx());
-            Field::new().show(ui, plain);
-        });
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
+        let mut h = Harness::builder()
+            .with_accessibility_check(false)
+            .build_ui(move |ui| {
+                Theme::vega().apply(ui.ctx());
+                Field::new().show(ui, plain);
+            });
         h.run();
         assert_eq!(invalid_node(&h, role), None, "{role:?} valid");
     }
@@ -590,6 +604,51 @@ fn disabled_fades_label_and_title_only() {
     assert_eq!(faded(&out, "Title"), 0.5);
     assert_eq!(faded(&out, "Helper."), 1.0);
     assert_eq!(faded(&out, "Wrong."), 1.0);
+}
+
+/// A horizontal field whose label grows (`flex-auto`) and has crate
+/// labels after it (flex items that shrink) settles: the leaves keep
+/// their unwrapped width where the row has room for their base sizes, and
+/// the growing label takes the rest, so the row ends at the field's right
+/// edge. The grower once counted at the room it grew into, so the leaves
+/// shrank in the pass after it filled the row and the label grew into
+/// the room that freed in the pass after that: the layout flipped between
+/// two states on every pass and asked for a discard on every frame.
+#[test]
+fn a_horizontal_field_with_labels_after_its_label_settles() {
+    let ctx = egui::Context::default();
+    vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let mut last = Vec::new();
+    let mut discards = Vec::new();
+    for _ in 0..6 {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(600.0, 800.0))),
+            ..Default::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            Field::new().horizontal().show(ui, |ui| {
+                last = vec![
+                    field_label(ui, "Before").rect,
+                    ui.add(Label::new("Plain before")).rect,
+                    ui.add_enabled(false, Checkbox::new(&mut true)).rect,
+                    field_label(ui, "After").rect,
+                    ui.add(Label::new("Plain after")).rect,
+                ];
+            });
+        });
+        discards.push(out.platform_output.request_discard_reasons.len());
+        let _ = common::no_textures(out);
+    }
+    assert_eq!(discards[3..], [0, 0, 0], "{discards:?} {last:?}");
+    let [before, plain_before, _, _, plain_after] = last[..] else {
+        panic!("{last:?}")
+    };
+    // One line each: as tall as the line box, not two.
+    assert_eq!(plain_before.height(), 14.0, "{last:?}");
+    assert_eq!(plain_after.height(), 14.0, "{last:?}");
+    assert!((plain_after.right() - 600.0).abs() < 0.1, "{last:?}");
+    assert!(before.width() > 300.0, "{last:?}");
 }
 
 /// `peer-disabled:opacity-50`: a label after a disabled checkbox fades, a
@@ -706,19 +765,22 @@ fn error_is_an_assertive_alert() {
 #[test]
 fn the_label_names_the_first_control() {
     for label_first in [true, false] {
-        let mut h = Harness::new_ui(move |ui| {
-            Theme::vega().apply(ui.ctx());
-            Field::new().horizontal().show(ui, |ui| {
-                if label_first {
-                    field_label(ui, "Accept");
-                }
-                ui.add(Checkbox::new(&mut false));
-                ui.add(Switch::new(&mut false));
-                if !label_first {
-                    field_label(ui, "Accept");
-                }
+        // A control is unnamed on purpose: the test checks the names itself.
+        let mut h = Harness::builder()
+            .with_accessibility_check(false)
+            .build_ui(move |ui| {
+                Theme::vega().apply(ui.ctx());
+                Field::new().horizontal().show(ui, |ui| {
+                    if label_first {
+                        field_label(ui, "Accept");
+                    }
+                    ui.add(Checkbox::new(&mut false));
+                    ui.add(Switch::new(&mut false));
+                    if !label_first {
+                        field_label(ui, "Accept");
+                    }
+                });
             });
-        });
         h.run();
         h.run();
         let _ = h.get_by_role(Role::Group);
@@ -852,6 +914,26 @@ fn a_button_before_a_text_field_leaves_it_the_label() {
     assert_eq!(button.labelled_by().count(), 0);
 }
 
+/// A choice card names its control by the text inside it, as a `<label>`
+/// around the field does in the browser, also when the field has only a
+/// title and a description and no label of its own.
+#[test]
+fn a_choice_card_names_its_control_by_its_text() {
+    let mut h = Harness::new_ui(|ui| {
+        Theme::vega().apply(ui.ctx());
+        FieldLabel::choice_card().show(ui, |ui| {
+            Field::new()
+                .horizontal()
+                .title("Share")
+                .description("Across devices.")
+                .show(ui, |ui| ui.add(Switch::new(&mut false)));
+        });
+    });
+    h.run();
+    let switch = h.get_by_role(Role::CheckBox).accesskit_node();
+    assert_eq!(switch.label().as_deref(), Some("Share Across devices."));
+}
+
 /// A press on a choice card toggles its switch; the card shows the
 /// switch's checked state from the next pass.
 #[test]
@@ -967,7 +1049,7 @@ fn card_after(
             title: Rect::NOTHING,
         };
         let mut active = false;
-        let out = ctx.run_ui(input, |ui| {
+        let mut out = ctx.run_ui(input, |ui| {
             r.card = FieldLabel::choice_card()
                 .show(ui, |ui| {
                     Field::new().horizontal().show(ui, |ui| {
@@ -983,6 +1065,7 @@ fn card_after(
                 .response
                 .rect;
         });
+        out.textures_delta.clear();
         (r, active, out)
     };
     let mut last = frame(Vec::new());
@@ -1400,7 +1483,12 @@ fn field_slider_snapshot() {
                 }
                 field_description(ui, job);
                 ui.add_space(8.0);
-                ui.add(Slider::new(&mut v, 0.0..=1000.0).step(10.0));
+                // Upstream: `aria-label="Price Range"`.
+                ui.add(
+                    Slider::new(&mut v, 0.0..=1000.0)
+                        .step(10.0)
+                        .label("Price Range"),
+                );
             });
         });
     });

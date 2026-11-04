@@ -197,8 +197,8 @@ icons-hugeicons = ["dep:shadcn-egui-icons-hugeicons"]
 icons-all = ["icons-tabler", "icons-phosphor", "icons-remixicon", "icons-hugeicons"]
 
 [dev-dependencies]
-eframe = "0.34"
-egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
+eframe = "0.37"
+egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
 # Composes the README's settings image from two snapshot renders; already
 # in the tree through egui_kittest.
 image = { version = "0.25", default-features = false }
@@ -213,7 +213,7 @@ shadcn-egui-font-oxanium.workspace = true
 # enables; eframe turns `clipboard` on in any case, so both paths share it)
 # and the surface it shows its pixels on.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-egui-winit = { version = "0.34", default-features = false, features = ["accesskit", "clipboard", "links", "wayland", "x11"] }
+egui-winit = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "links", "wayland", "x11"] }
 softbuffer = { version = "0.4", default-features = false, features = ["x11", "x11-dlopen", "wayland", "wayland-dlopen"] }
 
 # The gallery example's browser entry point; scripts/build-web-gallery.sh

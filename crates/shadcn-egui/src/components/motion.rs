@@ -163,17 +163,18 @@ impl<T: Tween> Run<T> {
 ///     ..Recipe::default()
 /// };
 /// let ctx = egui::Context::default();
-/// let _ = ctx.run_ui(Default::default(), |ui| {
+/// ctx.run_ui(Default::default(), |ui| {
 ///     let width = transition(
 ///         ui.ctx(),
-///         ui.id().with("width"),
+///         ui.scope_id().with("width"),
 ///         120.0,
 ///         &[&indicator],
 ///         Transition::OTHER,
 ///         State::NONE,
 ///     );
 ///     assert_eq!(width, 120.0);
-/// });
+/// })
+/// .drop_without_applying_deltas();
 /// ```
 pub fn transition(
     ctx: &Context,

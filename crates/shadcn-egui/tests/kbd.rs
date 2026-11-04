@@ -131,8 +131,8 @@ fn a_chip_lets_hover_through_to_what_is_under_it() {
             move |ui, s: &mut Hover| {
                 theme.apply(ui.ctx());
                 let under = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(100.0, 60.0));
-                let click = ui.interact(under, egui::Id::new("click"), egui::Sense::click());
-                let plain = ui.interact(under, egui::Id::new("plain"), egui::Sense::hover());
+                let click = ui.interact(under, egui::Id::unique("click"), egui::Sense::click());
+                let plain = ui.interact(under, egui::Id::unique("plain"), egui::Sense::hover());
                 let chip = ui.put(under.shrink(20.0), Kbd::new("K"));
                 *s = Hover {
                     chip: chip.hovered(),

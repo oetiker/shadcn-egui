@@ -57,7 +57,7 @@ impl SettingsApp {
                     .fill(t.palette().background)
                     .inner_margin(egui::Margin::symmetric(32, 12)),
             )
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 layout::row(ui, 16.0, |ui| {
                     label(ui, "Style");
                     ui.add(Select::new("theme_style", &mut self.style, &names));
