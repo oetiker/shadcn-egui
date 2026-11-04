@@ -423,8 +423,18 @@ impl Enter {
     /// animation's transform stands this pass: `zoom-in-*` about `origin`
     /// (CSS `transform-origin`) and the `slide-in-from-*` offset of the
     /// part's recipe stack `layers` under `s` (`s` holds the side the
-    /// panel opened to, `data-side`). egui's input is not transformed: a
-    /// press during the animation finds the panel where it ends.
+    /// panel opened to, `data-side`). The transform is the layer's own
+    /// (`Context::set_transform_layer`), which egui also applies to input:
+    /// a press during the animation finds the panel where it is drawn, as
+    /// Chrome hit-tests through a CSS transform. What the layer painted
+    /// before `from` (the dialog's backdrop) keeps its place: its shapes
+    /// get the inverse transform. Its hit area does not, so for the
+    /// 100 ms a press on the few pixels at the window's edge outside the
+    /// zoomed backdrop does not dismiss the dialog. The layer transform
+    /// is one per layer for all windows: an overlay opening in two
+    /// windows (egui viewports) at once hit-tests in each with the
+    /// transform the other window's last pass set. Once the animation
+    /// has run, the layer's transform is removed.
     pub(crate) fn transform(
         self,
         ctx: &Context,
@@ -435,6 +445,7 @@ impl Enter {
         s: State,
     ) {
         if !self.running() {
+            ctx.set_transform_layer(layer, egui::emath::TSTransform::IDENTITY);
             return;
         }
         let s = s | State::EXPANDED;
@@ -447,10 +458,12 @@ impl Enter {
                                                                      // `translate(offset) scale(scale)` about `origin`.
         let o = origin.to_vec2();
         let t = egui::emath::TSTransform::new(o + offset * left - o * scale, scale);
+        ctx.set_transform_layer(layer, t);
+        // egui applies the layer's transform to all its shapes, also to
+        // the ones painted before `from`: undo it on those.
         ctx.graphics_mut(|g| {
             let list = g.entry(layer);
-            let end = list.next_idx();
-            list.transform_range(from, end, t);
+            list.transform_range(egui::layers::ShapeIdx(0), from, t.inverse());
         });
     }
 }

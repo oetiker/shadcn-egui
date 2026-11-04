@@ -465,8 +465,8 @@ fn select_then_hover(
     let ctx = egui::Context::default();
     let mut out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
     // Past an overlay's open animation (100 ms; a pass without a time is
-    // egui's 1/60 s later): while it plays, the text is drawn scaled but
-    // takes the pointer at its final place.
+    // egui's 1/60 s later): while it plays, the text moves and grows from
+    // one pass to the next, away from the place measured here.
     for _ in 0..12 {
         out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
     }

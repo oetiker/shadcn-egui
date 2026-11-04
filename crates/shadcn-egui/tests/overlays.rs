@@ -1491,6 +1491,86 @@ fn reduced_motion_opens_an_overlay_at_once() {
     }
 }
 
+/// While a popover opens, a press lands where its content is drawn, as
+/// Chrome hit-tests through the CSS transform of the open animation: a
+/// click on the drawn button above its final place clicks it.
+#[test]
+fn a_press_during_the_open_animation_hits_the_drawn_place() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(640.0, 360.0));
+    let opened = std::cell::Cell::new(false);
+    let inside = std::cell::Cell::new(None::<egui::Rect>);
+    let clicked = std::cell::Cell::new(false);
+    let mut page = |ui: &mut egui::Ui| {
+        ui.add_space(40.0);
+        ui.horizontal(|ui| {
+            ui.add_space(40.0);
+            let r = ui.add(Button::new("Open").variant(ButtonVariant::Outline));
+            if !opened.replace(true) {
+                egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r));
+            }
+            Popover::new(&r).show(|ui| {
+                ui.label("Body");
+                let b = ui.add(Button::new("Inside"));
+                inside.set(Some(b.rect));
+                clicked.set(clicked.get() | b.clicked());
+            });
+        });
+    };
+    // The inner button is the only box in the primary colour.
+    let primary = Theme::vega().palette_of(egui::Theme::Light).primary;
+    let mut run = |time: f64, events: Vec<egui::Event>| {
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let out = common::no_textures(ctx.run_ui(input, &mut page));
+        common::rect_shapes(&out)
+            .into_iter()
+            .find(|r| {
+                // The fade scales the colour; its hue stays.
+                let [r, g, b, a] = r.fill.to_srgba_unmultiplied();
+                let w = primary.to_srgba_unmultiplied();
+                a > 0 && [r, g, b].iter().zip(w).all(|(x, y)| x.abs_diff(y) <= 2)
+            })
+            .map(|r| r.rect)
+    };
+    for _ in 0..5 {
+        run(0.0, Vec::new());
+    }
+    // Early in the animation the button is drawn smaller and higher than
+    // its place in the layout.
+    let t = 0.02;
+    let drawn = run(t, Vec::new()).expect("drawn while it opens");
+    let button = inside.get().expect("the button's place");
+    assert!(
+        drawn.width() < button.width() * 0.99,
+        "still zooming: {drawn:?} for {button:?}"
+    );
+    assert!(drawn.top() < button.top(), "drawn above its place");
+    let (top, bottom) = (drawn.left_top(), drawn.right_bottom());
+    // Inside the drawn button, above the button's place in the layout.
+    let at = egui::pos2((top.x + bottom.x) / 2.0, (top.y + button.top()) / 2.0);
+    assert!(at.y < bottom.y);
+    run(t, vec![egui::Event::PointerMoved(at)]);
+    let button_event = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    run(t, vec![button_event(true)]);
+    run(t, vec![button_event(false)]);
+    assert!(
+        clicked.get(),
+        "a press at {at:?} on the drawn button clicks it"
+    );
+}
+
 /// egui measures a popup, and a modal shown for the first time, in a
 /// sizing pass that draws nothing, at a place egui guesses: the panel's
 /// box is not drawn there either, also under reduced motion, where no
