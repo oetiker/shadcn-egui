@@ -18,14 +18,14 @@ The helpers live in `shadcn_egui::layout`.
 | a `.card` block | `shadcn_egui::components::card::Card::new().show(ui, \|ui\| ...)`, with `.size(..)` and `.footer(..)` |
 | `w-full max-w-*` on a custom-painted widget, `max-w-[calc(100%-Npx)]` on a floating panel | `shadcn_egui::layout::capped_width(ui, max, content_min)`, `layout::overlay_width(ctx, max, inset, content_min)`; allocate with `layout::allocate_overflowing` so a widget wider than its room overflows instead of widening its column |
 | label + control form row | `shadcn_egui::components::field::Field::new().horizontal().label("Label").show(ui, \|ui\| ...)` (the label takes the room the control leaves); a label over its control: `Field::new().label("Label").show(..)` |
-| app shell (sidebar/topbar/main) | `SidePanel` / `TopBottomPanel` / `CentralPanel` |
+| app shell (sidebar/topbar/main) | `egui::Panel::left` / `right` / `top` / `bottom` and `CentralPanel` |
 | responsive breakpoints (`sm:`, `md:`, `@container`) | branch on `shadcn_egui::layout::window_at_least(ui.ctx(), px)` (media query) or `layout::container_at_least(ui, px)` (container query); components apply their own |
 | CSS Grid tracks | `StripBuilder` rows × cells (no named lines) |
 
 Every gap `N` here is a named constant from the design (Tailwind `gap-N` is
 N×4 px); see the hard rules in SKILL.md. `StripBuilder` comes from
 `egui_extras`, which shadcn-egui does not depend on; an app that uses it adds
-`egui_extras = { version = "0.34", default-features = false }`.
+`egui_extras = { version = "0.37", default-features = false }`.
 
 `StripBuilder` puts `ui.spacing().item_spacing.x` between its cells
 (`.y` in a vertical strip), 8 px by default, where a grid or flex row

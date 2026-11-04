@@ -64,7 +64,7 @@ fills the spans of any triangle whose three vertices share one color and
 one UV, and blends the rest per pixel.
 
 - **Solid-fill fast path: key it on `egui::epaint::WHITE_UV`, never a
-  literal.** epaint 0.34 tags solid fills with `WHITE_UV = (0.0, 0.0)`; older
+  literal.** epaint 0.37 tags solid fills with `WHITE_UV = (0.0, 0.0)`; older
   code and blog posts test `(0.5, 0.5)`. With the wrong constant the fast path
   silently never fires and every fill, including the full-window background,
   takes the ~30x slower textured path (barycentrics + UV interp + sample +
@@ -178,7 +178,7 @@ one UV, and blends the rest per pixel.
   ```rust
   fn frame(ctx: &egui::Context, raw_input: egui::RawInput) -> egui::FullOutput {
       ctx.run_ui(raw_input, |ui| {
-          egui::CentralPanel::default().show_inside(ui, |ui| {
+          egui::CentralPanel::default().show(ui, |ui| {
               ui.label("Hello");
           });
       })
@@ -211,7 +211,7 @@ one UV, and blends the rest per pixel.
   feature on, so every eframe app has it, and Cargo unifies features: an app
   that also links eframe (the gallery, for its wgpu path) keeps the feature
   whatever its own `egui-winit` line says, and the gallery therefore names it
-  too. An app without eframe can drop it, `egui-winit = { version = "0.34",
+  too. An app without eframe can drop it, `egui-winit = { version = "0.37",
   default-features = false, features = ["links", "wayland", "x11"] }`, and
   use a clipboard crate with its own Wayland connection (`wl-clipboard-rs`).
   Check with `cargo tree -i smithay-clipboard`.

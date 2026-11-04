@@ -272,7 +272,7 @@ back, Right and Down forward) whatever its orientation.
   the widget's id. A widget scrolled away or not shown keeps time: shown
   again after the duration, it shows the new value at once.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`;
-  a role egui's `WidgetType` lacks (`alert`, `alertdialog`, `navigation`,
+  a role of upstream's own (`alert`, `alertdialog`, `navigation`,
   `group`) goes through `shared::widget_info_with_role(&resp, role, ..)`.
   A part whose upstream element has no disabled state (a `<label>`, a
   `<div>`, `role="status"`) reports none in a disabled `Ui`

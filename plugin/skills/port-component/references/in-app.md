@@ -21,7 +21,7 @@ the crate.
   `RecipeBox` for a part's fill, border, shadow, ring and outline,
   `opacity`, `part_opacity` and `part_painter` for a part's fade, `part_ui`
   and `content_ui` for a crate part or caller content drawn through egui,
-  `widget_info_with_role` for an accessible role egui's `WidgetType` lacks
+  `widget_info_with_role` for an accessible role of upstream's own
   (it reports no disabled state in a disabled `Ui` for a role ARIA 1.2
   gives none, such as `alert` or `status`, and keeps it for `group`),
   `hit_area` for a hit target larger than the part's box

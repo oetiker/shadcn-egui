@@ -76,7 +76,7 @@ impl SettingsApp {
 
 impl eframe::App for SettingsApp {
     // eframe hands us a root &mut Ui; settings_ui fills it via a
-    // CentralPanel::show_inside, so no ctx-level panel management is needed.
+    // CentralPanel::show, so no ctx-level panel management is needed.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Apply before anything reads the theme, and only when a toolbar
         // value changed, never every frame.

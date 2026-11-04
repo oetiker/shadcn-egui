@@ -33,11 +33,11 @@ Use the crate version that matches this skill: the `version` in
 `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`. Enable only the `font-*`
 and `icons-*` features the design uses (`references/presets.md` lists them).
 The crate does not re-export egui, so the app depends on the egui version the
-crate uses, `egui = "0.34"` for 0.4:
+crate uses, `egui = "0.37"` for 0.8:
 
 ```bash
 cargo add shadcn-egui@<version> --features font-geist,icons-hugeicons
-cargo add egui@0.34
+cargo add egui@0.37
 ```
 
 A path or git dependency takes the features in `Cargo.toml`:
@@ -259,7 +259,7 @@ fn delete(ui: &mut egui::Ui) -> egui::Response {
 ## Decompose and map
 
 1. Decompose the design top-down: app shell, panels
-   (`SidePanel`, `TopBottomPanel`, `CentralPanel`), the layout intent of each
+   (`egui::Panel::left`/`right`/`top`/`bottom`, `CentralPanel`), the layout intent of each
    region (stack, row, grid, space-between), components with their variants,
    token deviations (usually none).
 2. Map each part with the references:
@@ -308,7 +308,7 @@ dev-only: `egui_kittest` and `wgpu` never reach a shipped binary.
 
 ```toml
 [dev-dependencies]
-egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
+egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
 ```
 
 ```rust,ignore
@@ -331,6 +331,13 @@ fn settings_screen_dark() {
 `preset.apply(&h.ctx)`) there once, before `h.run()`, and set the mode with
 the builder's `.with_theme(..)`. Applying it inside `build_ui` would apply it
 every frame, which the hard rules forbid.
+
+`h.run()` panics when a control has no accessible name (egui_kittest 0.37
+checks every button, link, text field, checkbox, switch, slider, select and
+option). Name it as on the web page: its text, a `Field` label, `.label(..)`,
+or the text of its choice card.
+Only a test of a bare control, without the label the screen gives it, turns
+the check off with `Harness::builder().with_accessibility_check(false)`.
 
 Each test holds one harness that takes snapshots. A second harness in the
 same test (for example dark and light) fails with "Multiple SnapshotResults
@@ -379,8 +386,9 @@ See `references/gotchas.md` for the reasons.
   of crate code.
 - Every custom-painted widget reports itself with `resp.widget_info(..)`
   (role, label, enabled, selected), or screen readers see nothing; a role
-  egui's `WidgetType` lacks goes through
-  `shadcn_egui::components::shared::widget_info_with_role`.
+  of its own (upstream's `role="alert"`, `navigation`, `group`) goes
+  through `shadcn_egui::components::shared::widget_info_with_role`, which
+  reports the disabled state as the browser does for that role.
 
 ## Acceptance bar
 
