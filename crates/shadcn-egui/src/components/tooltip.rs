@@ -128,7 +128,8 @@ impl<'a> Tooltip<'a> {
             Enter::mark(ui, enter_id);
             // The popup's Ui carries egui's fade: this opacity replaces it.
             ui.set_opacity(enter.opacity());
-            let slot = RecipeBox::reserve(ui);
+            // egui's sizing pass draws nothing: no box either.
+            let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
             ui.set_max_width(max_w - pad_l - pad_r);
             let inner = ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
                 // The content's `text-*` and text colour reach what it holds.
@@ -147,6 +148,9 @@ impl<'a> Tooltip<'a> {
             (inner.inner, slot)
         })?;
         let (inner, slot) = shown.inner;
+        let Some(slot) = slot else {
+            return Some(InnerResponse::new(inner, shown.response));
+        };
         let (layer, area) = (shown.response.layer_id, shown.response.rect);
         panel.paint_reserved(ctx, layer, slot, area);
         // Without an arrow, floating-ui's origin for `align = "center"`.

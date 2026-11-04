@@ -728,7 +728,10 @@ impl RecipeBox {
     /// (top, right, bottom, left) plus the border widths, for a panel whose
     /// size egui learns only while it runs (a popup, a modal). Its first
     /// call in the panel's closure is [`RecipeBox::reserve`]; after `show`,
-    /// [`RecipeBox::paint_reserved`] paints the box under the content.
+    /// [`RecipeBox::paint_reserved`] paints the box under the content. In
+    /// egui's sizing pass (the first show of an area, the first pass of an
+    /// open popup) the content is invisible: reserve nothing then, or the
+    /// box shows alone at the place egui guessed.
     ///
     /// ```
     /// use shadcn_egui::components::shared::RecipeBox;
@@ -744,13 +747,15 @@ impl RecipeBox {
     ///         panel
     ///             .frame([16.0; 4])
     ///             .show(ui, |ui| {
-    ///                 let slot = RecipeBox::reserve(ui);
+    ///                 let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
     ///                 ui.label("Content");
     ///                 slot
     ///             })
     ///             .inner
     ///     });
-    ///     panel.paint_reserved(ctx, shown.response.layer_id, shown.inner, shown.response.rect);
+    ///     if let Some(slot) = shown.inner {
+    ///         panel.paint_reserved(ctx, shown.response.layer_id, slot, shown.response.rect);
+    ///     }
     /// }
     /// ```
     pub fn frame(&self, padding: [f32; 4]) -> egui::Frame {

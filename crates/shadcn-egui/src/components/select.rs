@@ -492,7 +492,8 @@ impl Widget for Select<'_> {
                     Enter::mark(ui, popup_id);
                     // The popup's Ui carries egui's fade: this opacity replaces it.
                     ui.set_opacity(enter.opacity());
-                    let slot = RecipeBox::reserve(ui);
+                    // egui's sizing pass draws nothing: no box either.
+                    let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     // The rows sit in the group, the group in the viewport,
@@ -632,12 +633,12 @@ impl Widget for Select<'_> {
                 }
                 Popup::close_id(&ctx, popup_id);
             }
-            if let Some(list) = list {
+            if let Some((list, slot)) = list.and_then(|l| l.inner.map(|slot| (l, slot))) {
                 let (layer, list_rect) = (list.response.layer_id, list.response.rect);
-                panel.paint_reserved(&ctx, layer, list.inner, list_rect);
+                panel.paint_reserved(&ctx, layer, slot, list_rect);
                 // bits' select content aligns to the trigger's start.
                 let (side, origin) = side_and_origin(list_rect, rect, egui::Align::Min);
-                enter.transform(&ctx, layer, list.inner, origin, &l, gs | side);
+                enter.transform(&ctx, layer, slot, origin, &l, gs | side);
             }
         }
         if !Popup::is_id_open(&ctx, popup_id) {

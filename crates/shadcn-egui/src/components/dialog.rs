@@ -172,7 +172,8 @@ impl<'a> Dialog<'a> {
             .show(ctx, |ui| {
                 Enter::mark(ui, self.id);
                 ui.multiply_opacity(enter.opacity());
-                let slot = RecipeBox::reserve(ui);
+                // egui's sizing pass draws nothing: no box either.
+                let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
                 let parts = DialogContext {
@@ -201,9 +202,11 @@ impl<'a> Dialog<'a> {
         let dismissed = resp.backdrop_response.clicked() || resp.should_close();
         let (inner, close, slot) = resp.inner;
         let (layer, rect) = (resp.response.layer_id, resp.response.rect);
-        panel.paint_reserved(ctx, layer, slot, rect);
-        // `transform-origin` is the panel's centre.
-        enter.transform(ctx, layer, slot, rect.center(), &l, g);
+        if let Some(slot) = slot {
+            panel.paint_reserved(ctx, layer, slot, rect);
+            // `transform-origin` is the panel's centre.
+            enter.transform(ctx, layer, slot, rect.center(), &l, g);
+        }
         if close || dismissed {
             *open = false;
         }

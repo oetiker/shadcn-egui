@@ -1253,8 +1253,9 @@ struct Drawn {
 }
 
 /// An overlay opened at time 0 (its first passes size and draw it), then
-/// one pass at each of `times`. `reduced` turns motion off.
-fn enter_passes(overlay: Overlay, reduced: bool, times: &[f64]) -> Vec<Drawn> {
+/// one pass at each of `times`: what the opening passes drew, and what
+/// the timed ones drew. `reduced` turns motion off.
+fn enter_passes(overlay: Overlay, reduced: bool, times: &[f64]) -> (Vec<Drawn>, Vec<Drawn>) {
     let ctx = egui::Context::default();
     Theme::vega().apply(&ctx);
     ctx.set_theme(egui::Theme::Light);
@@ -1331,16 +1332,17 @@ fn enter_passes(overlay: Overlay, reduced: bool, times: &[f64]) -> Vec<Drawn> {
     };
     // Open it: the pointer moves onto the tooltip's trigger once the
     // first pass placed it.
-    run(0.0, Vec::new());
+    let mut opening = vec![run(0.0, Vec::new())];
     let hover = trigger
         .get()
         .map(|r| vec![egui::Event::PointerMoved(r.center())])
         .unwrap_or_default();
-    run(0.0, hover);
+    opening.push(run(0.0, hover));
     for _ in 0..3 {
-        run(0.0, Vec::new());
+        opening.push(run(0.0, Vec::new()));
     }
-    times.iter().map(|&t| run(t, Vec::new())).collect()
+    let timed = times.iter().map(|&t| run(t, Vec::new())).collect();
+    (opening, timed)
 }
 
 /// An overlay opens as upstream's does (tw-animate-css `animate-in
@@ -1356,7 +1358,7 @@ fn an_overlay_opens_with_upstreams_enter_animation() {
     for overlay in Overlay::ALL {
         let d = overlay.duration();
         let half = d / 2.0;
-        let passes = enter_passes(overlay, false, &[half, d, 1.0, 2.0]);
+        let (_, passes) = enter_passes(overlay, false, &[half, d, 1.0, 2.0]);
         let p = Easing::Ease.at(0.5);
         let (r_half, c_half) = passes[0].panel.expect("drawn at half time");
         let (r_end, c_end) = passes[1].panel.expect("drawn at the end");
@@ -1418,7 +1420,7 @@ fn an_overlay_opens_with_upstreams_enter_animation() {
 #[test]
 fn reduced_motion_opens_an_overlay_at_once() {
     for overlay in Overlay::ALL {
-        let passes = enter_passes(overlay, true, &[0.0, 1.0]);
+        let (_, passes) = enter_passes(overlay, true, &[0.0, 1.0]);
         let first = passes[0]
             .panel
             .unwrap_or_else(|| panic!("{overlay:?} drawn {:?}", overlay.fill()));
@@ -1426,6 +1428,24 @@ fn reduced_motion_opens_an_overlay_at_once() {
         assert_eq!(first, settled, "{overlay:?}");
         if let Overlay::Dialog = overlay {
             assert_eq!(passes[0].backdrop, passes[1].backdrop, "backdrop at once");
+        }
+    }
+}
+
+/// egui measures a popup, and a modal shown for the first time, in a
+/// sizing pass that draws nothing, at a place egui guesses: the panel's
+/// box is not drawn there either, also under reduced motion, where no
+/// fade hides it. Every pass draws the panel at its place or not at all.
+#[test]
+fn an_opening_overlay_draws_its_box_only_in_place() {
+    for overlay in Overlay::ALL {
+        let (opening, timed) = enter_passes(overlay, true, &[1.0]);
+        let settled = timed[0].panel.expect("settled").0;
+        for (n, drawn) in opening.iter().enumerate() {
+            // A box of the panel's size (the trigger's own box is smaller).
+            if let Some((rect, _)) = drawn.panel.filter(|(r, _)| r.size() == settled.size()) {
+                assert_eq!(rect, settled, "{overlay:?}: opening pass {n}");
+            }
         }
     }
 }

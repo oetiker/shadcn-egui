@@ -129,7 +129,8 @@ impl<'a> Popover<'a> {
                 Enter::mark(ui, id);
                 // The popup's Ui carries egui's fade: this opacity replaces it.
                 ui.set_opacity(enter.opacity());
-                let slot = RecipeBox::reserve(ui);
+                // egui's sizing pass draws nothing: no box either.
+                let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
                 if let Some(w) = inner_width {
                     ui.set_width(w);
                 }
@@ -159,9 +160,11 @@ impl<'a> Popover<'a> {
             shown.response.layer_id,
             shown.response.rect,
         );
-        panel.paint_reserved(ctx, layer, slot, rect);
-        let (side, origin) = side_and_origin(rect, self.trigger.rect, egui::Align::Min);
-        enter.transform(ctx, layer, slot, origin, &l, g | side);
+        if let Some(slot) = slot {
+            panel.paint_reserved(ctx, layer, slot, rect);
+            let (side, origin) = side_and_origin(rect, self.trigger.rect, egui::Align::Min);
+            enter.transform(ctx, layer, slot, origin, &l, g | side);
+        }
         Some(inner)
     }
 }
