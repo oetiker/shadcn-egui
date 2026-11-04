@@ -464,7 +464,10 @@ fn select_then_hover(
 ) -> Option<String> {
     let ctx = egui::Context::default();
     let mut out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
-    for _ in 0..2 {
+    // Past an overlay's open animation (100 ms; a pass without a time is
+    // egui's 1/60 s later): while it plays, the text is drawn scaled but
+    // takes the pointer at its final place.
+    for _ in 0..12 {
         out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
     }
     let r = text_bounds(&out, needle);

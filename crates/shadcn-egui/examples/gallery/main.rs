@@ -338,6 +338,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 wgpu_options: wgpu_options(
                     std::env::var_os(ALLOW_SOFTWARE).is_some_and(|v| v == "1"),
                 ),
+                // eframe 0.37 asks the system for a font for any char the
+                // theme's fonts lack; the CPU path, the browser build and
+                // the snapshot tests draw with the theme's fonts alone, so
+                // this one does too, and all draw the same picture.
+                system_font_fallback: false,
                 ..Default::default()
             },
             Box::new(move |cc| {

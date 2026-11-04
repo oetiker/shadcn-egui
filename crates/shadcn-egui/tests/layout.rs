@@ -1588,9 +1588,10 @@ fn a_card_clips_its_footer_at_its_box() {
 /// pass.
 ///
 /// The stack is as wide as its label unwrapped (242.84375 in vega), and
-/// so is the label's own rect: epaint 0.37 wraps at the width it is given
-/// (0.34 rounded it to whole points) and reports the galley no wider
-/// than that width rounded down to its GUI grid (`Galley::round_output_to_gui`).
+/// so is the label's own rect: epaint rounds the wrap width to whole
+/// points (243 here) and reports the galley no wider than that, on its GUI
+/// grid (`Galley::round_output_to_gui`), which this width already sits on.
+/// Under egui 0.34 the label measured 243.0625 and was cut to 243.
 #[test]
 fn a_card_fills_a_column_and_takes_its_content_width_when_unbounded() {
     let (passes, r) = settled(&vega(), Host::Screen, &|ui, _, out| {
