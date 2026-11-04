@@ -180,12 +180,14 @@ impl Widget for Switch<'_> {
             ));
             thumb_box.paint(&thumb_painter, thumb_rect);
         }
-        // No label of its own: name it with `labelled_by(label.id)`, which
-        // an own label, even an empty one, would override.
+        // bits' switch root: `role="switch"` with `aria-checked`; egui
+        // reports `selected` as the checked state. No label of its own: name
+        // it with `labelled_by(label.id)`, which an own label, even an empty
+        // one, would override.
         resp.widget_info(|| egui::WidgetInfo {
             enabled,
             selected: Some(on),
-            ..egui::WidgetInfo::new(egui::Role::CheckBox)
+            ..egui::WidgetInfo::new(egui::Role::Switch)
         });
         // `data-disabled:cursor-not-allowed`, on the hit area as on its
         // `::after`.

@@ -118,9 +118,10 @@ fn every_widget_on_every_tab_is_exposed_to_accessibility() {
     });
     with_tab(1, |h| {
         // Switches and the checkbox carry no text: their row label names them.
-        for l in ["Marketing emails", "Security emails", "Weekly digest"] {
-            h.get_by_role_and_label(Role::CheckBox, l);
+        for l in ["Marketing emails", "Security emails"] {
+            h.get_by_role_and_label(Role::Switch, l);
         }
+        h.get_by_role_and_label(Role::CheckBox, "Weekly digest");
         for l in ["Active", "Beta", "Deprecated", "Optional"] {
             h.get_by_role_and_label(Role::Label, l);
         }

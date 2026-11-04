@@ -787,14 +787,15 @@ fn the_label_names_the_first_control() {
         let label = h
             .get_by_role_and_label(Role::Label, "Accept")
             .accesskit_node();
-        let boxes = h.get_all_by_role(Role::CheckBox).collect::<Vec<_>>();
-        let named: Vec<_> = boxes[0]
+        let checkbox = h.get_by_role(Role::CheckBox);
+        let named: Vec<_> = checkbox
             .accesskit_node()
             .labelled_by()
             .map(|n| n.id())
             .collect();
         assert_eq!(named, vec![label.id()]);
-        assert_eq!(boxes[1].accesskit_node().labelled_by().count(), 0);
+        let switch = h.get_by_role(Role::Switch);
+        assert_eq!(switch.accesskit_node().labelled_by().count(), 0);
     }
 }
 
@@ -930,7 +931,7 @@ fn a_choice_card_names_its_control_by_its_text() {
         });
     });
     h.run();
-    let switch = h.get_by_role(Role::CheckBox).accesskit_node();
+    let switch = h.get_by_role(Role::Switch).accesskit_node();
     assert_eq!(switch.label().as_deref(), Some("Share Across devices."));
 }
 

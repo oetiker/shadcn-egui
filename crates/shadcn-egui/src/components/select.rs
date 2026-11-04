@@ -473,6 +473,16 @@ impl Widget for Select<'_> {
                 .gap(side_offset)
                 .frame(frame)
                 .show(|ui| {
+                    // bits' content is `role="listbox"`; egui gives the
+                    // popup's Ui the `dialog` role.
+                    let popup = ui
+                        .stack()
+                        .iter()
+                        .find(|s| s.kind() == Some(egui::UiKind::Popup))
+                        .map_or(ui.unique_id(), |s| s.unique_id);
+                    ui.ctx().accesskit_node_builder(popup, |node| {
+                        node.set_role(egui::accesskit::Role::ListBox);
+                    });
                     let slot = RecipeBox::reserve(ui);
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
@@ -582,13 +592,19 @@ impl Widget for Select<'_> {
                                                 );
                                             }
                                         }
+                                        // bits' item: `role="option"` with
+                                        // `aria-selected`. egui reports a
+                                        // selected widget as toggled, so the
+                                        // state goes to `selected` instead.
                                         r.widget_info(|| {
-                                            egui::WidgetInfo::selected(
-                                                egui::Role::Button,
+                                            egui::WidgetInfo::labeled(
+                                                egui::Role::ListBoxOption,
                                                 true,
-                                                i == current,
                                                 self.options[i],
                                             )
+                                        });
+                                        ctx.accesskit_node_builder(r.id, |node| {
+                                            node.set_selected(i == current);
                                         });
                                     }
                                 });

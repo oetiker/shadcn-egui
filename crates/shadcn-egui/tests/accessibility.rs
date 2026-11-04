@@ -70,7 +70,7 @@ fn aria_invalid_reaches_the_accessibility_node() {
         ("checkbox", Role::CheckBox, |ui, yes| {
             ui.add(Checkbox::new(&mut false).invalid(yes));
         }),
-        ("switch", Role::CheckBox, |ui, yes| {
+        ("switch", Role::Switch, |ui, yes| {
             ui.add(Switch::new(&mut false).invalid(yes));
         }),
         ("select", Role::ComboBox, |ui, yes| {
@@ -188,7 +188,7 @@ fn a_disabled_ui_disables_every_leaf() {
         ),
         (
             "switch",
-            Err(Role::CheckBox),
+            Err(Role::Switch),
             |ui, s, how| {
                 put(ui, how, Switch::new(&mut s.on));
             },
@@ -331,7 +331,7 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
         (
             "card",
             |ui| Card::new().show(ui, |ui| card_header(ui, "Title", "Description")),
-            &[Role::Pane, Role::Label],
+            &[Role::GenericContainer, Role::Label],
             &[],
         ),
         (
@@ -454,7 +454,7 @@ fn a_disabled_ui_disables_no_part_without_a_disabled_state() {
                 });
             },
             &[Role::Label],
-            &[Role::CheckBox],
+            &[Role::Switch],
         ),
         (
             "fieldset",

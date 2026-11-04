@@ -337,7 +337,8 @@ impl<'a> Card<'a> {
 
         let response = crate::layout::end_item(ui, frame, outer, Sense::hover());
         crate::components::shared::widget_info_never_disabled(&response, || {
-            WidgetInfo::new(Role::Pane)
+            // card.svelte is a plain `div`: Chrome's `generic` role.
+            WidgetInfo::new(Role::GenericContainer)
         });
         result
     }

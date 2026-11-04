@@ -1488,10 +1488,15 @@ fn the_card_node_holds_its_sections() {
     use egui_kittest::kittest::{NodeT, Queryable};
     let mut h = egui_kittest::Harness::new_ui(|ui| demo_card(ui, CardSize::Default, true));
     h.run();
-    let card = h
-        .get_by_role(egui::accesskit::Role::Pane)
-        .accesskit_node()
-        .id();
+    // Card.svelte is a plain `div` (`generic`). egui's own Ui nodes are
+    // generic too but have no bounds; the card's node has its rect.
+    let cards: Vec<_> = h
+        .query_all(egui_kittest::kittest::By::new().predicate(|n| {
+            n.role() == egui::accesskit::Role::GenericContainer && n.data().bounds().is_some()
+        }))
+        .collect();
+    assert_eq!(cards.len(), 1, "one card node");
+    let card = cards[0].accesskit_node().id();
     for label in ["Notifications", "You have 3 unread messages.", "Save"] {
         let node = h.get_by_label(label);
         let mut up = node.parent();
@@ -2218,7 +2223,7 @@ fn switch_track_size_and_hit_area() {
     }
     let mut h = switch_harness(true, false);
     let track = h.state().rect;
-    let node = h.get_by_role(egui::accesskit::Role::CheckBox).rect();
+    let node = h.get_by_role(egui::accesskit::Role::Switch).rect();
     assert_eq!(
         node.expand2(egui::vec2(-12.0, -8.0)),
         track,
@@ -2302,7 +2307,7 @@ fn disabled_switch_ignores_click_and_space() {
     let track = h.state().rect;
     click_switch(&mut h, track.center());
     assert!(h.state().on, "disabled switch toggled by click");
-    h.get_by_role(egui::accesskit::Role::CheckBox).focus();
+    h.get_by_role(egui::accesskit::Role::Switch).focus();
     h.run();
     h.key_press(egui::Key::Space);
     h.run();
@@ -2316,7 +2321,7 @@ fn switch_toggles_on_click_space_and_enter() {
     let track = h.state().rect;
     click_switch(&mut h, track.center());
     assert!(h.state().on, "click did not switch on");
-    h.get_by_role(egui::accesskit::Role::CheckBox).focus();
+    h.get_by_role(egui::accesskit::Role::Switch).focus();
     h.run();
     h.key_press(egui::Key::Space);
     h.run();
@@ -2330,7 +2335,7 @@ fn switch_toggles_on_click_space_and_enter() {
 fn switch_reports_toggled_state() {
     use egui_kittest::kittest::{NodeT, Queryable};
     let h = switch_harness(true, true);
-    let node = h.get_by_role(egui::accesskit::Role::CheckBox);
+    let node = h.get_by_role(egui::accesskit::Role::Switch);
     assert_eq!(
         node.accesskit_node().toggled(),
         Some(egui::accesskit::Toggled::True)

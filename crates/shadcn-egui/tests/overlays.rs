@@ -498,6 +498,33 @@ fn select_opens_and_a_click_chooses() {
     );
 }
 
+/// bits' list is a `listbox` of `option`s; the chosen one is
+/// `aria-selected`, none is toggled.
+#[test]
+fn select_options_are_listbox_options() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::NodeT;
+    let mut h = select_harness(2);
+    h.run();
+    open_select(&mut h);
+    for (i, fruit) in FRUITS.iter().enumerate() {
+        let option = h.get_by_role_and_label(Role::ListBoxOption, fruit);
+        let node = option.accesskit_node();
+        assert_eq!(node.is_selected(), Some(i == 2), "{fruit}");
+        assert_eq!(node.toggled(), None, "{fruit}");
+        // Up to the window: one listbox and no dialog (egui's popup role).
+        let mut roles = Vec::new();
+        let mut up = option.parent();
+        while let Some(p) = up {
+            roles.push(p.accesskit_node().role());
+            up = p.parent();
+        }
+        let lists = roles.iter().filter(|&&r| r == Role::ListBox).count();
+        assert_eq!(lists, 1, "{fruit}: {roles:?}");
+        assert!(!roles.contains(&Role::Dialog), "{fruit}: {roles:?}");
+    }
+}
+
 #[test]
 fn select_keyboard_down_enter_chooses_the_next_option() {
     let mut h = select_harness(0);
