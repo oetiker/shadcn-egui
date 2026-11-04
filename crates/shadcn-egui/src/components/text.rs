@@ -554,9 +554,7 @@ impl TextLook {
                 .sections
                 .first()
                 .map_or(self.size, |s| s.format.font_id.size);
-            let space = job.sections.first().map_or(0.0, |s| {
-                ctx.fonts_mut(|f| f.glyph_width(&s.format.font_id, ' '))
-            });
+            let space = adv.space;
             let mut first = 0;
             for (p, para) in chars.split(|c| *c == '\n').enumerate() {
                 // Each char's left and right edge on the paragraph's line in
@@ -634,14 +632,11 @@ impl TextLook {
         // the section's leading space adds the rest and the kerning.
         // egui draws outlines at the coordinates it is given; Chrome at
         // `opsz` = the font size where the face has the axis.
-        let opsz: Vec<bool> = job
+        let formats: Vec<egui::TextFormat> = job
             .sections
             .iter()
             .zip(faces)
-            .map(|(s, face)| {
-                face.as_deref()
-                    .is_some_and(|d| shape::needs_opsz(d, s.format.coords.as_ref()))
-            })
+            .map(|(s, face)| shape::drawn_format(&s.format, face.as_deref()))
             .collect();
         let mut out = LayoutJob {
             sections: Vec::with_capacity(n),
@@ -668,13 +663,19 @@ impl TextLook {
                 out.wrap.break_anywhere = t.break_anywhere;
             }
         }
-        // The original char behind each char of `out`, for the row widths,
-        // and the exact x of its pen on its line, in points.
+        // Per section of `out` (a char, or a char and its marks): the
+        // caller's char it starts at (`None` for an inserted `\n`), the
+        // exact x of its pen on its line and Chrome's width, in points.
+        // `drawn` holds each char of `out` and its section.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);
         let mut pens: Vec<f32> = Vec::with_capacity(n);
+        let mut widths: Vec<f32> = Vec::with_capacity(n);
+        let mut drawn: Vec<(char, usize)> = Vec::with_capacity(n + 8);
         let mut pen = 0.0;
         let mut line_start = true;
         let mut prev_section = usize::MAX;
+        // egui's advance and Chrome's of the section before.
+        let (mut egui_w, mut chrome_w) = (0.0, 0.0);
         for (i, &c) in chars.iter().enumerate() {
             let si = section_of.get(i).copied().unwrap_or(0);
             let section = &job.sections[si];
@@ -687,9 +688,23 @@ impl TextLook {
                     byte_range: ByteIndex(at)..ByteIndex(at + 1),
                     format: job.sections[section_of[i - 1]].format.clone(),
                 });
+                drawn.push(('\n', out.sections.len() - 1));
                 origin.push(None);
                 pens.push(0.0);
+                widths.push(0.0);
                 line_start = true;
+            }
+            // A mark joins the section of its base: egui shapes them
+            // together, as Chrome does (it may compose them into one glyph).
+            if !line_start && si == prev_section && shape::attaches(Some(chars[i - 1]), c) {
+                out.text.push(c);
+                let last = out.sections.len() - 1;
+                out.sections[last].byte_range.end = ByteIndex(out.text.len());
+                drawn.push((c, last));
+                egui_w += adv.egui[i];
+                chrome_w += adv.chrome[i];
+                widths[last] += adv.chrome[i];
+                continue;
             }
             // egui's job draws a soft hyphen as its hyphen where it ends a
             // line, and every char Chrome draws as nothing (a soft hyphen
@@ -704,17 +719,13 @@ impl TextLook {
             let mut gap = if line_start {
                 0.0
             } else {
-                adv.chrome[i - 1] - adv.egui[i - 1] + adv.kern[i]
+                chrome_w - egui_w + adv.kern[i]
             };
             if si != prev_section {
                 gap += section.leading_space;
                 prev_section = si;
             }
-            let mut format = section.format.clone();
-            format.extra_letter_spacing = 0.0;
-            if opsz[si] {
-                format.coords.push(b"opsz", format.font_id.size);
-            }
+            let format = formats[si].clone();
             let at = out.text.len();
             out.text.push(c);
             out.sections.push(egui::text::LayoutSection {
@@ -722,15 +733,14 @@ impl TextLook {
                 byte_range: ByteIndex(at)..ByteIndex(out.text.len()),
                 format,
             });
+            drawn.push((c, out.sections.len() - 1));
             origin.push(Some(i));
-            // egui's own pen: the advance it gives the char before, then
+            // egui's own pen: the advance it gives the section before, then
             // the gap (Chrome's advance and the kerning).
-            pen = if line_start {
-                gap
-            } else {
-                pen + adv.egui[i - 1] + gap
-            };
+            pen = if line_start { gap } else { pen + egui_w + gap };
             pens.push(pen);
+            widths.push(adv.chrome[i]);
+            (egui_w, chrome_w) = (adv.egui[i], adv.chrome[i]);
             line_start = c == '\n';
         }
         if out.sections.is_empty() {
@@ -743,29 +753,53 @@ impl TextLook {
         // (the caret, the selection and the row width follow it). Unless
         // egui justified the row (and placed it again), each glyph keeps
         // its exact pen, and a row ends at Chrome's right edge of its last
-        // char.
+        // char. egui gives a char of its own section one glyph, and a
+        // cluster one per char (the continuation glyphs of a composed one),
+        // but a mark no face has none and a char the face decomposes more
+        // than one: each glyph finds its char, and so its section, by the
+        // char it shows.
         let g = Arc::make_mut(&mut galley);
-        let mut at = 0;
+        let mut next = 0;
         let mut right = f32::NEG_INFINITY;
         for placed in &mut g.rows {
-            let glyphs = placed.row.glyphs.len();
-            if !justify {
-                let row = Arc::make_mut(&mut placed.row);
-                for (k, glyph) in row.glyphs.iter_mut().enumerate() {
-                    if let Some(&x) = pens.get(at + k) {
-                        glyph.pos.x = x;
+            let row = Arc::make_mut(&mut placed.row);
+            let (mut last, mut section) = (None::<usize>, None::<usize>);
+            // How far the section's first glyph moved; its other glyphs
+            // move with it.
+            let mut shift = 0.0;
+            for glyph in &mut row.glyphs {
+                let ahead = (next..drawn.len().min(next + 4)).find(|&k| drawn[k].0 == glyph.chr);
+                let at = match (ahead, last) {
+                    (Some(k), _) => k,
+                    (None, Some(l)) if drawn[l].0 == glyph.chr => l,
+                    (None, _) => next.min(drawn.len().saturating_sub(1)),
+                };
+                let Some(&(_, s)) = drawn.get(at) else { break };
+                if !justify {
+                    if section != Some(s) {
+                        shift = pens[s] - glyph.pos.x;
                     }
+                    glyph.pos.x += shift;
                 }
-                if let Some(&Some(i)) = glyphs.checked_sub(1).and_then(|k| origin.get(at + k)) {
-                    row.size.x = pens[at + glyphs - 1] + adv.chrome[i];
+                next = next.max(at + 1);
+                (last, section) = (Some(at), Some(s));
+            }
+            if let (false, Some(s)) = (justify, section) {
+                if origin[s].is_some() {
+                    row.size.x = pens[s] + widths[s];
                 }
             }
-            right = right.max(placed.pos.x + placed.row.size.x);
-            at += glyphs + usize::from(placed.ends_with_newline);
-            // A row ended by an inserted `\n` ends as egui's own wrapped
-            // rows do: the caller's text has no char there.
-            if placed.ends_with_newline && origin.get(at - 1) == Some(&None) {
-                placed.ends_with_newline = false;
+            right = right.max(placed.pos.x + row.size.x);
+            if placed.ends_with_newline {
+                while drawn.get(next).is_some_and(|d| d.0 != '\n') {
+                    next += 1;
+                }
+                // A row ended by an inserted `\n` ends as egui's own
+                // wrapped rows do: the caller's text has no char there.
+                if drawn.get(next).is_some_and(|d| origin[d.1].is_none()) {
+                    placed.ends_with_newline = false;
+                }
+                next += 1;
             }
         }
         if job.halign == Align::LEFT && right.is_finite() {
@@ -1748,6 +1782,46 @@ mod tests {
             assert_eq!(block.galley().pixels_per_point, 2.0);
         })
         .drop_without_applying_deltas();
+    }
+
+    /// A char and its combining marks are one cluster, as Chrome shapes
+    /// them: the accent of a decomposed "e\u{301}" is drawn (egui shapes
+    /// a mark alone as nothing), and the chars after a cluster keep their
+    /// own x (caret stops).
+    #[test]
+    fn a_char_and_its_marks_draw_as_one_cluster() {
+        let ctx = egui::Context::default();
+        let row = |text: &str| {
+            let mut out = None;
+            ctx.run_ui(Default::default(), |ui| {
+                let look = TextLook::resolve(ui, &[], State::NONE);
+                let block = look.layout(ui, text, TextWrapMode::Extend, f32::INFINITY);
+                out = Some(block.galley().rows[0].row.clone());
+            })
+            .drop_without_applying_deltas();
+            out.unwrap()
+        };
+        let x =
+            |r: &egui::epaint::text::Row, c| r.glyphs.iter().find(|g| g.chr == c).unwrap().pos.x;
+        let plain = row("ex");
+        let marked = row("e\u{301}x");
+        // The cluster's ink reaches above the plain "e".
+        let ink = |r: &egui::epaint::text::Row| r.glyphs[0].uv_rect.size.y;
+        assert!(
+            ink(&marked) > ink(&plain),
+            "{} {}",
+            ink(&marked),
+            ink(&plain)
+        );
+        assert_eq!(marked.glyphs.len(), 3);
+        // U+0301 has no advance: "x" sits where it sits after "e".
+        assert!((x(&marked, 'x') - x(&plain, 'x')).abs() < 1e-3);
+        let step = |r: &egui::epaint::text::Row| x(r, 'd') - x(r, 'c');
+        let plain = row("abcd");
+        // U+1AB0, a mark no installed face has.
+        let marked = row("ab\u{1AB0}cd");
+        assert!(step(&plain) > 1.0, "{}", step(&plain));
+        assert!((step(&marked) - step(&plain)).abs() < 1e-3);
     }
 
     #[test]

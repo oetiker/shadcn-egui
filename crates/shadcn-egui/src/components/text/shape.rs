@@ -2,14 +2,16 @@
 //! with HarfBuzz: each glyph advances by its width at the face's variation
 //! location (the `wght` the theme sets, `opsz` at the font size, as
 //! `font-optical-sizing: auto` does), plus the pair kerning of the face's
-//! GPOS `kern` feature. egui 0.34 takes advances from the font's default
-//! instance and kerns from the legacy `kern` table only, which no font the
-//! crate ships has. [`advances`] measures a job as Chrome does; the text
-//! path moves egui's glyphs there and breaks lines on these widths.
+//! GPOS `kern` feature. egui 0.37 shapes with harfrust at the section's
+//! coordinates, but rounds neither as FreeType nor as HarfBuzz do, and
+//! kerns, ligates and draws contextual alternates within a section, which
+//! the crate's one-char sections keep from happening (one glyph per char).
+//! [`advances`] measures a job as Chrome does; the text path moves egui's
+//! glyphs there and breaks lines on these widths.
 
 use crate::components::shared::{with_viewport_state, PerViewport};
 use egui::epaint::text::ByteRangeExt as _;
-use egui::text::LayoutJob;
+use egui::text::{LayoutJob, TextFormat};
 use egui::FontData;
 use skrifa::instance::{Location, Size};
 use skrifa::raw::tables::gpos::{PairPos, PositionLookup, PositionSubtables, ValueRecord};
@@ -32,10 +34,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 /// them on the device: HarfBuzz positions, 1/65536 device px; `spacing`
 /// is the letter spacing in device px. A default ignorable char (a soft
 /// hyphen, a zero-width space, ...) has 0 for all of them, and the
-/// kerning reaches across it, as HarfBuzz hides it. `hyphen` holds, for a
+/// kerning reaches across it, as HarfBuzz hides it; so for a combining
+/// mark ([`is_mark`]), and the char before it then has egui's advance of
+/// the whole cluster. `hyphen` holds, for a
 /// soft hyphen, the hyphen Blink draws where it ends a line (U+2010 where
 /// the face has it, else `-`, as `HyphenString` picks) and its advance in
-/// HarfBuzz positions; `None` for every other char.
+/// HarfBuzz positions; `None` for every other char. `space` is Chrome's
+/// advance of a space in the first section, in points.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Advances {
     pub chrome: Vec<f32>,
@@ -45,6 +50,7 @@ pub(super) struct Advances {
     pub fixed_kern: Vec<i32>,
     pub spacing: Vec<f32>,
     pub hyphen: Vec<Option<(char, i32)>>,
+    pub space: f32,
 }
 
 /// Unicode's `Default_Ignorable_Code_Point`: chars a shaper draws as
@@ -70,6 +76,33 @@ pub(super) fn ignorable(c: char) -> bool {
             | '\u{1D173}'..='\u{1D17A}'
             | '\u{E0000}'..='\u{E0FFF}'
     )
+}
+
+/// A combining mark that is no default ignorable (the line breaker's
+/// `CM` blocks): it belongs to the char before it. HarfBuzz zeroes its
+/// advance (`ZERO_WIDTH_MARKS_BY_GDEF_LATE`), its kerning lookups skip it
+/// (`IgnoreMarks`) and Blink spaces letters per cluster, so the mark has 0
+/// for all of them; the text path shapes it with its base.
+pub(super) fn is_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{300}'..='\u{34E}'
+            | '\u{350}'..='\u{36F}'
+            | '\u{1AB0}'..='\u{1ACE}'
+            | '\u{1DC0}'..='\u{1DFF}'
+            | '\u{20D0}'..='\u{20F0}'
+            | '\u{FE20}'..='\u{FE2F}'
+            | '\u{302A}'..='\u{302F}'
+            | '\u{3099}'
+            | '\u{309A}'
+    )
+}
+
+/// Whether `c` joins the cluster of `before`, the char before it in the
+/// same section: a mark after a char that is neither a `\n` nor drawn as
+/// nothing.
+pub(super) fn attaches(before: Option<char>, c: char) -> bool {
+    is_mark(c) && before.is_some_and(|b| b != '\n' && !ignorable(b))
 }
 
 /// One device px in HarfBuzz positions (16.16 fixed point).
@@ -164,6 +197,29 @@ pub(super) fn needs_opsz(data: &FontData, coords: &[(Tag, f32)]) -> bool {
     }
     FontRef::from_index((*data.font).as_ref(), data.index)
         .is_ok_and(|f| f.axes().iter().any(|a| a.tag() == opsz))
+}
+
+/// The format egui draws one char of a section in: no letter spacing (the
+/// pens hold it) and, where [`needs_opsz`], `opsz` at the font size.
+pub(super) fn drawn_format(format: &TextFormat, data: Option<&FontData>) -> TextFormat {
+    let mut f = format.clone();
+    f.extra_letter_spacing = 0.0;
+    if data.is_some_and(|d| needs_opsz(d, format.coords.as_ref())) {
+        f.coords.push(b"opsz", f.font_id.size);
+    }
+    f
+}
+
+/// egui's advance of `text` (a char or a cluster) drawn alone in
+/// `format`, in points: what egui's layout adds to its pen for it, at the
+/// format's coordinates. A char no installed face has gets the advance of
+/// the box egui draws.
+fn egui_advance(f: &mut egui::epaint::text::FontsView<'_>, format: &TextFormat, text: &str) -> f32 {
+    let galley = f.layout_job(LayoutJob::single_section(text.to_owned(), format.clone()));
+    galley
+        .rows
+        .first()
+        .map_or(0.0, |r| r.row.glyphs.iter().map(|g| g.advance_width).sum())
 }
 
 /// One face, ready to measure: its tables at the location Chrome uses,
@@ -573,17 +629,20 @@ pub(super) fn advances(
         let hyphens = ['\u{2010}', '-'];
         job.sections
             .iter()
+            .enumerate()
             .zip(&mut known)
-            .map(|(section, row)| {
+            .map(|((si, section), row)| {
                 let text = &job.text[section.byte_range.as_usize()];
-                let font = &section.format.font_id;
+                let data = faces.get(si).and_then(Option::as_deref);
+                let format = OnceCell::new();
                 text.chars()
                     .chain(hyphens)
                     .zip(row.iter_mut())
                     .map(|(c, m)| {
                         let ask = m.egui.is_none();
                         if ask {
-                            m.egui = Some(f.glyph_width(font, c));
+                            let format = format.get_or_init(|| drawn_format(&section.format, data));
+                            m.egui = Some(egui_advance(f, format, c.encode_utf8(&mut [0; 4])));
                         }
                         ask
                     })
@@ -596,6 +655,8 @@ pub(super) fn advances(
     // together, so a colour change inside a word keeps its kerning.
     let mut before: Option<GlyphId> = None;
     let mut run: Option<(*const Mutex<Measures>, u32)> = None;
+    // The index of each mark that joins the cluster before it.
+    let mut clusters: Vec<usize> = Vec::new();
     for (si, ((section, row), asked)) in job.sections.iter().zip(&known).zip(&asked).enumerate() {
         let format = &section.format;
         let text = &job.text[section.byte_range.as_usize()];
@@ -628,14 +689,22 @@ pub(super) fn advances(
                 |w| ('\u{2010}', w),
             )
         });
+        // Blink's line estimate takes the primary font's space advance.
+        if si == 0 {
+            out.space = face()
+                .and_then(|f| f.glyph(' ')?.1)
+                .map_or(0.0, |w| w as f32 / FIXED_ONE / ppp);
+        }
         let this = handle(si).map(|m| (m as *const _, format.extra_letter_spacing.to_bits()));
         if this.is_none() || this != run {
             before = None;
         }
         run = this;
+        let mut last = None;
         for (c, k) in text.chars().zip(row) {
             let egui_adv = k.egui.unwrap_or_default();
-            if c == '\n' || ignorable(c) {
+            let mark = attaches(last.replace(c), c);
+            if c == '\n' || ignorable(c) || mark {
                 out.chrome.push(0.0);
                 out.kern.push(0.0);
                 out.egui.push(0.0);
@@ -645,6 +714,9 @@ pub(super) fn advances(
                 out.hyphen.push(if c == '\u{AD}' { hyphen } else { None });
                 if c == '\n' {
                     before = None;
+                }
+                if mark {
+                    clusters.push(out.chrome.len() - 1);
                 }
                 continue;
             }
@@ -667,6 +739,33 @@ pub(super) fn advances(
             out.hyphen.push(None);
             before = glyph;
         }
+    }
+    // A cluster's base has egui's advance of the whole cluster: egui
+    // shapes it in one section (it may compose a precomposed glyph).
+    if !clusters.is_empty() {
+        let chars: Vec<char> = job.text.chars().collect();
+        let mut section_at = Vec::with_capacity(chars.len());
+        for (si, s) in job.sections.iter().enumerate() {
+            let n = job.text[s.byte_range.as_usize()].chars().count();
+            section_at.extend(std::iter::repeat_n(si, n));
+        }
+        // Each base and the end of its marks.
+        let mut bases: Vec<(usize, usize)> = Vec::new();
+        for m in clusters {
+            match bases.last_mut() {
+                Some((_, end)) if *end == m => *end = m + 1,
+                _ => bases.push((m - 1, m + 1)),
+            }
+        }
+        ctx.fonts_mut(|f| {
+            for (b, end) in bases {
+                let si = section_at[b];
+                let data = faces.get(si).and_then(Option::as_deref);
+                let format = drawn_format(&job.sections[si].format, data);
+                let text: String = chars[b..end].iter().collect();
+                out.egui[b] = egui_advance(f, &format, &text);
+            }
+        });
     }
     out
 }

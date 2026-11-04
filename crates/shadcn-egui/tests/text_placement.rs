@@ -173,8 +173,11 @@ fn frame(
     };
     let mut out = ctx.run_ui(input, |ui| {
         for (i, rect) in items.iter_mut().enumerate() {
-            let area =
-                egui::Area::new(egui::Id::unique(i)).fixed_pos(pos2(8.0, 8.0 + 80.0 * i as f32));
+            // No fade-in: the selection's colour is matched below, and
+            // egui 0.37 fades a new area in over 0.2 s.
+            let area = egui::Area::new(egui::Id::unique(i))
+                .fixed_pos(pos2(8.0, 8.0 + 80.0 * i as f32))
+                .fade_in(false);
             *rect = area.show(ui.ctx(), |ui| item(ui, i)).inner.rect;
         }
     });
@@ -514,7 +517,30 @@ fn drawn_glyphs(ctx: &egui::Context, screen: Option<Rect>, font: &str, ppp: f32)
                 .then(|| origin + quad(&row.row.visuals.mesh, g.first_vertex as usize) * ppp)
         })
         .collect();
-    let format = t.galley.job.sections[0].format.clone();
+    let mut format = t.galley.job.sections[0].format.clone();
+    // Chrome draws at `opsz` = the font size (`font-optical-sizing:
+    // auto`) where the face has the axis and nothing sets it.
+    let opsz = skrifa::Tag::new(b"opsz");
+    let unset = ctx.fonts(|f| {
+        let defs = f.definitions();
+        let key = defs.families.get(&format.font_id.family)?.first()?;
+        let data = defs.font_data.get(key)?;
+        let face = skrifa::FontRef::from_index((*data.font).as_ref(), data.index).ok()?;
+        use skrifa::MetadataProvider as _;
+        let set = data
+            .tweak
+            .coords
+            .as_ref()
+            .iter()
+            .chain(format.coords.as_ref());
+        Some(
+            face.axes().iter().any(|a| a.tag() == opsz)
+                && !set.into_iter().any(|(t, _)| *t == opsz),
+        )
+    });
+    if unset == Some(true) {
+        format.coords.push(b"opsz", format.font_id.size);
+    }
     let chars: Vec<char> = GLYPH_TEXT.chars().collect();
     let ctx = ctx.clone();
     let reference = Box::new(move |i: usize, x: f32| {

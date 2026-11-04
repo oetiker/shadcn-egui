@@ -21,9 +21,10 @@ repository = "https://github.com/oetiker/shadcn-egui"
 egui = { version = "0.37", features = ["default_fonts", "monochrome_emoji_fonts"] }
 egui_extras = { version = "0.37", default-features = false }
 log = "0.4"
-# Font tables for the text path: glyph advances at the face's variation
-# location and GPOS kerning, which egui does not apply. Pinned to the
-# version egui's epaint uses, so no second copy enters the build.
+# Font tables for the text path: glyph advances and GPOS kerning in
+# Chrome's fixed-point rounding, with kerning across sections, which
+# egui's per-section shaping does not give. Pinned to the version egui's
+# epaint uses, so no second copy enters the build.
 skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
 shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.7.0" }
 # BEGIN fontgen
