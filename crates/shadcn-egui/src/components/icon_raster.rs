@@ -52,7 +52,8 @@ const MAX_PIXELS: usize = 16 << 20;
 const MAX_TURNED: usize = 64;
 /// ... and at most this many pixels (4 MiB of RGBA) in all.
 const MAX_TURNED_PIXELS: usize = 1 << 20;
-/// A turned texture its viewport has not drawn for this many passes is freed.
+/// A turned texture not drawn for this many passes, of any viewport, is
+/// freed; so are the textures of a viewport that is gone.
 const KEEP_PASSES: u64 = 60;
 
 /// What makes two icon textures the same. `Icon` compares blob records by
@@ -125,12 +126,9 @@ pub(crate) fn texture(
     // Rasterise and upload outside `data_mut`: `load_texture` locks the
     // context too.
     let scale = w as f32 / icon.size;
-    let alpha = coverage(icon, w, h, scale, stroke_width * scale);
-    let image = ColorImage::new(
-        [w, h],
-        // token-ok: a coverage mask, tinted by the caller's colour when drawn
-        alpha.into_iter().map(Color32::from_white_alpha).collect(),
-    );
+    let place = Place::scaled(scale);
+    let pixels = placed_coverage(icon, w, h, place, stroke_width * scale, mask);
+    let image = ColorImage::new([w, h], pixels);
     // 1:1 pixels stay exact; a clamped texture is scaled up and smoothed.
     let options = if linear || w.max(h) >= MAX_SIDE {
         TextureOptions::LINEAR
@@ -164,20 +162,71 @@ pub(crate) fn texture(
 /// shows it, more where one pass draws the icon at several angles. A
 /// texture is rasterised again in place for the next angle, never while
 /// a mesh of the same pass still shows its old angle.
-#[derive(Clone, Default)]
+///
+/// An egui plugin, so it lives outside `Memory` (a memory reset keeps
+/// it) and `Context::end_pass` ages it: every loop style calls that,
+/// `run_ui`, the deprecated `run` and `begin_pass`/`end_pass` alike,
+/// while egui runs a plugin's pass hooks under `run_ui` only.
+#[derive(Default)]
 struct TurnedCache {
     slots: Vec<Turned>,
     pixels: usize,
+    /// The passes ended so far, of all viewports.
+    clock: u64,
 }
 
-#[derive(Clone)]
 struct Turned {
     key: Key,
     viewport: ViewportId,
     angle: u32,
     /// The viewport's pass that last drew it.
     pass: u64,
+    /// The [`TurnedCache::clock`] when it was last drawn.
+    used: u64,
     tex: TextureHandle,
+}
+
+impl TurnedCache {
+    /// Frees the slots `free` picks, oldest first, while `more` says more
+    /// room is needed.
+    fn free(&mut self, free: impl Fn(&Turned) -> bool, more: impl Fn(&Self) -> bool) {
+        while more(self) {
+            let oldest = (self.slots.iter().enumerate())
+                .filter(|(_, s)| free(s))
+                .min_by_key(|(_, s)| s.used)
+                .map(|(i, _)| i);
+            let Some(i) = oldest else { break };
+            let [w, h] = self.slots.swap_remove(i).tex.size();
+            self.pixels -= w * h;
+        }
+    }
+
+    /// At the end of every pass: frees the textures no pass has drawn for
+    /// [`KEEP_PASSES`] passes, also those of a viewport that is gone or
+    /// shows no turned icon any more.
+    fn end_pass(&mut self) {
+        self.clock += 1;
+        let clock = self.clock;
+        let old = |s: &Turned| s.used + KEEP_PASSES < clock;
+        self.free(old, |c| c.slots.iter().any(old));
+    }
+
+    /// Runs `f` on the context's cache, registered on first use. egui
+    /// adds a plugin type once and ignores a second registration.
+    fn with<R>(ctx: &Context, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(&mut ctx.plugin_or_default::<Self>().lock())
+    }
+}
+
+impl egui::plugin::Plugin for TurnedCache {
+    fn debug_name(&self) -> &'static str {
+        "shadcn_egui::turned_icons"
+    }
+
+    /// Runs in `Context::end_pass`, once per pass of every viewport.
+    fn output_hook(&mut self, _output: &mut egui::FullOutput) {
+        self.end_pass();
+    }
 }
 
 /// The margin, in pixels on each side, around a `w`×`h` box that holds
@@ -191,7 +240,8 @@ pub(crate) fn turned_margin(w: usize, h: usize) -> [usize; 2] {
 /// The texture of `icon` in a `w`×`h` physical pixel box turned clockwise
 /// by `angle` radians about the box's centre, rasterised at that angle,
 /// with [`turned_margin`] pixels around the box. `None` when the turned
-/// textures are at their bounds, all drawn in this pass.
+/// textures are at their bounds, all drawn in this pass by this viewport
+/// or drawn lately by another.
 pub(crate) fn turned_texture(
     ctx: &Context,
     icon: &Icon,
@@ -200,7 +250,6 @@ pub(crate) fn turned_texture(
     stroke_width: f32,
     angle: f32,
 ) -> Option<TextureHandle> {
-    let id = Id::new("shadcn_egui::icon_raster::turned");
     let key = Key::new(icon, w, h, stroke_width, false);
     let [mx, my] = turned_margin(w, h);
     let (tw, th) = (w + 2 * mx, h + 2 * my);
@@ -213,18 +262,8 @@ pub(crate) fn turned_texture(
         New,
         Full,
     }
-    let found = ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<TurnedCache>(id);
-        let mut freed = 0;
-        cache.slots.retain(|s| {
-            let keep = s.viewport != viewport || s.pass + KEEP_PASSES >= pass;
-            if !keep {
-                let [ow, oh] = s.tex.size();
-                freed += ow * oh;
-            }
-            keep
-        });
-        cache.pixels -= freed;
+    let found = TurnedCache::with(ctx, |cache| {
+        let used = cache.clock;
         let mine = |s: &&mut Turned| s.key == key && s.viewport == viewport;
         if let Some(s) = cache
             .slots
@@ -232,15 +271,19 @@ pub(crate) fn turned_texture(
             .filter(mine)
             .find(|s| s.angle == bits)
         {
-            s.pass = pass;
+            (s.pass, s.used) = (pass, used);
             return Found::Same(s.tex.clone());
         }
         if let Some(s) = cache.slots.iter_mut().filter(mine).find(|s| s.pass != pass) {
             // Taken for this pass now, so no other call reuses it.
-            (s.angle, s.pass) = (bits, pass);
+            (s.angle, s.pass, s.used) = (bits, pass, used);
             return Found::Reuse(s.tex.clone());
         }
-        if cache.slots.len() >= MAX_TURNED || cache.pixels + tw * th > MAX_TURNED_PIXELS {
+        // Room from this viewport's textures that this pass has not drawn.
+        let full =
+            |c: &TurnedCache| c.slots.len() >= MAX_TURNED || c.pixels + tw * th > MAX_TURNED_PIXELS;
+        cache.free(|s| s.viewport == viewport && s.pass != pass, full);
+        if full(cache) {
             Found::Full
         } else {
             Found::New
@@ -249,12 +292,10 @@ pub(crate) fn turned_texture(
     let image = || {
         let scale = w as f32 / icon.size;
         let place = Place::turned(scale, w, h, angle);
-        let alpha = placed_coverage(icon, tw, th, place, stroke_width * scale);
-        // token-ok: a coverage mask, tinted by the caller's colour when drawn
-        let pixels = alpha.into_iter().map(Color32::from_white_alpha).collect();
+        let pixels = placed_coverage(icon, tw, th, place, stroke_width * scale, mask);
         ColorImage::new([tw, th], pixels)
     };
-    // Rasterise and upload outside `data_mut`: textures lock the context too.
+    // Rasterise and upload outside the cache's lock.
     match found {
         Found::Same(tex) => Some(tex),
         Found::Full => None,
@@ -265,14 +306,15 @@ pub(crate) fn turned_texture(
         Found::New => {
             let name = format!("icon:{}:turned", icon.name);
             let tex = ctx.load_texture(name, image(), TextureOptions::NEAREST);
-            ctx.data_mut(|d| {
-                let cache = d.get_temp_mut_or_default::<TurnedCache>(id);
+            TurnedCache::with(ctx, |cache| {
                 cache.pixels += tw * th;
+                let used = cache.clock;
                 cache.slots.push(Turned {
                     key,
                     viewport,
                     angle: bits,
                     pass,
+                    used,
                     tex: tex.clone(),
                 });
             });
@@ -361,11 +403,20 @@ impl Place {
 /// composited over the layers before it. Any input gives an image, never a
 /// panic.
 pub(crate) fn coverage(icon: &Icon, w: usize, h: usize, scale: f32, stroke_px: f32) -> Vec<u8> {
-    placed_coverage(icon, w, h, Place::scaled(scale), stroke_px)
+    placed_coverage(icon, w, h, Place::scaled(scale), stroke_px, |c| c)
 }
 
-/// [`coverage`] with the icon's points mapped by `place`.
-fn placed_coverage(icon: &Icon, w: usize, h: usize, place: Place, stroke_px: f32) -> Vec<u8> {
+/// [`coverage`] with the icon's points mapped by `place`, each level made
+/// a pixel by `pixel`. Pixels of coverage 0 stay the default pixel, which
+/// `pixel(0)` must equal.
+fn placed_coverage<T: Copy + Default>(
+    icon: &Icon,
+    w: usize,
+    h: usize,
+    place: Place,
+    stroke_px: f32,
+    pixel: impl Fn(u8) -> T,
+) -> Vec<T> {
     let mut total: Vec<f32> = vec![0.0; w * h];
     for layer in icon.layers() {
         let cov = layer_coverage(&layer, w, h, place, stroke_px);
@@ -375,15 +426,36 @@ fn placed_coverage(icon: &Icon, w: usize, h: usize, place: Place, stroke_px: f32
             *t = src + *t * (1.0 - src);
         }
     }
-    if place.turn.is_some() {
-        for (i, t) in total.iter_mut().enumerate() {
-            *t *= place.in_box(i % w, i / w);
+    let mut out = vec![T::default(); w * h];
+    for (i, (&c, px)) in total.iter().zip(&mut out).enumerate() {
+        // 0 stays 0; most of a turned texture is empty.
+        if c != 0.0 {
+            let c = if place.turn.is_some() {
+                c * place.in_box(i % w, i / w)
+            } else {
+                c
+            };
+            *px = pixel(level(c));
         }
     }
-    total
-        .into_iter()
-        .map(|c| (c * f32::from(u8::MAX)).round() as u8)
-        .collect()
+    out
+}
+
+/// A coverage level as a texture pixel: white at that alpha.
+fn mask(level: u8) -> Color32 {
+    // token-ok: a coverage mask, tinted by the caller's colour when drawn
+    Color32::from_white_alpha(level)
+}
+
+/// `(c * 255).round() as u8` for a coverage `c` in 0..=1 (NaN gives 0),
+/// without the library call `round` is on a plain x86-64 target.
+fn level(c: f32) -> u8 {
+    let x = c * f32::from(u8::MAX);
+    // `as` truncates (floor for x >= 0) and gives 0 for NaN; the fraction
+    // is exact below 2^23.
+    let floor = x as u32;
+    let up = u32::from(x - floor as f32 >= 0.5);
+    (floor + up).min(u32::from(u8::MAX)) as u8
 }
 
 /// Coverage (0..=1) of one layer: the exact area of the union of its
@@ -612,8 +684,8 @@ mod tests {
             flatten: (1e-4, 4096.0),
             ..place
         };
-        let painted = placed_coverage(icon, w, w, place, 2.0 * scale);
-        let exact = placed_coverage(icon, w, w, fine, 2.0 * scale);
+        let painted = placed_coverage(icon, w, w, place, 2.0 * scale, |c| c);
+        let exact = placed_coverage(icon, w, w, fine, 2.0 * scale, |c| c);
         painted
             .iter()
             .zip(&exact)
