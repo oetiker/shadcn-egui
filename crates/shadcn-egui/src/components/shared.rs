@@ -1843,9 +1843,13 @@ impl<T> PerViewport<T> {
     }
 
     /// The states of all viewports.
-    #[cfg(test)]
     pub(crate) fn all(&self) -> impl Iterator<Item = &T> {
         self.states.values().map(|(_, state)| state)
+    }
+
+    /// The states of all viewports, to change in place.
+    pub(crate) fn all_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.states.values_mut().map(|(_, state)| state)
     }
 
     /// Whether `viewport`'s state is at its number `at`.

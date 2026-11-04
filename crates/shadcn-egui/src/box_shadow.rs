@@ -14,6 +14,7 @@
 //! box only moves its quads, and a fade is the quads' vertex colour.
 
 use crate::color::mix_oklab;
+use crate::components::shared::{closed_viewports, PerViewport};
 use crate::theme::ShadowLayer;
 use egui::{Color32, CornerRadius, Mesh, Pos2, Rect, Shape, TextureHandle, TextureOptions};
 use std::f64::consts::{FRAC_PI_2, PI, SQRT_2};
@@ -120,13 +121,31 @@ pub(crate) fn shadow_shape(
     let cache = |f: &mut dyn FnMut(&mut ShadowCache)| {
         ctx.memory_mut(|m| f(m.caches.cache::<ShadowCache>()));
     };
+    let viewport = ctx.viewport_id();
+    let at = ctx.cumulative_pass_nr();
+    // The first call of a pass turns the viewports over: the context's
+    // pass counts are read outside the memory lock.
+    let mut known = None;
+    cache(&mut |c| {
+        if !c.viewports.is_at(viewport, at) {
+            known = Some(c.viewports.viewports().collect::<Vec<_>>());
+        }
+    });
+    let (closed, turns) = known.map_or_else(Default::default, |known| {
+        let closed = closed_viewports(ctx, known.iter().copied());
+        let turns: Vec<(egui::ViewportId, u64)> = (known.into_iter())
+            .filter(|v| *v != viewport && !closed.contains(v))
+            .map(|v| (v, ctx.cumulative_pass_nr_for(v)))
+            .collect();
+        (closed, turns)
+    });
     let mut ids = None;
-    cache(&mut |c| ids = c.get(&key));
+    cache(&mut |c| ids = c.get(&closed, &turns, viewport, at, &key));
     let ids = ids.unwrap_or_else(|| {
         let images = plan.images(&device);
         let bytes = images.iter().map(|i| i.pixels.len() * 4).sum();
         let mut spare = None;
-        cache(&mut |c| spare = c.spare(images.len()));
+        cache(&mut |c| spare = c.spare(viewport, at, images.len()));
         let tiles: Vec<TextureHandle> = match spare {
             Some(mut tiles) => {
                 for (tile, image) in tiles.iter_mut().zip(images) {
@@ -141,7 +160,7 @@ pub(crate) fn shadow_shape(
         };
         let ids: Vec<egui::TextureId> = tiles.iter().map(TextureHandle::id).collect();
         let mut tiles = Some(tiles);
-        cache(&mut |c| c.insert(key, tiles.take().unwrap_or_default(), bytes));
+        cache(&mut |c| c.insert(viewport, at, key, tiles.take().unwrap_or_default(), bytes));
         ids
     });
     let origin = [rect.min.x, rect.min.y].map(|v| f64::from((v * ppp).round()));
@@ -174,7 +193,8 @@ const MAX_IDLE: usize = 8;
 /// Passes an idle shadow is kept at most.
 const MAX_AGE: u64 = 60;
 
-/// Texture bytes kept at most: idle shadows go, oldest first, past it.
+/// Texture bytes a viewport keeps at most: its idle shadows go, oldest
+/// first, past it.
 /// The shadows of a page at 3x take a few MiB; a `shadow-2xl` box alone
 /// 7 MiB.
 const MAX_BYTES: usize = 16 << 20;
@@ -220,28 +240,25 @@ struct Entry {
     used: u64,
 }
 
-/// Shadow textures. A shadow stays while the last two passes use it, and
-/// up to [`MAX_IDLE`] idle ones for [`MAX_AGE`] passes within
-/// [`MAX_BYTES`]; a texture goes only after two passes without it, so no
-/// mesh of this pass names a freed one. One a single pass used and none
-/// since (a step of a shadow transition) lends its textures to the next
-/// new shadow, so a transition does not fill the cache. egui ends each
-/// pass of the cache (`CacheTrait::update`), so it empties when an app
-/// stops drawing shadows.
+/// One viewport's shadow textures, turned over by that viewport's own
+/// pass number. A shadow stays while the viewport's last two passes use
+/// it, and up to [`MAX_IDLE`] idle ones for [`MAX_AGE`] of its passes
+/// within [`MAX_BYTES`]; a texture goes only after two of its passes
+/// without it, so no mesh of its pass names a freed one. One a single
+/// pass used and none since (a step of a shadow transition) lends its
+/// textures to the viewport's next new shadow, so a transition does not
+/// fill the cache; never ones another viewport holds too.
 #[derive(Clone, Default)]
-struct ShadowCache {
-    /// Passes ended so far: the number of this one.
+struct Shadows {
+    /// The viewport's pass number the state is at.
     pass: u64,
     entries: std::collections::HashMap<Key, Entry>,
-    /// Shadows built, for the tests.
-    builds: u64,
 }
 
-impl egui::cache::CacheTrait for ShadowCache {
-    /// The end of a pass: idle shadows past the bounds go.
-    fn update(&mut self) {
-        self.pass += 1;
-        let pass = self.pass;
+impl Shadows {
+    /// The viewport's pass `pass` begins: idle shadows past the bounds go.
+    fn turn(&mut self, pass: u64) {
+        self.pass = pass;
         let idle = |used: u64| used + 1 < pass;
         let mut ages: Vec<u64> = self
             .entries
@@ -273,29 +290,23 @@ impl egui::cache::CacheTrait for ShadowCache {
         }
     }
 
-    fn len(&self) -> usize {
-        self.entries.len()
-    }
-}
-
-impl ShadowCache {
-    /// The textures of shadow `key`, marked as used in this pass.
-    fn get(&mut self, key: &Key) -> Option<Vec<egui::TextureId>> {
-        let pass = self.pass;
-        self.entries.get_mut(key).map(|e| {
-            e.used = pass;
-            e.tiles.iter().map(TextureHandle::id).collect()
-        })
-    }
-
     /// The `n` textures of a shadow one pass built and used, and none
-    /// since, taken out to be refilled.
-    fn spare(&mut self, n: usize) -> Option<Vec<TextureHandle>> {
+    /// since, that no texture in `held` is among, taken out to be refilled.
+    fn spare(
+        &mut self,
+        n: usize,
+        held: &std::collections::HashSet<egui::TextureId>,
+    ) -> Option<Vec<TextureHandle>> {
         let pass = self.pass;
         let key = *self
             .entries
             .iter()
-            .find(|(_, e)| e.built == e.used && e.used + 2 <= pass && e.tiles.len() == n)?
+            .find(|(_, e)| {
+                e.built == e.used
+                    && e.used + 2 <= pass
+                    && e.tiles.len() == n
+                    && !e.tiles.iter().any(|t| held.contains(&t.id()))
+            })?
             .0;
         self.entries.remove(&key).map(|e| e.tiles)
     }
@@ -311,21 +322,133 @@ impl ShadowCache {
                 used: pass,
             },
         );
-        self.builds += 1;
+    }
+}
+
+/// Shadow textures, a [`Shadows`] per viewport: egui counts passes per
+/// viewport and ends each pass of every viewport with the cache's
+/// `CacheTrait::update`, so a count of the cache's own would age a
+/// window's shadows by the passes of the others. A viewport takes a
+/// shadow another holds as a clone of its handles into its own state;
+/// the states of closed viewports go. When no viewport has drawn a
+/// shadow for [`MAX_AGE`] passes of any, all textures go, so the cache
+/// empties when an app stops drawing shadows.
+#[derive(Clone, Default)]
+struct ShadowCache {
+    /// Passes ended so far, of all viewports.
+    clock: u64,
+    /// The [`ShadowCache::clock`] when a viewport last drew a shadow.
+    drawn: u64,
+    viewports: PerViewport<Shadows>,
+}
+
+impl egui::cache::CacheTrait for ShadowCache {
+    /// The end of a pass of any viewport.
+    fn update(&mut self) {
+        self.clock += 1;
+        if self.drawn + MAX_AGE < self.clock {
+            for s in self.viewports.all_mut() {
+                s.entries.clear();
+            }
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.viewports.all().map(|s| s.entries.len()).sum()
+    }
+}
+
+impl ShadowCache {
+    /// The state of `viewport` at its pass `at`, after the viewports in
+    /// `closed` are dropped and the others turned over to their passes in
+    /// `turns`.
+    fn state(
+        &mut self,
+        closed: &[egui::ViewportId],
+        turns: &[(egui::ViewportId, u64)],
+        viewport: egui::ViewportId,
+        at: u64,
+    ) -> &mut Shadows {
+        self.drawn = self.clock;
+        self.viewports
+            .at(closed, viewport, at, |s, _| s.turn(at))
+            .pass = at;
+        for &(v, n) in turns {
+            self.viewports.at(&[], v, n, |s, _| s.turn(n));
+        }
+        self.viewports.at(&[], viewport, at, |_, _| {})
+    }
+
+    /// The textures of shadow `key` for `viewport` in its pass `at`,
+    /// marked as used there: its own, or a clone of another viewport's
+    /// kept in its own state. `closed` and `turns` as for
+    /// [`ShadowCache::state`].
+    fn get(
+        &mut self,
+        closed: &[egui::ViewportId],
+        turns: &[(egui::ViewportId, u64)],
+        viewport: egui::ViewportId,
+        at: u64,
+        key: &Key,
+    ) -> Option<Vec<egui::TextureId>> {
+        let ids = |e: &Entry| e.tiles.iter().map(TextureHandle::id).collect();
+        let mine = self.state(closed, turns, viewport, at);
+        if let Some(e) = mine.entries.get_mut(key) {
+            e.used = at;
+            return Some(ids(e));
+        }
+        let theirs = (self.viewports.others(viewport))
+            .find_map(|s| s.entries.get(key))
+            .map(|e| (e.tiles.clone(), e.bytes))?;
+        let mine = self.state(&[], &[], viewport, at);
+        mine.insert(*key, theirs.0, theirs.1);
+        mine.entries.get(key).map(ids)
+    }
+
+    /// Textures of `viewport`'s state to refill for a new shadow of `n`
+    /// tiles in its pass `at`, as [`Shadows::spare`].
+    fn spare(
+        &mut self,
+        viewport: egui::ViewportId,
+        at: u64,
+        n: usize,
+    ) -> Option<Vec<TextureHandle>> {
+        let held = (self.viewports.others(viewport))
+            .flat_map(|s| s.entries.values())
+            .flat_map(|e| e.tiles.iter().map(TextureHandle::id))
+            .collect();
+        self.state(&[], &[], viewport, at).spare(n, &held)
+    }
+
+    /// Shadow `key`, just built, into `viewport`'s state.
+    fn insert(
+        &mut self,
+        viewport: egui::ViewportId,
+        at: u64,
+        key: Key,
+        tiles: Vec<TextureHandle>,
+        bytes: usize,
+    ) {
+        self.state(&[], &[], viewport, at).insert(key, tiles, bytes);
+        self.viewports.builds += 1;
     }
 }
 
 #[cfg(test)]
 fn shadow_builds(ctx: &egui::Context) -> u64 {
-    ctx.memory_mut(|m| m.caches.cache::<ShadowCache>().builds)
+    ctx.memory_mut(|m| m.caches.cache::<ShadowCache>().viewports.builds)
 }
 
-/// Textures the cache holds.
+/// Textures the cache holds, each once however many viewports hold it.
 #[cfg(test)]
 fn shadow_textures(ctx: &egui::Context) -> usize {
     ctx.memory_mut(|m| {
         let c = m.caches.cache::<ShadowCache>();
-        c.entries.values().map(|e| e.tiles.len()).sum()
+        (c.viewports.all())
+            .flat_map(|s| s.entries.values())
+            .flat_map(|e| e.tiles.iter().map(TextureHandle::id))
+            .collect::<std::collections::HashSet<_>>()
+            .len()
     })
 }
 
@@ -1077,11 +1200,222 @@ mod tests {
         assert_eq!(freed, 1, "the backend is told to free it");
     }
 
+    /// The textures a shadow shape names.
+    fn texture_ids(shape: &Shape) -> Vec<egui::TextureId> {
+        match shape {
+            Shape::Mesh(m) => vec![m.texture_id],
+            Shape::Vec(v) => v.iter().flat_map(texture_ids).collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Passes of the root and of deferred windows the root shows, each
+    /// pass checked: no texture the last pass of another viewport names
+    /// is rewritten or freed.
+    struct Windows {
+        ctx: egui::Context,
+        windows: Vec<egui::ViewportId>,
+        /// What the last pass of each viewport named.
+        named: std::collections::HashMap<egui::ViewportId, Vec<egui::TextureId>>,
+        /// Textures uploaded so far.
+        uploaded: std::collections::HashSet<egui::TextureId>,
+        /// Textures freed so far.
+        freed: Vec<egui::TextureId>,
+    }
+
+    impl Windows {
+        fn new(windows: &[egui::ViewportId]) -> Self {
+            let ctx = egui::Context::default();
+            ctx.set_embed_viewports(false);
+            Self {
+                ctx,
+                windows: windows.to_vec(),
+                named: Default::default(),
+                uploaded: Default::default(),
+                freed: Vec::new(),
+            }
+        }
+
+        /// The root stops showing `window`: egui closes it.
+        fn close(&mut self, window: egui::ViewportId) {
+            self.windows.retain(|w| *w != window);
+            self.named.remove(&window);
+        }
+
+        /// One pass of `viewport` that draws the shadow `layers` of a
+        /// `size` box, or none; the root's pass shows
+        /// [`Windows::windows`]. Returns the textures the shadow names.
+        fn pass(
+            &mut self,
+            viewport: egui::ViewportId,
+            box_shadow: Option<(egui::Vec2, Layers)>,
+        ) -> Vec<egui::TextureId> {
+            let boxes: Vec<_> = box_shadow.into_iter().collect();
+            self.pass_all(viewport, &boxes).concat()
+        }
+
+        /// [`Windows::pass`] with the shadows of several boxes, the
+        /// textures of each returned.
+        fn pass_all(
+            &mut self,
+            viewport: egui::ViewportId,
+            boxes: &[(egui::Vec2, Layers)],
+        ) -> Vec<Vec<egui::TextureId>> {
+            let mut input = egui::RawInput {
+                viewport_id: viewport,
+                ..Default::default()
+            };
+            if viewport != egui::ViewportId::ROOT {
+                let info = egui::ViewportInfo {
+                    parent: Some(egui::ViewportId::ROOT),
+                    ..Default::default()
+                };
+                input.viewports.insert(viewport, info);
+            }
+            let mut shapes = Vec::new();
+            let windows = self.windows.clone();
+            let out = self.ctx.run_ui(input, |ui| {
+                if viewport == egui::ViewportId::ROOT {
+                    for w in &windows {
+                        let builder = egui::ViewportBuilder::default();
+                        ui.ctx().show_viewport_deferred(*w, builder, |_, _| {});
+                    }
+                }
+                for (size, layers) in boxes {
+                    let rect = Rect::from_min_size(egui::pos2(10.0, 10.0), *size);
+                    let cut = CornerRadius::same(6);
+                    shapes.push(shadow_shape(ui.ctx(), rect, [6.0; 4], cut, *layers, 1.0));
+                }
+            });
+            let others: Vec<egui::TextureId> = (self.named.iter())
+                .filter(|(v, _)| **v != viewport)
+                .flat_map(|(_, ids)| ids.iter().copied())
+                .collect();
+            for (id, _) in &out.textures_delta.set {
+                if !self.uploaded.insert(*id) {
+                    assert!(
+                        !others.contains(id),
+                        "{viewport:?} rewrote {id:?}, which another viewport draws"
+                    );
+                }
+            }
+            for id in &out.textures_delta.free {
+                assert!(
+                    !others.contains(id),
+                    "{viewport:?} freed {id:?}, which another viewport draws"
+                );
+            }
+            self.freed.extend(&out.textures_delta.free);
+            let ids: Vec<Vec<egui::TextureId>> = shapes.iter().map(texture_ids).collect();
+            self.named.insert(viewport, ids.concat());
+            ids
+        }
+    }
+
+    /// A shadow whose layers change with `step`: a transition.
+    fn animated(step: u32) -> Layers {
+        let blur = 2.0 + step as f32 * 0.25;
+        Layers::new(&[ShadowLayer::new(
+            egui::vec2(0.0, 2.0),
+            blur,
+            0.0,
+            Color32::BLACK,
+            0.2,
+        )])
+    }
+
+    /// Three viewports: the root draws a still shadow every pass, window
+    /// B an animated one, and window A, which egui does not repaint
+    /// meanwhile (a reactive window), a shadow of its own. A's shadow is
+    /// neither rebuilt, nor lent to B's transition, nor rewritten: egui
+    /// counts passes per viewport, and the root's and B's passes are not
+    /// A's.
+    #[test]
+    fn a_shadow_one_window_draws_survives_the_passes_of_others() {
+        let a = egui::ViewportId::from_hash_of("shadow window a");
+        let b = egui::ViewportId::from_hash_of("shadow window b");
+        let root = egui::ViewportId::ROOT;
+        let mut w = Windows::new(&[a, b]);
+        let still = Layers::new(&[ShadowLayer::new(
+            egui::vec2(0.0, 4.0),
+            8.0,
+            0.0,
+            Color32::BLACK,
+            0.3,
+        )]);
+        let mine = (egui::vec2(80.0, 30.0), shadow_sm());
+        let _ = w.pass(root, Some((egui::vec2(40.0, 40.0), still)));
+        let first = w.pass(a, Some(mine));
+        assert!(!first.is_empty(), "A's shadow has textures");
+        let mut b_builds = 0;
+        for step in 0..2 * MAX_AGE as u32 {
+            let _ = w.pass(root, Some((egui::vec2(40.0, 40.0), still)));
+            let before = shadow_builds(&w.ctx);
+            let _ = w.pass(b, Some((egui::vec2(60.0, 20.0), animated(step))));
+            b_builds += shadow_builds(&w.ctx) - before;
+        }
+        assert_eq!(b_builds, 2 * MAX_AGE, "each step of B's transition");
+        let before = shadow_builds(&w.ctx);
+        let again = w.pass(a, Some(mine));
+        assert_eq!(shadow_builds(&w.ctx) - before, 0, "A's shadow is rebuilt");
+        assert_eq!(again, first, "A's shadow keeps its textures");
+    }
+
+    /// The root and windows A and B draw their shadows in turn, a pass
+    /// each: nothing is rebuilt after the first round, and no viewport
+    /// rewrites or frees what another draws.
+    #[test]
+    fn shadows_of_windows_drawn_in_turn_are_built_once() {
+        let a = egui::ViewportId::from_hash_of("shadow window a");
+        let b = egui::ViewportId::from_hash_of("shadow window b");
+        let root = egui::ViewportId::ROOT;
+        let mut w = Windows::new(&[a, b]);
+        let boxes = [
+            (root, egui::vec2(40.0, 40.0), animated(1)),
+            (a, egui::vec2(80.0, 30.0), shadow_sm()),
+            (b, egui::vec2(60.0, 20.0), animated(9)),
+        ];
+        let mut ids = Vec::new();
+        for (v, size, layers) in boxes {
+            ids.push(w.pass(v, Some((size, layers))));
+        }
+        let built = shadow_builds(&w.ctx);
+        assert_eq!(built, 3, "one shadow per viewport");
+        for _ in 0..MAX_AGE {
+            for ((v, size, layers), first) in boxes.iter().zip(&ids) {
+                assert_eq!(&w.pass(*v, Some((*size, *layers))), first, "{v:?}");
+            }
+        }
+        assert_eq!(shadow_builds(&w.ctx), built, "rebuilt");
+    }
+
+    /// A window that draws the root's shadow takes the root's textures
+    /// instead of building them again; when the window closes, the shadow
+    /// only it drew is freed, and the one the root draws too stays.
+    #[test]
+    fn a_closed_windows_own_shadows_are_freed_and_shared_ones_stay() {
+        let a = egui::ViewportId::from_hash_of("shadow window a");
+        let root = egui::ViewportId::ROOT;
+        let mut w = Windows::new(&[a]);
+        let shared = (egui::vec2(40.0, 40.0), animated(1));
+        let own = (egui::vec2(80.0, 30.0), shadow_sm());
+        let roots = w.pass(root, Some(shared));
+        let mine = w.pass_all(a, &[shared, own]);
+        assert_eq!(mine[0], roots, "the window draws the root's textures");
+        assert_eq!(shadow_builds(&w.ctx), 2, "the shared shadow is built once");
+        w.close(a);
+        for _ in 0..3 {
+            assert_eq!(w.pass(root, Some(shared)), roots);
+        }
+        assert_eq!(shadow_builds(&w.ctx), 2, "rebuilt");
+        assert_eq!(w.freed, mine[1], "the closed window's own shadow is freed");
+        assert_eq!(shadow_textures(&w.ctx), roots.len());
+    }
+
     /// Past [`MAX_BYTES`] idle shadows go, oldest first; ones the last two
     /// passes used stay.
     #[test]
     fn the_shadow_cache_keeps_to_its_byte_budget() {
-        use egui::cache::CacheTrait as _;
         let ctx = egui::Context::default();
         let tile = || {
             let image = egui::ColorImage::new([1, 1], vec![Color32::TRANSPARENT]);
@@ -1095,17 +1429,17 @@ mod tests {
             1.0,
         );
         let plan = Plan::new(&device, 2048).expect("a shadow");
-        let mut cache = ShadowCache::default();
+        let mut cache = Shadows::default();
         let mib = 1 << 20;
         for k in 0..5 {
             let ppp = 1.0 + k as f32;
             let key = Key::new(&plan, [k as f32; 4], CornerRadius::ZERO, shadow_sm(), ppp);
             cache.insert(key, tile(), 6 * mib);
-            cache.update();
+            cache.turn(k + 1);
         }
         // The last pass used the newest; the idle ones go, oldest first,
         // until 12 MiB remain.
-        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.entries.len(), 2);
         let bytes: usize = cache.entries.values().map(|e| e.bytes).sum();
         assert!(bytes <= MAX_BYTES, "{bytes}");
     }
