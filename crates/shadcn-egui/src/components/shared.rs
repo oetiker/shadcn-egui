@@ -855,16 +855,14 @@ impl CutKey {
 }
 
 /// The fallback meshes of faded boxes with sides of unequal width, which
-/// cost 1-4k vertices and milliseconds to cut: the ones the last pass
-/// used and the ones this pass used so far. A pass keeps only what it
-/// uses, as egui's `FrameCache` does, so an animated box cannot grow it.
+/// cost 1-4k vertices and milliseconds to cut: per viewport, the ones its
+/// last pass used and the ones this pass used so far. A pass keeps only
+/// what it uses, as egui's `FrameCache` does, so an animated box cannot
+/// grow it; a mesh another viewport holds is taken from there.
 #[derive(Clone, Default)]
 struct CutCache {
-    pass: u64,
     current: std::collections::HashMap<CutKey, Arc<egui::Mesh>>,
     previous: std::collections::HashMap<CutKey, Arc<egui::Mesh>>,
-    /// Meshes built, for the tests.
-    builds: u64,
 }
 
 fn cut_cache_id() -> Id {
@@ -877,33 +875,63 @@ fn cut_mesh(
     key: CutKey,
     build: impl FnOnce() -> egui::Mesh,
 ) -> Arc<egui::Mesh> {
+    let viewport = ctx.viewport_id();
     let pass = ctx.cumulative_pass_nr();
-    let cached = ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
-        if cache.pass != pass {
-            cache.pass = pass;
-            cache.previous = std::mem::take(&mut cache.current);
-        }
-        let hit = cache
-            .current
-            .get(&key)
-            .cloned()
-            .or_else(|| cache.previous.remove(&key));
-        if let Some(mesh) = &hit {
-            cache.current.insert(key, mesh.clone());
-        }
-        hit
-    });
+    let cached = with_viewport_state(
+        ctx,
+        cut_cache_id(),
+        viewport,
+        pass,
+        |all: &mut PerViewport<CutCache>, closed| {
+            let cache = all.at(closed, viewport, pass, |c, _| {
+                c.previous = std::mem::take(&mut c.current);
+            });
+            if let Some(mesh) = cache.current.get(&key) {
+                return Some(mesh.clone());
+            }
+            let hit = cache.previous.remove(&key).or_else(|| {
+                all.others(viewport)
+                    .find_map(|c| c.current.get(&key).or_else(|| c.previous.get(&key)))
+                    .cloned()
+            });
+            if let Some(mesh) = &hit {
+                all.at(&[], viewport, pass, |_, _| {})
+                    .current
+                    .insert(key, mesh.clone());
+            }
+            hit
+        },
+    );
     if let Some(mesh) = cached {
         return mesh;
     }
     let mesh = Arc::new(build());
     ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
-        cache.current.insert(key, mesh.clone());
-        cache.builds += 1;
+        let all = d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id());
+        all.builds += 1;
+        all.at(&[], viewport, pass, |_, _| {})
+            .current
+            .insert(key, mesh.clone());
     });
     mesh
+}
+
+/// Fallback meshes [`cut_mesh`] built so far, for the tests.
+#[cfg(test)]
+pub(crate) fn cut_builds(ctx: &egui::Context) -> u64 {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id())
+            .builds
+    })
+}
+
+/// Viewports with a state in [`cut_mesh`]'s cache, for the tests.
+#[cfg(test)]
+pub(crate) fn cut_viewports(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id())
+            .len()
+    })
 }
 
 /// `top` composited over `under` (premultiplied, as the browser blends),
@@ -1679,12 +1707,18 @@ fn modality_id() -> Id {
     Id::new("shadcn_egui::focus_modality")
 }
 
-fn space_id() -> Id {
-    Id::new("shadcn_egui::space_down_on")
+/// The record of the button a held Space is down on, in `viewport`: each
+/// viewport has its own, as each document has in the browser, so Space
+/// held in two windows at once is two holds. The theme's hooks drop the
+/// record of a viewport egui has closed.
+pub(crate) fn space_id(viewport: egui::ViewportId) -> Id {
+    Id::new("shadcn_egui::space_down_on").with(viewport)
 }
 
-/// The crate-wide focus modality: the focused widget as last seen, whether
-/// `:focus-visible` holds for it, and what this pass's input was.
+/// The focus modality of one viewport: the focused widget as last seen,
+/// whether `:focus-visible` holds for it, and what this pass's input was.
+/// Each viewport has its own, as each document has in the browser: focus
+/// and pass numbers are per viewport in egui.
 #[derive(Clone, Copy, Debug)]
 struct Modality {
     focused: Option<Id>,
@@ -1694,6 +1728,8 @@ struct Modality {
     /// `pass`, if any.
     input: Option<bool>,
 }
+
+type Modalities = egui::ViewportIdMap<Modality>;
 
 /// The ids [`hit_area`] registered in one pass of one viewport. Only the
 /// current pass's are kept, so the set does not grow with every control
@@ -1705,8 +1741,176 @@ struct HitAreas {
     ids: egui::IdSet,
 }
 
-fn hit_areas_id(ctx: &Context) -> Id {
-    Id::new("shadcn_egui::hit_areas").with(ctx.viewport_id())
+type AllHitAreas = egui::ViewportIdMap<HitAreas>;
+
+fn hit_areas_id() -> Id {
+    Id::new("shadcn_egui::hit_areas")
+}
+
+/// The viewports among `ids` egui has closed: with a pass count of 0
+/// (egui forgets a closed viewport), and none of the root, the current
+/// viewport, its parent and the viewports the current input lists (eframe
+/// lists all open ones). A viewport in its first pass also counts 0 (egui
+/// counts it at the pass's end): an immediate window it shows in that pass
+/// must not take it for closed. A per-viewport record of the crate drops
+/// the closed ones, so an app that opens and closes windows of new ids
+/// keeps no record of each. Call it outside any `data` closure: the pass
+/// counts lock the context.
+pub(crate) fn closed_viewports(
+    ctx: &Context,
+    ids: impl IntoIterator<Item = egui::ViewportId>,
+) -> Vec<egui::ViewportId> {
+    let mut ids: Vec<egui::ViewportId> = ids
+        .into_iter()
+        .filter(|&v| v != egui::ViewportId::ROOT && ctx.cumulative_pass_nr_for(v) == 0)
+        .collect();
+    if ids.is_empty() {
+        return ids;
+    }
+    let live = [ctx.viewport_id(), ctx.parent_viewport_id()];
+    ctx.input(|i| ids.retain(|v| !live.contains(v) && !i.raw.viewports.contains_key(v)));
+    ids
+}
+
+/// A cache's state per viewport, each turned over by that viewport's own
+/// pass or frame number: egui counts passes and frames per viewport, so a
+/// state turned over by "the number moved on" for the whole context would
+/// turn over at every switch between two windows and keep nothing. Each
+/// viewport keeps what it drew in its last pass or frame, however often
+/// another viewport runs in between, and the states of closed viewports
+/// go (see [`with_viewport_state`]). A state holds shared handles (`Arc`,
+/// `TextureHandle`): what a viewport takes from another on a miss is a
+/// clone, so a state that goes, closed or turned over, frees nothing a
+/// live viewport's pass still names. That holds only if the taker stores
+/// the clone in its own state: a handle used on a miss but not kept could
+/// lose its last owner when the other viewport turns over, while the
+/// taker's pass still paints it.
+#[derive(Clone)]
+pub(crate) struct PerViewport<T> {
+    states: egui::ViewportIdMap<(u64, T)>,
+    /// Entries made, for the tests.
+    pub(crate) builds: u64,
+}
+
+impl<T> Default for PerViewport<T> {
+    fn default() -> Self {
+        Self {
+            states: egui::ViewportIdMap::default(),
+            builds: 0,
+        }
+    }
+}
+
+impl<T: Default> PerViewport<T> {
+    /// The state of `viewport` at its number `at`, with the viewports in
+    /// `closed` dropped first. `turn` runs with the state's old number
+    /// when the number moved on; a new state starts at `at`.
+    pub(crate) fn at(
+        &mut self,
+        closed: &[egui::ViewportId],
+        viewport: egui::ViewportId,
+        at: u64,
+        turn: impl FnOnce(&mut T, u64),
+    ) -> &mut T {
+        for v in closed {
+            self.states.remove(v);
+        }
+        let (old, state) = self
+            .states
+            .entry(viewport)
+            .or_insert_with(|| (at, T::default()));
+        if *old != at {
+            turn(state, *old);
+            *old = at;
+        }
+        state
+    }
+}
+
+impl<T> PerViewport<T> {
+    /// The states of the other viewports.
+    pub(crate) fn others(&self, viewport: egui::ViewportId) -> impl Iterator<Item = &T> {
+        self.states
+            .iter()
+            .filter(move |(v, _)| **v != viewport)
+            .map(|(_, (_, state))| state)
+    }
+
+    /// The viewports that hold a state.
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.states.len()
+    }
+
+    /// The states of all viewports.
+    #[cfg(test)]
+    pub(crate) fn all(&self) -> impl Iterator<Item = &T> {
+        self.states.values().map(|(_, state)| state)
+    }
+
+    /// Whether `viewport`'s state is at its number `at`.
+    pub(crate) fn is_at(&self, viewport: egui::ViewportId, at: u64) -> bool {
+        self.states.get(&viewport).is_some_and(|(n, _)| *n == at)
+    }
+
+    /// The state of `viewport`, as it is.
+    pub(crate) fn get(&self, viewport: egui::ViewportId) -> Option<&T> {
+        self.states.get(&viewport).map(|(_, state)| state)
+    }
+
+    /// The viewports that hold a state.
+    pub(crate) fn viewports(&self) -> impl Iterator<Item = egui::ViewportId> + '_ {
+        self.states.keys().copied()
+    }
+}
+
+/// `f` on the [`PerViewport`] in `ctx.data` at `id`, with the closed
+/// viewports it drops when `viewport` turns to its number `at`. While the
+/// viewport's state is at `at` (all but its first call in a pass or
+/// frame), `f` runs in one `data` lock with no viewport to drop; else the
+/// context's pass counts are read outside the lock first, and `f` runs in
+/// a second one. `f` names the state through [`PerViewport::at`].
+pub(crate) fn with_viewport_state<T, R>(
+    ctx: &Context,
+    id: Id,
+    viewport: egui::ViewportId,
+    at: u64,
+    mut f: impl FnMut(&mut PerViewport<T>, &[egui::ViewportId]) -> R,
+) -> R
+where
+    T: Clone + Default + Send + Sync + 'static,
+{
+    let known = ctx.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<PerViewport<T>>(id);
+        if all.is_at(viewport, at) {
+            Ok(f(all, &[]))
+        } else {
+            Err(all.viewports().collect::<Vec<_>>())
+        }
+    });
+    match known {
+        Ok(done) => done,
+        Err(known) => {
+            let closed = closed_viewports(ctx, known);
+            ctx.data_mut(|d| f(d.get_temp_mut_or_default::<PerViewport<T>>(id), &closed))
+        }
+    }
+}
+
+/// How many of `viewports` hold a hit-area record and a focus-modality
+/// record.
+#[cfg(test)]
+pub(crate) fn viewport_records(ctx: &Context, viewports: &[egui::ViewportId]) -> (usize, usize) {
+    ctx.data_mut(|d| {
+        let hit = d.get_temp_mut_or_default::<AllHitAreas>(hit_areas_id());
+        let hit = viewports.iter().filter(|v| hit.contains_key(v)).count();
+        let modality = d.get_temp_mut_or_default::<Modalities>(modality_id());
+        let modality = viewports
+            .iter()
+            .filter(|v| modality.contains_key(v))
+            .count();
+        (hit, modality)
+    })
 }
 
 /// A control's hit area, upstream's `after:absolute after:-inset-*`: a
@@ -1738,9 +1942,23 @@ fn hit_areas_id(ctx: &Context) -> Id {
 #[must_use]
 pub fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
     let pass = ui.ctx().cumulative_pass_nr();
-    let key = hit_areas_id(ui.ctx());
+    let viewport = ui.ctx().viewport_id();
+    // Once per pass of the viewport: drop the sets of closed viewports.
+    let known = ui.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<AllHitAreas>(hit_areas_id());
+        if all.get(&viewport).is_some_and(|a| a.pass == pass) {
+            Vec::new()
+        } else {
+            all.keys().copied().collect()
+        }
+    });
+    let closed = closed_viewports(ui.ctx(), known);
     ui.data_mut(|d| {
-        let areas = d.get_temp_mut_or_default::<HitAreas>(key);
+        let all = d.get_temp_mut_or_default::<AllHitAreas>(hit_areas_id());
+        for v in &closed {
+            all.remove(v);
+        }
+        let areas = all.entry(viewport).or_default();
         if areas.pass != pass {
             *areas = HitAreas {
                 pass,
@@ -1757,11 +1975,13 @@ pub fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
 /// every crate row asks once per pass.
 pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) -> Vec<Id> {
     let pass = ctx.cumulative_pass_nr();
-    let key = egui::util::id_type_map::RawKey::new::<HitAreas>(hit_areas_id(ctx));
+    let viewport = ctx.viewport_id();
+    let key = egui::util::id_type_map::RawKey::new::<AllHitAreas>(hit_areas_id());
     ctx.data(|d| {
         match d
             .get_temp_raw(key)
-            .and_then(|a| a.downcast_ref::<HitAreas>())
+            .and_then(|a| a.downcast_ref::<AllHitAreas>())
+            .and_then(|all| all.get(&viewport))
         {
             Some(areas) if areas.pass == pass => ids
                 .into_iter()
@@ -1773,11 +1993,11 @@ pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) 
 }
 
 /// Whether `:focus-visible` holds for the focused widget, as the browser
-/// tracks it (conformance 2.6), crate-wide. The modality is taken when
-/// focus changes: by the pass's last key press or pointer button event,
-/// and a focus move with no input in its pass (an overlay giving focus
-/// back, a scripted focus) keeps the one before, as the browser keeps it
-/// for a script's `focus()`. A key press while focus stays makes the
+/// tracks it (conformance 2.6): per viewport, as the browser tracks it per
+/// document. The modality is taken when focus changes: by the pass's last
+/// key press or pointer button event, and a focus move with no input in
+/// its pass (an overlay giving focus back, a scripted focus) keeps the one
+/// before, as the browser keeps it for a script's `focus()`. A key press while focus stays makes the
 /// focused widget focus-visible; a pointer press that moves no focus (a
 /// drag on a scroll bar, a press on the focused widget) changes nothing.
 /// A key pressed with Ctrl, Alt or Command is a shortcut and counts as no
@@ -1791,14 +2011,25 @@ pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) 
 pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
     let focused = ctx.memory(|m| m.focused());
-    let mut m = ctx
-        .data(|d| d.get_temp::<Modality>(modality_id()))
-        .unwrap_or(Modality {
-            focused,
-            keyboard: true,
-            pass: u64::MAX,
-            input: None,
-        });
+    let viewport = ctx.viewport_id();
+    let (stored, known) = ctx.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<Modalities>(modality_id());
+        let stored = all.get(&viewport).copied();
+        // Once per pass of the viewport: drop the records of closed ones.
+        let known = if stored.is_some_and(|m| m.pass == pass) {
+            Vec::new()
+        } else {
+            all.keys().copied().collect()
+        };
+        (stored, known)
+    });
+    let closed = closed_viewports(ctx, known);
+    let mut m = stored.unwrap_or(Modality {
+        focused,
+        keyboard: true,
+        pass: u64::MAX,
+        input: None,
+    });
     if m.pass != pass {
         // The raw events: a widget may have consumed the key already.
         m.input = ctx.input(|i| {
@@ -1822,7 +2053,13 @@ pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
         m.focused = focused;
         m.keyboard = m.input.unwrap_or(m.keyboard);
     }
-    ctx.data_mut(|d| d.insert_temp(modality_id(), m));
+    ctx.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<Modalities>(modality_id());
+        for v in &closed {
+            all.remove(v);
+        }
+        all.insert(viewport, m);
+    });
     m.keyboard
 }
 
@@ -1851,7 +2088,9 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
             i.has_accesskit_action_request(resp.id, egui::accesskit::Action::Click),
         )
     });
-    let held = ctx.data(|d| d.get_temp::<Id>(space_id())) == Some(resp.id);
+    // Outside the closures: `viewport_id` locks the context.
+    let space = space_id(ctx.viewport_id());
+    let held = ctx.data(|d| d.get_temp::<Id>(space)) == Some(resp.id);
     let mut click = false;
     if focused {
         click = match keys {
@@ -1865,9 +2104,9 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
     // The held Space of a `<button>`: `ACTIVE` until it comes up or focus
     // leaves, a click only if it comes up on the focused button.
     if keys == ActivationKeys::Button && focused && space_down && !space_up {
-        ctx.data_mut(|d| d.insert_temp(space_id(), resp.id));
+        ctx.data_mut(|d| d.insert_temp(space, resp.id));
     } else if held && (space_up || !focused) {
-        ctx.data_mut(|d| d.remove::<Id>(space_id()));
+        ctx.data_mut(|d| d.remove::<Id>(space));
     }
     resp.flags
         .set(egui::response::Flags::FAKE_PRIMARY_CLICKED, click || access);
@@ -1877,7 +2116,7 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
 /// what pointer and keyboard do to `resp`, and the theme's `DARK`. `FOCUS`
 /// is set while `resp` has focus; `FOCUS_VISIBLE` too where the browser's
 /// `:focus-visible` would match: focus moved by keyboard, not by a pointer
-/// press (crate-wide modality, conformance 2.6). A held Space on a
+/// press (modality per viewport, conformance 2.6). A held Space on a
 /// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`,
 /// or `DISABLED` in `context`) gets `DISABLED` and no `HOVER`, `ACTIVE`,
 /// `FOCUS` or `FOCUS_VISIBLE`, even if `context` has them: shadcn's
@@ -2068,7 +2307,8 @@ fn state_of(theme: &Theme, resp: &Response, context: State, keyboard: bool) -> S
         context.without(pointer_and_focus)
     };
     let focused = live && resp.has_focus();
-    let space_held = resp.ctx.data(|d| d.get_temp::<Id>(space_id())) == Some(resp.id);
+    let space = space_id(resp.ctx.viewport_id());
+    let space_held = resp.ctx.data(|d| d.get_temp::<Id>(space)) == Some(resp.id);
     theme.state(
         &resp.ctx,
         context
@@ -2406,8 +2646,9 @@ mod tests {
     /// `(builds, cached meshes)` of the context's fallback cache.
     fn cut_cache(ctx: &egui::Context) -> (u64, usize) {
         ctx.data_mut(|d| {
-            let c = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
-            (c.builds, c.current.len() + c.previous.len())
+            let all = d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id());
+            let size = all.all().map(|c| c.current.len() + c.previous.len()).sum();
+            (all.builds, size)
         })
     }
 

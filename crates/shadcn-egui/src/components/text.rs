@@ -38,6 +38,7 @@
 //! ```
 
 use crate::components::context;
+use crate::components::shared::{self, PerViewport};
 use crate::style::{pick, pick_where, Recipe, State, TextSize, TextWrap, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
@@ -51,6 +52,8 @@ use std::sync::Arc;
 
 mod line_break;
 mod shape;
+#[cfg(test)]
+pub(crate) use shape::{measure_builds, measure_viewports};
 mod wrap;
 
 /// The context a crate container puts on its content `Ui` to pass the
@@ -464,15 +467,27 @@ impl TextLook {
         let style = self.wrap_style.map(|s| s as u8);
         (wrap as u8, width.to_bits(), style, self.break_word).hash(&mut hasher);
         let key = hasher.finish();
-        let id = egui::Id::new("shadcn_egui::text::laid_out");
+        let id = laid_out_id();
+        let viewport = ctx.viewport_id();
         let frame = ctx.cumulative_frame_nr();
         let pass = ctx.cumulative_pass_nr();
-        // Laying out reads the fonts: not inside a `data_mut`.
-        let probe = ctx
-            .data_mut(|d| d.get_temp_mut_or_default::<LayoutCache>(id).pass != Some(pass))
-            .then(|| atlas_probe(ctx));
+        // Laying out reads the fonts and the pass counts lock the context:
+        // not inside a `data_mut`.
+        let (need_probe, known) = ctx.data_mut(|d| {
+            let all = d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(id);
+            let state = all.get(viewport);
+            let need_probe = state.is_none_or(|s| s.pass != Some(pass));
+            let known = (!all.is_at(viewport, frame)).then(|| all.viewports().collect::<Vec<_>>());
+            (need_probe, known)
+        });
+        let closed = known.map_or_else(Vec::new, |k| shared::closed_viewports(ctx, k));
+        let probe = need_probe.then(|| atlas_probe(ctx));
         let hit = ctx.data_mut(|d| {
-            let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
+            let all = d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(id);
+            let cache = all.at(&closed, viewport, frame, |c, _| {
+                c.entries.retain(|_, e| e.1 + 1 >= frame);
+                c.measured.retain(|_, e| e.1 + 1 >= frame);
+            });
             if let Some(probe) = probe {
                 // A new atlas: the galleys point at glyphs of the old one.
                 if !cache.probe.as_ref().is_some_and(|p| Arc::ptr_eq(p, &probe)) {
@@ -480,11 +495,6 @@ impl TextLook {
                 }
                 cache.probe = Some(probe);
                 cache.pass = Some(pass);
-            }
-            if cache.frame != frame {
-                cache.entries.retain(|_, e| e.1 + 1 >= frame);
-                cache.measured.retain(|_, e| e.1 + 1 >= frame);
-                cache.frame = frame;
             }
             if let Some(e) = cache.entries.get_mut(&key) {
                 e.1 = frame;
@@ -502,7 +512,9 @@ impl TextLook {
         let adv = measured.unwrap_or_else(|| Arc::new(shape::advances(ctx, &job, &faces)));
         let out = self.shape_and_lay_out(ctx, job, &faces, &adv, wrap, width);
         ctx.data_mut(|d| {
-            let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
+            let all = d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(id);
+            all.builds += 1;
+            let cache = all.at(&[], viewport, frame, |_, _| {});
             cache.entries.insert(key, (out.clone(), frame));
             cache.measured.insert(measured_key, (adv, frame));
         });
@@ -764,23 +776,69 @@ impl TextLook {
     }
 }
 
-/// The galleys [`TextLook::lay_out`] laid out in this frame and the one
-/// before: by the hash of the job, width, mode, scale and faces, the galley
-/// and the frame it was last used; by the hash of the job, scale and faces,
-/// the job's advances and the frame they were last used.
+/// Per viewport, the galleys [`TextLook::lay_out`] laid out in its frame
+/// and the one before: by the hash of the job, width, mode, scale and
+/// faces, the galley and the viewport's frame it was last used; by the
+/// hash of the job, scale and faces, the job's advances and the frame they
+/// were last used.
 /// The galleys hold the places of their glyphs in egui's font atlas.
 /// egui builds a new atlas, and empties its own galley cache, when the
 /// fonts or the text options change (a light/dark switch changes how glyph
-/// coverage becomes alpha) and when the atlas is almost full. Once per pass
-/// `probe`, a galley egui keeps in that cache, tells: egui hands out the
-/// same galley while its cache lives, and a new one after.
+/// coverage becomes alpha) and when the atlas is almost full. In each pass
+/// of the viewport, `probe`, a galley egui keeps in that cache, tells: egui
+/// hands out the same galley while its cache lives, and a new one after.
+/// egui's cache keeps only what was used since the last pass began, in any
+/// viewport, and keys a galley by its scale: the theme's begin-of-pass
+/// hook lays out the probe of every viewport at that viewport's scale in
+/// every pass ([`keep_probe`]), so neither a window without crate text
+/// nor a window at another scale drops it.
 #[derive(Clone, Default)]
 struct LayoutCache {
-    frame: u64,
     pass: Option<u64>,
     probe: Option<Arc<Galley>>,
     entries: std::collections::HashMap<u64, (Arc<Galley>, u64)>,
     measured: std::collections::HashMap<u64, (Arc<shape::Advances>, u64)>,
+}
+
+fn laid_out_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::text::laid_out")
+}
+
+fn placed_id() -> egui::Id {
+    egui::Id::new("shadcn_egui::text::placed")
+}
+
+/// Uses the probe galley of every viewport's [`LayoutCache`] at that
+/// viewport's scale, so egui's galley cache keeps them until the next pass
+/// begins, in any viewport: one that lays out no crate text, or one at
+/// another scale (a window on a 150 % monitor beside a root at 100 %).
+/// The theme's begin-of-pass hook calls it, which runs right after egui's
+/// cache dropped what the last pass did not use; under `Context::run`
+/// hooks do not run and such a pass makes the next crate text lay out
+/// again once.
+///
+/// egui lays text out at the current viewport's scale only, read from its
+/// input: the scale is set to each other one for its probe and back.
+pub(crate) fn keep_probe(ctx: &egui::Context) {
+    let own = ctx.pixels_per_point();
+    let viewport = ctx.viewport_id();
+    let mut scales: Vec<f32> = ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(laid_out_id())
+            .others(viewport)
+            .filter_map(|c| c.probe.as_ref().map(|p| p.pixels_per_point))
+            .filter(|&s| s != own)
+            .collect()
+    });
+    scales.sort_by(f32::total_cmp);
+    scales.dedup();
+    let _ = atlas_probe(ctx);
+    for &scale in &scales {
+        ctx.input_mut(|i| i.pixels_per_point = scale);
+        let _ = atlas_probe(ctx);
+    }
+    if !scales.is_empty() {
+        ctx.input_mut(|i| i.pixels_per_point = own);
+    }
 }
 
 /// A galley egui lays out and caches, for [`LayoutCache`]'s `probe`.
@@ -1074,14 +1132,43 @@ struct Placed {
 /// underline offset's bits.
 type PlacedKey = (usize, u32, Leading, Option<Option<u32>>);
 
-/// The galleys [`place_rows`] placed in this frame and the one before, by
-/// the address of the galley egui laid out. egui's galley cache hands out
-/// the same galley while the text stays the same, so an idle widget's text
-/// is placed once, not once per frame.
+/// Per viewport, the galleys [`place_rows`] placed in its frame and the
+/// one before, by the address of the galley egui laid out. egui's galley
+/// cache hands out the same galley while the text stays the same, so an
+/// idle widget's text is placed once, not once per frame.
 #[derive(Clone, Default)]
 struct PlacedCache {
-    frame: u64,
     entries: std::collections::HashMap<PlacedKey, Placed>,
+}
+
+/// Jobs [`TextLook::lay_out`] laid out and galleys [`place_rows`] placed
+/// so far, for the tests.
+#[cfg(test)]
+pub(crate) fn text_builds(ctx: &egui::Context) -> (u64, u64) {
+    ctx.data_mut(|d| {
+        let laid = d
+            .get_temp_mut_or_default::<PerViewport<LayoutCache>>(laid_out_id())
+            .builds;
+        let placed = d
+            .get_temp_mut_or_default::<PerViewport<PlacedCache>>(placed_id())
+            .builds;
+        (laid, placed)
+    })
+}
+
+/// Viewports with a state in the layout and the placing cache, for the
+/// tests.
+#[cfg(test)]
+pub(crate) fn text_viewports(ctx: &egui::Context) -> (usize, usize) {
+    ctx.data_mut(|d| {
+        let laid = d
+            .get_temp_mut_or_default::<PerViewport<LayoutCache>>(laid_out_id())
+            .len();
+        let placed = d
+            .get_temp_mut_or_default::<PerViewport<PlacedCache>>(placed_id())
+            .len();
+        (laid, placed)
+    })
 }
 
 /// [`place_galley_rows`] for a galley painted with its top at `origin_y`
@@ -1094,7 +1181,8 @@ fn place_rows(
     place: Place,
     origin_y: f32,
 ) -> Arc<Galley> {
-    let id = egui::Id::new("shadcn_egui::text::placed");
+    let id = placed_id();
+    let viewport = ctx.viewport_id();
     let (ppp, frame) = (ctx.pixels_per_point(), ctx.cumulative_frame_nr());
     // The tessellator rounds the galley origin to the pixel; Blink rounds
     // origin and baseline together. The fraction it drops goes into the
@@ -1106,20 +1194,24 @@ fn place_rows(
         place.leading,
         place.underline.map(|u| u.offset.map(f32::to_bits)),
     );
-    let hit = ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<PlacedCache>(id);
-        if cache.frame != frame {
-            // Text not shown in the last frame is gone from egui's cache too.
-            cache.entries.retain(|_, e| e.frame + 1 >= frame);
-            cache.frame = frame;
-        }
-        let e = cache.entries.get_mut(&key)?;
-        let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.place == place;
-        same.then(|| {
-            e.frame = frame;
-            e.placed.clone()
-        })
-    });
+    let hit = shared::with_viewport_state(
+        ctx,
+        id,
+        viewport,
+        frame,
+        |all: &mut PerViewport<PlacedCache>, closed| {
+            let cache = all.at(closed, viewport, frame, |c, _| {
+                // Text not shown in the last frame is gone from egui's cache too.
+                c.entries.retain(|_, e| e.frame + 1 >= frame);
+            });
+            let e = cache.entries.get_mut(&key)?;
+            let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.place == place;
+            same.then(|| {
+                e.frame = frame;
+                e.placed.clone()
+            })
+        },
+    );
     if let Some(placed) = hit {
         return placed;
     }
@@ -1134,7 +1226,9 @@ fn place_rows(
             placed: placed.clone(),
             frame,
         };
-        d.get_temp_mut_or_default::<PlacedCache>(id)
+        let all = d.get_temp_mut_or_default::<PerViewport<PlacedCache>>(id);
+        all.builds += 1;
+        all.at(&[], viewport, frame, |_, _| {})
             .entries
             .insert(key, entry);
     });

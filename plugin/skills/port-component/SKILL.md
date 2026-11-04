@@ -217,8 +217,8 @@ back, Right and Down forward) whatever its orientation.
   `shadcn_egui::components::shared::interaction_state(&theme, &resp, context)`,
   turns a `Response` into a `State`: the context flags, `HOVER`, `ACTIVE`,
   `FOCUS` while focused, `FOCUS_VISIBLE` where the browser's
-  `:focus-visible` would match (focus moved by keyboard, tracked
-  crate-wide), and `DARK`. A widget that takes typed text uses
+  `:focus-visible` would match (focus moved by keyboard, tracked per
+  window), and `DARK`. A widget that takes typed text uses
   `text_entry_state`, which shows the ring after a pointer focus too. Do
   not re-derive either per component, or components will disagree.
 - Call `shared::pressable(&mut resp, keys)` right after the interaction of
