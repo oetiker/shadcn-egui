@@ -12,10 +12,11 @@ use shadcn_egui::components::spinner::{spinner, Spinner};
 use shadcn_egui::{layout, Theme};
 
 /// The textured meshes a frame painted: the icons.
-fn icons(out: &egui::FullOutput) -> Vec<egui::Mesh> {
+fn icons(ctx: &egui::Context, out: &egui::FullOutput) -> Vec<egui::Mesh> {
+    let shadows = common::shadow_textures(ctx);
     common::mesh_shapes(out)
         .into_iter()
-        .filter(|m| m.texture_id != TextureId::default())
+        .filter(|m| m.texture_id != TextureId::default() && !shadows.contains(&m.texture_id))
         .collect()
 }
 
@@ -38,7 +39,7 @@ fn timed(
     );
     let repaint =
         out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
-    (icons(&out), repaint)
+    (icons(ctx, &out), repaint)
 }
 
 /// The angle of a painted icon quad: of its first edge against the x axis.
@@ -114,11 +115,11 @@ fn a_spinner_is_the_styles_size() {
 fn size_sets_the_side() {
     let theme = Theme::vega();
     for side in [12.0, 24.0, 32.0] {
-        let (rect, out) = common::measure_output(&theme, egui::Theme::Light, |ui| {
+        let (rect, out, ctx) = common::measure_frame(&theme, egui::Theme::Light, |ui| {
             ui.add(Spinner::new().size(side))
         });
         assert_eq!(rect.size(), Vec2::splat(side));
-        assert_eq!(icons(&out)[0].calc_bounds().size(), Vec2::splat(side));
+        assert_eq!(icons(&ctx, &out)[0].calc_bounds().size(), Vec2::splat(side));
     }
 }
 
@@ -183,14 +184,14 @@ fn alt_text_renames_it() {
 #[test]
 fn a_spinner_takes_the_uis_text_colour() {
     let colour = |set: Option<Color32>| {
-        let (_, out) = common::measure_output(&Theme::vega(), egui::Theme::Light, |ui| {
+        let (_, out, ctx) = common::measure_frame(&Theme::vega(), egui::Theme::Light, |ui| {
             ui.visuals_mut().override_text_color = Some(Color32::RED);
             match set {
                 Some(c) => ui.add(Spinner::new().color(c)),
                 None => spinner(ui),
             }
         });
-        common::mesh_colour(&icons(&out)[0])
+        common::mesh_colour(&icons(&ctx, &out)[0])
     };
     assert_eq!(colour(None), Color32::RED);
     assert_eq!(colour(Some(Color32::BLUE)), Color32::BLUE);
@@ -258,7 +259,7 @@ fn reduced_motion_stops_it() {
 fn a_spinner_in_a_button_keeps_its_size_and_takes_the_buttons_colour() {
     for (name, theme, mode) in common::themes() {
         for size in [ButtonSize::Sm, ButtonSize::Default, ButtonSize::Icon] {
-            let (_, out) = common::measure_output(&theme, mode, |ui| {
+            let (_, out, ctx) = common::measure_frame(&theme, mode, |ui| {
                 ui.add(
                     Button::new("Loading")
                         .size(size)
@@ -266,7 +267,7 @@ fn a_spinner_in_a_button_keeps_its_size_and_takes_the_buttons_colour() {
                         .icon(Glyph::Spinner),
                 )
             });
-            let painted = icons(&out);
+            let painted = icons(&ctx, &out);
             assert_eq!(painted.len(), 1, "{name}");
             assert_eq!(
                 painted[0].calc_bounds().size(),
@@ -290,7 +291,7 @@ fn a_spinner_in_a_button_keeps_its_size_and_takes_the_buttons_colour() {
 fn a_spinner_in_a_badge_takes_the_badges_icon_size() {
     for (name, theme, mode) in common::themes() {
         for end in [false, true] {
-            let (_, out) = common::measure_output(&theme, mode, |ui| {
+            let (_, out, ctx) = common::measure_frame(&theme, mode, |ui| {
                 let b = Badge::new("Syncing").variant(BadgeVariant::Secondary);
                 ui.add(if end {
                     b.icon_end(Glyph::Spinner)
@@ -298,7 +299,7 @@ fn a_spinner_in_a_badge_takes_the_badges_icon_size() {
                     b.icon(Glyph::Spinner)
                 })
             });
-            let painted = icons(&out);
+            let painted = icons(&ctx, &out);
             assert_eq!(painted.len(), 1, "{name}");
             let want = theme.style.badge.sized_icon_size.get(Default::default());
             assert_eq!(
@@ -887,7 +888,7 @@ fn spinners_past_the_turned_texture_bound_are_smoothed() {
         for (id, delta) in &out.textures_delta.set {
             options.insert(*id, delta.options);
         }
-        meshes = icons(&out);
+        meshes = icons(&ctx, &out);
     }
     let turned: Vec<_> = meshes.iter().filter(|m| angle(m).abs() > 1e-3).collect();
     assert!(!turned.is_empty(), "the bound is reached");
@@ -971,8 +972,8 @@ fn central(ctx: &egui::Context, add: &mut dyn FnMut(&mut egui::Ui)) {
 /// How many turned icons a frame draws as the unturned bitmap turned
 /// (the fallback: a turned quad) and how many rasterised at their angle
 /// (an upright quad).
-fn fallen_and_turned(out: &egui::FullOutput) -> (usize, usize) {
-    let all = icons(out);
+fn fallen_and_turned(ctx: &egui::Context, out: &egui::FullOutput) -> (usize, usize) {
+    let all = icons(ctx, out);
     let fallen = all.iter().filter(|m| angle(m).abs() > 1e-3).count();
     (fallen, all.len() - fallen)
 }
@@ -1009,7 +1010,7 @@ fn a_gone_viewports_turned_textures_are_freed() {
         let popup = egui::ViewportId::from_hash_of("popup");
         let out = run_by(by, &ctx, popup, 0.3, many_sizes);
         assert!(
-            fallen_and_turned(&out).0 > 0,
+            fallen_and_turned(&ctx, &out).0 > 0,
             "{by:?}: the bound is reached"
         );
         let mut last = (0, 0);
@@ -1023,7 +1024,7 @@ fn a_gone_viewports_turned_textures_are_freed() {
                     ui.add(Spinner::new().size(16.0));
                 },
             );
-            last = fallen_and_turned(&out);
+            last = fallen_and_turned(&ctx, &out);
         }
         for frame in 0..100 {
             run_by(
@@ -1092,6 +1093,6 @@ fn a_new_size_takes_the_room_of_sizes_no_longer_drawn() {
         let out = run_in(&ctx, root, 0.31 + f64::from(frame) * 0.017, |ui| {
             ui.add(Spinner::new().size(100.0));
         });
-        assert_eq!(fallen_and_turned(&out), (0, 1), "frame {frame}");
+        assert_eq!(fallen_and_turned(&ctx, &out), (0, 1), "frame {frame}");
     }
 }

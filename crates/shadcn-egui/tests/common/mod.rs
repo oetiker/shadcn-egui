@@ -142,16 +142,98 @@ pub fn snapshot_with_themes(
 pub fn measure_output(
     theme: &Theme,
     mode: egui::Theme,
-    mut add: impl FnMut(&mut egui::Ui) -> egui::Response,
+    add: impl FnMut(&mut egui::Ui) -> egui::Response,
 ) -> (egui::Rect, egui::FullOutput) {
+    let (rect, out, _) = measure_frame(theme, mode, add);
+    (rect, out)
+}
+
+/// [`measure_output`] and the context it ran on. The output's
+/// `textures_delta` holds what both frames uploaded, so it has the image
+/// of every texture the frame paints with.
+pub fn measure_frame(
+    theme: &Theme,
+    mode: egui::Theme,
+    mut add: impl FnMut(&mut egui::Ui) -> egui::Response,
+) -> (egui::Rect, egui::FullOutput, egui::Context) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     ctx.set_theme(mode);
     ctx.all_styles_mut(|s| s.animation_time = 0.0);
     let mut rect = egui::Rect::NOTHING;
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
-    let out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
-    (rect, out)
+    let first = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    let mut textures = first.textures_delta;
+    textures.append(std::mem::take(&mut out.textures_delta));
+    out.textures_delta = textures;
+    (rect, out, ctx)
+}
+
+/// The textures `ctx` holds for box shadows (the crate names them so).
+pub fn shadow_textures(ctx: &egui::Context) -> Vec<egui::TextureId> {
+    ctx.tex_manager()
+        .read()
+        .allocated()
+        .filter(|(_, meta)| meta.name == "shadcn-egui box-shadow")
+        .map(|(id, _)| *id)
+        .collect()
+}
+
+/// Every whole texture image `out` uploads, by id.
+pub fn texture_images(
+    out: &egui::FullOutput,
+) -> std::collections::HashMap<egui::TextureId, egui::ColorImage> {
+    out.textures_delta
+        .set
+        .iter()
+        .filter(|(_, d)| d.pos.is_none())
+        .map(|(id, d)| {
+            let egui::ImageData::Color(image) = &d.image;
+            (*id, (**image).clone())
+        })
+        .collect()
+}
+
+/// The premultiplied alpha, 0..=255, that the textured `meshes` paint at
+/// `p` (in points), sampled as a GPU samples a `NEAREST` texture: the
+/// texel under `p` times the vertex colour, of the first mesh that covers
+/// `p`; 0 where none does.
+pub fn textured_alpha(
+    meshes: &[egui::Mesh],
+    images: &std::collections::HashMap<egui::TextureId, egui::ColorImage>,
+    p: egui::Pos2,
+) -> f32 {
+    for m in meshes {
+        let Some(image) = images.get(&m.texture_id) else {
+            continue;
+        };
+        for t in m.indices.as_chunks::<3>().0 {
+            let [a, b, c] = t.map(|i| m.vertices[i as usize]);
+            let cross = |u: egui::Pos2, v: egui::Pos2, w: egui::Pos2| {
+                (v - u).x * (w - u).y - (v - u).y * (w - u).x
+            };
+            let area = cross(a.pos, b.pos, c.pos);
+            if area.abs() < 1e-9 {
+                continue;
+            }
+            let w = [
+                cross(b.pos, c.pos, p),
+                cross(c.pos, a.pos, p),
+                cross(a.pos, b.pos, p),
+            ]
+            .map(|x| x / area);
+            if w.iter().any(|x| *x < 0.0) {
+                continue;
+            }
+            let uv = a.uv.to_vec2() * w[0] + b.uv.to_vec2() * w[1] + c.uv.to_vec2() * w[2];
+            let [iw, ih] = image.size;
+            let x = ((uv.x * iw as f32).floor() as usize).min(iw - 1);
+            let y = ((uv.y * ih as f32).floor() as usize).min(ih - 1);
+            let texel = f32::from(image.pixels[y * iw + x].a());
+            return texel * f32::from(a.color.a()) / 255.0;
+        }
+    }
+    0.0
 }
 
 /// The rect of the widget `add` places, under `theme` in `mode` (see

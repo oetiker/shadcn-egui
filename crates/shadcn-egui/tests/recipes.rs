@@ -1025,16 +1025,12 @@ fn checkbox_tick_colour_comes_from_the_indicator() {
     let theme = common::restyled(Theme::vega(), |s| {
         s.checkbox_indicator.text.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
-    let (_, out) = common::measure_output(&theme, mode, |ui| ui.add(Checkbox::new(&mut true)));
-    let tick = out
-        .shapes
-        .iter()
-        .find_map(|c| match &c.shape {
-            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
-                m.vertices.first().map(|v| v.color)
-            }
-            _ => None,
-        })
+    let (_, out, ctx) = common::measure_frame(&theme, mode, |ui| ui.add(Checkbox::new(&mut true)));
+    let shadows = common::shadow_textures(&ctx);
+    let tick = common::mesh_shapes(&out)
+        .into_iter()
+        .find(|m| m.texture_id != egui::TextureId::default() && !shadows.contains(&m.texture_id))
+        .and_then(|m| m.vertices.first().map(|v| v.color))
         .expect("a tick");
     assert_eq!(tick, theme.palette_of(mode).destructive);
 }
@@ -1158,20 +1154,24 @@ fn replaced_popover_recipe_keeps_its_content_width() {
 }
 
 /// The bounds of every icon (a textured mesh) a frame painted.
-fn icon_rects(out: &egui::FullOutput) -> Vec<egui::Rect> {
-    fn walk(s: &egui::Shape, acc: &mut Vec<egui::Rect>) {
+fn icon_rects(ctx: &egui::Context, out: &egui::FullOutput) -> Vec<egui::Rect> {
+    let shadows = common::shadow_textures(ctx);
+    let icon = |id: egui::TextureId| id != egui::TextureId::default() && !shadows.contains(&id);
+    fn walk(s: &egui::Shape, icon: &dyn Fn(egui::TextureId) -> bool, acc: &mut Vec<egui::Rect>) {
         match s {
-            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
+            egui::Shape::Mesh(m) if icon(m.texture_id) => {
                 acc.push(egui::Rect::from_points(
                     &m.vertices.iter().map(|v| v.pos).collect::<Vec<_>>(),
                 ));
             }
-            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, acc)),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, icon, acc)),
             _ => {}
         }
     }
     let mut acc = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    out.shapes
+        .iter()
+        .for_each(|c| walk(&c.shape, &icon, &mut acc));
     acc
 }
 
@@ -1189,10 +1189,10 @@ fn replaced_recipes_keep_their_icons() {
         *s.select_item_indicator = Recipe::default();
     });
     let icon = cleared.metrics.icon;
-    let (_, out) = common::measure_output(&cleared, egui::Theme::Light, |ui| {
+    let (_, out, ctx) = common::measure_frame(&cleared, egui::Theme::Light, |ui| {
         ui.add(Checkbox::new(&mut true))
     });
-    let ticks = icon_rects(&out);
+    let ticks = icon_rects(&ctx, &out);
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(320.0, 260.0))
         .build_ui(move |ui| {
@@ -1200,10 +1200,10 @@ fn replaced_recipes_keep_their_icons() {
             ui.add(Select::new("fruit", &mut 0, &["Apple", "Banana"]));
         });
     h.run();
-    let chevrons = icon_rects(h.output());
+    let chevrons = icon_rects(&h.ctx, h.output());
     h.get_by_role(egui::accesskit::Role::ComboBox).click();
     h.run();
-    let open = icon_rects(h.output());
+    let open = icon_rects(&h.ctx, h.output());
     let big = |v: &[egui::Rect]| v.iter().filter(|r| r.width() >= icon * 0.5).count();
     assert_eq!(
         (big(&ticks), big(&chevrons), big(&open)),

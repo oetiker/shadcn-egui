@@ -777,6 +777,42 @@ mod tests {
         assert_eq!(c.pixels, full.pixels, "stale pixels of a freed texture");
     }
 
+    /// A `NEAREST` texture drawn 1:1 shows each texel at its pixel, as
+    /// the GPU does; the box shadows rely on it (#25).
+    #[test]
+    fn a_nearest_texture_drawn_one_to_one_shows_its_texels() {
+        let id = TextureId::Managed(9);
+        let texels = [
+            Color32::RED,
+            Color32::GREEN,
+            Color32::BLUE,
+            Color32::from_rgb(10, 20, 30),
+        ];
+        let mut mesh = Mesh::with_texture(id);
+        mesh.add_rect_with_uv(
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(4.0, 1.0)),
+            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        let mut delta = TexturesDelta::default();
+        delta.set.push((
+            id,
+            egui::epaint::ImageDelta::full(
+                egui::ColorImage::new([4, 1], texels.to_vec()),
+                TextureOptions::NEAREST,
+            ),
+        ));
+        let mut r = Rasterizer::with_white_atlas();
+        let mut c = Canvas::new(4, 1);
+        r.set_textures(&delta);
+        render(&mut r, &mut c, &[prim(mesh)]);
+        let want: Vec<u32> = texels
+            .iter()
+            .map(|t| u32::from_be_bytes([0, t.r(), t.g(), t.b()]))
+            .collect();
+        assert_eq!(c.pixels, want);
+    }
+
     #[test]
     fn an_opaque_rect_covers_exactly_its_pixels() {
         let mut c = Canvas::new(8, 8);

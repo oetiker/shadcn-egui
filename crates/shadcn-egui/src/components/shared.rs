@@ -784,14 +784,14 @@ impl RecipeBox {
         (!self.shadow.as_slice().is_empty() && self.shadow_opacity > 0.0).then(|| {
             // The fill's rect as egui's tessellator places it.
             let rect = on_pixels(ctx, rect);
-            Shape::Mesh(crate::box_shadow::shadow_mesh(
+            crate::box_shadow::shadow_shape(
                 ctx,
                 rect,
                 clamp_radii(self.radii, rect),
                 radius,
                 self.shadow,
                 self.shadow_opacity,
-            ))
+            )
         })
     }
 }
@@ -2427,6 +2427,26 @@ mod tests {
         mesh
     }
 
+    /// The same mesh, vertex for vertex and index for index.
+    fn assert_same_mesh(a: &egui::Mesh, b: &egui::Mesh, what: &str) {
+        assert_eq!(a.indices, b.indices, "{what} indices");
+        assert_eq!(a.vertices.len(), b.vertices.len(), "{what} vertices");
+        for (u, v) in a.vertices.iter().zip(&b.vertices) {
+            assert_eq!(u.pos.x.to_bits(), v.pos.x.to_bits(), "{what} {u:?} {v:?}");
+            assert_eq!(u.pos.y.to_bits(), v.pos.y.to_bits(), "{what} {u:?} {v:?}");
+            assert_eq!(u.uv, v.uv, "{what}");
+            assert_eq!(u.color, v.color, "{what}");
+        }
+    }
+
+    /// Both halves of a split as the per-edge test alone splits them.
+    fn assert_same_split(mesh: &egui::Mesh, polygon: &[egui::Pos2]) {
+        let fast = split_convex_with(mesh, polygon, true);
+        let reference = split_convex_with(mesh, polygon, false);
+        assert_same_mesh(&fast.0, &reference.0, "inside");
+        assert_same_mesh(&fast.1, &reference.1, "outside");
+    }
+
     /// The cheap sorting before the per-edge test keeps every outline
     /// the clip cuts with, `clip_inside` and `clip_outside` alike, cutting
     /// exactly as before: the exact, outer and inner outlines and the band
@@ -2465,7 +2485,7 @@ mod tests {
                 .into_iter()
                 .chain(quads)
             {
-                crate::box_shadow::tests::assert_same_split(&mesh, &polygon);
+                assert_same_split(&mesh, &polygon);
             }
         }
     }

@@ -507,7 +507,7 @@ fn box_pass(ctx: &egui::Context, time: f64, r: &Recipe, s: State) -> Vec<egui::S
     let theme = shadcn_egui::Theme::vega();
     let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(40.0, 20.0));
     let mut shapes = Vec::new();
-    let _ = ctx.run_ui(
+    let out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -518,8 +518,21 @@ fn box_pass(ctx: &egui::Context, time: f64, r: &Recipe, s: State) -> Vec<egui::S
                 .shapes(ui.ctx(), rect);
         },
     );
+    // Keep the images the pass uploads, for `shadow_alpha`.
+    ctx.data_mut(|d| {
+        let uploads = d.get_temp_mut_or_default::<Uploads>(egui::Id::new("uploads"));
+        for (id, delta) in out.textures_delta.set {
+            let egui::ImageData::Color(image) = delta.image;
+            if delta.pos.is_none() {
+                uploads.insert(id, image);
+            }
+        }
+    });
     shapes
 }
+
+/// The whole images the passes of a context uploaded, by texture.
+type Uploads = std::collections::HashMap<egui::TextureId, std::sync::Arc<egui::ColorImage>>;
 
 /// The outline's width among `shapes`: the only stroked rect.
 fn outline_width(shapes: &[egui::Shape]) -> f32 {
@@ -532,13 +545,33 @@ fn outline_width(shapes: &[egui::Shape]) -> f32 {
         .unwrap_or(0.0)
 }
 
-/// The darkest alpha of the shadow mesh among `shapes`.
-fn shadow_alpha(shapes: &[egui::Shape]) -> u8 {
-    shapes
-        .iter()
-        .filter_map(|s| match s {
-            egui::Shape::Mesh(m) => m.vertices.iter().map(|v| v.color.a()).max(),
-            _ => None,
+/// The darkest alpha the shadow among `shapes` paints: its texture's
+/// strongest texel times the fade of its quads.
+fn shadow_alpha(ctx: &egui::Context, shapes: &[egui::Shape]) -> u8 {
+    let uploads = ctx.data(|d| {
+        d.get_temp::<Uploads>(egui::Id::new("uploads"))
+            .unwrap_or_default()
+    });
+    fn meshes<'a>(s: &'a egui::Shape, out: &mut Vec<&'a egui::Mesh>) {
+        match s {
+            egui::Shape::Mesh(m) => out.push(m),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| meshes(s, out)),
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    shapes.iter().for_each(|s| meshes(s, &mut found));
+    found
+        .into_iter()
+        .filter_map(|m| {
+            let texel = uploads
+                .get(&m.texture_id)?
+                .pixels
+                .iter()
+                .map(|p| p.a())
+                .max()?;
+            let fade = m.vertices.iter().map(|v| v.color.a()).max()?;
+            Some((u16::from(texel) * u16::from(fade) / 255) as u8)
         })
         .max()
         .unwrap_or(0)
@@ -577,17 +610,17 @@ fn shadow_elevation_fades_where_box_shadow_is_named() {
     box_pass(&ctx, 1.0, &r, State::NONE);
     let full = {
         let ctx = fresh();
-        shadow_alpha(&box_pass(&ctx, 1.0, &r, State::FOCUS_VISIBLE))
+        shadow_alpha(&ctx, &box_pass(&ctx, 1.0, &r, State::FOCUS_VISIBLE))
     };
     assert!(full > 0);
     assert_eq!(
-        shadow_alpha(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        shadow_alpha(&ctx, &box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
         0
     );
-    let half = shadow_alpha(&box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
+    let half = shadow_alpha(&ctx, &box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
     assert!(half > 0 && half < full, "{half} of {full}");
     assert_eq!(
-        shadow_alpha(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE)),
+        shadow_alpha(&ctx, &box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE)),
         full
     );
     // `transition-colors` does not name `box-shadow`: it jumps.
@@ -595,7 +628,7 @@ fn shadow_elevation_fades_where_box_shadow_is_named() {
     let r = focus_recipe(Transition::COLORS);
     box_pass(&ctx, 1.0, &r, State::NONE);
     assert_eq!(
-        shadow_alpha(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        shadow_alpha(&ctx, &box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
         full
     );
 }
