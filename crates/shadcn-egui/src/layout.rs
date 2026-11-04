@@ -26,11 +26,13 @@ fn same_width(a: f32, b: f32) -> bool {
     a == b || (a - b).abs() <= ROW_HEIGHT_EPSILON
 }
 
-/// How much narrower epaint reports text at a finite width than it
-/// measured unwrapped: it wraps at that width rounded to whole points
-/// (plus this, so it never wraps earlier) and reports the galley no
-/// wider than the rounded width (`Fonts::layout_job`,
-/// `Galley::round_output_to_gui`).
+/// How much narrower epaint reports egui's own text (an egui `Label` in a
+/// stack) at a finite width than it measured unwrapped: epaint 0.37 rounds
+/// the wrap width to whole points (`GalleyCache::layout_internal`), wraps
+/// at that plus this, so it never wraps earlier
+/// (`LayoutJob::effective_wrap_width`), and reports the galley no wider
+/// than the rounded width (`Galley::round_output_to_gui`). Crate text
+/// breaks its own lines and reports its exact width.
 const TEXT_WIDTH_ROUNDING: f32 = 0.5; // behaviour-ok: epaint's wrap-width rounding, not a design token
 
 /// Whether a pass of `ui` may replace what a layout helper stored from

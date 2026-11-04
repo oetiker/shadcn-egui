@@ -284,15 +284,14 @@ pub(super) fn normal(cands: &[Candidate], width: f32) -> Vec<usize> {
 /// Whether a word may break between `a` and `b` under
 /// `overflow-wrap: break-word`, which breaks at grapheme cluster
 /// boundaries: not around a zero-width joiner, nor before a combining
-/// mark, a variation selector or an emoji skin-tone modifier.
+/// mark ([`super::shape::is_mark`], and the grapheme joiner U+034F), a
+/// variation selector or an emoji skin-tone modifier.
 fn cluster_boundary(a: char, b: char) -> bool {
     !(a == '\u{200D}'
+        || super::shape::is_mark(b)
         || matches!(
             b,
-            '\u{200D}'
-                | '\u{0300}'..='\u{036F}'
-                | '\u{FE00}'..='\u{FE0F}'
-                | '\u{1F3FB}'..='\u{1F3FF}'
+            '\u{200D}' | '\u{034F}' | '\u{FE00}'..='\u{FE0F}' | '\u{1F3FB}'..='\u{1F3FF}'
         ))
 }
 
@@ -604,11 +603,18 @@ mod tests {
         assert_eq!(break_word_lines("ab cd", 8.0), ["ab cd"]);
         // One char a line at least, even where none fits.
         assert_eq!(break_word_lines("abc", 0.5), ["a", "b", "c"]);
-        // A combining mark stays with its base.
-        assert_eq!(
-            break_word_lines("e\u{301}e\u{301}", 1.0),
-            ["e\u{301}", "e\u{301}"]
-        );
+        // A combining mark stays with its base, in every block the text
+        // path shapes with its base (`shape::is_mark`).
+        for mark in [
+            '\u{301}', '\u{1AB0}', '\u{1DC0}', '\u{20DD}', '\u{FE20}', '\u{3099}',
+        ] {
+            assert_eq!(
+                break_word_lines(&format!("e{mark}e{mark}"), 1.0),
+                [format!("e{mark}"), format!("e{mark}")],
+                "U+{:04X}",
+                mark as u32
+            );
+        }
         // Emergency candidates never reach the other breakers.
         assert!(candidates(&mono("abcd")).iter().all(|c| !c.emergency));
     }
