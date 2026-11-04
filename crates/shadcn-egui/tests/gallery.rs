@@ -93,7 +93,7 @@ fn a_picker_change_rewrites_the_code() {
     let mut h = stateful(GalleryState::default());
     h.get_by_role_and_label(Role::ComboBox, "Style").click();
     h.run();
-    h.get_by_role_and_label(Role::Button, "vega").click();
+    h.get_by_role_and_label(Role::ListBoxOption, "vega").click();
     h.run();
     let want = Preset::default().style(shadcn_egui::StyleName::Vega);
     assert_eq!(h.state().preset, want);
