@@ -23,7 +23,7 @@ use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
 use crate::style::{pick, pick_len};
 use crate::Theme;
-use egui::{PopupCloseBehavior, Response, TextWrapMode, Ui, UiBuilder};
+use egui::{PopupCloseBehavior, RectAlign, Response, TextWrapMode, Ui, UiBuilder};
 
 default_variant!(
     /// The popover's variant: upstream has none, so only app variants
@@ -123,6 +123,12 @@ impl<'a> Popover<'a> {
             .map(|w| (w - pad_l - pad_r).max(0.0));
         let shown = popup
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+            // popover-content.svelte: `side = "bottom"`, `align = "center"`;
+            // floating-ui flips to the top side when the bottom has no
+            // room, and egui's area shifts the box into the window as
+            // floating-ui's `shift` does.
+            .align(RectAlign::BOTTOM)
+            .align_alternatives(&[RectAlign::TOP])
             .gap(self.side_offset)
             .frame(frame)
             .show(|ui| {
@@ -162,7 +168,7 @@ impl<'a> Popover<'a> {
         );
         if let Some(slot) = slot {
             panel.paint_reserved(ctx, layer, slot, rect);
-            let (side, origin) = side_and_origin(rect, self.trigger.rect, egui::Align::Min);
+            let (side, origin) = side_and_origin(rect, self.trigger.rect, egui::Align::Center);
             enter.transform(ctx, layer, slot, origin, &l, g | side);
         }
         Some(inner)

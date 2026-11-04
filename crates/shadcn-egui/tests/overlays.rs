@@ -319,6 +319,65 @@ fn popover_box_is_w_72_and_content_gets_the_padding() {
     }
 }
 
+/// The popover's box and its trigger's rect, with the trigger at
+/// `(x, y)` in a 640 x 400 window.
+fn popover_place(x: f32, y: f32) -> (egui::Rect, egui::Rect) {
+    let seen = std::cell::Cell::new((egui::Rect::NOTHING, egui::Id::NULL));
+    let mut h = Harness::builder()
+        .with_size(vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            let r = egui::Rect::from_min_size(egui::pos2(x, y), vec2(110.0, 36.0));
+            let trigger = ui.put(r, Button::new("Dimensions").variant(ButtonVariant::Outline));
+            seen.set((trigger.rect, egui::Popup::default_response_id(&trigger)));
+            Popover::new(&trigger).show(|ui| {
+                popover_header(ui, "Layer size", "Set the dimensions for the layer.");
+            });
+        });
+    h.run();
+    h.get_by_label("Dimensions").click();
+    h.run();
+    let (trigger, id) = seen.get();
+    let panel = h
+        .ctx
+        .memory(|m| m.area_rect(id))
+        .expect("the popover is open");
+    (trigger, panel)
+}
+
+#[test]
+fn a_popover_is_centred_on_its_trigger() {
+    // popover-content.svelte: `align = "center"`, `side = "bottom"`,
+    // `sideOffset = 4`; floating-ui flips to the top when the bottom has no
+    // room and shifts the box into the window.
+    let (trigger, panel) = popover_place(265.0, 40.0);
+    assert!(
+        (panel.center().x - trigger.center().x).abs() < 0.5,
+        "centred: {panel:?} under {trigger:?}"
+    );
+    assert!(
+        (panel.top() - trigger.bottom() - 4.0).abs() < 0.5,
+        "below by 4: {panel:?}"
+    );
+
+    let (trigger, panel) = popover_place(265.0, 340.0);
+    assert!(
+        (panel.center().x - trigger.center().x).abs() < 0.5,
+        "centred: {panel:?} above {trigger:?}"
+    );
+    assert!(
+        (trigger.top() - panel.bottom() - 4.0).abs() < 0.5,
+        "flipped above: {panel:?}"
+    );
+
+    let (trigger, panel) = popover_place(4.0, 40.0);
+    assert!(panel.left() >= 0.0, "shifted into the window: {panel:?}");
+    assert!(
+        (panel.top() - trigger.bottom() - 4.0).abs() < 0.5,
+        "still below: {panel:?}"
+    );
+}
+
 #[test]
 fn popover_snapshot() {
     common::snapshot_all_with("popover", vec2(420.0, 240.0), popover_trigger, |h| {
