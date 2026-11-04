@@ -1202,3 +1202,230 @@ fn dialog_demo_snapshot() {
             });
     });
 }
+
+/// The overlays the enter animation runs on, with upstream's duration:
+/// tw-animate-css `animate-in` over `duration-100`, the tooltip without a
+/// duration over tw-animate's 150 ms.
+#[derive(Clone, Copy, Debug)]
+enum Overlay {
+    Dialog,
+    Popover,
+    Select,
+    Tooltip,
+}
+
+impl Overlay {
+    const ALL: [Overlay; 4] = [
+        Overlay::Dialog,
+        Overlay::Popover,
+        Overlay::Select,
+        Overlay::Tooltip,
+    ];
+
+    fn duration(self) -> f64 {
+        match self {
+            Overlay::Tooltip => 0.15,
+            _ => 0.1,
+        }
+    }
+
+    /// The panel's fill in vega light.
+    fn fill(self) -> egui::Color32 {
+        let theme = Theme::vega();
+        let p = theme.palette_of(egui::Theme::Light);
+        match self {
+            Overlay::Dialog => p.background,
+            Overlay::Popover | Overlay::Select => p.popover,
+            Overlay::Tooltip => p.foreground,
+        }
+    }
+}
+
+/// What one pass painted of an open overlay: the panel's fill rect and
+/// colour (the largest box of the panel's fill, `None` while it is
+/// invisible), the dialog's backdrop colour, and whether the pass asks for
+/// a repaint.
+#[derive(Debug)]
+struct Drawn {
+    panel: Option<(egui::Rect, egui::Color32)>,
+    backdrop: Option<egui::Color32>,
+    repaint: bool,
+}
+
+/// An overlay opened at time 0 (its first passes size and draw it), then
+/// one pass at each of `times`. `reduced` turns motion off.
+fn enter_passes(overlay: Overlay, reduced: bool, times: &[f64]) -> Vec<Drawn> {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    ctx.all_styles_mut(|s| {
+        s.interaction.tooltip_delay = 0.0;
+        if reduced {
+            s.animation_time = 0.0;
+        }
+    });
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(640.0, 360.0));
+    let trigger = std::cell::Cell::new(None::<egui::Rect>);
+    let mut selected = 0;
+    let mut page = |ui: &mut egui::Ui| {
+        ui.add_space(40.0);
+        ui.horizontal(|ui| {
+            ui.add_space(40.0);
+            match overlay {
+                Overlay::Dialog => {
+                    Dialog::new("enter", "Title").show(ui.ctx(), &mut true, |ui| {
+                        ui.label("Body");
+                    });
+                }
+                Overlay::Popover => {
+                    let r = ui.add(Button::new("Open").variant(ButtonVariant::Outline));
+                    if trigger.replace(Some(r.rect)).is_none() {
+                        egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r));
+                    }
+                    Popover::new(&r).show(|ui| {
+                        ui.label("Body");
+                    });
+                }
+                Overlay::Select => {
+                    let r = ui.add(Select::new("enter", &mut selected, &["One", "Two"]));
+                    if trigger.replace(Some(r.rect)).is_none() {
+                        egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r));
+                    }
+                }
+                Overlay::Tooltip => {
+                    let r = ui.add(Button::new("Hover").variant(ButtonVariant::Outline));
+                    trigger.set(Some(r.rect));
+                    tooltip(r, "Tip");
+                }
+            }
+        });
+    };
+    let fill = overlay.fill();
+    let same_rgb = |c: egui::Color32, want: egui::Color32| {
+        let [r, g, b, a] = c.to_srgba_unmultiplied();
+        let w = want.to_srgba_unmultiplied();
+        a > 0 && [r, g, b].iter().zip(w).all(|(x, y)| x.abs_diff(y) <= 2)
+    };
+    let mut run = |time: f64, events: Vec<egui::Event>| {
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let out = common::no_textures(ctx.run_ui(input, &mut page));
+        let rects = common::rect_shapes(&out);
+        let panel = rects
+            .iter()
+            .filter(|r| r.rect != screen && same_rgb(r.fill, fill))
+            .max_by(|a, b| a.rect.area().total_cmp(&b.rect.area()))
+            .map(|r| (r.rect, r.fill));
+        let backdrop = rects.iter().find(|r| r.rect == screen).map(|r| r.fill);
+        let repaint =
+            out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
+        Drawn {
+            panel,
+            backdrop,
+            repaint,
+        }
+    };
+    // Open it: the pointer moves onto the tooltip's trigger once the
+    // first pass placed it.
+    run(0.0, Vec::new());
+    let hover = trigger
+        .get()
+        .map(|r| vec![egui::Event::PointerMoved(r.center())])
+        .unwrap_or_default();
+    run(0.0, hover);
+    for _ in 0..3 {
+        run(0.0, Vec::new());
+    }
+    times.iter().map(|&t| run(t, Vec::new())).collect()
+}
+
+/// An overlay opens as upstream's does (tw-animate-css `animate-in
+/// fade-in-0 zoom-in-95`, conformance 7): from transparent at 95 % scale
+/// to its place along CSS's `ease` over the style's duration, a dialog's
+/// backdrop fading in with it; a popover or a select list slides down
+/// from 8 px above its place (`slide-in-from-top-2`), a tooltip up from
+/// below. egui's own fade of its area (0.2 s since egui 0.37) does not
+/// show.
+#[test]
+fn an_overlay_opens_with_upstreams_enter_animation() {
+    use shadcn_egui::style::Easing;
+    for overlay in Overlay::ALL {
+        let d = overlay.duration();
+        let half = d / 2.0;
+        let passes = enter_passes(overlay, false, &[half, d, 1.0, 2.0]);
+        let p = Easing::Ease.at(0.5);
+        let (r_half, c_half) = passes[0].panel.expect("drawn at half time");
+        let (r_end, c_end) = passes[1].panel.expect("drawn at the end");
+        let (r_settled, c_settled) = passes[3].panel.expect("settled");
+        assert_eq!(
+            (r_end, c_end),
+            (r_settled, c_settled),
+            "{overlay:?} ends in place"
+        );
+        let opacity = f32::from(c_half.a()) / f32::from(c_end.a());
+        assert!(
+            (opacity - p).abs() < 0.01,
+            "{overlay:?}: opacity {opacity}, want {p}"
+        );
+        let scale = r_half.width() / r_end.width();
+        let want = 0.95 + 0.05 * p;
+        assert!(
+            (scale - want).abs() < 0.002,
+            "{overlay:?}: scale {scale}, want {want}"
+        );
+        assert!(
+            passes[0].repaint,
+            "{overlay:?}: a running animation repaints"
+        );
+        let slide = 8.0 * (1.0 - p);
+        match overlay {
+            Overlay::Dialog => {
+                let moved = r_half.center() - r_end.center();
+                assert!(moved.length() < 0.01, "{overlay:?}: zooms about its centre");
+                let half = passes[0].backdrop.expect("backdrop at half time");
+                let end = passes[1].backdrop.expect("backdrop at the end");
+                let faded = f32::from(half.a()) / f32::from(end.a());
+                assert!(
+                    (faded - p).abs() < 0.05,
+                    "backdrop opacity {faded}, want {p}"
+                );
+                assert!(!passes[3].repaint, "no repaint once it has run");
+            }
+            Overlay::Popover | Overlay::Select => {
+                // The origin lies on the top edge: only the slide moves it.
+                let moved = r_half.top() - r_end.top();
+                assert!(
+                    (moved + slide).abs() < 0.01,
+                    "{overlay:?}: top moved {moved}"
+                );
+            }
+            Overlay::Tooltip => {
+                assert!(
+                    r_half.center().y > r_end.center().y,
+                    "starts below its place"
+                );
+            }
+        }
+    }
+}
+
+/// Under reduced motion (`animation_time == 0`) an overlay shows at its
+/// place and full opacity in the first pass that draws it.
+#[test]
+fn reduced_motion_opens_an_overlay_at_once() {
+    for overlay in Overlay::ALL {
+        let passes = enter_passes(overlay, true, &[0.0, 1.0]);
+        let first = passes[0]
+            .panel
+            .unwrap_or_else(|| panic!("{overlay:?} drawn {:?}", overlay.fill()));
+        let settled = passes[1].panel.expect("settled");
+        assert_eq!(first, settled, "{overlay:?}");
+        if let Overlay::Dialog = overlay {
+            assert_eq!(passes[0].backdrop, passes[1].backdrop, "backdrop at once");
+        }
+    }
+}

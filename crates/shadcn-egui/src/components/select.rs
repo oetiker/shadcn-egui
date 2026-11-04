@@ -14,7 +14,10 @@
 //! without a change; typing a letter jumps to the next option starting with
 //! it. The pointer moves the highlight too. An open list takes the keys
 //! while its trigger has focus or no widget has; once Tab moves focus to
-//! another widget, the keys belong to that widget.
+//! another widget, the keys belong to that widget. Opening plays the
+//! style's enter animation (`fade-in-0 zoom-in-95`, a slide from the
+//! trigger's side, `duration-100`); closing jumps, as egui drops the
+//! popup's area in the pass it closes.
 //!
 //! Differences from upstream: the options-list API has no groups, labels,
 //! separators or per-option disabled state, so `cn-select-label` and
@@ -33,6 +36,7 @@
 use crate::color::Tone;
 use crate::components::field::ControlSlot;
 use crate::components::icon::paint_icon;
+use crate::components::motion::{side_and_origin, Enter};
 use crate::components::scroll_area::ScrollArea;
 use crate::components::shared::{
     content_ui, disabled_cursor, interaction_state, line_width, opacity, part_painter, pressable,
@@ -425,7 +429,9 @@ impl Widget for Select<'_> {
                 |s| &s.select_item_indicator_icon,
                 |r| &r.select_item_indicator_icon,
             );
-            let panel = RecipeBox::resolve(ui.ctx(), t, &l, gs).faded(alpha);
+            // The open animation, in place of egui's fade of the popup's area.
+            let enter = Enter::at(&ctx, popup_id, &l, gs);
+            let panel = RecipeBox::resolve(ui.ctx(), t, &l, gs).faded(alpha * enter.opacity());
             let frame = panel.frame([gpt, gpr, gpb, gpl]);
             let item_look = TextLook::resolve(ui, &item, ist);
             let mut galleys: Vec<_> = self
@@ -483,6 +489,9 @@ impl Widget for Select<'_> {
                     ui.ctx().accesskit_node_builder(popup, |node| {
                         node.set_role(egui::accesskit::Role::ListBox);
                     });
+                    Enter::mark(ui, popup_id);
+                    // The popup's Ui carries egui's fade: this opacity replaces it.
+                    ui.set_opacity(enter.opacity());
                     let slot = RecipeBox::reserve(ui);
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
@@ -624,7 +633,11 @@ impl Widget for Select<'_> {
                 Popup::close_id(&ctx, popup_id);
             }
             if let Some(list) = list {
-                panel.paint_reserved(&ctx, list.response.layer_id, list.inner, list.response.rect);
+                let (layer, list_rect) = (list.response.layer_id, list.response.rect);
+                panel.paint_reserved(&ctx, layer, list.inner, list_rect);
+                // bits' select content aligns to the trigger's start.
+                let (side, origin) = side_and_origin(list_rect, rect, egui::Align::Min);
+                enter.transform(&ctx, layer, list.inner, origin, &l, gs | side);
             }
         }
         if !Popup::is_id_open(&ctx, popup_id) {

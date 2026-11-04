@@ -4,9 +4,12 @@
 //! classes `rotate-45` and `translate-y-[calc(-50%-2px)]` belong to the style
 //! and stylegen ignores them: the arrow is painted here as a diamond whose
 //! centre lies on the content edge, below or above the content, centred on the
-//! trigger.
+//! trigger. Opening plays the style's enter animation (`fade-in-0
+//! zoom-in-95`, a slide from the trigger's side, about the arrow's tip);
+//! closing jumps, as egui drops the tooltip's area in the pass it closes.
 
 use crate::components::context;
+use crate::components::motion::{side_and_origin, Enter};
 use crate::components::shared::{content_ui, opacity, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
@@ -104,8 +107,13 @@ impl<'a> Tooltip<'a> {
         // colours here. The arrow sits in the content.
         let alpha = opacity(&[&content_l[..]], g);
         let arrow_alpha = opacity(&[&arrow[..], &content_l[..]], g);
-        let panel = RecipeBox::resolve(ctx, &t, &content_l, g).faded(alpha);
-        let arrow_fill = pick(&arrow, |r| &r.bg, g).map(|p| t.paint(p).gamma_multiply(arrow_alpha));
+        // The open animation, in place of egui's fade of the tooltip's area;
+        // egui's tooltip area id is its own, so the trigger names it.
+        let enter_id = resp.id.with("shadcn_egui::tooltip");
+        let enter = Enter::at(ctx, enter_id, &content_l, g);
+        let panel = RecipeBox::resolve(ctx, &t, &content_l, g).faded(alpha * enter.opacity());
+        let arrow_fill = pick(&arrow, |r| &r.bg, g)
+            .map(|p| t.paint(p).gamma_multiply(arrow_alpha * enter.opacity()));
         let mut tip = egui::Tooltip::for_enabled(resp);
         let max_w = pick(&content_l, |r| &r.max_width, g).unwrap_or(f32::INFINITY);
         // The arrow's tip, not the content, touches the trigger; `side = "top"` is the base default.
@@ -117,6 +125,9 @@ impl<'a> Tooltip<'a> {
             variant: self.variant,
         };
         let shown = tip.show(|ui| {
+            Enter::mark(ui, enter_id);
+            // The popup's Ui carries egui's fade: this opacity replaces it.
+            ui.set_opacity(enter.opacity());
             let slot = RecipeBox::reserve(ui);
             ui.set_max_width(max_w - pad_l - pad_r);
             let inner = ui.scope_builder(context::push(UiBuilder::new(), parts), |ui| {
@@ -136,10 +147,12 @@ impl<'a> Tooltip<'a> {
             (inner.inner, slot)
         })?;
         let (inner, slot) = shown.inner;
-        panel.paint_reserved(ctx, shown.response.layer_id, slot, shown.response.rect);
+        let (layer, area) = (shown.response.layer_id, shown.response.rect);
+        panel.paint_reserved(ctx, layer, slot, area);
+        // Without an arrow, floating-ui's origin for `align = "center"`.
+        let (side, mut origin) = side_and_origin(area, resp.rect, egui::Align::Center);
         if let Some(fill) = arrow_fill {
             let r = pick(&arrow, |r| &r.radius, g).map_or(0.0, |r| t.radius_px(r, size / 2.0));
-            let area = shown.response.rect;
             // The content lies above or below the trigger; the arrow sits on the edge facing it.
             let above = area.center().y < resp.rect.center().y;
             let y = if above { area.max.y } else { area.min.y };
@@ -150,9 +163,13 @@ impl<'a> Tooltip<'a> {
             } else {
                 area.center().x
             };
-            let painter = ctx.layer_painter(shown.response.layer_id);
+            let painter = ctx.layer_painter(layer);
             painter.add(arrow_shape(pos2(x, y), size, r, fill));
+            // With one, its tip: the arrow's centre on the facing edge, the
+            // arrow's height out.
+            origin = pos2(x, if above { y + reach } else { y - reach });
         }
+        enter.transform(ctx, layer, slot, origin, &content_l, g | side);
         Some(InnerResponse::new(inner, shown.response))
     }
 }

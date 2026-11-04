@@ -90,8 +90,8 @@ impl Tween for Layers {
     }
 }
 
-/// One running (or finished) transition, kept per id in the context's
-/// temporary data.
+/// One running (or finished) transition, kept per id and viewport in the
+/// context's temporary data.
 #[derive(Clone, Copy, Debug)]
 struct Run<T> {
     from: T,
@@ -249,9 +249,12 @@ fn run<T: Tween>(
     let now = ctx.input(|i| i.time);
     let pass = ctx.cumulative_pass_nr();
     let stamp = theme_stamp(ctx);
-    // Updated in place: a settled value allocates nothing per pass.
+    // Updated in place: a settled value allocates nothing per pass. Kept
+    // per viewport: egui counts passes per viewport, and the same widget
+    // may show in two.
+    let key = id.with(("shadcn_egui::motion::transition", ctx.viewport_id()));
     let (value, running) = ctx.data_mut(|d| {
-        let slot = d.get_temp_mut_or_insert_with(id, || Run::settled(target));
+        let slot = d.get_temp_mut_or_insert_with(key, || Run::settled(target));
         let mut run = match Some(*slot) {
             // A theme, palette or mode change jumps, as the shadcn pages turn
             // transitions off for it (`disableTransitions`).
@@ -311,6 +314,175 @@ fn run<T: Tween>(
         ctx.request_repaint();
     }
     value
+}
+
+/// tw-animate-css's duration of an `animate-in` whose part sets no
+/// `duration-*`: `var(--tw-animation-duration, var(--tw-duration, 150ms))`.
+const ENTER_DURATION: f32 = 0.15; // behaviour-ok: tw-animate-css default animation duration
+
+/// When an overlay's enter animation started, kept per overlay and
+/// viewport: egui counts passes per viewport.
+#[derive(Clone, Copy, Debug)]
+struct Opened {
+    /// The time of the first pass that showed the overlay. egui's sizing
+    /// pass, which draws nothing, counts, as egui's own fade counts it:
+    /// the next pass draws.
+    start: f64,
+    /// The last pass (of this viewport) that showed the overlay.
+    pass: u64,
+}
+
+fn opened_key(ctx: &Context, overlay: Id) -> Id {
+    overlay.with(("shadcn_egui::motion::enter", ctx.viewport_id()))
+}
+
+/// An overlay's open animation (tw-animate-css `animate-in` with
+/// `fade-in-*`, `zoom-in-*` and `slide-in-from-*`, D-88) at this pass, for
+/// one part. The animation runs from the first pass that shows the
+/// overlay after a pass without it, along the part's `ease-*` (CSS's
+/// `ease` without one) over its `duration-*` (150 ms without one). No
+/// `animate-in`, or reduced motion (`style.animation_time == 0`), shows
+/// the open part at once. Asks for a repaint while it runs. Closing
+/// jumps: egui drops an overlay's area in the pass it closes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Enter {
+    /// The eased progress, 0 at the start and 1 at the end.
+    progress: f32,
+    /// The part's `fade-in-*` and `zoom-in-*` start values.
+    opacity: f32,
+    scale: f32,
+}
+
+impl Enter {
+    /// The enter animation of the overlay `id` for the part with recipe
+    /// stack `layers` under `s`; the open state (`data-open`) is added
+    /// here. Call it before the overlay shows, and [`Enter::mark`] in its
+    /// content.
+    pub(crate) fn at(ctx: &Context, id: Id, layers: &[&Recipe], s: State) -> Enter {
+        let s = s | State::EXPANDED;
+        let animates = pick(layers, |r| &r.animate_in, s).unwrap_or(false)
+            && ctx.global_style().animation_time > 0.0;
+        let opacity = pick(layers, |r| &r.enter_opacity, s).unwrap_or(1.0); // behaviour-ok: tw-animate --tw-enter-opacity initial
+        let scale = pick(layers, |r| &r.enter_scale, s).unwrap_or(1.0); // behaviour-ok: tw-animate --tw-enter-scale initial
+        let done = Enter {
+            progress: 1.0, // behaviour-ok: the finished progress
+            opacity,
+            scale,
+        };
+        if !animates {
+            return done;
+        }
+        let pass = ctx.cumulative_pass_nr();
+        let now = ctx.input(|i| i.time);
+        let start = ctx
+            .data(|d| d.get_temp::<Opened>(opened_key(ctx, id)))
+            .filter(|o| o.pass + 1 >= pass)
+            .map(|o| o.start);
+        // The pass that opens the overlay shows the start values.
+        let elapsed = start.map_or(0.0, |start| (now - start) as f32);
+        let duration = pick(layers, |r| &r.duration, s).unwrap_or(ENTER_DURATION);
+        if duration <= 0.0 || elapsed >= duration {
+            return done;
+        }
+        ctx.request_repaint();
+        let easing = pick(layers, |r| &r.easing, s).unwrap_or(Easing::Ease);
+        Enter {
+            progress: easing.at(elapsed.max(0.0) / duration),
+            ..done
+        }
+    }
+
+    /// Record, in the content of the overlay `id`, that it shows this
+    /// pass: its first pass after one without it starts the animation.
+    /// [`Enter::at`] has asked for the next pass.
+    pub(crate) fn mark(ui: &egui::Ui, id: Id) {
+        let ctx = ui.ctx();
+        let key = opened_key(ctx, id);
+        let pass = ctx.cumulative_pass_nr();
+        let now = ctx.input(|i| i.time);
+        ctx.data_mut(|d| {
+            let start = d
+                .get_temp::<Opened>(key)
+                .filter(|o| o.pass + 1 >= pass)
+                .map_or(now, |o| o.start);
+            d.insert_temp(key, Opened { start, pass });
+        });
+    }
+
+    /// The opacity the part paints at this pass.
+    pub(crate) fn opacity(self) -> f32 {
+        self.opacity + (1.0 - self.opacity) * self.progress // behaviour-ok: CSS keyframe interpolation to opacity 1
+    }
+
+    /// Whether the animation still runs this pass.
+    pub(crate) fn running(self) -> bool {
+        self.progress < 1.0 // behaviour-ok: the finished progress
+    }
+
+    /// Scale and move everything painted in `layer` since `from` as the
+    /// animation's transform stands this pass: `zoom-in-*` about `origin`
+    /// (CSS `transform-origin`) and the `slide-in-from-*` offset of the
+    /// part's recipe stack `layers` under `s` (`s` holds the side the
+    /// panel opened to, `data-side`). egui's input is not transformed: a
+    /// press during the animation finds the panel where it ends.
+    pub(crate) fn transform(
+        self,
+        ctx: &Context,
+        layer: egui::LayerId,
+        from: egui::layers::ShapeIdx,
+        origin: egui::Pos2,
+        layers: &[&Recipe],
+        s: State,
+    ) {
+        if !self.running() {
+            return;
+        }
+        let s = s | State::EXPANDED;
+        let offset = egui::vec2(
+            pick(layers, |r| &r.enter_x, s).unwrap_or(0.0),
+            pick(layers, |r| &r.enter_y, s).unwrap_or(0.0),
+        );
+        let left = 1.0 - self.progress; // behaviour-ok: the remaining share of the animation
+        let scale = self.scale + (1.0 - self.scale) * self.progress; // behaviour-ok: CSS keyframe interpolation to scale 1
+                                                                     // `translate(offset) scale(scale)` about `origin`.
+        let o = origin.to_vec2();
+        let t = egui::emath::TSTransform::new(o + offset * left - o * scale, scale);
+        ctx.graphics_mut(|g| {
+            let list = g.entry(layer);
+            let end = list.next_idx();
+            list.transform_range(from, end, t);
+        });
+    }
+}
+
+/// The side a panel opened to from its `trigger` (`data-side`), and the
+/// `transform-origin` floating-ui gives a panel without an arrow: on the
+/// edge facing the trigger, at its middle for an `align` of center, at
+/// its start or end otherwise.
+pub(crate) fn side_and_origin(
+    panel: egui::Rect,
+    trigger: egui::Rect,
+    align: egui::Align,
+) -> (State, egui::Pos2) {
+    let along = |lo: f32, hi: f32| match align {
+        egui::Align::Min => lo,
+        egui::Align::Center => (lo + hi) / 2.0,
+        egui::Align::Max => hi,
+    };
+    let (x, y) = (
+        along(panel.left(), panel.right()),
+        along(panel.top(), panel.bottom()),
+    );
+    let c = trigger.center();
+    if panel.top() >= c.y {
+        (State::SIDE_BOTTOM, egui::pos2(x, panel.top()))
+    } else if panel.bottom() <= c.y {
+        (State::SIDE_TOP, egui::pos2(x, panel.bottom()))
+    } else if panel.left() >= c.x {
+        (State::SIDE_RIGHT, egui::pos2(panel.left(), y))
+    } else {
+        (State::SIDE_LEFT, egui::pos2(panel.right(), y))
+    }
 }
 
 #[cfg(test)]

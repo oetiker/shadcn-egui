@@ -347,3 +347,54 @@ fn closed_windows_leave_no_cache() {
         "most states per cache: {most:?}"
     );
 }
+
+/// A transition of the same widget id in a root and a window: each
+/// viewport shows its own target from its first pass, though the two
+/// count their passes apart.
+#[test]
+fn a_transition_in_two_windows_keeps_each_windows_value() {
+    use crate::components::motion::transition;
+    use crate::style::{Prop, Transition};
+    let moving = Recipe {
+        transition: Prop::fixed(Transition::ALL),
+        ..Recipe::default()
+    };
+    let (root, win) = (std::cell::Cell::new(0.0), std::cell::Cell::new(0.0));
+    let value = |ui: &Ui, target: f32| {
+        let id = egui::Id::unique("shared transition");
+        let s = State::NONE;
+        transition(ui.ctx(), id, target, &[&moving], Transition::OTHER, s)
+    };
+    alternate(
+        &mut |ui, _| root.set(value(ui, 10.0)),
+        &mut |ui, _| win.set(value(ui, 20.0)),
+        5,
+        |_| (),
+    );
+    assert_eq!((root.get(), win.get()), (10.0, 20.0));
+}
+
+/// An overlay open in a root and a window under the same id plays its
+/// enter animation once in each, though the two count their passes apart.
+#[test]
+fn an_overlay_in_two_windows_finishes_its_enter_animation() {
+    use crate::components::motion::Enter;
+    let theme = Theme::vega();
+    let dialog = [&*theme.style.dialog_content];
+    let (root, win) = (std::cell::Cell::new(true), std::cell::Cell::new(true));
+    let running = |ui: &Ui| {
+        let id = egui::Id::unique("shared overlay");
+        let enter = Enter::at(ui.ctx(), id, &dialog, State::NONE);
+        Enter::mark(ui, id);
+        enter.running()
+    };
+    // Each pass advances a viewport's clock by egui's default 1/60 s: the
+    // 100 ms animation has run after six of them.
+    alternate(
+        &mut |ui, _| root.set(running(ui)),
+        &mut |ui, _| win.set(running(ui)),
+        30,
+        |_| (),
+    );
+    assert_eq!((root.get(), win.get()), (false, false));
+}
