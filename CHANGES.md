@@ -7,6 +7,13 @@ are recorded here. The format is based on
 ## [Unreleased]
 
 ### New
+
+### Changed
+
+### Fixed
+
+## 0.8.0 - 2026-11-05
+### New
 - Field lays out a form control with its label, description and errors: `Field::new().label("Email").description(..).error("Required.").show(ui, |ui| ui.add(Input::new(&mut email)))`, in a row with `.horizontal()` or `.responsive(true)`, grouped with `FieldSet` (legend, description) and `FieldGroup`, and divided by `FieldSeparator`; text fields in a horizontal field shrink to leave room for what follows them; `FieldLabel::choice_card()` turns a whole field into a card that toggles its checkbox or switch. An invalid field or one with an error turns its label, its control's border and the typed value red, and a press on a field's label, `field_label` or a plain `Label`, toggles, focuses or clicks its control, which it names for screen readers; a label after a disabled checkbox or switch looks faded and shows the not-allowed cursor. App variants style the parts of a field by the shadcn attributes the new state flags are named after: `State::HAS_CHECKED`, `HAS_FIELD`, `HAS_FOCUS_VISIBLE` and `HAS_DISABLED` for a choice card, `VARIANT_LABEL` and `VARIANT_LEGEND` for a legend, `AFTER_LEGEND`, `NTH_LAST_2`, `IN_FIELD_GROUP`, `IN_FIELD_LABEL`, `HAS_FIELD_CONTENT` and `HAS_HORIZONTAL`. (#27)
 - Spinner shows the icon library's loader icon turning once a second, in the colour of the text around it: `spinner(ui)`, or `ui.add(Spinner::new())` with `.size(..)`, `.color(..)` and `.alt_text(..)` for the name screen readers hear ("Loading" by default). It stands still when egui's `animation_time` is 0, the crate's reduced motion setting, and asks for no redraw while hidden (#26).
 - Avatar shows a round picture with initials while it loads or when it fails: `ui.add(Avatar::new("CN").image("https://…/me.png").alt_text("@me"))`, `Avatar::icon_only(icon, name)` for an icon instead of initials, `.size(AvatarSize::Sm)` or `Lg`, and `.badge(AvatarBadge::new())` for the status dot, with an icon by `.icon(..)`. `AvatarGroup::new().show(ui, |ui| ..)` overlaps avatars in a row, and `avatar_group_count(ui, "+3")` ends it in the size of the group's avatars. The image is a uri an installed egui image loader reads, or encoded bytes; a texture is not accepted, as the avatar's thin inner border is blended with the picture's pixels as on the shadcn page (#30).
