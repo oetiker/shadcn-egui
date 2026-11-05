@@ -7,28 +7,8 @@ use crate::components::shared::part_painter;
 use crate::layout::{self, capped_width};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
-use crate::Theme;
+use crate::{Orientation, Theme};
 use egui::{Response, Sense, Ui, Vec2, Widget};
-
-/// shadcn `orientation` of the separator.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SeparatorOrientation {
-    /// A rule across the available width (`w-full`). It has no content
-    /// width, so it never widens what it sits in: where the width is
-    /// unbounded (an `allocate_ui` of infinite width) it has no length,
-    /// and in a [`vstack`](crate::layout::vstack) that fits its row it
-    /// spans the width the stack's other items give it.
-    #[default]
-    Horizontal,
-    /// Upstream's `data-vertical:self-stretch`: it stretches in a flex
-    /// row and has no height (0) in a block or a column. In a crate
-    /// [`row`](crate::layout::row) it is as tall as the row's tallest
-    /// other item. A plain egui horizontal `Ui` counts as a flex row: the
-    /// rule is as tall as that row, or as its content where the height
-    /// is unbounded. In a column (a [`vstack`](crate::layout::vstack), a
-    /// vertical `Ui`) it is 0.
-    Vertical,
-}
 
 default_variant!(
     /// The separator's variant: upstream has none, so only app variants
@@ -41,21 +21,48 @@ default_variant!(
     }
 );
 
-/// A separator: `ui.add(Separator::new())`.
-#[derive(Clone, Copy, Debug, Default)]
+/// A separator: `ui.add(Separator::new())`, or `ui.add(Separator::new().vertical())`.
+#[derive(Clone, Copy, Debug)]
 pub struct Separator {
-    orientation: SeparatorOrientation,
+    orientation: Orientation,
     variant: SeparatorVariant,
+}
+
+impl Default for Separator {
+    fn default() -> Self {
+        Self {
+            orientation: Orientation::Horizontal,
+            variant: SeparatorVariant::default(),
+        }
+    }
 }
 
 impl Separator {
     pub fn new() -> Self {
         Self::default()
     }
-    /// shadcn `orientation`: `Horizontal` (the default) or `Vertical`.
-    pub fn orientation(mut self, o: SeparatorOrientation) -> Self {
+    /// shadcn `orientation`, `Horizontal` by default.
+    ///
+    /// `Horizontal` is a rule across the available width (`w-full`). It
+    /// has no content width, so it never widens what it sits in: where the
+    /// width is unbounded (an `allocate_ui` of infinite width) it has no
+    /// length, and in a [`vstack`](crate::layout::vstack) that fits its
+    /// row it spans the width the stack's other items give it.
+    ///
+    /// `Vertical` is upstream's `data-vertical:self-stretch`: it stretches
+    /// in a flex row and has no height (0) in a block or a column. In a
+    /// crate [`row`](crate::layout::row) it is as tall as the row's
+    /// tallest other item. A plain egui horizontal `Ui` counts as a flex
+    /// row: the rule is as tall as that row, or as its content where the
+    /// height is unbounded. In a column (a
+    /// [`vstack`](crate::layout::vstack), a vertical `Ui`) it is 0.
+    pub fn orientation(mut self, o: Orientation) -> Self {
         self.orientation = o;
         self
+    }
+    /// Shortcut for `.orientation(Orientation::Vertical)`.
+    pub fn vertical(self) -> Self {
+        self.orientation(Orientation::Vertical)
     }
     /// An app variant ([`SeparatorVariant::app`]).
     pub fn variant(mut self, v: impl Into<SeparatorVariant>) -> Self {
@@ -69,7 +76,7 @@ impl Widget for Separator {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.separator, |r| &r.separator)];
-        let vertical = self.orientation == SeparatorOrientation::Vertical;
+        let vertical = self.orientation == Orientation::Vertical;
         let st = t.state(
             ui.ctx(),
             v.bits().or(if vertical {
@@ -102,6 +109,10 @@ impl Widget for Separator {
             Vec2::new(capped_width(ui, f32::INFINITY, 0.0), h)
         };
         let (rect, resp) = layout::allocate_item(ui, size, Sense::hover());
+        if !vertical {
+            // `data-horizontal` (`group-has-data-horizontal/field:`).
+            crate::components::field::report_horizontal(ui);
+        }
         if ui.is_rect_visible(rect) {
             if let Some(c) = pick(&l, |r| &r.bg, st).map(|p| t.paint(p)) {
                 part_painter(ui, resp.id, &[&l[..]], st).rect_filled(rect, 0.0, c);
@@ -115,13 +126,6 @@ impl Widget for Separator {
 /// `ui.add(Separator::new())`.
 pub fn separator(ui: &mut Ui) {
     ui.add(Separator::new());
-}
-
-/// A vertical rule that stretches in a row and is 0 in a column (see
-/// [`SeparatorOrientation::Vertical`]): shorthand for
-/// `ui.add(Separator::new().orientation(SeparatorOrientation::Vertical))`.
-pub fn separator_vertical(ui: &mut Ui) {
-    ui.add(Separator::new().orientation(SeparatorOrientation::Vertical));
 }
 
 #[cfg(test)]

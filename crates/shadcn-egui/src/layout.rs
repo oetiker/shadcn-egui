@@ -3,7 +3,17 @@
 
 use crate::components::context;
 use egui::Ui;
-use egui_extras::{Size, StripBuilder};
+
+/// shadcn `orientation`, shared by every component that has one
+/// (`.orientation(..)`). It has no default: each component keeps
+/// upstream's own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Orientation {
+    /// Laid out along a row (`data-orientation="horizontal"`).
+    Horizontal,
+    /// Laid out along a column (`data-orientation="vertical"`).
+    Vertical,
+}
 
 /// A row height or stack width change below this is float noise, not a
 /// reason to redo a pass.
@@ -16,11 +26,13 @@ fn same_width(a: f32, b: f32) -> bool {
     a == b || (a - b).abs() <= ROW_HEIGHT_EPSILON
 }
 
-/// How much narrower epaint reports text at a finite width than it
-/// measured unwrapped: it wraps at that width rounded to whole points
-/// (plus this, so it never wraps earlier) and reports the galley no
-/// wider than the rounded width (`Fonts::layout_job`,
-/// `Galley::round_output_to_gui`).
+/// How much narrower epaint reports egui's own text (an egui `Label` in a
+/// stack) at a finite width than it measured unwrapped: epaint 0.37 rounds
+/// the wrap width to whole points (`GalleyCache::layout_internal`), wraps
+/// at that plus this, so it never wraps earlier
+/// (`LayoutJob::effective_wrap_width`), and reports the galley no wider
+/// than the rounded width (`Galley::round_output_to_gui`). Crate text
+/// breaks its own lines and reports its exact width.
 const TEXT_WIDTH_ROUNDING: f32 = 0.5; // behaviour-ok: epaint's wrap-width rounding, not a design token
 
 /// Whether a pass of `ui` may replace what a layout helper stored from
@@ -56,10 +68,48 @@ fn may_store(ui: &Ui, stored: bool) -> bool {
 /// `ui.horizontal` cannot do that (see [`allocate_overflowing`]).
 ///
 /// A child that is as high as the row's other children (`self-stretch`,
-/// as `separator_vertical`) takes its height from [`stretch_height`].
+/// as a vertical [`Separator`](crate::components::separator::Separator))
+/// takes its height from [`stretch_height`].
 pub fn row<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    row_aligned(ui, gap, false, add)
+}
+
+/// [`row`] with its items at the top of the row: the browser's flex row
+/// (`flex-direction: row; gap: N`) whose items keep their own height at the
+/// row's start, as `items-start` or an `h-fit` item in a stretching row
+/// (egui's `ui.horizontal_top`). A vertical
+/// [`Tabs`](crate::components::tabs::Tabs) list and its content sit in one:
+///
+/// ```
+/// # egui::__run_test_ui(|ui| {
+/// use shadcn_egui::components::tabs::Tabs;
+/// use shadcn_egui::{layout, Orientation};
+/// let mut tab = 0;
+/// layout::row_top(ui, Tabs::content_gap(ui), |ui| {
+///     ui.add(Tabs::new(&mut tab, &["Account", "Password"]).orientation(Orientation::Vertical));
+///     layout::vstack(ui, 0.0, |ui| ui.label("Manage your account."));
+/// });
+/// # });
+/// ```
+///
+/// An item that stretches to the row's height (upstream's bordered content
+/// box beside an `h-fit` list) reads [`stretch_height`], as in [`row`].
+#[doc(alias = "items-start")]
+pub fn row_top<R>(ui: &mut Ui, gap: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    row_aligned(ui, gap, true, add)
+}
+
+/// [`row`] with its items at the top of the row (`items-start`) where
+/// `top` is set, else centred (`items-center`).
+pub(crate) fn row_aligned<R>(
+    ui: &mut Ui,
+    gap: f32,
+    top: bool,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     let id = ui.next_auto_id().with("shadcn_egui::layout::row");
     let (stored, height, align) = row_band(ui, id);
+    let align = if top { egui::Align::Min } else { align };
     let layout = if ui.layout().prefer_right_to_left() {
         egui::Layout::right_to_left(align)
     } else {
@@ -142,8 +192,8 @@ fn stretch_pass_id(row: egui::Id) -> egui::Id {
 /// them: the height the previous pass found for each [`stretch_height`]
 /// call, in call order; the place on the layer of the next entry after
 /// each call, which marks the item that asked; and the `Ui`s whose
-/// children are the row's items: `roots` by the `id` their children name
-/// as parent, `skip` the unique ids of the `Ui`s between a root and the
+/// children are the row's items: `roots` by the unique id their children
+/// name as parent, `skip` the unique ids of the `Ui`s between a root and the
 /// row, which are no items themselves, and of the pass's hit areas,
 /// which take no part in the row's layout.
 #[derive(Clone, Debug, Default)]
@@ -155,11 +205,26 @@ struct Stretch {
 }
 
 /// One line of a crate row's items in a pass: the height of its tallest
-/// item and of its first.
+/// item and of its first, how many items it holds and their summed width.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Line {
     height: f32,
     first: f32,
+    items: usize,
+    widths: f32,
+}
+
+impl Line {
+    /// The gap between the line's items that spreads them over `width`
+    /// (`justify-content: space-between`), never below `gap`: one item, or
+    /// items that fill `width` already, keep `gap`.
+    pub(crate) fn between_gap(&self, width: f32, gap: f32) -> f32 {
+        if self.items < 2 || !width.is_finite() {
+            return gap;
+        }
+        let gaps = (self.items - 1) as f32;
+        ((width - self.widths) / gaps).max(gap)
+    }
 }
 
 /// A crate row's pass over its items ([`row`], [`wrap_row`],
@@ -182,7 +247,7 @@ impl RowItems {
         let stored = ui.data(|d| d.get_temp::<Vec<f32>>(stretch_id(row)));
         let pass = Stretch {
             heights: stored.clone().unwrap_or_default(),
-            roots: vec![ui.id()],
+            roots: vec![ui.unique_id()],
             ..Stretch::default()
         };
         ui.data_mut(|d| d.insert_temp(stretch_pass_id(row), pass));
@@ -256,9 +321,9 @@ fn row_lines(
     // is centred, and the union grew on every pass.
     //
     // Rebuild the tree from the creation order: a Ui registers before what
-    // it holds, and an entry names its Ui's `id` as parent, not the
-    // `unique_id` the Ui registered under. So an entry whose next entry
-    // names a parent not on the stack opens a Ui.
+    // it holds, under its `unique_id`, which its entries name as parent.
+    // So an entry whose next entry names a parent not on the stack opens
+    // a Ui.
     //
     // A frame (egui's `Frame`, a card) registers the `Ui`s of its content,
     // then the box around them: the box is an item of its own on the line
@@ -298,6 +363,7 @@ fn row_lines(
             lines.push(Line {
                 height: 0.0,
                 first: r.height(),
+                ..Line::default()
             });
             bottom = f32::NEG_INFINITY;
         }
@@ -305,6 +371,8 @@ fn row_lines(
         line_of[k] = lines.len() - 1;
         let line = lines.last_mut().expect("a line was pushed");
         line.height = line.height.max(r.height());
+        line.items += 1;
+        line.widths += r.width();
     }
     // A stretch item is the item that holds the first entry registered
     // after its mark.
@@ -337,17 +405,17 @@ pub(crate) fn hold_row_items(ui: &Ui) {
     let mut skip = Vec::new();
     for s in ui.stack().iter() {
         if context::on_frame::<RowContext>(s).is_some() {
-            let root = ui.id();
+            let root = ui.unique_id();
             ui.data_mut(|d| {
-                if let Some(mut pass) = d.get_temp::<Stretch>(stretch_pass_id(s.id)) {
+                if let Some(mut pass) = d.get_temp::<Stretch>(stretch_pass_id(s.unique_id)) {
                     pass.roots.push(root);
                     pass.skip.extend(skip);
-                    d.insert_temp(stretch_pass_id(s.id), pass);
+                    d.insert_temp(stretch_pass_id(s.unique_id), pass);
                 }
             });
             return;
         }
-        skip.push(s.id);
+        skip.push(s.unique_id);
     }
 }
 
@@ -560,7 +628,7 @@ fn start_line(ui: &mut Ui) {
         return;
     };
     // The new line's number: the lines the row's items so far are on.
-    let parent = ui.id();
+    let parent = ui.unique_id();
     let line = ui.ctx().viewport(|v| {
         let mut bottom = f32::NEG_INFINITY;
         let mut lines = 0;
@@ -794,7 +862,7 @@ pub(crate) fn as_flex_item<R, F: FnOnce(&mut Ui) -> R>(
 fn flex_row_of(ui: &Ui) -> Option<egui::Id> {
     for s in ui.stack().iter() {
         if context::on_frame::<RowContext>(s).is_some() {
-            return Some(s.id);
+            return Some(s.unique_id);
         }
         if s.kind().is_some()
             || !s.layout_direction.is_horizontal()
@@ -856,6 +924,29 @@ pub(crate) fn flex_leaf(ui: &Ui, basis: f32, min: impl FnOnce() -> f32) -> Optio
             });
     });
     target
+}
+
+/// Reports the part that grows in a crate row (a horizontal field's
+/// label or content, its first text field; `flex-grow`) to the row as a
+/// flex item of flex base size `basis` and narrowest width `min`, after
+/// it took `width`: the room the row's other items left in the previous
+/// pass. The row's plan then counts it at its base size, as CSS resolves
+/// a line, not at the room it grew into: counted at that room, a leaf
+/// after it found no room in the pass after the grower filled the row,
+/// shrank and wrapped, and the grower took the room that freed in the
+/// pass after that, a cycle that never settled. The grower takes no width
+/// from the plan.
+pub(crate) fn flex_grower(ui: &Ui, basis: f32, min: f32, width: f32) {
+    if ui.layout().main_wrap() {
+        return;
+    }
+    let Some(row) = flex_row_of(ui) else {
+        return;
+    };
+    ui.data_mut(|d| {
+        d.get_temp_mut_or_default::<Vec<FlexItem>>(flex_items_id(row))
+            .push(FlexItem { width, basis, min });
+    });
 }
 
 /// What a row learns about one of its [`vstack`] items in a pass.
@@ -1621,60 +1712,6 @@ pub(crate) fn reverse_column<R>(
     inner
 }
 
-/// A shadcn Card at the default size, across the available width of a
-/// column and content-sized in a crate row. See
-/// [`crate::components::card::Card`] for sizes, a footer and its width.
-pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-    crate::components::card::Card::new().show(ui, add)
-}
-
-/// A labeled control row: fixed-width label column + control filling the
-/// rest, as high as the taller of the two (never egui's `interact_size`),
-/// both centred in it. The height comes from the previous pass; where it
-/// changes, the pass is redone.
-pub fn form_row(ui: &mut Ui, label_width: f32, label: &str, control: impl FnOnce(&mut Ui)) {
-    let id = ui.next_auto_id().with("shadcn_egui::layout::form_row");
-    let (stored, band, align) = row_band(ui, id);
-    let mut lines = Vec::new();
-    // A cell measures its widgets, not its own rect: egui makes a centred
-    // cell as high as the band, so the row would never shrink.
-    let mut cell = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
-        ui.with_layout(egui::Layout::left_to_right(align), |ui| {
-            let items = RowItems::begin(ui);
-            add(ui);
-            lines.extend(items.finish(ui, false));
-        });
-    };
-    let mut control = Some(control);
-    ui.allocate_ui(egui::vec2(ui.available_width(), band), |ui| {
-        StripBuilder::new(ui)
-            .size(Size::exact(label_width))
-            .size(Size::remainder())
-            .horizontal(|mut strip| {
-                strip.cell(|ui| {
-                    cell(ui, &mut |ui| {
-                        ui.add(crate::components::label::Label::new(label));
-                    })
-                });
-                strip.cell(|ui| {
-                    cell(ui, &mut |ui| {
-                        if let Some(control) = control.take() {
-                            control(ui);
-                        }
-                    })
-                });
-            });
-    });
-    settle_row_band(
-        ui,
-        id,
-        stored,
-        band,
-        &lines,
-        "layout::form_row content height changed",
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1705,14 +1742,15 @@ mod tests {
     fn an_overflowing_widget_keeps_its_parents_width() {
         let ctx = egui::Context::default();
         let mut widths = None;
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.allocate_ui(egui::vec2(100.0, 200.0), |ui| {
                 ui.set_max_width(100.0);
                 let (rect, response) =
                     allocate_overflowing(ui, egui::vec2(150.0, 20.0), egui::Sense::hover());
                 widths = Some((rect.width(), response.rect.width(), ui.min_rect().width()));
             });
-        });
+        })
+        .drop_without_applying_deltas();
         assert_eq!(widths, Some((150.0, 150.0, 100.0)));
     }
 
@@ -1721,7 +1759,7 @@ mod tests {
     fn after_overflow(rows: impl Fn(&mut Ui, &mut dyn FnMut(&mut Ui))) -> (f32, f32) {
         let ctx = egui::Context::default();
         let mut out = None;
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let max = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 200.0));
             let mut column = ui.new_child(egui::UiBuilder::new().max_rect(max));
             let mut next = 0.0;
@@ -1733,7 +1771,8 @@ mod tests {
                     .left();
             });
             out = Some((next, column.min_rect().width()));
-        });
+        })
+        .drop_without_applying_deltas();
         out.expect("ran")
     }
 
@@ -1773,7 +1812,7 @@ mod tests {
         let in_stack = |inner_row: bool| {
             let ctx = egui::Context::default();
             let mut out = None;
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 let max = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 200.0));
                 let mut column = ui.new_child(egui::UiBuilder::new().max_rect(max));
                 let mut stack_width = 0.0;
@@ -1794,7 +1833,8 @@ mod tests {
                         .left()
                 });
                 out = Some((stack_width, next, column.min_rect().width()));
-            });
+            })
+            .drop_without_applying_deltas();
             out.expect("ran")
         };
         assert_eq!(in_stack(false), (150.0, 154.0, 100.0));
@@ -1845,14 +1885,15 @@ mod tests {
         let overflow = |layout: Layout| {
             let ctx = egui::Context::default();
             let mut span = None;
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
                 let max =
                     egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(100.0, 50.0));
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(max).layout(layout));
                 let (rect, _) =
                     allocate_overflowing(&mut child, egui::vec2(150.0, 20.0), egui::Sense::hover());
                 span = Some((rect.left(), rect.right(), child.min_rect().width()));
-            });
+            })
+            .drop_without_applying_deltas();
             span.expect("ran")
         };
         assert_eq!(

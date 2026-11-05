@@ -6,7 +6,7 @@
 
 use shadcn_egui_core::{BlobRange, Icon, IconShape, IconSlots};
 
-static ICONS_BIN: [u8; 2158] = *include_bytes!("icons.bin");
+static ICONS_BIN: [u8; 6910] = *include_bytes!("icons.bin");
 
 const fn icon(name: &'static str, start: u32, len: u32) -> Icon {
     Icon {
@@ -22,11 +22,11 @@ const fn icon(name: &'static str, start: u32, len: u32) -> Icon {
 
 pub const BIG_BOX: Icon = icon("big-box", 0, 70);
 pub const FADED: Icon = icon("faded", 70, 158);
-pub const MIXED: Icon = icon("mixed", 228, 442);
-pub const RING: Icon = icon("ring", 670, 1092);
-pub const SQUARE_HOLE: Icon = icon("square-hole", 1762, 156);
-pub const STAR_EVENODD: Icon = icon("star-evenodd", 1918, 208);
-pub const X: Icon = icon("x", 2126, 32);
+pub const MIXED: Icon = icon("mixed", 228, 1954);
+pub const RING: Icon = icon("ring", 2182, 4332);
+pub const SQUARE_HOLE: Icon = icon("square-hole", 6514, 156);
+pub const STAR_EVENODD: Icon = icon("star-evenodd", 6670, 208);
+pub const X: Icon = icon("x", 6878, 32);
 
 /// Every icon in this crate, sorted by name.
 pub const ALL: &[&Icon] = &[
@@ -50,5 +50,6 @@ pub const SLOTS: IconSlots = {
     s.chevron_right = RING;
     s.more_horizontal = RING;
     s.close = X;
+    s.loader = RING;
     s
 };

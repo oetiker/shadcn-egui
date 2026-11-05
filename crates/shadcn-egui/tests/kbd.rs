@@ -5,7 +5,6 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use egui_kittest::Harness;
 use shadcn_egui::components::icon_atom::IconAtom;
 use shadcn_egui::components::kbd::{kbd, Kbd, KbdGroup, KbdRecipes, KbdVariant};
-use shadcn_egui::components::label::description;
 use shadcn_egui::components::text::TextLook;
 use shadcn_egui::style::Style;
 use shadcn_egui::style::{AppVariant, State};
@@ -132,8 +131,8 @@ fn a_chip_lets_hover_through_to_what_is_under_it() {
             move |ui, s: &mut Hover| {
                 theme.apply(ui.ctx());
                 let under = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(100.0, 60.0));
-                let click = ui.interact(under, egui::Id::new("click"), egui::Sense::click());
-                let plain = ui.interact(under, egui::Id::new("plain"), egui::Sense::hover());
+                let click = ui.interact(under, egui::Id::unique("click"), egui::Sense::click());
+                let plain = ui.interact(under, egui::Id::unique("plain"), egui::Sense::hover());
                 let chip = ui.put(under.shrink(20.0), Kbd::new("K"));
                 *s = Hover {
                     chip: chip.hovered(),
@@ -268,12 +267,12 @@ fn kbd_demo(ui: &mut egui::Ui) {
         });
         ctrl_plus_b(ui);
         ui.horizontal_wrapped(|ui| {
-            description(ui, "Use");
+            common::muted_text(ui, "Use");
             KbdGroup::new().show(ui, |ui| {
                 kbd(ui, "Ctrl + B");
                 kbd(ui, "Ctrl + K");
             });
-            description(ui, "to open the command palette");
+            common::muted_text(ui, "to open the command palette");
         });
         ui.add(Kbd::icon_only(icons.check, "Enter"));
     });

@@ -380,7 +380,7 @@ fn the_track_is_muted() {
 /// One pass at `time` showing `fraction`: the indicator's right edge and
 /// whether the pass asks for a repaint.
 fn timed_pass(ctx: &egui::Context, time: f64, fraction: f32) -> (f32, bool) {
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -390,6 +390,7 @@ fn timed_pass(ctx: &egui::Context, time: f64, fraction: f32) -> (f32, bool) {
             in_width(200.0, |ui| progress(ui, fraction))(ui);
         },
     );
+    out.textures_delta.clear();
     let primary = Theme::vega().palette_of(egui::Theme::Light).primary;
     let (_, hi) = painted_span(&out, primary).expect("an indicator");
     let repaint =
@@ -421,6 +422,9 @@ fn reduced_motion_jumps() {
     let ctx = egui::Context::default();
     ctx.set_theme(egui::Theme::Light);
     ctx.all_styles_mut(|s| s.animation_time = 0.0);
+    // egui 0.37 sends the window its theme in the first pass, which asks
+    // for a second one.
+    timed_pass(&ctx, 0.5, 0.13);
     let (start, _) = timed_pass(&ctx, 1.0, 0.13);
     let (end, moving) = timed_pass(&ctx, 2.0, 0.66);
     assert!(near(end - start, 106.0));
@@ -475,4 +479,67 @@ fn snapshot() {
             progress(ui, 0.01);
         });
     });
+}
+
+/// progress-label: a `max-w-sm` field whose label row holds the title at
+/// its start and the value (`ml-auto font-normal text-muted-foreground`)
+/// at its end, a span in the label: plain text in the label's look, not
+/// a second label. egui has no `tabular-nums`.
+fn progress_label(ui: &mut egui::Ui) {
+    use shadcn_egui::components::field::{field_label, Field};
+    use shadcn_egui::components::text::TextLook;
+    use shadcn_egui::style::{State, Weight};
+    use shadcn_egui::theme::family_for;
+    ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
+        ui.set_width(384.0);
+        Field::new().show(ui, |ui| {
+            // One label, "Upload progress" then " 56%" in the label's
+            // size, normal weight and muted colour (`ml-auto` on the
+            // span: the space before it fills the row).
+            let t = Theme::current(ui.ctx());
+            let st = t.state(ui.ctx(), State::NONE);
+            let look = TextLook::resolve(ui, &[&*t.style.label, &*t.style.field_label], st);
+            let normal = egui::FontId::new(look.size(), family_for(ui.ctx(), Weight::Normal));
+            let width = |text: egui::WidgetText| {
+                look.layout(ui, text, egui::TextWrapMode::Extend, f32::INFINITY)
+                    .size()
+                    .x
+            };
+            let name = width("Upload progress".into());
+            let value = width(
+                egui::RichText::new(" 56%")
+                    .family(normal.family.clone())
+                    .into(),
+            );
+            let fill = (384.0 - name - value).max(0.0);
+            let mut job = egui::text::LayoutJob::default();
+            job.append(
+                "Upload progress",
+                0.0,
+                egui::TextFormat::simple(look.font_id(ui.ctx()), egui::Color32::PLACEHOLDER),
+            );
+            job.append(
+                " 56%",
+                fill,
+                egui::TextFormat::simple(normal, t.role(Token::MutedForeground)),
+            );
+            field_label(ui, job);
+            ui.add(Progress::from_value(56.0, 100.0))
+        });
+    });
+}
+
+#[test]
+fn progress_label_snapshot() {
+    common::snapshot_all("progress_label", egui::vec2(432.0, 90.0), progress_label);
+}
+
+/// progress-label has one label, "Upload progress 56%", whose value is
+/// a span in it: no second label node for the value.
+#[test]
+fn progress_label_has_one_label() {
+    let mut h = Harness::new_ui(progress_label);
+    h.run();
+    assert_eq!(h.get_all_by_role(Role::Label).count(), 1);
+    let _ = h.get_by_role_and_label(Role::Label, "Upload progress 56%");
 }

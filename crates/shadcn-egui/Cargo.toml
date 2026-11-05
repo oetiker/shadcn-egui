@@ -15,12 +15,11 @@ include = ["src/**", "LICENSE*", "README*"]
 all-features = true
 
 # Keep the runtime dependency surface minimal: these propagate to every
-# consumer. The library only needs egui and egui_extras' StripBuilder/Size
-# (no loaders, no features). Heavier crates (eframe, egui_kittest, wgpu) are
-# dev-only.
+# consumer. Besides egui the library needs only its text tables (skrifa),
+# logging and its own core, font and icon crates. Heavier crates (eframe,
+# egui_kittest, wgpu) and egui_extras are dev-only.
 [dependencies]
 egui.workspace = true
-egui_extras.workspace = true
 log.workspace = true
 skrifa.workspace = true
 shadcn-egui-core.workspace = true
@@ -198,13 +197,24 @@ icons-hugeicons = ["dep:shadcn-egui-icons-hugeicons"]
 icons-all = ["icons-tabler", "icons-phosphor", "icons-remixicon", "icons-hugeicons"]
 
 [dev-dependencies]
-eframe = "0.34"
-egui_kittest = { version = "0.34", features = ["wgpu", "snapshot"] }
+eframe = "0.37"
+egui_kittest = { version = "0.37", features = ["wgpu", "snapshot"] }
 # Composes the README's settings image from two snapshot renders; already
 # in the tree through egui_kittest.
 image = { version = "0.25", default-features = false }
+# The layout tests check the crate's widgets in StripBuilder cells, where
+# apps put them.
+egui_extras.workspace = true
 # Tests compare against a heading font that differs from the body font.
 shadcn-egui-font-oxanium.workspace = true
+
+# The gallery example's CPU renderer (`--cpu`, or no GPU): its window,
+# input, accessibility and clipboard (the egui-winit features eframe
+# enables; eframe turns `clipboard` on in any case, so both paths share it)
+# and the surface it shows its pixels on.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+egui-winit = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "links", "wayland", "x11"] }
+softbuffer = { version = "0.4", default-features = false, features = ["x11", "x11-dlopen", "wayland", "wayland-dlopen"] }
 
 # The gallery example's browser entry point; scripts/build-web-gallery.sh
 # runs the wasm-bindgen CLI of the version Cargo.lock pins for this crate.

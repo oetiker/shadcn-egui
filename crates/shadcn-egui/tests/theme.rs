@@ -8,7 +8,8 @@ fn apply_sets_panel_fill_and_stores_theme() {
     let ctx = egui::Context::default();
     Theme::vega().apply(&ctx);
     // run one frame so style takes effect
-    let _ = ctx.run_ui(Default::default(), |_ui| {});
+    ctx.run_ui(Default::default(), |_ui| {})
+        .drop_without_applying_deltas();
     let got = theme(&ctx);
     assert!(got.is_dark());
     assert_eq!(
@@ -44,7 +45,8 @@ fn set_theme_flips_the_palette_after_one_apply() {
     t.apply(&ctx);
     for mode in [egui::Theme::Light, egui::Theme::Dark, egui::Theme::Light] {
         ctx.set_theme(mode);
-        let _ = ctx.run_ui(Default::default(), |_ui| {});
+        ctx.run_ui(Default::default(), |_ui| {})
+            .drop_without_applying_deltas();
         assert_eq!(
             Theme::current(&ctx).palette(),
             t.palette_of(mode),
@@ -210,7 +212,7 @@ fn context_mode_sets_the_dark_state() {
 }
 
 use shadcn_egui::icons::lucide::{
-    CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, MORE_HORIZONTAL,
+    CHECK, CHEVRON_DOWN, CHEVRON_LEFT, CHEVRON_RIGHT, CHEVRON_UP, LOADER_CIRCLE, MORE_HORIZONTAL,
     SLOTS as LUCIDE_SLOTS, X as CLOSE,
 };
 use shadcn_egui::{FontName, IconLibrary, IconSlots};
@@ -226,6 +228,7 @@ fn a_new_theme_draws_lucide_and_its_own_menu_colours() {
     lucide.chevron_left = CHEVRON_LEFT;
     lucide.chevron_right = CHEVRON_RIGHT;
     lucide.more_horizontal = MORE_HORIZONTAL;
+    lucide.loader = LOADER_CIRCLE;
     assert_eq!(t.icons, lucide);
     assert_eq!(t.icons, LUCIDE_SLOTS);
     assert!(!t.menu_inverted);
@@ -313,7 +316,8 @@ fn apply_reaches_both_styles_on_a_light_context() {
     ctx.set_theme(egui::Theme::Light);
     let t = Theme::vega();
     t.apply(&ctx);
-    let _ = ctx.run_ui(Default::default(), |_ui| {});
+    ctx.run_ui(Default::default(), |_ui| {})
+        .drop_without_applying_deltas();
     assert_eq!(ctx.global_style().visuals.panel_fill, t.light.background);
     assert_both_styles(&ctx, &t);
 }
@@ -328,7 +332,7 @@ fn apply_survives_a_system_theme_switch() {
             system_theme: Some(sys),
             ..Default::default()
         };
-        let _ = ctx.run_ui(input, |_ui| {});
+        ctx.run_ui(input, |_ui| {}).drop_without_applying_deltas();
         assert_eq!(
             ctx.global_style().visuals.panel_fill,
             t.palette_of(sys).background,
@@ -353,9 +357,10 @@ fn hairlines(ctx: &egui::Context, ppp: f32) -> Vec<f32> {
         ..Default::default()
     };
     let mut root = 0.0;
-    let _ = ctx.run_ui(input, |ui| {
+    ctx.run_ui(input, |ui| {
         root = ui.visuals().widgets.inactive.bg_stroke.width
-    });
+    })
+    .drop_without_applying_deltas();
     let mut out = vec![root];
     for which in [egui::Theme::Dark, egui::Theme::Light] {
         let v = &ctx.style_of(which).visuals;

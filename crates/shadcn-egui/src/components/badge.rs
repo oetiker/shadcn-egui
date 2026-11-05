@@ -4,17 +4,18 @@
 
 use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
-use crate::components::icon::Icon;
+use crate::components::icon::Glyph;
 use crate::components::shared::{
-    interaction_state, line_width, part_painter, transitioned_text, RecipeBox,
+    interaction_state, line_width, part_painter, pressable, transitioned_text, with_opacity,
+    ActivationKeys, RecipeBox,
 };
-use crate::components::text::TextLook;
+use crate::components::text::{selectable_sense, TextLook};
 use crate::style::app::Sealed;
 use crate::style::{
     pick, pick_len, AppEnum, AppVariant, Paint, Prop, Recipe, Role, State, Style, VariantEnum,
 };
 use crate::Theme;
-use egui::{Response, Sense, Ui, Vec2, Widget};
+use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -88,8 +89,9 @@ impl VariantEnum for BadgeVariant {}
 pub struct Badge {
     text: String,
     variant: BadgeVariant,
-    icon: Option<Icon>,
-    icon_end: Option<Icon>,
+    icon: Option<Glyph>,
+    icon_end: Option<Glyph>,
+    link: bool,
 }
 
 impl Badge {
@@ -99,20 +101,31 @@ impl Badge {
             variant: BadgeVariant::Default,
             icon: None,
             icon_end: None,
+            link: false,
         }
     }
     pub fn variant(mut self, v: impl Into<BadgeVariant>) -> Self {
         self.variant = v.into();
         self
     }
-    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
-    pub fn icon(mut self, icon: &Icon) -> Self {
-        self.icon = Some(*icon);
+    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`),
+    /// or [`Glyph::Spinner`] (`<Spinner data-icon="inline-start" />`).
+    pub fn icon(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
-    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`).
-    pub fn icon_end(mut self, icon: &Icon) -> Self {
-        self.icon_end = Some(*icon);
+    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`),
+    /// or [`Glyph::Spinner`].
+    pub fn icon_end(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon_end = Some(icon.into());
+        self
+    }
+    /// The badge is a link (shadcn's `href`, an `<a>`): it takes the
+    /// style's link hover look, clicks and takes focus, activates on Enter
+    /// only and shows the pointing hand. Its `clicked()` is where the app
+    /// opens the target (`ctx.open_url`).
+    pub fn link(mut self, link: bool) -> Self {
+        self.link = link;
         self
     }
 }
@@ -131,11 +144,11 @@ impl Widget for Badge {
             variant.part(&t.style, BadgeVariant::layer, |r| &r.badge),
         ];
         let enabled = ui.is_enabled();
-        // The style has no `[a]:hover` rules (a badge is not a link in
-        // egui): the hover rules it has, and an app variant's, decide. A
-        // badge is never focused.
+        // `LINK` turns on the style's `[a]:hover` rules; a badge that is
+        // not a link is a `span` and never takes focus.
         let context = variant
             .bits()
+            .with(State::LINK, self.link)
             .with(State::ICON_START, self.icon.is_some())
             .with(State::ICON_END, self.icon_end.is_some());
         // Geometry never depends on hover: resolve it before allocating.
@@ -154,6 +167,7 @@ impl Widget for Badge {
         let row = AtomRow::new(ui, self.text.as_str())
             .icons(self.icon, self.icon_end)
             .icon_size(icon_px)
+            .sized_icon_size(pick(&l, |r| &r.sized_icon_size, g))
             .gap(gap)
             .inset(
                 pad_l + border_w,
@@ -168,10 +182,39 @@ impl Widget for Badge {
         // In a justified layout the box takes the layout's width, as egui's
         // `Button` does (conformance 3.1); the content stays centred in it.
         let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
-        let resp = ui.interact(rect, id, Sense::hover());
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
-        });
+        // A `span` upstream, without `select-none`: its text selects as
+        // the browser's does. A link's text drags the link in the browser,
+        // so a link badge clicks and does not select.
+        let sense = if self.link {
+            Sense::click()
+        } else {
+            selectable_sense(ui)
+        };
+        let mut resp = ui.interact(rect, id, sense);
+        let role = if self.link {
+            pressable(&mut resp, ActivationKeys::Enter);
+            if resp.hovered() {
+                ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            }
+            egui::Role::Link
+        } else {
+            egui::Role::Label
+        };
+        let info = || egui::WidgetInfo::labeled(role, enabled, &self.text);
+        // A plain badge is a `<span>`, with no disabled state; a link badge
+        // is a control.
+        if role == egui::Role::Link {
+            resp.widget_info(info);
+        } else {
+            crate::components::shared::widget_info_never_disabled(&resp, info);
+        }
+        for (slot, _) in [self.icon, self.icon_end]
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| **g == Some(Glyph::Spinner))
+        {
+            crate::components::spinner::report_hosted(ui, &resp, slot);
+        }
         if !ui.is_rect_visible(rect) {
             return resp;
         }
@@ -187,7 +230,16 @@ impl Widget for Badge {
             .paint(&painter, rect);
 
         // A state's `underline` (the link variant on hover) lays out again.
-        row.paint(ui, &painter, rect, &TextLook::resolve(ui, &l, st), fg);
+        let look = TextLook::resolve(ui, &l, st);
+        // The selectable text paints through the `Ui`: at the part's opacity.
+        let row = if self.link {
+            row
+        } else {
+            row.selectable(&resp)
+        };
+        with_opacity(ui, painter.opacity(), |ui| {
+            row.paint(ui, &painter, rect, &look, fg);
+        });
         resp
     }
 }

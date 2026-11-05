@@ -1847,6 +1847,15 @@ inside its root (`button_group_separator`, `button_group_text`) keeps its
 part shortcut. Bubble and message groups get the same test in their
 family PR.
 
+Consequence (Item port, #29, axiom 1, R:Part): `ItemGroup` has no size
+setter. Upstream's `ItemGroup` takes no `size`; its gap follows the items'
+sizes (`has-data-[size=sm|xs]`), so the group takes them from the previous
+pass, as `AvatarGroup` does, and the "explicit size" of the recommendation
+does not apply. Only items report their size: upstream's selector also
+matches other sized descendants (avatar, switch, select, card, toggle
+group), which do not change the group's gap here; the `ItemGroup` docs
+name that gap.
+
 ### D-51 · Labelled groups of items
 
 - **Case:** Select groups carry their label (`SelectGroup { label, items
@@ -2232,8 +2241,8 @@ builder's terminal call takes the `&Context`:
   the crate hides egui's bars and paints its own from the output state,
   with the exact thumb colour and all four bits types, and CP-14-30 is (i)
   move select's list in the same PR or (ii) later. (a)'s cost, not named
-  before: the crate then also implements thumb dragging, track clicks, the
-  hover widening and the offset writes through `scroll_area::State`, a
+  before: the crate then also implements thumb dragging, track clicks and
+  the offset writes through `scroll_area::State`, a
   second scroll bar implementation that follows egui at every upgrade.
 - **Recommendation:** (b) (it replaces the earlier pick (a)): the theme
   sets a full `ScrollStyle` (floating, track opacities 0, dormant handle opacity 0, handle in the
@@ -2258,7 +2267,7 @@ Decision: (a) — differs from the recommendation (maintainer, P9: colours
 match upstream exactly; a `ScrollStyle` thumb reaches only the nearest
 shared colour). A crate `ScrollArea` hides egui's bars and paints its own
 (transparent track, exact `bg-border` thumb), with the cost named above
-accepted: thumb drag, track click, hover widening and offset writes through
+accepted: thumb drag, track click and offset writes through
 `scroll_area::State`, followed at every egui upgrade. Under (a), as the
 recommendation describes: hover-only visibility first, bits' other types
 later; CP-14-30 (i), select's list moves to the crate type in the
@@ -2905,6 +2914,11 @@ recommended.
 Decision: (a); `required` behavioural in questionnaire, AccessKit-only on
 Field — as recommended.
 
+Consequence (field port, 2026-10-31, maintainer): Field gets no
+`required`. Upstream's v4 Field has no such prop, which axiom 1 requires of
+a setter; formsnap's `aria-required` is not the component. `required`
+stays behavioural in questionnaire.
+
 ### D-85 · `read_only`
 
 - **Case:** Calendar has `readonly` in shadcn's demo; bits-ui radio-group
@@ -3009,7 +3023,7 @@ behaviour, as setters.
   through `accesskit_node_builder` where it does not (switch, tab,
   tablist, log, table, live regions, expanded); (b) `WidgetType` only.
   Per component: toggle `Button` + selected; toggle-group upstream roles;
-  spinner `.label` default "Loading"; skeleton `Other`; separator
+  spinner `.alt_text` default "Loading"; skeleton `Other`; separator
   decorative; command highlight as `selected`; accordion `expanded`;
   carousel roledescription; field error and marker `status` live regions;
   item `Button`/`Other`.
@@ -3024,6 +3038,15 @@ Decision: (a) with the per-component answers — as recommended.
 Consequence (rules, 2026-10-19): The AccessKit role is set after
 `widget_info`, which sets one from `WidgetType`. The decorative separator
 reports no `widget_info` (conformance 8).
+
+Consequence (field port, 2026-10-31): "field error ... `status`" in the
+per-component list is wrong: upstream's FieldError has `role="alert"`, so it
+reports `Role::Alert` with an assertive live region, as CP-07-17 and the
+alert do (conformance 8). The marker's `status` stays.
+
+Consequence (maintainer, 2026-10-31): The spinner's name setter is
+`.alt_text(impl Into<String>)`, default "Loading", as on the avatar; it
+was `.label`, which reads as visible text the spinner does not show.
 
 ## Shortcut functions
 
@@ -3974,12 +3997,26 @@ with list and content parts (D-47).
 
 Decision: deferred to the family PR (recommendation is the default
 proposal). Under D-62 (a) F12 ports a real widget (the crate `ScrollArea`
-with its own bars, thumb drag, track click, hover widening) and moves
+with its own bars, thumb drag, track click) and moves
 select's list onto it; CP-14-29's skip still holds, and the PR checks that
 egui's keyboard scrolling keeps working under the hidden bars.
 
 Consequence (rules, 2026-10-23, fix 5): Resizable's `autoSaveId` is an opt-in
 setter behind the crate's `persistence` feature (D-35).
+
+Consequence (maintainer, 2026-10-31, #28): CP-14-29 is added, not skipped.
+egui 0.34 has no keyboard scrolling, so the skip left a scroll area that the
+keyboard cannot scroll; the check above on egui's keyboard scrolling is void.
+As in Chrome's keyboard-focusable scrollers, an overflowing viewport that
+holds nothing focusable is a Tab stop with the `cn-scroll-area-viewport`
+focus ring, and the arrow keys, Page Up/Down, Space, Home and End scroll it.
+
+Consequence (maintainer, 2026-10-31, #28): the crate `ScrollArea` clips its
+content to a rectangle, not to the root's radius (`rounded-[inherit]`),
+because egui clips only to rectangles. It is a known difference, named in
+the module docs and in build-ui together with Card, whose `overflow-hidden`
+clips to a rectangle the same way. Upstream's bars do not widen on hover, so
+D-62 and this entry no longer list hover widening.
 
 ### D-121 · F13 paging (breadcrumb, pagination)
 

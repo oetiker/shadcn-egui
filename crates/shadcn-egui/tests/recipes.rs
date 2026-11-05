@@ -154,7 +154,7 @@ fn important_app_rule_beats_generated_important() {
         10.0,
     );
     let mode = egui::Theme::Light;
-    let badge = |ui: &mut egui::Ui| ui.add(Badge::new("Badge").icon(&X));
+    let badge = |ui: &mut egui::Ui| ui.add(Badge::new("Badge").icon(X));
     let before = common::measure(&luma, mode, badge);
     let theme = common::restyled(luma, |s| {
         s.badge
@@ -233,10 +233,9 @@ fn disabled_line_bar_is_faded_with_its_trigger() {
     let mode = egui::Theme::Light;
     let theme = Theme::vega();
     let (_, out) = common::measure_output(&theme, mode, |ui| {
-        ui.add(
-            Tabs::new(&mut 0, &["A", "B"])
-                .variant(TabsVariant::Line)
-                .enabled(false),
+        ui.add_enabled(
+            false,
+            Tabs::new(&mut 0, &["A", "B"]).variant(TabsVariant::Line),
         )
     });
     let fg = theme.palette_of(mode).foreground;
@@ -441,7 +440,7 @@ fn tooltip_colours_come_from_the_style() {
 
 #[test]
 fn separator_line_comes_from_the_style() {
-    use shadcn_egui::components::separator::{separator, separator_vertical};
+    use shadcn_egui::components::separator::{separator, Separator};
     use shadcn_egui::style::Prop;
     let mode = egui::Theme::Light;
     let line = |theme: &Theme| {
@@ -480,7 +479,7 @@ fn separator_line_comes_from_the_style() {
     let (_, out) = common::measure_output(&vertical, mode, |ui| {
         ui.horizontal(|ui| {
             ui.allocate_response(vec2(0.0, 40.0), egui::Sense::hover());
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
         })
         .response
     });
@@ -503,7 +502,7 @@ fn button_disabled_opacity_comes_from_the_style() {
     });
     let (_, on) = common::measure_output(&theme, mode, |ui| ui.add(Button::new("Save")));
     let (_, off) = common::measure_output(&theme, mode, |ui| {
-        ui.add(Button::new("Save").enabled(false))
+        ui.add_enabled(false, Button::new("Save"))
     });
     assert_eq!(
         common::text_colour(&off),
@@ -602,7 +601,7 @@ fn input_placeholder_and_fade_come_from_the_style() {
     });
     assert_eq!(common::text_colour(&on), theme.palette_of(mode).primary);
     let (_, off) = common::measure_output(&theme, mode, |ui| {
-        ui.add(Input::new(&mut String::new()).hint("Email").enabled(false))
+        ui.add_enabled(false, Input::new(&mut String::new()).hint("Email"))
     });
     assert_eq!(
         common::text_colour(&off),
@@ -635,7 +634,7 @@ fn select_fade_and_offset() {
         ui.add(Select::new("s", &mut 0, &["Apple"]))
     });
     let (_, off) = common::measure_output(&theme, mode, |ui| {
-        ui.add(Select::new("s", &mut 0, &["Apple"]).enabled(false))
+        ui.add_enabled(false, Select::new("s", &mut 0, &["Apple"]))
     });
     assert_eq!(
         common::text_colour(&off),
@@ -653,7 +652,10 @@ fn select_fade_and_offset() {
     assert_eq!(border(&off), border(&on).gamma_multiply(0.25));
 
     let item_top = |offset: f32| {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = egui_kittest::Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(320.0, 260.0))
             .build_ui(move |ui| {
                 Theme::vega().apply(ui.ctx());
@@ -694,13 +696,14 @@ fn click_flips(
         vec![egui::Event::PointerMoved(pos), press(true)],
         vec![press(false)],
     ] {
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 events,
                 ..Default::default()
             },
             |ui| add(ui, &mut value),
-        );
+        )
+        .drop_without_applying_deltas();
     }
     value
 }
@@ -762,7 +765,7 @@ fn switch_fade_comes_from_the_style() {
     });
     let fills = |enabled: bool| {
         let (track, out) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Switch::new(&mut true).enabled(enabled))
+            ui.add_enabled(enabled, Switch::new(&mut true))
         });
         // Faded, the track paints as a mesh with the thumb cut out of it
         // (its bounds the track's plus egui's feathering): its fill is its
@@ -800,7 +803,7 @@ fn checkbox_fade_comes_from_the_style() {
     });
     let fill = |enabled: bool| {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Checkbox::new(&mut true).enabled(enabled))
+            ui.add_enabled(enabled, Checkbox::new(&mut true))
         });
         // Faded, the box paints as meshes: its first is the fill.
         common::box_fills(&out)
@@ -837,7 +840,7 @@ fn slider_fade_multiplies_down_the_parts() {
     // border (the thumb) paints its fill and border as one mesh.
     let rects = |enabled: bool| {
         let (_, out) = common::measure_output(&theme, mode, |ui| {
-            ui.add(Slider::new(&mut 50.0, 0.0..=100.0).enabled(enabled))
+            ui.add_enabled(enabled, Slider::new(&mut 50.0, 0.0..=100.0))
         });
         fn walk(s: &egui::Shape, out: &mut Vec<egui::Color32>) {
             match s {
@@ -978,7 +981,7 @@ fn dialog_close_recipe_paints_the_close_button() {
             time: Some(time),
             ..Default::default()
         };
-        out = ctx.run_ui(input, frame);
+        out = common::no_textures(ctx.run_ui(input, frame));
     }
     let filled: Vec<_> = common::rect_shapes(&out)
         .into_iter()
@@ -1026,16 +1029,12 @@ fn checkbox_tick_colour_comes_from_the_indicator() {
     let theme = common::restyled(Theme::vega(), |s| {
         s.checkbox_indicator.text.base = Some(Paint::Role(Role::Destructive, 1.0));
     });
-    let (_, out) = common::measure_output(&theme, mode, |ui| ui.add(Checkbox::new(&mut true)));
-    let tick = out
-        .shapes
-        .iter()
-        .find_map(|c| match &c.shape {
-            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
-                m.vertices.first().map(|v| v.color)
-            }
-            _ => None,
-        })
+    let (_, out, ctx) = common::measure_frame(&theme, mode, |ui| ui.add(Checkbox::new(&mut true)));
+    let shadows = common::shadow_textures(&ctx);
+    let tick = common::mesh_shapes(&out)
+        .into_iter()
+        .find(|m| m.texture_id != egui::TextureId::default() && !shadows.contains(&m.texture_id))
+        .and_then(|m| m.vertices.first().map(|v| v.color))
         .expect("a tick");
     assert_eq!(tick, theme.palette_of(mode).destructive);
 }
@@ -1159,20 +1158,24 @@ fn replaced_popover_recipe_keeps_its_content_width() {
 }
 
 /// The bounds of every icon (a textured mesh) a frame painted.
-fn icon_rects(out: &egui::FullOutput) -> Vec<egui::Rect> {
-    fn walk(s: &egui::Shape, acc: &mut Vec<egui::Rect>) {
+fn icon_rects(ctx: &egui::Context, out: &egui::FullOutput) -> Vec<egui::Rect> {
+    let shadows = common::shadow_textures(ctx);
+    let icon = |id: egui::TextureId| id != egui::TextureId::default() && !shadows.contains(&id);
+    fn walk(s: &egui::Shape, icon: &dyn Fn(egui::TextureId) -> bool, acc: &mut Vec<egui::Rect>) {
         match s {
-            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
+            egui::Shape::Mesh(m) if icon(m.texture_id) => {
                 acc.push(egui::Rect::from_points(
                     &m.vertices.iter().map(|v| v.pos).collect::<Vec<_>>(),
                 ));
             }
-            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, acc)),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, icon, acc)),
             _ => {}
         }
     }
     let mut acc = Vec::new();
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut acc));
+    out.shapes
+        .iter()
+        .for_each(|c| walk(&c.shape, &icon, &mut acc));
     acc
 }
 
@@ -1190,21 +1193,24 @@ fn replaced_recipes_keep_their_icons() {
         *s.select_item_indicator = Recipe::default();
     });
     let icon = cleared.metrics.icon;
-    let (_, out) = common::measure_output(&cleared, egui::Theme::Light, |ui| {
+    let (_, out, ctx) = common::measure_frame(&cleared, egui::Theme::Light, |ui| {
         ui.add(Checkbox::new(&mut true))
     });
-    let ticks = icon_rects(&out);
+    let ticks = icon_rects(&ctx, &out);
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = egui_kittest::Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui(move |ui| {
             cleared.apply(ui.ctx());
             ui.add(Select::new("fruit", &mut 0, &["Apple", "Banana"]));
         });
     h.run();
-    let chevrons = icon_rects(h.output());
+    let chevrons = icon_rects(&h.ctx, h.output());
     h.get_by_role(egui::accesskit::Role::ComboBox).click();
     h.run();
-    let open = icon_rects(h.output());
+    let open = icon_rects(&h.ctx, h.output());
     let big = |v: &[egui::Rect]| v.iter().filter(|r| r.width() >= icon * 0.5).count();
     assert_eq!(
         (big(&ticks), big(&chevrons), big(&open)),
@@ -1323,7 +1329,10 @@ fn overlay_output(
     ui_fn: fn(&mut egui::Ui),
     act: fn(&mut egui_kittest::Harness<'static>),
 ) -> egui::FullOutput {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = egui_kittest::Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(520.0, 420.0))
         .with_theme(egui::Theme::Light)
         .build_ui(move |ui| {
@@ -1335,7 +1344,7 @@ fn overlay_output(
     act(&mut h);
     h.run();
     h.run();
-    h.output().clone()
+    common::no_textures(h.output().clone())
 }
 
 /// Issue #6, M2: every part's `opacity` takes effect, multiplied down the
@@ -1366,7 +1375,9 @@ fn every_part_opacity_multiplies_down_the_part_tree() {
         r.opacity.base = Some(v);
     }
     fn leaf(theme: &Theme, f: fn(&mut egui::Ui) -> egui::Response) -> egui::FullOutput {
-        common::measure_output(theme, egui::Theme::Light, f).1
+        common::measure_output(theme, egui::Theme::Light, f)
+            .1
+            .into_inner()
     }
     fn click_open(h: &mut egui_kittest::Harness<'static>) {
         h.get_by_label("Open").click();

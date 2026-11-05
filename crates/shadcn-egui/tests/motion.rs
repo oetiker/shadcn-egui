@@ -11,7 +11,7 @@ const PROPERTY: Transition = Transition::OTHER;
 /// one trailing repaint after the pass that last asked).
 fn pass(ctx: &egui::Context, time: f64, target: f32, layers: &[&Recipe]) -> (f32, bool) {
     let mut value = f32::NAN;
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -19,7 +19,7 @@ fn pass(ctx: &egui::Context, time: f64, target: f32, layers: &[&Recipe]) -> (f32
         |ui| {
             value = transition(
                 ui.ctx(),
-                egui::Id::new("motion-test"),
+                egui::Id::unique("motion-test"),
                 target,
                 layers,
                 PROPERTY,
@@ -27,6 +27,7 @@ fn pass(ctx: &egui::Context, time: f64, target: f32, layers: &[&Recipe]) -> (f32
             );
         },
     );
+    out.textures_delta.clear();
     let repaint =
         out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
     (value, repaint)
@@ -36,13 +37,14 @@ fn pass(ctx: &egui::Context, time: f64, target: f32, layers: &[&Recipe]) -> (f32
 fn fresh() -> egui::Context {
     let ctx = egui::Context::default();
     for time in [0.0, 0.1, 0.2] {
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
             },
             |_| {},
-        );
+        )
+        .drop_without_applying_deltas();
     }
     ctx
 }
@@ -166,13 +168,14 @@ fn a_reversed_transition_takes_only_the_way_covered() {
 
 /// One pass at `time` that does not show the widget.
 fn skip(ctx: &egui::Context, time: f64) {
-    let _ = ctx.run_ui(
+    ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
         },
         |_| {},
-    );
+    )
+    .drop_without_applying_deltas();
 }
 
 #[test]
@@ -223,7 +226,7 @@ fn every_style_times_the_progress_indicator() {
 /// `animation_time` to 0: the left edge of the last filled rect (the
 /// thumb), and whether the pass ends with a repaint request.
 fn switch_pass(ctx: &egui::Context, time: f64, on: bool, reduced: bool) -> (f32, bool) {
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -237,6 +240,7 @@ fn switch_pass(ctx: &egui::Context, time: f64, on: bool, reduced: bool) -> (f32,
             ui.add(shadcn_egui::components::switch::Switch::new(&mut on));
         },
     );
+    out.textures_delta.clear();
     let left = out
         .shapes
         .iter()
@@ -291,7 +295,7 @@ fn button_pass(
     in_area: bool,
 ) -> (egui::Rect, egui::Color32, bool) {
     let mut rect = egui::Rect::NOTHING;
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             events: pointer.map(egui::Event::PointerMoved).into_iter().collect(),
@@ -307,7 +311,7 @@ fn button_pass(
                     .rect
             };
             rect = if in_area {
-                egui::Area::new(egui::Id::new("area"))
+                egui::Area::new(egui::Id::unique("area"))
                     .fixed_pos(egui::pos2(40.0, 40.0))
                     .fade_in(false)
                     .show(ui.ctx(), add)
@@ -317,6 +321,7 @@ fn button_pass(
             };
         },
     );
+    out.textures_delta.clear();
     let fill = out
         .shapes
         .iter()
@@ -402,17 +407,18 @@ fn a_colour_the_transition_does_not_name_jumps() {
         let ctx = fresh();
         let fill = |time: f64, r: &Recipe| {
             let mut fill = None;
-            let _ = ctx.run_ui(
+            ctx.run_ui(
                 egui::RawInput {
                     time: Some(time),
                     ..Default::default()
                 },
                 |ui| {
                     fill = RecipeBox::resolve(ui.ctx(), &theme, &[r], State::NONE)
-                        .transitioned(ui.ctx(), egui::Id::new("box"), &[r], State::NONE)
+                        .transitioned(ui.ctx(), egui::Id::unique("box"), &[r], State::NONE)
                         .fill();
                 },
-            );
+            )
+            .drop_without_applying_deltas();
             fill.expect("a fill")
         };
         let idle = fill(1.0, &from);
@@ -451,17 +457,18 @@ fn an_alpha_scaled_fill_fades_from_its_theme_colour() {
     let ctx = fresh();
     let fill = |time: f64, r: &Recipe| {
         let mut fill = None;
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
             },
             |ui| {
                 fill = RecipeBox::resolve(ui.ctx(), &theme, &[r], State::NONE)
-                    .transitioned(ui.ctx(), egui::Id::new("box"), &[r], State::NONE)
+                    .transitioned(ui.ctx(), egui::Id::unique("box"), &[r], State::NONE)
                     .fill();
             },
-        );
+        )
+        .drop_without_applying_deltas();
         fill.expect("a fill")
     };
     fill(1.0, &from);
@@ -507,19 +514,35 @@ fn box_pass(ctx: &egui::Context, time: f64, r: &Recipe, s: State) -> Vec<egui::S
     let theme = shadcn_egui::Theme::vega();
     let rect = egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(40.0, 20.0));
     let mut shapes = Vec::new();
-    let _ = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
         },
         |ui| {
             shapes = RecipeBox::resolve(ui.ctx(), &theme, &[r], s)
-                .transitioned(ui.ctx(), egui::Id::new("box"), &[r], s)
+                .transitioned(ui.ctx(), egui::Id::unique("box"), &[r], s)
                 .shapes(ui.ctx(), rect);
         },
     );
+    // Keep the images the pass uploads, for `shadow_alpha`.
+    ctx.data_mut(|d| {
+        let uploads = d.get_temp_mut_or_default::<Uploads>(egui::Id::unique("uploads"));
+        for (id, deltas) in std::mem::take(&mut out.textures_delta.set) {
+            for delta in deltas {
+                let egui::ImageData::Color(image) = delta.image;
+                if delta.pos.is_none() {
+                    uploads.insert(id, image);
+                }
+            }
+        }
+        out.textures_delta.clear();
+    });
     shapes
 }
+
+/// The whole images the passes of a context uploaded, by texture.
+type Uploads = std::collections::HashMap<egui::TextureId, std::sync::Arc<egui::ColorImage>>;
 
 /// The outline's width among `shapes`: the only stroked rect.
 fn outline_width(shapes: &[egui::Shape]) -> f32 {
@@ -532,13 +555,33 @@ fn outline_width(shapes: &[egui::Shape]) -> f32 {
         .unwrap_or(0.0)
 }
 
-/// The darkest alpha of the shadow mesh among `shapes`.
-fn shadow_alpha(shapes: &[egui::Shape]) -> u8 {
-    shapes
-        .iter()
-        .filter_map(|s| match s {
-            egui::Shape::Mesh(m) => m.vertices.iter().map(|v| v.color.a()).max(),
-            _ => None,
+/// The darkest alpha the shadow among `shapes` paints: its texture's
+/// strongest texel times the fade of its quads.
+fn shadow_alpha(ctx: &egui::Context, shapes: &[egui::Shape]) -> u8 {
+    let uploads = ctx.data(|d| {
+        d.get_temp::<Uploads>(egui::Id::unique("uploads"))
+            .unwrap_or_default()
+    });
+    fn meshes<'a>(s: &'a egui::Shape, out: &mut Vec<&'a egui::Mesh>) {
+        match s {
+            egui::Shape::Mesh(m) => out.push(m),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| meshes(s, out)),
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    shapes.iter().for_each(|s| meshes(s, &mut found));
+    found
+        .into_iter()
+        .filter_map(|m| {
+            let texel = uploads
+                .get(&m.texture_id)?
+                .pixels
+                .iter()
+                .map(|p| p.a())
+                .max()?;
+            let fade = m.vertices.iter().map(|v| v.color.a()).max()?;
+            Some((u16::from(texel) * u16::from(fade) / 255) as u8)
         })
         .max()
         .unwrap_or(0)
@@ -577,17 +620,17 @@ fn shadow_elevation_fades_where_box_shadow_is_named() {
     box_pass(&ctx, 1.0, &r, State::NONE);
     let full = {
         let ctx = fresh();
-        shadow_alpha(&box_pass(&ctx, 1.0, &r, State::FOCUS_VISIBLE))
+        shadow_alpha(&ctx, &box_pass(&ctx, 1.0, &r, State::FOCUS_VISIBLE))
     };
     assert!(full > 0);
     assert_eq!(
-        shadow_alpha(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        shadow_alpha(&ctx, &box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
         0
     );
-    let half = shadow_alpha(&box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
+    let half = shadow_alpha(&ctx, &box_pass(&ctx, 2.075, &r, State::FOCUS_VISIBLE));
     assert!(half > 0 && half < full, "{half} of {full}");
     assert_eq!(
-        shadow_alpha(&box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE)),
+        shadow_alpha(&ctx, &box_pass(&ctx, 2.2, &r, State::FOCUS_VISIBLE)),
         full
     );
     // `transition-colors` does not name `box-shadow`: it jumps.
@@ -595,7 +638,7 @@ fn shadow_elevation_fades_where_box_shadow_is_named() {
     let r = focus_recipe(Transition::COLORS);
     box_pass(&ctx, 1.0, &r, State::NONE);
     assert_eq!(
-        shadow_alpha(&box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
+        shadow_alpha(&ctx, &box_pass(&ctx, 2.0, &r, State::FOCUS_VISIBLE)),
         full
     );
 }
@@ -618,13 +661,14 @@ fn disabled_opacity_fades_where_opacity_is_named() {
     };
     let at = |ctx: &egui::Context, time: f64, r: &Recipe, s: State| {
         let mut o = f32::NAN;
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
             },
-            |ui| o = part_opacity(ui, egui::Id::new("part"), &[&[r]], s),
-        );
+            |ui| o = part_opacity(ui, egui::Id::unique("part"), &[&[r]], s),
+        )
+        .drop_without_applying_deltas();
         o
     };
     let ctx = fresh();
@@ -647,7 +691,7 @@ fn disabled_opacity_fades_where_opacity_is_named() {
 /// left: the thumb's left edge minus the track's, and whether the pass
 /// ends with a repaint request.
 fn moved_switch_pass(ctx: &egui::Context, time: f64, on: bool, shift: f32) -> (f32, bool) {
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -661,6 +705,7 @@ fn moved_switch_pass(ctx: &egui::Context, time: f64, on: bool, shift: f32) -> (f
             });
         },
     );
+    out.textures_delta.clear();
     let lefts: Vec<f32> = out
         .shapes
         .iter()
@@ -712,7 +757,7 @@ fn a_property_moves_where_the_transition_names_any_part_of_it() {
     let ctx = fresh();
     let at = |time: f64, c: egui::Color32| {
         let mut out = c;
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
@@ -720,14 +765,15 @@ fn a_property_moves_where_the_transition_names_any_part_of_it() {
             |ui| {
                 out = transition_color(
                     ui.ctx(),
-                    egui::Id::new("c"),
+                    egui::Id::unique("c"),
                     c,
                     &[&r],
                     Transition::COLORS,
                     State::NONE,
                 )
             },
-        );
+        )
+        .drop_without_applying_deltas();
         out
     };
     at(1.0, egui::Color32::BLACK);
@@ -755,7 +801,7 @@ fn sibling_labels_keep_their_own_transitions() {
     let ctx = fresh();
     let mut repaints = Vec::new();
     for time in [1.0, 2.0, 3.0, 4.0] {
-        let out = ctx.run_ui(
+        let mut out = ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
@@ -763,9 +809,10 @@ fn sibling_labels_keep_their_own_transitions() {
             |ui| {
                 theme.apply(ui.ctx());
                 ui.add(Label::new("On"));
-                ui.add(Label::new("Off").enabled(false));
+                ui.add_enabled(false, Label::new("Off"));
             },
         );
+        out.textures_delta.clear();
         repaints.push(
             out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO,
         );
@@ -782,7 +829,7 @@ fn themed_button_pass(
     mode: egui::Theme,
 ) -> (egui::Color32, bool) {
     let mut rect = egui::Rect::NOTHING;
-    let out = ctx.run_ui(
+    let mut out = ctx.run_ui(
         egui::RawInput {
             time: Some(time),
             ..Default::default()
@@ -795,6 +842,7 @@ fn themed_button_pass(
                 .rect;
         },
     );
+    out.textures_delta.clear();
     let fill = out
         .shapes
         .iter()
@@ -921,7 +969,7 @@ fn a_faded_box_fades_its_outline_too() {
     let ctx = fresh();
     let mut outline = None;
     for time in [1.0, 5.0] {
-        let _ = ctx.run_ui(
+        ctx.run_ui(
             egui::RawInput {
                 time: Some(time),
                 ..Default::default()
@@ -929,14 +977,15 @@ fn a_faded_box_fades_its_outline_too() {
             |ui| {
                 let shapes = RecipeBox::resolve(ui.ctx(), &theme, &[&r], s)
                     .faded(0.5)
-                    .transitioned(ui.ctx(), egui::Id::new("box"), &[&r], s)
+                    .transitioned(ui.ctx(), egui::Id::unique("box"), &[&r], s)
                     .shapes(ui.ctx(), rect);
                 outline = shapes.iter().find_map(|s| match s {
                     egui::Shape::Rect(r) if r.stroke.width > 0.0 => Some(r.stroke.color),
                     _ => None,
                 });
             },
-        );
+        )
+        .drop_without_applying_deltas();
     }
     let want = theme
         .paint(Paint::Role(Role::Ring, 1.0))

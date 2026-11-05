@@ -7,12 +7,17 @@
 //! z-order cannot flip) and blocks input to everything beneath. Closes on Esc,
 //! a backdrop click, or the close button.
 //!
+//! Opening plays the style's enter animation on the overlay and the panel
+//! (`fade-in-0 zoom-in-95`, `duration-100`); closing jumps, as egui drops
+//! the modal's area in the pass it closes.
+//!
 //! The overlay's `backdrop-blur-xs` is not drawn: egui cannot blur what lies
 //! beneath, so only the overlay colour applies.
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::context;
 use crate::components::free_content;
+use crate::components::motion::Enter;
 use crate::components::shared::{content_ui, opacity, part_painter, part_ui, RecipeBox};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
@@ -67,9 +72,9 @@ pub struct Dialog<'a> {
 }
 
 impl<'a> Dialog<'a> {
-    pub fn new(id_salt: impl std::hash::Hash, title: &'a str) -> Self {
+    pub fn new(id_salt: impl std::hash::Hash + std::fmt::Debug, title: &'a str) -> Self {
         Self {
-            id: Id::new(id_salt),
+            id: Id::unique(id_salt),
             variant: DialogVariant::Default,
             title,
             description: None,
@@ -146,21 +151,29 @@ impl<'a> Dialog<'a> {
             layout::overlay_width(ctx, max_width, px(|r| &r.max_width_inset), pad_l + pad_r);
         let inner_width = width - pad_l - pad_r;
 
-        let panel = RecipeBox::resolve(ctx, &t, &l, g).faded(alpha);
+        // The open animation of the panel and of the overlay, in place of
+        // egui's fade of the modal's area.
+        let enter = Enter::at(ctx, self.id, &l, g);
+        let panel = RecipeBox::resolve(ctx, &t, &l, g).faded(alpha * enter.opacity());
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         let overlay_l = [v.part(&t.style, |_, s| &s.dialog_overlay, |r| &r.dialog_overlay)];
+        let overlay_enter = Enter::at(ctx, self.id, &overlay_l, g);
         let overlay = pick(&overlay_l, |r| &r.bg, g).map_or(Color32::TRANSPARENT, |p| t.paint(p));
         // The overlay's opacity fades the backdrop, the app's colour too.
         let backdrop = self
             .backdrop
             .unwrap_or(overlay)
-            .gamma_multiply(opacity(&[&overlay_l[..]], g));
+            .gamma_multiply(opacity(&[&overlay_l[..]], g) * overlay_enter.opacity());
 
         let resp = egui::Modal::new(self.id)
+            .area(egui::Modal::default_area(self.id).fade_in(false))
             .backdrop_color(backdrop)
             .frame(frame)
             .show(ctx, |ui| {
-                let slot = RecipeBox::reserve(ui);
+                Enter::mark(ui, self.id);
+                ui.multiply_opacity(enter.opacity());
+                // egui's sizing pass draws nothing: no box either.
+                let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
                 ui.set_width(inner_width);
                 ui.spacing_mut().item_spacing.y = gap;
                 let parts = DialogContext {
@@ -188,7 +201,12 @@ impl<'a> Dialog<'a> {
             });
         let dismissed = resp.backdrop_response.clicked() || resp.should_close();
         let (inner, close, slot) = resp.inner;
-        panel.paint_reserved(ctx, resp.response.layer_id, slot, resp.response.rect);
+        let (layer, rect) = (resp.response.layer_id, resp.response.rect);
+        if let Some(slot) = slot {
+            panel.paint_reserved(ctx, layer, slot, rect);
+            // `transform-origin` is the panel's centre.
+            enter.transform(ctx, layer, slot, rect.center(), &l, g);
+        }
         if close || dismissed {
             *open = false;
         }
@@ -222,13 +240,13 @@ fn header(
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(
             ui,
-            ui.id().with("shadcn_egui::dialog::header"),
+            ui.scope_id().with("shadcn_egui::dialog::header"),
             &[&header_l[..]],
             g,
             |ui| {
                 part_ui(
                     ui,
-                    ui.id().with("shadcn_egui::dialog::title"),
+                    ui.scope_id().with("shadcn_egui::dialog::title"),
                     &[&heading[..]],
                     g,
                     |ui| title_look.label(ui, title, TextWrapMode::Wrap),
@@ -236,7 +254,7 @@ fn header(
                 if let Some(d) = description {
                     part_ui(
                         ui,
-                        ui.id().with("shadcn_egui::dialog::description"),
+                        ui.scope_id().with("shadcn_egui::dialog::description"),
                         &[&desc[..]],
                         g,
                         |ui| desc_look.label(ui, d, TextWrapMode::Wrap),
@@ -273,7 +291,7 @@ fn close_button(ui: &mut Ui, t: &Theme, v: &Resolved<DialogVariant>, pad: (f32, 
     child
         .add(
             Button::new("Close")
-                .icon(&t.icons.close)
+                .icon(t.icons.close)
                 .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::IconSm)
                 .extra_layer(close.clone()),
@@ -428,7 +446,7 @@ mod tests {
         let ctx = egui::Context::default();
         let t = Theme::vega().variant(BRAND, DialogVariant::Default, brand);
         t.apply(&ctx);
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let mut open = true;
             let seen = Dialog::new("d", "Title")
                 .variant(BRAND)
@@ -442,6 +460,7 @@ mod tests {
             assert_eq!(seen, Some(Some(Paint::Role(Role::Primary, 1.0))));
             let t = Theme::current(ui.ctx());
             assert_eq!(dialog_recipes(ui, &t).base(), DialogVariant::Default);
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

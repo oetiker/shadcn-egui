@@ -207,6 +207,10 @@ fn pseudo_targets() {
     assert!(
         matches!(utility("size-4", Some(Pseudo::Svg)), U::Set(v) if v == [(Field::IconSize, Value::Px(16.0))])
     );
+    // `[&>svg]` also reaches an icon with a size of its own (the spinner).
+    assert!(
+        matches!(utility("size-3", Some(Pseudo::SvgAll)), U::Set(v) if v == [(Field::IconSize, Value::Px(12.0)), (Field::SizedIconSize, Value::Px(12.0))])
+    );
     assert!(matches!(utility("-inset-2", Some(Pseudo::After)), U::Set(v) if v.len() == 2));
     assert!(
         matches!(utility("-inset-x-3", Some(Pseudo::After)), U::Set(v) if v == [(Field::HitInsetX, Value::Px(12.0))])
@@ -267,9 +271,11 @@ fn variants() {
         variant("[&_svg:not([class*='size-'])]"),
         V::Pseudo(Pseudo::Svg, _)
     ));
+    assert!(matches!(variant("[&>svg]"), V::Pseudo(Pseudo::SvgAll, _)));
     assert!(matches!(variant("after"), V::Pseudo(Pseudo::After, _)));
     assert!(matches!(variant("data-open"), V::Cond { all, .. } if all == flag("EXPANDED")));
-    assert!(matches!(variant("[a]"), V::Ignore(_)));
+    assert!(matches!(variant("[a]"), V::Cond { all, .. } if all == flag("LINK")));
+    assert!(matches!(variant("*:[a]"), V::Ignore(_)));
     assert!(matches!(variant("lg"), V::Unsupported));
     // Only exact, listed text translates: an unknown group name is not guessed.
     assert!(matches!(
@@ -433,6 +439,7 @@ fn model_matches_recipe_rs() {
         InsetBottom,
         InsetLeft,
         IconSize,
+        SizedIconSize,
         IconShiftY,
         IconHidden,
         TextSize,
@@ -444,6 +451,7 @@ fn model_matches_recipe_rs() {
         UnderlineOffset,
         TextWrap,
         TextAlign,
+        LineClamp,
         Radius,
         RadiusTop,
         RadiusBottom,
@@ -478,6 +486,7 @@ fn model_matches_recipe_rs() {
         Easing,
         AnimateIn,
         AnimateOut,
+        AnimateSpin,
         EnterOpacity,
         EnterScale,
         EnterX,
@@ -577,7 +586,27 @@ fn conditional_classes_have_nonzero_rank() {
 fn rank_order_agrees_with_specificity() {
     /// (pseudo-elements, classes), compared in that order.
     fn specificity(v: &str) -> (u32, u32) {
+        // shadcn-svelte's custom `data-*` variants are `&:where(..)`, also
+        // under `not-`, `has-`, `group-` and `peer-` (`:not(*:where(..))`).
+        let custom = [
+            "data-open",
+            "data-closed",
+            "data-checked",
+            "data-unchecked",
+            "data-disabled",
+            "data-active",
+            "data-horizontal",
+            "data-vertical",
+        ];
+        let mut inner = v.split('/').next().unwrap_or(v);
+        while let Some(rest) = ["not-", "has-", "group-", "peer-"]
+            .iter()
+            .find_map(|p| inner.strip_prefix(p))
+        {
+            inner = rest;
+        }
         let none = v.starts_with("in-")
+            || custom.contains(&inner)
             || ["sm", "md", "supports-backdrop-filter", "after", "[&>svg]"].contains(&v);
         match v {
             "placeholder" => (1, 0),
@@ -700,13 +729,16 @@ fn important_class_gets_the_top_rank_bit() {
             all: 0,
             none: 0,
             rank: 1 << R_IMPORTANT,
-            pseudo: Some(Pseudo::Svg),
+            pseudo: Some(Pseudo::SvgAll),
             child: None,
         }
     );
     assert_eq!(
         utility(&c.utility, v.pseudo),
-        U::Set(vec![(Field::IconSize, Value::Px(12.0))])
+        U::Set(vec![
+            (Field::IconSize, Value::Px(12.0)),
+            (Field::SizedIconSize, Value::Px(12.0))
+        ])
     );
     // An important plain class outranks the highest-ranked normal one.
     let important = variants_of("h-8!").unwrap().rank;
@@ -769,6 +801,7 @@ fn ignore_reasons_follow_the_spec_groups() {
         "flex-col-reverse",
         "flex-row",
         "flex-1",
+        "flex-auto",
         "grow",
         "shrink-0",
         "@container/card-header",
@@ -788,6 +821,7 @@ fn ignore_reasons_follow_the_spec_groups() {
         "overflow-hidden",
         "peer",
         "group/button",
+        "peer/field-label",
     ];
     // Motion classes are looks (rules axiom 8): recipe values.
     for u in [
@@ -813,7 +847,8 @@ fn ignore_reasons_follow_the_spec_groups() {
 /// `line-clamp-N` sets `display: -webkit-box`; Tailwind 4.3.3 emits the
 /// display utilities after it, so a display class on the same target and
 /// variants wins and Chrome clamps nothing (the select value). Without one
-/// the clamp is real, and the crate does not build it yet.
+/// the clamp is real: a part's own clamp is its `line_clamp`; a child's,
+/// or one a display class cancels in some states only, is not built.
 #[test]
 fn a_display_class_cancels_a_line_clamp() {
     use stylegen::resolve::{CLAMP_CANCELLED, CLAMP_EFFECTIVE};
@@ -830,9 +865,13 @@ fn a_display_class_cancels_a_line_clamp() {
         CLAMP_CANCELLED
     )));
     assert!(select.unsupported.is_empty());
+    assert_eq!(
+        winner(&["line-clamp-2"], Field::LineClamp, 0),
+        Some(Value::Lines(2))
+    );
+    assert!(run(&["line-clamp-2"]).unsupported.is_empty());
     for classes in [
-        &["line-clamp-2"][..],
-        &["line-clamp-1", "md:flex"],
+        &["line-clamp-1", "md:flex"][..],
         &["flex", "*:line-clamp-1"],
     ] {
         let m = run(classes);
@@ -842,6 +881,19 @@ fn a_display_class_cancels_a_line_clamp() {
         );
     }
     assert!(run(&["flex", "line-clamp-3"]).unsupported.is_empty());
+}
+
+/// Tailwind 4's `animate-spin` is `spin 1s linear infinite`: the part turns,
+/// one turn a second, at an even speed (D-88: a motion value is a look).
+#[test]
+fn animate_spin_turns_once_a_second_linearly() {
+    let spin = &["animate-spin"];
+    assert_eq!(winner(spin, Field::AnimateSpin, 0), Some(Value::Bool(true)));
+    assert_eq!(winner(spin, Field::Duration, 0), Some(Value::Factor(1.0)));
+    assert_eq!(
+        winner(spin, Field::Easing, 0),
+        Some(Value::Easing("Linear"))
+    );
 }
 
 /// The winning value of `field` under `state` in one class list, as `pick`
@@ -1004,7 +1056,8 @@ fn svg_targets_keep_their_variant_order() {
 /// moves a variant fails here.
 #[test]
 fn ranks_pin_tailwind_order() {
-    const ORDER: [&str; 79] = [
+    const ORDER: [&str; 100] = [
+        "not-has-[:disabled,[data-disabled]]",
         "not-aria-[haspopup]",
         "not-data-selected",
         "not-data-[variant=destructive]",
@@ -1014,8 +1067,12 @@ fn ranks_pin_tailwind_order() {
         "group-has-data-[size=lg]/avatar-group",
         "group-has-data-[size=sm]/avatar-group",
         "group-has-data-[slot=alert-dialog-media]/alert-dialog-content",
+        "group-has-data-[slot=item-description]/item",
+        "group-has-data-horizontal/field",
+        "group-has-[:focus-visible]/field-label",
         "group-has-[>svg]/alert",
         "group-data-[disabled=true]",
+        "group-data-[disabled=true]/field",
         "group-data-[size=default]/alert-dialog-content",
         "group-data-[size=default]/avatar",
         "group-data-[size=default]/switch",
@@ -1023,7 +1080,9 @@ fn ranks_pin_tailwind_order() {
         "group-data-[size=sm]/alert-dialog-content",
         "group-data-[size=sm]/avatar",
         "group-data-[size=sm]/card",
+        "group-data-[size=sm]/item",
         "group-data-[size=sm]/switch",
+        "group-data-[size=xs]/item",
         "group-data-[variant=default]/tabs-list",
         "group-data-[variant=line]/tabs-list",
         "group-data-horizontal/tabs",
@@ -1032,6 +1091,7 @@ fn ranks_pin_tailwind_order() {
         "peer-data-disabled",
         "placeholder",
         "after",
+        "last",
         "hover",
         "focus",
         "focus-visible",
@@ -1041,11 +1101,17 @@ fn ranks_pin_tailwind_order() {
         "in-data-[slot=tooltip-content]",
         "has-data-[icon=inline-end]",
         "has-data-[icon=inline-start]",
+        "has-data-[size=sm]",
+        "has-data-[size=xs]",
         "has-data-[slot=alert-action]",
         "has-data-[slot=alert-dialog-media]",
         "has-data-[slot=card-footer]",
         "has-data-[slot=kbd]",
+        "has-data-checked",
+        "has-[:focus-visible]",
         "has-[>[data-slot=button-group]]",
+        "has-[>[data-slot=field-content]]",
+        "has-[>[data-slot=field]]",
         "has-[>[data-variant=outline]]",
         "has-[>svg]",
         "aria-checked",
@@ -1057,6 +1123,7 @@ fn ranks_pin_tailwind_order() {
         "data-selected",
         "data-[active=true]",
         "data-[disabled=true]",
+        "data-[invalid=true]",
         "data-[orientation=horizontal]",
         "data-[orientation=vertical]",
         "data-[side=bottom]",
@@ -1066,10 +1133,14 @@ fn ranks_pin_tailwind_order() {
         "data-[size=default]",
         "data-[size=lg]",
         "data-[size=sm]",
+        "data-[size=xs]",
         "data-[state=checked]",
         "data-[state=delayed-open]",
         "data-[state=unchecked]",
+        "data-[variant=label]",
+        "data-[variant=legend]",
         "data-[variant=line]",
+        "nth-last-2",
         "supports-backdrop-filter",
         "sm",
         "md",
@@ -1083,7 +1154,9 @@ fn ranks_pin_tailwind_order() {
         "data-horizontal",
         "data-vertical",
         "[&_svg:not([class*='size-'])]",
+        "[a]",
         "[&>svg]",
+        "[[data-variant=legend]+&]",
     ];
     let mut translated: Vec<&str> = TRANSLATED.iter().map(|(n, _, _)| *n).collect();
     let mut listed = ORDER.to_vec();
@@ -1275,4 +1348,350 @@ fn state_ranks_compose_like_a_class() {
     // `aria-expanded:` sorts after `hover:`: a rule under EXPANDED beats
     // one under HOVER of equal specificity.
     assert!(compose(&["EXPANDED"]) > compose(&["HOVER"]));
+}
+
+/// The Field port's variants (#27): each translates to its flag, by exact
+/// text, with the specificity the browser gives it.
+#[test]
+fn field_variants_translate() {
+    let is = |v: &str, f: &str| {
+        assert!(
+            matches!(variant(v), V::Cond { all, none: 0, .. } if all == flag(f)),
+            "`{v}` → {f}: {:?}",
+            variant(v)
+        );
+    };
+    is("data-[invalid=true]", "INVALID");
+    is("group-data-[disabled=true]/field", "DISABLED");
+    is("data-[variant=label]", "VARIANT_LABEL");
+    is("data-[variant=legend]", "VARIANT_LEGEND");
+    is("[[data-variant=legend]+&]", "AFTER_LEGEND");
+    is("last", "LAST");
+    is("nth-last-2", "NTH_LAST_2");
+    is("group-has-data-horizontal/field", "HAS_HORIZONTAL");
+    is("has-data-checked", "HAS_CHECKED");
+    is("has-[>[data-slot=field]]", "HAS_FIELD");
+    is("has-[>[data-slot=field-content]]", "HAS_FIELD_CONTENT");
+    is("has-[:focus-visible]", "HAS_FOCUS_VISIBLE");
+    is(
+        "group-has-[:focus-visible]/field-label",
+        "HAS_FOCUS_VISIBLE",
+    );
+    assert!(
+        matches!(variant("not-has-[:disabled,[data-disabled]]"), V::Cond { all: 0, none, .. } if none == flag("HAS_DISABLED"))
+    );
+    for v in [
+        "data-[slot=checkbox-group]",
+        "has-[>[data-slot=checkbox-group]]",
+        "has-[>[data-slot=radio-group]]",
+        "group-data-[variant=outline]/field-group",
+        "[&>a]",
+        "[&>a:hover]",
+        "[&>.sr-only]",
+        "@md/field-group",
+    ] {
+        assert!(matches!(variant(v), V::Ignore(_)), "`{v}` is ignored");
+    }
+    // `nth-last` is its own functional root (variants.ts:892), after `data`.
+    assert_eq!(tw_cmp("data-x", "nth-last-2"), Some(Ordering::Less));
+    assert_eq!(tw_cmp("nth-last-2", "supports-x"), Some(Ordering::Less));
+    assert_eq!(tw_cmp("last", "nth-last-2"), Some(Ordering::Less));
+    // `:where(..)` custom variants under `has-`/`group-has-` add nothing:
+    // `has-data-checked:bg-primary/5` loses to the card's `hover:` rule
+    // only by order, not by specificity.
+    let one = rank_of("hover").map(|_| ());
+    assert!(one.is_some());
+    let r = |raw: &str| variants_of(raw).expect(raw).rank;
+    assert_eq!(r("has-data-checked:bg-primary") >> R_CLASSES, 0);
+    assert_eq!(
+        r("group-has-data-horizontal/field:text-balance") >> R_CLASSES,
+        0
+    );
+    assert_eq!(r("has-[:focus-visible]:ring-3") >> R_CLASSES, 2);
+    assert_eq!(r("[[data-variant=legend]+&]:-mt-1.5") >> R_CLASSES, 2);
+    assert_eq!(r("nth-last-2:-mt-1") >> R_CLASSES, 2);
+}
+
+/// The Field family's child rules land on the child's part: a nested
+/// field group's gap, a choice card's field padding, the checkbox's
+/// `mt-px` beside a FieldContent in a horizontal field.
+#[test]
+fn field_child_rules_route_to_the_child() {
+    use stylegen::resolve::{route, Part};
+    let part = |name: &str, classes: &[&str]| Part {
+        name: name.to_owned(),
+        marker: translate(
+            &classes.iter().map(|c| (*c).to_owned()).collect::<Vec<_>>(),
+            &Vars::new(),
+        ),
+        corrections: Vec::new(),
+    };
+    let mut ps = vec![
+        part(
+            "cn-field-group",
+            &["gap-7", "*:data-[slot=field-group]:gap-4"],
+        ),
+        part("cn-field-label", &["*:data-[slot=field]:p-3"]),
+        part(
+            "cn-field-orientation-horizontal",
+            &[
+                "has-[>[data-slot=field-content]]:items-start",
+                "*:data-[slot=field-label]:flex-auto",
+                "has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
+            ],
+        ),
+        part("cn-field", &["gap-3"]),
+        part("cn-checkbox", &["size-4"]),
+    ];
+    route(&mut ps);
+    for p in &ps {
+        assert!(
+            p.marker.unsupported.is_empty(),
+            "{}: {:?}",
+            p.name,
+            p.marker.unsupported
+        );
+    }
+    let decl = |name: &str, field: Field| {
+        let p = ps.iter().find(|p| p.name == name).expect(name);
+        p.marker
+            .decls
+            .iter()
+            .filter(|d| d.field == field)
+            .map(|d| (d.value, d.all, d.none))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        decl("cn-field-group", Field::Gap),
+        [
+            (Value::Px(28.0), 0, 0),
+            (Value::Px(16.0), flag("IN_FIELD_GROUP"), 0)
+        ]
+    );
+    assert_eq!(
+        decl("cn-field", Field::PadTop),
+        [(Value::Px(12.0), flag("IN_FIELD_LABEL"), 0)]
+    );
+    assert_eq!(
+        decl("cn-checkbox", Field::MarginTop),
+        [(Value::Px(1.0), flag("HAS_FIELD_CONTENT"), 0)]
+    );
+}
+
+/// A choice card rings while a control inside it has keyboard focus. The
+/// control's own `group-has-[:focus-visible]/field-label:ring-0` and
+/// `focus-visible:ring-3` tie on specificity; `group` registers before
+/// `focus-visible`, so the focused checkbox keeps its ring and only its
+/// checked border stays `Primary`. Without its own focus (another control
+/// in the card has it) the checkbox drops its ring.
+#[test]
+fn choice_card_rules_translate() {
+    let owned = marker_classes("vega", "cn-checkbox");
+    let checkbox: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let in_card = flag("HAS_FOCUS_VISIBLE");
+    let focused = in_card | flag("FOCUS_VISIBLE");
+    assert_eq!(
+        winner(&checkbox, Field::RingWidth, focused),
+        Some(Value::Px(3.0))
+    );
+    assert_eq!(
+        winner(&checkbox, Field::RingWidth, in_card),
+        Some(Value::Px(0.0))
+    );
+    assert_eq!(
+        winner(&checkbox, Field::BorderColor, focused),
+        Some(Value::Paint {
+            role: "Ring",
+            alpha: 1.0
+        })
+    );
+    assert_eq!(
+        winner(&checkbox, Field::BorderColor, focused | flag("CHECKED")),
+        Some(Value::Paint {
+            role: "Primary",
+            alpha: 1.0
+        })
+    );
+    let owned = marker_classes("vega", "cn-field-label");
+    let classes: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let card = flag("HAS_FIELD");
+    let focus = card | flag("HAS_FOCUS_VISIBLE");
+    assert_eq!(
+        winner(&classes, Field::RingWidth, focus),
+        Some(Value::Px(3.0))
+    );
+    assert_eq!(winner(&classes, Field::RingWidth, card), None);
+    assert_eq!(
+        winner(&classes, Field::BorderColor, focus),
+        Some(Value::Paint {
+            role: "Ring",
+            alpha: 1.0
+        })
+    );
+    assert_eq!(
+        winner(&classes, Field::Bg, card | flag("HOVER")),
+        Some(Value::Paint {
+            role: "Muted",
+            alpha: 0.5
+        })
+    );
+    // A disabled control inside: no hover fill.
+    assert_eq!(
+        winner(
+            &classes,
+            Field::Bg,
+            card | flag("HOVER") | flag("HAS_DISABLED")
+        ),
+        None
+    );
+    assert_eq!(
+        winner(&classes, Field::Bg, card | flag("HAS_CHECKED")),
+        Some(Value::Paint {
+            role: "Primary",
+            alpha: 0.05
+        })
+    );
+    assert_eq!(
+        winner(&classes, Field::Opacity, flag("DISABLED")),
+        Some(Value::Factor(0.5))
+    );
+}
+
+/// `[a]` is the part itself rendered as a link (D-86 (b)): the `LINK`
+/// flag, an element's specificity. `*:[a]` is a link child, caller content
+/// (D-100), and stays ignored.
+#[test]
+fn a_link_part_is_the_link_flag_and_a_link_child_is_ignored() {
+    use stylegen::model::flag;
+    let link = variants_of("[a]:hover:bg-muted").unwrap();
+    assert_eq!(link.all, flag("LINK") | flag("HOVER"));
+    assert_eq!(link.child, None);
+    assert_eq!(variants_of("*:[a]:underline"), Err("ignored".to_owned()));
+    for v in ["[&>a]:underline", "[&>a:hover]:text-primary"] {
+        assert_eq!(variants_of(v), Err("ignored".to_owned()), "{v}");
+    }
+}
+
+/// `border-{t,l}-<role>` colours the one border side; on a box where that
+/// side is the only one with a width it is the box's border colour, exactly
+/// (the scroll-area bar: `data-horizontal:border-t
+/// data-horizontal:border-t-transparent`). Anywhere else the crate would
+/// need per-side colours, so the class stays unsupported.
+#[test]
+fn side_border_colour_is_the_border_colour_of_a_one_side_box() {
+    let run = |classes: &[&str]| {
+        let classes: Vec<String> = classes.iter().map(|c| (*c).to_owned()).collect();
+        translate(&classes, &Vars::new())
+    };
+    let bar = [
+        "data-horizontal:border-t",
+        "data-horizontal:border-t-transparent",
+        "data-vertical:border-l",
+        "data-vertical:border-l-transparent",
+    ];
+    let m = run(&bar);
+    assert!(m.unsupported.is_empty(), "{:?}", m.unsupported);
+    let transparent = Some(Value::Paint {
+        role: "Transparent",
+        alpha: 1.0,
+    });
+    for o in ["HORIZONTAL", "VERTICAL"] {
+        assert_eq!(
+            winner(&bar, Field::BorderColor, flag(o)),
+            transparent,
+            "{o}"
+        );
+    }
+    assert!(run(&["border-t", "border-t-transparent"])
+        .unsupported
+        .is_empty());
+    for classes in [
+        &["border", "border-t-transparent"][..],
+        &["border-t", "border-l", "border-t-transparent"],
+        &["border-l-2", "border-t-transparent"],
+        &["border-t", "data-vertical:border-l", "border-t-transparent"],
+        &["border-t", "border-border", "border-t-transparent"],
+        &["*:border-t", "*:border-t-transparent"],
+        &["border-b", "border-b-input"],
+        &["border-r-input"],
+    ] {
+        assert!(!run(classes).unsupported.is_empty(), "{classes:?}");
+    }
+}
+
+/// `rounded-[inherit]` (the scroll-area viewport) clips the content to the
+/// root's radius; egui clips to rectangles, an accepted difference.
+#[test]
+fn inherited_radius_is_ignored() {
+    assert!(matches!(utility("rounded-[inherit]", None), U::Ignore(_)));
+}
+
+/// The port-component skill's in-app recipe example ranks its rules by
+/// hand. Its bits must be the generator's: the prose names each
+/// variant's bit, and each `rank:` in the example must be the rank of a
+/// class in the example's `// style:` or `// base:` string. A new variant
+/// shifts the bits; this fails until the skill follows.
+#[test]
+fn in_app_skill_ranks_match_the_generator() {
+    let doc = read("../../plugin/skills/port-component/references/in-app.md");
+    // `(1 << 54) | (1 << 81) | (2 << 122)`, `1 << 84`.
+    let eval = |expr: &str| -> u128 {
+        expr.split('|')
+            .map(|t| {
+                let t = t.trim().trim_start_matches('(').trim_end_matches(')');
+                let (a, b) = t.split_once(" << ").unwrap_or_else(|| panic!("`{t}`"));
+                a.trim().parse::<u128>().unwrap() << b.trim().parse::<u32>().unwrap()
+            })
+            .fold(0, |acc, v| acc | v)
+    };
+    // The prose: "`focus-visible:` `1 << 37`" and "`dark:aria-invalid:` is
+    // `(..)`", from "The bits used below:" to the end of its paragraph.
+    let start = doc.find("The bits used below:").expect("bits sentence");
+    let prose = &doc[start..start + doc[start..].find(". A focused").expect("end")];
+    let quoted: Vec<&str> = prose.split('`').skip(1).step_by(2).collect();
+    let mut named = 0;
+    for w in quoted.windows(2) {
+        let Some(v) = w[0].strip_suffix(':') else {
+            continue;
+        };
+        if let Some(n) = w[1].strip_prefix("1 << ") {
+            assert_eq!(rank(v).to_string(), n, "`{v}:` in in-app.md");
+            named += 1;
+        } else if w[1].starts_with('(') {
+            let class = format!("{v}:border-input");
+            assert_eq!(
+                eval(w[1]),
+                variants_of(&class).unwrap().rank,
+                "`{v}:` in in-app.md"
+            );
+            named += 1;
+        }
+    }
+    assert_eq!(named, 10, "bits named in the prose");
+    // The example: every rank is a class's rank.
+    let line = |tag: &str| {
+        doc.lines()
+            .find_map(|l| l.trim().strip_prefix(tag))
+            .unwrap_or_else(|| panic!("{tag}"))
+            .trim_matches('"')
+            .to_owned()
+    };
+    let classes = format!("{} {}", line("// style: "), line("// base: "));
+    let ranks: Vec<u128> = classes
+        .split_whitespace()
+        .filter_map(|c| variants_of(c).ok().map(|v| v.rank))
+        .collect();
+    let mut rules = 0;
+    for l in doc.lines() {
+        let Some((_, rest)) = l.split_once("rank: ") else {
+            continue;
+        };
+        let expr = rest.split(", value:").next().unwrap();
+        assert!(
+            ranks.contains(&eval(expr)),
+            "in-app.md rank `{expr}` is no class's rank: {l}"
+        );
+        rules += 1;
+    }
+    assert_eq!(rules, 18, "rank lines in the example");
 }

@@ -42,7 +42,10 @@ fn render<S: Clone + 'static>(
     state: S,
     mut paint: impl FnMut(&mut egui::Ui, &mut S) + 'static,
 ) -> (image::RgbaImage, S) {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(size)
         .with_pixels_per_point(ppp)
         .with_theme(egui::Theme::Dark)
@@ -232,7 +235,7 @@ fn a_track_cut_under_a_faded_thumb_has_no_crack() {
                             ui.add_space(8.0 + dx);
                             ui.set_width(160.0);
                             let mut v = value;
-                            *rect = ui.add(Slider::new(&mut v, 0.0..=100.0).enabled(false)).rect;
+                            *rect = ui.add_enabled(false, Slider::new(&mut v, 0.0..=100.0)).rect;
                         });
                     },
                 );

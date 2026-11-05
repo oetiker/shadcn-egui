@@ -38,19 +38,23 @@
 //! ```
 
 use crate::components::context;
+use crate::components::shared::{self, PerViewport};
 use crate::style::{pick, pick_where, Recipe, State, TextSize, TextWrap, Weight};
 use crate::theme::{family_for, heading_family_for};
 use crate::Theme;
-use egui::text::{LayoutJob, TextWrapping};
+use egui::epaint::text::ByteRangeExt as _;
+use egui::text::{ByteIndex, LayoutJob, TextWrapping};
 use egui::FontData;
 use egui::{
-    Align, Color32, FontFamily, FontId, FontSelection, Galley, Painter, Pos2, Response, Stroke,
-    TextWrapMode, Ui, Vec2, WidgetText,
+    Align, Color32, FontFamily, FontId, FontSelection, Galley, Painter, Pos2, Response, Sense,
+    Stroke, TextWrapMode, Ui, Vec2, WidgetText,
 };
 use std::sync::Arc;
 
 mod line_break;
 mod shape;
+#[cfg(test)]
+pub(crate) use shape::{measure_builds, measure_viewports};
 mod wrap;
 
 /// The context a crate container puts on its content `Ui` to pass the
@@ -104,6 +108,7 @@ pub struct TextLook {
     underline_offset: Option<f32>,
     leading: Leading,
     wrap_style: Option<TextWrap>,
+    line_clamp: Option<u32>,
     break_word: bool,
 }
 
@@ -156,6 +161,7 @@ impl TextLook {
             underline_offset: pick(layers, |r| &r.underline_offset, state),
             leading: Leading::Inline,
             wrap_style: pick(layers, |r| &r.text_wrap, state),
+            line_clamp: pick(layers, |r| &r.line_clamp, state),
             break_word: false,
         }
     }
@@ -278,7 +284,8 @@ impl TextLook {
     /// explicit colour (`strong` and `weak` text included) is
     /// `Color32::PLACEHOLDER`, which the painter replaces with the colour
     /// passed at paint time. Sections without an explicit line height get
-    /// the look's.
+    /// the look's. A `line-clamp-N` look keeps at most N rows, the last
+    /// one ending in `…`, unless the caller's job keeps fewer.
     fn job(&self, ui: &Ui, text: WidgetText) -> LayoutJob {
         let ctx = ui.ctx();
         let font = self.font_id(ctx);
@@ -296,6 +303,12 @@ impl TextLook {
             WidgetText::LayoutJob(job) => job.as_ref().clone(),
             WidgetText::Galley(galley) => galley.job.as_ref().clone(),
         };
+        if let Some(rows) = self.line_clamp.map(|n| n as usize) {
+            if rows < job.wrap.max_rows {
+                job.wrap.max_rows = rows;
+                job.wrap.overflow_character = Some('…');
+            }
+        }
         if self.uppercase {
             uppercase(&mut job);
         }
@@ -335,7 +348,11 @@ impl TextLook {
     /// Show `text` in this look as an egui `Label` (selectable as egui's
     /// labels are, with the label's accessibility info): wrapped at the
     /// available width unless `wrap` says otherwise, each row placed as
-    /// the browser places it, in the look's colour.
+    /// the browser places it, in the look's colour. An app turns text
+    /// selection off app-wide with egui's switch,
+    /// `ctx.all_styles_mut(|s| s.interaction.selectable_labels = false)`,
+    /// which this text follows (an allowed exception to "no egui setting
+    /// changes a behaviour").
     pub fn label(&self, ui: &mut Ui, text: impl Into<WidgetText>, wrap: TextWrapMode) -> Response {
         let mut job = self.job(ui, text.into());
         fill_color(&mut job, self.resolved_color(ui));
@@ -351,9 +368,10 @@ impl TextLook {
         } else {
             place_rows(ui.ctx(), source, self.place(), pos.y)
         };
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, ui.is_enabled(), galley.text())
+        crate::components::shared::widget_info_never_disabled(&response, || {
+            egui::WidgetInfo::labeled(egui::Role::Label, true, galley.text())
         });
+        crate::components::field::card_text(ui, galley.text());
         if ui.is_rect_visible(response.rect) {
             if galley.elided {
                 let job = LayoutJob {
@@ -451,14 +469,34 @@ impl TextLook {
         let style = self.wrap_style.map(|s| s as u8);
         (wrap as u8, width.to_bits(), style, self.break_word).hash(&mut hasher);
         let key = hasher.finish();
-        let id = egui::Id::new("shadcn_egui::text::laid_out");
+        let id = laid_out_id();
+        let viewport = ctx.viewport_id();
         let frame = ctx.cumulative_frame_nr();
+        let pass = ctx.cumulative_pass_nr();
+        // Laying out reads the fonts and the pass counts lock the context:
+        // not inside a `data_mut`.
+        let (need_probe, known) = ctx.data_mut(|d| {
+            let all = d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(id);
+            let state = all.get(viewport);
+            let need_probe = state.is_none_or(|s| s.pass != Some(pass));
+            let known = (!all.is_at(viewport, frame)).then(|| all.viewports().collect::<Vec<_>>());
+            (need_probe, known)
+        });
+        let closed = known.map_or_else(Vec::new, |k| shared::closed_viewports(ctx, k));
+        let probe = need_probe.then(|| atlas_probe(ctx));
         let hit = ctx.data_mut(|d| {
-            let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
-            if cache.frame != frame {
-                cache.entries.retain(|_, e| e.1 + 1 >= frame);
-                cache.measured.retain(|_, e| e.1 + 1 >= frame);
-                cache.frame = frame;
+            let all = d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(id);
+            let cache = all.at(&closed, viewport, frame, |c, _| {
+                c.entries.retain(|_, e| e.1 + 1 >= frame);
+                c.measured.retain(|_, e| e.1 + 1 >= frame);
+            });
+            if let Some(probe) = probe {
+                // A new atlas: the galleys point at glyphs of the old one.
+                if !cache.probe.as_ref().is_some_and(|p| Arc::ptr_eq(p, &probe)) {
+                    cache.entries.clear();
+                }
+                cache.probe = Some(probe);
+                cache.pass = Some(pass);
             }
             if let Some(e) = cache.entries.get_mut(&key) {
                 e.1 = frame;
@@ -476,7 +514,9 @@ impl TextLook {
         let adv = measured.unwrap_or_else(|| Arc::new(shape::advances(ctx, &job, &faces)));
         let out = self.shape_and_lay_out(ctx, job, &faces, &adv, wrap, width);
         ctx.data_mut(|d| {
-            let cache = d.get_temp_mut_or_default::<LayoutCache>(id);
+            let all = d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(id);
+            all.builds += 1;
+            let cache = all.at(&[], viewport, frame, |_, _| {});
             cache.entries.insert(key, (out.clone(), frame));
             cache.measured.insert(measured_key, (adv, frame));
         });
@@ -503,7 +543,7 @@ impl TextLook {
         for (si, s) in job.sections.iter().enumerate() {
             section_of.extend(std::iter::repeat_n(
                 si,
-                job.text[s.byte_range.clone()].chars().count(),
+                job.text[s.byte_range.as_usize()].chars().count(),
             ));
         }
         // `starts[i]`: a line starts at char `i` after a chosen break.
@@ -514,9 +554,7 @@ impl TextLook {
                 .sections
                 .first()
                 .map_or(self.size, |s| s.format.font_id.size);
-            let space = job.sections.first().map_or(0.0, |s| {
-                ctx.fonts_mut(|f| f.glyph_width(&s.format.font_id, ' '))
-            });
+            let space = adv.space;
             let mut first = 0;
             for (p, para) in chars.split(|c| *c == '\n').enumerate() {
                 // Each char's left and right edge on the paragraph's line in
@@ -594,36 +632,50 @@ impl TextLook {
         // the section's leading space adds the rest and the kerning.
         // egui draws outlines at the coordinates it is given; Chrome at
         // `opsz` = the font size where the face has the axis.
-        let opsz: Vec<bool> = job
+        let formats: Vec<egui::TextFormat> = job
             .sections
             .iter()
             .zip(faces)
-            .map(|(s, face)| {
-                face.as_deref()
-                    .is_some_and(|d| shape::needs_opsz(d, s.format.coords.as_ref()))
-            })
+            .map(|(s, face)| shape::drawn_format(&s.format, face.as_deref()))
             .collect();
         let mut out = LayoutJob {
             sections: Vec::with_capacity(n),
             text: String::with_capacity(job.text.len() + 8),
             ..job.clone()
         };
-        out.wrap = if breaking {
-            let mut w = TextWrapping::no_max_width();
-            if job.justify {
-                w.max_width = width;
+        // The caller's row limit, overflow character and `break_anywhere`
+        // stay, as egui's `Label` keeps them (it sets only what the wrap
+        // mode needs). The chosen breaks are forced ones, so egui needs
+        // the width only to justify, or to fit the overflow character into
+        // the last row a row limit keeps.
+        let limited = job.wrap.max_rows != usize::MAX;
+        out.wrap = job.wrap.clone();
+        match wrap {
+            TextWrapMode::Extend => out.wrap.max_width = f32::INFINITY,
+            TextWrapMode::Wrap if breaking && !job.justify && !limited => {
+                out.wrap.max_width = f32::INFINITY;
             }
-            w
-        } else {
-            TextWrapping::from_wrap_mode_and_width(wrap, width)
-        };
-        // The original char behind each char of `out`, for the row widths,
-        // and the exact x of its pen on its line, in points.
+            TextWrapMode::Wrap => out.wrap.max_width = width,
+            TextWrapMode::Truncate => {
+                let t = TextWrapping::truncate_at_width(width);
+                out.wrap.max_width = t.max_width;
+                out.wrap.max_rows = t.max_rows;
+                out.wrap.break_anywhere = t.break_anywhere;
+            }
+        }
+        // Per section of `out` (a char, or a char and its marks): the
+        // caller's char it starts at (`None` for an inserted `\n`), the
+        // exact x of its pen on its line and Chrome's width, in points.
+        // `drawn` holds each char of `out` and its section.
         let mut origin: Vec<Option<usize>> = Vec::with_capacity(n);
         let mut pens: Vec<f32> = Vec::with_capacity(n);
+        let mut widths: Vec<f32> = Vec::with_capacity(n);
+        let mut drawn: Vec<(char, usize)> = Vec::with_capacity(n + 8);
         let mut pen = 0.0;
         let mut line_start = true;
         let mut prev_section = usize::MAX;
+        // egui's advance and Chrome's of the section before.
+        let (mut egui_w, mut chrome_w) = (0.0, 0.0);
         for (i, &c) in chars.iter().enumerate() {
             let si = section_of.get(i).copied().unwrap_or(0);
             let section = &job.sections[si];
@@ -633,12 +685,26 @@ impl TextLook {
                 out.text.push('\n');
                 out.sections.push(egui::text::LayoutSection {
                     leading_space: 0.0,
-                    byte_range: at..at + 1,
+                    byte_range: ByteIndex(at)..ByteIndex(at + 1),
                     format: job.sections[section_of[i - 1]].format.clone(),
                 });
+                drawn.push(('\n', out.sections.len() - 1));
                 origin.push(None);
                 pens.push(0.0);
+                widths.push(0.0);
                 line_start = true;
+            }
+            // A mark joins the section of its base: egui shapes them
+            // together, as Chrome does (it may compose them into one glyph).
+            if !line_start && si == prev_section && shape::attaches(Some(chars[i - 1]), c) {
+                out.text.push(c);
+                let last = out.sections.len() - 1;
+                out.sections[last].byte_range.end = ByteIndex(out.text.len());
+                drawn.push((c, last));
+                egui_w += adv.egui[i];
+                chrome_w += adv.chrome[i];
+                widths[last] += adv.chrome[i];
+                continue;
             }
             // egui's job draws a soft hyphen as its hyphen where it ends a
             // line, and every char Chrome draws as nothing (a soft hyphen
@@ -653,33 +719,28 @@ impl TextLook {
             let mut gap = if line_start {
                 0.0
             } else {
-                adv.chrome[i - 1] - adv.egui[i - 1] + adv.kern[i]
+                chrome_w - egui_w + adv.kern[i]
             };
             if si != prev_section {
                 gap += section.leading_space;
                 prev_section = si;
             }
-            let mut format = section.format.clone();
-            format.extra_letter_spacing = 0.0;
-            if opsz[si] {
-                format.coords.push(b"opsz", format.font_id.size);
-            }
+            let format = formats[si].clone();
             let at = out.text.len();
             out.text.push(c);
             out.sections.push(egui::text::LayoutSection {
                 leading_space: gap,
-                byte_range: at..out.text.len(),
+                byte_range: ByteIndex(at)..ByteIndex(out.text.len()),
                 format,
             });
+            drawn.push((c, out.sections.len() - 1));
             origin.push(Some(i));
-            // egui's own pen: the advance it gives the char before, then
+            // egui's own pen: the advance it gives the section before, then
             // the gap (Chrome's advance and the kerning).
-            pen = if line_start {
-                gap
-            } else {
-                pen + adv.egui[i - 1] + gap
-            };
+            pen = if line_start { gap } else { pen + egui_w + gap };
             pens.push(pen);
+            widths.push(adv.chrome[i]);
+            (egui_w, chrome_w) = (adv.egui[i], adv.chrome[i]);
             line_start = c == '\n';
         }
         if out.sections.is_empty() {
@@ -692,29 +753,53 @@ impl TextLook {
         // (the caret, the selection and the row width follow it). Unless
         // egui justified the row (and placed it again), each glyph keeps
         // its exact pen, and a row ends at Chrome's right edge of its last
-        // char.
+        // char. egui gives a char of its own section one glyph, and a
+        // cluster one per char (the continuation glyphs of a composed one),
+        // but a mark no face has none and a char the face decomposes more
+        // than one: each glyph finds its char, and so its section, by the
+        // char it shows.
         let g = Arc::make_mut(&mut galley);
-        let mut at = 0;
+        let mut next = 0;
         let mut right = f32::NEG_INFINITY;
         for placed in &mut g.rows {
-            let glyphs = placed.row.glyphs.len();
-            if !justify {
-                let row = Arc::make_mut(&mut placed.row);
-                for (k, glyph) in row.glyphs.iter_mut().enumerate() {
-                    if let Some(&x) = pens.get(at + k) {
-                        glyph.pos.x = x;
+            let row = Arc::make_mut(&mut placed.row);
+            let (mut last, mut section) = (None::<usize>, None::<usize>);
+            // How far the section's first glyph moved; its other glyphs
+            // move with it.
+            let mut shift = 0.0;
+            for glyph in &mut row.glyphs {
+                let ahead = (next..drawn.len().min(next + 4)).find(|&k| drawn[k].0 == glyph.chr);
+                let at = match (ahead, last) {
+                    (Some(k), _) => k,
+                    (None, Some(l)) if drawn[l].0 == glyph.chr => l,
+                    (None, _) => next.min(drawn.len().saturating_sub(1)),
+                };
+                let Some(&(_, s)) = drawn.get(at) else { break };
+                if !justify {
+                    if section != Some(s) {
+                        shift = pens[s] - glyph.pos.x;
                     }
+                    glyph.pos.x += shift;
                 }
-                if let Some(&Some(i)) = glyphs.checked_sub(1).and_then(|k| origin.get(at + k)) {
-                    row.size.x = pens[at + glyphs - 1] + adv.chrome[i];
+                next = next.max(at + 1);
+                (last, section) = (Some(at), Some(s));
+            }
+            if let (false, Some(s)) = (justify, section) {
+                if origin[s].is_some() {
+                    row.size.x = pens[s] + widths[s];
                 }
             }
-            right = right.max(placed.pos.x + placed.row.size.x);
-            at += glyphs + usize::from(placed.ends_with_newline);
-            // A row ended by an inserted `\n` ends as egui's own wrapped
-            // rows do: the caller's text has no char there.
-            if placed.ends_with_newline && origin.get(at - 1) == Some(&None) {
-                placed.ends_with_newline = false;
+            right = right.max(placed.pos.x + row.size.x);
+            if placed.ends_with_newline {
+                while drawn.get(next).is_some_and(|d| d.0 != '\n') {
+                    next += 1;
+                }
+                // A row ended by an inserted `\n` ends as egui's own
+                // wrapped rows do: the caller's text has no char there.
+                if drawn.get(next).is_some_and(|d| origin[d.1].is_none()) {
+                    placed.ends_with_newline = false;
+                }
+                next += 1;
             }
         }
         if job.halign == Align::LEFT && right.is_finite() {
@@ -727,15 +812,74 @@ impl TextLook {
     }
 }
 
-/// The galleys [`TextLook::lay_out`] laid out in this frame and the one
-/// before: by the hash of the job, width, mode, scale and faces, the galley
-/// and the frame it was last used; by the hash of the job, scale and faces,
-/// the job's advances and the frame they were last used.
+/// Per viewport, the galleys [`TextLook::lay_out`] laid out in its frame
+/// and the one before: by the hash of the job, width, mode, scale and
+/// faces, the galley and the viewport's frame it was last used; by the
+/// hash of the job, scale and faces, the job's advances and the frame they
+/// were last used.
+/// The galleys hold the places of their glyphs in egui's font atlas.
+/// egui builds a new atlas, and empties its own galley cache, when the
+/// fonts or the text options change (a light/dark switch changes how glyph
+/// coverage becomes alpha) and when the atlas is almost full. In each pass
+/// of the viewport, `probe`, a galley egui keeps in that cache, tells: egui
+/// hands out the same galley while its cache lives, and a new one after.
+/// egui's cache keeps only what was used since the last pass began, in any
+/// viewport, and keys a galley by its scale: the theme's begin-of-pass
+/// hook lays out the probe of every viewport at that viewport's scale in
+/// every pass ([`keep_probe`]), so neither a window without crate text
+/// nor a window at another scale drops it.
 #[derive(Clone, Default)]
 struct LayoutCache {
-    frame: u64,
+    pass: Option<u64>,
+    probe: Option<Arc<Galley>>,
     entries: std::collections::HashMap<u64, (Arc<Galley>, u64)>,
     measured: std::collections::HashMap<u64, (Arc<shape::Advances>, u64)>,
+}
+
+fn laid_out_id() -> egui::Id {
+    egui::Id::unique("shadcn_egui::text::laid_out")
+}
+
+fn placed_id() -> egui::Id {
+    egui::Id::unique("shadcn_egui::text::placed")
+}
+
+/// Uses the probe galley of every viewport's [`LayoutCache`] at that
+/// viewport's scale, so egui's galley cache keeps them until the next pass
+/// begins, in any viewport: one that lays out no crate text, or one at
+/// another scale (a window on a 150 % monitor beside a root at 100 %).
+/// The theme's begin-of-pass hook calls it, which runs right after egui's
+/// cache dropped what the last pass did not use; under
+/// `begin_pass`/`end_pass` hooks do not run and such a pass makes the next
+/// crate text lay out again once.
+///
+/// egui lays text out at the current viewport's scale only, read from its
+/// input: the scale is set to each other one for its probe and back.
+pub(crate) fn keep_probe(ctx: &egui::Context) {
+    let own = ctx.pixels_per_point();
+    let viewport = ctx.viewport_id();
+    let mut scales: Vec<f32> = ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<LayoutCache>>(laid_out_id())
+            .others(viewport)
+            .filter_map(|c| c.probe.as_ref().map(|p| p.pixels_per_point))
+            .filter(|&s| s != own)
+            .collect()
+    });
+    scales.sort_by(f32::total_cmp);
+    scales.dedup();
+    let _ = atlas_probe(ctx);
+    for &scale in &scales {
+        ctx.input_mut(|i| i.pixels_per_point = scale);
+        let _ = atlas_probe(ctx);
+    }
+    if !scales.is_empty() {
+        ctx.input_mut(|i| i.pixels_per_point = own);
+    }
+}
+
+/// A galley egui lays out and caches, for [`LayoutCache`]'s `probe`.
+fn atlas_probe(ctx: &egui::Context) -> Arc<Galley> {
+    ctx.fonts_mut(|f| f.layout_no_wrap("x".into(), FontId::default(), Color32::PLACEHOLDER))
 }
 
 /// Every placeholder colour of `job` (text and underline) set to `color`.
@@ -780,6 +924,38 @@ impl TextBlock {
         let galley = place_rows(painter.ctx(), self.source.clone(), self.place, pos.y);
         painter.galley(pos, galley, color);
     }
+
+    /// [`TextBlock::paint`] through egui's label text selection, for text
+    /// the browser lets the user select and copy: `response` must sense
+    /// clicks and drags ([`selectable_sense`]). It paints with
+    /// `ui.painter()`, at the `Ui`'s opacity.
+    pub(crate) fn paint_selectable(&self, ui: &Ui, response: &Response, pos: Pos2, color: Color32) {
+        let galley = place_rows(ui.ctx(), self.source.clone(), self.place, pos.y);
+        egui::text_selection::LabelSelectionState::label_text_selection(
+            ui,
+            response,
+            pos,
+            galley,
+            color,
+            Stroke::NONE,
+        );
+    }
+}
+
+/// What text the user can select senses, as egui's `Label` does: clicks
+/// and drags (clicks only on a touch screen, where a drag scrolls), never
+/// Tab focus. `Sense::hover()` when the app turned egui's
+/// `selectable_labels` off.
+pub(crate) fn selectable_sense(ui: &Ui) -> Sense {
+    if !ui.style().interaction.selectable_labels {
+        return Sense::hover();
+    }
+    let select = if ui.input(|i| i.has_touch_screen()) {
+        Sense::click()
+    } else {
+        Sense::click_and_drag()
+    };
+    Sense::hover() | (select - Sense::FOCUSABLE)
 }
 
 /// Run `add` in a child `Ui` whose text a crate container's recipe sets
@@ -824,7 +1000,7 @@ fn body_size(ui: &Ui) -> f32 {
 /// underline's line colour) set to `Color32::PLACEHOLDER`, and no font
 /// override. Built once per context style, not per frame.
 fn placeholder_style(ctx: &egui::Context) -> Arc<egui::Style> {
-    let id = egui::Id::new("shadcn_egui::text::placeholder_style");
+    let id = egui::Id::unique("shadcn_egui::text::placeholder_style");
     let source = ctx.global_style();
     let cached = ctx.data(|d| d.get_temp::<(Arc<egui::Style>, Arc<egui::Style>)>(id));
     if let Some((_, style)) = cached.filter(|(src, _)| Arc::ptr_eq(src, &source)) {
@@ -928,14 +1104,14 @@ fn family_vmetrics(ctx: &egui::Context, family: &FontFamily) -> Option<VMetrics>
     let (id, data) = ctx.fonts(|f| {
         let defs = f.definitions();
         let key = defs.families.get(family)?.first()?;
-        let id = egui::Id::new("shadcn_egui::text::vmetrics").with(key);
+        let id = egui::Id::unique("shadcn_egui::text::vmetrics").with(key);
         Some((id, defs.font_data.get(key)?.clone()))
     })?;
     let cached = ctx.data(|d| d.get_temp::<(Arc<FontData>, Option<VMetrics>)>(id));
     if let Some((_, m)) = cached.filter(|(src, _)| Arc::ptr_eq(src, &data)) {
         return m;
     }
-    let m = vmetrics(&data.font, data.index);
+    let m = vmetrics((*data.font).as_ref(), data.index);
     ctx.data_mut(|d| d.insert_temp(id, (data, m)));
     m
 }
@@ -992,14 +1168,43 @@ struct Placed {
 /// underline offset's bits.
 type PlacedKey = (usize, u32, Leading, Option<Option<u32>>);
 
-/// The galleys [`place_rows`] placed in this frame and the one before, by
-/// the address of the galley egui laid out. egui's galley cache hands out
-/// the same galley while the text stays the same, so an idle widget's text
-/// is placed once, not once per frame.
+/// Per viewport, the galleys [`place_rows`] placed in its frame and the
+/// one before, by the address of the galley egui laid out. egui's galley
+/// cache hands out the same galley while the text stays the same, so an
+/// idle widget's text is placed once, not once per frame.
 #[derive(Clone, Default)]
 struct PlacedCache {
-    frame: u64,
     entries: std::collections::HashMap<PlacedKey, Placed>,
+}
+
+/// Jobs [`TextLook::lay_out`] laid out and galleys [`place_rows`] placed
+/// so far, for the tests.
+#[cfg(test)]
+pub(crate) fn text_builds(ctx: &egui::Context) -> (u64, u64) {
+    ctx.data_mut(|d| {
+        let laid = d
+            .get_temp_mut_or_default::<PerViewport<LayoutCache>>(laid_out_id())
+            .builds;
+        let placed = d
+            .get_temp_mut_or_default::<PerViewport<PlacedCache>>(placed_id())
+            .builds;
+        (laid, placed)
+    })
+}
+
+/// Viewports with a state in the layout and the placing cache, for the
+/// tests.
+#[cfg(test)]
+pub(crate) fn text_viewports(ctx: &egui::Context) -> (usize, usize) {
+    ctx.data_mut(|d| {
+        let laid = d
+            .get_temp_mut_or_default::<PerViewport<LayoutCache>>(laid_out_id())
+            .len();
+        let placed = d
+            .get_temp_mut_or_default::<PerViewport<PlacedCache>>(placed_id())
+            .len();
+        (laid, placed)
+    })
 }
 
 /// [`place_galley_rows`] for a galley painted with its top at `origin_y`
@@ -1012,7 +1217,8 @@ fn place_rows(
     place: Place,
     origin_y: f32,
 ) -> Arc<Galley> {
-    let id = egui::Id::new("shadcn_egui::text::placed");
+    let id = placed_id();
+    let viewport = ctx.viewport_id();
     let (ppp, frame) = (ctx.pixels_per_point(), ctx.cumulative_frame_nr());
     // The tessellator rounds the galley origin to the pixel; Blink rounds
     // origin and baseline together. The fraction it drops goes into the
@@ -1024,20 +1230,24 @@ fn place_rows(
         place.leading,
         place.underline.map(|u| u.offset.map(f32::to_bits)),
     );
-    let hit = ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<PlacedCache>(id);
-        if cache.frame != frame {
-            // Text not shown in the last frame is gone from egui's cache too.
-            cache.entries.retain(|_, e| e.frame + 1 >= frame);
-            cache.frame = frame;
-        }
-        let e = cache.entries.get_mut(&key)?;
-        let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.place == place;
-        same.then(|| {
-            e.frame = frame;
-            e.placed.clone()
-        })
-    });
+    let hit = shared::with_viewport_state(
+        ctx,
+        id,
+        viewport,
+        frame,
+        |all: &mut PerViewport<PlacedCache>, closed| {
+            let cache = all.at(closed, viewport, frame, |c, _| {
+                // Text not shown in the last frame is gone from egui's cache too.
+                c.entries.retain(|_, e| e.frame + 1 >= frame);
+            });
+            let e = cache.entries.get_mut(&key)?;
+            let same = Arc::ptr_eq(&e.source, &galley) && e.ppp == ppp && e.place == place;
+            same.then(|| {
+                e.frame = frame;
+                e.placed.clone()
+            })
+        },
+    );
     if let Some(placed) = hit {
         return placed;
     }
@@ -1052,7 +1262,9 @@ fn place_rows(
             placed: placed.clone(),
             frame,
         };
-        d.get_temp_mut_or_default::<PlacedCache>(id)
+        let all = d.get_temp_mut_or_default::<PerViewport<PlacedCache>>(id);
+        all.builds += 1;
+        all.at(&[], viewport, frame, |_, _| {})
             .entries
             .insert(key, entry);
     });
@@ -1096,7 +1308,7 @@ fn place_galley_rows(
         let section = job
             .sections
             .iter()
-            .find(|s| s.byte_range.contains(&start))
+            .find(|s| s.byte_range.contains(&ByteIndex(start)))
             .or(job.sections.last());
         // The row's ascent, descent and line gap in device px, each
         // rounded: from its first font's tables, else egui's metrics.
@@ -1172,7 +1384,10 @@ fn underline_row(
     for glyph in &row.glyphs {
         let at = byte;
         byte += job.text[at..].chars().next().map_or(0, char::len_utf8);
-        let section = job.sections.iter().position(|s| s.byte_range.contains(&at));
+        let section = job
+            .sections
+            .iter()
+            .position(|s| s.byte_range.contains(&ByteIndex(at)));
         let same = section.is_some() && prev == section;
         prev = section;
         let Some(section) = section else {
@@ -1203,8 +1418,8 @@ fn uppercase(job: &mut LayoutJob) {
     let mut text = String::with_capacity(job.text.len());
     for section in &mut job.sections {
         let start = text.len();
-        text.push_str(&job.text[section.byte_range.clone()].to_uppercase());
-        section.byte_range = start..text.len();
+        text.push_str(&job.text[section.byte_range.as_usize()].to_uppercase());
+        section.byte_range = ByteIndex(start)..ByteIndex(text.len());
     }
     job.text = text;
 }
@@ -1217,11 +1432,12 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.set_pixels_per_point(ppp);
         let mut f = Some(f);
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        ctx.run_ui(Default::default(), |ui| {
             if let Some(f) = f.take() {
                 f(ui);
             }
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
     /// The caret in a line box (a textarea's row) spans the font's ascent
@@ -1520,7 +1736,8 @@ mod tests {
             ctx.set_pixels_per_point(ppp);
             crate::Theme::vega().apply(&ctx);
             ctx.set_theme(egui::Theme::Light);
-            let _ = ctx.run_ui(Default::default(), |_| {});
+            ctx.run_ui(Default::default(), |_| {})
+                .drop_without_applying_deltas();
             ctx
         };
         let measure = |ctx: &egui::Context, text: &str| {
@@ -1547,22 +1764,64 @@ mod tests {
         let ctx = egui::Context::default();
         let mut galleys = Vec::new();
         for _ in 0..3 {
-            let _ = ctx.run_ui(Default::default(), |ui| {
+            ctx.run_ui(Default::default(), |ui| {
                 let look = TextLook::resolve(ui, &[], State::NONE);
                 let block = look.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
                 galleys.push(block.galley().clone());
-            });
+            })
+            .drop_without_applying_deltas();
         }
         assert!(Arc::ptr_eq(&galleys[0], &galleys[1]));
         assert!(Arc::ptr_eq(&galleys[1], &galleys[2]));
         // Another scale places it again.
         ctx.set_pixels_per_point(2.0);
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        ctx.run_ui(Default::default(), |ui| {
             let look = TextLook::resolve(ui, &[], State::NONE);
             let block = look.layout(ui, "Hg", TextWrapMode::Extend, f32::INFINITY);
             assert!(!Arc::ptr_eq(&galleys[2], block.galley()));
             assert_eq!(block.galley().pixels_per_point, 2.0);
-        });
+        })
+        .drop_without_applying_deltas();
+    }
+
+    /// A char and its combining marks are one cluster, as Chrome shapes
+    /// them: the accent of a decomposed "e\u{301}" is drawn (egui shapes
+    /// a mark alone as nothing), and the chars after a cluster keep their
+    /// own x (caret stops).
+    #[test]
+    fn a_char_and_its_marks_draw_as_one_cluster() {
+        let ctx = egui::Context::default();
+        let row = |text: &str| {
+            let mut out = None;
+            ctx.run_ui(Default::default(), |ui| {
+                let look = TextLook::resolve(ui, &[], State::NONE);
+                let block = look.layout(ui, text, TextWrapMode::Extend, f32::INFINITY);
+                out = Some(block.galley().rows[0].row.clone());
+            })
+            .drop_without_applying_deltas();
+            out.unwrap()
+        };
+        let x =
+            |r: &egui::epaint::text::Row, c| r.glyphs.iter().find(|g| g.chr == c).unwrap().pos.x;
+        let plain = row("ex");
+        let marked = row("e\u{301}x");
+        // The cluster's ink reaches above the plain "e".
+        let ink = |r: &egui::epaint::text::Row| r.glyphs[0].uv_rect.size.y;
+        assert!(
+            ink(&marked) > ink(&plain),
+            "{} {}",
+            ink(&marked),
+            ink(&plain)
+        );
+        assert_eq!(marked.glyphs.len(), 3);
+        // U+0301 has no advance: "x" sits where it sits after "e".
+        assert!((x(&marked, 'x') - x(&plain, 'x')).abs() < 1e-3);
+        let step = |r: &egui::epaint::text::Row| x(r, 'd') - x(r, 'c');
+        let plain = row("abcd");
+        // U+1AB0, a mark no installed face has.
+        let marked = row("ab\u{1AB0}cd");
+        assert!(step(&plain) > 1.0, "{}", step(&plain));
+        assert!((step(&marked) - step(&plain)).abs() < 1e-3);
     }
 
     #[test]
@@ -1579,9 +1838,10 @@ mod tests {
         };
         let measure = |ctx: &egui::Context| {
             let mut m = None;
-            let _ = ctx.run_ui(Default::default(), |ui| {
+            ctx.run_ui(Default::default(), |ui| {
                 m = family_vmetrics(ui.ctx(), &FontFamily::Proportional);
-            });
+            })
+            .drop_without_applying_deltas();
             m.expect("font tables")
         };
         let other = egui::FontDefinitions::default();
@@ -1593,7 +1853,10 @@ mod tests {
         let after = measure(&ctx);
         assert_ne!(before, after);
         assert_eq!(after, vmetrics(inter.data, 0).expect("tables"));
-        assert_eq!(before, vmetrics(&ubuntu.font, 0).expect("tables"));
+        assert_eq!(
+            before,
+            vmetrics((*ubuntu.font).as_ref(), 0).expect("tables")
+        );
     }
 
     #[test]
@@ -1726,10 +1989,16 @@ mod tests {
     fn uppercase_keeps_sections_apart() {
         let mut job = LayoutJob::default();
         job.append("straße", 0.0, Default::default());
-        job.append("x", 0.0, Default::default());
+        // Another format: egui 0.37 merges a section into the one before
+        // it where the formats are equal.
+        let red = egui::TextFormat {
+            color: egui::Color32::RED,
+            ..Default::default()
+        };
+        job.append("x", 0.0, red);
         uppercase(&mut job);
         assert_eq!(job.text, "STRASSEX");
-        assert_eq!(job.sections[0].byte_range, 0..7);
-        assert_eq!(job.sections[1].byte_range, 7..8);
+        assert_eq!(job.sections[0].byte_range, ByteIndex(0)..ByteIndex(7));
+        assert_eq!(job.sections[1].byte_range, ByteIndex(7)..ByteIndex(8));
     }
 }

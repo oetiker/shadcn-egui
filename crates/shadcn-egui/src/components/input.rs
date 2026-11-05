@@ -3,13 +3,15 @@
 //! recipe. A frameless egui `TextEdit` sits inside a box this widget
 //! paints.
 
+use crate::components::field::ControlSlot;
 use crate::components::icon_atom::retint;
 use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
-use crate::{layout, Theme};
-use egui::text::LayoutJob;
+use crate::Theme;
+use egui::epaint::text::ByteRangeExt as _;
+use egui::text::{ByteIndex, LayoutJob};
 use egui::{
     AtomKind, Atoms, IntoAtoms, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget, WidgetText,
 };
@@ -30,9 +32,8 @@ pub struct Input<'a> {
     hint: Atoms<'static>,
     password: bool,
     max_width: Option<f32>,
-    id_salt: Option<egui::Id>,
-    enabled: bool,
-    invalid: bool,
+    id_salt: Option<egui::IdSalt>,
+    invalid: Option<bool>,
     variant: InputVariant,
 }
 
@@ -46,8 +47,7 @@ impl<'a> Input<'a> {
             password: false,
             max_width: None,
             id_salt: None,
-            enabled: true,
-            invalid: false,
+            invalid: None,
             variant: InputVariant::Default,
         }
     }
@@ -62,8 +62,10 @@ impl<'a> Input<'a> {
         self.password = yes;
         self
     }
-    /// Override the default maximum width (`Metrics::field_max_width`). Pass
-    /// `f32::INFINITY` for full-width.
+    /// Override the default maximum width (`Metrics::field_max_width`; in
+    /// a vertical [`Field`](crate::components::field::Field) the field's
+    /// width, first in a horizontal one the room the parts after it
+    /// leave). Pass `f32::INFINITY` for full-width.
     pub fn max_width(mut self, w: f32) -> Self {
         self.max_width = Some(w);
         self
@@ -73,18 +75,15 @@ impl<'a> Input<'a> {
     /// (a test, or `ctx.memory_mut(|m| m.request_focus(..))`) must address
     /// this field from outside the widget tree that builds it; without one,
     /// `TextEdit` falls back to an id keyed on widget position.
-    pub fn id_salt(mut self, salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(egui::Id::new(salt));
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(salt));
         self
     }
-    /// `false` draws the field disabled: no focus, no typing.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
-    }
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the input is
+    /// invalid unless this says `false`.
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// An app variant ([`InputVariant::app`]).
@@ -99,7 +98,8 @@ impl<'a> Widget for Input<'a> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.input, |r| &r.input)];
-        let context = v.bits().with(State::INVALID, self.invalid);
+        let mut slot = ControlSlot::of(ui);
+        let context = v.bits().with(State::INVALID, slot.invalid(self.invalid));
         // The field's text sits in its line box as in a browser's
         // text-entry field: the leading's half above rounds up.
         let mut frame = TextEntry::resolve(
@@ -107,7 +107,6 @@ impl<'a> Widget for Input<'a> {
             &t,
             &l,
             context,
-            self.enabled,
             Leading::Field,
             TextClip::Content,
             "shadcn_egui::input",
@@ -139,8 +138,14 @@ impl<'a> Widget for Input<'a> {
                 .galley()
                 .clone()
         };
-        let max_width = self.max_width.unwrap_or(t.metrics.field_max_width);
-        let width = layout::capped_width(ui, max_width, frame.content_min);
+        // The field's width in a vertical field (`*:w-full`), the room
+        // left in a horizontal one.
+        let width = slot.text_width(
+            ui,
+            self.max_width,
+            t.metrics.field_max_width,
+            frame.content_min,
+        );
         let mut edit = TextEdit::singleline(self.text);
         if !self.hint.is_empty() {
             // The placeholder is laid out in the field's look on one line,
@@ -171,15 +176,22 @@ impl<'a> Widget for Input<'a> {
         let edit = edit
             .layouter(&mut layouter)
             .password(password)
-            .vertical_align(egui::Align::Center);
+            .align(egui::Align2::LEFT_CENTER);
         // No not-allowed cursor while disabled: upstream's
         // `disabled:cursor-not-allowed` comes with
         // `disabled:pointer-events-none`, so the browser shows the cursor
         // of what lies under the field.
-        frame
+        let enabled = frame.enabled;
+        let resp = frame
             .show(ui, Vec2::new(width, height), edit, self.id_salt)
             .response
-            .response
+            .response;
+        if slot.pressed && enabled {
+            resp.request_focus();
+        }
+        let st = State::NONE.with(State::FOCUS_VISIBLE, resp.has_focus());
+        slot.done(ui, &resp, st, enabled, false);
+        resp
     }
 }
 
@@ -193,11 +205,11 @@ fn drop_line_breaks(job: &mut LayoutJob) {
     for section in &mut job.sections {
         let start = text.len();
         text.extend(
-            job.text[section.byte_range.clone()]
+            job.text[section.byte_range.as_usize()]
                 .chars()
                 .filter(|c| !matches!(c, '\r' | '\n')),
         );
-        section.byte_range = start..text.len();
+        section.byte_range = ByteIndex(start)..ByteIndex(text.len());
     }
     job.text = text;
 }

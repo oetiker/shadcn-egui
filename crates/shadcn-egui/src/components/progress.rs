@@ -11,7 +11,7 @@ use crate::layout::{self, capped_width};
 use crate::style::app::default_variant;
 use crate::style::{pick_len, Transition};
 use crate::Theme;
-use egui::{Response, Sense, Ui, Vec2, Widget, WidgetInfo, WidgetType};
+use egui::{Response, Role, Sense, Ui, Vec2, Widget, WidgetInfo};
 
 default_variant!(
     /// The progress bar's variant: upstream has none, so only app variants
@@ -148,9 +148,8 @@ impl Widget for Progress {
         }
 
         let (value, max) = (self.value, self.max);
-        resp.widget_info(|| {
-            let mut info = WidgetInfo::new(WidgetType::ProgressIndicator);
-            info.enabled = ui.is_enabled();
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            let mut info = WidgetInfo::new(Role::ProgressIndicator);
             info.value = value.is_finite().then_some(f64::from(value));
             info
         });

@@ -6,25 +6,26 @@ The helpers live in `shadcn_egui::layout`.
 | Web intent | egui approach |
 |---|---|
 | `display:flex; flex-direction:row; gap:N` | `shadcn_egui::layout::row(ui, N, \|ui\| ...)` |
+| `flex-direction:row; gap:N` with `items-start` (or an `h-fit` item, a vertical tab list beside its content) | `shadcn_egui::layout::row_top(ui, N, \|ui\| ...)`: the items at the top of the row, not centred; an item that stretches (a bordered box beside the list) reads `layout::stretch_height(ui)`, as in `layout::row` |
 | `flex-wrap:wrap` row | `shadcn_egui::layout::wrap_row(ui, N, \|ui\| ...)`; a custom widget in it allocates with `layout::allocate_item(ui, size, sense)` (or `layout::allocate_item_space`), so that it starts a line as a crate widget does |
 | `flex-direction:column; gap:N` | `shadcn_egui::layout::vstack(ui, N, \|ui\| ...)` |
-| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer, a dialog footer from `sm` up; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; `separator_vertical` stretches there too (in a plain egui `ui.horizontal` to that row's height), and in a column has no height |
+| `self-stretch` (`h-auto` divider, group in a row) | `shadcn_egui::layout::stretch_height(ui)` before the item draws: the height of the tallest other child in any crate row (`layout::row`, `space_between`, a card footer, a dialog footer from `sm` up; in `wrap_row` of the child's own line), `None` in a column or outside a crate row; a vertical separator (`ui.add(Separator::new().vertical())`) stretches there too (in a plain egui `ui.horizontal` to that row's height), and in a column has no height |
 | `after:absolute after:-inset-*` (a hit target larger than a custom widget's box) | `shadcn_egui::components::shared::hit_area(ui, rect, id, sense)` after `layout::allocate_item`: it takes the pointer but no part in a crate row's height |
 | `justify-content:space-between` | `shadcn_egui::layout::space_between(ui, \|ui\| {left}, \|ui\| {right})` |
 | `flex:1` / `flex-grow` across siblings | `egui_extras::StripBuilder` with `Size::remainder()` per growing cell |
 | fixed + fluid columns | `StripBuilder` `Size::exact(w)` + `Size::remainder()` |
 | proportional columns (`fr`) | `StripBuilder` `Size::relative(frac)` |
-| a `.card` block | `shadcn_egui::layout::card(ui, \|ui\| ...)`, or `components::card::Card` for sizes and a footer |
+| a `.card` block | `shadcn_egui::components::card::Card::new().show(ui, \|ui\| ...)`, with `.size(..)` and `.footer(..)` |
 | `w-full max-w-*` on a custom-painted widget, `max-w-[calc(100%-Npx)]` on a floating panel | `shadcn_egui::layout::capped_width(ui, max, content_min)`, `layout::overlay_width(ctx, max, inset, content_min)`; allocate with `layout::allocate_overflowing` so a widget wider than its room overflows instead of widening its column |
-| label + control form row | `shadcn_egui::layout::form_row(ui, label_w, "Label", \|ui\| ...)` |
-| app shell (sidebar/topbar/main) | `SidePanel` / `TopBottomPanel` / `CentralPanel` |
+| label + control form row | `shadcn_egui::components::field::Field::new().horizontal().label("Label").show(ui, \|ui\| ...)` (the label takes the room the control leaves); a label over its control: `Field::new().label("Label").show(..)` |
+| app shell (sidebar/topbar/main) | `egui::Panel::left` / `right` / `top` / `bottom` and `CentralPanel` |
 | responsive breakpoints (`sm:`, `md:`, `@container`) | branch on `shadcn_egui::layout::window_at_least(ui.ctx(), px)` (media query) or `layout::container_at_least(ui, px)` (container query); components apply their own |
 | CSS Grid tracks | `StripBuilder` rows × cells (no named lines) |
 
 Every gap `N` here is a named constant from the design (Tailwind `gap-N` is
 N×4 px); see the hard rules in SKILL.md. `StripBuilder` comes from
-`egui_extras`; an app that uses it directly adds
-`egui_extras = { version = "0.34", default-features = false }`.
+`egui_extras`, which shadcn-egui does not depend on; an app that uses it adds
+`egui_extras = { version = "0.37", default-features = false }`.
 
 `StripBuilder` puts `ui.spacing().item_spacing.x` between its cells
 (`.y` in a vertical strip), 8 px by default, where a grid or flex row
@@ -59,7 +60,7 @@ fn footer(ui: &mut egui::Ui) {
 - `layout::space_between` shows the widgets of each side left to right
   in the order the code adds them, as `justify-between` does; add the
   primary action last.
-- `layout::row`, `space_between`, `form_row` and a card footer are as
+- `layout::row`, `space_between`, a horizontal `Field` and a card footer are as
   high as their tallest child, never `ui.spacing().interact_size.y`. A
   checkbox's, switch's or slider's larger click target does not count, as an
   absolute box in a flex row: a row of a label and a checkbox is 16 px
@@ -87,6 +88,5 @@ fn footer(ui: &mut egui::Ui) {
   children in a `layout::vstack` with the design's gap.
 
 Gotcha: `StripBuilder.horizontal` fills all available vertical space. Wrap it
-in `ui.allocate_ui(vec2(w, row_h), ...)` to cap a row's height (`form_row`
-does this). When no helper fits, port one with `shadcn-egui:port-component`
+in `ui.allocate_ui(vec2(w, row_h), ...)` to cap a row's height. When no helper fits, port one with `shadcn-egui:port-component`
 instead of inlining `available_width()` arithmetic.

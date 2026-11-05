@@ -28,6 +28,7 @@ pub enum Field {
     InsetBottom,
     InsetLeft,
     IconSize,
+    SizedIconSize,
     IconShiftY,
     IconHidden,
     TextSize,
@@ -39,6 +40,7 @@ pub enum Field {
     UnderlineOffset,
     TextWrap,
     TextAlign,
+    LineClamp,
     Radius,
     RadiusTop,
     RadiusBottom,
@@ -73,6 +75,7 @@ pub enum Field {
     Easing,
     AnimateIn,
     AnimateOut,
+    AnimateSpin,
     EnterOpacity,
     EnterScale,
     EnterX,
@@ -108,6 +111,7 @@ impl Field {
             InsetBottom => "inset_bottom",
             InsetLeft => "inset_left",
             IconSize => "icon_size",
+            SizedIconSize => "sized_icon_size",
             IconShiftY => "icon_shift_y",
             IconHidden => "icon_hidden",
             TextSize => "text_size",
@@ -119,6 +123,7 @@ impl Field {
             UnderlineOffset => "underline_offset",
             TextWrap => "text_wrap",
             TextAlign => "text_align",
+            LineClamp => "line_clamp",
             Radius => "radius",
             RadiusTop => "radius_top",
             RadiusBottom => "radius_bottom",
@@ -153,6 +158,7 @@ impl Field {
             Easing => "easing",
             AnimateIn => "animate_in",
             AnimateOut => "animate_out",
+            AnimateSpin => "animate_spin",
             EnterOpacity => "enter_opacity",
             EnterScale => "enter_scale",
             EnterX => "enter_x",
@@ -200,6 +206,8 @@ pub enum Value {
     TextAlign(&'static str),
     /// `Blend::Darken`, `Blend::Lighten`.
     Blend(&'static str),
+    /// A count of lines (`line-clamp-N`).
+    Lines(u32),
     /// The `Transition` const names it ORs together.
     Transition(&'static [&'static str]),
     /// `Easing::Linear`, `Easing::In`, `Easing::Out`, `Easing::InOut`.
@@ -226,6 +234,7 @@ impl Value {
             Value::TextWrap(w) => format!("TextWrap::{w}"),
             Value::TextAlign(a) => format!("TextAlign::{a}"),
             Value::Blend(b) => format!("Blend::{b}"),
+            Value::Lines(n) => n.to_string(),
             Value::Easing(e) => format!("Easing::{e}"),
             Value::Transition(names) => match names.split_first() {
                 None => "Transition::NONE".into(),
@@ -290,6 +299,22 @@ pub const FLAGS: &[(&str, u128)] = &[
     ("DELAYED_OPEN", 1 << 49),
     ("IN_GROUP_HORIZONTAL", 1 << 50),
     ("IN_GROUP_VERTICAL", 1 << 51),
+    ("LINK", 1 << 52),
+    ("SIZE_XS", 1 << 53),
+    ("HAS_SIZE_XS", 1 << 54),
+    ("HAS_DESCRIPTION", 1 << 55),
+    ("VARIANT_LABEL", 1 << 56),
+    ("VARIANT_LEGEND", 1 << 57),
+    ("AFTER_LEGEND", 1 << 58),
+    ("NTH_LAST_2", 1 << 59),
+    ("IN_FIELD_GROUP", 1 << 60),
+    ("HAS_HORIZONTAL", 1 << 61),
+    ("HAS_CHECKED", 1 << 62),
+    ("HAS_FIELD", 1 << 63),
+    ("HAS_FIELD_CONTENT", 1 << 64),
+    ("HAS_FOCUS_VISIBLE", 1 << 65),
+    ("HAS_DISABLED", 1 << 66),
+    ("IN_FIELD_LABEL", 1 << 67),
 ];
 
 pub fn flag(name: &str) -> u128 {

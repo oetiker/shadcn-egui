@@ -83,7 +83,7 @@ fn drawn(files: &'static FontFiles, scale: f32, mode: egui::Theme) -> Vec<f32> {
                 recipe.text_size.base = Some(TextSize::Px(size));
                 recipe.line_height.base = Some(1.5);
                 recipe.weight.base = Some(weight);
-                egui::Area::new(egui::Id::new(("ink", i)))
+                egui::Area::new(egui::Id::unique(("ink", i)))
                     .fixed_pos(pos2(LEFT, TOP + i as f32 * STEP))
                     .show(ui.ctx(), |ui| {
                         let look = TextLook::resolve(ui, &[&recipe], State::NONE);

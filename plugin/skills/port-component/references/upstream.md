@@ -100,7 +100,8 @@ pub const DEFAULT_SIDE_OFFSET: f32 = 4.0; // behaviour-ok: upstream prop default
 String literals and one-line `/* .. */` comments are not scanned; the lines
 inside a multi-line block comment are. Neither are Lucide icon data blocks
 (`pub const NAME: Icon = Icon {` to `};`) nor the icon rasterizer
-`icon_raster.rs`, whose numbers are path data and rasterizer geometry.
+`icon_raster.rs` with its `icon_raster/` modules, whose numbers are path
+data and rasterizer geometry.
 
 ## Snapshots
 
@@ -167,11 +168,20 @@ tools/icongen/scripts/generate-crates.sh <scratch dir> [lib...]
 
 Each crate holds every icon as a `pub const` (a range into one `icons.bin`
 blob), `ALL`, and `SLOTS`, one icon per `IconSlots` field (checkbox tick, select
-trigger, chevrons, close button, ...). Remix Icon stays at its last Apache-2.0 release. A component
+trigger, chevrons, close button, spinner, ...). Remix Icon stays at its last Apache-2.0 release. A component
 that needs a new slot icon adds it to `IconSlots` and `IconSlots::all` in
 `shadcn-egui-core`, to `SLOT_NAMES` in `tools/icongen/src/lib.rs` and to the
 `slots()` table in `generate-crates.sh`, with the icon upstream's
 `IconPlaceholder` names for each library.
+
+A full run ends with `tools/icongen/tests/fill_scan.rs`: every shipped fill,
+read from the scratch dir, must convert, and the crate's raster of its blob
+must stay within 4 levels (of 255) of the exact area coverage of its upstream
+outline on every pixel at every tested size up to 256 px. The test computes
+that coverage on its own, sharing no code with icongen or the crate, so a seam
+between two shapes fails the scan like any other wrong pixel. The icongen test
+gate runs the same scan when `ICONGEN_DOWNLOADS` names that scratch dir;
+without it the scan is skipped.
 
 After changing icongen, regenerate the test fixtures:
 
@@ -183,7 +193,7 @@ cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   tools/icongen/tests/fixtures/{mic,circle-alert,settings,x,power,monitor}.svg
 cargo run --manifest-path tools/icongen/Cargo.toml --jobs 4 -- \
   --crate-dir crates/shadcn-egui/tests/icons/fixture \
-  --slots check=mixed,select_trigger=ring,chevron_down_plain=ring,chevron_up=ring,chevron_left=ring,chevron_right=ring,more_horizontal=ring,close=x \
+  --slots check=mixed,select_trigger=ring,chevron_down_plain=ring,chevron_up=ring,chevron_left=ring,chevron_right=ring,more_horizontal=ring,close=x,loader=ring \
   --provenance "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)" \
   tools/icongen/tests/fixtures/{big-box,faded,mixed,ring,square-hole,star-evenodd,x}.svg
 ```

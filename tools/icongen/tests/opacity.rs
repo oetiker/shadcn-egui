@@ -11,7 +11,7 @@ fn fixture(name: &str) -> String {
 
 #[test]
 fn a_translucent_path_becomes_its_own_layer() {
-    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black">
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-linecap="round" stroke-linejoin="round">
         <path d="M1 1L5 1"/><path opacity="0.4" d="M1 3L5 3"/></svg>"#;
     let icon = convert("t", svg).expect("converts");
     assert_eq!(icon.segs, vec![Seg::M(1.0, 1.0), Seg::L(5.0, 1.0)]);
@@ -53,7 +53,7 @@ fn opacity_multiplies_down_the_tree_and_into_paint_opacity() {
 #[test]
 fn an_alpha_that_rounds_to_full_is_opaque_and_one_that_rounds_to_zero_is_dropped() {
     // 0.999999 * 65535 rounds to 65535; 0.001 * 0.004 * 65535 rounds to 0.
-    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black">
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-linecap="round" stroke-linejoin="round">
         <path opacity="0.999999" d="M1 1L5 1"/>
         <g opacity="0.001"><path opacity="0.004" d="M1 3L5 3"/></g>
         <path stroke-opacity="0.000001" d="M1 5L5 5"/>
@@ -82,7 +82,7 @@ fn an_alpha_outside_the_open_range_is_an_error() {
 fn opaque_icons_have_no_layers_and_invisible_paths_are_dropped() {
     let icon = convert("mixed", &fixture("mixed")).expect("converts");
     assert!(icon.layers.is_empty());
-    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black">
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-linecap="round" stroke-linejoin="round">
         <path d="M1 1L5 1"/><path stroke-opacity="0" d="M1 3L5 3"/></svg>"#;
     let icon = convert("t", svg).expect("converts");
     assert!(icon.layers.is_empty(), "{:?}", icon.layers);
@@ -128,7 +128,7 @@ fn opaque_records_are_unchanged_by_layers() {
 
 #[test]
 fn slices_cannot_hold_translucent_layers() {
-    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black">
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-linecap="round" stroke-linejoin="round">
         <path opacity="0.4" d="M1 3L5 3"/></svg>"#;
     let icon = convert("faint", svg).expect("converts");
     let err = ensure_stroke_only(&icon).expect_err("--out has no alpha");

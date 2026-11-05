@@ -275,7 +275,8 @@ mod tests {
     /// Run one frame and return how many passes it took.
     fn frame(ctx: &Context, mut ui_fn: impl FnMut(&mut Ui)) -> u64 {
         let before = ctx.cumulative_pass_nr();
-        let _ = ctx.run_ui(RawInput::default(), |ui| ui_fn(ui));
+        ctx.run_ui(RawInput::default(), |ui| ui_fn(ui))
+            .drop_without_applying_deltas();
         ctx.cumulative_pass_nr() - before
     }
 
@@ -284,12 +285,12 @@ mod tests {
     fn group_frame(ctx: &Context, n: usize, width: f32) -> (Vec<State>, u64) {
         let mut seen = Vec::new();
         let passes = frame(ctx, |ui| {
-            let group = Group::begin(ui, Id::new("g"));
+            let group = Group::begin(ui, Id::unique("g"));
             seen.clear();
             ui.scope_builder(group.push(UiBuilder::new()), |ui| {
                 for i in 0..n {
                     let item = Item {
-                        id: Id::new(i),
+                        id: Id::unique(i),
                         size: vec2(width * (i + 1) as f32, 20.0),
                         enabled: true,
                     };
@@ -333,12 +334,12 @@ mod tests {
         let widest = |w: f32| {
             let mut seen = 0.0;
             let passes = frame(&ctx, |ui| {
-                let group = Group::begin(ui, Id::new("w"));
+                let group = Group::begin(ui, Id::unique("w"));
                 seen = group.widest();
                 ui.scope_builder(group.push(UiBuilder::new()), |ui| {
                     for (i, w) in [w, 5.0].into_iter().enumerate() {
                         let item = Item {
-                            id: Id::new(i),
+                            id: Id::unique(i),
                             size: vec2(w, 20.0),
                             enabled: true,
                         };
@@ -360,12 +361,12 @@ mod tests {
         let run = |ids: &[u8], height: f32| {
             let mut seen = (0, Vec::new(), Vec::new());
             let passes = frame(&ctx, |ui| {
-                let group = Group::begin(ui, Id::new("list"));
+                let group = Group::begin(ui, Id::unique("list"));
                 seen = (group.count(), group.ids(), group.sizes());
                 ui.scope_builder(group.push(UiBuilder::new()), |ui| {
                     for &i in ids {
                         let item = Item {
-                            id: Id::new(i),
+                            id: Id::unique(i),
                             size: vec2(10.0, height),
                             enabled: true,
                         };
@@ -379,7 +380,7 @@ mod tests {
         let ((count, ids, sizes), passes) = run(&[1, 2], 20.0);
         assert_eq!(passes, 2);
         assert_eq!(count, 2);
-        assert_eq!(ids, vec![Id::new(1u8), Id::new(2u8)]);
+        assert_eq!(ids, vec![Id::unique(1u8), Id::unique(2u8)]);
         assert_eq!(sizes, vec![vec2(10.0, 20.0); 2]);
         assert_eq!(run(&[1, 2], 20.0).1, 1);
         // Same count, other ids; then other sizes.
@@ -394,12 +395,12 @@ mod tests {
         let card = |action: bool, media: bool| {
             let mut seen = State::NONE;
             let passes = frame(&ctx, |ui| {
-                let group = Group::begin(ui, Id::new("card"));
+                let group = Group::begin(ui, Id::unique("card"));
                 seen = group.presence(State::HAS_ACTION | State::HAS_ICON);
                 let parts = State::NONE
                     .with(State::HAS_ACTION, action)
                     .with(State::HAS_MEDIA, media);
-                report(ui.ctx(), Id::new("card"), parts);
+                report(ui.ctx(), Id::unique("card"), parts);
                 let _ = group.end(ui.ctx());
             });
             (seen, passes)
@@ -422,17 +423,17 @@ mod tests {
     fn an_area_sizing_pass_registers_nothing() {
         // Defect 7: an `Area`'s first pass is invisible and disabled.
         let ctx = Context::default();
-        let group = Id::new("menu");
+        let group = Id::unique("menu");
         let popup = |seen: &mut Vec<bool>, sizing: &mut bool| {
             frame(&ctx, |ui| {
-                egui::Area::new(Id::new("area")).show(ui.ctx(), |ui| {
+                egui::Area::new(Id::unique("area")).show(ui.ctx(), |ui| {
                     *sizing = ui.is_sizing_pass();
                     let g = Group::begin(ui, group);
                     *seen = g.enabled();
                     ui.scope_builder(g.push(UiBuilder::new()), |ui| {
                         for i in 0..3 {
                             let item = Item {
-                                id: Id::new(i),
+                                id: Id::unique(i),
                                 size: vec2(if ui.is_sizing_pass() { 1.0 } else { 50.0 }, 20.0),
                                 enabled: ui.is_enabled(),
                             };
@@ -465,10 +466,10 @@ mod tests {
     #[test]
     fn only_a_direct_child_joins_its_group() {
         let ctx = Context::default();
-        let _ = ctx.run_ui(RawInput::default(), |ui| {
-            let group = Group::begin(ui, Id::new("direct"));
+        ctx.run_ui(RawInput::default(), |ui| {
+            let group = Group::begin(ui, Id::unique("direct"));
             let item = |i: u8| Item {
-                id: Id::new(i),
+                id: Id::unique(i),
                 size: Vec2::ZERO,
                 enabled: true,
             };
@@ -489,7 +490,7 @@ mod tests {
                 });
                 // A group inside the element is the item's group again.
                 crate::layout::vstack(ui, 0.0, |ui| {
-                    let inner = Group::begin(ui, Id::new("inner"));
+                    let inner = Group::begin(ui, Id::unique("inner"));
                     ui.scope_builder(inner.push(UiBuilder::new()), |ui| {
                         assert_eq!(join(ui, item(6)).map(|p| p.index), Some(0));
                     });
@@ -497,19 +498,21 @@ mod tests {
                 });
             });
             assert_eq!(group.end(ui.ctx()).items.len(), 4);
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
     #[test]
     fn outside_a_group_a_child_has_no_position() {
         let ctx = Context::default();
-        let _ = ctx.run_ui(RawInput::default(), |ui| {
+        ctx.run_ui(RawInput::default(), |ui| {
             let item = Item {
-                id: Id::new(0),
+                id: Id::unique(0),
                 size: Vec2::ZERO,
                 enabled: true,
             };
             assert_eq!(join(ui, item), None);
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

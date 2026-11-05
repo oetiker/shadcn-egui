@@ -177,7 +177,7 @@ impl Preset {
     /// is logged once per context: applying the same preset again logs
     /// nothing new.
     pub fn apply(&self, ctx: &egui::Context) {
-        let id = egui::Id::new("shadcn_egui::preset_warnings");
+        let id = egui::Id::unique("shadcn_egui::preset_warnings");
         let mut logged: std::collections::BTreeSet<String> =
             ctx.data(|d| d.get_temp(id)).unwrap_or_default();
         let theme = self.theme_with_warnings(&mut |line| {

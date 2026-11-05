@@ -7,18 +7,23 @@
 //! and a click outside close it. bits-ui also moves keyboard focus into the
 //! content; egui does not, so focus stays where it was.
 //!
+//! Opening plays the style's enter animation (`fade-in-0 zoom-in-95`, a
+//! slide from the trigger's side, `duration-100`); closing jumps, as egui
+//! drops the popup's area in the pass it closes.
+//!
 //! egui remembers one open popup at a time, so opening a popover closes any
 //! other popup (a menu, a combo box). Nest them only through `open_bool`
 //! state of your own.
 
 use crate::components::context;
 use crate::components::free_content;
+use crate::components::motion::{side_and_origin, Enter};
 use crate::components::shared::{content_ui, opacity, part_ui, RecipeBox, DEFAULT_SIDE_OFFSET};
 use crate::components::text::{content_scope, TextLook};
 use crate::style::app::{default_variant, Resolved};
 use crate::style::{pick, pick_len};
 use crate::Theme;
-use egui::{PopupCloseBehavior, Response, TextWrapMode, Ui, UiBuilder};
+use egui::{PopupCloseBehavior, RectAlign, Response, TextWrapMode, Ui, UiBuilder};
 
 default_variant!(
     /// The popover's variant: upstream has none, so only app variants
@@ -104,7 +109,11 @@ impl<'a> Popover<'a> {
         let gap = px(|r| &r.gap);
         // The frame paints outside the content's `Ui`: fade its colours here.
         let alpha = opacity(&[&l[..]], g);
-        let panel = RecipeBox::resolve(&self.trigger.ctx, &t, &l, g).faded(alpha);
+        let popup = egui::Popup::from_toggle_button_response(self.trigger);
+        let id = popup.get_id();
+        // The open animation, in place of egui's fade of the popup's area.
+        let enter = Enter::at(&self.trigger.ctx, id, &l, g);
+        let panel = RecipeBox::resolve(&self.trigger.ctx, &t, &l, g).faded(alpha * enter.opacity());
         let frame = panel.frame([pad_t, pad_r, pad_b, pad_l]);
         // No width from the builder or the recipe: CSS's initial `auto`,
         // the content's width.
@@ -112,12 +121,22 @@ impl<'a> Popover<'a> {
             .width
             .or_else(|| pick(&l, |r| &r.width, g))
             .map(|w| (w - pad_l - pad_r).max(0.0));
-        let shown = egui::Popup::from_toggle_button_response(self.trigger)
+        let shown = popup
             .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+            // popover-content.svelte: `side = "bottom"`, `align = "center"`;
+            // floating-ui flips to the top side when the bottom has no
+            // room, and egui's area shifts the box into the window as
+            // floating-ui's `shift` does.
+            .align(RectAlign::BOTTOM)
+            .align_alternatives(&[RectAlign::TOP])
             .gap(self.side_offset)
             .frame(frame)
             .show(|ui| {
-                let slot = RecipeBox::reserve(ui);
+                Enter::mark(ui, id);
+                // The popup's Ui carries egui's fade: this opacity replaces it.
+                ui.set_opacity(enter.opacity());
+                // egui's sizing pass draws nothing: no box either.
+                let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
                 if let Some(w) = inner_width {
                     ui.set_width(w);
                 }
@@ -131,7 +150,7 @@ impl<'a> Popover<'a> {
                     content_scope(ui, &look, |ui| {
                         content_ui(
                             ui,
-                            ui.id().with("shadcn_egui::popover::content"),
+                            ui.scope_id().with("shadcn_egui::popover::content"),
                             &[&l[..]],
                             g,
                             |ui| free_content::body(ui, gap, 0.0, "popover", content),
@@ -142,12 +161,16 @@ impl<'a> Popover<'a> {
                 (inner.inner, slot)
             })?;
         let (inner, slot) = shown.inner;
-        panel.paint_reserved(
+        let (ctx, layer, rect) = (
             &self.trigger.ctx,
             shown.response.layer_id,
-            slot,
             shown.response.rect,
         );
+        if let Some(slot) = slot {
+            panel.paint_reserved(ctx, layer, slot, rect);
+            let (side, origin) = side_and_origin(rect, self.trigger.rect, egui::Align::Center);
+            enter.transform(ctx, layer, slot, origin, &l, g | side);
+        }
         Some(inner)
     }
 }
@@ -187,20 +210,20 @@ fn header(ui: &mut Ui, title: &str, description: &str) {
         ui.spacing_mut().item_spacing.y = gap;
         content_ui(
             ui,
-            ui.id().with("shadcn_egui::popover::header"),
+            ui.scope_id().with("shadcn_egui::popover::header"),
             &[&header_l[..]],
             g,
             |ui| {
                 part_ui(
                     ui,
-                    ui.id().with("shadcn_egui::popover::title"),
+                    ui.scope_id().with("shadcn_egui::popover::title"),
                     &[&title_l[..]],
                     g,
                     |ui| title_look.label(ui, title, TextWrapMode::Wrap),
                 );
                 part_ui(
                     ui,
-                    ui.id().with("shadcn_egui::popover::description"),
+                    ui.scope_id().with("shadcn_egui::popover::description"),
                     &[&desc_l2[..]],
                     g,
                     |ui| desc_look.label(ui, description, TextWrapMode::Wrap),

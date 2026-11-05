@@ -597,7 +597,7 @@ use std::sync::Arc;
 
 fn theme_id() -> egui::Id {
     static ID: std::sync::LazyLock<egui::Id> =
-        std::sync::LazyLock::new(|| egui::Id::new("shadcn_egui::active_theme"));
+        std::sync::LazyLock::new(|| egui::Id::unique("shadcn_egui::active_theme"));
     *ID
 }
 
@@ -825,6 +825,62 @@ struct InstalledFonts {
     heading: &'static str,
     /// The body is mono: the install put its face first in Monospace.
     mono_body: bool,
+    /// The fonts themselves, for an install that gives way (`gives_way`)
+    /// but brings the app's own definitions.
+    fonts: ThemeFonts,
+}
+
+impl InstalledFonts {
+    fn of(fonts: ThemeFonts) -> Self {
+        Self {
+            body: fonts.body.name,
+            heading: fonts.heading.name,
+            mono_body: fonts.body.kind == FontKind::Mono,
+            fonts,
+        }
+    }
+}
+
+/// Whether an install of `key` gives way to the `installed` fonts: the
+/// current viewport applied `key` in this or its previous pass, and some
+/// open viewport applied `installed` in its current or previous pass. Two
+/// viewports that apply themes with other fonts in every pass (a window in
+/// another font than the root), or one viewport that applies two such
+/// themes, would else install them in turn in every pass, and each install
+/// rebuilds the font atlas, redoes the pass and repaints the other
+/// viewports. The fonts of the last real change stay instead. Once no
+/// viewport applies `installed` any more (it closed, or stopped), the
+/// install goes ahead.
+fn gives_way(ctx: &egui::Context, key: &InstalledFonts, installed: &InstalledFonts) -> bool {
+    // Outside the closures: `viewport_id` and the pass numbers lock the
+    // context. In place: `get_temp` would clone every viewport's list.
+    let id = applied_themes_id();
+    let ids: Vec<egui::ViewportId> = ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<AppliedThemes>(id)
+            .keys()
+            .copied()
+            .collect()
+    });
+    let current = ctx.viewport_id();
+    let closed = crate::components::shared::closed_viewports(ctx, ids.iter().copied());
+    let passes: Vec<(egui::ViewportId, u64)> = ids
+        .into_iter()
+        .filter(|v| !closed.contains(v))
+        .map(|v| (v, ctx.cumulative_pass_nr_for(v)))
+        .collect();
+    let fonts_of = |t: &Theme| InstalledFonts::of(t.fonts);
+    ctx.data_mut(|d| {
+        let applied = d.get_temp_mut_or_default::<AppliedThemes>(id);
+        let recent = |v: egui::ViewportId, pass: u64, fonts: &InstalledFonts| {
+            applied
+                .get(&v)
+                .is_some_and(|a| a.recent(pass).any(|t| fonts_of(t) == *fonts))
+        };
+        let mine = passes
+            .iter()
+            .any(|&(v, pass)| v == current && recent(v, pass, key));
+        mine && passes.iter().any(|&(v, pass)| recent(v, pass, installed))
+    })
 }
 
 /// Whether the context's current fonts bind `family`. Only valid once the
@@ -839,15 +895,25 @@ fn is_bound(ctx: &egui::Context, family: &str) -> bool {
 /// neither rebuilds the atlas nor drops fonts an app added through
 /// `apply_with_fonts`. When the app has replaced the fonts since
 /// (`ctx.set_fonts`), the theme's families are installed again on top of
-/// the app's current fonts, which keeps the app's own families.
+/// the app's current fonts, which keeps the app's own families. An
+/// install that gives way to the installed fonts (`gives_way`) installs
+/// nothing; with `base` it installs the fonts that stay on top of `base`,
+/// so the app's own definitions still go in.
 fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefinitions>) {
-    let id = egui::Id::new("shadcn_egui::installed_fonts");
-    let key = InstalledFonts {
-        body: fonts.body.name,
-        heading: fonts.heading.name,
-        mono_body: fonts.body.kind == FontKind::Mono,
-    };
+    let id = egui::Id::unique("shadcn_egui::installed_fonts");
+    let mut key = InstalledFonts::of(fonts);
+    let mut fonts = fonts;
     let last = ctx.data(|d| d.get_temp::<InstalledFonts>(id));
+    if let Some(last) = last
+        .as_ref()
+        .filter(|last| **last != key && gives_way(ctx, &key, last))
+    {
+        if base.is_none() {
+            return;
+        }
+        fonts = last.fonts;
+        key = last.clone();
+    }
     let base = match base {
         Some(base) => base,
         None if last.as_ref() != Some(&key) => FontDefinitions::default(),
@@ -888,14 +954,18 @@ fn install_fonts(ctx: &egui::Context, fonts: ThemeFonts, base: Option<FontDefini
     // and is redone. Where no crate call has seen this pass yet, a call
     // between two passes cannot be told from the first call of a pass:
     // repaint, so a pass that drew in the old fonts is not the last one.
-    // egui repaints after the first pass anyway.
+    // egui repaints after the first pass anyway. The fonts are the
+    // context's, not the viewport's: every other viewport that drew in the
+    // old fonts repaints too.
+    let record = pass_mode_id(ctx.viewport_id());
     let seen = ctx.data(|d| {
-        d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())
-            .is_some_and(|(p, ..)| p == pass)
+        d.get_temp::<PassStart>(record)
+            .is_some_and(|start| start.pass == pass)
     });
     if pass > 0 && !seen {
         ctx.request_repaint();
     }
+    repaint_other_viewports(ctx);
     ctx.data_mut(|d| {
         let n = d.get_temp::<u64>(font_installs_id()).unwrap_or(0);
         d.insert_temp(font_installs_id(), n + 1);
@@ -931,14 +1001,14 @@ impl PendingHeading {
 }
 
 fn pending_heading_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::pending_heading")
+    egui::Id::unique("shadcn_egui::pending_heading")
 }
 
 /// Set once the heading family was seen bound. Every install defines it,
 /// but an app's own `ctx.set_fonts` drops it: [`unbind_lost_heading`]
 /// clears the flag again.
 fn heading_bound_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::heading_bound")
+    egui::Id::unique("shadcn_egui::heading_bound")
 }
 
 fn heading_bound(ctx: &egui::Context) -> bool {
@@ -946,7 +1016,8 @@ fn heading_bound(ctx: &egui::Context) -> bool {
 }
 
 /// The family `TextStyle::Heading` may name now: the heading family once it
-/// is known to be bound, else `Proportional`, upgraded by [`bind_heading`].
+/// is known to be bound, else `Proportional`, upgraded by [`bind_heading`]
+/// at the start of a later pass ([`ThemeHooks`]).
 fn heading_family_now(ctx: &egui::Context) -> FontFamily {
     if heading_bound(ctx) {
         if is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
@@ -955,27 +1026,19 @@ fn heading_family_now(ctx: &egui::Context) -> FontFamily {
         // The app replaced the fonts; this apply installs the theme's again.
         ctx.data_mut(|d| d.remove::<bool>(heading_bound_id()));
     }
-    let hook_id = egui::Id::new("shadcn_egui::heading_hook");
-    if !ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
-        ctx.data_mut(|d| d.insert_temp(hook_id, true));
-        ctx.on_begin_pass(
-            "shadcn_egui::bind_heading",
-            Arc::new(|ui: &mut egui::Ui| {
-                if let Some(id) = check_heading(ui.ctx()) {
-                    // The root ui was built before this hook ran.
-                    ui.style_mut().text_styles.insert(TextStyle::Heading, id);
-                }
-            }),
-        );
-    }
     FontFamily::Proportional
 }
 
-/// Once per pass: a heading whose family the app's own fonts dropped
-/// ([`unbind_lost_heading`]) falls back, a waiting one binds
+/// Once per pass of each viewport: a heading whose family the app's own
+/// fonts dropped ([`unbind_lost_heading`]) falls back, a waiting one binds
 /// ([`bind_heading`]). Returns the new heading `FontId` when it changed.
+/// Each viewport counts its own passes and binds the fonts at the start
+/// of each: an immediate viewport's pass, run inside its parent's, may
+/// have the number its parent already checked, and fonts its parent's
+/// pass does not have yet.
 fn check_heading(ctx: &egui::Context) -> Option<FontId> {
-    let id = egui::Id::new("shadcn_egui::heading_checked");
+    // Outside the closures: `viewport_id` locks the context.
+    let id = heading_checked_id(ctx.viewport_id());
     let pass = ctx.cumulative_pass_nr();
     if ctx.data(|d| d.get_temp::<u64>(id)) == Some(pass) {
         return None;
@@ -983,6 +1046,11 @@ fn check_heading(ctx: &egui::Context) -> Option<FontId> {
     ctx.data_mut(|d| d.insert_temp(id, pass));
     let fallback = unbind_lost_heading(ctx);
     bind_heading(ctx).or(fallback)
+}
+
+/// The pass of the viewport whose heading [`check_heading`] checked last.
+fn heading_checked_id(viewport: egui::ViewportId) -> egui::Id {
+    egui::Id::unique("shadcn_egui::heading_checked").with(viewport)
 }
 
 /// `TextStyle::Heading` back to `Proportional` when the context's fonts no
@@ -994,7 +1062,7 @@ fn unbind_lost_heading(ctx: &egui::Context) -> Option<FontId> {
     if !heading_bound(ctx) || is_bound(ctx, FAMILY_HEADING_SEMIBOLD) {
         return None;
     }
-    let warned = egui::Id::new("shadcn_egui::lost_heading_warned");
+    let warned = egui::Id::unique("shadcn_egui::lost_heading_warned");
     ctx.data_mut(|d| {
         d.remove::<bool>(heading_bound_id());
         if !d.get_temp::<bool>(warned).unwrap_or(false) {
@@ -1082,13 +1150,16 @@ impl Theme {
     /// frame shows widgets of both modes. A pass hook checks this at the
     /// end of the pass too; an app's own `begin_pass`/`end_pass` loop runs
     /// no hook, so there only a crate widget after the call catches it.
+    /// A switch to a mode the viewport's previous pass also ran in (a
+    /// window kept in another mode than the root, a pass that draws in
+    /// both modes) is the app's pattern: it discards nothing.
     pub fn current(ctx: &egui::Context) -> Theme {
         static FALLBACK: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(Theme::vega);
         // Before the first pass ends, fonts may not exist yet; the hook binds then.
         if ctx.cumulative_pass_nr() > 0 {
             let _ = check_heading(ctx);
         }
-        let mode = check_mode_switch(ctx);
+        let mode = check_mode_switch(ctx, Check::Within);
         let theme = ctx.data(|d| d.get_temp::<Theme>(theme_id()));
         theme.unwrap_or_else(|| FALLBACK.clone()).in_mode(mode)
     }
@@ -1110,7 +1181,12 @@ impl Theme {
     /// app's fonts again. In a loop that does not run egui's pass hooks, a
     /// heading in a `Ui` built before the first shadcn component of that pass
     /// can still panic. Calling `apply` and `set_fonts` every frame rebuilds
-    /// the font atlas on every other frame.
+    /// the font atlas on every other frame. Fonts belong to the context, not
+    /// to a viewport: where windows apply themes with different fonts in
+    /// every pass, or one pass applies several, all draw in the fonts of the
+    /// last change. So does the ink of the text: while windows draw in the
+    /// light and the dark mode, all draw their text in the main window's
+    /// mode's ink, as egui keeps one font atlas for all windows.
     ///
     /// egui swaps in new fonts only at the next pass. Called in the middle
     /// of a pass, `apply` of other fonts asks egui to discard that pass and
@@ -1138,7 +1214,6 @@ impl Theme {
     fn apply_inner(&self, ctx: &egui::Context, base: Option<FontDefinitions>) {
         install_fonts(ctx, self.fonts, base);
         crate::components::icon_atom::install(ctx);
-        crate::components::shared::install_focus_modality(ctx);
         let m = &self.metrics;
         let hairline = crate::components::shared::line_width(m.border, ctx.pixels_per_point());
         let heading = FontId::new(m.text_heading, heading_family_now(ctx));
@@ -1148,22 +1223,77 @@ impl Theme {
             });
         }
 
+        let ink = shared_ink(ctx);
         for mode in [egui::Theme::Dark, egui::Theme::Light] {
             let dark = mode == egui::Theme::Dark;
             let p = self.palette_of(mode);
-            ctx.style_mut_of(mode, |s| self.style_egui(s, p, dark, hairline, &heading));
+            ctx.style_mut_of(mode, |s| {
+                self.style_egui(s, p, dark, hairline, &heading);
+                s.visuals.text_options.color_transfer_function = coverage(ink.unwrap_or(mode));
+            });
         }
 
-        ctx.data_mut(|d| {
-            if d.get_temp::<Theme>(theme_id()).as_ref() != Some(self) {
-                let generation = d.get_temp::<u64>(generation_id()).unwrap_or(0);
-                d.insert_temp(generation_id(), generation + 1);
+        // Outside the closures: `viewport_id` locks the context.
+        let viewport = ctx.viewport_id();
+        let pass = ctx.cumulative_pass_nr();
+        forget_closed_viewports(ctx, viewport, pass);
+        let (changed, repeat) = ctx.data_mut(|d| {
+            let changed = d.get_temp::<Theme>(theme_id()).as_ref() != Some(self);
+            let last = d.get_temp::<u64>(generation_id()).unwrap_or(0);
+            let made = d.get_temp::<u64>(generations_made_id()).unwrap_or(0);
+            // In place: `get_temp` would clone every viewport's list.
+            let applied = d.get_temp_mut_or_default::<AppliedThemes>(applied_themes_id());
+            let mine = applied.entry(viewport).or_default();
+            mine.turn_to(pass);
+            // The app's pattern: this viewport applied the theme in this
+            // pass or in its previous one already.
+            let repeat = mine.generation_of(self).is_some();
+            // A theme applied again gets the generation it had, as long as
+            // some viewport applied it in its last two passes: an app that
+            // applies several themes in every pass (styles side by side, a
+            // variant on top of the page's theme, a window in another
+            // palette) ends each pass with the generation it started with,
+            // however many themes it applies, and `check_mode_switch`
+            // discards none of them.
+            let generation = if changed {
+                applied.values().find_map(|a| a.generation_of(self))
+            } else {
+                Some(last)
+            };
+            let new = generation.is_none();
+            let generation = generation.unwrap_or(made + 1);
+            let mine = applied.entry(viewport).or_default();
+            if !mine.now.iter().any(|(t, _)| t == self) {
+                mine.now.push((self.clone(), generation));
             }
+            if new {
+                d.insert_temp(generations_made_id(), generation);
+            }
+            d.insert_temp(generation_id(), generation);
             d.insert_temp(theme_id(), self.clone());
             d.insert_temp(hairline_id(), hairline);
+            d.insert_temp(hairline_id().with(viewport), hairline);
+            (changed, repeat)
         });
-        install_hairline_hook(ctx);
-        install_mode_switch_hook(ctx);
+        // The styles are the context's: other viewports drew in the old
+        // ones. A theme this viewport applies in every pass is no change
+        // for them: two viewports that each apply their own theme in every
+        // pass would else repaint each other in every frame.
+        if changed && !repeat {
+            repaint_other_viewports(ctx);
+        }
+        // egui takes the list of pass hooks before a `run_ui` pass, so hooks
+        // first registered in a pass do not run at its end: check here, so
+        // a font install after the pass's last crate widget redoes the pass
+        // as the end check would, and repaint for what that check would
+        // catch later in the pass (a `ctx.set_theme(..)`).
+        if ctx.plugin_opt::<ThemeHooks>().is_none() {
+            ctx.plugin_or_default::<ThemeHooks>();
+            if ctx.cumulative_pass_nr() > 0 {
+                check_mode_switch(ctx, Check::End);
+                ctx.request_repaint();
+            }
+        }
     }
 
     /// One mode's egui style: type scale, spacing and colours.
@@ -1217,15 +1347,6 @@ impl Theme {
         let v = &mut s.visuals;
         v.disabled_alpha = disabled_alpha.unwrap_or(v.disabled_alpha);
         v.dark_mode = dark;
-        // The ink of Chrome's grayscale anti-aliasing: light text on dark
-        // takes `coverage^0.81`, dark text on light the plain coverage
-        // (tests/text_coverage.rs). egui's dark default (`2c - c²`) draws
-        // 3 to 25 % more.
-        v.text_options.alpha_from_coverage = if dark {
-            egui::epaint::AlphaFromCoverage::Gamma(0.81)
-        } else {
-            egui::epaint::AlphaFromCoverage::Linear
-        };
         v.panel_fill = p.background;
         v.window_fill = p.card;
         v.window_stroke = Stroke::new(hairline, p.border);
@@ -1262,24 +1383,134 @@ impl Theme {
 }
 
 fn hairline_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::hairline")
+    egui::Id::unique("shadcn_egui::hairline")
 }
 
-/// The pass number, and the mode and the font install the pass started
-/// with, as first seen by [`check_mode_switch`].
-fn pass_mode_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::pass_mode")
+/// The ink of Chrome's grayscale anti-aliasing: light text on dark takes
+/// `coverage^0.81`, dark text on light the plain coverage
+/// (tests/text_coverage.rs). egui's dark default (`2c - c²`) draws 3 to
+/// 25 % more.
+fn coverage(mode: egui::Theme) -> egui::epaint::FontColorTransferFunction {
+    match mode {
+        egui::Theme::Dark => egui::epaint::FontColorTransferFunction::Gamma(0.81),
+        egui::Theme::Light => egui::epaint::FontColorTransferFunction::Off,
+    }
+}
+
+/// The mode whose ink both styles carry while open windows run in two
+/// modes: the root window's ([`ink_of_windows`]). `None`: each mode its
+/// own ink.
+fn shared_ink_id() -> egui::Id {
+    egui::Id::unique("shadcn_egui::shared_ink")
+}
+
+fn shared_ink(ctx: &egui::Context) -> Option<egui::Theme> {
+    ctx.data(|d| d.get_temp::<Option<egui::Theme>>(shared_ink_id()))
+        .flatten()
+}
+
+/// The ink the windows draw their text in: `None` while all of them draw
+/// their widgets in one mode, else the root window's mode.
+///
+/// egui keeps one font atlas per context, and the ink is baked into its
+/// glyphs: each viewport's pass that starts with other text options than
+/// the last one rebuilds the atlas and drops every laid-out text. A window
+/// in another mode than the root would so rebuild it twice per frame, and
+/// both windows would draw in the other one's ink. With one ink for both
+/// modes the atlas stays, the root window draws in its own mode's ink and
+/// only the other windows draw in the root's: a light window beside a dark
+/// root draws its text bolder (`coverage^0.81` instead of the coverage), a
+/// dark window beside a light root fainter. When the windows draw in one
+/// mode again, each mode gets its own ink back (one atlas rebuild). A root
+/// window without crate widgets, or a loop that runs no pass hook, keeps
+/// each mode's own ink.
+fn ink_of_windows(applied: &AppliedThemes) -> Option<egui::Theme> {
+    let root = applied.get(&egui::ViewportId::ROOT)?.drawn_in?;
+    applied
+        .values()
+        .any(|a| a.drawn_in.is_some_and(|m| m != root))
+        .then_some(root)
+}
+
+/// Write the ink of [`ink_of_windows`] into both styles when it changed,
+/// and repaint the windows that drew in the old one.
+fn set_shared_ink(ctx: &egui::Context, ink: Option<egui::Theme>) {
+    let changed = ctx.data_mut(|d| {
+        let id = shared_ink_id();
+        let changed = d.get_temp::<Option<egui::Theme>>(id).flatten() != ink;
+        if changed {
+            d.insert_temp(id, ink);
+        }
+        changed
+    });
+    if !changed {
+        return;
+    }
+    for mode in [egui::Theme::Dark, egui::Theme::Light] {
+        ctx.style_mut_of(mode, |s| {
+            s.visuals.text_options.color_transfer_function = coverage(ink.unwrap_or(mode));
+        });
+    }
+    ctx.request_repaint();
+    repaint_other_viewports(ctx);
+}
+
+/// What a pass started with, as first seen by [`check_mode_switch`].
+#[derive(Clone, Copy, PartialEq)]
+struct PassStart {
+    pass: u64,
+    mode: egui::Theme,
+    /// [`font_installs`].
+    fonts: u64,
+    /// [`generation_id`]: the applied theme.
+    generation: u64,
+    /// Recorded by the begin hook: the end hook checks this pass.
+    hooked: bool,
+}
+
+/// Where [`check_mode_switch`] runs.
+#[derive(Clone, Copy, PartialEq)]
+enum Check {
+    /// The begin hook of a `run_ui` pass.
+    Begin,
+    /// A crate call in the pass ([`Theme::current`]).
+    Within,
+    /// The end hook, or where it does not run yet ([`Theme::apply`]).
+    End,
+}
+
+/// The [`PassStart`] of the viewport's pass. One per viewport: each
+/// counts its own passes, and an immediate viewport runs its passes inside
+/// its parent's.
+fn pass_mode_id(viewport: egui::ViewportId) -> egui::Id {
+    egui::Id::unique("shadcn_egui::pass_mode").with(viewport)
+}
+
+/// Repaint every viewport but the current one that has drawn a frame:
+/// fonts and styles belong to the context, so a change made in one
+/// viewport leaves the others' last frame stale until their next input.
+/// egui lists the open viewports in the raw input (eframe fills it); a
+/// viewport that has drawn no frame has nothing stale.
+fn repaint_other_viewports(ctx: &egui::Context) {
+    let current = ctx.viewport_id();
+    let mut ids: Vec<egui::ViewportId> = ctx.input(|i| i.raw.viewports.keys().copied().collect());
+    ids.extend([egui::ViewportId::ROOT, ctx.parent_viewport_id()]);
+    for id in ids {
+        if id != current && ctx.cumulative_pass_nr_for(id) > 0 {
+            ctx.request_repaint_of(id);
+        }
+    }
 }
 
 /// The font definitions [`install_fonts`] installed last.
 fn last_defs_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::last_font_definitions")
+    egui::Id::unique("shadcn_egui::last_font_definitions")
 }
 
 /// How many times [`install_fonts`] has installed fonts that differ from
 /// the ones egui has.
 fn font_installs_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::font_installs")
+    egui::Id::unique("shadcn_egui::font_installs")
 }
 
 fn font_installs(ctx: &egui::Context) -> u64 {
@@ -1291,58 +1522,219 @@ fn font_installs(ctx: &egui::Context) -> u64 {
 /// other mode: discard the pass, as the browser restyles the whole page at
 /// once, and repaint for a loop that cannot redo it. A font install since
 /// the pass started does the same: egui swaps in new fonts only at the
-/// next pass, so the whole pass is in the old fonts. Runs at the start and
-/// end of every pass ([`install_mode_switch_hook`]) and in every
+/// next pass, so the whole pass is in the old fonts. So does an apply of
+/// another theme with the same fonts: the widgets drawn before it keep
+/// the old colours. In a pass the begin hook started, only the end hook
+/// checks the theme: a pass that ends with the theme it started with is
+/// kept, so several themes applied in every pass (styles side by side, a
+/// variant on top of the page's theme) cost no extra pass. An app's own
+/// loop runs no hook: there a crate call checks. Either way a theme the
+/// viewport applied in its previous pass too is the app's pattern, not a
+/// switch, and is not discarded: a window that applies another theme than
+/// the root in every pass starts each pass with the root's. So is a mode
+/// the viewport's previous pass ran in too: the mode belongs to the
+/// context, and a window that keeps another mode than the root, or a pass
+/// that switches to dark and back, starts each pass in the mode it left
+/// last. The end check also sets the ink of all windows
+/// ([`ink_of_windows`]). Runs at the
+/// start and end of every pass ([`ThemeHooks`]) and in every
 /// [`Theme::current`], so an app's own loop, which runs no pass hook, is
 /// caught by the next crate widget.
-fn check_mode_switch(ctx: &egui::Context) -> egui::Theme {
+fn check_mode_switch(ctx: &egui::Context, check: Check) -> egui::Theme {
     let mode = ctx.theme();
     let pass = ctx.cumulative_pass_nr();
-    let fonts = font_installs(ctx);
-    match ctx.data(|d| d.get_temp::<(u64, egui::Theme, u64)>(pass_mode_id())) {
-        Some((p, start, start_fonts)) if p == pass => {
-            if start != mode {
+    let now = PassStart {
+        pass,
+        mode,
+        fonts: font_installs(ctx),
+        generation: theme_generation(ctx),
+        hooked: check == Check::Begin,
+    };
+    // Outside the closures: `viewport_id` locks the context.
+    let viewport = ctx.viewport_id();
+    let record = pass_mode_id(viewport);
+    forget_closed_viewports(ctx, viewport, pass);
+    let (mode_before, ink) = ctx.data_mut(|d| {
+        let applied = d.get_temp_mut_or_default::<AppliedThemes>(applied_themes_id());
+        let mine = applied.entry(viewport).or_default();
+        mine.turn_to(pass);
+        let before = mine.modes_before & mode_bit(mode) != 0;
+        mine.modes |= mode_bit(mode);
+        if check == Check::Within {
+            mine.drawn_in = Some(mode);
+        }
+        let ink = (check == Check::End).then(|| ink_of_windows(applied));
+        (before, ink)
+    });
+    if let Some(ink) = ink {
+        set_shared_ink(ctx, ink);
+    }
+    match ctx.data(|d| d.get_temp::<PassStart>(record)) {
+        Some(start) if start.pass == pass => {
+            if start.mode != now.mode && !mode_before {
                 ctx.request_discard("shadcn-egui: light/dark mode changed in the pass");
                 ctx.request_repaint();
             }
-            if start_fonts != fonts {
+            if start.fonts != now.fonts {
                 ctx.request_discard("shadcn-egui: the theme's fonts changed in the pass");
                 ctx.request_repaint();
+            } else if start.generation != now.generation && (check == Check::End || !start.hooked) {
+                // In place: `get_temp` would clone every viewport's list.
+                let repeat = ctx.data_mut(|d| {
+                    d.get_temp_mut_or_default::<AppliedThemes>(applied_themes_id())
+                        .get(&viewport)
+                        .is_some_and(|a| a.before(pass, now.generation))
+                });
+                if !repeat {
+                    ctx.request_discard("shadcn-egui: the theme changed in the pass");
+                    ctx.request_repaint();
+                }
             }
         }
         _ => {
-            ctx.data_mut(|d| d.insert_temp(pass_mode_id(), (pass, mode, fonts)));
+            ctx.data_mut(|d| d.insert_temp(record, now));
         }
     }
     mode
 }
 
-/// Run [`check_mode_switch`] at the start and end of every pass of `ctx`,
-/// so a switch after the pass's last crate widget, or before a plain egui
-/// `Area`, does not leave a mixed or stale frame; installed once.
-fn install_mode_switch_hook(ctx: &egui::Context) {
-    let hook_id = egui::Id::new("shadcn_egui::mode_switch_hook");
-    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(hook_id, true));
-    let check = |ui: &mut egui::Ui| {
-        check_mode_switch(ui.ctx());
-    };
-    ctx.on_begin_pass("shadcn_egui::mode_switch", Arc::new(check));
-    ctx.on_end_pass("shadcn_egui::mode_switch", Arc::new(check));
+/// The generation of the applied theme: one number per theme, so a theme
+/// applied again has the number it had (see [`AppliedThemes`]).
+fn generation_id() -> egui::Id {
+    egui::Id::unique("shadcn_egui::theme_generation")
 }
 
-fn generation_id() -> egui::Id {
-    egui::Id::new("shadcn_egui::theme_generation")
+/// The themes each viewport applied in its last two passes, with their
+/// generations, and the modes they ran in: [`Theme::apply`] gives a theme
+/// found here the number it had, and a theme the viewport applied, or a
+/// mode it ran in, in its previous pass too is the app's pattern
+/// ([`check_mode_switch`]). Holds no more themes than the app applies in
+/// two passes, and keeps every one an app applies in every pass, however
+/// many. A viewport egui has closed is dropped
+/// ([`forget_closed_viewports`]).
+fn applied_themes_id() -> egui::Id {
+    egui::Id::unique("shadcn_egui::applied_themes")
+}
+
+type AppliedThemes = std::collections::HashMap<egui::ViewportId, Applied>;
+
+/// The themes one viewport applied, and the modes it ran in: in its pass
+/// `pass`, and in the pass before it.
+#[derive(Clone, Default)]
+struct Applied {
+    pass: u64,
+    now: Vec<(Theme, u64)>,
+    before: Vec<(Theme, u64)>,
+    /// [`mode_bit`]s.
+    modes: u8,
+    modes_before: u8,
+    /// The mode of the viewport's last crate widget ([`ink_of_windows`]).
+    /// Not the mode its pass ends in: an immediate window's mode stays
+    /// for the rest of its parent's pass.
+    drawn_in: Option<egui::Theme>,
+}
+
+fn mode_bit(mode: egui::Theme) -> u8 {
+    match mode {
+        egui::Theme::Dark => 1,
+        egui::Theme::Light => 2,
+    }
+}
+
+/// Once per pass of the current viewport, before its first record: drop
+/// the records of the viewports egui has closed (it forgets a closed
+/// viewport, whose pass count then reads 0), so an app that opens and
+/// closes windows of new ids keeps no record of each.
+fn forget_closed_viewports(ctx: &egui::Context, current: egui::ViewportId, pass: u64) {
+    let id = applied_themes_id();
+    let ids: Vec<egui::ViewportId> = ctx.data_mut(|d| {
+        let applied = d.get_temp_mut_or_default::<AppliedThemes>(id);
+        if applied.get(&current).is_some_and(|a| a.pass == pass) {
+            return Vec::new();
+        }
+        applied.keys().copied().collect()
+    });
+    // Outside the closures: the pass numbers lock the context.
+    let closed = crate::components::shared::closed_viewports(ctx, ids);
+    if closed.is_empty() {
+        return;
+    }
+    ctx.data_mut(|d| {
+        for &v in &closed {
+            d.get_temp_mut_or_default::<AppliedThemes>(id).remove(&v);
+            d.remove::<PassStart>(pass_mode_id(v));
+            d.remove::<u64>(heading_checked_id(v));
+            d.remove::<f32>(hairline_id().with(v));
+            d.remove::<egui::Id>(crate::components::shared::space_id(v));
+        }
+    });
+}
+
+impl Applied {
+    /// Move on to the viewport's pass `pass`: the current list becomes the
+    /// previous one when `pass` follows it, and is dropped otherwise.
+    fn turn_to(&mut self, pass: u64) {
+        if self.pass == pass {
+            return;
+        }
+        let now = std::mem::take(&mut self.now);
+        let modes = std::mem::take(&mut self.modes);
+        (self.before, self.modes_before) = if self.pass + 1 == pass {
+            (now, modes)
+        } else {
+            (Vec::new(), 0)
+        };
+        self.pass = pass;
+    }
+
+    /// The generation `theme` had when applied in either pass.
+    fn generation_of(&self, theme: &Theme) -> Option<u64> {
+        let mut all = self.now.iter().chain(&self.before);
+        all.find(|(t, _)| t == theme).map(|(_, g)| *g)
+    }
+
+    /// The themes the viewport applied in its pass `pass` and the one
+    /// before it.
+    fn recent(&self, pass: u64) -> impl Iterator<Item = &Theme> {
+        let now = (self.pass == pass).then_some(&self.now);
+        let before = if self.pass == pass {
+            Some(&self.before)
+        } else if self.pass + 1 == pass {
+            Some(&self.now)
+        } else {
+            None
+        };
+        now.into_iter().chain(before).flatten().map(|(t, _)| t)
+    }
+
+    /// Whether the viewport applied the theme of `generation` in the pass
+    /// before `pass`.
+    fn before(&self, pass: u64, generation: u64) -> bool {
+        let previous = if self.pass == pass {
+            &self.before
+        } else if self.pass + 1 == pass {
+            &self.now
+        } else {
+            return false;
+        };
+        previous.iter().any(|(_, g)| *g == generation)
+    }
+}
+
+/// The highest generation given out so far.
+fn generations_made_id() -> egui::Id {
+    egui::Id::unique("shadcn_egui::theme_generations_made")
+}
+
+fn theme_generation(ctx: &egui::Context) -> u64 {
+    ctx.data(|d| d.get_temp::<u64>(generation_id()).unwrap_or(0))
 }
 
 /// What the colours of the context's pass resolve from: the applied
-/// theme (counted up by each [`Theme::apply`] of a different theme) and
-/// the mode. A transition that sees it change jumps.
+/// theme (its generation, which changes with each [`Theme::apply`] of a
+/// different theme) and the mode. A transition that sees it change jumps.
 pub(crate) fn theme_stamp(ctx: &egui::Context) -> u64 {
-    let generation = ctx.data(|d| d.get_temp::<u64>(generation_id()).unwrap_or(0));
-    generation * 2 + u64::from(ctx.theme() == egui::Theme::Dark)
+    theme_generation(ctx) * 2 + u64::from(ctx.theme() == egui::Theme::Dark)
 }
 
 /// Every stroke [`Theme::apply`] gives the theme's hairline (`border`).
@@ -1362,40 +1754,93 @@ fn set_hairline(v: &mut egui::Visuals, width: f32) {
     }
 }
 
-/// Keep the hairline of plain egui widgets on whole device pixels, as the
-/// crate's own borders: `Theme::apply` runs once, often before the window's
-/// scale is known, and the scale can change later (zoom, another monitor).
-/// Each pass checks the scale and rewrites the stroke widths only when the
-/// snapped width changes, so style writes of the app's own stay.
-fn install_hairline_hook(ctx: &egui::Context) {
-    let hook_id = egui::Id::new("shadcn_egui::hairline_hook");
-    if ctx.data(|d| d.get_temp::<bool>(hook_id).unwrap_or(false)) {
-        return;
+/// The theme's pass hooks, registered once per context by
+/// [`Theme::apply`]. A plugin, not a flag in egui's memory: a memory reset
+/// (egui's "Reset memory" button) dropped such a flag and the next apply
+/// installed a second set of hooks.
+///
+/// egui runs plugin pass hooks only in `Context::run_ui` and
+/// `Context::run_pass`; under `begin_pass`/`end_pass` no hook runs. There the next
+/// crate widget catches a mode or font switch through
+/// [`Theme::current`], and the hairline follows a scale change only at
+/// the next [`Theme::apply`].
+#[derive(Default)]
+struct ThemeHooks;
+
+impl egui::plugin::Plugin for ThemeHooks {
+    fn debug_name(&self) -> &'static str {
+        "shadcn_egui::theme"
     }
-    ctx.data_mut(|d| d.insert_temp(hook_id, true));
-    ctx.on_begin_pass(
-        "shadcn_egui::hairline",
-        Arc::new(|ui: &mut egui::Ui| {
-            if let Some(width) = snap_hairline(ui.ctx()) {
-                // The root ui was built before this hook ran.
-                set_hairline(&mut ui.style_mut().visuals, width);
-            }
-        }),
-    );
+
+    /// Keep the hairline of plain egui widgets on whole device pixels, as
+    /// the crate's own borders: `Theme::apply` runs once, often before the
+    /// window's scale is known, and the scale can change later (zoom,
+    /// another monitor). Each pass checks the scale and rewrites the stroke
+    /// widths only when the snapped width changes, so style writes of the
+    /// app's own stay. Before that, bind a waiting heading, track the
+    /// focus modality and keep the text cache's atlas probes in egui's
+    /// galley cache; after it, check for a mode switch.
+    fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
+        #[cfg(test)]
+        hook_tests::count();
+        if let Some(id) = check_heading(ui.ctx()) {
+            // The root ui was built before this hook ran.
+            ui.style_mut().text_styles.insert(TextStyle::Heading, id);
+        }
+        #[cfg(test)]
+        hook_tests::count();
+        crate::components::shared::focus_modality_keyboard(ui.ctx());
+        crate::components::text::keep_probe(ui.ctx());
+        #[cfg(test)]
+        hook_tests::count();
+        if let Some(width) = snap_hairline(ui.ctx()) {
+            // The root ui was built before this hook ran.
+            set_hairline(&mut ui.style_mut().visuals, width);
+        }
+        #[cfg(test)]
+        hook_tests::count();
+        check_mode_switch(ui.ctx(), Check::Begin);
+    }
+
+    /// Track the focus modality, then check for a mode switch after the
+    /// pass's last crate widget, or before a plain egui `Area`, so the
+    /// frame is not mixed or stale.
+    fn on_end_pass(&mut self, ui: &mut egui::Ui) {
+        #[cfg(test)]
+        hook_tests::count();
+        crate::components::shared::focus_modality_keyboard(ui.ctx());
+        #[cfg(test)]
+        hook_tests::count();
+        check_mode_switch(ui.ctx(), Check::End);
+    }
 }
 
-/// The hairline for the context's current scale, written to both styles
-/// when it differs from the last one written. Returns the new width then.
+/// The hairline for the current viewport's scale, written to both styles
+/// when it differs from the one this viewport last had (a viewport new to
+/// the theme starts with the one last written). Returns the new width
+/// then. The styles are the context's: with windows at different scales
+/// they hold the width of the window whose scale changed last, rather
+/// than one rewritten in every pass, which would undo the app's own
+/// stroke widths.
 fn snap_hairline(ctx: &egui::Context) -> Option<f32> {
     let border = ctx
         .data(|d| d.get_temp::<Theme>(theme_id()))?
         .metrics
         .border;
     let width = crate::components::shared::line_width(border, ctx.pixels_per_point());
-    if ctx.data(|d| d.get_temp::<f32>(hairline_id())) == Some(width) {
+    // Outside the closures: `viewport_id` locks the context.
+    let mine = hairline_id().with(ctx.viewport_id());
+    let (own, last) = ctx.data(|d| (d.get_temp::<f32>(mine), d.get_temp::<f32>(hairline_id())));
+    if own.or(last) == Some(width) {
+        if own.is_none() {
+            ctx.data_mut(|d| d.insert_temp(mine, width));
+        }
         return None;
     }
-    ctx.data_mut(|d| d.insert_temp(hairline_id(), width));
+    ctx.data_mut(|d| {
+        d.insert_temp(mine, width);
+        d.insert_temp(hairline_id(), width);
+    });
     ctx.all_styles_mut(|s| set_hairline(&mut s.visuals, width));
     Some(width)
 }
@@ -1403,4 +1848,440 @@ fn snap_hairline(ctx: &egui::Context) -> Option<f32> {
 /// Convenience accessor for components.
 pub fn theme(ctx: &egui::Context) -> Theme {
     Theme::current(ctx)
+}
+
+#[cfg(test)]
+mod hook_tests {
+    use super::Theme;
+    use std::cell::Cell;
+
+    thread_local! {
+        /// The theme's pass hooks run so far on this thread.
+        static RUNS: Cell<u32> = const { Cell::new(0) };
+    }
+
+    /// Counts one run of a theme pass hook.
+    pub(super) fn count() {
+        RUNS.with(|r| r.set(r.get() + 1));
+    }
+
+    /// The theme's pass hooks that run in one empty `run_ui` pass.
+    fn runs_per_pass(ctx: &egui::Context) -> u32 {
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .drop_without_applying_deltas();
+        let before = RUNS.with(Cell::get);
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .drop_without_applying_deltas();
+        RUNS.with(Cell::get) - before
+    }
+
+    /// A reset of egui's memory (its "Reset memory" button) and a new
+    /// `Theme::apply` install no second set of pass hooks.
+    #[test]
+    fn a_memory_reset_installs_no_second_set_of_hooks() {
+        let ctx = egui::Context::default();
+        let mut runs = Vec::new();
+        for _ in 0..3 {
+            Theme::vega().apply(&ctx);
+            runs.push(runs_per_pass(&ctx));
+            ctx.memory_mut(|m| *m = Default::default());
+        }
+        // At the start of a pass the heading binding, the focus modality,
+        // the hairline and the mode check; at its end the focus modality
+        // and the mode check.
+        assert_eq!(runs, [6; 3]);
+    }
+}
+
+#[cfg(test)]
+mod viewport_tests {
+    use super::Theme;
+    use super::{
+        applied_themes_id, hairline_id, heading_checked_id, pass_mode_id, AppliedThemes, PassStart,
+    };
+    use std::cell::{Cell, RefCell};
+
+    fn records(ctx: &egui::Context) -> usize {
+        ctx.data_mut(|d| {
+            d.get_temp_mut_or_default::<AppliedThemes>(applied_themes_id())
+                .len()
+        })
+    }
+
+    thread_local! {
+        /// The scale of the immediate windows the test renderer runs.
+        static WINDOW_SCALE: Cell<Option<f32>> = const { Cell::new(None) };
+        /// The input events of the next window pass.
+        static WINDOW_EVENTS: RefCell<Vec<egui::Event>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// A context whose immediate viewports are real windows, each pass
+    /// run with `run_ui` (so the theme's hooks run) at [`WINDOW_SCALE`]
+    /// and with the events in [`WINDOW_EVENTS`].
+    fn windowed_context() -> egui::Context {
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        egui::Context::set_immediate_viewport_renderer(|ctx, mut viewport| {
+            let id = viewport.ids.this;
+            let info = egui::ViewportInfo {
+                native_pixels_per_point: WINDOW_SCALE.with(Cell::get),
+                ..Default::default()
+            };
+            let input = egui::RawInput {
+                viewport_id: id,
+                viewports: [(id, info)].into_iter().collect(),
+                events: WINDOW_EVENTS.with(|e| std::mem::take(&mut *e.borrow_mut())),
+                ..Default::default()
+            };
+            ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui))
+                .drop_without_applying_deltas();
+        });
+        ctx
+    }
+
+    /// Windows of new ids that open and close one after the other leave
+    /// no record behind: the theme's records hold the root and the windows
+    /// egui has not closed yet, however many windows came and went.
+    #[test]
+    fn closed_windows_leave_no_record() {
+        let ctx = windowed_context();
+        let frame = |open: Option<u32>| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                Theme::vega().apply(ui.ctx());
+                let _ = Theme::current(ui.ctx());
+                if let Some(n) = open {
+                    let builder = egui::ViewportBuilder::default();
+                    ui.ctx()
+                        .show_viewport_immediate(window(n), builder, |ui, _| {
+                            Theme::vega().apply(ui.ctx());
+                            let _ = Theme::current(ui.ctx());
+                        });
+                }
+            })
+            .drop_without_applying_deltas();
+        };
+        let mut most = 0;
+        for n in 0..50 {
+            frame(Some(n));
+            most = most.max(records(&ctx));
+        }
+        // The root, the open window and the one egui closes at the end of
+        // the root's pass.
+        assert!(most <= 3, "records with windows coming and going: {most}");
+        for _ in 0..2 {
+            frame(None);
+        }
+        assert_eq!(records(&ctx), 1, "records once all windows closed");
+        let left = (0..50).filter(|&n| {
+            ctx.data(|d| {
+                d.get_temp::<PassStart>(pass_mode_id(window(n))).is_some()
+                    || d.get_temp::<u64>(heading_checked_id(window(n))).is_some()
+                    || d.get_temp::<f32>(hairline_id().with(window(n))).is_some()
+            })
+        });
+        assert_eq!(left.count(), 0, "pass records of closed windows");
+    }
+
+    fn window(n: u32) -> egui::ViewportId {
+        egui::ViewportId::from_hash_of(("shadcn_egui_test_window", n))
+    }
+
+    /// A focusable widget, focused when `focus`; the focus modality after it.
+    fn target(ui: &mut egui::Ui, name: &str, focus: bool) -> bool {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
+        let resp = ui.interact(rect, egui::Id::unique(name), egui::Sense::click());
+        if focus {
+            resp.request_focus();
+        }
+        crate::components::shared::focus_modality_keyboard(ui.ctx())
+    }
+
+    /// A pointer press that focuses a widget in one window leaves the
+    /// keyboard ring of the widget focused in another: the browser keeps
+    /// `:focus-visible` per document.
+    #[test]
+    fn a_press_in_one_window_keeps_the_ring_in_another() {
+        let ctx = windowed_context();
+        let key = egui::Event::Key {
+            key: egui::Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let press = egui::Event::PointerButton {
+            pos: egui::pos2(5.0, 5.0),
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        };
+        // (root events, root focuses, window events, window focuses)
+        let frames = [
+            (vec![key], true, vec![], false),
+            (vec![], false, vec![press], true),
+            (vec![], false, vec![], false),
+            (vec![], false, vec![], false),
+        ];
+        let mut seen = Vec::new();
+        for (root_events, root_focus, window_events, window_focus) in frames {
+            WINDOW_EVENTS.with(|e| *e.borrow_mut() = window_events);
+            let input = egui::RawInput {
+                events: root_events,
+                ..Default::default()
+            };
+            let mut root = false;
+            let mut win = false;
+            ctx.run_ui(input, |ui| {
+                Theme::vega().apply(ui.ctx());
+                root = target(ui, "root target", root_focus);
+                let builder = egui::ViewportBuilder::default();
+                ui.ctx()
+                    .show_viewport_immediate(window(0), builder, |ui, _| {
+                        win = target(ui, "window target", window_focus);
+                    });
+            })
+            .drop_without_applying_deltas();
+            seen.push((root, win));
+        }
+        // Frame 0: the root's widget focused by a key, the window has no
+        // focus (keyboard, as a page that saw no input). From frame 1 the
+        // window's widget is focused by a press.
+        assert_eq!(
+            seen,
+            [(true, true), (true, false), (true, false), (true, false)],
+            "(root, window) keyboard modality per frame"
+        );
+    }
+
+    /// With windows at two scales (1x and 1.5x monitors) the hairline is
+    /// written when a window's snapped width changes, not in every pass:
+    /// a stroke width the app set itself stays.
+    #[test]
+    fn an_app_stroke_stays_with_windows_at_two_scales() {
+        let ctx = windowed_context();
+        WINDOW_SCALE.with(|s| s.set(Some(1.5)));
+        let frame = || {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                let builder = egui::ViewportBuilder::default();
+                ui.ctx()
+                    .show_viewport_immediate(window(0), builder, |ui, _| {
+                        let _ = Theme::current(ui.ctx());
+                    });
+            })
+            .drop_without_applying_deltas();
+        };
+        Theme::vega().apply(&ctx);
+        for _ in 0..3 {
+            frame();
+        }
+        ctx.all_styles_mut(|s| s.visuals.selection.stroke.width = 3.0);
+        for _ in 0..3 {
+            frame();
+        }
+        for mode in [egui::Theme::Dark, egui::Theme::Light] {
+            let width = ctx.style_of(mode).visuals.selection.stroke.width;
+            assert_eq!(width, 3.0, "the app's selection stroke ({mode:?})");
+        }
+    }
+
+    fn space(pressed: bool) -> egui::Event {
+        egui::Event::Key {
+            key: egui::Key::Space,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    /// A focused `<button>` that acts on keys as upstream's; whether it
+    /// clicked in this pass.
+    fn space_button(ui: &mut egui::Ui, name: &str) -> bool {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
+        let mut resp = ui.interact(rect, egui::Id::unique(name), egui::Sense::click());
+        resp.request_focus();
+        crate::components::shared::pressable(
+            &mut resp,
+            crate::components::shared::ActivationKeys::Button,
+        );
+        resp.clicked()
+    }
+
+    /// Space held on a button in each of two windows at the same time:
+    /// each button clicks when Space comes up in its own window, as each
+    /// browser tab keeps its own held key.
+    #[test]
+    fn space_held_in_two_windows_clicks_both_buttons() {
+        let ctx = windowed_context();
+        // (root events, window events): both press Space, then each
+        // releases it in a frame of its own.
+        let frames = [
+            (vec![space(true)], vec![space(true)]),
+            (vec![space(false)], vec![]),
+            (vec![], vec![space(false)]),
+        ];
+        let mut seen = Vec::new();
+        for (root_events, window_events) in frames {
+            WINDOW_EVENTS.with(|e| *e.borrow_mut() = window_events);
+            let input = egui::RawInput {
+                events: root_events,
+                ..Default::default()
+            };
+            let mut root = false;
+            let mut win = false;
+            ctx.run_ui(input, |ui| {
+                Theme::vega().apply(ui.ctx());
+                root = space_button(ui, "root button");
+                let builder = egui::ViewportBuilder::default();
+                ui.ctx()
+                    .show_viewport_immediate(window(0), builder, |ui, _| {
+                        win = space_button(ui, "window button");
+                    });
+            })
+            .drop_without_applying_deltas();
+            seen.push((root, win));
+        }
+        assert_eq!(
+            seen,
+            [(false, false), (true, false), (false, true)],
+            "(root, window) clicks per frame"
+        );
+    }
+
+    /// Windows of new ids that open and close one after the other, each
+    /// with Space held on a button, leave no held-Space record.
+    #[test]
+    fn closed_windows_leave_no_held_space() {
+        let ctx = windowed_context();
+        let frame = |open: Option<u32>| {
+            WINDOW_EVENTS.with(|e| *e.borrow_mut() = vec![space(true)]);
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                Theme::vega().apply(ui.ctx());
+                if let Some(n) = open {
+                    let builder = egui::ViewportBuilder::default();
+                    ui.ctx()
+                        .show_viewport_immediate(window(n), builder, |ui, _| {
+                            let _ = space_button(ui, "window button");
+                        });
+                }
+            })
+            .drop_without_applying_deltas();
+        };
+        let held = |n: u32| {
+            let id = crate::components::shared::space_id(window(n));
+            ctx.data(|d| d.get_temp::<egui::Id>(id).is_some())
+        };
+        for n in 0..50 {
+            frame(Some(n));
+            assert!(held(n), "window {n} holds Space on its button");
+        }
+        for _ in 0..2 {
+            frame(None);
+        }
+        let left = (0..50).filter(|&n| held(n)).count();
+        assert_eq!(left, 0, "held-Space records of closed windows");
+    }
+
+    /// A deferred window in its first pass that shows an immediate window
+    /// keeps its records: egui counts the deferred window's first pass at
+    /// the pass's end, and the immediate window's crate calls must not take
+    /// it for closed and drop its theme record and hit areas mid-pass.
+    #[test]
+    fn a_window_in_its_first_pass_keeps_its_records() {
+        let ctx = windowed_context();
+        let deferred = egui::ViewportId::from_hash_of("first-pass window");
+        let hit = |ui: &mut egui::Ui| {
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
+            let id = egui::Id::unique("hit");
+            let _ = crate::components::shared::hit_area(ui, rect, id, egui::Sense::click());
+        };
+        for _ in 0..2 {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                Theme::vega().apply(ui.ctx());
+                let builder = egui::ViewportBuilder::default();
+                ui.ctx()
+                    .show_viewport_deferred(deferred, builder, |_, _| {});
+            })
+            .drop_without_applying_deltas();
+        }
+        let info = egui::ViewportInfo {
+            parent: Some(egui::ViewportId::ROOT),
+            ..Default::default()
+        };
+        let input = egui::RawInput {
+            viewport_id: deferred,
+            viewports: [(deferred, info)].into_iter().collect(),
+            ..Default::default()
+        };
+        let seen = Cell::new(((0, 0), 0));
+        ctx.run_ui(input, |ui| {
+            assert_eq!(ui.ctx().cumulative_pass_nr(), 0, "the window's first pass");
+            Theme::vega().apply(ui.ctx());
+            hit(ui);
+            let builder = egui::ViewportBuilder::default();
+            ui.ctx()
+                .show_viewport_immediate(window(0), builder, |ui, _| {
+                    Theme::vega().apply(ui.ctx());
+                    hit(ui);
+                });
+            let hit_areas = crate::components::shared::viewport_records(ui.ctx(), &[deferred]);
+            let applied = ui.ctx().data_mut(|d| {
+                d.get_temp_mut_or_default::<AppliedThemes>(applied_themes_id())
+                    .contains_key(&deferred)
+            });
+            seen.set((hit_areas, usize::from(applied)));
+        })
+        .drop_without_applying_deltas();
+        assert_eq!(
+            seen.get(),
+            ((1, 1), 1),
+            "((hit-area, modality), theme) records of the window after the immediate one"
+        );
+    }
+
+    /// Windows of new ids that call `hit_area` leave no hit-area record and
+    /// no focus-modality record once egui has closed them.
+    #[test]
+    fn closed_windows_leave_no_hit_areas() {
+        let ctx = windowed_context();
+        let hit = |ui: &mut egui::Ui| {
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0));
+            let id = egui::Id::unique("hit");
+            let _ = crate::components::shared::hit_area(ui, rect, id, egui::Sense::click());
+        };
+        let frame = |open: Option<u32>| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                Theme::vega().apply(ui.ctx());
+                hit(ui);
+                if let Some(n) = open {
+                    let builder = egui::ViewportBuilder::default();
+                    ui.ctx()
+                        .show_viewport_immediate(window(n), builder, |ui, _| hit(ui));
+                }
+            })
+            .drop_without_applying_deltas();
+        };
+        let all: Vec<egui::ViewportId> = std::iter::once(egui::ViewportId::ROOT)
+            .chain((0..50).map(window))
+            .collect();
+        let mut most = (0, 0);
+        for n in 0..50 {
+            frame(Some(n));
+            let (hit, modality) = crate::components::shared::viewport_records(&ctx, &all);
+            most = (most.0.max(hit), most.1.max(modality));
+        }
+        assert!(
+            most.0 <= 3 && most.1 <= 3,
+            "(hit-area, modality) records with windows coming and going: {most:?}"
+        );
+        for _ in 0..2 {
+            frame(None);
+        }
+        let left = crate::components::shared::viewport_records(&ctx, &all);
+        assert_eq!(
+            left,
+            (1, 1),
+            "(hit-area, modality) records once all windows closed"
+        );
+    }
 }

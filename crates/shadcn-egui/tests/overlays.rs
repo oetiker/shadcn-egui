@@ -169,11 +169,14 @@ fn a_disabled_dialog_footer_keeps_its_strip_colour() {
         ctx.global_style_mut(|s| s.animation_time = 0.0);
         let mut out = None;
         for _ in 0..2 {
-            out = Some(ctx.run_ui(egui::RawInput::default(), |ui| {
-                Dialog::new("d", "Title").show(ui.ctx(), &mut true, |ui| {
-                    ui.add_enabled_ui(!disabled, |ui| dialog::footer(ui, |_| {}));
-                });
-            }));
+            out = Some(common::no_textures(ctx.run_ui(
+                egui::RawInput::default(),
+                |ui| {
+                    Dialog::new("d", "Title").show(ui.ctx(), &mut true, |ui| {
+                        ui.add_enabled_ui(!disabled, |ui| dialog::footer(ui, |_| {}));
+                    });
+                },
+            )));
         }
         common::rect_shapes(&out.expect("ran"))
             .into_iter()
@@ -316,6 +319,65 @@ fn popover_box_is_w_72_and_content_gets_the_padding() {
     }
 }
 
+/// The popover's box and its trigger's rect, with the trigger at
+/// `(x, y)` in a 640 x 400 window.
+fn popover_place(x: f32, y: f32) -> (egui::Rect, egui::Rect) {
+    let seen = std::cell::Cell::new((egui::Rect::NOTHING, egui::Id::NULL));
+    let mut h = Harness::builder()
+        .with_size(vec2(640.0, 400.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            let r = egui::Rect::from_min_size(egui::pos2(x, y), vec2(110.0, 36.0));
+            let trigger = ui.put(r, Button::new("Dimensions").variant(ButtonVariant::Outline));
+            seen.set((trigger.rect, egui::Popup::default_response_id(&trigger)));
+            Popover::new(&trigger).show(|ui| {
+                popover_header(ui, "Layer size", "Set the dimensions for the layer.");
+            });
+        });
+    h.run();
+    h.get_by_label("Dimensions").click();
+    h.run();
+    let (trigger, id) = seen.get();
+    let panel = h
+        .ctx
+        .memory(|m| m.area_rect(id))
+        .expect("the popover is open");
+    (trigger, panel)
+}
+
+#[test]
+fn a_popover_is_centred_on_its_trigger() {
+    // popover-content.svelte: `align = "center"`, `side = "bottom"`,
+    // `sideOffset = 4`; floating-ui flips to the top when the bottom has no
+    // room and shifts the box into the window.
+    let (trigger, panel) = popover_place(265.0, 40.0);
+    assert!(
+        (panel.center().x - trigger.center().x).abs() < 0.5,
+        "centred: {panel:?} under {trigger:?}"
+    );
+    assert!(
+        (panel.top() - trigger.bottom() - 4.0).abs() < 0.5,
+        "below by 4: {panel:?}"
+    );
+
+    let (trigger, panel) = popover_place(265.0, 340.0);
+    assert!(
+        (panel.center().x - trigger.center().x).abs() < 0.5,
+        "centred: {panel:?} above {trigger:?}"
+    );
+    assert!(
+        (trigger.top() - panel.bottom() - 4.0).abs() < 0.5,
+        "flipped above: {panel:?}"
+    );
+
+    let (trigger, panel) = popover_place(4.0, 40.0);
+    assert!(panel.left() >= 0.0, "shifted into the window: {panel:?}");
+    assert!(
+        (panel.top() - trigger.bottom() - 4.0).abs() < 0.5,
+        "still below: {panel:?}"
+    );
+}
+
 #[test]
 fn popover_snapshot() {
     common::snapshot_all_with("popover", vec2(420.0, 240.0), popover_trigger, |h| {
@@ -351,6 +413,39 @@ fn tooltip_shows_on_hover() {
     h.get_by_label("Hover me").hover();
     h.run();
     h.get_by_label("Add to library");
+}
+
+/// shadcn's `disabled:pointer-events-none`: the pointer on a disabled
+/// trigger does not reach it, so neither the crate's tooltip nor egui's
+/// `on_hover_text` opens there. egui's `on_disabled_hover_text` is the
+/// hint for a disabled widget.
+#[test]
+fn a_disabled_trigger_shows_no_tooltip() {
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 160.0))
+        .build_ui(|ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.style_mut().interaction.tooltip_delay = 0.0;
+            ui.add_space(32.0);
+            ui.horizontal(|ui| {
+                ui.add_space(32.0);
+                tooltip(ui.add_enabled(false, Button::new("Crate")), "Crate tip");
+                ui.add_enabled(false, Button::new("Egui"))
+                    .on_hover_text("Egui tip");
+                ui.add_enabled(false, Button::new("Hint"))
+                    .on_disabled_hover_text("Hint tip");
+            });
+        });
+    h.run();
+    for (trigger, tip, shows) in [
+        ("Crate", "Crate tip", false),
+        ("Egui", "Egui tip", false),
+        ("Hint", "Hint tip", true),
+    ] {
+        h.get_by_label(trigger).hover();
+        h.run();
+        assert_eq!(h.query_by_label(tip).is_some(), shows, "{trigger}");
+    }
 }
 
 #[test]
@@ -424,7 +519,10 @@ fn tooltip_snapshot() {
 const FRUITS: [&str; 4] = ["Apple", "Banana", "Blueberry", "Cherry"];
 
 fn select_harness(start: usize) -> Harness<'static, usize> {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -457,6 +555,33 @@ fn select_opens_and_a_click_chooses() {
         h.query_by_label("Banana").is_none(),
         "choosing closes the list"
     );
+}
+
+/// bits' list is a `listbox` of `option`s; the chosen one is
+/// `aria-selected`, none is toggled.
+#[test]
+fn select_options_are_listbox_options() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::NodeT;
+    let mut h = select_harness(2);
+    h.run();
+    open_select(&mut h);
+    for (i, fruit) in FRUITS.iter().enumerate() {
+        let option = h.get_by_role_and_label(Role::ListBoxOption, fruit);
+        let node = option.accesskit_node();
+        assert_eq!(node.is_selected(), Some(i == 2), "{fruit}");
+        assert_eq!(node.toggled(), None, "{fruit}");
+        // Up to the window: one listbox and no dialog (egui's popup role).
+        let mut roles = Vec::new();
+        let mut up = option.parent();
+        while let Some(p) = up {
+            roles.push(p.accesskit_node().role());
+            up = p.parent();
+        }
+        let lists = roles.iter().filter(|&&r| r == Role::ListBox).count();
+        assert_eq!(lists, 1, "{fruit}: {roles:?}");
+        assert!(!roles.contains(&Role::Dialog), "{fruit}: {roles:?}");
+    }
 }
 
 #[test]
@@ -500,7 +625,10 @@ fn select_escape_and_outside_click_keep_the_value() {
 /// to that widget: typing and Enter do not choose an option.
 #[test]
 fn open_select_ignores_keys_once_focus_moves_elsewhere() {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -564,12 +692,15 @@ fn select_trigger_reports_the_current_text() {
 
 #[test]
 fn select_disabled_does_not_open() {
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(320.0, 260.0))
         .build_ui_state(
             |ui, value: &mut usize| {
                 Theme::vega().apply(ui.ctx());
-                ui.add(Select::new("fruit", value, &FRUITS).enabled(false));
+                ui.add_enabled(false, Select::new("fruit", value, &FRUITS));
             },
             0usize,
         );
@@ -609,11 +740,7 @@ fn select_triggers(ui: &mut egui::Ui) {
     );
     ui.add(Select::new("b", &mut b, &FRUITS).width(180.0));
     ui.add(Select::new("c", &mut c, &FRUITS).invalid(true).width(180.0));
-    ui.add(
-        Select::new("d", &mut d, &FRUITS)
-            .enabled(false)
-            .width(180.0),
-    );
+    ui.add_enabled(false, Select::new("d", &mut d, &FRUITS).width(180.0));
     ui.add(Select::new("e", &mut e, &FRUITS).size(SelectSize::Sm));
 }
 
@@ -645,7 +772,10 @@ fn select_open_snapshot() {
 #[test]
 fn select_item_rows_have_the_text_sm_line_plus_padding() {
     for (name, theme, mode) in common::themes() {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(320.0, 260.0))
             .build_ui_state(
                 |ui, value: &mut usize| {
@@ -671,7 +801,10 @@ fn select_list_is_capped_to_the_window() {
         "Short",
         "An option whose text is far wider than this narrow window",
     ];
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(200.0, 300.0))
         .build_ui_state(
             |ui, value: &mut usize| {
@@ -695,6 +828,66 @@ fn select_list_is_capped_to_the_window() {
     );
 }
 
+/// A select of thirty options: more than its list shows in a 260 px
+/// window.
+fn long_select_harness() -> Harness<'static, usize> {
+    let options: Vec<String> = (0..30).map(|i| format!("Option {i}")).collect();
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
+    Harness::builder()
+        .with_accessibility_check(false)
+        .with_size(vec2(320.0, 260.0))
+        .build_ui_state(
+            move |ui, value: &mut usize| {
+                Theme::vega().apply(ui.ctx());
+                ui.ctx().set_theme(egui::Theme::Light);
+                let options: Vec<&str> = options.iter().map(String::as_str).collect();
+                ui.add(Select::new("many", value, &options).width(180.0));
+            },
+            0usize,
+        )
+}
+
+/// bits keeps the highlighted option in view: arrows that move the
+/// highlight past the visible rows scroll the list after it.
+#[test]
+fn select_list_follows_the_highlight() {
+    let mut h = long_select_harness();
+    h.run();
+    open_select(&mut h);
+    assert!(
+        h.get_by_label("Option 15").rect().top() > 260.0,
+        "starts below the window"
+    );
+    for _ in 0..15 {
+        h.key_press(Key::ArrowDown);
+        h.run();
+    }
+    let row = h.get_by_label("Option 15").rect();
+    assert!(
+        row.top() >= 0.0 && row.bottom() <= 260.0,
+        "the highlighted row is in view: {row:?}"
+    );
+}
+
+/// The list scrolls in the crate's `ScrollArea`: hovered, an overflowing
+/// list shows the 7 px `border` thumb of the scroll-area recipes.
+#[test]
+fn select_list_uses_the_crate_scroll_bar() {
+    use shadcn_egui::style::{Paint, Role};
+    let mut h = long_select_harness();
+    h.run();
+    open_select(&mut h);
+    h.get_by_label("Option 2").hover();
+    h.run();
+    let border = Theme::current(&h.ctx).paint(Paint::Role(Role::Border, 1.0));
+    let thumbs: Vec<_> = common::rect_shapes(h.output())
+        .into_iter()
+        .filter(|r| r.fill == border && r.rect.width() == 7.0)
+        .collect();
+    assert_eq!(thumbs.len(), 1, "{thumbs:?}");
+}
+
 /// The trigger is `w-fit`, capped to the room (conformance 3.1): an option
 /// wider than the window, or a wider `width`, keeps it inside the window.
 #[test]
@@ -704,7 +897,10 @@ fn select_trigger_is_capped_to_the_room() {
         "An option whose text is far wider than this narrow window",
     ];
     for width in [None, Some(400.0)] {
+        // A bare control has no accessible name (as upstream's demo); names are
+        // not what this test checks.
         let mut h = Harness::builder()
+            .with_accessibility_check(false)
             .with_size(vec2(200.0, 300.0))
             .build_ui_state(
                 move |ui, value: &mut usize| {
@@ -739,12 +935,13 @@ fn select_trigger_in_no_room_takes_its_content_minimum() {
     let mut v = 0usize;
     let mut rects = (egui::Rect::NOTHING, egui::Rect::NOTHING);
     for _ in 0..2 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let parent = ui.allocate_ui(vec2(0.0, 100.0), |ui| {
                 ui.add(Select::new("fruit", &mut v, &FRUITS)).rect
             });
             rects = (parent.inner, parent.response.rect);
-        });
+        })
+        .drop_without_applying_deltas();
     }
     let (trigger, parent) = rects;
     // vega: pl-2.5, pr-2, a 1 px border each side, gap-1.5, a size-4 chevron.
@@ -756,7 +953,10 @@ fn select_trigger_in_no_room_takes_its_content_minimum() {
 fn dark_pixels_of_open_list(theme: Theme) -> usize {
     let mode = egui::Theme::Light;
     let bg = theme.palette_of(mode).background;
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(vec2(260.0, 260.0))
         .build_ui(move |ui| {
             theme.apply(ui.ctx());
@@ -941,4 +1141,450 @@ fn free_popover_content_is_one_block() {
         "{description:?}"
     );
     assert_eq!(boxes[1].top(), boxes[0].bottom(), "no gap inside the run");
+}
+
+// ---------------------------------------------------------------------------
+// Upstream's demos that hold a Field
+
+const GAP_4: shadcn_egui::style::AppVariant<shadcn_egui::components::field::FieldGroupVariant> =
+    shadcn_egui::components::field::FieldGroupVariant::app("gap-4");
+
+/// The snapshot themes with the demos' classes as app variants: the
+/// `gap-4` field group of popover-form.
+fn field_demo_themes() -> Vec<common::Themed> {
+    use shadcn_egui::components::field::FieldGroupVariant;
+    common::snapshot_themes()
+        .into_iter()
+        .map(|(n, t, m)| {
+            let t = t.variant(GAP_4, FieldGroupVariant::Default, |r, _| {
+                r.field_group.gap.set(16.0)
+            });
+            (n, t, m)
+        })
+        .collect()
+}
+
+/// select-invalid: an invalid `max-w-48` field with an error; the field
+/// makes its select invalid (`aria-invalid` on the trigger).
+#[test]
+fn select_invalid_snapshot() {
+    use shadcn_egui::components::field::Field;
+    common::snapshot_all("select_invalid", vec2(240.0, 130.0), |ui| {
+        ui.allocate_ui(vec2(192.0, ui.available_height()), |ui| {
+            ui.set_width(192.0);
+            let mut i = usize::MAX;
+            Field::new()
+                .invalid(true)
+                .label("Fruit")
+                .error("Please select a fruit.")
+                .show(ui, |ui| {
+                    ui.add(
+                        Select::new("fruit", &mut i, &["Apple", "Banana", "Blueberry"])
+                            .placeholder("Select a fruit"),
+                    )
+                });
+        });
+    });
+}
+
+/// popover-form: a `w-64` popover at the trigger's start with a header
+/// and a `gap-4` group of two horizontal fields. The labels' `w-1/2` is a
+/// share of the row, which no recipe length holds: in the browser's flex
+/// row a `w-1/2` label and a `w-full` input shrink by their bases to a
+/// third and two thirds of the row less the gap, so the input takes that
+/// width and the label the rest.
+#[test]
+fn popover_form_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::style::{pick, State};
+    common::snapshot_with_themes(
+        "popover_form",
+        vec2(320.0, 260.0),
+        field_demo_themes(),
+        |ui| {
+            let trigger = ui.add(Button::new("Open Popover").variant(ButtonVariant::Outline));
+            Popover::new(&trigger).width(256.0).show(|ui| {
+                popover_header(ui, "Dimensions", "Set the dimensions for the layer.");
+                let t = Theme::current(ui.ctx());
+                let row = [&*t.style.field, &*t.style.field_orientation_horizontal];
+                let gap = pick(&row, |r| &r.gap, State::NONE).unwrap_or(0.0);
+                let input = (ui.available_width() - gap) * 2.0 / 3.0;
+                FieldGroup::new().variant(GAP_4).show(ui, |ui| {
+                    for (name, value) in [("Width", "100%"), ("Height", "25px")] {
+                        Field::new().horizontal().label(name).show(ui, |ui| {
+                            ui.add(
+                                Input::new(&mut String::from(value))
+                                    .max_width(input)
+                                    .id_salt(name),
+                            )
+                        });
+                    }
+                });
+            });
+        },
+        |h| {
+            h.get_by_label("Open Popover").click();
+            h.run();
+            // Move the pointer off the trigger, as the click leaves it there.
+            h.event(egui::Event::PointerGone);
+            h.run();
+        },
+    );
+}
+
+/// dialog-demo: a `sm:max-w-sm` dialog over its trigger, a group of two
+/// fields, each with a plain Label, and the footer's actions.
+#[test]
+fn dialog_demo_snapshot() {
+    use shadcn_egui::components::field::{Field, FieldGroup};
+    use shadcn_egui::components::input::Input;
+    use shadcn_egui::components::label::label;
+    common::snapshot_all("dialog_demo", vec2(800.0, 500.0), |ui| {
+        ui.add(Button::new("Open Dialog").variant(ButtonVariant::Outline));
+        Dialog::new("dialog-demo", "Edit profile")
+            .description("Make changes to your profile here. Click save when you're done.")
+            .width(384.0)
+            .show(ui.ctx(), &mut true, |ui| {
+                FieldGroup::new().show(ui, |ui| {
+                    for (name, value) in [("Name", "Pedro Duarte"), ("Username", "@peduarte")] {
+                        Field::new().show(ui, |ui| {
+                            label(ui, name);
+                            ui.add(Input::new(&mut String::from(value)).id_salt(name))
+                        });
+                    }
+                });
+                dialog::footer(ui, |ui| {
+                    ui.add(Button::new("Cancel").variant(ButtonVariant::Outline));
+                    ui.add(Button::new("Save changes"));
+                });
+            });
+    });
+}
+
+/// The overlays the enter animation runs on, with upstream's duration:
+/// tw-animate-css `animate-in` over `duration-100`, the tooltip without a
+/// duration over tw-animate's 150 ms.
+#[derive(Clone, Copy, Debug)]
+enum Overlay {
+    Dialog,
+    Popover,
+    Select,
+    Tooltip,
+}
+
+impl Overlay {
+    const ALL: [Overlay; 4] = [
+        Overlay::Dialog,
+        Overlay::Popover,
+        Overlay::Select,
+        Overlay::Tooltip,
+    ];
+
+    fn duration(self) -> f64 {
+        match self {
+            Overlay::Tooltip => 0.15,
+            _ => 0.1,
+        }
+    }
+
+    /// The panel's fill in vega light.
+    fn fill(self) -> egui::Color32 {
+        let theme = Theme::vega();
+        let p = theme.palette_of(egui::Theme::Light);
+        match self {
+            Overlay::Dialog => p.background,
+            Overlay::Popover | Overlay::Select => p.popover,
+            Overlay::Tooltip => p.foreground,
+        }
+    }
+}
+
+/// What one pass painted of an open overlay: the panel's fill rect and
+/// colour (the largest box of the panel's fill, `None` while it is
+/// invisible), the dialog's backdrop colour, and whether the pass asks for
+/// a repaint.
+#[derive(Debug)]
+struct Drawn {
+    panel: Option<(egui::Rect, egui::Color32)>,
+    backdrop: Option<egui::Color32>,
+    repaint: bool,
+}
+
+/// An overlay opened at time 0 (its first passes size and draw it), then
+/// one pass at each of `times`: what the opening passes drew, and what
+/// the timed ones drew. `reduced` turns motion off.
+fn enter_passes(overlay: Overlay, reduced: bool, times: &[f64]) -> (Vec<Drawn>, Vec<Drawn>) {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    ctx.all_styles_mut(|s| {
+        s.interaction.tooltip_delay = 0.0;
+        if reduced {
+            s.animation_time = 0.0;
+        }
+    });
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(640.0, 360.0));
+    let trigger = std::cell::Cell::new(None::<egui::Rect>);
+    let mut selected = 0;
+    let mut page = |ui: &mut egui::Ui| {
+        ui.add_space(40.0);
+        ui.horizontal(|ui| {
+            ui.add_space(40.0);
+            match overlay {
+                Overlay::Dialog => {
+                    Dialog::new("enter", "Title").show(ui.ctx(), &mut true, |ui| {
+                        ui.label("Body");
+                    });
+                }
+                Overlay::Popover => {
+                    let r = ui.add(Button::new("Open").variant(ButtonVariant::Outline));
+                    if trigger.replace(Some(r.rect)).is_none() {
+                        egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r));
+                    }
+                    Popover::new(&r).show(|ui| {
+                        ui.label("Body");
+                    });
+                }
+                Overlay::Select => {
+                    let r = ui.add(Select::new("enter", &mut selected, &["One", "Two"]));
+                    if trigger.replace(Some(r.rect)).is_none() {
+                        egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r));
+                    }
+                }
+                Overlay::Tooltip => {
+                    let r = ui.add(Button::new("Hover").variant(ButtonVariant::Outline));
+                    trigger.set(Some(r.rect));
+                    tooltip(r, "Tip");
+                }
+            }
+        });
+    };
+    let fill = overlay.fill();
+    let same_rgb = |c: egui::Color32, want: egui::Color32| {
+        let [r, g, b, a] = c.to_srgba_unmultiplied();
+        let w = want.to_srgba_unmultiplied();
+        a > 0 && [r, g, b].iter().zip(w).all(|(x, y)| x.abs_diff(y) <= 2)
+    };
+    let mut run = |time: f64, events: Vec<egui::Event>| {
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let out = common::no_textures(ctx.run_ui(input, &mut page));
+        let rects = common::rect_shapes(&out);
+        let panel = rects
+            .iter()
+            .filter(|r| r.rect != screen && same_rgb(r.fill, fill))
+            .max_by(|a, b| a.rect.area().total_cmp(&b.rect.area()))
+            .map(|r| (r.rect, r.fill));
+        let backdrop = rects.iter().find(|r| r.rect == screen).map(|r| r.fill);
+        let repaint =
+            out.viewport_output[&egui::ViewportId::ROOT].repaint_delay == std::time::Duration::ZERO;
+        Drawn {
+            panel,
+            backdrop,
+            repaint,
+        }
+    };
+    // Open it: the pointer moves onto the tooltip's trigger once the
+    // first pass placed it.
+    let mut opening = vec![run(0.0, Vec::new())];
+    let hover = trigger
+        .get()
+        .map(|r| vec![egui::Event::PointerMoved(r.center())])
+        .unwrap_or_default();
+    opening.push(run(0.0, hover));
+    for _ in 0..3 {
+        opening.push(run(0.0, Vec::new()));
+    }
+    let timed = times.iter().map(|&t| run(t, Vec::new())).collect();
+    (opening, timed)
+}
+
+/// An overlay opens as upstream's does (tw-animate-css `animate-in
+/// fade-in-0 zoom-in-95`, conformance 7): from transparent at 95 % scale
+/// to its place along CSS's `ease` over the style's duration, a dialog's
+/// backdrop fading in with it; a popover or a select list slides down
+/// from 8 px above its place (`slide-in-from-top-2`), a tooltip up from
+/// below. egui's own fade of its area (0.2 s since egui 0.37) does not
+/// show.
+#[test]
+fn an_overlay_opens_with_upstreams_enter_animation() {
+    use shadcn_egui::style::Easing;
+    for overlay in Overlay::ALL {
+        let d = overlay.duration();
+        let half = d / 2.0;
+        let (_, passes) = enter_passes(overlay, false, &[half, d, 1.0, 2.0]);
+        let p = Easing::Ease.at(0.5);
+        let (r_half, c_half) = passes[0].panel.expect("drawn at half time");
+        let (r_end, c_end) = passes[1].panel.expect("drawn at the end");
+        let (r_settled, c_settled) = passes[3].panel.expect("settled");
+        assert_eq!(
+            (r_end, c_end),
+            (r_settled, c_settled),
+            "{overlay:?} ends in place"
+        );
+        let opacity = f32::from(c_half.a()) / f32::from(c_end.a());
+        assert!(
+            (opacity - p).abs() < 0.01,
+            "{overlay:?}: opacity {opacity}, want {p}"
+        );
+        let scale = r_half.width() / r_end.width();
+        let want = 0.95 + 0.05 * p;
+        assert!(
+            (scale - want).abs() < 0.002,
+            "{overlay:?}: scale {scale}, want {want}"
+        );
+        assert!(
+            passes[0].repaint,
+            "{overlay:?}: a running animation repaints"
+        );
+        let slide = 8.0 * (1.0 - p);
+        match overlay {
+            Overlay::Dialog => {
+                let moved = r_half.center() - r_end.center();
+                assert!(moved.length() < 0.01, "{overlay:?}: zooms about its centre");
+                let half = passes[0].backdrop.expect("backdrop at half time");
+                let end = passes[1].backdrop.expect("backdrop at the end");
+                let faded = f32::from(half.a()) / f32::from(end.a());
+                assert!(
+                    (faded - p).abs() < 0.05,
+                    "backdrop opacity {faded}, want {p}"
+                );
+                assert!(!passes[3].repaint, "no repaint once it has run");
+            }
+            Overlay::Popover | Overlay::Select => {
+                // The origin lies on the top edge: only the slide moves it.
+                let moved = r_half.top() - r_end.top();
+                assert!(
+                    (moved + slide).abs() < 0.01,
+                    "{overlay:?}: top moved {moved}"
+                );
+            }
+            Overlay::Tooltip => {
+                assert!(
+                    r_half.center().y > r_end.center().y,
+                    "starts below its place"
+                );
+            }
+        }
+    }
+}
+
+/// Under reduced motion (`animation_time == 0`) an overlay shows at its
+/// place and full opacity in the first pass that draws it.
+#[test]
+fn reduced_motion_opens_an_overlay_at_once() {
+    for overlay in Overlay::ALL {
+        let (_, passes) = enter_passes(overlay, true, &[0.0, 1.0]);
+        let first = passes[0]
+            .panel
+            .unwrap_or_else(|| panic!("{overlay:?} drawn {:?}", overlay.fill()));
+        let settled = passes[1].panel.expect("settled");
+        assert_eq!(first, settled, "{overlay:?}");
+        if let Overlay::Dialog = overlay {
+            assert_eq!(passes[0].backdrop, passes[1].backdrop, "backdrop at once");
+        }
+    }
+}
+
+/// While a popover opens, a press lands where its content is drawn, as
+/// Chrome hit-tests through the CSS transform of the open animation: a
+/// click on the drawn button above its final place clicks it.
+#[test]
+fn a_press_during_the_open_animation_hits_the_drawn_place() {
+    let ctx = egui::Context::default();
+    Theme::vega().apply(&ctx);
+    ctx.set_theme(egui::Theme::Light);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(640.0, 360.0));
+    let opened = std::cell::Cell::new(false);
+    let inside = std::cell::Cell::new(None::<egui::Rect>);
+    let clicked = std::cell::Cell::new(false);
+    let mut page = |ui: &mut egui::Ui| {
+        ui.add_space(40.0);
+        ui.horizontal(|ui| {
+            ui.add_space(40.0);
+            let r = ui.add(Button::new("Open").variant(ButtonVariant::Outline));
+            if !opened.replace(true) {
+                egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&r));
+            }
+            Popover::new(&r).show(|ui| {
+                ui.label("Body");
+                let b = ui.add(Button::new("Inside"));
+                inside.set(Some(b.rect));
+                clicked.set(clicked.get() | b.clicked());
+            });
+        });
+    };
+    // The inner button is the only box in the primary colour.
+    let primary = Theme::vega().palette_of(egui::Theme::Light).primary;
+    let mut run = |time: f64, events: Vec<egui::Event>| {
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let out = common::no_textures(ctx.run_ui(input, &mut page));
+        common::rect_shapes(&out)
+            .into_iter()
+            .find(|r| {
+                // The fade scales the colour; its hue stays.
+                let [r, g, b, a] = r.fill.to_srgba_unmultiplied();
+                let w = primary.to_srgba_unmultiplied();
+                a > 0 && [r, g, b].iter().zip(w).all(|(x, y)| x.abs_diff(y) <= 2)
+            })
+            .map(|r| r.rect)
+    };
+    for _ in 0..5 {
+        run(0.0, Vec::new());
+    }
+    // Early in the animation the button is drawn smaller and higher than
+    // its place in the layout.
+    let t = 0.02;
+    let drawn = run(t, Vec::new()).expect("drawn while it opens");
+    let button = inside.get().expect("the button's place");
+    assert!(
+        drawn.width() < button.width() * 0.99,
+        "still zooming: {drawn:?} for {button:?}"
+    );
+    assert!(drawn.top() < button.top(), "drawn above its place");
+    let (top, bottom) = (drawn.left_top(), drawn.right_bottom());
+    // Inside the drawn button, above the button's place in the layout.
+    let at = egui::pos2((top.x + bottom.x) / 2.0, (top.y + button.top()) / 2.0);
+    assert!(at.y < bottom.y);
+    run(t, vec![egui::Event::PointerMoved(at)]);
+    let button_event = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    run(t, vec![button_event(true)]);
+    run(t, vec![button_event(false)]);
+    assert!(
+        clicked.get(),
+        "a press at {at:?} on the drawn button clicks it"
+    );
+}
+
+/// egui measures a popup, and a modal shown for the first time, in a
+/// sizing pass that draws nothing, at a place egui guesses: the panel's
+/// box is not drawn there either, also under reduced motion, where no
+/// fade hides it. Every pass draws the panel at its place or not at all.
+#[test]
+fn an_opening_overlay_draws_its_box_only_in_place() {
+    for overlay in Overlay::ALL {
+        let (opening, timed) = enter_passes(overlay, true, &[1.0]);
+        let settled = timed[0].panel.expect("settled").0;
+        for (n, drawn) in opening.iter().enumerate() {
+            // A box of the panel's size (the trigger's own box is smaller).
+            if let Some((rect, _)) = drawn.panel.filter(|(r, _)| r.size() == settled.size()) {
+                assert_eq!(rect, settled, "{overlay:?}: opening pass {n}");
+            }
+        }
+    }
 }

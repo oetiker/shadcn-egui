@@ -5,20 +5,25 @@
 //! both.
 
 use crate::components::alert::{alert_action, Alert, AlertVariant};
-use crate::components::badge::{badge, BadgeVariant};
+use crate::components::avatar::{avatar_group_count, Avatar, AvatarBadge, AvatarGroup, AvatarSize};
+use crate::components::badge::{badge, Badge, BadgeVariant};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::components::card::{card_description, card_title};
+use crate::components::card::{card_description, card_title, Card};
 use crate::components::checkbox::checkbox;
 use crate::components::dialog::{self, Dialog};
-use crate::components::icon::IconView;
+use crate::components::field::{field_label, Field, FieldGroup, FieldLabel};
+use crate::components::icon::{Glyph, IconView};
 use crate::components::input::Input;
+use crate::components::item::{Item, ItemGroup, ItemSize, ItemVariant};
 use crate::components::kbd::{kbd, Kbd, KbdGroup};
-use crate::components::label::{description, label};
+use crate::components::label::label;
 use crate::components::popover::{popover_header, Popover};
 use crate::components::progress::Progress;
+use crate::components::scroll_area::ScrollArea;
 use crate::components::select::Select;
-use crate::components::separator::{separator, separator_vertical};
+use crate::components::separator::{separator, Separator};
 use crate::components::slider::Slider;
+use crate::components::spinner::Spinner;
 use crate::components::switch::toggle;
 use crate::components::tabs::Tabs;
 use crate::components::text::TextLook;
@@ -75,7 +80,7 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
                 .fill(t.palette().background)
                 .inner_margin(egui::Margin::same(32)),
         )
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             layout::vstack(ui, 24.0, |ui| {
                 card_title(ui, "Settings");
                 card_description(ui, "Manage your account settings and preferences.");
@@ -95,34 +100,20 @@ pub fn settings_ui(ui: &mut egui::Ui, state: &mut SettingsState) {
         });
 }
 
-/// A labelled control: a 6px-gap stack of `label` over the control. The
-/// label names the control for screen readers (`labelled_by`).
-fn field(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> egui::Response) {
-    layout::vstack(ui, 6.0, |ui| {
-        let name = label(ui, name);
-        let _ = control(ui).labelled_by(name.id);
-    });
+/// A labelled control: a vertical [`Field`], its label over the control,
+/// naming it for screen readers.
+fn field<R>(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> R) {
+    Field::new().label(name).show(ui, control);
 }
 
-/// A label on the left, its control on the right, the label naming the
-/// control for screen readers (`labelled_by`).
-fn setting_row(
-    ui: &mut egui::Ui,
-    name: &str,
-    control: impl FnOnce(&mut egui::Ui) -> egui::Response,
-) {
-    let label_id = std::cell::Cell::new(egui::Id::NULL);
-    layout::space_between(
-        ui,
-        |ui| label_id.set(label(ui, name).id),
-        |ui| {
-            let _ = control(ui).labelled_by(label_id.get());
-        },
-    );
+/// A label on the left, its control on the right: a horizontal [`Field`],
+/// the label naming the control for screen readers.
+fn setting_row<R>(ui: &mut egui::Ui, name: &str, control: impl FnOnce(&mut egui::Ui) -> R) {
+    Field::new().horizontal().label(name).show(ui, control);
 }
 
 fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Account");
             card_description(ui, "Update your account details.");
@@ -170,7 +161,7 @@ fn account_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 }
 
 fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Notifications");
             card_description(ui, "Choose what you want to be notified about.");
@@ -197,7 +188,7 @@ fn notifications_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
 }
 
 fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             card_title(ui, "Components");
             card_description(ui, "Buttons, badges, a slider and a select.");
@@ -238,7 +229,8 @@ fn components_tab(ui: &mut egui::Ui, state: &mut SettingsState) {
                 badge(ui, "Outline", BadgeVariant::Outline);
             });
             separator(ui);
-            field(ui, "Volume", |ui| {
+            // field-slider: a slider is named by the field's title.
+            Field::new().title("Volume").show(ui, |ui| {
                 ui.add(Slider::new(&mut state.slider, 0.0..=100.0).label("Volume"))
             });
             field(ui, "Region", |ui| {
@@ -361,14 +353,12 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
     let t = Theme::current(ui.ctx());
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(t.palette().background))
-        .show_inside(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, |ui| {
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin::same(32))
-                        .show(ui, |ui| gallery_components(ui, state));
-                });
+        .show(ui, |ui| {
+            ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                egui::Frame::new()
+                    .inner_margin(egui::Margin::same(32))
+                    .show(ui, |ui| gallery_components(ui, state));
+            });
         });
 }
 
@@ -376,9 +366,22 @@ pub fn gallery_ui(ui: &mut egui::Ui, state: &mut GalleryState) {
 /// feature set, and wide enough for the longest id (`inverted-translucent`).
 const PART_WIDTH: f32 = 192.0;
 
-/// One preset part: its label over a select of `options`, `current` the
-/// index of the preset's value (`None`: not offered, shown as the
-/// placeholder `missing`), and a muted `help` line under it. Returns the
+/// The demos' own muted paragraph (`text-sm text-muted-foreground`), which
+/// belongs to no component: caller text in a recipe of its own.
+fn muted(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    use crate::style::{Paint, Prop, Recipe, Role, TextSize};
+    let recipe = Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    };
+    let st = Theme::current(ui.ctx()).state(ui.ctx(), State::NONE);
+    TextLook::resolve(ui, &[&recipe], st).label(ui, text, egui::TextWrapMode::Wrap)
+}
+
+/// One preset part: a [`Field`] with its label over a select of `options`,
+/// `current` the index of the preset's value (`None`: not offered, shown as
+/// the placeholder `missing`), and `help` as its description. Returns the
 /// newly picked index.
 fn part_select(
     ui: &mut egui::Ui,
@@ -389,10 +392,15 @@ fn part_select(
 ) -> Option<usize> {
     let mut idx = current.unwrap_or(usize::MAX);
     let mut picked = None;
-    layout::vstack(ui, 6.0, |ui| {
-        // The help line wraps at the select's width.
+    ui.scope(|ui| {
+        // The field, and the help line in it, are as wide as the select.
         ui.set_max_width(PART_WIDTH);
-        field(ui, name, |ui| {
+        let field = Field::new().label(name).id_salt(name);
+        let field = match help {
+            Some(help) => field.description(help),
+            None => field,
+        };
+        field.show(ui, |ui| {
             let resp = ui.add(
                 Select::new(name, &mut idx, options)
                     .placeholder(missing)
@@ -401,11 +409,7 @@ fn part_select(
             if resp.changed() && idx < options.len() {
                 picked = Some(idx);
             }
-            resp
         });
-        if let Some(help) = help {
-            description(ui, help);
-        }
     });
     picked
 }
@@ -436,7 +440,7 @@ fn preset_bar(ui: &mut egui::Ui, state: &mut GalleryState) {
                 .fill(t.palette().background)
                 .inner_margin(egui::Margin::symmetric(32, 16)),
         )
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             layout::vstack(ui, 12.0, |ui| {
                 layout::row(ui, 8.0, |ui| {
                     let name = label(ui, "Preset code");
@@ -628,7 +632,7 @@ const BADGE_VARIANTS: [(BadgeVariant, &str); 6] = [
 
 /// A component group: a card with a heading-font title and a description.
 fn group(ui: &mut egui::Ui, title: &str, about: &str, add: impl FnOnce(&mut egui::Ui)) {
-    layout::card(ui, |ui| {
+    Card::new().show(ui, |ui| {
         layout::vstack(ui, 16.0, |ui| {
             layout::vstack(ui, 6.0, |ui| {
                 card_title(ui, title);
@@ -654,8 +658,11 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 badges_group(ui);
                 icons_group(ui);
                 kbd_gallery(ui);
+                avatar_gallery(ui);
+                field_gallery(ui);
                 overlays_group(ui, state);
                 progress_group(ui, state);
+                scroll_area_group(ui);
             });
             layout::vstack(right, 24.0, |ui| {
                 inputs_group(ui, state);
@@ -663,6 +670,8 @@ fn gallery_components(ui: &mut egui::Ui, state: &mut GalleryState) {
                 controls_group(ui, state);
                 alerts_group(ui);
                 tabs_group(ui, state);
+                spinner_group(ui);
+                item_group(ui);
             });
         });
     });
@@ -673,7 +682,7 @@ fn buttons_group(ui: &mut egui::Ui) {
     group(ui, "Button", "Every variant in every size.", |ui| {
         for (size, size_name) in BUTTON_SIZES {
             layout::vstack(ui, 8.0, |ui| {
-                description(ui, size_name);
+                muted(ui, size_name);
                 layout::wrap_row(ui, 8.0, |ui| {
                     for (variant, name) in BUTTON_VARIANTS {
                         let _ = ui.add(Button::new(name).variant(variant).size(size));
@@ -682,7 +691,7 @@ fn buttons_group(ui: &mut egui::Ui) {
             });
         }
         layout::vstack(ui, 8.0, |ui| {
-            description(ui, "Icon sizes, an icon with text, disabled");
+            muted(ui, "Icon sizes, an icon with text, disabled");
             layout::wrap_row(ui, 8.0, |ui| {
                 for size in [
                     ButtonSize::IconXs,
@@ -694,11 +703,11 @@ fn buttons_group(ui: &mut egui::Ui) {
                         Button::new("Close")
                             .variant(ButtonVariant::Outline)
                             .size(size)
-                            .icon(&icons.close),
+                            .icon(icons.close),
                     );
                 }
-                let _ = ui.add(Button::new("Confirm").icon(&icons.check));
-                let _ = ui.add(Button::new("Disabled").enabled(false));
+                let _ = ui.add(Button::new("Confirm").icon(icons.check));
+                let _ = ui.add_enabled(false, Button::new("Disabled"));
             });
         });
     });
@@ -769,16 +778,240 @@ fn kbd_gallery(ui: &mut egui::Ui) {
                 kbd(ui, "B");
             });
             ui.horizontal_wrapped(|ui| {
-                description(ui, "Use");
+                muted(ui, "Use");
                 KbdGroup::new().show(ui, |ui| {
                     kbd(ui, "Ctrl + B");
                     kbd(ui, "Ctrl + K");
                 });
-                description(ui, "to open the command palette");
+                muted(ui, "to open the command palette");
             });
             ui.add(Kbd::icon_only(icons.check, "Enter"));
         });
     });
+}
+
+/// The caller's `rounded-md border` around a scroll area demo.
+fn scroll_root(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    // The theme writes the hairline in the border colour here.
+    let border = ui.visuals().widgets.noninteractive.bg_stroke;
+    egui::Frame::new()
+        .stroke(border)
+        .corner_radius(Theme::current(ui.ctx()).radius_md())
+        .show(ui, |ui| {
+            ui.set_width(width);
+            add(ui);
+        });
+}
+
+/// shadcn-svelte's `scroll-area-demo` (50 tags in an `h-72 w-48` root)
+/// and `scroll-area-horizontal` (three works in a `w-96` root); `muted`
+/// boxes of the photos' 300 × 400 stand in for the images, as the
+/// gallery installs no image loader.
+fn scroll_area_group(ui: &mut egui::Ui) {
+    group(ui, "Scroll Area", "Vertical and horizontal.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            // The roots' 1 px border is outside the stated size.
+            scroll_root(ui, 190.0, |ui| {
+                ScrollArea::vertical()
+                    .id_salt("gallery-tags")
+                    .max_height(286.0)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        egui::Frame::new().inner_margin(16).show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            label(ui, "Tags");
+                            ui.add_space(16.0);
+                            for i in (1..=50).rev() {
+                                ui.label(format!("v1.2.0-beta.{i}"));
+                                ui.add_space(8.0);
+                                separator(ui);
+                                ui.add_space(8.0);
+                            }
+                        });
+                    });
+            });
+            scroll_root(ui, 382.0, |ui| {
+                ScrollArea::horizontal()
+                    .id_salt("gallery-works")
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        egui::Frame::new().inner_margin(16).show(ui, |ui| {
+                            ui.horizontal_top(|ui| {
+                                ui.spacing_mut().item_spacing.x = 16.0;
+                                for artist in ["Ornella Binni", "Tom Byrom", "Vladimir Malyavko"] {
+                                    ui.vertical(|ui| work(ui, artist));
+                                }
+                            });
+                        });
+                    });
+            });
+        });
+    });
+}
+
+/// One work of `scroll-area-horizontal`: the photo, then its credit.
+fn work(ui: &mut egui::Ui, artist: &str) {
+    let t = Theme::current(ui.ctx());
+    let (_, r) = ui.allocate_space(egui::vec2(300.0, 400.0));
+    ui.painter()
+        .rect_filled(r, t.radius_md(), t.palette().muted);
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let muted = t.palette().muted_foreground;
+        ui.label(egui::RichText::new("Photo by ").size(12.0).color(muted));
+        ui.label(egui::RichText::new(artist).size(12.0).strong());
+    });
+}
+
+/// shadcn-svelte's spinner demos: sizes, a disabled button and badges
+/// with a spinner. `spinner-custom-demo` is left out: it turns another
+/// icon itself and uses no `<Spinner>`.
+fn spinner_group(ui: &mut egui::Ui) {
+    group(ui, "Spinner", "Sizes, in a button and in badges.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            layout::row(ui, 24.0, |ui| {
+                for side in [12.0, 16.0, 24.0, 32.0] {
+                    let _ = ui.add(Spinner::new().size(side));
+                }
+            });
+            layout::wrap_row(ui, 8.0, |ui| {
+                let _ = ui.add_enabled(
+                    false,
+                    Button::new("Please wait")
+                        .size(ButtonSize::Sm)
+                        .variant(ButtonVariant::Outline)
+                        .icon(Glyph::Spinner),
+                );
+                let _ = ui.add(Badge::new("Syncing").icon(Glyph::Spinner));
+                let _ = ui.add(
+                    Badge::new("Generating")
+                        .variant(BadgeVariant::Secondary)
+                        .icon_end(Glyph::Spinner),
+                );
+            });
+        });
+    });
+}
+
+/// shadcn-svelte's item demos: the outline variant with icon media and an
+/// action, a muted link item at the small size, and `item-group-demo`'s
+/// group of outline items with avatars. The demo's `rounded-full` on the
+/// icon buttons is a Button look, an app variant (axiom 8), and is not
+/// reproduced.
+fn item_group(ui: &mut egui::Ui) {
+    use crate::icons::lucide;
+    group(ui, "Item", "Variants, sizes, media and a group.", |ui| {
+        layout::vstack(ui, 16.0, |ui| {
+            Item::new()
+                .variant(ItemVariant::Outline)
+                .icon(lucide::SHIELD_ALERT)
+                .title("Security Alert")
+                .description("New login detected from unknown device.")
+                .show(ui, |ui| {
+                    let _ = ui.add(Button::new("Review").size(ButtonSize::Sm));
+                });
+            let _ = ui.add(
+                Item::new()
+                    .variant(ItemVariant::Muted)
+                    .size(ItemSize::Sm)
+                    .icon(lucide::BADGE_CHECK)
+                    .title("Your profile has been verified.")
+                    .link(true),
+            );
+            ItemGroup::new().show(ui, |ui| {
+                for (name, mail) in [
+                    ("shadcn", "shadcn@vercel.com"),
+                    ("maxleiter", "maxleiter@vercel.com"),
+                ] {
+                    Item::new()
+                        .variant(ItemVariant::Outline)
+                        .media(move |ui| {
+                            let _ = ui.add(Avatar::new(&name[..1]));
+                        })
+                        .title(name)
+                        .description(mail)
+                        .show(ui, |ui| {
+                            let _ = ui.add(
+                                Button::new("Add")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Icon)
+                                    .icon(lucide::PLUS),
+                            );
+                        });
+                }
+            });
+        });
+    });
+}
+
+/// shadcn-svelte's avatar demos without images (the gallery installs no
+/// image loader, so each avatar shows its fallback): sizes, a badge with an
+/// icon, and a group with a count.
+fn field_gallery(ui: &mut egui::Ui) {
+    group(
+        ui,
+        "Field",
+        "A label, a control, a description or errors; a choice card.",
+        |ui| {
+            // The switch's state lives in egui's memory: the gallery
+            // keeps no app state for it.
+            let key = egui::Id::unique("shadcn_egui::reference::field_share");
+            let mut share = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(true);
+            let mut terms = ui
+                .data(|d| d.get_temp::<bool>(key.with("terms")))
+                .unwrap_or(false);
+            FieldGroup::new().show(ui, |ui| {
+                let mut email: &str = "max@";
+                Field::new()
+                    .label("Email")
+                    .error("Enter a valid email address.")
+                    .show(ui, |ui| ui.add(Input::new(&mut email)));
+                Field::new().horizontal().show(ui, |ui| {
+                    ui.add(crate::components::checkbox::Checkbox::new(&mut terms));
+                    field_label(ui, "Accept the terms and conditions");
+                });
+                FieldLabel::choice_card().show(ui, |ui| {
+                    Field::new()
+                        .horizontal()
+                        .title("Share across devices")
+                        .description("Focus is shared across devices.")
+                        .show(ui, |ui| {
+                            ui.add(crate::components::switch::Switch::new(&mut share))
+                        });
+                });
+            });
+            ui.data_mut(|d| {
+                d.insert_temp(key, share);
+                d.insert_temp(key.with("terms"), terms);
+            });
+        },
+    );
+}
+
+fn avatar_gallery(ui: &mut egui::Ui) {
+    let icons = crate::icons::lucide::PLUS;
+    group(
+        ui,
+        "Avatar",
+        "Sizes, a badge and a group with a count.",
+        |ui| {
+            layout::wrap_row(ui, 24.0, |ui| {
+                layout::row(ui, 8.0, |ui| {
+                    for size in [AvatarSize::Sm, AvatarSize::Default, AvatarSize::Lg] {
+                        let _ = ui.add(Avatar::new("CN").size(size));
+                    }
+                });
+                let _ = ui.add(Avatar::new("PP").badge(AvatarBadge::new().icon(icons)));
+                AvatarGroup::new().show(ui, |ui| {
+                    for name in ["CN", "LR", "ER"] {
+                        let _ = ui.add(Avatar::new(name));
+                    }
+                    avatar_group_count(ui, "+3");
+                });
+            });
+        },
+    );
 }
 
 fn icons_group(ui: &mut egui::Ui) {
@@ -792,6 +1025,7 @@ fn icons_group(ui: &mut egui::Ui) {
         ("chevron_right", &t.icons.chevron_right),
         ("more_horizontal", &t.icons.more_horizontal),
         ("close", &t.icons.close),
+        ("loader", &t.icons.loader),
     ];
     group(
         ui,
@@ -803,7 +1037,7 @@ fn icons_group(ui: &mut egui::Ui) {
                     layout::vstack(ui, 4.0, |ui| {
                         let name = label(ui, icon.name);
                         let _ = ui.add(IconView::new(icon).size(24.0)).labelled_by(name.id);
-                        description(ui, slot);
+                        muted(ui, slot);
                     });
                 }
             });
@@ -876,7 +1110,8 @@ fn controls_group(ui: &mut egui::Ui, state: &mut GalleryState) {
         |ui| {
             setting_row(ui, "Accept terms", |ui| checkbox(ui, &mut state.checked));
             setting_row(ui, "Airplane mode", |ui| toggle(ui, &mut state.switch_on));
-            field(ui, "Volume", |ui| {
+            // field-slider: a slider is named by the field's title.
+            Field::new().title("Volume").show(ui, |ui| {
                 ui.add(Slider::new(&mut state.volume, 0.0..=100.0).label("Volume"))
             });
             field(ui, "Region", |ui| {
@@ -936,14 +1171,14 @@ fn tabs_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                 1 => "The usage tab.",
                 _ => "The billing tab.",
             };
-            description(ui, text);
+            muted(ui, text);
         });
         separator(ui);
         layout::row(ui, 12.0, |ui| {
             label(ui, "Blog");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             label(ui, "Docs");
-            separator_vertical(ui);
+            ui.add(Separator::new().vertical());
             label(ui, "Source");
         });
     });
@@ -972,7 +1207,6 @@ fn overlays_group(ui: &mut egui::Ui, state: &mut GalleryState) {
                     ui.add(Button::new("Tooltip").variant(ButtonVariant::Outline)),
                     "Add to library",
                 );
-                description(ui, "hover me");
             });
         },
     );

@@ -113,7 +113,10 @@ impl Widget for Kbd<'_> {
         let icon_px = pick(&l, |r| &r.icon_size, st).unwrap_or(t.metrics.icon);
         let look = TextLook::resolve(ui, &l, st);
         let (row, name) = match self.icon {
-            Some((icon, name)) => (AtomRow::new(ui, self.atoms).icons(Some(icon), None), name),
+            Some((icon, name)) => (
+                AtomRow::new(ui, self.atoms).icons(Some(icon.into()), None),
+                name,
+            ),
             None => {
                 let name = self
                     .atoms
@@ -147,8 +150,9 @@ impl Widget for Kbd<'_> {
         ui.set_clip_rect(egui::Rect::NOTHING);
         let resp = ui.interact(rect, id, Sense::hover());
         ui.set_clip_rect(clip);
-        let enabled = ui.is_enabled();
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &name));
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::labeled(egui::Role::Label, true, &name)
+        });
         if !ui.is_rect_visible(rect) {
             return resp;
         }

@@ -3,16 +3,18 @@
 //! `peer-disabled:cursor-not-allowed` matters in egui: the label of a
 //! disabled control shows the not-allowed cursor. Its look comes from the
 //! style's `cn-label` recipe. `peer-disabled:opacity-50` arrives as the
-//! DISABLED state of that recipe.
-//!
-//! `description` has no marker of its own in shadcn: it is the muted `text-sm`
-//! paragraph that `cn-card-description` and `cn-dialog-description` share, so
-//! it reads the `card_description` recipe.
+//! DISABLED state of that recipe: draw the label of a disabled control
+//! with `ui.add_enabled(false, Label::new(..))`. Placed directly in a
+//! [`Field`](crate::components::field::Field), it is the field's label,
+//! as upstream's `<Label for>` in the demos: it names the field's first
+//! crate control, and a press on it acts on that control. There, after a
+//! disabled checkbox or switch in the same `Ui`, it fades and shows the
+//! not-allowed cursor by itself (`peer-disabled:`).
 
 use crate::components::shared::{disabled_cursor, part_painter};
 use crate::components::text::TextLook;
 use crate::style::app::default_variant;
-use crate::style::{pick, Role, State};
+use crate::style::State;
 use crate::Theme;
 use egui::{Response, Sense, TextWrapMode, Ui, Widget};
 
@@ -29,7 +31,6 @@ default_variant!(
 
 pub struct Label {
     text: String,
-    enabled: bool,
     variant: LabelVariant,
 }
 
@@ -37,14 +38,8 @@ impl Label {
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
-            enabled: true,
             variant: LabelVariant::Default,
         }
-    }
-    /// `false` draws the label as the label of a disabled peer control.
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
     }
     /// An app variant ([`LabelVariant::app`]).
     pub fn variant(mut self, v: impl Into<LabelVariant>) -> Self {
@@ -62,11 +57,14 @@ impl Widget for Label {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.label, |r| &r.label)];
-        let enabled = self.enabled && ui.is_enabled();
+        // `peer-disabled:opacity-50`: in a field, after a disabled
+        // checkbox or switch, it fades as in a disabled `Ui`.
+        let enabled = ui.is_enabled() && !crate::components::field::peer_disabled(ui);
         let st = t.state(ui.ctx(), v.bits().with(State::DISABLED, !enabled));
         let look = TextLook::resolve(ui, &l, st);
-        let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; reads label first
-        let fg = pick(&l, |r| &r.text, st).map_or(inherited, |p| t.paint(p));
+        // `cn-label` sets no colour: the label takes its `Ui`'s text
+        // colour, as CSS inherits it (a field's destructive text).
+        let fg = look.resolved_color(ui);
         let painter = part_painter(ui, ui.next_auto_id(), &[&l[..]], st);
 
         // The label is as tall as its line box (`leading-none`: the font
@@ -98,9 +96,12 @@ impl Widget for Label {
             size = egui::vec2(block.size().x.max(width), block.size().y);
         }
         let (rect, resp) = crate::layout::allocate_item(ui, size, Sense::hover());
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, enabled, &self.text)
+        // In a field it is the field's label, as upstream's `<Label for>`.
+        let resp = crate::components::field::label_in_field(ui, rect).unwrap_or(resp);
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::labeled(egui::Role::Label, true, &self.text)
         });
+        crate::components::field::card_text(ui, &self.text);
         // `peer-disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);
         if ui.is_rect_visible(rect) {
@@ -108,20 +109,6 @@ impl Widget for Label {
         }
         resp
     }
-}
-
-/// Muted `text-sm` helper text, wrapping like a paragraph.
-pub fn description(ui: &mut Ui, text: &str) -> Response {
-    let t = Theme::current(ui.ctx());
-    let l = [&*t.style.card_description];
-    let st = t.state(ui.ctx(), State::NONE);
-    let look = TextLook::resolve(ui, &l, st);
-    let muted = t.role(Role::MutedForeground); // behaviour-ok: inherits; reads card_description first
-    let look = match look.recipe_color() {
-        Some(_) => look,
-        None => look.color(muted),
-    };
-    look.label(ui, text, TextWrapMode::Wrap)
 }
 
 #[cfg(test)]

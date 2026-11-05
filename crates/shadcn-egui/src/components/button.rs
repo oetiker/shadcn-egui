@@ -5,7 +5,8 @@
 
 use crate::color::Tone;
 use crate::components::atom_row::AtomRow;
-use crate::components::icon::Icon;
+use crate::components::field::ControlSlot;
+use crate::components::icon::Glyph;
 use crate::components::motion::transition;
 use crate::components::shared::{
     interaction_state, line_width, part_painter, pressable, report_invalid, shift,
@@ -167,11 +168,10 @@ pub struct Button {
     text: String,
     variant: ButtonVariant,
     size: ButtonSize,
-    enabled: bool,
-    icon: Option<Icon>,
-    icon_end: Option<Icon>,
+    icon: Option<Glyph>,
+    icon_end: Option<Glyph>,
     expanded: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     has_popup: bool,
     extra: Option<Recipe>,
 }
@@ -182,11 +182,10 @@ impl Button {
             text: text.into(),
             variant: ButtonVariant::Default,
             size: ButtonSize::Default,
-            enabled: true,
             icon: None,
             icon_end: None,
             expanded: false,
-            invalid: false,
+            invalid: None,
             has_popup: false,
             extra: None,
         }
@@ -199,22 +198,18 @@ impl Button {
         self.size = s.into();
         self
     }
-    /// Disabled buttons do not sense clicks, cannot take focus, show no
-    /// hover or press styling, and paint at the style's disabled opacity.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
-    }
-    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`).
+    /// An icon before the text (shadcn `<Icon data-icon="inline-start" />`),
+    /// or [`Glyph::Spinner`] (`<Spinner data-icon="inline-start" />`).
     /// With an icon size (`ButtonSize::Icon`, …) only the icon is drawn and
     /// the text is the button's accessible name.
-    pub fn icon(mut self, icon: &Icon) -> Self {
-        self.icon = Some(*icon);
+    pub fn icon(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
-    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`).
-    pub fn icon_end(mut self, icon: &Icon) -> Self {
-        self.icon_end = Some(*icon);
+    /// An icon after the text (shadcn `<Icon data-icon="inline-end" />`),
+    /// or [`Glyph::Spinner`].
+    pub fn icon_end(mut self, icon: impl Into<Glyph>) -> Self {
+        self.icon_end = Some(icon.into());
         self
     }
     /// `aria-expanded`: the menu or popover this button opens is open.
@@ -223,8 +218,10 @@ impl Button {
         self
     }
     /// `aria-invalid`: the destructive ring and border.
+    /// Inside an invalid [`Field`](crate::components::field::Field) the
+    /// button is invalid unless this says `false` (rules, axiom 5).
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// `aria-haspopup`: the button opens a popup, so it does not nudge down
@@ -262,7 +259,7 @@ impl Button {
     /// button as wide as its text.
     /// `size` is the built-in size the button draws with (an app size's
     /// base).
-    fn icon_only(&self, size: ButtonSize) -> Option<Icon> {
+    fn icon_only(&self, size: ButtonSize) -> Option<Glyph> {
         let square = size.is_icon();
         let icon = self.icon.or(self.icon_end);
         debug_assert!(
@@ -287,12 +284,14 @@ impl Widget for Button {
         let z = size.part(&t.style, ButtonSize::layer, |r| &r.button);
         let (layers, n) = Self::layers(&t.style, v, z, self.extra.as_ref());
         let l = &layers[..n];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
+        let slot = ControlSlot::of_button(ui);
+        let invalid = slot.invalid(self.invalid);
         let context = (variant.bits() | size.bits())
             .with(State::ICON_START, self.icon.is_some())
             .with(State::ICON_END, self.icon_end.is_some())
             .with(State::EXPANDED, self.expanded)
-            .with(State::INVALID, self.invalid)
+            .with(State::INVALID, invalid)
             .with(State::HAS_POPUP, self.has_popup);
         // Geometry never depends on hover or press: resolve it before allocating.
         let g = t.state(ui.ctx(), context);
@@ -315,6 +314,7 @@ impl Widget for Button {
         let (pad_t, pad_b) = (get(|r| &r.pad_top), get(|r| &r.pad_bottom));
         let row = row
             .icon_size(icon_px)
+            .sized_icon_size(pick(l, |r| &r.sized_icon_size, g))
             .gap(gap)
             .inset(
                 pad_l + border_w,
@@ -340,10 +340,27 @@ impl Widget for Button {
         let (id, rect) = crate::layout::allocate_item_space(ui, Vec2::new(width, height));
         let mut resp = ui.interact(rect, id, sense);
         pressable(&mut resp, ActivationKeys::Button);
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, &self.text)
-        });
-        report_invalid(&resp, self.invalid);
+        // A press on the field's label clicks the button, as on
+        // `<label for=button>`.
+        if enabled && slot.pressed {
+            resp.flags
+                .insert(egui::response::Flags::FAKE_PRIMARY_CLICKED);
+        }
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &self.text));
+        report_invalid(&resp, invalid);
+        let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
+        slot.done(ui, &resp, st, enabled, false);
+        let shown = match icon_only {
+            Some(glyph) => [Some(glyph), None],
+            None => [self.icon, self.icon_end],
+        };
+        for (glyph_slot, _) in shown
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| **g == Some(Glyph::Spinner))
+        {
+            crate::components::spinner::report_hosted(ui, &resp, glyph_slot);
+        }
         if !ui.is_rect_visible(rect) {
             return resp;
         }
@@ -460,6 +477,6 @@ mod tests {
         // An app size from an icon size draws icon only.
         assert_eq!(base, ButtonSize::Icon);
         let icon = crate::icons::lucide::X;
-        assert!(Button::new("x").icon(&icon).icon_only(base).is_some());
+        assert!(Button::new("x").icon(icon).icon_only(base).is_some());
     }
 }

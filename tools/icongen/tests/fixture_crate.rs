@@ -15,7 +15,7 @@ const NAMES: [&str; 7] = [
 ];
 const SLOTS: &str = "check=mixed,select_trigger=ring,chevron_down_plain=ring,chevron_up=ring,\
 chevron_left=ring,chevron_right=ring,more_horizontal=ring,\
-close=x";
+close=x,loader=ring";
 const PROVENANCE: &str =
     "icongen test fixtures (tools/icongen/tests/fixtures); x.svg is Lucide (ISC)";
 

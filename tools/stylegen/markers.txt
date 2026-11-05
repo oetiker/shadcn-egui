@@ -27,3 +27,7 @@ textarea.rs textarea: cn-textarea
 hover_card.rs hover-card: cn-hover-card-content
 alert_dialog.rs alert-dialog: cn-alert-dialog-overlay cn-alert-dialog-content cn-alert-dialog-header cn-alert-dialog-media cn-alert-dialog-title cn-alert-dialog-description cn-alert-dialog-footer cn-alert-dialog-cancel cn-alert-dialog-action
 pagination.rs pagination: cn-pagination cn-pagination-content cn-pagination-link cn-pagination-previous cn-pagination-previous-text cn-pagination-next cn-pagination-next-text cn-pagination-ellipsis
+item.rs item: cn-item cn-item-variant-default cn-item-variant-outline cn-item-variant-muted cn-item-size-default cn-item-size-sm cn-item-size-xs cn-item-media cn-item-media-variant-default cn-item-media-variant-icon cn-item-media-variant-image cn-item-content cn-item-title cn-item-description cn-item-actions cn-item-header cn-item-footer cn-item-group cn-item-separator
+field.rs field: cn-field cn-field-orientation-vertical cn-field-orientation-horizontal cn-field-orientation-responsive cn-field-content cn-field-label cn-field-title cn-field-description cn-field-separator cn-field-separator-content cn-field-error cn-field-group cn-field-set cn-field-legend
+scroll_area.rs scroll-area: cn-scroll-area cn-scroll-area-viewport cn-scroll-area-scrollbar cn-scroll-area-thumb
+spinner.rs spinner: slot:spinner

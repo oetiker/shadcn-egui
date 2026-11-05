@@ -7,6 +7,7 @@
 //! The indeterminate state of the upstream component is not offered: the
 //! value is a plain `bool`.
 
+use crate::components::field::ControlSlot;
 use crate::components::icon::paint_icon;
 use crate::components::shared::{
     disabled_cursor, interaction_state, line_width, part_painter, pressable, report_invalid,
@@ -38,8 +39,7 @@ default_variant!(
 /// accessibility node carries that larger rect.
 pub struct Checkbox<'a> {
     checked: &'a mut bool,
-    enabled: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     variant: CheckboxVariant,
 }
 
@@ -47,19 +47,15 @@ impl<'a> Checkbox<'a> {
     pub fn new(checked: &'a mut bool) -> Self {
         Self {
             checked,
-            enabled: true,
-            invalid: false,
+            invalid: None,
             variant: CheckboxVariant::Default,
         }
     }
-    /// `false` draws the box disabled: no hover, no focus, no toggling.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
-    }
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the checkbox is
+    /// invalid unless this says `false`.
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// An app variant ([`CheckboxVariant::app`]).
@@ -74,9 +70,12 @@ impl Widget for Checkbox<'_> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.checkbox, |r| &r.checkbox)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
+        let slot = ControlSlot::of(ui);
+        let invalid = slot.invalid(self.invalid);
+        let bits = v.bits().or(slot.state());
         // Geometry depends on neither the value nor interaction.
-        let g = t.state(ui.ctx(), v.bits().with(State::INVALID, self.invalid));
+        let g = t.state(ui.ctx(), bits.with(State::INVALID, invalid));
         let get = |f: fn(&Recipe) -> &Prop<f32>| pick_len(&l, f, g);
 
         // No size: CSS's initial `auto`, the indicator's tick inside the
@@ -92,7 +91,10 @@ impl Widget for Checkbox<'_> {
             pick(&l, |r| &r.width, g).unwrap_or(auto),
             pick(&l, |r| &r.height, g).unwrap_or(auto),
         );
-        let (rect, base) = crate::layout::allocate_item(ui, size, Sense::hover());
+        // `mt-px` beside a FieldContent in a horizontal field.
+        let mt = get(|r| &r.margin_top);
+        let (rect, base) = crate::layout::allocate_item(ui, size + vec2(0.0, mt), Sense::hover());
+        let rect = Rect::from_min_size(rect.min + vec2(0.0, mt), size);
         let hit = rect.expand2(vec2(get(|r| &r.hit_inset_x), get(|r| &r.hit_inset_y)));
         let sense = if enabled {
             Sense::click()
@@ -101,7 +103,7 @@ impl Widget for Checkbox<'_> {
         };
         let mut resp = crate::components::shared::hit_area(ui, hit, base.id.with("hit"), sense);
         pressable(&mut resp, ActivationKeys::Space);
-        if enabled && resp.clicked() {
+        if enabled && (resp.clicked() || slot.pressed) {
             *self.checked = !*self.checked;
             resp.mark_changed();
         }
@@ -111,8 +113,8 @@ impl Widget for Checkbox<'_> {
         } else {
             State::UNCHECKED
         })
-        .with(State::INVALID, self.invalid)
-        .or(v.bits());
+        .with(State::INVALID, invalid)
+        .or(bits);
         let st = interaction_state(&t, &resp, context.with(State::DISABLED, !enabled));
 
         if ui.is_rect_visible(rect) {
@@ -142,11 +144,12 @@ impl Widget for Checkbox<'_> {
         resp.widget_info(|| egui::WidgetInfo {
             enabled,
             selected: Some(checked),
-            ..egui::WidgetInfo::new(egui::WidgetType::Checkbox)
+            ..egui::WidgetInfo::new(egui::Role::CheckBox)
         });
         // `disabled:cursor-not-allowed`, on the hit area as on its `::after`.
         disabled_cursor(&resp, !enabled);
-        report_invalid(&resp, self.invalid);
+        report_invalid(&resp, invalid);
+        slot.done(ui, &resp, st, enabled, true);
         resp.rect = rect;
         resp
     }

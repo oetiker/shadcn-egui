@@ -2,7 +2,7 @@
 //! ranks, CSS spacing variables resolved.
 
 use crate::class::split;
-use crate::model::{Field, Value};
+use crate::model::{flag, Field, Value};
 use crate::utility::{utility, U};
 use crate::variant::{class_variants, rank, ChildSel, Skip};
 use std::collections::HashMap;
@@ -83,9 +83,10 @@ pub fn collect_vars(css: &[(String, Vec<String>)]) -> Vars {
 
 /// Why a `line-clamp-N` under a display class clamps nothing.
 pub const CLAMP_CANCELLED: &str = "line clamp under a display class: Tailwind emits the display utility later, so Chrome drops `display: -webkit-box` and clamps nothing; the component clips the text";
-/// Why a `line-clamp-N` that Chrome applies is not translated.
+/// Why a `line-clamp-N` that Chrome applies is not translated: on a child
+/// target, or under a display class that cancels it only in some states.
 pub const CLAMP_EFFECTIVE: &str =
-    "line clamp: the crate does not clamp lines yet (no ported part has one)";
+    "line clamp on a child target or cancelled only in some states: the crate clamps a part's own text in every state";
 
 pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     let mut m = Marker::default();
@@ -94,8 +95,11 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
     // Line clamps and display classes, by target and variants: a display
     // class of the same target and at least the clamp's rank cancels it.
     type Target = (Option<ChildSel>, u128, u128, u128);
-    let mut clamps: Vec<(String, Target)> = Vec::new();
+    let mut clamps: Vec<(String, u32, usize, Target)> = Vec::new();
     let mut displays: Vec<Target> = Vec::new();
+    // `border-{t,l}-<role>` decls (as `BorderColor`) with their class and
+    // the width field of their side, checked once every class is read.
+    let mut sides: Vec<(String, Field, Decl)> = Vec::new();
     for (idx, raw) in classes.iter().enumerate() {
         let c = split(raw);
         let v = match class_variants(&c) {
@@ -134,7 +138,28 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
         match utility(&c.utility, v.pseudo) {
             U::Set(list) => set(list, false, &mut m),
             U::After(list) => set(list, true, &mut m),
-            U::Clamp(_) => clamps.push((raw.clone(), (v.child.clone(), v.all, v.none, v.rank))),
+            U::Clamp(n) => clamps.push((
+                raw.clone(),
+                n,
+                idx,
+                (v.child.clone(), v.all, v.none, v.rank),
+            )),
+            U::SideColor(..) if v.child.is_some() => m.unsupported.push((
+                raw.clone(),
+                "single-side border colour on a child target".into(),
+            )),
+            U::SideColor(side, value) => sides.push((
+                raw.clone(),
+                side,
+                Decl {
+                    field: Field::BorderColor,
+                    value,
+                    all: v.all,
+                    none: v.none,
+                    rank: v.rank,
+                    idx,
+                },
+            )),
             _ if v.child.is_some() => match utility(&c.utility, v.pseudo) {
                 U::Ignore(why) => m.ignored.push((raw.clone(), why)),
                 U::Show(why) => {
@@ -190,6 +215,29 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
             U::Unsupported(why) => m.unsupported.push((raw.clone(), why.to_owned())),
         }
     }
+    // A side's colour is the box's border colour, exactly, when no other
+    // side can have a width and no whole-box colour can apply with it.
+    for (raw, side, decl) in sides {
+        let widths = [
+            Field::BorderWidth,
+            Field::BorderTopWidth,
+            Field::BorderLeftWidth,
+        ];
+        let clash = m.decls.iter().any(|d| {
+            let other_width =
+                widths.contains(&d.field) && d.field != side && d.value != Value::Px(0.0);
+            (other_width || d.field == Field::BorderColor) && overlap(d, &decl)
+        });
+        if clash {
+            m.unsupported.push((
+                raw,
+                "single-side border colour on a box with another bordered side or a border colour"
+                    .into(),
+            ));
+        } else {
+            m.decls.push(decl);
+        }
+    }
     // A display class shows a part that a `hidden` class hides (`hidden
     // sm:flex`); on a part that is never hidden it is structure.
     let hides = m.decls.iter().any(|d| d.field == Field::Hidden);
@@ -207,12 +255,24 @@ pub fn translate(classes: &[String], vars: &Vars) -> Marker {
             m.ignored.push((raw, why));
         }
     }
-    for (raw, (child, all, none, rank)) in clamps {
+    for (raw, n, idx, (child, all, none, rank)) in clamps {
         let cancelled = displays
             .iter()
             .any(|d| d.0 == child && d.1 == all && d.2 == none && d.3 >= rank);
+        // A display class of the target in other states cancels the clamp
+        // there only.
+        let partly = displays.iter().any(|d| d.0 == child);
         if cancelled {
             m.ignored.push((raw, CLAMP_CANCELLED));
+        } else if child.is_none() && !partly {
+            m.decls.push(Decl {
+                field: Field::LineClamp,
+                value: Value::Lines(n),
+                all,
+                none,
+                rank,
+                idx,
+            });
         } else {
             m.unsupported.push((raw, CLAMP_EFFECTIVE.into()));
         }
@@ -514,6 +574,25 @@ pub const CONTEXTS: &[Context] = &[
         flags: &["IN_BUTTON_GROUP", "IN_GROUP_VERTICAL"],
         children: BUTTON_GROUP_CHILDREN,
     },
+    // A field group nested in a field group (`*:data-[slot=field-group]:`).
+    Context {
+        parent: "cn-field-group",
+        flags: &["IN_FIELD_GROUP"],
+        children: &[],
+    },
+    // The field a choice card wraps (`*:data-[slot=field]:`).
+    Context {
+        parent: "cn-field-label",
+        flags: &["IN_FIELD_LABEL"],
+        children: &[],
+    },
+    // The checkbox of a horizontal field: its rule's own
+    // `has-[>[data-slot=field-content]]` says when it applies.
+    Context {
+        parent: "cn-field-orientation-horizontal",
+        flags: &[],
+        children: &[],
+    },
 ];
 
 /// Upstream slots of components the crate does not ship, with the reason.
@@ -632,6 +711,14 @@ fn list(names: &[String]) -> String {
 
 /// tailwind-merge inside one marker: for one field under one exact variant
 /// set, only the last class survives.
+/// Whether the conditions of `a` and `b` can hold at once: neither needs a
+/// flag the other excludes, and they do not need both orientations
+/// (`data-orientation` has one value).
+fn overlap(a: &Decl, b: &Decl) -> bool {
+    let both = flag("VERTICAL") | flag("HORIZONTAL");
+    a.all & b.none == 0 && b.all & a.none == 0 && (a.all | b.all) & both != both
+}
+
 fn merge(decls: Vec<Decl>) -> Vec<Decl> {
     let mut out: Vec<Decl> = Vec::new();
     for d in decls {

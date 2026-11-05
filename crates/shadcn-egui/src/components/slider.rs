@@ -13,16 +13,8 @@ use crate::components::shared::{
 };
 use crate::style::app::default_variant;
 use crate::style::{pick_len, Recipe, State};
-use crate::{layout, Theme};
+use crate::{layout, Orientation, Theme};
 use egui::{pos2, vec2, EventFilter, Key, Modifiers, Rect, Sense, Ui, Widget};
-
-/// shadcn `orientation` of the slider.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SliderOrientation {
-    #[default]
-    Horizontal,
-    Vertical,
-}
 
 default_variant!(
     /// The slider's variant: upstream has none, so only app variants
@@ -54,8 +46,7 @@ pub struct Slider<'a> {
     value: &'a mut f32,
     range: std::ops::RangeInclusive<f32>,
     step: f32,
-    orientation: SliderOrientation,
-    enabled: bool,
+    orientation: Orientation,
     label: String,
     variant: SliderVariant,
 }
@@ -66,8 +57,7 @@ impl<'a> Slider<'a> {
             value,
             range,
             step: 0.0,
-            orientation: SliderOrientation::Horizontal,
-            enabled: true,
+            orientation: Orientation::Horizontal,
             label: String::new(),
             variant: SliderVariant::Default,
         }
@@ -77,14 +67,14 @@ impl<'a> Slider<'a> {
         self.step = step;
         self
     }
-    pub fn orientation(mut self, o: SliderOrientation) -> Self {
+    /// shadcn `orientation`, `Horizontal` by default.
+    pub fn orientation(mut self, o: Orientation) -> Self {
         self.orientation = o;
         self
     }
-    /// `false` draws the slider disabled: no hover, no focus, no changes.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
+    /// Shortcut for `.orientation(Orientation::Vertical)`.
+    pub fn vertical(self) -> Self {
+        self.orientation(Orientation::Vertical)
     }
     /// Accessible name (shadcn sets it through a label).
     pub fn label(mut self, text: impl Into<String>) -> Self {
@@ -117,8 +107,8 @@ impl Widget for Slider<'_> {
         let track = [v.part(&t.style, |_, s| &s.slider_track, |r| &r.slider_track)];
         let range = [v.part(&t.style, |_, s| &s.slider_range, |r| &r.slider_range)];
         let thumb = [v.part(&t.style, |_, s| &s.slider_thumb, |r| &r.slider_thumb)];
-        let enabled = self.enabled && ui.is_enabled();
-        let vertical = self.orientation == SliderOrientation::Vertical;
+        let enabled = ui.is_enabled();
+        let vertical = self.orientation == Orientation::Vertical;
         let orient = if vertical {
             State::VERTICAL
         } else {
@@ -334,6 +324,10 @@ impl Widget for Slider<'_> {
         }
         let label = self.label;
         resp.widget_info(|| egui::WidgetInfo::slider(enabled, value as f64, label.as_str()));
+        if !vertical {
+            // `data-horizontal` on the slider (`group-has-data-horizontal/field:`).
+            crate::components::field::report_horizontal(ui);
+        }
         resp.rect = rect;
         resp
     }

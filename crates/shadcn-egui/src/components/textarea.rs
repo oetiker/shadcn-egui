@@ -22,13 +22,14 @@
 //! }
 //! ```
 
+use crate::components::field::ControlSlot;
 use crate::components::icon_atom::retint;
 use crate::components::shared::disabled_cursor;
 use crate::components::text::Leading;
 use crate::components::text_entry::{within, TextClip, TextEntry};
 use crate::style::app::default_variant;
 use crate::style::{pick, State};
-use crate::{layout, Theme};
+use crate::Theme;
 use egui::text_edit::TextEditOutput;
 use egui::{
     AtomKind, Atoms, IntoAtoms, Response, TextBuffer, TextEdit, TextWrapMode, Ui, Vec2, Widget,
@@ -54,8 +55,8 @@ pub struct Textarea<'t> {
     text: &'t mut dyn TextBuffer,
     hint_text: Atoms<'static>,
     desired_width: Option<f32>,
-    id_salt: Option<egui::Id>,
-    invalid: bool,
+    id_salt: Option<egui::IdSalt>,
+    invalid: Option<bool>,
     variant: TextareaVariant,
 }
 
@@ -69,7 +70,7 @@ impl<'t> Textarea<'t> {
             hint_text: Atoms::default(),
             desired_width: None,
             id_salt: None,
-            invalid: false,
+            invalid: None,
             variant: TextareaVariant::Default,
         }
     }
@@ -85,8 +86,10 @@ impl<'t> Textarea<'t> {
     }
 
     /// The width the field asks for, in points, capped to the available
-    /// width (default `Metrics::field_max_width`). `f32::INFINITY` fills
-    /// the `Ui`'s width.
+    /// width (default `Metrics::field_max_width`; in a vertical
+    /// [`Field`](crate::components::field::Field) the field's width, first
+    /// in a horizontal one the room the parts after it leave).
+    /// `f32::INFINITY` fills the `Ui`'s width.
     #[inline]
     pub fn desired_width(mut self, desired_width: f32) -> Self {
         self.desired_width = Some(desired_width);
@@ -97,15 +100,17 @@ impl<'t> Textarea<'t> {
     /// `TextEdit::id_salt`. Needed only where a caller must address this
     /// field from outside the widget tree that builds it.
     #[inline]
-    pub fn id_salt(mut self, id_salt: impl std::hash::Hash) -> Self {
-        self.id_salt = Some(egui::Id::new(id_salt));
+    pub fn id_salt(mut self, id_salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = Some(egui::IdSalt::new(id_salt));
         self
     }
 
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the textarea is
+    /// invalid unless this says `false`.
     #[inline]
     pub fn invalid(mut self, invalid: bool) -> Self {
-        self.invalid = invalid;
+        self.invalid = Some(invalid);
         self
     }
 
@@ -122,14 +127,14 @@ impl<'t> Textarea<'t> {
         let t = Theme::current(ui.ctx());
         let v = t.resolve(self.variant);
         let l = [v.part(&t.style, |_, s| &s.textarea, |r| &r.textarea)];
-        let context = v.bits().with(State::INVALID, self.invalid);
+        let mut slot = ControlSlot::of(ui);
+        let context = v.bits().with(State::INVALID, slot.invalid(self.invalid));
         // A `<textarea>`'s rows are line boxes, placed as inline text.
         let frame = TextEntry::resolve(
             ui,
             &t,
             &l,
             context,
-            true,
             Leading::Inline,
             TextClip::Padding,
             "shadcn_egui::textarea",
@@ -143,8 +148,14 @@ impl<'t> Textarea<'t> {
         // A `<textarea>` breaks a word wider than the field
         // (`overflow-wrap: break-word`, the browser's default for it).
         let look = frame.look.clone().break_word(true);
-        let max_width = self.desired_width.unwrap_or(t.metrics.field_max_width);
-        let width = layout::capped_width(ui, max_width, frame.content_min);
+        // The field's width in a vertical field (`*:w-full`), the room
+        // left in a horizontal one.
+        let width = slot.text_width(
+            ui,
+            self.desired_width,
+            t.metrics.field_max_width,
+            frame.content_min,
+        );
         let wrap = frame.content_width(width);
 
         // `field-sizing-content`: the box holds its text, or its hint text
@@ -184,13 +195,19 @@ impl<'t> Textarea<'t> {
             .layouter(&mut layouter)
             .desired_width(f32::INFINITY)
             .desired_rows(1)
-            .vertical_align(egui::Align::Min);
+            .align(egui::Align2::LEFT_TOP);
         let disabled = !frame.enabled;
         let out = frame.show(ui, Vec2::new(width, height), edit, self.id_salt);
         // `disabled:cursor-not-allowed`: unlike the input, the textarea
         // has no `disabled:pointer-events-none` that would let the pointer
         // through.
         disabled_cursor(&out.response.response, disabled);
+        let resp = &out.response.response;
+        if slot.pressed && !disabled {
+            resp.request_focus();
+        }
+        let st = State::NONE.with(State::FOCUS_VISIBLE, resp.has_focus());
+        slot.done(ui, resp, st, !disabled, false);
         out
     }
 }

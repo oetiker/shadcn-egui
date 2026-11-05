@@ -16,13 +16,17 @@ fn harness(
     ui_fn: impl FnMut(&mut egui::Ui, &mut String) + 'static,
 ) -> Harness<'static, String> {
     let mut ui_fn = ui_fn;
-    let mut h = Harness::new_ui_state(
-        move |ui, text: &mut String| {
-            Theme::vega().apply(ui.ctx());
-            ui_fn(ui, text);
-        },
-        text.to_owned(),
-    );
+    // A bare control has no accessible name (as upstream's demo); names are
+    // not what this test checks.
+    let mut h = Harness::builder()
+        .with_accessibility_check(false)
+        .build_ui_state(
+            move |ui, text: &mut String| {
+                Theme::vega().apply(ui.ctx());
+                ui_fn(ui, text);
+            },
+            text.to_owned(),
+        );
     h.run();
     h
 }
@@ -107,12 +111,13 @@ fn show_returns_the_text_edit_output() {
     let mut text = String::from("abc");
     let mut cursor = None;
     for _ in 0..3 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let out = Textarea::new(&mut text).id_salt("out").show(ui);
             out.response.response.request_focus();
             cursor = out.cursor_range;
             assert_eq!(out.galley.text(), "abc");
-        });
+        })
+        .drop_without_applying_deltas();
     }
     assert!(cursor.is_some(), "a focused field reports its cursor");
 }
@@ -305,13 +310,14 @@ fn the_field_overflows_a_narrow_column_without_widening_it() {
     let mut text = String::new();
     let mut widths = (0.0, 0.0);
     for _ in 0..2 {
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             ui.allocate_ui(egui::vec2(10.0, 100.0), |ui| {
                 ui.set_max_width(10.0);
                 let field = ui.add(Textarea::new(&mut text));
                 widths = (field.rect.width(), ui.min_rect().width());
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
     assert!(widths.0 > 10.0, "the field keeps its minimum: {widths:?}");
     assert_eq!(widths.1, 10.0, "the column keeps its width");
@@ -377,7 +383,8 @@ fn a_focused_field_shows_the_ring() {
             ..Default::default()
         };
         let mut rect = egui::Rect::NOTHING;
-        let out = ctx.run_ui(input, |ui| rect = ui.add(Textarea::new(&mut text)).rect);
+        let mut out = ctx.run_ui(input, |ui| rect = ui.add(Textarea::new(&mut text)).rect);
+        out.textures_delta.clear();
         (rect, out)
     };
     let (rect, _) = frame(Vec::new());
@@ -484,9 +491,9 @@ fn the_text_follows_the_md_breakpoint() {
         let mut text = String::from("Hello");
         let mut out = None;
         for _ in 0..2 {
-            out = Some(ctx.run_ui(input.clone(), |ui| {
+            out = Some(common::no_textures(ctx.run_ui(input.clone(), |ui| {
                 ui.add(Textarea::new(&mut text));
-            }));
+            })));
         }
         common::text_shapes(&out.unwrap())
             .iter()
@@ -566,7 +573,7 @@ fn a_recipe_that_does_not_grow_fails_a_debug_assert() {
 /// (`disabled` from the `Ui`) and invalid (`aria-invalid`) states on the
 /// bare field, a filled field with a wrapped and a broken line, and a
 /// focused one. textarea-field, -disabled and -invalid wrap the field in
-/// Field, which waits for the Field port.
+/// a Field: their own snapshots follow.
 #[test]
 fn textarea_snapshot() {
     use shadcn_egui::components::button::Button;
@@ -611,6 +618,61 @@ fn textarea_snapshot() {
     });
 }
 
+/// A Field demo at the desktop width, where `md:text-sm` applies as on
+/// the docs page; the bare field's phone size is in `textarea_snapshot`.
+/// The demos set no width: the field gets 384 points here.
+fn field_demo(name: &str, add: impl Fn(&mut egui::Ui)) {
+    common::snapshot_all(name, egui::vec2(800.0, 190.0), |ui| {
+        ui.allocate_ui(egui::vec2(384.0, ui.available_height()), |ui| {
+            ui.set_width(384.0);
+            add(ui);
+        });
+    });
+}
+
+/// textarea-field: a label, a description, then the field.
+#[test]
+fn textarea_field_snapshot() {
+    use shadcn_egui::components::field::{field_description, field_label, Field};
+    field_demo("textarea_field", |ui| {
+        Field::new().show(ui, |ui| {
+            field_label(ui, "Message");
+            field_description(ui, "Enter your message below.");
+            ui.add(Textarea::new(&mut String::new()).hint_text("Type your message here."));
+        });
+    });
+}
+
+/// textarea-disabled: `data-disabled` on the field and `disabled` on the
+/// textarea, both from a disabled `Ui`.
+#[test]
+fn textarea_disabled_snapshot() {
+    use shadcn_egui::components::field::Field;
+    field_demo("textarea_disabled", |ui| {
+        ui.add_enabled_ui(false, |ui| {
+            Field::new().label("Message").show(ui, |ui| {
+                ui.add(Textarea::new(&mut String::new()).hint_text("Type your message here."))
+            });
+        });
+    });
+}
+
+/// textarea-invalid: `data-invalid` on the field; the textarea takes
+/// `aria-invalid` from it, the description follows it.
+#[test]
+fn textarea_invalid_snapshot() {
+    use shadcn_egui::components::field::Field;
+    field_demo("textarea_invalid", |ui| {
+        Field::new()
+            .invalid(true)
+            .label("Message")
+            .description("Please enter a valid message.")
+            .show(ui, |ui| {
+                ui.add(Textarea::new(&mut String::new()).hint_text("Type your message here."))
+            });
+    });
+}
+
 /// Where [`host_frame`] shows the field.
 #[derive(Clone, Copy, Debug)]
 enum Host {
@@ -646,7 +708,7 @@ fn host_frame(
             Host::Plain => egui::Frame::group(ui.style()).show(ui, add).inner,
             Host::Card => Card::new().show(ui, |ui| card_content(ui, add)),
             Host::Area => {
-                egui::Area::new(egui::Id::new("area"))
+                egui::Area::new(egui::Id::unique("area"))
                     .fixed_pos(egui::pos2(40.0, 40.0))
                     // egui's fade-in animates the Area itself.
                     .fade_in(false)
@@ -695,8 +757,9 @@ fn a_field_settles_in_a_card_and_in_a_plain_host_under_both_loops() {
                 assert_eq!(passes, 1, "{case}");
                 assert_eq!(rect.size(), want, "{case}: {rect:?}");
                 // egui asks for a second frame after a context's first,
-                // with a plain label alone too.
-                if frame > 0 {
+                // with a plain label alone too, and egui 0.37 a third, as it
+                // sends the window its theme in the first.
+                if frame > 1 {
                     assert!(!ctx.has_requested_repaint(), "{case}");
                 }
             }

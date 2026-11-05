@@ -26,6 +26,11 @@ pub enum U {
     /// and variants wins over its `display: -webkit-box` and nothing is
     /// clamped; [`crate::resolve::translate`] decides which.
     Clamp(u32),
+    /// `border-{t,l}-<role>`: the colour of the side whose width field is
+    /// given. [`crate::resolve::translate`] makes it the box's
+    /// `BorderColor` where that side is the box's only side with a width,
+    /// and reports it unsupported elsewhere.
+    SideColor(Field, Value),
     Ignore(&'static str),
     Unsupported(&'static str),
 }
@@ -46,10 +51,14 @@ const ANCHOR: &str = "bits-ui anchor variable: its value comes from the placemen
 const FONT_SANS: &str = "sets the theme's sans font, which crate text uses already (D-100)";
 const DEAD_BLEND: &str = "`background-blend-mode` without a background image: the browser paints the plain colour (dead rule, conformance 2.8)";
 const CENTRE: &str = "dialog centring: egui centres the dialog window";
+const INHERIT_RADIUS: &str = "clips the content to the parent's radius; egui clips to a rectangle (accepted difference, as card's `overflow-hidden`)";
 
 const IGNORE_EXACT: &[(&str, &str)] = &[
     ("flex-col", STRUCTURE),
     ("flex-1", STRUCTURE),
+    ("flex-wrap", STRUCTURE),
+    ("basis-full", STRUCTURE),
+    ("flex-auto", STRUCTURE),
     ("shrink-0", STRUCTURE),
     ("relative", STRUCTURE),
     ("absolute", STRUCTURE),
@@ -99,6 +108,7 @@ const IGNORE_PREFIX: &[(&str, &str)] = &[
     ("auto-rows-", STRUCTURE),
     ("@container/", STRUCTURE),
     ("group/", BROWSER),
+    ("peer/", BROWSER),
     ("cursor-", BROWSER),
     ("overflow-", BROWSER),
     ("origin-", ANCHOR),
@@ -198,8 +208,11 @@ fn spaced(fields: &[Field], value: &str, sign: f32) -> U {
 pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
     use Field::*;
     match pseudo {
-        Some(Pseudo::Svg) => {
+        Some(p @ (Pseudo::Svg | Pseudo::SvgAll)) => {
             if let Some(v) = u.strip_prefix("size-").and_then(spacing) {
+                if p == Pseudo::SvgAll {
+                    return px(&[IconSize, SizedIconSize], v);
+                }
                 return px(&[IconSize], v);
             }
             if let Some(v) = u.strip_prefix("translate-y-").and_then(spacing) {
@@ -244,6 +257,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
                 // The pseudo-element is drawn whenever it has fields.
                 U::Show(why) => U::Ignore(why),
                 U::Clamp(_) => U::Unsupported("line-clamp under after:"),
+                U::SideColor(..) => U::Unsupported("single-side border colour under after:"),
                 other @ (U::After(_) | U::Ignore(_) | U::Unsupported(_)) => other,
             };
         }
@@ -434,6 +448,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
         "border-l" => return px(&[BorderLeftWidth], 1.0),
         "ring" => return px(&[RingWidth], 1.0),
         "outline" => return px(&[OutlineWidth], 1.0),
+        "rounded-[inherit]" => return U::Ignore(INHERIT_RADIUS),
         _ => {}
     }
     for (prefix, field) in [
@@ -475,6 +490,9 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             if let Some(n) = v.strip_prefix(side).and_then(|n| n.parse::<f32>().ok()) {
                 return px(&[field], n);
             }
+            if let Some((r, a)) = v.strip_prefix(side).and_then(role) {
+                return U::SideColor(field, Value::Paint { role: r, alpha: a });
+            }
         }
         if v.starts_with("b-")
             || v.starts_with("l-")
@@ -483,7 +501,7 @@ pub fn utility(u: &str, pseudo: Option<Pseudo>) -> U {
             || v.starts_with("y-")
         {
             return U::Unsupported(
-                "single-side border other than border-t (underline-style inputs)",
+                "single-side border other than border-t or border-l (underline-style inputs)",
             );
         }
         return role(v).map_or(U::Unsupported("border-* value"), |(r, a)| {
@@ -588,15 +606,24 @@ fn calc(v: &str) -> Option<(f32, f32)> {
 
 /// Motion classes (D-88, axiom 8: a value a class gives is a look):
 /// tw-animate-css enter and exit (`animate-in`, `fade-in-0`, `zoom-in-95`,
-/// `slide-in-from-top-2`), `duration-*` (seconds, also the animation's
-/// duration), `ease-*` (the timing function) and `transition-*` (the
-/// properties that animate).
+/// `slide-in-from-top-2`), Tailwind's `animate-spin`, `duration-*` (seconds,
+/// also the animation's duration), `ease-*` (the timing function) and
+/// `transition-*` (the properties that animate).
 fn motion(u: &str) -> Option<U> {
     use Field::*;
     let set = |f: Field, v: Value| Some(U::Set(vec![(f, v)]));
     match u {
         "animate-in" => return set(AnimateIn, Value::Bool(true)),
         "animate-out" => return set(AnimateOut, Value::Bool(true)),
+        // Tailwind 4: `--animate-spin: spin 1s linear infinite`, one turn a
+        // second.
+        "animate-spin" => {
+            return Some(U::Set(vec![
+                (AnimateSpin, Value::Bool(true)),
+                (Duration, Value::Factor(1.0)),
+                (Easing, Value::Easing("Linear")),
+            ]))
+        }
         "fade-in" => return set(EnterOpacity, Value::Factor(0.0)),
         "fade-out" => return set(ExitOpacity, Value::Factor(0.0)),
         _ => {}

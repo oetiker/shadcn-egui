@@ -6,12 +6,33 @@
 //!
 //! Lucide icons are 24x24 outlines drawn with a 2-unit round-capped stroke.
 //! Round caps matter: some icons draw dots as zero-length lines, which vanish
-//! without them. Every stroke is painted with round caps and round joins.
+//! without them. Every stroke is painted with the caps and joins its icon
+//! gives it: round in Lucide and Tabler, and in Hugeicons also butt or
+//! square ends and miter or bevel corners where the set draws them.
 
 use super::icon_raster;
 use crate::Theme;
-use egui::{pos2, Color32, Painter, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
+use egui::emath::Rot2;
+use egui::{pos2, Color32, Mesh, Painter, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
 pub use shadcn_egui_core::{Icon, IconLayer, IconShape, IconSlots, Seg};
+
+/// What a part's icon slot shows (`data-icon="inline-start"`,
+/// `"inline-end"`): an icon, or upstream's `<Spinner>` in its place, the
+/// theme's `loader` icon turning
+/// ([`Spinner`](crate::components::spinner::Spinner)).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Glyph {
+    Icon(Icon),
+    /// The theme's `loader` icon, turning; its accessible name is
+    /// "Loading".
+    Spinner,
+}
+
+impl From<Icon> for Glyph {
+    fn from(icon: Icon) -> Self {
+        Glyph::Icon(icon)
+    }
+}
 
 /// Paint `icon` scaled into the square `rect`: the fill (if any) and the
 /// strokes of each layer at the layer's alpha, from one coverage texture
@@ -23,6 +44,23 @@ pub use shadcn_egui_core::{Icon, IconLayer, IconShape, IconSlots, Seg};
 /// An icon larger than 1024 physical pixels is drawn from a 1024-pixel
 /// texture scaled up. A curve with no start point is skipped.
 pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, stroke_width: f32) {
+    paint_icon_rotated(painter, rect, icon, color, stroke_width, 0.0);
+}
+
+/// [`paint_icon`], turned clockwise by `angle` radians about the centre of
+/// the snapped rect: rasterised at that angle, as a browser rasterises a
+/// turned SVG, into a texture drawn 1:1 on the pixel grid. Only when the
+/// turned box is larger than the texture limit, or the turned textures
+/// are at their bounds, is the unturned texture drawn turned, sampled
+/// smoothed.
+pub(crate) fn paint_icon_rotated(
+    painter: &Painter,
+    rect: Rect,
+    icon: &Icon,
+    color: Color32,
+    stroke_width: f32,
+    angle: f32,
+) {
     let ppp = painter.pixels_per_point();
     let (x0, y0) = ((rect.min.x * ppp).round(), (rect.min.y * ppp).round());
     let w = (rect.width() * ppp).round().max(1.0); // behaviour-ok: at least one device pixel
@@ -36,13 +74,42 @@ pub fn paint_icon(painter: &Painter, rect: Rect, icon: &Icon, color: Color32, st
     let side = icon_raster::MAX_SIDE.min(ctx.input(|i| i.max_texture_side)) as f32;
     let k = (side / w.max(h)).min(1.0); // behaviour-ok: never rasterise larger than drawn
     let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0)); // behaviour-ok: at least one device pixel
-    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width);
+
+    // Turned, and not scaled down to the texture limit: rasterise at the angle.
+    let turned = angle != 0.0; // behaviour-ok: 0 is the unturned angle
+    if turned && (tw, th) == (w, h) {
+        let [mx, my] = icon_raster::turned_margin(w as usize, h as usize);
+        let fits = (w as usize + 2 * mx).max(h as usize + 2 * my) as f32 <= side;
+        let tex = fits
+            .then(|| {
+                icon_raster::turned_texture(ctx, icon, w as usize, h as usize, stroke_width, angle)
+            })
+            .flatten();
+        if let Some(tex) = tex {
+            let margin = Vec2::new(mx as f32, my as f32) / ppp;
+            let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
+            let mut mesh = Mesh::with_texture(tex.id());
+            mesh.add_rect_with_uv(drawn.expand2(margin), uv, color);
+            painter.add(mesh);
+            return;
+        }
+    }
+    // A bitmap drawn turned is sampled smoothed: nearest samples would
+    // leave stair steps along its edges.
+    let tex = icon_raster::texture(ctx, icon, tw as usize, th as usize, stroke_width, turned);
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)); // behaviour-ok: the whole texture (UV unit square)
-    painter.image(tex.id(), drawn, uv, color);
+    let mut mesh = Mesh::with_texture(tex.id());
+    mesh.add_rect_with_uv(drawn, uv, color);
+    // At 0 the vertices stay as they are, bit for bit.
+    if angle != 0.0 {
+        mesh.rotate(Rot2::from_angle(angle), drawn.center());
+    }
+    painter.add(mesh);
 }
 
 /// An icon as a widget: `ui.add(IconView::new(&icons::MIC))`. Sized
-/// `Metrics::icon`, colored `foreground`, stroked `Metrics::icon_stroke`.
+/// `Metrics::icon`, in the `Ui`'s text colour (`currentColor`), stroked
+/// `Metrics::icon_stroke`.
 /// It has no accessible name; give it one with `.labelled_by(label.id)`.
 pub struct IconView<'a> {
     icon: &'a Icon,
@@ -62,8 +129,9 @@ impl<'a> IconView<'a> {
         self.size = Some(size);
         self
     }
-    pub fn color(mut self, color: Color32) -> Self {
-        self.color = Some(color);
+    /// The colour; the `Ui`'s text colour by default.
+    pub fn color(mut self, color: impl Into<Color32>) -> Self {
+        self.color = Some(color.into());
         self
     }
 }
@@ -76,13 +144,11 @@ impl Widget for IconView<'_> {
         // No label of its own (the icon's name is an id, not text a reader
         // should hear): name it with `labelled_by(label.id)`, which an own
         // label would override.
-        let enabled = ui.is_enabled();
-        resp.widget_info(|| egui::WidgetInfo {
-            enabled,
-            ..egui::WidgetInfo::new(egui::WidgetType::Image)
+        crate::components::shared::widget_info_never_disabled(&resp, || {
+            egui::WidgetInfo::new(egui::Role::Image)
         });
         if ui.is_rect_visible(rect) {
-            let color = self.color.unwrap_or(t.palette().foreground);
+            let color = self.color.unwrap_or(ui.visuals().text_color());
             paint_icon(ui.painter(), rect, self.icon, color, t.metrics.icon_stroke);
         }
         resp

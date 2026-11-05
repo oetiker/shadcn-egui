@@ -14,21 +14,30 @@
 //! without a change; typing a letter jumps to the next option starting with
 //! it. The pointer moves the highlight too. An open list takes the keys
 //! while its trigger has focus or no widget has; once Tab moves focus to
-//! another widget, the keys belong to that widget.
+//! another widget, the keys belong to that widget. Opening plays the
+//! style's enter animation (`fade-in-0 zoom-in-95`, a slide from the
+//! trigger's side, `duration-100`); closing jumps, as egui drops the
+//! popup's area in the pass it closes.
 //!
 //! Differences from upstream: the options-list API has no groups, labels,
 //! separators or per-option disabled state, so `cn-select-label` and
 //! `cn-select-separator` are not drawn and the list always sits in one
-//! `cn-select-group` (its padding frames the rows). An `egui::ScrollArea`
-//! replaces the scroll buttons (`cn-select-scroll-*` are resolved by the
-//! style but unused). Each row paints its tick and text in the row's own
+//! `cn-select-group` (its padding frames the rows). Upstream's list shows
+//! no scroll bar and scrolls by its up and down buttons; here the list
+//! scrolls in the crate's [`ScrollArea`], which shows its `border` thumb
+//! while the pointer is over a list that overflows, and the buttons are
+//! not drawn (`cn-select-scroll-*` are resolved by the style but unused).
+//! Each row paints its tick and text in the row's own
 //! text colour, which is what the `**:` descendant classes of
 //! `cn-select-item` ask for. Without `width`, the trigger is as wide as its
 //! widest option (`w-fit` would make it jump with the chosen text); either
 //! width is capped to the room (conformance 3.1).
 
 use crate::color::Tone;
+use crate::components::field::ControlSlot;
 use crate::components::icon::paint_icon;
+use crate::components::motion::{side_and_origin, Enter};
+use crate::components::scroll_area::ScrollArea;
 use crate::components::shared::{
     content_ui, disabled_cursor, interaction_state, line_width, opacity, part_painter, pressable,
     report_invalid, transitioned_text, ActivationKeys, RecipeBox, DEFAULT_SIDE_OFFSET,
@@ -88,8 +97,7 @@ pub struct Select<'a> {
     size: SelectSize,
     variant: SelectVariant,
     placeholder: String,
-    enabled: bool,
-    invalid: bool,
+    invalid: Option<bool>,
     width: Option<f32>,
     side_offset: f32,
 }
@@ -104,8 +112,7 @@ impl<'a> Select<'a> {
             size: SelectSize::Default,
             variant: SelectVariant::Default,
             placeholder: String::new(),
-            enabled: true,
-            invalid: false,
+            invalid: None,
             width: None,
             side_offset: DEFAULT_SIDE_OFFSET,
         }
@@ -125,14 +132,11 @@ impl<'a> Select<'a> {
         self.placeholder = text.into();
         self
     }
-    /// `false` draws the select disabled: no hover, no focus, no opening.
-    pub fn enabled(mut self, yes: bool) -> Self {
-        self.enabled = yes;
-        self
-    }
-    /// shadcn `aria-invalid`: destructive border and ring.
+    /// shadcn `aria-invalid`: destructive border and ring. Inside an
+    /// invalid [`Field`](crate::components::field::Field) the select is
+    /// invalid unless this says `false`.
     pub fn invalid(mut self, yes: bool) -> Self {
-        self.invalid = yes;
+        self.invalid = Some(yes);
         self
     }
     /// Trigger width in points, capped to the room; default is the widest
@@ -154,12 +158,14 @@ impl Widget for Select<'_> {
         let ctx = ui.ctx().clone();
         let v = t.resolve_pair(self.variant, self.size);
         let trig = [v.part(&t.style, |s| &s.select_trigger, |r| &r.select_trigger)];
-        let enabled = self.enabled && ui.is_enabled();
+        let enabled = ui.is_enabled();
         let n = self.options.len();
         let has_value = *self.selected < n;
+        let slot = ControlSlot::of(ui);
+        let invalid = slot.invalid(self.invalid);
         let context = v
             .bits()
-            .with(State::INVALID, self.invalid)
+            .with(State::INVALID, invalid)
             .with(State::PLACEHOLDER, !has_value);
         // Geometry depends on neither interaction nor the open state.
         let g = t.state(ui.ctx(), context);
@@ -256,7 +262,11 @@ impl Widget for Select<'_> {
             });
         }
         let activation = ui.input(|i| i.key_pressed(Key::Enter) || i.key_pressed(Key::Space));
-        let mut toggle = resp.clicked();
+        // A press on the field's label opens the list, as on the trigger.
+        if slot.pressed && enabled {
+            resp.request_focus();
+        }
+        let mut toggle = resp.clicked() || slot.pressed;
         if enabled && keys_to_list && n > 0 {
             let mut hl = ctx
                 .data(|d| d.get_temp::<usize>(hl_id))
@@ -360,7 +370,9 @@ impl Widget for Select<'_> {
                     t.metrics.icon_stroke,
                 );
             }
-            let inherited = t.role(Role::Foreground); // behaviour-ok: inherits Foreground; upstream sets no text colour
+            // No colour of its own: the value inherits the `Ui`'s (a
+            // field's destructive text in an invalid field).
+            let inherited = ui.visuals().text_color();
             let text_color = transitioned_text(
                 ui.ctx(),
                 resp.id,
@@ -380,11 +392,12 @@ impl Widget for Select<'_> {
         resp.widget_info(|| egui::WidgetInfo {
             enabled,
             current_text_value: Some(shown.to_owned()),
-            ..egui::WidgetInfo::new(egui::WidgetType::ComboBox)
+            ..egui::WidgetInfo::new(egui::Role::ComboBox)
         });
         // The trigger's `disabled:cursor-not-allowed`.
         disabled_cursor(&resp, !enabled);
-        report_invalid(&resp, self.invalid);
+        report_invalid(&resp, invalid);
+        slot.done(ui, &resp, st, enabled, false);
 
         // The list.
         if open {
@@ -416,7 +429,9 @@ impl Widget for Select<'_> {
                 |s| &s.select_item_indicator_icon,
                 |r| &r.select_item_indicator_icon,
             );
-            let panel = RecipeBox::resolve(ui.ctx(), t, &l, gs).faded(alpha);
+            // The open animation, in place of egui's fade of the popup's area.
+            let enter = Enter::at(&ctx, popup_id, &l, gs);
+            let panel = RecipeBox::resolve(ui.ctx(), t, &l, gs).faded(alpha * enter.opacity());
             let frame = panel.frame([gpt, gpr, gpb, gpl]);
             let item_look = TextLook::resolve(ui, &item, ist);
             let mut galleys: Vec<_> = self
@@ -464,7 +479,21 @@ impl Widget for Select<'_> {
                 .gap(side_offset)
                 .frame(frame)
                 .show(|ui| {
-                    let slot = RecipeBox::reserve(ui);
+                    // bits' content is `role="listbox"`; egui gives the
+                    // popup's Ui the `dialog` role.
+                    let popup = ui
+                        .stack()
+                        .iter()
+                        .find(|s| s.kind() == Some(egui::UiKind::Popup))
+                        .map_or(ui.unique_id(), |s| s.unique_id);
+                    ui.ctx().accesskit_node_builder(popup, |node| {
+                        node.set_role(egui::accesskit::Role::ListBox);
+                    });
+                    Enter::mark(ui, popup_id);
+                    // The popup's Ui carries egui's fade: this opacity replaces it.
+                    ui.set_opacity(enter.opacity());
+                    // egui's sizing pass draws nothing: no box either.
+                    let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
                     ui.set_width(inner_w);
                     ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
                     // The rows sit in the group, the group in the viewport,
@@ -472,11 +501,11 @@ impl Widget for Select<'_> {
                     let chain = [&group[..], &viewport[..], &l[..]];
                     content_ui(
                         ui,
-                        ui.id().with("shadcn_egui::select::content"),
+                        ui.scope_id().with("shadcn_egui::select::content"),
                         &chain,
                         gs,
                         |ui| {
-                            egui::ScrollArea::vertical()
+                            ScrollArea::vertical()
                                 .max_height(max_h.max(0.0))
                                 .auto_shrink([false, true])
                                 .show(ui, |ui| {
@@ -573,13 +602,19 @@ impl Widget for Select<'_> {
                                                 );
                                             }
                                         }
+                                        // bits' item: `role="option"` with
+                                        // `aria-selected`. egui reports a
+                                        // selected widget as toggled, so the
+                                        // state goes to `selected` instead.
                                         r.widget_info(|| {
-                                            egui::WidgetInfo::selected(
-                                                egui::WidgetType::SelectableLabel,
+                                            egui::WidgetInfo::labeled(
+                                                egui::Role::ListBoxOption,
                                                 true,
-                                                i == current,
                                                 self.options[i],
                                             )
+                                        });
+                                        ctx.accesskit_node_builder(r.id, |node| {
+                                            node.set_selected(i == current);
                                         });
                                     }
                                 });
@@ -598,8 +633,12 @@ impl Widget for Select<'_> {
                 }
                 Popup::close_id(&ctx, popup_id);
             }
-            if let Some(list) = list {
-                panel.paint_reserved(&ctx, list.response.layer_id, list.inner, list.response.rect);
+            if let Some((list, slot)) = list.and_then(|l| l.inner.map(|slot| (l, slot))) {
+                let (layer, list_rect) = (list.response.layer_id, list.response.rect);
+                panel.paint_reserved(&ctx, layer, slot, list_rect);
+                // bits' select content aligns to the trigger's start.
+                let (side, origin) = side_and_origin(list_rect, rect, egui::Align::Min);
+                enter.transform(&ctx, layer, slot, origin, &l, gs | side);
             }
         }
         if !Popup::is_id_open(&ctx, popup_id) {

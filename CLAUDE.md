@@ -86,6 +86,7 @@ crates.
   cargo clippy --workspace --all-targets --all-features --jobs 4 -- -D warnings
   cargo clippy -p shadcn-egui --target wasm32-unknown-unknown --example gallery --features fonts-all,icons-all --jobs 4 -- -D warnings
   cargo fmt --all --check
+  export ICONGEN_DOWNLOADS=<generate-crates.sh scratch dir>
   for t in stylegen icongen fontgen; do
     cargo test --manifest-path tools/$t/Cargo.toml --jobs 4 -- --test-threads 4
     cargo clippy --manifest-path tools/$t/Cargo.toml --all-targets --jobs 4 -- -D warnings

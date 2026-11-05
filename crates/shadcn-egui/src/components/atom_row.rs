@@ -10,7 +10,8 @@
 //! colour (rules, Media and icons); other images draw as given. Typed icon
 //! slots and [`IconAtom`]s without a caller side are the part's icon size
 //! ([`AtomRow::icon_size`]), as upstream sizes an svg without a `size-*`
-//! class.
+//! class. A [`Glyph::Spinner`] in a slot keeps the spinner's own size
+//! unless the part sizes every icon ([`AtomRow::sized_icon_size`]).
 //!
 //! Use it in two steps, as the size never depends on the interaction
 //! state: [`AtomRow::lay_out`] gives the row's border-box size to allocate;
@@ -19,21 +20,24 @@
 //!
 //! [`IconAtom`]: crate::components::icon_atom::IconAtom
 
-use crate::components::icon::{paint_icon, Icon};
+use crate::components::icon::{paint_icon, paint_icon_rotated, Glyph, Icon};
 use crate::components::icon_atom::{resize, retint};
+#[cfg(doc)]
+use crate::components::text::selectable_sense;
 use crate::components::text::{TextBlock, TextLook};
 use egui::{
-    Align2, AtomKind, Atoms, Color32, Image, IntoAtoms, Painter, Rect, SizedAtomKind, TextWrapMode,
-    Ui, Vec2, WidgetText,
+    Align2, AtomKind, Atoms, Color32, Image, IntoAtoms, Painter, Rect, Response, SizedAtomKind,
+    TextWrapMode, Ui, Vec2, WidgetText,
 };
 
 /// One row of atoms with optional typed icon slots, before layout.
 #[must_use = "Call .lay_out(ui, look)"]
 pub(crate) struct AtomRow<'a> {
     atoms: Atoms<'a>,
-    start: Option<Icon>,
-    end: Option<Icon>,
+    start: Option<Glyph>,
+    end: Option<Glyph>,
     icon_size: f32,
+    spinner_size: f32,
     icon_stroke: f32,
     gap: f32,
     /// Left, right, top and bottom: padding plus border.
@@ -43,12 +47,14 @@ pub(crate) struct AtomRow<'a> {
 impl<'a> AtomRow<'a> {
     /// `atoms` with no icon slots, no gap and no inset.
     pub(crate) fn new(ui: &Ui, atoms: impl IntoAtoms<'a>) -> Self {
-        let metrics = crate::Theme::current(ui.ctx()).metrics;
+        let t = crate::Theme::current(ui.ctx());
+        let metrics = t.metrics;
         Self {
             atoms: atoms.into_atoms(),
             start: None,
             end: None,
             icon_size: metrics.icon,
+            spinner_size: crate::components::spinner::own_size(&t),
             icon_stroke: metrics.icon_stroke,
             gap: 0.0,
             inset: [0.0; 4],
@@ -56,7 +62,7 @@ impl<'a> AtomRow<'a> {
     }
 
     /// The typed icon slots before and after the content.
-    pub(crate) fn icons(mut self, start: Option<Icon>, end: Option<Icon>) -> Self {
+    pub(crate) fn icons(mut self, start: Option<Glyph>, end: Option<Glyph>) -> Self {
         self.start = start;
         self.end = end;
         self
@@ -67,6 +73,15 @@ impl<'a> AtomRow<'a> {
     /// side; `Metrics::icon` by default.
     pub(crate) fn icon_size(mut self, size: f32) -> Self {
         self.icon_size = size;
+        self
+    }
+
+    /// The part's size for every icon (`[&>svg]:size-*`), which also
+    /// reaches a spinner; `None` keeps the spinner's own `size-4`.
+    pub(crate) fn sized_icon_size(mut self, size: Option<f32>) -> Self {
+        if let Some(size) = size {
+            self.spinner_size = size;
+        }
         self
     }
 
@@ -89,11 +104,17 @@ impl<'a> AtomRow<'a> {
     pub(crate) fn lay_out(self, ui: &Ui, look: &TextLook) -> LaidRow<'a> {
         let font = egui::FontSelection::FontId(look.font_id(ui.ctx()));
         let mut items = Vec::new();
-        let icon = |i: Icon| Item {
-            kind: ItemKind::Icon(i),
-            size: Vec2::splat(self.icon_size),
-            align: Align2::CENTER_CENTER,
-            grow: false,
+        let icon = |g: Glyph| {
+            let (kind, side) = match g {
+                Glyph::Icon(i) => (ItemKind::Icon(i), self.icon_size),
+                Glyph::Spinner => (ItemKind::Spinner, self.spinner_size),
+            };
+            Item {
+                kind,
+                size: Vec2::splat(side),
+                align: Align2::CENTER_CENTER,
+                grow: false,
+            }
         };
         items.extend(self.start.map(icon));
         for atom in self.atoms {
@@ -143,6 +164,7 @@ impl<'a> AtomRow<'a> {
             gap: self.gap,
             inset: self.inset,
             icon_stroke: self.icon_stroke,
+            select: None,
         }
     }
 }
@@ -160,6 +182,8 @@ struct Item<'a> {
 
 enum ItemKind<'a> {
     Icon(Icon),
+    /// The theme's `loader` icon, turning.
+    Spinner,
     /// The source text, to lay out again in a look of the paint state.
     Text {
         text: WidgetText,
@@ -177,9 +201,20 @@ pub(crate) struct LaidRow<'a> {
     gap: f32,
     inset: [f32; 4],
     icon_stroke: f32,
+    /// The widget's response, when its text is selectable.
+    select: Option<Response>,
 }
 
 impl LaidRow<'_> {
+    /// Make the text selectable through egui's label text selection, as
+    /// the browser selects a `span`'s: `response` senses
+    /// [`selectable_sense`], and the `Ui` given to [`LaidRow::paint`] has
+    /// the opacity the text paints at.
+    pub(crate) fn selectable(mut self, response: &Response) -> Self {
+        self.select = Some(response.clone());
+        self
+    }
+
     /// The border-box size: the content plus the inset.
     pub(crate) fn size(&self) -> Vec2 {
         let [l, r, t, b] = self.inset;
@@ -220,13 +255,22 @@ impl LaidRow<'_> {
             let at = item.align.align_size_within_rect(item.size, cell);
             match item.kind {
                 ItemKind::Icon(icon) => paint_icon(painter, at, &icon, color, self.icon_stroke),
+                ItemKind::Spinner => {
+                    let t = crate::Theme::current(ui.ctx());
+                    let angle = crate::components::spinner::spin(ui, &[&*t.style.spinner]);
+                    let loader = &t.icons.loader;
+                    paint_icon_rotated(painter, at, loader, color, self.icon_stroke, angle);
+                }
                 ItemKind::Text { text, block } => {
                     let block = if relayout {
                         lay_out_text(ui, look, text)
                     } else {
                         block
                     };
-                    block.paint(painter, at.min, color);
+                    match &self.select {
+                        Some(resp) => block.paint_selectable(ui, resp, at.min, color),
+                        None => block.paint(painter, at.min, color),
+                    }
                 }
                 ItemKind::Sized(SizedAtomKind::Text(galley)) => {
                     painter.galley(at.min, galley, color);
@@ -235,6 +279,21 @@ impl LaidRow<'_> {
                     paint_image(painter, &retint(image, color), at);
                 }
                 ItemKind::Sized(SizedAtomKind::Empty { .. }) => {}
+                // egui's own atoms paint as egui's atom layout paints them,
+                // in `cell` with the row's colour.
+                ItemKind::Sized(SizedAtomKind::Paint { paint, .. }) => paint(
+                    ui,
+                    egui::AtomPaintArgs {
+                        rect: at,
+                        fallback_text_color: color,
+                    },
+                ),
+                ItemKind::Sized(SizedAtomKind::Widget(widget)) => {
+                    widget.paint_at(ui, cell);
+                }
+                ItemKind::Sized(SizedAtomKind::Container(container)) => {
+                    container.paint_at(ui, cell);
+                }
             }
         }
     }
@@ -271,7 +330,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::components::icon_atom::install(&ctx);
         let mut sizes = Vec::new();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let icons = crate::icons::lucide::SLOTS;
             let size = |row: AtomRow<'_>| row.lay_out(ui, &look).size();
@@ -280,21 +339,22 @@ mod tests {
             sizes.push(size(AtomRow::new(ui, "Save").inset(8.0, 6.0, 3.0, 3.0)));
             sizes.push(size(
                 AtomRow::new(ui, "Save")
-                    .icons(Some(icons.check), Some(icons.check))
+                    .icons(Some(icons.check.into()), Some(icons.check.into()))
                     .icon_size(12.0)
                     .gap(4.0),
             ));
             // An empty text is no item: one icon, no gap.
             sizes.push(size(
                 AtomRow::new(ui, "")
-                    .icons(Some(icons.check), None)
+                    .icons(Some(icons.check.into()), None)
                     .icon_size(24.0)
                     .gap(4.0),
             ));
             sizes.push(size(
                 AtomRow::new(ui, (IconAtom::new(icons.check).size(16.0), "Save")).gap(4.0),
             ));
-        });
+        })
+        .drop_without_applying_deltas();
         // The line box: 10 px text at line height 2.
         assert_eq!(sizes[0].y, 20.0);
         assert_eq!(sizes[1], sizes[0] + Vec2::new(14.0, 6.0));
@@ -309,7 +369,7 @@ mod tests {
     fn icon_atoms_take_the_row_colour_unless_tinted() {
         let ctx = egui::Context::default();
         crate::components::icon_atom::install(&ctx);
-        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let check = crate::icons::lucide::SLOTS.check;
             let atoms = (
@@ -322,6 +382,7 @@ mod tests {
             let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), row.size());
             row.paint(ui, &painter, rect, &look, Color32::RED);
         });
+        output.textures_delta.clear();
         let fills: Vec<Color32> = output
             .shapes
             .iter()
@@ -347,7 +408,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::components::icon_atom::install(&ctx);
         let mut sizes = Vec::new();
-        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let check = crate::icons::lucide::SLOTS.check;
             for atom in [IconAtom::new(check), IconAtom::new(check).size(20.0)] {
@@ -357,6 +418,7 @@ mod tests {
                 row.paint(ui, ui.painter(), rect, &look, Color32::RED);
             }
         });
+        output.textures_delta.clear();
         assert_eq!(sizes, [Vec2::splat(12.0), Vec2::splat(20.0)]);
         let painted: Vec<Vec2> = output
             .shapes
@@ -369,10 +431,48 @@ mod tests {
         assert_eq!(painted, [Vec2::splat(12.0), Vec2::splat(20.0)]);
     }
 
+    /// egui 0.37's container and widget atoms take their place in the
+    /// row and paint their own atoms there.
+    #[test]
+    fn container_and_widget_atoms_paint_their_atoms() {
+        let ctx = egui::Context::default();
+        let mut widths = Vec::new();
+        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let look = look(ui);
+            let alone = AtomRow::new(ui, "Save").lay_out(ui, &look).size().x;
+            let atoms = (
+                egui::ContainerAtom::new("In"),
+                "Save",
+                egui::WidgetAtom::new("Out"),
+            );
+            let row = AtomRow::new(ui, atoms).gap(4.0).lay_out(ui, &look);
+            widths.push((alone, row.size().x));
+            let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), row.size());
+            row.paint(ui, ui.painter(), rect, &look, Color32::RED);
+        });
+        let texts: Vec<(String, f32)> = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_owned(), t.pos.x)),
+                _ => None,
+            })
+            .collect();
+        output.drop_without_applying_deltas();
+        let names: Vec<&str> = texts.iter().map(|(t, _)| t.as_str()).collect();
+        assert_eq!(names, ["In", "Save", "Out"], "{texts:?}");
+        assert!(
+            texts[0].1 < texts[1].1 && texts[1].1 < texts[2].1,
+            "{texts:?}"
+        );
+        let (alone, row) = widths[0];
+        assert!(row > alone + 8.0, "{widths:?}");
+    }
+
     #[test]
     fn row_paints_its_content_centred_in_the_inset_box() {
         let ctx = egui::Context::default();
-        let output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             let look = look(ui);
             let row = AtomRow::new(ui, "Save")
                 .inset(10.0, 2.0, 0.0, 0.0)
@@ -381,10 +481,11 @@ mod tests {
             let rect = Rect::from_min_size(egui::pos2(0.0, 0.0), Vec2::new(100.0, 40.0));
             row.paint(ui, ui.painter(), rect, &look, Color32::RED);
             // Centred in 10..98: starts at 54 - w/2.
-            ui.data_mut(|d| d.insert_temp(egui::Id::new("left"), 54.0 - content.x / 2.0));
+            ui.data_mut(|d| d.insert_temp(egui::Id::unique("left"), 54.0 - content.x / 2.0));
         });
+        output.textures_delta.clear();
         let left: f32 = ctx
-            .data(|d| d.get_temp(egui::Id::new("left")))
+            .data(|d| d.get_temp(egui::Id::unique("left")))
             .expect("stored");
         let text = output
             .shapes

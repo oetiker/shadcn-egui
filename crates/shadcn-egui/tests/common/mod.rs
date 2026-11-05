@@ -11,6 +11,45 @@ use egui_kittest::{Harness, SnapshotResults};
 use shadcn_egui::style::Style;
 use shadcn_egui::{Palette, Theme};
 
+/// `out` without its texture uploads. egui 0.37 debug-asserts that a
+/// dropped `FullOutput` has no unapplied texture delta; a test that only
+/// reads shapes or AccessKit output has no renderer to apply it to.
+pub fn no_textures(mut out: egui::FullOutput) -> egui::FullOutput {
+    out.textures_delta.clear();
+    out
+}
+
+/// A pass's output that a helper hands back with its texture uploads (a
+/// test may read them), and that discards them when the test drops it,
+/// for the reason given at [`no_textures`].
+pub struct Output(pub egui::FullOutput);
+
+impl std::ops::Deref for Output {
+    type Target = egui::FullOutput;
+    fn deref(&self) -> &egui::FullOutput {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Output {
+    fn deref_mut(&mut self) -> &mut egui::FullOutput {
+        &mut self.0
+    }
+}
+
+impl Output {
+    /// The output itself, without its texture uploads.
+    pub fn into_inner(mut self) -> egui::FullOutput {
+        no_textures(std::mem::take(&mut self.0))
+    }
+}
+
+impl Drop for Output {
+    fn drop(&mut self) {
+        self.0.textures_delta.clear();
+    }
+}
+
 /// A test theme: its name suffix, the theme, and the mode it renders in.
 /// The mode travels beside the theme: an app picks it with
 /// `ctx.set_theme(..)`, and the helpers below do the same.
@@ -97,7 +136,11 @@ pub fn page_harness<'a>(
     mut ui_fn: impl FnMut(&mut egui::Ui) + 'a,
 ) -> Harness<'a> {
     let bg = theme.palette_of(mode).background;
+    // Snapshots show bare controls, as upstream's style demos do, most
+    // without an accessible name; tests/accessibility.rs and the
+    // interaction tests check the names.
     let mut h = Harness::builder()
+        .with_accessibility_check(false)
         .with_size(size)
         .with_theme(mode)
         .build_ui(move |ui| {
@@ -142,16 +185,99 @@ pub fn snapshot_with_themes(
 pub fn measure_output(
     theme: &Theme,
     mode: egui::Theme,
+    add: impl FnMut(&mut egui::Ui) -> egui::Response,
+) -> (egui::Rect, Output) {
+    let (rect, out, _) = measure_frame(theme, mode, add);
+    (rect, out)
+}
+
+/// [`measure_output`] and the context it ran on. The output's
+/// `textures_delta` holds what both frames uploaded, so it has the image
+/// of every texture the frame paints with.
+pub fn measure_frame(
+    theme: &Theme,
+    mode: egui::Theme,
     mut add: impl FnMut(&mut egui::Ui) -> egui::Response,
-) -> (egui::Rect, egui::FullOutput) {
+) -> (egui::Rect, Output, egui::Context) {
     let ctx = egui::Context::default();
     theme.apply(&ctx);
     ctx.set_theme(mode);
     ctx.all_styles_mut(|s| s.animation_time = 0.0);
     let mut rect = egui::Rect::NOTHING;
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
-    let out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
-    (rect, out)
+    let first = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| rect = add(ui).rect);
+    let mut textures = first.textures_delta;
+    textures.append(std::mem::take(&mut out.textures_delta));
+    out.textures_delta = textures;
+    (rect, Output(out), ctx)
+}
+
+/// The textures `ctx` holds for box shadows (the crate names them so).
+pub fn shadow_textures(ctx: &egui::Context) -> Vec<egui::TextureId> {
+    ctx.tex_manager()
+        .read()
+        .allocated()
+        .filter(|(_, meta)| meta.name == "shadcn-egui box-shadow")
+        .map(|(id, _)| *id)
+        .collect()
+}
+
+/// Every whole texture image `out` uploads, by id.
+pub fn texture_images(
+    out: &egui::FullOutput,
+) -> std::collections::HashMap<egui::TextureId, egui::ColorImage> {
+    out.textures_delta
+        .set
+        .iter()
+        .filter_map(|(id, deltas)| {
+            // The last whole image of the pass is the texture.
+            let d = deltas.iter().rev().find(|d| d.pos.is_none())?;
+            let egui::ImageData::Color(image) = &d.image;
+            Some((*id, (**image).clone()))
+        })
+        .collect()
+}
+
+/// The premultiplied alpha, 0..=255, that the textured `meshes` paint at
+/// `p` (in points), sampled as a GPU samples a `NEAREST` texture: the
+/// texel under `p` times the vertex colour, of the first mesh that covers
+/// `p`; 0 where none does.
+pub fn textured_alpha(
+    meshes: &[egui::Mesh],
+    images: &std::collections::HashMap<egui::TextureId, egui::ColorImage>,
+    p: egui::Pos2,
+) -> f32 {
+    for m in meshes {
+        let Some(image) = images.get(&m.texture_id) else {
+            continue;
+        };
+        for t in m.indices.as_chunks::<3>().0 {
+            let [a, b, c] = t.map(|i| m.vertices[i as usize]);
+            let cross = |u: egui::Pos2, v: egui::Pos2, w: egui::Pos2| {
+                (v - u).x * (w - u).y - (v - u).y * (w - u).x
+            };
+            let area = cross(a.pos, b.pos, c.pos);
+            if area.abs() < 1e-9 {
+                continue;
+            }
+            let w = [
+                cross(b.pos, c.pos, p),
+                cross(c.pos, a.pos, p),
+                cross(a.pos, b.pos, p),
+            ]
+            .map(|x| x / area);
+            if w.iter().any(|x| *x < 0.0) {
+                continue;
+            }
+            let uv = a.uv.to_vec2() * w[0] + b.uv.to_vec2() * w[1] + c.uv.to_vec2() * w[2];
+            let [iw, ih] = image.size;
+            let x = ((uv.x * iw as f32).floor() as usize).min(iw - 1);
+            let y = ((uv.y * ih as f32).floor() as usize).min(ih - 1);
+            let texel = f32::from(image.pixels[y * iw + x].a());
+            return texel * f32::from(a.color.a()) / 255.0;
+        }
+    }
+    0.0
 }
 
 /// The rect of the widget `add` places, under `theme` in `mode` (see
@@ -338,9 +464,9 @@ pub fn pass(
     ctx: &egui::Context,
     events: Vec<egui::Event>,
     ui_fn: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
+) -> Output {
     match app_loop {
-        Loop::RunUi => ctx.run_ui(window_input(events), ui_fn),
+        Loop::RunUi => Output(ctx.run_ui(window_input(events), ui_fn)),
         Loop::Own => own_pass(ctx, events, ui_fn),
     }
 }
@@ -352,16 +478,16 @@ pub fn own_pass(
     ctx: &egui::Context,
     events: Vec<egui::Event>,
     mut ui_fn: impl FnMut(&mut egui::Ui),
-) -> egui::FullOutput {
+) -> Output {
     ctx.begin_pass(window_input(events));
     let window = egui::Rect::from_min_size(egui::Pos2::ZERO, PASS_WINDOW);
     let builder = egui::UiBuilder::new().max_rect(window);
     ui_fn(&mut egui::Ui::new(
         ctx.clone(),
-        egui::Id::new("own_pass"),
+        egui::Id::unique("own_pass"),
         builder,
     ));
-    ctx.end_pass()
+    Output(ctx.end_pass())
 }
 
 fn window_input(events: Vec<egui::Event>) -> egui::RawInput {
@@ -465,4 +591,19 @@ pub fn bounds_by_label(out: &egui::FullOutput, label: &str) -> Option<egui::Rect
                 egui::pos2(b.x1 as f32, b.y1 as f32),
             )
         })
+}
+
+/// The upstream demos' own muted paragraph (`text-sm
+/// text-muted-foreground`, no part of any component): caller text in a
+/// recipe the test builds, wrapping like a paragraph.
+pub fn muted_text(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    use shadcn_egui::components::text::TextLook;
+    use shadcn_egui::style::{Paint, Prop, Recipe, Role, State, TextSize};
+    let muted = Recipe {
+        text_size: Prop::fixed(TextSize::Sm),
+        text: Prop::fixed(Paint::Role(Role::MutedForeground, 1.0)),
+        ..Recipe::default()
+    };
+    let st = Theme::current(ui.ctx()).state(ui.ctx(), State::NONE);
+    TextLook::resolve(ui, &[&muted], st).label(ui, text, egui::TextWrapMode::Wrap)
 }

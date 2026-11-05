@@ -23,7 +23,7 @@ struct Body {
 }
 
 fn key(ui: &Ui) -> Id {
-    ui.id().with("shadcn_egui::free_content::body")
+    ui.scope_id().with("shadcn_egui::free_content::body")
 }
 
 /// The cursor moved past `body.mark`: free content since the last part.

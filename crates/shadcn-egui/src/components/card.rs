@@ -26,8 +26,7 @@ use crate::style::app::{default_variant, state_size, ResolvedPair};
 use crate::style::{pick_len, State};
 use crate::{layout, Theme};
 use egui::{
-    Align, Layout, Rect, Response, Sense, Shape, TextWrapMode, Ui, UiBuilder, WidgetInfo,
-    WidgetType,
+    Align, Layout, Rect, Response, Role, Sense, Shape, TextWrapMode, Ui, UiBuilder, WidgetInfo,
 };
 
 /// `data-size` of a card: `default` or `sm`, or an app size
@@ -337,7 +336,10 @@ impl<'a> Card<'a> {
         }
 
         let response = crate::layout::end_item(ui, frame, outer, Sense::hover());
-        response.widget_info(|| WidgetInfo::new(WidgetType::Panel));
+        crate::components::shared::widget_info_never_disabled(&response, || {
+            // card.svelte is a plain `div`: Chrome's `generic` role.
+            WidgetInfo::new(Role::GenericContainer)
+        });
         result
     }
 }
@@ -553,14 +555,15 @@ mod tests {
         Theme::vega()
             .variant(BRAND, CardVariant::Default, |_, _| {})
             .apply(&ctx);
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             Card::new().variant(BRAND).show(ui, |ui| {
                 assert_eq!(card_context(ui).variant, CardVariant::from(BRAND));
                 Card::new().show(ui, |ui| {
                     assert_eq!(card_context(ui).variant, CardVariant::Default)
                 });
             });
-        });
+        })
+        .drop_without_applying_deltas();
     }
 
     /// Each card part reads the size of its nearest card; outside a card
@@ -568,7 +571,7 @@ mod tests {
     #[test]
     fn parts_read_the_nearest_cards_size() {
         let ctx = egui::Context::default();
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             assert_eq!(card_context(ui).size, CardSize::Default);
             Card::new()
                 .size(CardSize::Sm)
@@ -584,6 +587,7 @@ mod tests {
                     assert_eq!(card_context(ui).size, CardSize::Sm);
                 });
             assert_eq!(card_context(ui).size, CardSize::Default);
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

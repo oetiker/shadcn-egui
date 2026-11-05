@@ -28,7 +28,7 @@ fn two_targets(ctx: &egui::Context, events: Vec<egui::Event>) -> [State; 2] {
         let theme = common::resolved(&Theme::vega(), egui::Theme::Light);
         for (i, x) in [0.0, 100.0].into_iter().enumerate() {
             let rect = Rect::from_min_size(egui::pos2(x, 0.0), egui::vec2(80.0, 30.0));
-            let mut resp = ui.interact(rect, egui::Id::new(("target", i)), egui::Sense::click());
+            let mut resp = ui.interact(rect, egui::Id::unique(("target", i)), egui::Sense::click());
             pressable(&mut resp, ActivationKeys::Button);
             st[i] = interaction_state(&theme, &resp, State::NONE);
         }
@@ -101,7 +101,7 @@ fn the_modality_sees_passes_without_crate_widgets() {
         common::pass(Loop::RunUi, &ctx, events, |ui| {
             Theme::vega().apply(ui.ctx());
             ui.ctx().set_theme(egui::Theme::Light);
-            let mut resp = ui.interact(rect, egui::Id::new("t"), egui::Sense::click());
+            let mut resp = ui.interact(rect, egui::Id::unique("t"), egui::Sense::click());
             if ask {
                 pressable(&mut resp, ActivationKeys::Button);
                 st = interaction_state(&Theme::current(ui.ctx()), &resp, State::NONE);
@@ -339,13 +339,13 @@ fn a_click_beside_a_check_control_inside_its_target_toggles() {
 }
 
 /// One control of [`a_disabled_control_shows_the_not_allowed_cursor`]:
-/// drawn enabled or with its own `enabled(false)`.
+/// drawn enabled or with `ui.add_enabled(false, ..)`.
 type Control = fn(&mut egui::Ui, bool) -> egui::Response;
 
 /// Upstream's `disabled:cursor-not-allowed` (checkbox, switch, select
 /// trigger, textarea; the label as `peer-disabled:`): the pointer over a
 /// disabled control, its hit area beside it included, shows the
-/// not-allowed cursor, whether its own flag or a disabled `Ui` disables
+/// not-allowed cursor, whether `add_enabled` or a disabled area disables
 /// it. The input's rule comes with `disabled:pointer-events-none`, so the
 /// browser shows the cursor of what lies under it: the default one here.
 /// An enabled control never shows it.
@@ -354,25 +354,25 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
     let controls: [(&str, Control, Option<f32>, bool); 6] = [
         (
             "checkbox",
-            |ui, on| ui.add(Checkbox::new(&mut false).enabled(on)),
+            |ui, on| ui.add_enabled(on, Checkbox::new(&mut false)),
             Some(4.0),
             true,
         ),
         (
             "switch",
-            |ui, on| ui.add(Switch::new(&mut false).enabled(on)),
+            |ui, on| ui.add_enabled(on, Switch::new(&mut false)),
             Some(4.0),
             true,
         ),
         (
             "select",
-            |ui, on| ui.add(Select::new("fruit", &mut 0, &["Apple", "Pear"]).enabled(on)),
+            |ui, on| ui.add_enabled(on, Select::new("fruit", &mut 0, &["Apple", "Pear"])),
             None,
             true,
         ),
         (
             "label",
-            |ui, on| ui.add(Label::new("Email").enabled(on)),
+            |ui, on| ui.add_enabled(on, Label::new("Email")),
             None,
             true,
         ),
@@ -384,7 +384,7 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
         ),
         (
             "input",
-            |ui, on| ui.add(Input::new(&mut String::new()).enabled(on)),
+            |ui, on| ui.add_enabled(on, Input::new(&mut String::new())),
             None,
             false,
         ),
@@ -392,8 +392,8 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
     for (name, control, beside, shows) in controls {
         for (how, enabled, ui_enabled) in [
             ("enabled", true, true),
-            ("own flag", false, true),
-            ("disabled Ui", true, false),
+            ("add_enabled", false, true),
+            ("disabled area", true, false),
         ] {
             let ctx = egui::Context::default();
             let rect = Cell::new(Rect::NOTHING);
@@ -435,4 +435,197 @@ fn a_disabled_control_shows_the_not_allowed_cursor() {
             }
         }
     }
+}
+
+/// The text `ui_fn` paints that contains `needle`: its bounds in a pass.
+fn text_bounds(out: &egui::FullOutput, needle: &str) -> Rect {
+    common::text_shapes(out)
+        .into_iter()
+        .find(|t| t.galley.text().contains(needle))
+        .map(|t| t.visual_bounding_rect())
+        .unwrap_or_else(|| panic!("no text containing {needle:?}"))
+}
+
+/// The text a pass asks the platform to copy, if any.
+fn copied_text(out: &egui::FullOutput) -> Option<String> {
+    out.platform_output.commands.iter().find_map(|c| match c {
+        egui::OutputCommand::CopyText(s) => Some(s.clone()),
+        _ => None,
+    })
+}
+
+/// Press on the text containing `needle` near its start, drag a little
+/// way into it and release, then move along the text with no button held
+/// and press Ctrl+C. Returns what that copies.
+fn select_then_hover(
+    app_loop: Loop,
+    needle: &str,
+    mut ui_fn: impl FnMut(&mut egui::Ui),
+) -> Option<String> {
+    let ctx = egui::Context::default();
+    let mut out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
+    // Past an overlay's open animation (100 ms; a pass without a time is
+    // egui's 1/60 s later): while it plays, the text moves and grows from
+    // one pass to the next, away from the place measured here.
+    for _ in 0..12 {
+        out = common::pass(app_loop, &ctx, vec![], &mut ui_fn);
+    }
+    let r = text_bounds(&out, needle);
+    let (y, start) = (r.center().y, r.left() + 1.0);
+    let end = start + r.width() * 0.4;
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        common::pointer_down(egui::pos2(start, y)),
+        &mut ui_fn,
+    );
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        vec![egui::Event::PointerMoved(egui::pos2(end, y))],
+        &mut ui_fn,
+    );
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        common::pointer_up(egui::pos2(end, y)),
+        &mut ui_fn,
+    );
+    let _ = common::pass(
+        app_loop,
+        &ctx,
+        vec![egui::Event::PointerMoved(egui::pos2(r.right() - 1.0, y))],
+        &mut ui_fn,
+    );
+    copied_text(&common::pass(
+        app_loop,
+        &ctx,
+        vec![egui::Event::Copy],
+        &mut ui_fn,
+    ))
+}
+
+/// cpu-rendering.md section 5 tells a custom loop to run frames through
+/// `Context::run_ui`: only there does egui end a label selection on the
+/// release and hand Ctrl+C's text to the platform. Through its own
+/// `begin_pass`/`end_pass` the selection follows the pointer after the
+/// release and nothing is copied.
+#[test]
+fn dialog_text_selection_ends_on_release_only_under_run_ui() {
+    use shadcn_egui::components::dialog::Dialog;
+    let title = "Delete this session now";
+    let dialog = |ui: &mut egui::Ui| {
+        Theme::vega().apply(ui.ctx());
+        Dialog::new("d", title).show(ui.ctx(), &mut true, |_| ());
+    };
+    let copied = select_then_hover(Loop::RunUi, title, dialog).expect("run_ui copies");
+    assert!(
+        !copied.is_empty() && title.starts_with(&copied) && copied.len() < title.len() - 4,
+        "the selection stops where the button came up: {copied:?}"
+    );
+    assert_eq!(select_then_hover(Loop::Own, title, dialog), None);
+}
+
+/// A badge is a `span` upstream with no `select-none`: its text selects
+/// and copies as the browser's does.
+#[test]
+fn badge_text_selects_and_copies() {
+    use shadcn_egui::components::badge::{Badge, BadgeVariant};
+    let text = "Experimental feature";
+    for variant in [BadgeVariant::Default, BadgeVariant::Link] {
+        let copied = select_then_hover(Loop::RunUi, text, |ui| {
+            Theme::vega().apply(ui.ctx());
+            ui.add(Badge::new(text).variant(variant));
+        });
+        let copied = copied.unwrap_or_else(|| panic!("{variant:?}: nothing copied"));
+        assert!(
+            !copied.is_empty() && text.starts_with(&copied) && copied.len() < text.len(),
+            "{variant:?}: {copied:?}"
+        );
+    }
+}
+
+/// Crate text selects by default; an app that turns egui's
+/// `selectable_labels` off turns selection off in crate text too (the
+/// maintainer's exception to concept 1 of the API rules, 2026-10-30).
+#[test]
+fn text_selection_follows_egui_selectable_labels() {
+    use shadcn_egui::components::badge::Badge;
+    use shadcn_egui::components::dialog::Dialog;
+    let (title, chip) = ("Delete this session now", "Experimental feature");
+    for selectable in [true, false] {
+        let setup = move |ui: &mut egui::Ui| {
+            ui.ctx()
+                .all_styles_mut(|s| s.interaction.selectable_labels = selectable);
+            Theme::vega().apply(ui.ctx());
+        };
+        let dialog = select_then_hover(Loop::RunUi, title, |ui| {
+            setup(ui);
+            Dialog::new("d", title).show(ui.ctx(), &mut true, |_| ());
+        });
+        let badge = select_then_hover(Loop::RunUi, chip, |ui| {
+            setup(ui);
+            ui.add(Badge::new(chip));
+        });
+        assert_eq!(dialog.is_some(), selectable, "dialog title: {dialog:?}");
+        assert_eq!(badge.is_some(), selectable, "badge: {badge:?}");
+    }
+}
+
+/// A link badge (`href`, an `<a>`) takes the style's `[a]:hover` fill,
+/// shows the pointing hand, reports the link role, focuses on a press and
+/// clicks on Enter only; a plain badge keeps its fill under the pointer.
+#[test]
+fn a_link_badge_hovers_clicks_and_activates_on_enter_only() {
+    use shadcn_egui::components::badge::Badge;
+    let theme = common::resolved(&Theme::vega(), egui::Theme::Light);
+    let primary = theme.role(shadcn_egui::style::Role::Primary);
+    let fill_and_click = |link: bool, events: &[Vec<egui::Event>]| {
+        let ctx = egui::Context::default();
+        ctx.set_theme(egui::Theme::Light);
+        ctx.all_styles_mut(|s| s.animation_time = 0.0);
+        let (mut fill, mut clicks, mut cursor) = (None, 0, egui::CursorIcon::Default);
+        let (mut info, mut rect) = (None, egui::Rect::NOTHING);
+        let mut frames = vec![
+            vec![],
+            vec![egui::Event::PointerMoved(egui::pos2(500.0, 300.0))],
+        ];
+        frames.extend_from_slice(events);
+        frames.push(vec![egui::Event::PointerMoved(egui::pos2(20.0, 10.0))]);
+        frames.push(vec![]);
+        for events in frames {
+            let out = common::pass(Loop::RunUi, &ctx, events, |ui| {
+                Theme::vega().apply(ui.ctx());
+                let resp = ui.add(Badge::new("Docs").link(link));
+                clicks += usize::from(resp.clicked());
+                info = Some(resp.has_focus());
+                rect = resp.rect;
+            });
+            fill = common::box_fills(&out)
+                .into_iter()
+                .find(|f| f.0 == rect)
+                .map(|f| f.1);
+            cursor = out.platform_output.cursor_icon;
+        }
+        (fill, clicks, cursor, info)
+    };
+    let (fill, _, cursor, _) = fill_and_click(true, &[]);
+    assert_eq!(fill, Some(primary.gamma_multiply(0.8)), "link hover fill");
+    assert_eq!(cursor, egui::CursorIcon::PointingHand);
+    let (fill, _, cursor, _) = fill_and_click(false, &[]);
+    assert_eq!(fill, Some(primary), "a plain badge keeps its fill");
+    assert_ne!(cursor, egui::CursorIcon::PointingHand);
+
+    // A press focuses the link; Space then does nothing, Enter clicks.
+    let press = common::click(egui::pos2(20.0, 10.0));
+    let (_, clicks, _, focused) = fill_and_click(true, std::slice::from_ref(&press));
+    assert_eq!(
+        (clicks, focused),
+        (1, Some(true)),
+        "a press clicks and focuses"
+    );
+    let (_, clicks, _, _) = fill_and_click(true, &[press.clone(), common::key(Key::Space)]);
+    assert_eq!(clicks, 1, "Space does not activate a link");
+    let (_, clicks, _, _) = fill_and_click(true, &[press, common::key(Key::Enter)]);
+    assert_eq!(clicks, 2, "Enter activates a link");
 }

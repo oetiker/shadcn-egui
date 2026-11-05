@@ -1,9 +1,18 @@
 # Fast egui without a GPU (CPU rasterizer, custom integration)
 
-Applies when you drive egui yourself (`egui-winit` + `begin_pass`/`end_pass`,
+Applies when you drive egui yourself (`egui-winit` + `Context::run_ui`,
 not eframe) and rasterize its meshes on the CPU, for example into a `softbuffer`
 surface on a box with no usable GPU. eframe + wgpu/glow handles most of this
 for you; a hand-rolled loop does not.
+
+The gallery example (`crates/shadcn-egui/examples/gallery/`, `cpu.rs` and
+`raster.rs`, run with `--cpu`) is a working loop for sections 1, 2, 4 and
+5: frame pacing, damage tracking, the fallback from eframe, the clipboard,
+and pixels that match egui-wgpu's. It wires accesskit and IME as eframe
+does (`egui_winit::State::init_accesskit` before the window shows,
+`handle_platform_output` after every pass), but neither was tested with
+an input method or a screen reader. Of section 3 it follows the texture
+bullets only; see there.
 
 **Measure before optimizing.** Time the raster, the composite copy and the
 present separately. In practice the raster dominates (~100 ms on a trivial
@@ -14,30 +23,48 @@ killer is *how often* you raster, not how long one raster takes.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| New screen, cursor blink or animation appears only after the next mouse move | loop runs `ControlFlow::Wait` and ignores egui's own repaint requests | read `full_output.viewport_output[&ViewportId::ROOT].repaint_delay`: zero → `request_redraw()` now; finite → `ControlFlow::WaitUntil(now + delay)`; `Duration::MAX` → wait for the next OS event |
-| 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 3) |
-| Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
+| New screen, cursor blink or animation appears only after the next mouse move | loop runs `ControlFlow::Wait` and ignores egui's own repaint requests | read `full_output.viewport_output[&ViewportId::ROOT].repaint_delay`: finite → next frame at `frame_start + delay.max(refresh_interval)` via `ControlFlow::WaitUntil`; `Duration::MAX` → wait for the next OS event. Also install `ctx.set_request_repaint_callback` and send its requests to the loop as user events, for repaints asked from outside a pass |
+| A turning spinner or a fade pins a CPU core | `repaint_delay` is zero during an animation, and the loop draws again at once | never draw sooner than the display's refresh interval (`monitor.refresh_rate_millihertz()`, else 16.7 ms) after the last frame; the same cap stops a stream of mouse moves from drawing faster than the screen shows. While the window is hidden or minimised (`window.is_visible() == Some(false)` or `window.is_minimized() == Some(true)`), draw no more than every 100 ms, as eframe does |
+| 100% CPU while idle or typing | loop free-runs at 60 fps, or presents once per external event (network frame, timer) | event-driven present: skip raster **and** present when nothing changed (see 4) |
+| Toggles/fades/tab indicator look like slow staged steps | every animation frame is a full CPU raster | raster only the damage (see 4): an animation then costs its own small area. If that is still too slow, `ctx.style_mut(\|s\| s.animation_time = 0.0)`: `animate_bool` then returns its target at once, and the crate's `Switch` keeps working |
+| The window stays blank or black after it opens, or parts of it after another window moved off it (X11 without a compositor) | the loop presents only damage rectangles, and X11 dropped what the window showed (pixels presented while it was unmapped are lost too) | on a `RedrawRequested` the system sent, present the whole frame. winit merges the system's redraws (X11 expose) with the ones you request into one event, so do not call `request_redraw()` for your own frames: draw them in `about_to_wait` when they are due, and every `RedrawRequested` is then the system's |
 
 The deferred first-frame build of the font atlas (`set_fonts` lands next frame) also
 arrives as a repaint request, so ignoring `repaint_delay` leaves the first
 screen with fallback fonts until the user moves the mouse.
 
-## 2. Tessellation settings for a non-AA rasterizer
+## 2. Tessellation settings
 
-- `ctx.options_mut(|o| o.tessellation_options.feathering = false)`.
-  Feathering adds ~1 px alpha "wings" that assume coverage-based blending. An
-  integer rasterizer turns them into hard partial-alpha fringes (dimmed
-  rounded-corner strokes, banding in stacked translucent focus rings). Off,
-  every solid fill is a clean 4-vertex / 6-index quad, which enables the
-  row-fill fast path below. Text is unaffected (pre-antialiased atlas texture).
+- **For the same look as on the GPU, keep feathering on** and rasterize as
+  the GPU does: sample each pixel at its center, apply the top-left fill
+  rule on positions snapped to a subpixel grid (1/256 px), interpolate the
+  vertex colors across the triangle, and blend premultiplied
+  (`One`, `OneMinusSrcAlpha`). Feathering's ~1 px alpha "wings" are then the
+  anti-aliased edges egui-wgpu draws. eframe's default surface is gamma
+  space (`*8Unorm`): multiply vertex colors and texture samples, filter
+  textures, in gamma space, and add egui-wgpu's dither (interleaved
+  gradient noise, ±0.475/255) before the blend.
+- **For speed over looks**,
+  `ctx.options_mut(|o| o.tessellation_options.feathering = false)`.
+  A rasterizer that does not interpolate vertex colors turns the wings into
+  hard partial-alpha fringes (dimmed rounded-corner strokes, banding in
+  stacked translucent focus rings). Off, every solid fill is a clean
+  4-vertex / 6-index quad, which enables the row-fill fast path below, and
+  shapes lose their anti-aliased edges. Text is unaffected
+  (pre-antialiased atlas texture).
 - Tessellate with the **same** `pixels_per_point` egui laid out with. A
   mismatch gives misshapen, mis-sized text and a flood of epaint
   `pixels_per_point` warnings.
 
 ## 3. The rasterizer itself
 
+The first two bullets are fast paths for a rasterizer that runs with
+feathering off. The gallery keeps feathering on and takes neither: it
+fills the spans of any triangle whose three vertices share one color and
+one UV, and blends the rest per pixel.
+
 - **Solid-fill fast path: key it on `egui::epaint::WHITE_UV`, never a
-  literal.** epaint 0.34 tags solid fills with `WHITE_UV = (0.0, 0.0)`; older
+  literal.** epaint 0.37 tags solid fills with `WHITE_UV = (0.0, 0.0)`; older
   code and blog posts test `(0.5, 0.5)`. With the wrong constant the fast path
   silently never fires and every fill, including the full-window background,
   takes the ~30x slower textured path (barycentrics + UV interp + sample +
@@ -61,17 +88,36 @@ screen with fallback fonts until the user moves the mouse.
   `textures_delta` and no external damage → skip raster and present
   entirely. `egui-winit` requests a repaint on every `CursorMoved`, so
   without this a mouse move re-rasters the whole window.
+- **Find the damage per triangle, not per primitive.** egui merges all
+  shapes of a layer with the same clip rect and texture into one mesh, so
+  a hover on one button changes the primitive of the whole panel. Hash each
+  triangle (its vertices' pos/uv/color bits, the clip rect and texture),
+  match last frame's list against this frame's in order (common prefix and
+  suffix, then each new triangle takes the next equal old one), and damage
+  the pixel boxes of the triangles left unmatched on either side. Where no
+  box touches, the same triangles cover each pixel in the same order, so
+  it cannot have changed. A changed texture other than the font atlas
+  (which egui only grows into unused space) damages everything.
 - **Clip the raster to damage.** Damage = changed external content ∪ egui's
-  area this frame ∪ egui's area last frame (so vanished widgets get erased).
+  damage above (so vanished widgets get erased).
   Per damage rect: restore the background under it, then raster egui clipped
   to it. If your rect coalescing does not return disjoint rects, do restore →
   raster per rect in sequence, otherwise overlaps blend translucent egui
   pixels twice.
-- **Copy only what changed to the surface.** softbuffer's `buffer.age()` says
+- **Copy and send only what changed.** softbuffer's `buffer.age()` says
   how many presents ago this back buffer was shown; copy the union of the
-  damage since then (full copy when age is 0 or after a resize). Plain
-  `present()` is enough: the whole buffer must be valid anyway, and the
-  damage list of `present_with_damage` is only a compositor hint.
+  damage since then (full copy when age is 0 or after a resize). Then
+  present with `present_with_damage(&rects)`: on X11 with shared memory
+  softbuffer sends only those rectangles to the server (plain `present()`
+  sends the whole window every frame), and Wayland gets them as buffer
+  damage. On X11 the age is 1 after the first present (one buffer).
+  The whole window must still go out after a system redraw (see 1).
+- **A turning Spinner changes a texture every frame.** It rasterises its
+  icon at the new angle and sends the texture in `textures_delta` each
+  frame, so the frame is never skipped and the spinner's box is damage. Its
+  own raster costs 0.09 ms at 16 pt and 3.4 ms at 256 pt per frame at 2x
+  (`icons.md`); a large one also costs a large damage rect. Under
+  `animation_time == 0` it stands still and its texture stays as it is.
 - **Modal over live content:** do not alpha-blend a full-window dimmed
   backdrop every frame. Dim the current background **once** into the
   background layer when the modal opens, pause updates of the content behind
@@ -79,12 +125,71 @@ screen with fallback fonts until the user moves the mouse.
 
 ## 5. Integration traps (custom loop)
 
-- **`ctx.is_pointer_over_egui()` is always `true`** under a `CentralPanel`
-  when you drive egui with `begin_pass`/`end_pass`: the modern code path needs
-  state only `Context::run_ui` writes, and the legacy fallback sees the central
-  panel claim the whole unused rect. Likewise `wants_pointer_input()` over a
-  `CentralPanel`, and `wants_keyboard_input()` is true for *any* focused
-  widget (a button reached by Tab). For "is the pointer over floating UI":
+- **Falling back from eframe to the CPU in one process.** winit allows one
+  event loop per process, and `eframe::run_native` makes its own and
+  never returns it. Build the loop yourself
+  (`EventLoop::<eframe::UserEvent>::with_user_event().build()`), run
+  eframe on it with `eframe::create_native(..)` and
+  `event_loop.run_app_on_demand(&mut app)`, and set a flag in the app
+  creator closure: eframe calls it only after wgpu found an adapter and set
+  up the window's surface. Loop ended and flag unset → wgpu did not start;
+  run the CPU loop on the same event loop. Test it with
+  `WGPU_BACKEND=metal` on Linux (no adapter of that backend).
+  `run_app_on_demand` drops eframe's error, so with the flag alone a
+  wgpu failure after the start ends the app with exit 0, and the
+  fallback cannot name its cause. eframe logs the error as it ends the
+  loop (`log::error!("Exiting because of error: {err}")`), and the gallery
+  reads it from there: its `EframeError` logger keeps that record and
+  passes every other one to an inner logger, which prints warnings and
+  errors to stderr (winit's errors only: winit warns on every start on
+  many X11 desktops). An app with its own logger puts that one in as the
+  inner logger (`EframeError::install(inner, max_level)`; for env_logger,
+  `Box::leak(Box::new(builder.build()))` and the logger's `filter()`), so the
+  capture adds to it rather than replacing it. The text is eframe's
+  wording, not its API: if eframe rewords it, the cause is lost without
+  notice. The gallery's test `eframe_still_logs_the_exit_error_the_gallery_reads`
+  fails when the eframe in `Cargo.lock` no longer logs it.
+
+- **Treat a software adapter as no GPU.** On a machine without a GPU,
+  wgpu does start: on Mesa's llvmpipe or lavapipe, or WARP on Windows,
+  which wgpu reports as `wgpu::DeviceType::Cpu`. The fallback above then
+  never runs, and drawing through the software adapter costs far more
+  CPU than a CPU rasterizer that redraws only the damage (a turning
+  spinner in the gallery: 316 % on llvmpipe, 26 % on its CPU path). Refuse
+  such adapters in eframe's adapter choice:
+  `NativeOptions::wgpu_options.wgpu_setup =
+  WgpuSetup::CreateNew(WgpuSetupCreateNew { native_adapter_selector:
+  Some(..), ..WgpuSetupCreateNew::without_display_handle() })`. The
+  selector gets every adapter and the window's surface; return the
+  adapter wgpu would pick among those that are not `DeviceType::Cpu` and
+  `is_surface_supported`, or an `Err` naming the software adapter. eframe
+  then ends its loop before it creates the app, and the fallback runs
+  with that cause. The gallery's `choose_adapter` and `wgpu_options` in
+  `main.rs` do this; `SHADCN_EGUI_SOFTWARE_GPU=1` lets it use the
+  software adapter.
+
+- **Run each frame with `ctx.run_ui(raw_input, |ui| ..)`**, not
+  `begin_pass`/`end_pass` or the deprecated `ctx.run`. Only `run_ui` runs
+  egui's plugins. Without them, label text selection never ends: after a
+  drag the selection follows the pointer with no button held, and Ctrl+C
+  copies nothing. `run_ui` takes the `RawInput` from
+  `egui_winit::State::take_egui_input` and returns the same `FullOutput`:
+
+  ```rust
+  fn frame(ctx: &egui::Context, raw_input: egui::RawInput) -> egui::FullOutput {
+      ctx.run_ui(raw_input, |ui| {
+          egui::CentralPanel::default().show(ui, |ui| {
+              ui.label("Hello");
+          });
+      })
+  }
+  ```
+
+- **`ctx.is_pointer_over_egui()` is `true` over the whole window** when a
+  `CentralPanel` fills it: the panel is egui. So is
+  `egui_wants_pointer_input()` there, and `egui_wants_keyboard_input()` is
+  true for *any* focused widget (a button reached by Tab). For "is the
+  pointer over floating UI":
 
   ```rust
   fn pointer_over_floating_ui(ctx: &egui::Context) -> bool {
@@ -99,12 +204,38 @@ screen with fallback fonts until the user moves the mouse.
   `.interactable(false)` so it does not claim the pointer; a modal backdrop
   is the opposite case and must keep blocking clicks. Unit-test the routing predicate itself:
   `egui::Context::default()` runs headless; feed it a `RawInput`.
-- **`egui-winit` default features pull `smithay-clipboard`**, which segfaults
-  on Wayland (its thread shares winit's `wl_display`; unmaintained, egui#3805).
-  Use `egui-winit = { version = "0.34", default-features = false, features =
-  ["links", "wayland", "x11"] }` and, if you need a clipboard, a crate with its
-  own Wayland connection (`wl-clipboard-rs`). Check with `cargo tree -i
-  smithay-clipboard`.
+- **`egui-winit`'s `clipboard` feature (on by default) pulls
+  `smithay-clipboard` on Wayland**, whose worker thread shares winit's
+  `wl_display`; on WSLg it panics with "Broken pipe" when the window is
+  resized and takes the app down (egui#3805, open). eframe turns the same
+  feature on, so every eframe app has it, and Cargo unifies features: an app
+  that also links eframe (the gallery, for its wgpu path) keeps the feature
+  whatever its own `egui-winit` line says, and the gallery therefore names it
+  too. An app without eframe can drop it, `egui-winit = { version = "0.37",
+  default-features = false, features = ["links", "wayland", "x11"] }`, and
+  use a clipboard crate with its own Wayland connection (`wl-clipboard-rs`).
+  Check with `cargo tree -i smithay-clipboard`.
+- **Clipboard without egui-winit's clipboard features:** egui-winit then
+  keeps copied text in an in-process string. Before `handle_platform_output`,
+  take each `egui::OutputCommand::CopyText(text)` out of
+  `full_output.platform_output.commands` and store it with your own
+  clipboard crate. For Ctrl+V, push `egui::Event::Paste(text)` from that
+  clipboard into the `RawInput` and drop the `Paste` egui-winit adds from
+  its own string:
+
+  ```rust
+  fn take_copied_text(output: &mut egui::PlatformOutput) -> Option<String> {
+      let mut copied = None;
+      output.commands.retain(|c| match c {
+          egui::OutputCommand::CopyText(text) => {
+              copied = Some(text.clone());
+              false
+          }
+          _ => true,
+      });
+      copied
+  }
+  ```
 - **Colors on a non-sRGB GPU surface.** softbuffer writes raw sRGB bytes. If
   the same app also has a wgpu path rendering to a `*Unorm` (non-sRGB) surface,
   emit raw sRGB from custom shaders too; linearizing first makes overlays

@@ -8,18 +8,24 @@ exclude = ["tools"]
 [workspace.package]
 version = "0.7.0"
 edition = "2021"
-rust-version = "1.92"
+rust-version = "1.95"
 license = "MIT"
 repository = "https://github.com/oetiker/shadcn-egui"
 
 [workspace.dependencies]
-egui = "0.34"
-egui_extras = { version = "0.34", default-features = false }
+# `default_fonts` and `monochrome_emoji_fonts`: egui's faces (Ubuntu, Hack,
+# NotoEmoji, emoji-icon-font) stay the fallback behind the crate's fonts, as
+# with egui 0.34, whose default `default_fonts` held all four; egui 0.37
+# turned `default_fonts` off by default and moved the emoji faces into
+# `monochrome_emoji_fonts`.
+egui = { version = "0.37", features = ["default_fonts", "monochrome_emoji_fonts"] }
+egui_extras = { version = "0.37", default-features = false }
 log = "0.4"
-# Font tables for the text path: glyph advances at the face's variation
-# location and GPOS kerning, which egui does not apply. Pinned to the
-# version egui's epaint uses, so no second copy enters the build.
-skrifa = { version = "=0.40.0", default-features = false, features = ["std"] }
+# Font tables for the text path: glyph advances and GPOS kerning in
+# Chrome's fixed-point rounding, with kerning across sections, which
+# egui's per-section shaping does not give. Pinned to the version egui's
+# epaint uses, so no second copy enters the build.
+skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
 shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.7.0" }
 # BEGIN fontgen
 shadcn-egui-font-inter = { path = "crates/shadcn-egui-font-inter", version = "0.7.0" }

@@ -49,9 +49,9 @@ use shadcn_egui::Theme;
 fn icons(ui: &mut egui::Ui) {
     let t = Theme::current(ui.ctx());
     ui.add(IconView::new(&lucide::MIC).size(24.0).color(t.palette().destructive));
-    ui.add(Button::new("Mute").icon(&lucide::MIC));
-    ui.add(Button::new("Close").icon(&lucide::X).size(ButtonSize::Icon));
-    ui.add(Badge::new("Live").icon_end(&lucide::RADIO));
+    ui.add(Button::new("Mute").icon(lucide::MIC));
+    ui.add(Button::new("Close").icon(lucide::X).size(ButtonSize::Icon));
+    ui.add(Badge::new("Live").icon_end(lucide::RADIO));
 }
 ```
 
@@ -67,14 +67,19 @@ fn icons(ui: &mut egui::Ui) {
 - Icons are rasterised on the CPU into a cached texture per icon and pixel
   size, so a translucent colour applies once and very large icons cost a
   texture each. This works the same under a CPU rasterizer.
+- A turning Spinner is the exception: it is rasterised at its new angle and
+  its texture is uploaded again on every frame it turns. Measured extra cost
+  per frame (release build, one spinner, at 1x / 2x pixels per point):
+  16 pt 0.07 / 0.09 ms, 48 pt 0.11 / 0.2 ms, 128 pt 0.26 / 1.0 ms,
+  256 pt 1.0 / 3.4 ms. Keep a full-page loading spinner modest in size.
 
 ## Icon slots
 
 Components draw a few icons of their own: the checkbox tick and the selected
 Select item (`check`), the Select trigger icon (`select_trigger`), the plain
 chevrons (`chevron_down_plain`, `chevron_up`, `chevron_left`,
-`chevron_right`), three dots (`more_horizontal`) and the Dialog close button
-(`close`). These come from `Theme::icons`, an `IconSlots` value. It gains
+`chevron_right`), three dots (`more_horizontal`), the Dialog close button
+(`close`) and the Spinner's turning icon (`loader`). These come from `Theme::icons`, an `IconSlots` value. It gains
 slots over time, so build one from `IconSlots::all(icon)` and set the slots
 to change. A preset fills the slots from its icon library's `SLOTS`,
 so switching the library changes these icons too. Without a preset, a theme

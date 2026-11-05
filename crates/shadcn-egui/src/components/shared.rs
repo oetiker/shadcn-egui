@@ -129,7 +129,7 @@ pub fn part_painter(ui: &Ui, id: Id, chain: &[&[&Recipe]], s: State) -> Painter 
 /// Run `add` with `ui` at `opacity`, then restore the `Ui`'s own opacity.
 /// A [`Ui::disable`] inside `add` (a disabled card action) keeps its fade:
 /// the `Ui` stays disabled, so what it paints afterwards stays faded too.
-fn with_opacity<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+pub(crate) fn with_opacity<R>(ui: &mut Ui, opacity: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let (before, was_enabled) = (ui.opacity(), ui.is_enabled());
     ui.set_opacity(opacity);
     let inner = add(ui);
@@ -728,7 +728,10 @@ impl RecipeBox {
     /// (top, right, bottom, left) plus the border widths, for a panel whose
     /// size egui learns only while it runs (a popup, a modal). Its first
     /// call in the panel's closure is [`RecipeBox::reserve`]; after `show`,
-    /// [`RecipeBox::paint_reserved`] paints the box under the content.
+    /// [`RecipeBox::paint_reserved`] paints the box under the content. In
+    /// egui's sizing pass (the first show of an area, the first pass of an
+    /// open popup) the content is invisible: reserve nothing then, or the
+    /// box shows alone at the place egui guessed.
     ///
     /// ```
     /// use shadcn_egui::components::shared::RecipeBox;
@@ -740,17 +743,19 @@ impl RecipeBox {
     ///     let popover = [&*theme.style.popover_content];
     ///     let state = theme.state(ctx, State::NONE);
     ///     let panel = RecipeBox::resolve(ctx, &theme, &popover, state);
-    ///     let shown = egui::Area::new(egui::Id::new("panel")).show(ctx, |ui| {
+    ///     let shown = egui::Area::new(egui::Id::unique("panel")).show(ctx, |ui| {
     ///         panel
     ///             .frame([16.0; 4])
     ///             .show(ui, |ui| {
-    ///                 let slot = RecipeBox::reserve(ui);
+    ///                 let slot = ui.is_visible().then(|| RecipeBox::reserve(ui));
     ///                 ui.label("Content");
     ///                 slot
     ///             })
     ///             .inner
     ///     });
-    ///     panel.paint_reserved(ctx, shown.response.layer_id, shown.inner, shown.response.rect);
+    ///     if let Some(slot) = shown.inner {
+    ///         panel.paint_reserved(ctx, shown.response.layer_id, slot, shown.response.rect);
+    ///     }
     /// }
     /// ```
     pub fn frame(&self, padding: [f32; 4]) -> egui::Frame {
@@ -784,14 +789,14 @@ impl RecipeBox {
         (!self.shadow.as_slice().is_empty() && self.shadow_opacity > 0.0).then(|| {
             // The fill's rect as egui's tessellator places it.
             let rect = on_pixels(ctx, rect);
-            Shape::Mesh(crate::box_shadow::shadow_mesh(
+            crate::box_shadow::shadow_shape(
                 ctx,
                 rect,
                 clamp_radii(self.radii, rect),
                 radius,
                 self.shadow,
                 self.shadow_opacity,
-            ))
+            )
         })
     }
 }
@@ -855,20 +860,18 @@ impl CutKey {
 }
 
 /// The fallback meshes of faded boxes with sides of unequal width, which
-/// cost 1-4k vertices and milliseconds to cut: the ones the last pass
-/// used and the ones this pass used so far. A pass keeps only what it
-/// uses, as egui's `FrameCache` does, so an animated box cannot grow it.
+/// cost 1-4k vertices and milliseconds to cut: per viewport, the ones its
+/// last pass used and the ones this pass used so far. A pass keeps only
+/// what it uses, as egui's `FrameCache` does, so an animated box cannot
+/// grow it; a mesh another viewport holds is taken from there.
 #[derive(Clone, Default)]
 struct CutCache {
-    pass: u64,
     current: std::collections::HashMap<CutKey, Arc<egui::Mesh>>,
     previous: std::collections::HashMap<CutKey, Arc<egui::Mesh>>,
-    /// Meshes built, for the tests.
-    builds: u64,
 }
 
 fn cut_cache_id() -> Id {
-    Id::new("shadcn_egui::cut_cache")
+    Id::unique("shadcn_egui::cut_cache")
 }
 
 /// The mesh for `key`, from the cache or from `build`.
@@ -877,33 +880,63 @@ fn cut_mesh(
     key: CutKey,
     build: impl FnOnce() -> egui::Mesh,
 ) -> Arc<egui::Mesh> {
+    let viewport = ctx.viewport_id();
     let pass = ctx.cumulative_pass_nr();
-    let cached = ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
-        if cache.pass != pass {
-            cache.pass = pass;
-            cache.previous = std::mem::take(&mut cache.current);
-        }
-        let hit = cache
-            .current
-            .get(&key)
-            .cloned()
-            .or_else(|| cache.previous.remove(&key));
-        if let Some(mesh) = &hit {
-            cache.current.insert(key, mesh.clone());
-        }
-        hit
-    });
+    let cached = with_viewport_state(
+        ctx,
+        cut_cache_id(),
+        viewport,
+        pass,
+        |all: &mut PerViewport<CutCache>, closed| {
+            let cache = all.at(closed, viewport, pass, |c, _| {
+                c.previous = std::mem::take(&mut c.current);
+            });
+            if let Some(mesh) = cache.current.get(&key) {
+                return Some(mesh.clone());
+            }
+            let hit = cache.previous.remove(&key).or_else(|| {
+                all.others(viewport)
+                    .find_map(|c| c.current.get(&key).or_else(|| c.previous.get(&key)))
+                    .cloned()
+            });
+            if let Some(mesh) = &hit {
+                all.at(&[], viewport, pass, |_, _| {})
+                    .current
+                    .insert(key, mesh.clone());
+            }
+            hit
+        },
+    );
     if let Some(mesh) = cached {
         return mesh;
     }
     let mesh = Arc::new(build());
     ctx.data_mut(|d| {
-        let cache = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
-        cache.current.insert(key, mesh.clone());
-        cache.builds += 1;
+        let all = d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id());
+        all.builds += 1;
+        all.at(&[], viewport, pass, |_, _| {})
+            .current
+            .insert(key, mesh.clone());
     });
     mesh
+}
+
+/// Fallback meshes [`cut_mesh`] built so far, for the tests.
+#[cfg(test)]
+pub(crate) fn cut_builds(ctx: &egui::Context) -> u64 {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id())
+            .builds
+    })
+}
+
+/// Viewports with a state in [`cut_mesh`]'s cache, for the tests.
+#[cfg(test)]
+pub(crate) fn cut_viewports(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id())
+            .len()
+    })
 }
 
 /// `top` composited over `under` (premultiplied, as the browser blends),
@@ -980,7 +1013,10 @@ fn cut(
 /// The convex outline of a rounded rect, as egui's tessellator traces it.
 pub(crate) fn rounded_polygon(rect: Rect, radius: CornerRadius) -> Vec<egui::Pos2> {
     let mut points = Vec::new();
-    egui::epaint::tessellator::path::rounded_rectangle(&mut points, rect, radius.into());
+    egui::epaint::tessellator::path::rounded_rectangle(
+        &mut points,
+        egui::epaint::RoundedRect::new(rect, radius),
+    );
     points.dedup_by(|a, b| (*a - *b).length_sq() < 1e-6);
     points
 }
@@ -1373,6 +1409,22 @@ pub(crate) fn clip_inside(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> egui::Me
 /// share an edge, and two polygons that share a side, cut it at the same
 /// point, so the pieces meet without a crack a pixel centre could fall in.
 fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui::Mesh) {
+    split_convex_with(mesh, polygon, true)
+}
+
+/// [`split_convex`], with `classify` deciding whether triangles are first
+/// sorted by the cheap tests of [`Sorter`]: one whose points lie in its
+/// inner rects lies inside every edge; one outside the edge it faces, or
+/// either neighbour, lies outside. The per-edge test would emit both the
+/// same way (it sends a triangle outside if any edge has it wholly
+/// outside, whichever edge it meets first), so the output is identical.
+/// Without, every triangle takes the per-edge test: the reference the
+/// tests compare against.
+pub(crate) fn split_convex_with(
+    mesh: &egui::Mesh,
+    polygon: &[egui::Pos2],
+    classify: bool,
+) -> (egui::Mesh, egui::Mesh) {
     use egui::epaint::Vertex;
     let n = polygon.len();
     let mut out = egui::Mesh::with_texture(mesh.texture_id);
@@ -1382,13 +1434,7 @@ fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui:
         return (out, rest);
     }
     let first = |a: egui::Pos2, b: egui::Pos2| (a.x, a.y) <= (b.x, b.y);
-    let area: f32 = (0..n)
-        .map(|i| {
-            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
-            a.x * b.y - b.x * a.y
-        })
-        .sum();
-    let orient = area.signum();
+    let orient = orientation(polygon);
     // > 0 inside edge `i`, < 0 outside it.
     let side = |i: usize, p: egui::Pos2| {
         let (a, b) = (polygon[i], polygon[(i + 1) % n]);
@@ -1428,8 +1474,28 @@ fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui:
         Vec::with_capacity(n + 3),
         Vec::with_capacity(n + 3),
     );
+    let sorter = classify.then(|| Sorter::new(polygon));
     for tri in mesh.indices.as_chunks::<3>().0 {
         let tri = tri.map(|i| mesh.vertices[i as usize]);
+        if let Some(sorter) = &sorter {
+            if tri.iter().all(|v| sorter.inside(v.pos)) {
+                emit(&mut out, &tri);
+                continue;
+            }
+            let sum = tri
+                .iter()
+                .fold(egui::Vec2::ZERO, |s, v| s + v.pos.to_vec2());
+            let centroid = (sum / tri.len() as f32).to_pos2();
+            let facing = sorter.facing(centroid);
+            if facing.is_some_and(|f| {
+                [f + n - 1, f, f + 1]
+                    .iter()
+                    .any(|&e| tri.iter().all(|v| side(e % n, v.pos) <= 0.0))
+            }) {
+                emit(&mut rest, &tri);
+                continue;
+            }
+        }
         let (mut all_inside, mut outside_one) = (true, false);
         for e in 0..n {
             let d = tri.map(|v| side(e, v.pos));
@@ -1473,6 +1539,149 @@ fn split_convex(mesh: &egui::Mesh, polygon: &[egui::Pos2]) -> (egui::Mesh, egui:
     (out, rest)
 }
 
+/// Which way `polygon` runs: the sign of its area, as [`split_convex`]'s
+/// side test takes it.
+fn orientation(polygon: &[egui::Pos2]) -> f32 {
+    let n = polygon.len();
+    let area: f32 = (0..n)
+        .map(|i| {
+            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+            a.x * b.y - b.x * a.y
+        })
+        .sum();
+    area.signum()
+}
+
+/// Cheap tests that sort most triangles before [`split_convex`]'s
+/// per-edge test, deciding as it would.
+pub(crate) struct Sorter {
+    /// Rects inside the polygon (see [`inner_rect`]): a point in one lies
+    /// inside every edge, and so does a triangle whose points all do, the
+    /// polygon being convex.
+    cores: Vec<Rect>,
+    /// Where the polygon's straight middle lies: a point outside it faces
+    /// the edges in the direction it lies off this rect.
+    middle: Rect,
+    /// The edge facing each of [`FACINGS`] directions round the circle.
+    facing: Vec<usize>,
+}
+
+/// How many directions [`Sorter`] tells the facing edge for.
+const FACINGS: usize = 64;
+
+impl Sorter {
+    pub(crate) fn new(polygon: &[egui::Pos2]) -> Self {
+        let n = polygon.len();
+        let orient = orientation(polygon);
+        let bounds = Rect::from_points(polygon);
+        // Shrunk evenly, in x only, in y only.
+        let [square, wide, tall] = [egui::Vec2::splat(1.0), egui::Vec2::X, egui::Vec2::Y] // behaviour-ok: shrink weights
+            .map(|w| inner_rect(polygon, orient, w));
+        let middle = Rect::from_x_y_ranges(
+            wide.map_or(bounds.center().x..=bounds.center().x, |r| {
+                r.x_range().into()
+            }),
+            tall.map_or(bounds.center().y..=bounds.center().y, |r| {
+                r.y_range().into()
+            }),
+        );
+        let outward = |i: usize| {
+            let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+            egui::vec2(b.y - a.y, a.x - b.x) * orient
+        };
+        let facing = (0..FACINGS)
+            .map(|k| {
+                let angle = (k as f32 + 0.5) / FACINGS as f32 * std::f32::consts::TAU; // behaviour-ok: centre of the direction's sector
+                let dir = egui::vec2(angle.cos(), angle.sin());
+                (0..n)
+                    .max_by(|&i, &j| {
+                        let reach = |i: usize| outward(i).normalized().dot(dir);
+                        reach(i).total_cmp(&reach(j))
+                    })
+                    .unwrap_or(0)
+            })
+            .collect();
+        Self {
+            cores: [square, wide, tall].into_iter().flatten().collect(),
+            middle,
+            facing,
+        }
+    }
+
+    /// `p` lies inside every edge of the polygon, far enough that
+    /// [`split_convex`] finds it so: a triangle with all its points here
+    /// is wholly inside.
+    pub(crate) fn inside(&self, p: egui::Pos2) -> bool {
+        self.cores.iter().any(|r| r.contains(p))
+    }
+
+    /// The edge facing the direction `p` lies off the middle, the likeliest
+    /// to have `p` outside; `None` where `p` lies within the middle.
+    fn facing(&self, p: egui::Pos2) -> Option<usize> {
+        let off = p - p.clamp(self.middle.min, self.middle.max);
+        if off == egui::Vec2::ZERO {
+            return None;
+        }
+        let turn = off.y.atan2(off.x) / std::f32::consts::TAU;
+        let k = ((turn + 1.0) * FACINGS as f32) as usize % FACINGS; // behaviour-ok: atan2's -1/2..1/2 turn made positive
+        Some(self.facing[k])
+    }
+}
+
+/// An axis-aligned rect inside every edge of `polygon` (inside where the
+/// edge's side, by `orient`, is positive), kept off each edge by a margin
+/// far above the rounding of [`split_convex`]'s side test, so that test
+/// finds every point of it strictly inside. The polygon's bounding box,
+/// shrunk as far as its edges need, by `weight` in x and y; `None` when
+/// nothing is left.
+fn inner_rect(polygon: &[egui::Pos2], orient: f32, weight: egui::Vec2) -> Option<Rect> {
+    let n = polygon.len();
+    let bounds = Rect::from_points(polygon);
+    // The side test's rounding is a few float epsilons of the distances
+    // within the polygon's bounds; 1e-5 of them is a wide berth.
+    let margin = 1e-3 + 1e-5 * (bounds.width() + bounds.height()); // behaviour-ok: float tolerance in points
+
+    // Signed distance inside edge `i`.
+    let inside = |i: usize, p: egui::Pos2| {
+        let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+        // The side test's cross product, as a dot with the edge's normal.
+        let normal = egui::vec2(a.y - b.y, b.x - a.x) * orient;
+        normal.dot(p - a) / (b - a).length()
+    };
+    let corners = |r: Rect| {
+        [
+            r.left_top(),
+            r.right_top(),
+            r.left_bottom(),
+            r.right_bottom(),
+        ]
+    };
+    // Off the straight sides first, then each corner moves into the box
+    // by `weight` per point of shrinking: an edge it is too near to asks
+    // for that much.
+    let start = bounds.shrink(2.0 * margin); // behaviour-ok: twice the margin, as below
+    let mut shrink = 0.0f32;
+    for corner in corners(start) {
+        let towards = start.center() - corner;
+        let step = egui::vec2(towards.x.signum() * weight.x, towards.y.signum() * weight.y);
+        for i in 0..n {
+            let rate = inside(i, corner + step) - inside(i, corner);
+            // Twice the margin, so rounding cannot take the corner below it.
+            let need = 2.0 * margin - inside(i, corner); // behaviour-ok: float tolerance
+            if need > 0.0 && rate > 0.0 {
+                shrink = shrink.max(need / rate);
+            }
+        }
+    }
+    let core = start.shrink2(weight * shrink);
+    // Distance to an edge is linear, so the corners bound the whole rect.
+    let fits = core.is_positive()
+        && corners(core)
+            .iter()
+            .all(|&p| (0..n).all(|i| inside(i, p) >= margin));
+    fits.then_some(core)
+}
+
 /// Apply `translate-x/y` to a part's rect. `Calc(f, n)` is `calc(f × 100% +
 /// n)` of the part's own size.
 pub fn shift(rect: Rect, x: Option<Shift>, y: Option<Shift>) -> Rect {
@@ -1503,15 +1712,21 @@ pub enum ActivationKeys {
 }
 
 fn modality_id() -> Id {
-    Id::new("shadcn_egui::focus_modality")
+    Id::unique("shadcn_egui::focus_modality")
 }
 
-fn space_id() -> Id {
-    Id::new("shadcn_egui::space_down_on")
+/// The record of the button a held Space is down on, in `viewport`: each
+/// viewport has its own, as each document has in the browser, so Space
+/// held in two windows at once is two holds. The theme's hooks drop the
+/// record of a viewport egui has closed.
+pub(crate) fn space_id(viewport: egui::ViewportId) -> Id {
+    Id::unique("shadcn_egui::space_down_on").with(viewport)
 }
 
-/// The crate-wide focus modality: the focused widget as last seen, whether
-/// `:focus-visible` holds for it, and what this pass's input was.
+/// The focus modality of one viewport: the focused widget as last seen,
+/// whether `:focus-visible` holds for it, and what this pass's input was.
+/// Each viewport has its own, as each document has in the browser: focus
+/// and pass numbers are per viewport in egui.
 #[derive(Clone, Copy, Debug)]
 struct Modality {
     focused: Option<Id>,
@@ -1521,6 +1736,8 @@ struct Modality {
     /// `pass`, if any.
     input: Option<bool>,
 }
+
+type Modalities = egui::ViewportIdMap<Modality>;
 
 /// The ids [`hit_area`] registered in one pass of one viewport. Only the
 /// current pass's are kept, so the set does not grow with every control
@@ -1532,8 +1749,180 @@ struct HitAreas {
     ids: egui::IdSet,
 }
 
-fn hit_areas_id(ctx: &Context) -> Id {
-    Id::new("shadcn_egui::hit_areas").with(ctx.viewport_id())
+type AllHitAreas = egui::ViewportIdMap<HitAreas>;
+
+fn hit_areas_id() -> Id {
+    Id::unique("shadcn_egui::hit_areas")
+}
+
+/// The viewports among `ids` egui has closed: with a pass count of 0
+/// (egui forgets a closed viewport), and none of the root, the current
+/// viewport, its parent and the viewports the current input lists (eframe
+/// lists all open ones). A viewport in its first pass also counts 0 (egui
+/// counts it at the pass's end): an immediate window it shows in that pass
+/// must not take it for closed. A per-viewport record of the crate drops
+/// the closed ones, so an app that opens and closes windows of new ids
+/// keeps no record of each. Call it outside any `data` closure: the pass
+/// counts lock the context.
+pub(crate) fn closed_viewports(
+    ctx: &Context,
+    ids: impl IntoIterator<Item = egui::ViewportId>,
+) -> Vec<egui::ViewportId> {
+    let mut ids: Vec<egui::ViewportId> = ids
+        .into_iter()
+        .filter(|&v| v != egui::ViewportId::ROOT && ctx.cumulative_pass_nr_for(v) == 0)
+        .collect();
+    if ids.is_empty() {
+        return ids;
+    }
+    let live = [ctx.viewport_id(), ctx.parent_viewport_id()];
+    ctx.input(|i| ids.retain(|v| !live.contains(v) && !i.raw.viewports.contains_key(v)));
+    ids
+}
+
+/// A cache's state per viewport, each turned over by that viewport's own
+/// pass or frame number: egui counts passes and frames per viewport, so a
+/// state turned over by "the number moved on" for the whole context would
+/// turn over at every switch between two windows and keep nothing. Each
+/// viewport keeps what it drew in its last pass or frame, however often
+/// another viewport runs in between, and the states of closed viewports
+/// go (see [`with_viewport_state`]). A state holds shared handles (`Arc`,
+/// `TextureHandle`): what a viewport takes from another on a miss is a
+/// clone, so a state that goes, closed or turned over, frees nothing a
+/// live viewport's pass still names. That holds only if the taker stores
+/// the clone in its own state: a handle used on a miss but not kept could
+/// lose its last owner when the other viewport turns over, while the
+/// taker's pass still paints it.
+#[derive(Clone)]
+pub(crate) struct PerViewport<T> {
+    states: egui::ViewportIdMap<(u64, T)>,
+    /// Entries made, for the tests.
+    pub(crate) builds: u64,
+}
+
+impl<T> Default for PerViewport<T> {
+    fn default() -> Self {
+        Self {
+            states: egui::ViewportIdMap::default(),
+            builds: 0,
+        }
+    }
+}
+
+impl<T: Default> PerViewport<T> {
+    /// The state of `viewport` at its number `at`, with the viewports in
+    /// `closed` dropped first. `turn` runs with the state's old number
+    /// when the number moved on; a new state starts at `at`.
+    pub(crate) fn at(
+        &mut self,
+        closed: &[egui::ViewportId],
+        viewport: egui::ViewportId,
+        at: u64,
+        turn: impl FnOnce(&mut T, u64),
+    ) -> &mut T {
+        for v in closed {
+            self.states.remove(v);
+        }
+        let (old, state) = self
+            .states
+            .entry(viewport)
+            .or_insert_with(|| (at, T::default()));
+        if *old != at {
+            turn(state, *old);
+            *old = at;
+        }
+        state
+    }
+}
+
+impl<T> PerViewport<T> {
+    /// The states of the other viewports.
+    pub(crate) fn others(&self, viewport: egui::ViewportId) -> impl Iterator<Item = &T> {
+        self.states
+            .iter()
+            .filter(move |(v, _)| **v != viewport)
+            .map(|(_, (_, state))| state)
+    }
+
+    /// The viewports that hold a state.
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.states.len()
+    }
+
+    /// The states of all viewports.
+    pub(crate) fn all(&self) -> impl Iterator<Item = &T> {
+        self.states.values().map(|(_, state)| state)
+    }
+
+    /// The states of all viewports, to change in place.
+    pub(crate) fn all_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.states.values_mut().map(|(_, state)| state)
+    }
+
+    /// Whether `viewport`'s state is at its number `at`.
+    pub(crate) fn is_at(&self, viewport: egui::ViewportId, at: u64) -> bool {
+        self.states.get(&viewport).is_some_and(|(n, _)| *n == at)
+    }
+
+    /// The state of `viewport`, as it is.
+    pub(crate) fn get(&self, viewport: egui::ViewportId) -> Option<&T> {
+        self.states.get(&viewport).map(|(_, state)| state)
+    }
+
+    /// The viewports that hold a state.
+    pub(crate) fn viewports(&self) -> impl Iterator<Item = egui::ViewportId> + '_ {
+        self.states.keys().copied()
+    }
+}
+
+/// `f` on the [`PerViewport`] in `ctx.data` at `id`, with the closed
+/// viewports it drops when `viewport` turns to its number `at`. While the
+/// viewport's state is at `at` (all but its first call in a pass or
+/// frame), `f` runs in one `data` lock with no viewport to drop; else the
+/// context's pass counts are read outside the lock first, and `f` runs in
+/// a second one. `f` names the state through [`PerViewport::at`].
+pub(crate) fn with_viewport_state<T, R>(
+    ctx: &Context,
+    id: Id,
+    viewport: egui::ViewportId,
+    at: u64,
+    mut f: impl FnMut(&mut PerViewport<T>, &[egui::ViewportId]) -> R,
+) -> R
+where
+    T: Clone + Default + Send + Sync + 'static,
+{
+    let known = ctx.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<PerViewport<T>>(id);
+        if all.is_at(viewport, at) {
+            Ok(f(all, &[]))
+        } else {
+            Err(all.viewports().collect::<Vec<_>>())
+        }
+    });
+    match known {
+        Ok(done) => done,
+        Err(known) => {
+            let closed = closed_viewports(ctx, known);
+            ctx.data_mut(|d| f(d.get_temp_mut_or_default::<PerViewport<T>>(id), &closed))
+        }
+    }
+}
+
+/// How many of `viewports` hold a hit-area record and a focus-modality
+/// record.
+#[cfg(test)]
+pub(crate) fn viewport_records(ctx: &Context, viewports: &[egui::ViewportId]) -> (usize, usize) {
+    ctx.data_mut(|d| {
+        let hit = d.get_temp_mut_or_default::<AllHitAreas>(hit_areas_id());
+        let hit = viewports.iter().filter(|v| hit.contains_key(v)).count();
+        let modality = d.get_temp_mut_or_default::<Modalities>(modality_id());
+        let modality = viewports
+            .iter()
+            .filter(|v| modality.contains_key(v))
+            .count();
+        (hit, modality)
+    })
 }
 
 /// A control's hit area, upstream's `after:absolute after:-inset-*`: a
@@ -1565,9 +1954,23 @@ fn hit_areas_id(ctx: &Context) -> Id {
 #[must_use]
 pub fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
     let pass = ui.ctx().cumulative_pass_nr();
-    let key = hit_areas_id(ui.ctx());
+    let viewport = ui.ctx().viewport_id();
+    // Once per pass of the viewport: drop the sets of closed viewports.
+    let known = ui.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<AllHitAreas>(hit_areas_id());
+        if all.get(&viewport).is_some_and(|a| a.pass == pass) {
+            Vec::new()
+        } else {
+            all.keys().copied().collect()
+        }
+    });
+    let closed = closed_viewports(ui.ctx(), known);
     ui.data_mut(|d| {
-        let areas = d.get_temp_mut_or_default::<HitAreas>(key);
+        let all = d.get_temp_mut_or_default::<AllHitAreas>(hit_areas_id());
+        for v in &closed {
+            all.remove(v);
+        }
+        let areas = all.entry(viewport).or_default();
         if areas.pass != pass {
             *areas = HitAreas {
                 pass,
@@ -1584,11 +1987,13 @@ pub fn hit_area(ui: &Ui, rect: Rect, id: Id, sense: egui::Sense) -> Response {
 /// every crate row asks once per pass.
 pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) -> Vec<Id> {
     let pass = ctx.cumulative_pass_nr();
-    let key = egui::util::id_type_map::RawKey::new::<HitAreas>(hit_areas_id(ctx));
+    let viewport = ctx.viewport_id();
+    let key = egui::util::id_type_map::RawKey::new::<AllHitAreas>(hit_areas_id());
     ctx.data(|d| {
         match d
             .get_temp_raw(key)
-            .and_then(|a| a.downcast_ref::<HitAreas>())
+            .and_then(|a| a.downcast_ref::<AllHitAreas>())
+            .and_then(|all| all.get(&viewport))
         {
             Some(areas) if areas.pass == pass => ids
                 .into_iter()
@@ -1600,11 +2005,11 @@ pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) 
 }
 
 /// Whether `:focus-visible` holds for the focused widget, as the browser
-/// tracks it (conformance 2.6), crate-wide. The modality is taken when
-/// focus changes: by the pass's last key press or pointer button event,
-/// and a focus move with no input in its pass (an overlay giving focus
-/// back, a scripted focus) keeps the one before, as the browser keeps it
-/// for a script's `focus()`. A key press while focus stays makes the
+/// tracks it (conformance 2.6): per viewport, as the browser tracks it per
+/// document. The modality is taken when focus changes: by the pass's last
+/// key press or pointer button event, and a focus move with no input in
+/// its pass (an overlay giving focus back, a scripted focus) keeps the one
+/// before, as the browser keeps it for a script's `focus()`. A key press while focus stays makes the
 /// focused widget focus-visible; a pointer press that moves no focus (a
 /// drag on a scroll bar, a press on the focused widget) changes nothing.
 /// A key pressed with Ctrl, Alt or Command is a shortcut and counts as no
@@ -1618,14 +2023,25 @@ pub(crate) fn hit_areas_among(ctx: &Context, ids: impl IntoIterator<Item = Id>) 
 pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
     let focused = ctx.memory(|m| m.focused());
-    let mut m = ctx
-        .data(|d| d.get_temp::<Modality>(modality_id()))
-        .unwrap_or(Modality {
-            focused,
-            keyboard: true,
-            pass: u64::MAX,
-            input: None,
-        });
+    let viewport = ctx.viewport_id();
+    let (stored, known) = ctx.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<Modalities>(modality_id());
+        let stored = all.get(&viewport).copied();
+        // Once per pass of the viewport: drop the records of closed ones.
+        let known = if stored.is_some_and(|m| m.pass == pass) {
+            Vec::new()
+        } else {
+            all.keys().copied().collect()
+        };
+        (stored, known)
+    });
+    let closed = closed_viewports(ctx, known);
+    let mut m = stored.unwrap_or(Modality {
+        focused,
+        keyboard: true,
+        pass: u64::MAX,
+        input: None,
+    });
     if m.pass != pass {
         // The raw events: a widget may have consumed the key already.
         m.input = ctx.input(|i| {
@@ -1649,23 +2065,14 @@ pub(crate) fn focus_modality_keyboard(ctx: &Context) -> bool {
         m.focused = focused;
         m.keyboard = m.input.unwrap_or(m.keyboard);
     }
-    ctx.data_mut(|d| d.insert_temp(modality_id(), m));
+    ctx.data_mut(|d| {
+        let all = d.get_temp_mut_or_default::<Modalities>(modality_id());
+        for v in &closed {
+            all.remove(v);
+        }
+        all.insert(viewport, m);
+    });
     m.keyboard
-}
-
-/// Run [`focus_modality_keyboard`] at the start and end of every pass of
-/// `ctx`; installed once.
-pub(crate) fn install_focus_modality(ctx: &Context) {
-    let id = Id::new("shadcn_egui::focus_modality_hooks");
-    if ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(id, true));
-    let track = |ui: &mut Ui| {
-        focus_modality_keyboard(ui.ctx());
-    };
-    ctx.on_begin_pass("shadcn_egui::focus_modality", std::sync::Arc::new(track));
-    ctx.on_end_pass("shadcn_egui::focus_modality", std::sync::Arc::new(track));
 }
 
 /// Make `resp` act on press and keys as upstream's element: a pointer
@@ -1693,7 +2100,9 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
             i.has_accesskit_action_request(resp.id, egui::accesskit::Action::Click),
         )
     });
-    let held = ctx.data(|d| d.get_temp::<Id>(space_id())) == Some(resp.id);
+    // Outside the closures: `viewport_id` locks the context.
+    let space = space_id(ctx.viewport_id());
+    let held = ctx.data(|d| d.get_temp::<Id>(space)) == Some(resp.id);
     let mut click = false;
     if focused {
         click = match keys {
@@ -1707,9 +2116,9 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
     // The held Space of a `<button>`: `ACTIVE` until it comes up or focus
     // leaves, a click only if it comes up on the focused button.
     if keys == ActivationKeys::Button && focused && space_down && !space_up {
-        ctx.data_mut(|d| d.insert_temp(space_id(), resp.id));
+        ctx.data_mut(|d| d.insert_temp(space, resp.id));
     } else if held && (space_up || !focused) {
-        ctx.data_mut(|d| d.remove::<Id>(space_id()));
+        ctx.data_mut(|d| d.remove::<Id>(space));
     }
     resp.flags
         .set(egui::response::Flags::FAKE_PRIMARY_CLICKED, click || access);
@@ -1719,14 +2128,14 @@ pub fn pressable(resp: &mut Response, keys: ActivationKeys) {
 /// what pointer and keyboard do to `resp`, and the theme's `DARK`. `FOCUS`
 /// is set while `resp` has focus; `FOCUS_VISIBLE` too where the browser's
 /// `:focus-visible` would match: focus moved by keyboard, not by a pointer
-/// press (crate-wide modality, conformance 2.6). A held Space on a
-/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`, or
-/// `DISABLED` in `context` for a widget's own `enabled` flag) gets
-/// `DISABLED` and no `HOVER`, `ACTIVE`, `FOCUS` or `FOCUS_VISIBLE`, even if
-/// `context` has them: shadcn's `disabled:pointer-events-none`. A
-/// composite widget passes the response of its focusable inner part (a
-/// select's trigger, a slider's thumb), so focus and press are read where
-/// they happen. For a widget that takes typed text use [`text_entry_state`].
+/// press (modality per viewport, conformance 2.6). A held Space on a
+/// [`pressable`] button is `ACTIVE`. A disabled widget (a disabled `Ui`,
+/// or `DISABLED` in `context`) gets `DISABLED` and no `HOVER`, `ACTIVE`,
+/// `FOCUS` or `FOCUS_VISIBLE`, even if `context` has them: shadcn's
+/// `disabled:pointer-events-none`. A composite widget passes the
+/// response of its focusable inner part (a select's trigger, a slider's
+/// thumb), so focus and press are read where they happen. For a widget
+/// that takes typed text use [`text_entry_state`].
 pub fn interaction_state(theme: &Theme, resp: &Response, context: State) -> State {
     state_of(theme, resp, context, focus_modality_keyboard(&resp.ctx))
 }
@@ -1738,19 +2147,142 @@ pub fn text_entry_state(theme: &Theme, resp: &Response, context: State) -> State
     state_of(theme, resp, context, true)
 }
 
-/// Reports `make_info` for `resp` as [`Response::widget_info`] does, then
-/// gives the widget an accessible `role` that egui's `WidgetType` lacks
-/// (upstream's `role="alert"`, `alertdialog`, `navigation`, `group`).
-/// `widget_info` sets a role from the `WidgetType`, so the role is set
-/// after it; the name, value and state stay those of `make_info`.
+/// Reports `make_info` for `resp` as [`Response::widget_info`] does, with
+/// `role` as the widget's accessible role (upstream's `role="alert"`,
+/// `alertdialog`, `navigation`, `group`). `widget_info` sets the role of
+/// `make_info`, so `role` is set after it; the name and value stay those
+/// of `make_info`.
+///
+/// The disabled state follows the role (conformance 8). A role that
+/// supports `aria-disabled` in WAI-ARIA 1.2 (its "Used in Roles" and
+/// "Inherits into Roles": `button`, `group`, `link`, the
+/// `input`, `composite`, `menuitem` and `gridcell` families, …) keeps
+/// egui's state, so it is disabled in a disabled `Ui`, as a
+/// `<fieldset disabled>` is. A role without it (`alert`, `alertdialog`,
+/// `navigation`, `status`, `dialog`, `region`, …) is never reported
+/// disabled, although egui marks every widget in a disabled `Ui` so.
 pub fn widget_info_with_role(
     resp: &Response,
     role: egui::accesskit::Role,
     make_info: impl Fn() -> egui::WidgetInfo,
 ) {
-    resp.widget_info(make_info);
+    if has_disabled_state(role) {
+        resp.widget_info(make_info);
+    } else {
+        widget_info_never_disabled(resp, make_info);
+    }
     resp.ctx
         .accesskit_node_builder(resp.id, |node| node.set_role(role));
+}
+
+/// Whether `role` supports `aria-disabled` in WAI-ARIA 1.2
+/// (<https://www.w3.org/TR/wai-aria-1.2/#aria-disabled>): the roles it is
+/// used in (`application`, `button`, `composite`, `gridcell`, `group`,
+/// `input`, `link`, `menuitem`, `scrollbar`, `separator`, `tab`), the
+/// roles that inherit it (`checkbox`, `columnheader`, `combobox`, `grid`,
+/// `listbox`, `menu`, `menubar`, `menuitemcheckbox`, `menuitemradio`,
+/// `option`, `radio`, `radiogroup`, `row`, `rowheader`, `searchbox`,
+/// `slider`, `spinbutton`, `switch`, `tablist`, `textbox`, `toolbar`,
+/// `tree`, `treegrid`, `treeitem`), the roles of other specs that are a
+/// subclass of one of them (DPUB-ARIA's `link` subroles, Graphics-ARIA's
+/// `graphics-object`, a `group`) and `<details>`, which HTML-AAM maps to
+/// `group`, as AccessKit names them. Its global use is deprecated in
+/// 1.2, so every other role has no disabled state.
+fn has_disabled_state(role: egui::accesskit::Role) -> bool {
+    use egui::accesskit::Role as R;
+    matches!(
+        role,
+        R::Application
+            // button
+            | R::Button
+            | R::DefaultButton
+            | R::DisclosureTriangle
+            // composite
+            | R::ComboBox
+            | R::EditableComboBox
+            | R::Grid
+            | R::ListGrid
+            | R::TreeGrid
+            | R::ListBox
+            | R::Menu
+            | R::MenuBar
+            | R::MenuListPopup
+            | R::RadioGroup
+            | R::TabList
+            | R::Tree
+            // gridcell
+            | R::GridCell
+            | R::ColumnHeader
+            | R::RowHeader
+            // group
+            | R::Group
+            | R::Row
+            | R::Toolbar
+            | R::Details
+            | R::GraphicsObject
+            // input
+            | R::CheckBox
+            | R::Switch
+            | R::RadioButton
+            | R::ListBoxOption
+            | R::MenuListOption
+            | R::TreeItem
+            | R::Slider
+            | R::SpinButton
+            | R::TextInput
+            | R::MultilineTextInput
+            | R::SearchInput
+            | R::DateInput
+            | R::DateTimeInput
+            | R::WeekInput
+            | R::MonthInput
+            | R::TimeInput
+            | R::EmailInput
+            | R::NumberInput
+            | R::PasswordInput
+            | R::PhoneNumberInput
+            | R::UrlInput
+            | R::ColorWell
+            // link
+            | R::Link
+            | R::DocBackLink
+            | R::DocBiblioRef
+            | R::DocGlossRef
+            | R::DocNoteRef
+            // menuitem
+            | R::MenuItem
+            | R::MenuItemCheckBox
+            | R::MenuItemRadio
+            // scrollbar, separator, tab
+            | R::ScrollBar
+            | R::Splitter
+            | R::Tab
+    )
+}
+
+/// Reports `make_info` for a part whose upstream element has no disabled
+/// state (a `<label>`, `<div>`, `<span>`, `<kbd>`, `<svg>`, `<legend>`, or
+/// `role="status"`, `progressbar`, `alert`): HTML-AAM and ARIA 1.2
+/// give it none, so a disabled `Ui` does not make it disabled to assistive
+/// technology (conformance 8). egui marks every widget in a disabled `Ui`
+/// disabled and adds ": disabled" to its spoken text; this reports the
+/// part as enabled and takes the flag out of its node again. Controls keep
+/// egui's disabled state.
+pub(crate) fn widget_info_never_disabled(
+    resp: &Response,
+    make_info: impl Fn() -> egui::WidgetInfo,
+) {
+    resp.widget_info(|| egui::WidgetInfo {
+        enabled: true,
+        ..make_info()
+    });
+    never_disabled(&resp.ctx, resp.id);
+}
+
+/// Takes egui's disabled flag out of the accessibility node `id`, a part
+/// [`widget_info_never_disabled`] describes that reports no `widget_info`.
+pub(crate) fn never_disabled(ctx: &egui::Context, id: Id) {
+    ctx.accesskit_node_builder(id, |node| node.clear_disabled());
 }
 
 /// Upstream's `aria-invalid`: while `invalid`, the accessibility node of
@@ -1787,7 +2319,8 @@ fn state_of(theme: &Theme, resp: &Response, context: State, keyboard: bool) -> S
         context.without(pointer_and_focus)
     };
     let focused = live && resp.has_focus();
-    let space_held = resp.ctx.data(|d| d.get_temp::<Id>(space_id())) == Some(resp.id);
+    let space = space_id(resp.ctx.viewport_id());
+    let space_held = resp.ctx.data(|d| d.get_temp::<Id>(space)) == Some(resp.id);
     theme.state(
         &resp.ctx,
         context
@@ -1883,6 +2416,106 @@ mod tests {
             CornerRadius::ZERO,
         );
         assert_eq!(area(&clip_inside(&quad, &beside)), 0.0);
+    }
+
+    /// A mesh of small squares over `rect`, `step` apart, each colour
+    /// different so a misplaced vertex shows.
+    fn grid(rect: Rect, step: f32) -> egui::Mesh {
+        let mut mesh = egui::Mesh::default();
+        let (w, h) = (
+            (rect.width() / step) as usize,
+            (rect.height() / step) as usize,
+        );
+        for j in 0..h {
+            for i in 0..w {
+                let min = rect.min + egui::vec2(i as f32, j as f32) * step;
+                let tone = ((i * 7 + j * 13) % 256) as u8;
+                mesh.add_colored_rect(
+                    Rect::from_min_size(min, egui::Vec2::splat(step)),
+                    Color32::from_rgba_premultiplied(tone, 255 - tone, 0, 255),
+                );
+            }
+        }
+        mesh
+    }
+
+    /// The same mesh, vertex for vertex and index for index.
+    fn assert_same_mesh(a: &egui::Mesh, b: &egui::Mesh, what: &str) {
+        assert_eq!(a.indices, b.indices, "{what} indices");
+        assert_eq!(a.vertices.len(), b.vertices.len(), "{what} vertices");
+        for (u, v) in a.vertices.iter().zip(&b.vertices) {
+            assert_eq!(u.pos.x.to_bits(), v.pos.x.to_bits(), "{what} {u:?} {v:?}");
+            assert_eq!(u.pos.y.to_bits(), v.pos.y.to_bits(), "{what} {u:?} {v:?}");
+            assert_eq!(u.uv, v.uv, "{what}");
+            assert_eq!(u.color, v.color, "{what}");
+        }
+    }
+
+    /// Both halves of a split as the per-edge test alone splits them.
+    fn assert_same_split(mesh: &egui::Mesh, polygon: &[egui::Pos2]) {
+        let fast = split_convex_with(mesh, polygon, true);
+        let reference = split_convex_with(mesh, polygon, false);
+        assert_same_mesh(&fast.0, &reference.0, "inside");
+        assert_same_mesh(&fast.1, &reference.1, "outside");
+    }
+
+    /// The cheap sorting before the per-edge test keeps every outline
+    /// the clip cuts with, `clip_inside` and `clip_outside` alike, cutting
+    /// exactly as before: the exact, outer and inner outlines and the band
+    /// quads of a rounded clip (#25).
+    #[test]
+    fn the_quick_split_cuts_every_clip_outline_as_the_edge_test_does() {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(1.5);
+        let mesh = grid(
+            Rect::from_min_size(egui::pos2(-3.3, -2.1), egui::vec2(70.0, 40.0)),
+            0.7,
+        );
+        let radii = [
+            CornerRadius::same(6),
+            CornerRadius {
+                nw: 0,
+                ne: 14,
+                sw: 3,
+                se: 9,
+            },
+            CornerRadius::ZERO,
+        ];
+        for radius in radii {
+            let outline = rounded_polygon(
+                Rect::from_min_size(egui::pos2(2.25, 3.5), egui::vec2(55.0, 25.0)),
+                radius,
+            );
+            let clip = RoundedClip::new(&ctx, outline);
+            assert!(clip.half > 0.0);
+            let n = clip.exact.len();
+            let quads = (0..n).map(|i| {
+                let j = (i + 1) % n;
+                vec![clip.outer[i], clip.outer[j], clip.inner[j], clip.inner[i]]
+            });
+            for polygon in [clip.exact.clone(), clip.outer.clone(), clip.inner.clone()]
+                .into_iter()
+                .chain(quads)
+            {
+                assert_same_split(&mesh, &polygon);
+            }
+        }
+    }
+
+    /// The quick inside test has a rect to work with on a rounded box,
+    /// nearly as large as fits, clear of the rounding.
+    #[test]
+    fn a_rounded_box_has_an_inner_rect() {
+        let rect = Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(90.0, 30.0));
+        let polygon = rounded_polygon(rect, CornerRadius::same(6));
+        let core = inner_rect(&polygon, orientation(&polygon), egui::vec2(1.0, 1.0))
+            .expect("an inner rect");
+        // Its corner meets the rounding on the diagonal, 6 (1 - 1/√2) =
+        // 1.76 in, a little further for the arc's chords.
+        assert!(rect.shrink(1.75).contains_rect(core), "{core:?}");
+        assert!(core.contains_rect(rect.shrink(2.5)), "{core:?}");
+        let centre = rect.min + egui::Vec2::splat(6.0);
+        assert!((core.min - centre).length() < 6.0, "{core:?}");
     }
 
     /// A box narrower than the outer box's rounding keeps only the part
@@ -2045,8 +2678,9 @@ mod tests {
     /// `(builds, cached meshes)` of the context's fallback cache.
     fn cut_cache(ctx: &egui::Context) -> (u64, usize) {
         ctx.data_mut(|d| {
-            let c = d.get_temp_mut_or_default::<CutCache>(cut_cache_id());
-            (c.builds, c.current.len() + c.previous.len())
+            let all = d.get_temp_mut_or_default::<PerViewport<CutCache>>(cut_cache_id());
+            let size = all.all().map(|c| c.current.len() + c.previous.len()).sum();
+            (all.builds, size)
         })
     }
 
@@ -2059,13 +2693,14 @@ mod tests {
         let rect = Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(40.0, 20.0));
         let mut vertices = 0;
         for _ in 0..4 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+            ctx.run_ui(egui::RawInput::default(), |_| {
                 for shape in b.shapes_at(&ctx, rect, 0.5) {
                     if let Shape::Mesh(m) = shape {
                         vertices = m.vertices.len();
                     }
                 }
-            });
+            })
+            .drop_without_applying_deltas();
         }
         assert!(vertices > 0, "the box is one mesh");
         assert_eq!(cut_cache(&ctx).0, 1, "builds over 4 frames");
@@ -2078,11 +2713,12 @@ mod tests {
         let b = one_side_off();
         let ctx = egui::Context::default();
         for frame in 0..20 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+            ctx.run_ui(egui::RawInput::default(), |_| {
                 let at = egui::pos2(10.0 + frame as f32, 10.0);
                 let rect = Rect::from_min_size(at, egui::vec2(40.0, 20.0));
                 let _ = b.shapes_at(&ctx, rect, 0.5);
-            });
+            })
+            .drop_without_applying_deltas();
         }
         let (builds, size) = cut_cache(&ctx);
         assert_eq!(builds, 20);
