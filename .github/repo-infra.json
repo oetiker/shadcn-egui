@@ -1,5 +1,12 @@
 {
   "moving_major_tag": false,
+  "dependabot": {
+    "cargo": [
+      "/tools/stylegen",
+      "/tools/icongen",
+      "/tools/fontgen"
+    ]
+  },
   "rust": {
     "test": [
       "shadcn-egui-core"
