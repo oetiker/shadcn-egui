@@ -50,13 +50,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
 
+      # nextest runs each test in a process of its own. Under `cargo test` the
+      # snapshot tests share one process, each creating and destroying its own
+      # wgpu device, and the Vulkan loader of ubuntu-26.04 (1.4.341) races on
+      # its global device list: the test binary dies with SIGSEGV. The fix is
+      # in Vulkan-Loader 1.4.350 (KhronosGroup/Vulkan-Loader#1866).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.151
+
       - name: Test with default features
-        run: cargo test --locked --workspace --all-targets -- --test-threads 4
+        run: cargo nextest run --locked --workspace --all-targets --test-threads 4
 
       - name: Test with all features
-        run: cargo test --locked --workspace --all-targets --all-features -- --test-threads 4
+        run: cargo nextest run --locked --workspace --all-targets --all-features --test-threads 4
 
-      # --all-targets leaves doctests out; the skills' rust fences compile
+      # nextest runs no doctests; the skills' rust fences compile
       # only here (skill_docs in crates/shadcn-egui/src/lib.rs).
       - name: Doctests with default features
         run: cargo test --locked -p shadcn-egui --doc -- --test-threads 4
