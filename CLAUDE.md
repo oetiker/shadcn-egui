@@ -77,6 +77,14 @@ crates.
 
 - Cap parallelism: every cargo command gets `--jobs 4`, every `cargo test`
   also `-- --test-threads 4`.
+- On Vulkan loader 1.4.341 (`libvulkan1` on Ubuntu 26.04; fixed in
+  1.4.350, while 1.3.275 on Ubuntu 24.04 passes), `cargo test` with more than one test thread dies with SIGSEGV in
+  a snapshot test binary: the loader races on its global device list
+  when two tests create and destroy wgpu devices in one process
+  (KhronosGroup/Vulkan-Loader#1866). Run the workspace tests there with
+  `cargo nextest run --workspace --all-targets --jobs 4 --test-threads 4`,
+  which runs each test in a process of its own; CI does this since #41.
+  Doctests stay on `cargo test --doc`.
 - Gates (all must pass, warning-clean):
 
   ```bash

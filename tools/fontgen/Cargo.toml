@@ -11,4 +11,4 @@ publish = false
 [workspace]
 
 [dependencies]
-skrifa = "0.48"
+skrifa = "0.49"
