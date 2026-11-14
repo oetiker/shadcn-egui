@@ -25,7 +25,7 @@ log = "0.4"
 # Chrome's fixed-point rounding, with kerning across sections, which
 # egui's per-section shaping does not give. Pinned to the version egui's
 # epaint uses, so no second copy enters the build.
-skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
+skrifa = { version = "=0.50.0", default-features = false, features = ["std"] }
 shadcn-egui-core = { path = "crates/shadcn-egui-core", version = "0.8.0" }
 # BEGIN fontgen
 shadcn-egui-font-inter = { path = "crates/shadcn-egui-font-inter", version = "0.8.0" }
